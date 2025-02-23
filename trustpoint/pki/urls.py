@@ -4,6 +4,7 @@ from django.urls import path, re_path  # type: ignore[import-untyped]
 
 from pki.views import certificates, domains, issuing_cas, truststores
 from pki.views.domains import DevIdRegistrationCreateView, DevIdRegistrationDeleteView, DevIdMethodSelectView
+from pki.views.issuing_cas import IssuedCertificatesListView
 
 app_name = 'pki'
 
@@ -105,6 +106,12 @@ urlpatterns = [
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
     path('issuing-cas/crl-gen/<int:pk>/', issuing_cas.IssuingCaCrlGenerationView.as_view(), name='issuing_cas-crl-gen'),
+    path(
+        'issuing-cas/<int:pk>/issued-certificates/',
+        IssuedCertificatesListView.as_view(),
+        name='issued_certificates',
+    ),
+
     re_path(
         r'^issuing-cas/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
         issuing_cas.IssuingCaBulkDeleteConfirmView.as_view(),

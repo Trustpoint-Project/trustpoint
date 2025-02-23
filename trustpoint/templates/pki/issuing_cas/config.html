@@ -95,9 +95,19 @@
                                     {% endfor %}
                                 </div>
                                 <div>
-                                    <div>{% trans 'Certificates issued:' %}</div>
-                                    <div></div>
+                                    <strong>{% trans 'Certificates issued:' %}</strong>
+                                    <span>
+        {% if issued_certificates|length > 0 %}
+            <a href="{% url 'pki:issued_certificates' pk=issuing_ca.pk %}" class="btn btn-link">
+                {{ issued_certificates|length }}
+            </a>
+        {% else %}
+            {{ issued_certificates|length }}  {# Show number but no link when count = 0 #}
+        {% endif %}
+    </span>
                                 </div>
+
+
                             </div>
                         </div>
                     </div>
