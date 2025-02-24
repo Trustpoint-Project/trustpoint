@@ -1,5 +1,5 @@
 import pytest
-from core.serializer.certificate import CertificateSerializer
+from trustpoint_core.serializer.certificate import CertificateSerializer
 from cryptography.hazmat.primitives import serialization
 from pki.models.certificate import CertificateModel
 from pki.tests.fixtures import self_signed_cert_with_ext  # noqa: F401

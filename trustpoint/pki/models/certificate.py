@@ -12,7 +12,7 @@ from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 
 
-from core.oid import (
+from trustpoint_core.oid import (
     PublicKeyAlgorithmOid,
     CertificateExtensionOid,
     NameOid,
@@ -21,7 +21,7 @@ from core.oid import (
     SignatureSuite,
     PublicKeyInfo
 )
-from core.serializer import CertificateSerializer, PublicKeySerializer
+from trustpoint_core.serializer import CertificateSerializer, PublicKeySerializer
 
 from pki.models.extension import (
     AttributeTypeAndValue,
