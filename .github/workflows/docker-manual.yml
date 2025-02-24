@@ -12,40 +12,40 @@ jobs:
       TAG_VERSION: v0.2.0
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-    - name: Setup up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Setup up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_HUB_USERNAME }}
-        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-    - name: Build the Docker images using Docker Compose
-      run: docker compose build
+      - name: Build the Docker images using Docker Compose
+        run: docker compose build
 
-    - name: Tag additional versions for trustpoint and postgres images
-      run: |
-        # For the trustpoint container:
-          docker tag ${DOCKER_HUB_USERNAME}/trustpoint:${GITHUB_SHA} ${DOCKER_HUB_USERNAME}/trustpoint:${TAG_VERSION}
-          docker tag ${DOCKER_HUB_USERNAME}/trustpoint:${GITHUB_SHA} ${DOCKER_HUB_USERNAME}/trustpoint:latest
-        # For the postgres container:
-          docker tag ${DOCKER_HUB_USERNAME}/postgres:${GITHUB_SHA} ${DOCKER_HUB_USERNAME}/postgres:${TAG_VERSION}
-          docker tag ${DOCKER_HUB_USERNAME}/postgres:${GITHUB_SHA} ${DOCKER_HUB_USERNAME}/postgres:latest
+      - name: Tag additional versions for trustpoint and postgres images
+        run: |
+          # For the trustpoint container:
+            docker tag ${DOCKER_HUB_USERNAME}/trustpoint:${GITHUB_SHA} ${DOCKER_HUB_USERNAME}/trustpoint:${TAG_VERSION}
+            docker tag ${DOCKER_HUB_USERNAME}/trustpoint:${GITHUB_SHA} ${DOCKER_HUB_USERNAME}/trustpoint:latest
+          # For the postgres container:
+            docker tag ${DOCKER_HUB_USERNAME}/postgres:${GITHUB_SHA} ${DOCKER_HUB_USERNAME}/postgres:${TAG_VERSION}
+            docker tag ${DOCKER_HUB_USERNAME}/postgres:${GITHUB_SHA} ${DOCKER_HUB_USERNAME}/postgres:latest
 
-    - name: Push docker images to Docker Hub
-      run:
-        # Push trustpoint images
-        docker push ${DOCKER_HUB_USERNAME}/trustpoint:${GITHUB_SHA}
-        docker push ${DOCKER_HUB_USERNAME}/trustpoint:${TAG_VERSION}
-        docker push ${DOCKER_HUB_USERNAME}/trustpoint:latest
-        # Push postgres images
-        docker push ${DOCKER_HUB_USERNAME}/postgres:${GITHUB_SHA}
-        docker push ${DOCKER_HUB_USERNAME}/postgres:${TAG_VERSION}
-        docker push ${DOCKER_HUB_USERNAME}/postgres:latest
+      - name: Push docker images to Docker Hub
+        run:
+          # Push trustpoint images
+          docker push ${DOCKER_HUB_USERNAME}/trustpoint:${GITHUB_SHA}
+          docker push ${DOCKER_HUB_USERNAME}/trustpoint:${TAG_VERSION}
+          docker push ${DOCKER_HUB_USERNAME}/trustpoint:latest
+          # Push postgres images
+          docker push ${DOCKER_HUB_USERNAME}/postgres:${GITHUB_SHA}
+          docker push ${DOCKER_HUB_USERNAME}/postgres:${TAG_VERSION}
+          docker push ${DOCKER_HUB_USERNAME}/postgres:latest
