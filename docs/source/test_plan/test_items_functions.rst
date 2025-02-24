@@ -43,8 +43,8 @@ Functional Requirements
    _`R_007`, "Logging Capabilities", "Provide detailed and configurable logging for system events and actions.", "TPC_Web, TP_Client", "High"
    _`R_008`, "Auto-Generated Issuing CAs", "Automatically generate Issuing Certificate Authorities based on configuration.", "TPC_Web", "High"
    _`R_009`, "High Availability", "Ensure system availability using redundancy or failover mechanisms.", "TPC_Web, TP_Client", "High"
-   _`R_010`, "CMP Endpoint for Onboarded Devices", "Provide a CMP endpoint for device onboarding.", "All components", "High"
-   _`R_011`, "EST Endpoint for Onboarded Devices", "Provide an EST endpoint for device onboarding.", "All components", "High"
+   _`R_010`, ":term:`CMP` Endpoint for Onboarded Devices", "Provide a :term:`CMP` endpoint for device onboarding.", "All components", "High"
+   _`R_011`, ":term:`EST` Endpoint for Onboarded Devices", "Provide an :term:`EST` endpoint for device onboarding.", "All components", "High"
    _`R_012`, "Language Selection and Translation", "Support multi-language UI options for global usability.", "TPC_Web, TP_Client", "Medium"
    _`R_013`, "Remote Credential Download", "Enable credential downloads from a remote device using a one-time password.", "TPC_Web", "High"
 

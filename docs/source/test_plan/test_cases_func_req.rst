@@ -306,10 +306,10 @@ This testcase is related to requirement `R_010`_.
 Test Idea
 """""""""
 
-To verify that the system provides a CMP endpoint for onboarding devices, we will test the following scenarios:
+To verify that the system provides a :term:`CMP` endpoint for onboarding devices, we will test the following scenarios:
 
 #. Device Registration and Certificate Enrollment
-    - A new device initiates a CMP request to the endpoint.
+    - A new device initiates a :term:`CMP` request to the endpoint.
     - The system processes the request and issues a certificate.
     - The device successfully receives and stores the issued certificate.
 
@@ -319,7 +319,7 @@ To verify that the system provides a CMP endpoint for onboarding devices, we wil
     - The device replaces its old certificate with the new one.
 
 #. Handling Unauthorized Requests
-    - A device with invalid credentials tries to access the CMP endpoint.
+    - A device with invalid credentials tries to access the :term:`CMP` endpoint.
     - The system rejects the request with an appropriate error response.
 
 #. Certificate Revocation for a Compromised Device
@@ -335,7 +335,7 @@ Edge cases:
 
 - Expired certificates being used for renewal.
 - Partial network outages during certificate issuance.
-- Unexpected payloads being sent to the CMP endpoint.
+- Unexpected payloads being sent to the :term:`CMP` endpoint.
 
 """"""""""""
 Feature File
@@ -349,27 +349,27 @@ R_011
 ^^^^^
 
 This testcase is related to requirement `R_011`_.
-Note that EST and CMP could be tested the same way.
+Note that :term:`EST` and :term:`CMP` could be tested the same way.
 This is still w.i.p.
 
 """""""""
 Test Idea
 """""""""
 
-To verify that the system provides an EST endpoint for onboarding devices, we will test the following scenarios:
+To verify that the system provides an :term:`EST` endpoint for onboarding devices, we will test the following scenarios:
 
 #. Device Registration and Certificate Enrollment
-    - A new device initiates an EST request to the endpoint.
+    - A new device initiates an :term:`EST` request to the endpoint.
     - The system processes the request and issues a certificate.
     - The device successfully receives and stores the issued certificate.
 
 #. Certificate Renewal for an Onboarded Device
-    - An onboarded device requests certificate renewal using EST.
+    - An onboarded device requests certificate renewal using :term:`EST`.
     - The system validates the request and issues a new certificate.
     - The device replaces its old certificate with the new one.
 
 #. Handling Unauthorized Requests
-    - A device with invalid credentials tries to access the EST endpoint.
+    - A device with invalid credentials tries to access the :term:`EST` endpoint.
     - The system rejects the request with an appropriate error response.
 
 #. Certificate Revocation for a Compromised Device
@@ -378,14 +378,14 @@ To verify that the system provides an EST endpoint for onboarding devices, we wi
     - The revoked device is unable to authenticate using its certificate.
 
 #. High Load Handling
-    - Simulate multiple devices requesting certificate issuance simultaneously via EST.
+    - Simulate multiple devices requesting certificate issuance simultaneously via :term:`EST`.
     - Verify that the system handles high traffic without performance degradation.
 
 Edge cases:
 
 - Expired certificates being used for renewal.
 - Partial network outages during certificate issuance.
-- Unexpected payloads being sent to the EST endpoint.
+- Unexpected payloads being sent to the :term:`EST` endpoint.
 
 """"""""""""
 Feature File
