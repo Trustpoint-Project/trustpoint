@@ -1,6 +1,6 @@
 """URL configuration for the PKI application."""
 
-from django.urls import path, re_path  # type: ignore[import-untyped]
+from django.urls import path, re_path
 
 from pki.views import certificates, domains, issuing_cas, truststores
 from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView

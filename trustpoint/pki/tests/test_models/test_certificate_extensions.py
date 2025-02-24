@@ -4,6 +4,7 @@
 # ruff: noqa: F811  # ruff does not like pytest fixtures as arguments
 
 import hashlib
+from typing import cast
 
 import pytest  # type: ignore  # noqa: PGH003
 from cryptography import x509
@@ -14,6 +15,12 @@ from pyasn1.codec.der.decoder import decode  # type: ignore  # noqa: PGH003
 from pyasn1.type import char  # type: ignore  # noqa: PGH003
 
 from pki.models.certificate import CertificateModel
+from pki.models.extension import (
+    AccessDescriptionModel,
+    GeneralNameDirectoryName,
+    GeneralNameOtherName,
+    GeneralNamesModel,
+)
 from pki.tests import (
     DNS_NAME_VALUE,
     INHIBIT_ANY_POLICY_VALUE,
@@ -53,7 +60,8 @@ def test_san_ext(self_signed_cert_with_ext: Certificate) -> None:
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     san_ext = cert_model.subject_alternative_name_extension
     assert san_ext is not None
-    san = san_ext.subject_alt_name
+    san: GeneralNamesModel | None = san_ext.subject_alt_name
+    assert san is not None  # Is it actually allowed to have the extension present without any names?
 
     # DNS
     assert any(d.value == DNS_NAME_VALUE for d in san.dns_names.all())
@@ -63,7 +71,7 @@ def test_san_ext(self_signed_cert_with_ext: Certificate) -> None:
     assert any(u.value == URI_VALUE for u in san.uniform_resource_identifiers.all())
     # DirectoryName
     assert san.directory_names.count() == 1
-    dir_name = san.directory_names.first()
+    dir_name = cast(GeneralNameDirectoryName, san.directory_names.first())
     assert any(attr.value == ORGANIZATION_NAME for attr in dir_name.names.all())
     # RegisteredID
     assert any(r.value == REGISTERED_ID_OID for r in san.registered_ids.all())
@@ -71,7 +79,7 @@ def test_san_ext(self_signed_cert_with_ext: Certificate) -> None:
     assert any(ip.value == IP_ADDRESS_VALUE for ip in san.ip_addresses.all())
     # OtherName
     assert san.other_names.count() == 1
-    other_name = san.other_names.first()
+    other_name = cast(GeneralNameOtherName, san.other_names.first())
     assert other_name.type_id == OTHER_NAME_OID
     decoded_asn1, _ = decode(bytes.fromhex(other_name.value), asn1Spec=char.UTF8String())
     assert str(decoded_asn1) == OTHER_NAME_CONTENT
@@ -84,6 +92,7 @@ def test_ian_ext(self_signed_cert_with_ext: Certificate) -> None:
     ian_ext = cert_model.issuer_alternative_name_extension
     assert ian_ext is not None
     ian = ian_ext.issuer_alt_name
+    assert ian is not None
 
     # DNS
     assert any(d.value == DNS_NAME_VALUE for d in ian.dns_names.all())
@@ -93,7 +102,7 @@ def test_ian_ext(self_signed_cert_with_ext: Certificate) -> None:
     assert any(u.value == URI_VALUE for u in ian.uniform_resource_identifiers.all())
     # DirectoryName
     assert ian.directory_names.count() == 1
-    dir_name = ian.directory_names.first()
+    dir_name = cast(GeneralNameDirectoryName, ian.directory_names.first())
     assert any(attr.value == ORGANIZATION_NAME for attr in dir_name.names.all())
     # RegisteredID
     assert any(r.value == REGISTERED_ID_OID for r in ian.registered_ids.all())
@@ -101,7 +110,7 @@ def test_ian_ext(self_signed_cert_with_ext: Certificate) -> None:
     assert any(ip.value == IP_ADDRESS_VALUE for ip in ian.ip_addresses.all())
     # OtherName
     assert ian.other_names.count() == 1
-    other_name = ian.other_names.first()
+    other_name = cast(GeneralNameOtherName, ian.other_names.first())
     assert other_name.type_id == OTHER_NAME_OID
     decoded_asn1, _ = decode(bytes.fromhex(other_name.value), asn1Spec=char.UTF8String())
     assert str(decoded_asn1) == OTHER_NAME_CONTENT
@@ -138,19 +147,19 @@ def test_authority_key_identifier_ext(self_signed_cert_with_ext: Certificate) ->
     assert aki_ext.authority_cert_serial_number == expected_serial_number
 
     # Issuer
-    authority_cert_issuer = aki_ext.authority_cert_issuer
+    authority_cert_issuer = cast(GeneralNamesModel, aki_ext.authority_cert_issuer)
     assert any(r.value == RFC822_EMAIL for r in authority_cert_issuer.rfc822_names.all())
     assert any(d.value == DNS_NAME_VALUE for d in authority_cert_issuer.dns_names.all())
     assert any(u.value == URI_VALUE for u in authority_cert_issuer.uniform_resource_identifiers.all())
     assert authority_cert_issuer.directory_names.count() == 1
-    dir_name = authority_cert_issuer.directory_names.first()
+    dir_name = cast(GeneralNameDirectoryName, authority_cert_issuer.directory_names.first())
     assert any(attr.value == ORGANIZATION_NAME for attr in dir_name.names.all())
     assert any(r.value == REGISTERED_ID_OID for r in authority_cert_issuer.registered_ids.all())
     assert any(ip.value == IP_ADDRESS_VALUE for ip in authority_cert_issuer.ip_addresses.all())
 
     # OtherName
     assert authority_cert_issuer.other_names.count() == 1
-    other_name = authority_cert_issuer.other_names.first()
+    other_name = cast(GeneralNameOtherName, authority_cert_issuer.other_names.first())
     assert other_name.type_id == OTHER_NAME_OID
     decoded_asn1, _ = decode(bytes.fromhex(other_name.value), asn1Spec=char.UTF8String())
     assert str(decoded_asn1) == OTHER_NAME_CONTENT
@@ -300,7 +309,7 @@ def test_subject_information_access_extension(self_signed_cert_with_ext: Certifi
     assert ext is not None
     assert ext.subject_info_access_syntax.count() == 1
 
-    ad = ext.subject_info_access_syntax.first()
+    ad = cast(AccessDescriptionModel, ext.subject_info_access_syntax.first())
     assert ad.access_method == SubjectInformationAccessOID.CA_REPOSITORY.dotted_string
     assert ad.access_location is not None
     assert ad.access_location.dns_name is not None

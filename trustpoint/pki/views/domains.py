@@ -111,7 +111,7 @@ class DomainConfigView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegi
 
         return context  # noqa: RET504
 
-    def post(self, request: HttpRequest, *_args: tuple, **_kwargs: dict) -> HttpResponse:
+    def post(self, request: HttpRequest, *_args: tuple[Any], **_kwargs: dict[str,Any]) -> HttpResponse:
         """Handle config form submission."""
         messages.success(request, _('Settings updated successfully.'))
         return HttpResponseRedirect(self.success_url)
@@ -233,19 +233,19 @@ class DevIdRegistrationDeleteView(DomainContextMixin, TpLoginRequiredMixin, Dele
     template_name = 'pki/devid_registration/confirm_delete.html'
     success_url = reverse_lazy('pki:domains')
 
-    def delete(self, request: HttpRequest, *args: tuple, **kwargs: dict) -> HttpResponse:
+    def delete(self, request: HttpRequest, *args: tuple[Any], **kwargs: dict[str, Any]) -> HttpResponse:
         """Override delete method to add a success message."""
         response = super().delete(request, *args, **kwargs)
         messages.success(request, _('DevID Registration Pattern deleted successfully.'))
         return response
 
-class DevIdMethodSelectView(DomainContextMixin, TpLoginRequiredMixin, FormView):
+class DevIdMethodSelectView(DomainContextMixin, TpLoginRequiredMixin, FormView[DevIdAddMethodSelectForm]):
     """View to select the method to add a DevID Registration pattern."""
 
     template_name = 'pki/devid_registration/method_select.html'
     form_class = DevIdAddMethodSelectForm
 
-    def get_context_data(self, **kwargs: dict) -> dict[str, Any]:
+    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
         """Add additional context data."""
         context = super().get_context_data(**kwargs)
         context['domain'] = get_object_or_404(DomainModel, id=self.kwargs.get('pk'))

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from core.file_builder.certificate import CertificateArchiveFileBuilder, CertificateFileBuilder
 from core.file_builder.enum import ArchiveFormat, CertificateFileFormat
@@ -57,7 +57,8 @@ class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, TpLoginRequi
     model = CertificateModel
     context_object_name = 'certificate'
 
-    def get(self, _request: HttpRequest, pk: str | None = None, *_args: tuple, **_kwargs: dict) -> HttpResponse:
+    def get(self, _request: HttpRequest, pk: str | None = None,
+            *_args: tuple[Any], **_kwargs: dict[str, Any]) -> HttpResponse:
         """HTTP GET Method.
 
         If only the certificate primary key are passed in the url, the download summary will be displayed.

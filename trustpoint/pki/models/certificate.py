@@ -329,7 +329,7 @@ class CertificateModel(LoggerMixin, models.Model):
         """Human-readable representation of the CertificateModel instance."""
         return self.common_name
 
-    def save(self, *_args: tuple, **_kwargs: dict) -> None:
+    def save(self, *_args: tuple[str], **_kwargs: dict[str,str]) -> None:
         """Save method must not be called directly to protect the integrity.
 
         This method makes sure save() is not called by mistake.
@@ -421,17 +421,18 @@ class CertificateModel(LoggerMixin, models.Model):
 
     @staticmethod
     def _get_spki_info(cert: x509.Certificate) -> tuple[PublicKeyAlgorithmOid, int, NamedCurve]:
-        if isinstance(cert.public_key(), rsa.RSAPublicKey):
+        cert_public_key = cert.public_key()
+        if isinstance(cert_public_key, rsa.RSAPublicKey):
             spki_algorithm_oid = PublicKeyAlgorithmOid.RSA
             spki_ec_curve_oid = NamedCurve.NONE
-        elif isinstance(cert.public_key(), ec.EllipticCurvePublicKey):
+        elif isinstance(cert_public_key, ec.EllipticCurvePublicKey):
             spki_algorithm_oid = PublicKeyAlgorithmOid.ECC
-            spki_ec_curve_oid = NamedCurve[cert.public_key().curve.name.upper()]
+            spki_ec_curve_oid = NamedCurve[cert_public_key.curve.name.upper()]
         else:
             exc_msg = 'Subject Public Key Info contains an unsupported key type.'
             raise TypeError(exc_msg)
 
-        return spki_algorithm_oid, cert.public_key().key_size, spki_ec_curve_oid
+        return spki_algorithm_oid, cert_public_key.key_size, spki_ec_curve_oid
 
     # --------------------------------------------- Data Retrieval Methods ---------------------------------------------
 

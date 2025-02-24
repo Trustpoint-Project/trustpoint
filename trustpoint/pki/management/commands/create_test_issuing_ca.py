@@ -15,7 +15,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
 
     help = 'Removes all migrations, deletes db and runs makemigrations and migrate afterwards.'
 
-    def handle(self, *_args: tuple, **_kwargs: dict) -> None:
+    def handle(self, *_args: tuple[str], **_kwargs: dict[str,str]) -> None:
         """Executes the command."""
         key_usage_extension = x509.KeyUsage(
             digital_signature=True,

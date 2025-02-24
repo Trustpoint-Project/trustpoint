@@ -217,7 +217,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
         with Path(path / 'trust-store.pem').open('wb') as f:
             f.write(certs)
 
-    def handle(self, *_args: tuple, **_kwargs: dict) -> None:
+    def handle(self, *_args: tuple[str], **_kwargs: dict[str,str]) -> None:
         """Executes the command."""
         tests_data_path = Path(__file__).parent.parent.parent.parent.parent / Path('tests/data/certs')
         shutil.rmtree(tests_data_path, ignore_errors=True)
@@ -231,10 +231,6 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
         self._create_trust_store(path=tests_data_path)
 
         for algo in KeyAlgorithm:
-            cmd = (
-                f'openssl verify -CAfile {tests_data_path}/{algo.value}-root-ca-cert.pem -untrusted '
-                f'{tests_data_path}/{algo.value}-issuing-ca-cert.pem {tests_data_path}/{algo.value}-ee-cert.pem'
-            )
             cmd = (
                 'openssl', 'verify',
                 '-CAfile', f'{tests_data_path}/{algo.value}-root-ca-cert.pem',

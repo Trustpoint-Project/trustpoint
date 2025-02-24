@@ -22,7 +22,7 @@ class Command(BaseCommand):
 
     help = 'Creates a TLS Server Certificate as required.'
 
-    def handle(self, *_args: tuple, **_kwargs: dict) -> None:
+    def handle(self, *_args: tuple[str], **_kwargs: dict[str,str]) -> None:
         """Executes the command."""
         one_day = datetime.timedelta(1, 0, 0)
         ipv4_addresses = subprocess.check_output(['hostname', '-I']).decode().strip()  # noqa: S603, S607

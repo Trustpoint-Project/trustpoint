@@ -16,7 +16,7 @@ class Command(BaseCommand):
     """Add domains and associated device names with random onboarding protocol and serial number"""
     help = 'Add domains and associated device names with random onboarding protocol and serial number'
 
-    def handle(self, *_args: tuple, **_kwargs: dict) -> None:
+    def handle(self, *_args: tuple[str], **_kwargs: dict[str,str]) -> None:
         """Execute the command."""
         call_command('create_multiple_test_issuing_cas')
         call_command('import_idevid_truststores')

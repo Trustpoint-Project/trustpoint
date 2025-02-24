@@ -16,7 +16,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
 
     help = 'Generate a long certificate chain with 4 Intermediate CAs.'
 
-    def handle(self, *_args: tuple, **_kwargs: dict) -> None:
+    def handle(self, *_args: tuple[str], **_kwargs: dict[str,str]) -> None:
         """Executes the command."""
         root_1, root_1_key = self.create_root_ca('Root CA A')
 

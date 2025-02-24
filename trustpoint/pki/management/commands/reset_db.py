@@ -27,7 +27,7 @@ class Command(BaseCommand):
         parser.add_argument('--force', action='store_true', help='Force database reset without prompt.')
         parser.add_argument('--no-user', action='store_true', help='Skip superuser creation.')
 
-    def handle(self, *_args: tuple, **options: dict) -> None:
+    def handle(self, *_args: tuple[str], **options: dict[str,str]) -> None:
         """Executes the command."""
         # Confirm database reset
         if not options.get('force'):

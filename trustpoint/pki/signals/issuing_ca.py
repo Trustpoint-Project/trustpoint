@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from django.db.models.signals import post_delete, pre_delete  # type: ignore[import-untyped]
-from django.dispatch import receiver  # type: ignore[import-untyped]
+from django.db.models.signals import post_delete, pre_delete
+from django.dispatch import receiver
 
 from pki.models.credential import CertificateChainOrderModel
 from pki.models.issuing_ca import IssuingCaModel

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
 from django.db.models import ProtectedError
@@ -152,7 +152,7 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, TpLoginRequiredMixin, De
 
     # TODO(Air): This view should use a POST request as it is an action.
     # However, this is not trivial in the config view as that already contains a form.
-    def get(self, request: HttpRequest, *_args: tuple, **_kwargs: dict) -> HttpResponse:
+    def get(self, request: HttpRequest, *_args: tuple[Any], **_kwargs: dict[str,Any]) -> HttpResponse:
         """Generate a CRL for the Issuing CA (should be POST!)."""
         issuing_ca = self.get_object()
         if issuing_ca.issue_crl():
@@ -172,7 +172,7 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView):
     ignore_url = reverse_lazy('pki:issuing_cas')
     context_object_name = 'issuing_ca'
 
-    def get(self, request: HttpRequest, *_args: tuple, **_kwargs: dict) -> HttpResponse:
+    def get(self, request: HttpRequest, *_args: tuple[Any], **_kwargs: dict[str,Any]) -> HttpResponse:
         """Download the CRL of the Issuing CA."""
         issuing_ca = self.get_object()
         crl_pem = issuing_ca.crl_pem

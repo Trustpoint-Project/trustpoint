@@ -24,7 +24,7 @@ class Command(BaseCommand):
         'rsa4/rsa4_chain.pem': 'RSA-4096',
     })
 
-    def handle(self, *_args: tuple, **_kwargs: dict) -> None:
+    def handle(self, *_args: tuple[str], **_kwargs: dict[str,str]) -> None:
         """Execute the command."""
         base_path = Path.resolve(
             Path(Path.parent(__file__) / '../../../../tests/data/idevid_hierarchies')

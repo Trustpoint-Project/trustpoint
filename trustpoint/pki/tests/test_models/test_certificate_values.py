@@ -128,7 +128,7 @@ def test_subject_attributes(self_signed_cert_basic: CertificateTuple) -> None:
 
 
 @pytest.mark.django_db
-def test_certificate_pem(self_signed_cert_basic: CertificateModel) -> None:
+def test_certificate_pem(self_signed_cert_basic: CertificateTuple) -> None:
     """Test if the PEM-encoded certificate is correctly saved."""
     cert_model, cert = self_signed_cert_basic
     assert cert.public_bytes(
@@ -137,7 +137,7 @@ def test_certificate_pem(self_signed_cert_basic: CertificateModel) -> None:
 
 
 @pytest.mark.django_db
-def test_public_key_pem(self_signed_cert_basic: CertificateModel) -> None:
+def test_public_key_pem(self_signed_cert_basic: CertificateTuple) -> None:
     """Test if the PEM-encoded public key is correctly saved."""
     cert_model, cert = self_signed_cert_basic
     assert cert.public_key().public_bytes(
@@ -147,7 +147,7 @@ def test_public_key_pem(self_signed_cert_basic: CertificateModel) -> None:
 
 
 @pytest.mark.django_db
-def test_subject_public_bytes(self_signed_cert_basic: CertificateModel) -> None:
+def test_subject_public_bytes(self_signed_cert_basic: CertificateTuple) -> None:
     """Test if the subject public bytes are correctly saved."""
     cert_model, cert = self_signed_cert_basic
     assert cert.subject.public_bytes().hex().upper() == cert_model.subject_public_bytes
@@ -155,7 +155,7 @@ def test_subject_public_bytes(self_signed_cert_basic: CertificateModel) -> None:
 ONE_MINUTE = 60
 
 @pytest.mark.django_db
-def test_created_at_timestamp(self_signed_cert_basic: CertificateModel) -> None:
+def test_created_at_timestamp(self_signed_cert_basic: CertificateTuple) -> None:
     """Test if the creation timestamp is set correctly."""
     cert_model, _ = self_signed_cert_basic
     now = datetime.now(UTC)
@@ -163,7 +163,7 @@ def test_created_at_timestamp(self_signed_cert_basic: CertificateModel) -> None:
 
 
 @pytest.mark.django_db
-def test_ca_attributes(self_signed_cert_basic: CertificateModel) -> None:
+def test_ca_attributes(self_signed_cert_basic: CertificateTuple) -> None:
     """Test if CA-related attributes are correctly stored."""
     cert_model, _ = self_signed_cert_basic
     assert cert_model.is_ca is True
