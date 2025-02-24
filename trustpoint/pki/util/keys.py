@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.db import models
 
 if TYPE_CHECKING:
-    from trustpoint_core.x509 import PrivateKey
+    from trustpoint_core.types import PrivateKey
     from pki.models.credential import CredentialModel
     from pki.models.domain import DomainModel
 

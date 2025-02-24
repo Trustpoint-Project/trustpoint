@@ -16,7 +16,7 @@ from pki.models import IssuingCaModel
 from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
-    from trustpoint_core.x509 import PrivateKey
+    from trustpoint_core.types import PrivateKey
 
 logger = logging.getLogger(__name__)
 
