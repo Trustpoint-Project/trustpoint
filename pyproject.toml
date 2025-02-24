@@ -113,6 +113,10 @@ convention = "google"
 strict = true
 plugins = ["mypy_django_plugin.main"]
 
+[[tool.mypy.overrides]]
+module = ["crispy_bootstrap5.*", "crispy_forms.*"]
+ignore_missing_imports = true
+
 [tool.django-stubs]
 django_settings_module = "trustpoint.settings"
 
