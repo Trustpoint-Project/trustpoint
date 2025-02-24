@@ -37,6 +37,9 @@ class DomainModel(models.Model):
         default=True,
     )
 
+    created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
+    updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
+
     def __repr__(self) -> str:
         return f'DomainModel(unique_name={self.unique_name})'
 

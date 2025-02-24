@@ -51,6 +51,44 @@ class CertificateDetailView(CertificatesContextMixin, TpLoginRequiredMixin, Deta
     template_name = 'pki/certificates/details.html'
     context_object_name = 'cert'
 
+class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView):
+    """View for downloading a single certificate."""
+
+    model = CertificateModel
+    context_object_name = 'certificate'
+
+    def get(self, request: HttpRequest, pk: str | None = None, *args: tuple, **kwargs: dict) -> HttpResponse:
+        """HTTP GET Method.
+
+        If only the certificate primary key are passed in the url, the download summary will be displayed.
+        If value for file_format is also provided, a file download will be performed.
+
+        Compare the re_path regex in the pki.urls package.
+
+        Args:
+            request: The HttpRequest object.
+            pk: A string containing the certificate primary key.
+            *args: Positional arguments.
+            **kwargs: Keyword arguments.
+
+        Returns:
+            HttpResponse: The HTTP response with either the download summary or a file download.
+
+        Raises:
+            Http404
+        """
+        if not pk:
+            raise Http404
+
+        certificate_serializer = CertificateModel.objects.get(pk=pk).get_certificate_serializer()
+        file_bytes = CertificateFileBuilder.build(certificate_serializer, file_format=CertificateFileFormat.PEM)
+
+        response = HttpResponse(file_bytes, content_type=CertificateFileFormat.PEM.mime_type)
+        response['Content-Disposition'] = f'attachment; filename="issuing_ca_cert.pem"'
+
+        return response
+
+
 class CertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView):
     """View for downloading a single certificate."""
 

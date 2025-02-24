@@ -15,75 +15,48 @@
                 <div class="tp-card-centered-content">
                     <h2>General</h2>
                     <hr class="hr-m">
-                    <div class="tp-kvp-list">
+                    <div class="tp-kvp-list mb-5">
                         <div>
                             <div>{% trans 'Unique Name' %}</div>
                             <div> {{ domain.unique_name }} </div>
                         </div>
+
+
                         <div>
-                            <div>{% trans 'URL Path Segment' %}</div>
-                            <div> {{ domain.unique_name.lower }} </div>
+                            <div>{% trans '# Devices' %}</div>
+                            <div>{{ domain.devices.count }}</div>
                         </div>
-                    </div>
-                    <h5 class="mb-2 ms-2">{% trans 'Devices in Domain' %}</h5>
-                    <div class="tp-kvp-list">
-                        <div>
-                            <div>{% trans 'Pending devices' %}</div>
-                            <div> {{ devices_count.P|default:0 }} </div>
-                        </div>
-                        <div>
-                            <div>{% trans 'Running devices' %}</div>
-                            <div> {{ devices_count.R|default:0 }} </div>
-                        </div>
-                        <div>
-                            <div>{% trans 'Onboarded devices' %}</div>
-                            <div> {{ devices_count.O|default:0 }} </div>
-                        </div>
-                        <div>
-                            <div>{% trans 'Failed devices' %}</div>
-                            <div> {{ devices_count.F|default:0 }} </div>
-                        </div>
-                        <div>
-                            <div>{% trans 'Revoked devices' %}</div>
-                            <div> {{ devices_count.D|default:0 }} </div>
-                        </div>
-                    </div>
-                    <h2>{% trans 'Issuing CA' %}</h2>
-                    <hr class="hr-m">
-                    <div class="tp-kvp-list">
+
+
                         <div>
                             <div>{% trans 'Issuing CA' %}</div>
-                            <div> {{ domain.issuing_ca.unique_name }} </div>
+                            <div>
+                                <a href="{% url 'pki:issuing_cas-config' pk=domain.issuing_ca.id %}">
+                                    {{ domain.issuing_ca.unique_name }}
+                                </a>
+                            </div>
                         </div>
+
                         <div>
                             <div>{% trans 'Expiry Date' %}</div>
                             <div> {{ domain.issuing_ca.credential.certificate.not_valid_after }} </div>
                         </div>
-{#                        <div>#}
-{#                            <div>{% trans 'Certificates Issued:' %}</div>#}
-{#                            <div>#}
-{#                                <a href="{% url 'pki:certificate-detail' pk=domain.issuing_ca.credential.certificate.id %}">#}
-{#                                    {% if domain.issuing_ca.credential.certificate.common_name %}#}
-{#                                        CN: {{ domain.issuing_ca.credential.certificate.common_name }}#}
-{#                                    {% else %}#}
-{#                                        {% trans 'Issuing CA Certificate' %}#}
-{#                                    {% endif %}#}
-{#                                </a>#}
-{#                            </div>#}
-{#                        </div>#}
+
                     </div>
 
-                    <h2>{% trans 'DevID Registration' %}</h2>
-                    <hr class="hr-m">
-
+                    <h2>{% trans 'Add New DevID Registration Pattern' %}</h2>
+                    <hr>
                     <a href="{% url 'pki:devid_registration-method_select' pk=domain.id %}"
-                       class="btn btn-primary tp-table-btn min-width-20 mt-3">
-                        {% trans 'Create new DevID Registration Pattern' %}
+                           class="btn btn-primary tp-table-btn min-width-20">
+                            {% trans 'Create new DevID Registration Pattern' %}
                     </a>
 
-                    <br>
+                    <h2 class="mt-5">{% trans 'DevID Registration Patterns' %}</h2>
+                    <hr>
 
                     {% include 'pki/devid_registration/table.html' %}
+
+
 
                 </div>
             </div>

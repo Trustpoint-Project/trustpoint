@@ -2,46 +2,49 @@
 
 {% block content %}
 <div class="table-responsive">
-  <table class="table">
-      <thead>
+    <table class="table">
+        <thead>
         <tr>
-          <th>
-              <a href="?sort={% if current_sort == 'unique_name' %}-{% endif %}unique_name">
-                  {% trans 'Unique Name' %}
-              </a>
-          </th>
-          <th>
-              <a href="?sort={% if current_sort == 'truststore' %}-{% endif %}truststore">
-                  {% trans 'Truststore' %}
-              </a>
-          </th>
-          <th>
-              <a href="?sort={% if current_sort == 'serial_number_pattern' %}-{% endif %}serial_number_pattern">
-                  {% trans 'Serial Number Pattern' %}
-              </a>
-          </th>
-          <th>Delete</th>
+            <th>
+                <a href="?sort={% if current_sort == 'unique_name' %}-{% endif %}unique_name">
+                    {% trans 'Unique Name' %}
+                </a>
+            </th>
+            <th>
+                <a href="?sort={% if current_sort == 'truststore' %}-{% endif %}truststore">
+                    {% trans 'Truststore' %}
+                </a>
+            </th>
+            <th>
+                <a href="?sort={% if current_sort == 'serial_number_pattern' %}-{% endif %}serial_number_pattern">
+                    {% trans 'Serial Number Pattern' %}
+                </a>
+            </th>
+            <th>Delete</th>
+            <th>Help</th>
         </tr>
-      </thead>
-      <tbody>
-          {% for devid_registration in devid_registrations %}
-              <tr>
-                  <td>{{ devid_registration.unique_name }}</td>
-                  <td>{{ devid_registration.truststore }}</td>
-                  <td>{{ devid_registration.serial_number_pattern }}</td>
-                  <td>
-                      <a href="{% url 'pki:devid_registration_delete' pk=devid_registration.id %}"
-                         class="btn btn-danger tp-table-btn">
-                         {% trans 'Delete' %}
-                  </td>
-              </tr>
-          {% empty %}
-              <tr>
-                  <td colspan="4" class="middle">{% trans 'There are no DevID Registration Patterns available.' %}</td>
-              </tr>
-          {% endfor %}
-      </tbody>
-  </table>
-  {% include 'trustpoint/pagination.html' %}
+        </thead>
+        <tbody>
+        {% for devid_registration in devid_registrations %}
+        <tr>
+            <td>{{ devid_registration.unique_name }}</td>
+            <td>{{ devid_registration.truststore }}</td>
+            <td>{{ devid_registration.serial_number_pattern }}</td>
+            <td>
+                <a href="{% url 'pki:devid_registration_delete' pk=devid_registration.id %}"
+                   class="btn btn-danger tp-table-btn w-100">
+                    {% trans 'Delete' %}
+            </td>
+            <td><a href="{% url 'devices:help-onboarding_cmp-idevid-registration' pk=devid_registration.id %}" class="btn btn-primary tp-table-btn w-100">Help - Onboard New Device</a></td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="5" class="middle">{% trans 'There are no DevID Registration Patterns available.' %}</td>
+        </tr>
+        {% endfor %}
+
+        </tbody>
+    </table>
+    {% include 'trustpoint/pagination.html' %}
 </div>
 {% endblock content %}

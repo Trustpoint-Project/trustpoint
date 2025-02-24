@@ -20,13 +20,7 @@
                                     <li class="tp-card-split">
                                         {{ domain.unique_name }}
                                         <div>
-                                            {#                                            <a href="{% url 'pki:domains-detail' domain.id %}" class="primary">#}
-                                            {#                                                {% trans "Details" %}#}
-                                            {#                                            </a>#}
-                                            |
-                                            {#                                            <a href="{% url 'pki:domains-config' domain.id %}" class="primary">#}
-                                            {#                                                {% trans "Config" %}#}
-                                            {#                                            </a>#}
+
                                         </div>
                                     </li>
                                 {% endfor %}
@@ -102,7 +96,7 @@
                                 </div>
                                 <div>
                                     <div>{% trans 'Certificates issued:' %}</div>
-                                    <div>-------------------- TODO --------------------</div>
+                                    <div></div>
                                 </div>
                             </div>
                         </div>
@@ -306,9 +300,7 @@
                     <div class="card-footer d-flex">
                         <div class="tp-card-btn-footer m-1">
                             <a href="{% url 'pki:issuing_cas' %}"
-                               class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                            <button type="submit" class="btn btn-primary">{% trans 'Save' %}</button>
-
+                               class="btn btn-secondary">{% trans 'Back' %}</a>
                         </div>
                     </div>
                 </div>

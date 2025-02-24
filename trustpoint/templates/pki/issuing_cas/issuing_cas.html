@@ -28,9 +28,7 @@
                         </a>
                     </th>
                     <th>
-                        <a href="">
-                            Signature-Suite
-                        </a>
+                            {% trans 'Signature-Suite' %}
                     </th>
                     <th>
                         <a href="?sort={% if current_sort == 'updated_at' %}-{% endif %}updated_at">
@@ -56,11 +54,11 @@
                         <td>{{ ca.unique_name }}</td>
                         <td>{{ ca.credential.certificate.common_name }}</td>
                         <td>{{ ca.credential.certificate.not_valid_after }}</td>
-                        <td>{{ ca.credential.certificate.signature_algorithm }}</td>
+                        <td>{{ ca.signature_suite }}</td>
                         <td>{{ ca.updated_at }}</td>
                         <td>{{ ca.created_at }}</td>
-                        <td><a href="config/{{ ca.id }}/" class="btn btn-primary tp-table-btn">Config</a></td>
-                        <td><a href="delete/{{ ca.id }}/" class="btn btn-danger tp-table-btn">Delete</a></td>
+                        <td><a href="config/{{ ca.id }}/" class="btn btn-primary tp-table-btn w-100">Config</a></td>
+                        <td><a href="delete/{{ ca.id }}/" class="btn btn-danger tp-table-btn w-100">Delete</a></td>
                     </tr>
                 {% empty %}
                     <tr>

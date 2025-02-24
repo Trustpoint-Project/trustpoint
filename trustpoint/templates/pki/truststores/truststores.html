@@ -33,7 +33,6 @@
                 </tr>
                 </thead>
                 <tbody>
-                {# When adding or removing columns, please update the "colspan" attribute in the {% empty %} section accordingly #}
                 {% for truststore in page_obj %}
                     <tr>
                         <td class="row_checkbox">
@@ -43,13 +42,13 @@
                         <td>{{ truststore.get_intended_usage_display }}</td>
                         <td>{{ truststore.created_at }}</td>
                         <td>
-                            <a href="details/{{ truststore.id }}/" class="btn btn-primary tp-table-btn">Details</a>
+                            <a href="details/{{ truststore.id }}/" class="btn btn-primary tp-table-btn w-100">Details</a>
                         </td>
                         <td>
-                            <a href="download/{{ truststore.id }}/" class="btn btn-primary tp-table-btn">Download</a>
+                            <a href="download/{{ truststore.id }}/" class="btn btn-primary tp-table-btn w-100">Download</a>
                         </td>
                         <td>
-                            <a href="delete/{{ truststore.id }}/" class="btn btn-danger tp-table-btn">Delete</a>
+                            <a href="delete/{{ truststore.id }}/" class="btn btn-danger tp-table-btn w-100">Delete</a>
                         </td>
                     </tr>
                 {% empty %}
