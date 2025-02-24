@@ -1,6 +1,10 @@
 version = 1
 revision = 1
 requires-python = ">=3.11"
+resolution-markers = [
+    "python_full_version >= '3.12'",
+    "python_full_version < '3.12'",
+]
 
 [[package]]
 name = "alabaster"
@@ -1390,6 +1394,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "beautifulsoup4" },
     { name = "behave" },
     { name = "behave-django" },
     { name = "behave-html-pretty-formatter" },
@@ -1443,6 +1448,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "beautifulsoup4", marker = "extra == 'dev'", specifier = ">=4.13.3" },
     { name = "behave", marker = "extra == 'dev'", specifier = ">=1.2.7.dev6" },
     { name = "behave-django", marker = "extra == 'dev'", specifier = ">=1.5.0" },
     { name = "behave-html-pretty-formatter", marker = "extra == 'dev'", specifier = ">=1.12.3" },
