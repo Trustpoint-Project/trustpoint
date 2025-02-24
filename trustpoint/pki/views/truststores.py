@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.file_builder.certificate import CertificateCollectionArchiveFileBuilder, CertificateCollectionBuilder
-from core.file_builder.enum import ArchiveFormat, CertificateFileFormat
+from trustpoint_core.file_builder.certificate import CertificateCollectionArchiveFileBuilder, CertificateCollectionBuilder
+from trustpoint_core.file_builder.enum import ArchiveFormat, CertificateFileFormat
 from django.contrib import messages
 from django.db.models import ProtectedError
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect

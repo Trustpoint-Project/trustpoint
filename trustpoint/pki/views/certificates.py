@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.file_builder.certificate import CertificateArchiveFileBuilder, CertificateFileBuilder
-from core.file_builder.enum import ArchiveFormat, CertificateFileFormat
+from trustpoint_core.file_builder.certificate import CertificateArchiveFileBuilder, CertificateFileBuilder
+from trustpoint_core.file_builder.enum import ArchiveFormat, CertificateFileFormat
 from django.http import Http404, HttpRequest, HttpResponse
 from django.urls import reverse_lazy
 from django.views.generic.base import RedirectView

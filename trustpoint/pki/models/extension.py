@@ -7,7 +7,7 @@ import abc
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
 from typing import TYPE_CHECKING, ClassVar
 
-from core.oid import CertificateExtensionOid, NameOid
+from trustpoint_core.oid import CertificateExtensionOid, NameOid
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
 from django.db import models
