@@ -40,7 +40,7 @@ jobs:
             docker tag ${DOCKER_HUB_USERNAME}/postgres:${GITHUB_SHA} ${DOCKER_HUB_USERNAME}/postgres:latest
 
       - name: Push docker images to Docker Hub
-        run:
+        run: |
           # Push trustpoint images
           docker push ${DOCKER_HUB_USERNAME}/trustpoint:${GITHUB_SHA}
           docker push ${DOCKER_HUB_USERNAME}/trustpoint:${TAG_VERSION}
