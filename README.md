@@ -11,7 +11,7 @@
 ![Status](https://img.shields.io/badge/Status-Beta-red)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Pytest Status](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/pytest.yml/badge.svg)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/pytest.yml)
-[![codecov](https://codecov.io/gh/Trustpoint-Project/trustpoint/branch/test-plan-clean-up/graph/badge.svg?token=0N31L1QWPE)](https://codecov.io/gh/Trustpoint-Project/trustpoint)
+[![codecov](https://codecov.io/gh/Trustpoint-Project/trustpoint/graph/badge.svg?token=0N31L1QWPE)](https://codecov.io/gh/Trustpoint-Project/trustpoint)
 [![MyPy Status](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/mypy.yml/badge.svg)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/mypy.yml)
 [![Ruff Status](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/ruff.yml/badge.svg)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/ruff.yml)
 
