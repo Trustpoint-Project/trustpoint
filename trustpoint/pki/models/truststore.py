@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.serializer import CertificateSerializer, CertificateCollectionSerializer
+from core.serializer import CertificateCollectionSerializer
 from core.validator.field import UniqueNameValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -10,8 +10,8 @@ from django.utils.translation import gettext_lazy as _
 from .certificate import CertificateModel
 
 __all__ = [
-    'TrustpointTlsServerCredentialModel',
     'ActiveTrustpointTlsServerCredentialModel',
+    'TrustpointTlsServerCredentialModel',
     'TruststoreModel',
     'TruststoreOrderModel'
 ]

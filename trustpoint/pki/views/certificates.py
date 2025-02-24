@@ -84,7 +84,7 @@ class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, TpLoginRequi
         file_bytes = CertificateFileBuilder.build(certificate_serializer, file_format=CertificateFileFormat.PEM)
 
         response = HttpResponse(file_bytes, content_type=CertificateFileFormat.PEM.mime_type)
-        response['Content-Disposition'] = f'attachment; filename="issuing_ca_cert.pem"'
+        response['Content-Disposition'] = 'attachment; filename="issuing_ca_cert.pem"'
 
         return response
 

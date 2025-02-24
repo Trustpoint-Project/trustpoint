@@ -4,11 +4,12 @@ from django.contrib import messages
 from django.db.models import ProtectedError
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect
-from django.utils.translation import gettext as _
 from django.urls import reverse_lazy
+from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
-from django.views.generic.list import ListView  # type: ignore[import-untyped]
 from django.views.generic.edit import FormView
+from django.views.generic.list import ListView  # type: ignore[import-untyped]
+
 from pki.forms import (
     IssuingCaAddFileImportPkcs12Form,
     IssuingCaAddFileImportSeparateFilesForm,
@@ -17,9 +18,9 @@ from pki.forms import (
 from pki.models import IssuingCaModel
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
-    LoggerMixin,
     BulkDeleteView,
     ContextDataMixin,
+    LoggerMixin,
     SortableTableMixin,
     TpLoginRequiredMixin,
 )

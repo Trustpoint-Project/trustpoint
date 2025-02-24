@@ -4,13 +4,13 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING
 
+from core import oid
 from core.validator.field import UniqueNameValidator
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from core import oid
 
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel

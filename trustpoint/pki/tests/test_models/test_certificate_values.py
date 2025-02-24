@@ -1,10 +1,14 @@
-from datetime import datetime, timezone
+"""Tests that verify the correctness of certificate property values."""
+
+# ruff: noqa: F401  # keep the unused imports for future test use
+
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import pytest
 from cryptography.hazmat.primitives import hashes, serialization
 
 # Project imports
-from pki.models.certificate import CertificateModel
 from pki.tests import (
     COMMON_NAME,
     COUNTRY_NAME,
@@ -18,7 +22,9 @@ from pki.tests import (
     RFC822_EMAIL,
     URI_VALUE,
 )
-from pki.tests.fixtures import self_signed_cert_basic
+
+if TYPE_CHECKING:
+    from pki.models.certificate import CertificateModel
 
 # ----------------------------
 # Certificate Property Tests
@@ -150,7 +156,7 @@ def test_subject_public_bytes(self_signed_cert_basic) -> None:
 def test_created_at_timestamp(self_signed_cert_basic) -> None:
     """Test if the creation timestamp is set correctly."""
     cert_model, _ = self_signed_cert_basic
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     assert (now - cert_model.created_at).total_seconds() < 60
 
 

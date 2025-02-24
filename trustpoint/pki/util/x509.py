@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 
 from core.serializer import CredentialSerializer
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import rsa, ec
-from cryptography.hazmat.primitives.hashes import HashAlgorithm, SHA256
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509.oid import NameOID
 
 from pki.models import IssuingCaModel
@@ -63,8 +63,8 @@ class CertificateGenerator:
         builder = builder.issuer_name(x509.Name([
             x509.NameAttribute(NameOID.COMMON_NAME, issuer_cn),
         ]))
-        builder = builder.not_valid_before(datetime.datetime.now(tz=datetime.timezone.utc) - one_day)
-        builder = builder.not_valid_after(datetime.datetime.now(tz=datetime.timezone.utc) + (one_day * validity_days))
+        builder = builder.not_valid_before(datetime.datetime.now(tz=datetime.UTC) - one_day)
+        builder = builder.not_valid_after(datetime.datetime.now(tz=datetime.UTC) + (one_day * validity_days))
         builder = builder.serial_number(x509.random_serial_number())
         builder = builder.public_key(public_key)
         builder = builder.add_extension(
@@ -98,7 +98,7 @@ class CertificateGenerator:
                 key_size=2048
             )
 
-        not_valid_before = datetime.datetime.now(tz=datetime.timezone.utc)
+        not_valid_before = datetime.datetime.now(tz=datetime.UTC)
         not_valid_after = not_valid_before + (one_day * validity_days)
         # Note: There was an if-else with strange logic for negative validity days here
         # I do not understand the concept of negative validity days

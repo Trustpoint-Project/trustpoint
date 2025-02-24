@@ -1,11 +1,10 @@
 import hashlib
 import ipaddress
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest  # type: ignore  # noqa: PGH003
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.x509 import (
     AuthorityKeyIdentifier,
     BasicConstraints,
@@ -52,7 +51,7 @@ from pki.tests import (
 # Basic Self-Signed Certificate Fixture
 # ----------------------------
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope='function')
 def self_signed_cert_basic(rsa_private_key) -> CertificateModel:
     """Creates a self-signed CA certificate with minimal extensions and saves it to the database once per module.
 
@@ -63,7 +62,7 @@ def self_signed_cert_basic(rsa_private_key) -> CertificateModel:
         x509.NameAttribute(NameOID.COUNTRY_NAME, COUNTRY_NAME),
     ])
     issuer = subject
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     basic_constraints = BasicConstraints(ca=True, path_length=None)
 
@@ -86,7 +85,7 @@ def self_signed_cert_basic(rsa_private_key) -> CertificateModel:
 # Self-Signed Certificate with Extensions Fixture
 # ----------------------------
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope='function')
 def self_signed_cert_with_ext(rsa_private_key) -> x509.Certificate:
     """Create a self-signed certificate with multiple extensions."""
     subject = x509.Name([
@@ -94,7 +93,7 @@ def self_signed_cert_with_ext(rsa_private_key) -> x509.Certificate:
         x509.NameAttribute(NameOID.COUNTRY_NAME, COUNTRY_NAME),
     ])
     issuer = subject
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Build General Names
     rfc822_name = RFC822Name(RFC822_EMAIL)
@@ -140,12 +139,12 @@ def self_signed_cert_with_ext(rsa_private_key) -> x509.Certificate:
 
     cp = x509.CertificatePolicies([
         PolicyInformation(
-            policy_identifier=ObjectIdentifier("2.23.140.1.1"),
+            policy_identifier=ObjectIdentifier('2.23.140.1.1'),
             policy_qualifiers=[
-                "https://example-ev-certs.com/cps",
+                'https://example-ev-certs.com/cps',
                 UserNotice(
                     notice_reference=NoticeReference(
-                        organization="Example EV Certification Authority",
+                        organization='Example EV Certification Authority',
                         notice_numbers=[1, 2]
                     ),
                     explicit_text="EV certificates issued under Example EV CA's CP/CPS."
@@ -153,7 +152,7 @@ def self_signed_cert_with_ext(rsa_private_key) -> x509.Certificate:
             ],
         ),
         x509.PolicyInformation(
-            policy_identifier=x509.ObjectIdentifier("2.23.140.1.2.1"),
+            policy_identifier=x509.ObjectIdentifier('2.23.140.1.2.1'),
             policy_qualifiers=[
                 'https://example-dv-certs.com/cps',
                 x509.UserNotice(

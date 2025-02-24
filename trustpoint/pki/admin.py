@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import CertificateModel, CredentialModel, CertificateChainOrderModel, IssuingCaModel
+
+from .models import CertificateChainOrderModel, CertificateModel, CredentialModel, IssuingCaModel
 from .models.devid_registration import DevIdRegistration
 
 

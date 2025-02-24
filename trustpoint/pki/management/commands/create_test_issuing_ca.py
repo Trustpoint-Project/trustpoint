@@ -8,9 +8,9 @@ from typing import Union
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, ed448, ed25519, rsa
+from django.core.management.base import BaseCommand
 
 from .base_commands import CertificateCreationCommandMixin
-from django.core.management.base import BaseCommand
 
 PublicKey = Union[rsa.RSAPublicKey, ec.EllipticCurvePublicKey, ed448.Ed448PublicKey, ed25519.Ed25519PublicKey]
 PrivateKey = Union[rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey, ed448.Ed448PrivateKey, ed25519.Ed25519PrivateKey]
@@ -42,7 +42,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
 
         ee_certs = {}
         ee_keys = {}
-        for i in range(0, 100):
+        for i in range(100):
             random_integer = random.randint(20, 80)
             sign = random.choice([1, -1])
             validity_days = random_integer * sign

@@ -1,27 +1,25 @@
 """Module that contains the CertificateModel."""
 from __future__ import annotations
 
+import datetime
 from typing import TYPE_CHECKING
 
-import datetime
+from core.oid import (
+    AlgorithmIdentifier,
+    CertificateExtensionOid,
+    NamedCurve,
+    NameOid,
+    PublicKeyAlgorithmOid,
+    PublicKeyInfo,
+    SignatureSuite,
+)
+from core.serializer import CertificateSerializer, PublicKeySerializer
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, ed448, ed25519, rsa
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
-
-
-from core.oid import (
-    PublicKeyAlgorithmOid,
-    CertificateExtensionOid,
-    NameOid,
-    AlgorithmIdentifier,
-    NamedCurve,
-    SignatureSuite,
-    PublicKeyInfo
-)
-from core.serializer import CertificateSerializer, PublicKeySerializer
 
 from pki.models.extension import (
     AttributeTypeAndValue,
@@ -100,9 +98,9 @@ class CertificateModel(LoggerMixin, models.Model):
     def certificate_status(self) -> CertificateStatus:
         if RevokedCertificateModel.objects.filter(certificate=self).exists():
             return self.CertificateStatus.REVOKED
-        elif datetime.datetime.now(datetime. UTC) < self.not_valid_before:
+        if datetime.datetime.now(datetime. UTC) < self.not_valid_before:
             return self.CertificateStatus.NOT_YET_VALID
-        elif datetime.datetime.now(datetime. UTC) > self.not_valid_after:
+        if datetime.datetime.now(datetime. UTC) > self.not_valid_after:
             return self.CertificateStatus.EXPIRED
         return self.CertificateStatus.OK
 
@@ -599,7 +597,7 @@ class CertificateModel(LoggerMixin, models.Model):
             cert_model: CertificateModel,
             certificate: x509.Certificate,
             subject: list[tuple[str, str]],
-            issuer: list[tuple[str, str]]) -> 'CertificateModel':
+            issuer: list[tuple[str, str]]) -> CertificateModel:
 
         cert_model._save()
         for oid, value in subject:
@@ -622,7 +620,6 @@ class CertificateModel(LoggerMixin, models.Model):
         Raises:
             NotImplementedError
         """
-
         raise NotImplementedError(
             '.save() must not be called directly on a Certificate instance to protect the integrity of the database. '
             'Use .save_certificate() or .save_certificate_and_key() passing the required cryptography objects.'

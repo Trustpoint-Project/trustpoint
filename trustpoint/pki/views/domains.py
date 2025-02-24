@@ -130,7 +130,7 @@ class DomainConfigView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegi
                 protocol_object.status = protocol_name in active_protocols
                 protocol_object.save()
 
-        messages.success(request, _("Settings updated successfully."))
+        messages.success(request, _('Settings updated successfully.'))
         return HttpResponseRedirect(self.success_url)
 
 
@@ -259,12 +259,12 @@ class DevIdMethodSelectView(DomainContextMixin, TpLoginRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["domain"] = get_object_or_404(DomainModel, id=self.kwargs.get("pk"))
+        context['domain'] = get_object_or_404(DomainModel, id=self.kwargs.get('pk'))
         return context
 
     def form_valid(self, form) -> HttpResponseRedirect:
         method_select = form.cleaned_data.get('method_select')
-        domain_pk = self.kwargs.get("pk")  # Get domain ID
+        domain_pk = self.kwargs.get('pk')  # Get domain ID
 
         if not method_select:
             return HttpResponseRedirect(reverse('pki:devid_registration-method_select', kwargs={'pk': domain_pk}))

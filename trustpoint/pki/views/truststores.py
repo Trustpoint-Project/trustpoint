@@ -64,7 +64,7 @@ class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormVi
 
     def form_valid(self, form):
         truststore = form.cleaned_data['truststore']
-        domain_id = self.kwargs.get("pk")
+        domain_id = self.kwargs.get('pk')
 
         if domain_id:
             return HttpResponseRedirect(reverse('pki:devid_registration_create-with_truststore_id', kwargs={'pk': domain_id, 'truststore_id': truststore.id}))
@@ -78,9 +78,9 @@ class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormVi
     def get_context_data(self, **kwargs):
         """Include domain in context only if pk is present."""
         context = super().get_context_data(**kwargs)
-        pk = self.kwargs.get("pk")
+        pk = self.kwargs.get('pk')
         if pk:
-            context["domain"] = get_object_or_404(DomainModel, id=pk)
+            context['domain'] = get_object_or_404(DomainModel, id=pk)
         return context
 
 class TruststoreDetailView(TruststoresContextMixin, TpLoginRequiredMixin, DetailView):

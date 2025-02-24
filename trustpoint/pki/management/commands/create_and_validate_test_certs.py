@@ -14,10 +14,10 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.serialization import BestAvailableEncryption, pkcs12
 from cryptography.x509.oid import NameOID
-
-from pki.util.keys import KeyAlgorithm, KeyGenerator
-from .base_commands import CertificateCreationCommandMixin
 from django.core.management.base import BaseCommand
+from pki.util.keys import KeyAlgorithm, KeyGenerator
+
+from .base_commands import CertificateCreationCommandMixin
 
 
 class Command(CertificateCreationCommandMixin, BaseCommand):
@@ -53,7 +53,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             key=ee_key,
             cert=ee_cert,
             cas=[root_cert, issuing_cert],
-            encryption_algorithm=BestAvailableEncryption(b"password")
+            encryption_algorithm=BestAvailableEncryption(b'password')
         )
 
         with open(path / f'{algorithm.value}.p12', 'wb') as f:
@@ -72,7 +72,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             issuer: None | x509.Certificate = None,
             issuer_priv_key: None | rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey = None,
             validity_days: int = 365) -> tuple[str, x509.Certificate, rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey]:
-        
+
         kg = KeyGenerator(algorithm)
         private_key = kg.generate_key()
 
@@ -207,7 +207,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
     def _create_trust_store(path: Path):
         certs = ''
         for value in [algo.value for algo in KeyAlgorithm]:
-            with open(path / f'{value}-chain.pem', 'r') as f:
+            with open(path / f'{value}-chain.pem') as f:
                 certs += f.read()
 
         with open(path / 'trust-store.pem', 'w') as f:

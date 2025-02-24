@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -9,19 +11,16 @@ from core.serializer import (
     PrivateKeySerializer,
 )
 from core.validator.field import UniqueNameValidator
-from django import forms
-from django.utils.translation import gettext_lazy as _
-
-from pki.models import IssuingCaModel, DevIdRegistration
-from trustpoint.views.base import LoggerMixin
-
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
+from django import forms
 from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
+
+from pki.models import DevIdRegistration, IssuingCaModel
 from pki.models.certificate import CertificateModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
-from typing import TYPE_CHECKING
-
+from trustpoint.views.base import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Union

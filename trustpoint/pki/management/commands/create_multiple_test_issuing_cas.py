@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.core.management.base import BaseCommand
 
-from cryptography.hazmat.primitives.asymmetric import rsa, ec
-from cryptography.hazmat.primitives import hashes
 from .base_commands import CertificateCreationCommandMixin
 
 

@@ -6,10 +6,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from cryptography.hazmat.primitives.serialization import BestAvailableEncryption, pkcs12
+from django.core.management.base import BaseCommand
 from pki.models import CertificateModel
 
 from .base_commands import CertificateCreationCommandMixin
-from django.core.management.base import BaseCommand
 
 
 class Command(CertificateCreationCommandMixin, BaseCommand):

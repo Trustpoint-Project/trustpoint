@@ -3,16 +3,10 @@
 
 from __future__ import annotations
 
-import datetime
-
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import NameOID
+from django.core.management.base import BaseCommand
 from pki.models import CertificateModel
 
 from .base_commands import CertificateCreationCommandMixin
-from django.core.management.base import BaseCommand
 
 
 class Command(CertificateCreationCommandMixin, BaseCommand):

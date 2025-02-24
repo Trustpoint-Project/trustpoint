@@ -1,14 +1,13 @@
 # add_domains_and_devices_certs.py
 import random
 import string
-from pathlib import Path
-from django.core.management.base import BaseCommand
+
 from devices_deprecated import DeviceOnboardingStatus
-from pki.models import DomainModel, IssuingCaModel, IssuedDeviceCertificateModel, CertificateModel
 from devices_deprecated.models import Device
-from pki import CertificateTypes, TemplateName
 from django.core.management import call_command
-from pki.initializer import UnprotectedFileImportLocalIssuingCaFromPkcs12Initializer
+from django.core.management.base import BaseCommand
+from pki import CertificateTypes, TemplateName
+from pki.models import CertificateModel, DomainModel, IssuedDeviceCertificateModel, IssuingCaModel
 
 
 class Command(BaseCommand):
@@ -27,57 +26,57 @@ class Command(BaseCommand):
         onboarding_protocols = [Device.OnboardingProtocol.TP_CLIENT.value, Device.OnboardingProtocol.MANUAL.value]
 
         data = {
-            "arburg": [
-                "ALLROUNDER-Injection-Molding-Machine",
-                "freeformer-3D-Printer",
-                "SELOGICA-Control-System",
-                "MULTILIFT-Robotic-Systems",
-                "ARBIDRIVE-Servo-Motor",
-                "ALS_Arburg-Leitrechner-System"
+            'arburg': [
+                'ALLROUNDER-Injection-Molding-Machine',
+                'freeformer-3D-Printer',
+                'SELOGICA-Control-System',
+                'MULTILIFT-Robotic-Systems',
+                'ARBIDRIVE-Servo-Motor',
+                'ALS_Arburg-Leitrechner-System'
             ],
-            "homag": [
-                "CENTATEQ-CNC-Processing-Center",
-                "EDGETEQ-Edge-Banding-Machine",
-                "powerTouch-Control",
-                "intelliGuide-Assist-System",
-                "DRILLTEQ-Drilling-and-Dowel-Insertion-Machine",
-                "STORETEQ-Storage-System"
+            'homag': [
+                'CENTATEQ-CNC-Processing-Center',
+                'EDGETEQ-Edge-Banding-Machine',
+                'powerTouch-Control',
+                'intelliGuide-Assist-System',
+                'DRILLTEQ-Drilling-and-Dowel-Insertion-Machine',
+                'STORETEQ-Storage-System'
             ],
-            "belden": [
-                "Hirschmann-Industrial-Ethernet-Switches",
-                "Lumberg-Automation-Connectors",
-                "GarrettCom-Magnum-Routers",
-                "TROMPETER-Coaxial-Connectors",
-                "Belden-I_O-Modules"
+            'belden': [
+                'Hirschmann-Industrial-Ethernet-Switches',
+                'Lumberg-Automation-Connectors',
+                'GarrettCom-Magnum-Routers',
+                'TROMPETER-Coaxial-Connectors',
+                'Belden-I_O-Modules'
             ],
-            "siemens": [
-                "SIMATIC-PLC",
-                "SINAMICS-Drive-Systems",
-                "SIRIUS-Control-Devices",
-                "SIMOTICS-Electric-Motors",
-                "SIMATIC-HMI-Panels",
-                "SITOP-Power-Supplies"
+            'siemens': [
+                'SIMATIC-PLC',
+                'SINAMICS-Drive-Systems',
+                'SIRIUS-Control-Devices',
+                'SIMOTICS-Electric-Motors',
+                'SIMATIC-HMI-Panels',
+                'SITOP-Power-Supplies'
             ],
-            "phoenix_contact": [
-                "CLIPLINE-Terminal-Blocks",
-                "QUINT-Power-Supplies",
-                "PLCnext-Control",
-                "TERMITRAB-Surge-Protection",
-                "CONTACTRON-Motor-Starters",
-                "ME-PLC_Modular-Controller"
+            'phoenix_contact': [
+                'CLIPLINE-Terminal-Blocks',
+                'QUINT-Power-Supplies',
+                'PLCnext-Control',
+                'TERMITRAB-Surge-Protection',
+                'CONTACTRON-Motor-Starters',
+                'ME-PLC_Modular-Controller'
             ],
-            "schmalz": [
-                "Vacuum-Generators",
-                "Vacuum-Grippers",
-                "Vacuum-Clamping-Systems",
-                "Suction-Pads",
-                "Vacuum-Layer-Grippers",
-                "Vacuum-Ejectors"
+            'schmalz': [
+                'Vacuum-Generators',
+                'Vacuum-Grippers',
+                'Vacuum-Clamping-Systems',
+                'Suction-Pads',
+                'Vacuum-Layer-Grippers',
+                'Vacuum-Ejectors'
             ]
         }
 
 
-        print("Starting the process of adding domains and devices...\n")
+        print('Starting the process of adding domains and devices...\n')
         index = 0
         for domain_name, devices in data.items():
             issuing_ca = random.choice(['issuing-ca-a', 'issuing-ca-b', 'issuing-ca-c'])
@@ -86,11 +85,11 @@ class Command(BaseCommand):
             domain.save()
 
             if created:
-                print(f"Created new domain: {domain_name}")
+                print(f'Created new domain: {domain_name}')
             else:
-                print(f"Domain already exists: {domain_name}")
+                print(f'Domain already exists: {domain_name}')
 
-            print(f"Domain({domain_name}, Issuing CA: {domain.issuing_ca})")
+            print(f'Domain({domain_name}, Issuing CA: {domain.issuing_ca})')
 
             for device_name in devices:
                 onboarding_protocol = random.choice(onboarding_protocols)
@@ -98,8 +97,8 @@ class Command(BaseCommand):
                 serial_number = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
 
                 print(f"Creating device '{device_name}' in domain '{domain_name}' with:")
-                print(f"  - Serial Number: {serial_number}")
-                print(f"  - Onboarding Protocol: {onboarding_protocol}")
+                print(f'  - Serial Number: {serial_number}')
+                print(f'  - Onboarding Protocol: {onboarding_protocol}')
 
                 dev = Device(
                     device_name=device_name,
@@ -121,6 +120,6 @@ class Command(BaseCommand):
                   protocol=onboarding_protocol
                 )
                 issued_dev_cert.save()
-                index = index +1 
+                index = index +1
                 print(f"IssuedDeviceCertificateModel '{device_name}' created successfully.\n")
-        print("\nProcess completed. All domains, devices and certificates have been added.")
+        print('\nProcess completed. All domains, devices and certificates have been added.')

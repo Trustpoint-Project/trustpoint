@@ -3,17 +3,16 @@
 
 from __future__ import annotations
 
-import ipaddress
-from typing import Union
 import datetime
+import ipaddress
+import subprocess
 from pathlib import Path
+from typing import Union
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, ed448, ed25519, rsa
-
 from django.core.management.base import BaseCommand
-import subprocess
 
 PublicKey = Union[rsa.RSAPublicKey, ec.EllipticCurvePublicKey, ed448.Ed448PublicKey, ed25519.Ed25519PublicKey]
 PrivateKey = Union[rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey, ed448.Ed448PrivateKey, ed25519.Ed25519PrivateKey]

@@ -12,6 +12,7 @@ from django.db import models
 
 if TYPE_CHECKING:
     from core.x509 import PrivateKey
+
     from pki.models.credential import CredentialModel
     from pki.models.domain import DomainModel
 

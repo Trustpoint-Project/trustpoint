@@ -3,7 +3,7 @@
 from django.urls import path, re_path  # type: ignore[import-untyped]
 
 from pki.views import certificates, domains, issuing_cas, truststores
-from pki.views.domains import DevIdRegistrationCreateView, DevIdRegistrationDeleteView, DevIdMethodSelectView
+from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
 
 app_name = 'pki'
 

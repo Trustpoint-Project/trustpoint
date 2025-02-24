@@ -1,9 +1,9 @@
+from core.validator.field import UniqueNameValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from core.validator.field import UniqueNameValidator
-from .truststore import TruststoreModel
 from .domain import DomainModel
+from .truststore import TruststoreModel
 
 __all__ = ['DevIdRegistration']
 

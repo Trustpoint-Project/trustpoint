@@ -46,7 +46,7 @@ class CertificateCreationCommandMixin(CertificateGenerator):
             key=private_key,
             cert=issuing_ca_cert,
             cas=chain,
-            encryption_algorithm=BestAvailableEncryption(b"testing321"))
+            encryption_algorithm=BestAvailableEncryption(b'testing321'))
 
         with open(issuing_ca_path, 'wb') as f:
             f.write(p12)
