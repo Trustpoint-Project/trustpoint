@@ -26,18 +26,18 @@ jobs:
     - name: Push the Docker image
       run: |
         # For the trustpoint container:
-          docker tag $DOCKER_HUB_USERNAME/trustpoint:$GITHUB_SHA $DOCKER_HUB_USERNAME/trustpoint:$GITHUB_SHA
-          docker tag $DOCKER_HUB_USERNAME/trustpoint:$GITHUB_SHA $DOCKER_HUB_USERNAME/trustpoint:$TAG_VERSION
-          docker tag $DOCKER_HUB_USERNAME/trustpoint:$GITHUB_SHA $DOCKER_HUB_USERNAME/trustpoint:latest
+          docker tag trustpoint:$GITHUB_SHA $DOCKER_HUB_USERNAME/trustpoint:$GITHUB_SHA
+          docker tag trustpoint:$GITHUB_SHA $DOCKER_HUB_USERNAME/trustpoint:$TAG_VERSION
+          docker tag trustpoint:$GITHUB_SHA $DOCKER_HUB_USERNAME/trustpoint:latest
 
           docker push $DOCKER_HUB_USERNAME/trustpoint:$GITHUB_SHA
           docker push $DOCKER_HUB_USERNAME/trustpoint:$TAG_VERSION
           docker push $DOCKER_HUB_USERNAME/trustpoint:latest
         
         # For the postgres container:
-          docker tag $DOCKER_HUB_USERNAME/postgres:$GITHUB_SHA $DOCKER_HUB_USERNAME/postgres:$GITHUB_SHA
-          docker tag $DOCKER_HUB_USERNAME/postgres:$GITHUB_SHA $DOCKER_HUB_USERNAME/postgres:$TAG_VERSION
-          docker tag $DOCKER_HUB_USERNAME/postgres:$GITHUB_SHA $DOCKER_HUB_USERNAME/postgres:latest
+          docker tag postgres:$GITHUB_SHA $DOCKER_HUB_USERNAME/postgres:$GITHUB_SHA
+          docker tag postgres:$GITHUB_SHA $DOCKER_HUB_USERNAME/postgres:$TAG_VERSION
+          docker tag postgres:$GITHUB_SHA $DOCKER_HUB_USERNAME/postgres:latest
 
           docker push $DOCKER_HUB_USERNAME/postgres:$GITHUB_SHA
           docker push $DOCKER_HUB_USERNAME/postgres:$TAG_VERSION
