@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-29 15:17+0100\n"
+"POT-Creation-Date: 2025-02-17 08:20+0000\n"
 "PO-Revision-Date: 2024-10-29 15:21+0100\n"
 "Last-Translator: Christian Schwinne <christian.schwinne  AT hshl.de>\n"
 "Language-Team: \n"
@@ -19,181 +19,152 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: Poedit 3.5\n"
 
-#: .\sysconf\forms.py:19
-msgid "NTP Server Address"
-msgstr "NTP-Serveradresse"
-
-#: .\sysconf\forms.py:30
-msgid "Static IP Address"
-msgstr "Statische IP-Adresse"
-
-#: .\sysconf\forms.py:31
-msgid "DHCP"
-msgstr "DHCP"
-
-#: .\sysconf\forms.py:32 .\sysconf\models.py:52
-msgid "Netmask"
-msgstr "Subnetzmaske"
-
-#: .\sysconf\forms.py:33 .\sysconf\models.py:51
-msgid "Gateway"
-msgstr "Gateway"
-
-#: .\sysconf\forms.py:45
-msgid "Logging Server Address"
-msgstr "Adresse des Logging-Servers"
-
-#: .\sysconf\forms.py:46
-msgid "Logging Server Port"
-msgstr "Logging-Server Port"
-
-#: .\sysconf\forms.py:47
-msgid "Logging Protocol"
-msgstr "Logging-Protokoll"
-
-#: .\sysconf\forms.py:48
-msgid "Network Protocol"
-msgstr "Netzwerkprotokoll"
-
-#: .\sysconf\forms.py:66
+#: settings/forms.py:55
 msgid "Security level presets"
 msgstr "Allgemeines Sicherheitslevel"
 
-#: .\sysconf\forms.py:70
+#: settings/forms.py:59
 msgid "Advanced security settings"
 msgstr "Erweiterte Sicherheitseinstellungen"
 
-#: .\sysconf\forms.py:80
+#: settings/forms.py:73
 msgid "Enable local auto-generated PKI"
 msgstr "Lokale automatisch generierte PKI aktivieren"
 
-#: .\sysconf\forms.py:87
+#: settings/forms.py:85
 msgid "Key Algorithm for auto-generated PKI"
 msgstr "Schlüsselalgorithmus für automatisch generierte PKI"
 
-#: .\sysconf\models.py:24
-msgid "Logging server address"
-msgstr "Adresse des Loggingservers"
-
-#: .\sysconf\models.py:26
-msgid "Logging server port"
-msgstr "Port des Loggingservers"
-
-#: .\sysconf\models.py:40
-msgid "Logging type"
-msgstr "Logging-Art"
-
-#: .\sysconf\models.py:41
-msgid "Network type"
-msgstr "Netzwerkart"
-
-#: .\sysconf\models.py:50
-msgid "Static IP address"
-msgstr "Statische IP-Adresse"
-
-#: .\sysconf\security\__init__.py:9
+#: settings/models.py:13
 msgid "Testing env"
 msgstr "Testumgebung"
 
-#: .\sysconf\security\__init__.py:10
+#: settings/models.py:14
 msgid "Basic"
 msgstr "Grundlegend"
 
-#: .\sysconf\security\__init__.py:11
+#: settings/models.py:15
 msgid "Medium"
 msgstr "Mittel"
 
-#: .\sysconf\security\__init__.py:12
+#: settings/models.py:16
 msgid "High"
 msgstr "Hoch"
 
-#: .\sysconf\security\__init__.py:13
+#: settings/models.py:17
 msgid "Highest"
 msgstr "Höchstes"
 
-#: .\sysconf\templates\sysconf\language.html:7
-msgid "Language Configuration"
-msgstr "Spracheinstellungen (Language)"
-
-#: .\sysconf\templates\sysconf\language.html:29
-#: .\sysconf\templates\sysconf\logging.html:24
-#: .\sysconf\templates\sysconf\network.html:19
-#: .\sysconf\templates\sysconf\ntp.html:19
-#: .\sysconf\templates\sysconf\security.html:39
-#: .\sysconf\templates\sysconf\ssh.html:13
-msgid "Save"
-msgstr "Speichern"
-
-#: .\sysconf\templates\sysconf\logging.html:11
-msgid "Logging Configuration"
-msgstr "Logging-Einstellungen"
-
-#: .\sysconf\templates\sysconf\logging.html:21
-msgid "Back"
-msgstr "Zurück"
-
-#: .\sysconf\templates\sysconf\logging.html:22
-msgid "View logs"
-msgstr "Logs aufrufen"
-
-#: .\sysconf\templates\sysconf\network.html:7
-msgid "Network Configuration"
-msgstr "Netzwerkeinstellungen"
-
-#: .\sysconf\templates\sysconf\ntp.html:7
-msgid "NTP Configuration"
-msgstr "NTP-Einstellungen"
-
-#: .\sysconf\templates\sysconf\security.html:11
-msgid "Security Configuration"
-msgstr "Sicherheitseinstellungen"
-
-#: .\sysconf\templates\sysconf\security.html:22
-msgid ""
-"Some settings are hidden as they are unavailable for the selected security "
-"level."
-msgstr ""
-"Einige Einstellungen sind für das aktuelle Sicherheitslevel nicht "
-"verfügbar und daher ausgeblendet."
-
-#: .\sysconf\templates\sysconf\security.html:28
-msgid "WARNING!"
-msgstr "ACHTUNG!"
-
-#: .\sysconf\templates\sysconf\security.html:28
-msgid ""
-"By saving, you will disable the local auto-generated PKI. This revokes all "
-"certificates issued by the local auto-generated PKI and deletes the auto-"
-"generated Issuing CA."
-msgstr ""
-"Beim Speichern wird die lokale automatisch generierte PKI deaktiviert. "
-"Dies widerruft alle von der automatisch generierten PKI ausgestellten "
-"Zertifikate und entfernt die automatisch generierte Issuing CA."
-
-#: .\sysconf\templates\sysconf\security.html:29
-msgid "This action is irreversible."
-msgstr "Diese Aktion ist unwiderruflich."
-
-#: .\sysconf\templates\sysconf\ssh.html:6
-msgid "SSH"
-msgstr "SSH"
-
-#: .\sysconf\views.py:93
+#: settings/security/mixins.py:78
 #, python-format
 msgid "Your security setting %s does not allow the feature: %s"
 msgstr "Ihre Sicherheitseinstellung %s erlaubt die Funktion nicht: %s"
 
-#: .\sysconf\views.py:146
-msgid "Error saving the configuration."
-msgstr "Beim Speichern der Einstellungen ist ein Fehler aufgetreten."
+#: settings/views/logging.py:93 settings/views/logging.py:98
+msgid "None"
+msgstr ""
 
-#: .\sysconf\views.py:168 .\sysconf\views.py:197 .\sysconf\views.py:236
+#: settings/views/security.py:68
 msgid "Your changes were saved successfully."
 msgstr "Ihre Änderungen wurden erfolgreich gespeichert."
 
-#: .\sysconf\views.py:170 .\sysconf\views.py:199 .\sysconf\views.py:241
+#: settings/views/security.py:72
 msgid "Error saving the configuration"
 msgstr "Beim Speichern der Einstellungen ist ein Fehler aufgetreten"
+
+#~ msgid "NTP Server Address"
+#~ msgstr "NTP-Serveradresse"
+
+#~ msgid "Static IP Address"
+#~ msgstr "Statische IP-Adresse"
+
+#~ msgid "DHCP"
+#~ msgstr "DHCP"
+
+#~ msgid "Netmask"
+#~ msgstr "Subnetzmaske"
+
+#~ msgid "Gateway"
+#~ msgstr "Gateway"
+
+#~ msgid "Logging Server Address"
+#~ msgstr "Adresse des Logging-Servers"
+
+#~ msgid "Logging Server Port"
+#~ msgstr "Logging-Server Port"
+
+#~ msgid "Logging Protocol"
+#~ msgstr "Logging-Protokoll"
+
+#~ msgid "Network Protocol"
+#~ msgstr "Netzwerkprotokoll"
+
+#~ msgid "Logging server address"
+#~ msgstr "Adresse des Loggingservers"
+
+#~ msgid "Logging server port"
+#~ msgstr "Port des Loggingservers"
+
+#~ msgid "Logging type"
+#~ msgstr "Logging-Art"
+
+#~ msgid "Network type"
+#~ msgstr "Netzwerkart"
+
+#~ msgid "Static IP address"
+#~ msgstr "Statische IP-Adresse"
+
+#~ msgid "Language Configuration"
+#~ msgstr "Spracheinstellungen (Language)"
+
+#~ msgid "Save"
+#~ msgstr "Speichern"
+
+#~ msgid "Logging Configuration"
+#~ msgstr "Logging-Einstellungen"
+
+#~ msgid "Back"
+#~ msgstr "Zurück"
+
+#~ msgid "View logs"
+#~ msgstr "Logs aufrufen"
+
+#~ msgid "Network Configuration"
+#~ msgstr "Netzwerkeinstellungen"
+
+#~ msgid "NTP Configuration"
+#~ msgstr "NTP-Einstellungen"
+
+#~ msgid "Security Configuration"
+#~ msgstr "Sicherheitseinstellungen"
+
+#~ msgid ""
+#~ "Some settings are hidden as they are unavailable for the selected "
+#~ "security level."
+#~ msgstr ""
+#~ "Einige Einstellungen sind für das aktuelle Sicherheitslevel nicht "
+#~ "verfügbar und daher ausgeblendet."
+
+#~ msgid "WARNING!"
+#~ msgstr "ACHTUNG!"
+
+#~ msgid ""
+#~ "By saving, you will disable the local auto-generated PKI. This revokes "
+#~ "all certificates issued by the local auto-generated PKI and deletes the "
+#~ "auto-generated Issuing CA."
+#~ msgstr ""
+#~ "Beim Speichern wird die lokale automatisch generierte PKI deaktiviert. "
+#~ "Dies widerruft alle von der automatisch generierten PKI ausgestellten "
+#~ "Zertifikate und entfernt die automatisch generierte Issuing CA."
+
+#~ msgid "This action is irreversible."
+#~ msgstr "Diese Aktion ist unwiderruflich."
+
+#~ msgid "SSH"
+#~ msgstr "SSH"
+
+#~ msgid "Error saving the configuration."
+#~ msgstr "Beim Speichern der Einstellungen ist ein Fehler aufgetreten."
 
 #~ msgid "Enable Local Root CA"
 #~ msgstr "Lokale Root CA erlauben"

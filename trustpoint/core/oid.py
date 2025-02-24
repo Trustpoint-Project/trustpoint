@@ -6,7 +6,7 @@ import enum
 from typing import TYPE_CHECKING, cast
 
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa, x448, x25519
+from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa, x448, x25519, dh
 
 if TYPE_CHECKING:
     from typing import Self, Union, Optional
@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from cryptography import x509
 
     PublicKey = Union[
+        dh.DHPublicKey,
         dsa.DSAPublicKey,
         rsa.RSAPublicKey,
         ec.EllipticCurvePublicKey,
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
         x448.X448PublicKey,
     ]
     PrivateKey = Union[
+        dh.DHPrivateKey,
         dsa.DSAPrivateKey,
         rsa.RSAPrivateKey,
         ec.EllipticCurvePrivateKey,
@@ -310,8 +312,8 @@ class NamedCurve(enum.Enum):
     NONE = ('None', 'None', 0, None, '')
     SECP192R1 = ('1.2.840.10045.3.1.1', 'SECP192R1', 192, ec.SECP192R1, 'prime192v1')
     SECP224R1 = ('1.3.132.0.33', 'SECP224R1', 224, ec.SECP224R1, 'secp224r1')
-    SECP256K1 = ('1.3.132.0.10', 'SECP256K1', 256, ec.SECP256K1, 'brainpoolP512r1')
-    SECP256R1 = ('1.2.840.10045.3.1.7', 'SECP256R1', 256, ec.SECP256R1, 'brainpoolP512r1')
+    SECP256K1 = ('1.3.132.0.10', 'SECP256K1', 256, ec.SECP256K1, 'secp256k1')
+    SECP256R1 = ('1.2.840.10045.3.1.7', 'SECP256R1', 256, ec.SECP256R1, 'prime256v1')
     SECP384R1 = ('1.3.132.0.34', 'SECP384R1', 384, ec.SECP384R1, 'secp384r1')
     SECP521R1 = ('1.3.132.0.35', 'SECP521R1', 521, ec.SECP521R1, 'secp521r1')
     BRAINPOOLP256R1 = ('1.3.36.3.3.2.8.1.1.7', 'BRAINPOOLP256R1', 256, ec.BrainpoolP256R1, 'brainpoolP256r1')
@@ -477,6 +479,7 @@ class AlgorithmIdentifier(enum.Enum):
     verbose_name: str
     public_key_algo_oid: PublicKeyAlgorithmOid
     padding_scheme: RsaPaddingScheme
+    hash_algorithm: HashAlgorithm
 
     RSA_MD5 = (
         '1.2.840.113549.1.1.4',

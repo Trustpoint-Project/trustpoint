@@ -1,4 +1,4 @@
-"""File for steps which are used more often across multiple feature files."""
+"""File for steps which are used more often across multiple feature files."""  # noqa: INP001
 
 import logging
 
@@ -39,7 +39,8 @@ def commentary_step(context: runner.Context) -> None:
 def step_admin_logged_in(context: runner.Context) -> None:
     """Logs the admin user into the TPC_Web interface.
 
-    This step sets up the initial state for all scenarios, ensuring the admin is authenticated and on the TPC_Web dashboard.
+    This step sets up the initial state for all scenarios, ensuring the admin is authenticated and on the TPC_Web
+    dashboard.
 
     Args:
         context: the behave context

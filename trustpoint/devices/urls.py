@@ -69,8 +69,12 @@ urlpatterns = [
         'help/onboarding/cmp-shared-secret/<int:pk>/',
         views.OnboardingCmpSharedSecretHelpView.as_view(),
         name='help-onboarding_cmp-shared-secret'),
-path(
+    path(
         'help/onboarding/cmp-idevid/<int:pk>/',
         views.OnboardingCmpIdevidHelpView.as_view(),
-        name='help-onboarding_cmp-idevid')
+        name='help-onboarding_cmp-idevid'),
+    path(
+        'help/onboarding/cmp-idevid-registration/<int:pk>/',
+        views.OnboardingIdevidRegistrationHelpView.as_view(),
+        name='help-onboarding_cmp-idevid-registration')
 ]

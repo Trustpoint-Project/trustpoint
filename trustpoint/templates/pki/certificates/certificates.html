@@ -76,8 +76,8 @@
           <td>{{ certificate.certificate_status }}</td>
           <td>{{ certificate.created_at }}</td>
           <td>{% if certificate.is_self_signed == 1 %} ✔ {% else %} ✘ {% endif %}</td>
-          <td><a href="details/{{certificate.id}}/" class="btn btn-primary tp-table-btn">Details</a></td>
-          <td><a href="download/{{certificate.id}}/" class="btn btn-primary tp-table-btn">Download</a></td>
+          <td><a href="details/{{certificate.id}}/" class="btn btn-primary tp-table-btn w-100">Details</a></td>
+          <td><a href="download/{{certificate.id}}/" class="btn btn-primary tp-table-btn w-100">Download</a></td>
         </tr>
         {% empty %}
         <tr>

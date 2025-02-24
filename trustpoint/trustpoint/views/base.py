@@ -29,7 +29,7 @@ class IndexView(RedirectView):
     """View that redirects to the index home page."""
 
     permanent: bool = False
-    pattern_name: str = 'pki:certificates'
+    pattern_name: str = 'home:dashboard'
 
 
 class ListInDetailView(ListView):

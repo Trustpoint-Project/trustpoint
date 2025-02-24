@@ -1,160 +1,162 @@
-import string
-from typing import NoReturn
+"""Python steps file for R_001."""  # noqa: INP001
 
-from behave import given, then, when
+from behave import given, runner, then, when
 
 
 @given('the identity {name} with {identifier} exists')
-def step_identity_exists(context: object, name: string, identifier: string) -> NoReturn:
+def step_identity_exists(context: runner.Context, name: str, identifier: str) -> None:  # noqa: ARG001
     """Ensures that an identity with the specified name and identifier exists in the system.
 
-    :param context: the context object
-    :param name: the name of the identity
-    :param identifier: the ID of the identity
-
-    :raises StepNotImplementedError: This step is not yet implemented.
-
-    :return: No Return
-
+    Args:
+        context (runner.Context): Behave context.
+        name (str): The name of the identity.
+        identifier (str): The ID of the identity.
     """
     msg = 'Step not implemented: Identity creation or precondition setup.'
-    assert False, msg
+    raise AssertionError(msg)
 
 
 @when('the admin navigates to the identity details page for {name}')
-def step_impl(context: object, name: string) -> NoReturn:
-    """The admin user should navigate to the details page using the UI.
+def step_navigate_identity_details(context: runner.Context, name: str) -> None:  # noqa: ARG001
+    """The admin user navigates to the identity details page.
 
-    :param context: the context object
-    :param name: the name of the identity
-
-    :raises StepNotImplementedError: This step is not yet implemented.
-
-    :return: No Return
+    Args:
+        context (runner.Context): Behave context.
+        name (str): The name of the identity.
     """
     msg = f'STEP: When the admin navigates to the identity details page for {name}'
-    assert False, msg
+    raise AssertionError(msg)
 
 
 @then('the system should display the correct details for {name} and {identifier}')
-def step_impl(context: object, name: string, identifier: string) -> NoReturn:
-    """The system should post the changes visible to the admin.
+def step_display_identity_details(context: runner.Context, name: str, identifier: str) -> None:  # noqa: ARG001
+    """Verifies that the correct identity details are displayed.
 
-    :param context: the context object
-    :param name: the name of the identity
-    :param identifier: the ID of the identity
-
-    :raises StepNotImplementedError: This step is not yet implemented.
-
-    :return: No Return
+    Args:
+        context (runner.Context): Behave context.
+        name (str): The name of the identity.
+        identifier (str): The ID of the identity.
     """
     msg = f'STEP: Then the system should display the correct details for {name} and {identifier}'
-    assert False, msg
+    raise AssertionError(msg)
 
 
 @when('the admin navigates to the "Create Identity" page')
-def step_navigate_create_identity(context: object) -> NoReturn:
-    """Navigates to the "Create Identity" page within the TPC_Web interface.
+def step_navigate_create_identity(context: runner.Context) -> None:  # noqa: ARG001
+    """Navigates to the "Create Identity" page.
 
-    This step simulates the admin user accessing the page to add a new identity.
-
-    :param context: the context object
-
-    :raises StepNotImplementedError: This step is not yet implemented.
-
-    :return: No Return
+    Args:
+        context (runner.Context): Behave context.
     """
     msg = 'Step not implemented: Navigate to Create Identity page.'
-    assert False, msg
+    raise AssertionError(msg)
 
 
 @when('the admin fills in the identity details with {name} and {identifier}')
-def step_fill_identity_details(context: object, name: string, identifier: string) -> NoReturn:
-    """Fills in the form fields for creating a new identity.
+def step_fill_identity_details(context: runner.Context, name: str, identifier: str) -> None:  # noqa: ARG001
+    """Fills in the identity creation form.
 
-    :param context: the context object
-    :param name: the name of the identity
-    :param identifier: the ID of the identity
-
-    :raises StepNotImplementedError: This step is not yet implemented.
-
-    :return: No Return
+    Args:
+        context (runner.Context): Behave context.
+        name (str): The name of the identity.
+        identifier (str): The ID of the identity.
     """
     msg = 'Step not implemented: Fill identity details.'
-    assert False, msg
+    raise AssertionError(msg)
 
 
 @when('the admin submits the form')
-def step_submit_form(context: object) -> NoReturn:
-    """Submits the "Create Identity" form.
+def step_submit_form(context: runner.Context) -> None:  # noqa: ARG001
+    """Submits the identity creation form.
 
-    This step triggers the creation process for the new identity.
-
-    :raises StepNotImplementedError: This step is not yet implemented.
-
-    :return: No Return
+    Args:
+        context (runner.Context): Behave context.
     """
     msg = 'Step not implemented: Submit the Create Identity form.'
-    assert False, msg
+    raise AssertionError(msg)
 
 
 @then('the new identity {name} with {identifier} should appear in the identity list')
-def step_identity_in_list(context: object, name: string, identifier: string) -> NoReturn:
-    """Verifies that the newly created identity appears in the identity list.
+def step_identity_in_list(context: runner.Context, name: str, identifier: str) -> None:  # noqa: ARG001
+    """Verifies that the new identity appears in the identity list.
 
-    :param context: the context object
-    :param name: the name of the identity
-    :param identifier: the ID of the identity
-
-    :raises StepNotImplementedError: This step is not yet implemented.
-
-    :return: No Return
+    Args:
+        context (runner.Context): Behave context.
+        name (str): The name of the identity.
+        identifier (str): The ID of the identity.
     """
     msg = 'Step not implemented: Check for identity in the list.'
-    assert False, msg
+    raise AssertionError(msg)
 
 
 @when('the admin updates the name to {name} and identifier to {identifier}')
-def step_impl(context: object, name: string, identifier: string) -> NoReturn:
-    """The admin should put in a new name and/or a new identifier.
+def step_update_identity(context: runner.Context, name: str, identifier: str) -> None:  # noqa: ARG001
+    """Updates the identity details.
 
-    :param context: the context object
-    :param name: the name of the identity
-    :param identifier: the ID of the identity
-
-    :raises StepNotImplementedError: This step is not yet implemented.
-
-    :return: No Return
+    Args:
+        context (runner.Context): Behave context.
+        name (str): The new name of the identity.
+        identifier (str): The new ID of the identity.
     """
     msg = f'STEP: When the admin updates the name to {name} and identifier to {identifier}'
-    assert False, msg
+    raise AssertionError(msg)
 
 
 @when('the admin saves the changes')
-def step_impl(context) -> NoReturn:
+def step_save_changes(context: runner.Context) -> None:  # noqa: ARG001
+    """Saves the updated identity details.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
     msg = 'STEP: When the admin saves the changes'
-    assert False, msg
+    raise AssertionError(msg)
 
 
 @then('the updated identity {name} with {identifier} should appear in the identity list')
-def step_impl(context, name, identifier) -> NoReturn:
+def step_verify_updated_identity(context: runner.Context, name: str, identifier: str) -> None:  # noqa: ARG001
+    """Verifies that the updated identity appears in the identity list.
+
+    Args:
+        context (runner.Context): Behave context.
+        name (str): The updated name of the identity.
+        identifier (str): The updated ID of the identity.
+    """
     msg = f'STEP: Then the updated identity {name} with {identifier} should appear in the identity list'
-    assert False, msg
+    raise AssertionError(msg)
 
 
 @when('the admin deletes the identity with the name {name}')
-def step_impl(context, name) -> NoReturn:
+def step_delete_identity(context: runner.Context, name: str) -> None:  # noqa: ARG001
+    """Deletes an identity by name.
+
+    Args:
+        context (runner.Context): Behave context.
+        name (str): The name of the identity to be deleted.
+    """
     msg = f'STEP: When the admin deletes the identity with the name {name}'
-    assert False, msg
+    raise AssertionError(msg)
 
 
 @then('the identity {name} should no longer appear in the identity list')
-def step_impl(context, name) -> NoReturn:
+def step_verify_identity_deletion(context: runner.Context, name: str) -> None:  # noqa: ARG001
+    """Verifies that the identity no longer appears in the list.
+
+    Args:
+        context (runner.Context): Behave context.
+        name (str): The name of the identity.
+    """
     msg = f'STEP: Then the identity {name} should no longer appear in the identity list'
-    assert False, msg
+    raise AssertionError(msg)
 
 
 @when('the admin attempts to view the details of a non-existent identity {non_existent_ID}')
-def step_impl(context, non_existent_ID) -> NoReturn:
-    msg = f'STEP: When the admin attempts to view the details of a non-existent identity {non_existent_ID}'
-    assert False, msg
+def step_attempt_view_nonexistent(context: runner.Context, non_existent_id: str) -> None:  # noqa: ARG001
+    """Attempts to view details of a non-existent identity.
+
+    Args:
+        context (runner.Context): Behave context.
+        non_existent_id (str): The ID of the non-existent identity.
+    """
+    msg = f'STEP: When the admin attempts to view the details of a non-existent identity {non_existent_id}'
+    raise AssertionError(msg)

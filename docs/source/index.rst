@@ -19,11 +19,11 @@ Welcome to Trustpoint's documentation!
    :caption: 🚀 Getting Started :
 
    introduction
-   faq
    quickstart_setup
    quickstart_operate
-   community_support
    usage_guide
+   community_support
+   faq
 
 
 .. toctree::

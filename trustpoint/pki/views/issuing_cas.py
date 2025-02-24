@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.contrib import messages
+from django.db.models import ProtectedError
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.utils.translation import gettext as _
@@ -91,6 +92,7 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, TpLoginRequiredMix
 
 
 class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, TpLoginRequiredMixin, BulkDeleteView):
+    """View to confirm the deletion of multiple Issuing CAs."""
 
     model = IssuingCaModel
     success_url = reverse_lazy('pki:issuing_cas')
@@ -98,11 +100,21 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, TpLoginRequiredMixin
     template_name = 'pki/issuing_cas/confirm_delete.html'
     context_object_name = 'issuing_cas'
 
-    def form_valid(self, form):
+    def form_valid(self, form) -> HttpResponse:
+        """Delete the selected Issuing CAs on valid form."""
         queryset = self.get_queryset()
         deleted_count = queryset.count()
 
-        response = super().form_valid(form)
+        try:
+            response = super().form_valid(form)
+        except ProtectedError:
+            messages.error(
+                self.request,
+                _(
+                    'Cannot delete the selected Issuing CA(s) because they are referenced by other objects.'
+                )
+            )
+            return HttpResponseRedirect(self.success_url)
 
         messages.success(
             self.request,

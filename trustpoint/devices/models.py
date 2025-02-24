@@ -3,15 +3,12 @@ from __future__ import annotations
 import datetime
 import logging
 import secrets
-from typing import Any
 
 from django.db import models
-from django.db.models import UniqueConstraint
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from django.contrib.contenttypes.models import ContentType
 from core.validator.field import UniqueNameValidator
-from django.core.exceptions import ValidationError
 from core import oid
 
 from pki.models import CertificateModel, DomainModel, CredentialModel, IssuingCaModel
@@ -19,6 +16,13 @@ from pki.models.credential import CredentialModel
 from pki.models.truststore import TruststoreModel
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    'DeviceModel',
+    'IssuedCredentialModel',
+    'RemoteDeviceCredentialDownloadModel',
+
+]
 
 class DeviceModel(models.Model):
 
@@ -118,7 +122,6 @@ class DeviceModel(models.Model):
         on_delete=models.DO_NOTHING)
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
-    updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
 
     @property
     def signature_suite(self) -> oid.SignatureSuite:

@@ -9,51 +9,62 @@
     </div>
 
     <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; max-height: 90%;">
-      <table class="table">
-        <thead>
-          <tr>
-            <th id="checkbox-column"><input type="checkbox"/></th>
-            <th>
-              <a href="?sort={% if current_sort == 'unique_name' %}-{% endif %}unique_name">
-                Domain Name
-              </a>
-            </th>
-            <th>
-              <a href="?sort={% if current_sort == 'issuing_ca__unique_name' %}-{% endif %}issuing_ca__unique_name">
-                Issuing CA Name
-              </a>
-            </th>
-            <th>Details</th>
-            <th>Config</th>
-            <th>Delete</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for domain in page_obj %}
-          <tr{% if not domain.is_active %} class="text-muted"{% endif %}>
-            <td class="row_checkbox">
-              <input type="checkbox" name="row_checkbox" value="{{ domain.id }}" />
-            </td>
-            <td>{{ domain.unique_name }}</td>
-            <td>{{ domain.issuing_ca.unique_name }}</td>
-            <td><a href="detail/{{domain.id}}/" class="btn btn-primary tp-table-btn">Details</a></td>
-            <td><a href="config/{{domain.id}}/" class="btn btn-primary tp-table-btn">Config</a></td>
-            <td><a href="delete/{{domain.id}}/" class="btn btn-danger tp-table-btn">Delete</a></td>
-          </tr>
-          {% empty %}
-          <tr>
-            <td colspan="6" class="middle">{% trans 'No domains are configured yet.' %}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-  
-      {% include 'trustpoint/pagination.html' %}
+        <table class="table">
+            <thead>
+            <tr>
+                <th id="checkbox-column"><input type="checkbox"/></th>
+                <th>
+                    <a href="?sort={% if current_sort == 'unique_name' %}-{% endif %}unique_name">
+                        Domain Name
+                    </a>
+                </th>
+                <th>
+                    <a href="?sort={% if current_sort == 'issuing_ca__unique_name' %}-{% endif %}issuing_ca__unique_name" style="font-weight: bold;">
+                        Issuing CA Name
+                    </a>
+                </th>
+                <th>{% trans '# Devices' %}</th>
+                <th>{% trans 'Signature-Suite' %}</th>
+                <th>
+                    <a href="?sort={% if created_at == 'created_at' %}-{% endif %}created_at" style="font-weight: bold;">
+                        Created At
+                    </a>
+                </th>
+
+                <th>Config</th>
+                <th>Delete</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for domain in page_obj %}
+            <tr{% if not domain.is_active %} class="text-muted"{% endif %}>
+                <td class="row_checkbox">
+                    <input type="checkbox" name="row_checkbox" value="{{ domain.id }}"/>
+                </td>
+                <td>{{ domain.unique_name }}</td>
+                <td>{{ domain.issuing_ca.unique_name }}</td>
+                <td>{{ domain.devices.count }}</td>
+                <td>{{ domain.signature_suite }}</td>
+                <td>{{ domain.created_at }}</td>
+
+                <td><a href="config/{{ domain.id }}/" class="btn btn-primary tp-table-btn w-100">Config</a></td>
+                <td><a href="delete/{{ domain.id }}/" class="btn btn-danger tp-table-btn w-100">Delete</a></td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="8" class="middle">{% trans 'No domains are configured yet.' %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        {% include 'trustpoint/pagination.html' %}
     </div>
 
     <div class="card-footer d-flex justify-content-between tp-sticky-footer">
         <div class="tp-card-btn-footer m-1">
-            <button type="button" class="btn btn-danger tp-table-select-btn me-2" data-tp-url="delete">{% trans 'Delete selected' %}</button>
+            <button type="button" class="btn btn-danger tp-table-select-btn me-2"
+                    data-tp-url="delete">{% trans 'Delete selected' %}</button>
         </div>
         <div class="m-1">
             <a class="btn btn-primary" href="{% url 'pki:domains-add' %}">

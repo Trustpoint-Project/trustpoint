@@ -4,6 +4,7 @@ import enum
 from typing import Any, cast
 
 from django.contrib import messages
+from django.db.models import ProtectedError
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
@@ -141,12 +142,36 @@ class DomainDetailView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegi
 
 
 class DomainCaBulkDeleteConfirmView(DomainContextMixin, TpLoginRequiredMixin, BulkDeleteView):
+    """View to confirm the deletion of multiple Domains."""
 
     model = DomainModel
     success_url = reverse_lazy('pki:domains')
     ignore_url = reverse_lazy('pki:domains')
     template_name = 'pki/domains/confirm_delete.html'
     context_object_name = 'domains'
+
+    def form_valid(self, form) -> HttpResponse:
+        """Attempt to delete domains if the form is valid."""
+        queryset = self.get_queryset()
+        deleted_count = queryset.count()
+
+        try:
+            response = super().form_valid(form)
+        except ProtectedError:
+            messages.error(
+                self.request,
+                _(
+                    'Cannot delete the selected Domains(s) because they are referenced by other objects.'
+                )
+            )
+            return HttpResponseRedirect(self.success_url)
+
+        messages.success(
+            self.request,
+            _('Successfully deleted {count} Domains.').format(count=deleted_count)
+        )
+
+        return response
 
 
 class DevIdRegistrationCreateView(DomainContextMixin, TpLoginRequiredMixin, FormView):

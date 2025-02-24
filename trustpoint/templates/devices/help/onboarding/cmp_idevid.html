@@ -66,10 +66,30 @@
                             </div>
                         </li>
                         <li>
-                            <div>{% trans 'Shared Secret' %}</div>
+                            <div>{% trans 'Required Public Key Type' %}</div>
+                            <div>{{ device.public_key_info }}</div>
+                        </li>
+
+                    </ul>
+                    <hr>
+
+
+                    <h2 class="mt-5">{% trans 'Download or Copy Issuing CA Certificate' %}</h2>
+                    <hr>
+                    <ul class="tp-kvp-list">
+                        <li>
+                            <div>{% trans 'Download Issuing CA Certificate' %}</div>
+                            <div>
+                                <a class="btn btn-primary min-width-15 mb-3" href="{% url 'pki:certificate-issuing-ca-download' pk=device.domain.issuing_ca.credential.certificate.id %}">Download Issuing CA</a>
+                            </div>
+                        </li>
+                        <li>
+                            <div>
+                                {% trans 'Issuing CA in PEM format. You can copy this and paste it into a new file named issuing_ca_cert.pem' %}
+                            </div>
                             <div class="copy-container" style="position: relative;">
                                 <code class="command-text language-bash">
-                                    {{ device.cmp_shared_secret }}
+                                    {{ issuing_ca_pem|linebreaksbr }}
                                 </code>
 
                                 <button type="button" class="copy-button" data-tooltip="Copy to clipboard" aria-label="Copy to clipboard">
@@ -79,17 +99,7 @@
                                 </button>
                             </div>
                         </li>
-                        <li>
-                            <div>{% trans 'Key Identifier (KID)' %}</div>
-                            <div>{{ device.id }}</div>
-                        </li>
-                        <li>
-                            <div>{% trans 'Required Public Key Type' %}</div>
-                            <div>{{ device.public_key_info }}</div>
-                        </li>
-
                     </ul>
-                    <hr>
 
                     <h2 class="mt-5">{% trans 'OpenSSL 3.x Commands' %}</h2>
                     <hr>
@@ -183,7 +193,9 @@
                                     -subject "/CN=Trustpoint Domain Credential" \<br>
                                     -newkey domain_credential_key.pem \<br>
                                     -certout domain_credential_cert.pem \<br>
-                                    -chainout domain_credential_chain.pem
+                                    -chainout chain_without_root.pem \<br>
+                                    -extracertsout full_chain.pem \<br>
+                                    -srvcert issuing_ca_cert.pem
                                 </code>
 
                                 <button type="button" class="copy-button" data-tooltip="Copy to clipboard" aria-label="Copy to clipboard">
@@ -231,7 +243,9 @@
                                     -days 10 \<br>
                                     -newkey key.pem \<br>
                                     -certout cert.pem \<br>
-                                    -chainout chain.pem
+                                    -chainout chain_without_root.pem \<br>
+                                    -extracertsout full_chain.pem \<br>
+                                    -srvcert issuing_ca_cert.pem
                                 </code>
 
                                 <button type="button" class="copy-button" data-tooltip="Copy to clipboard" aria-label="Copy to clipboard">
@@ -271,7 +285,9 @@
                                     -sans "critical 127.0.0.1 ::1 localhost" \<br>
                                     -newkey key.pem \<br>
                                     -certout cert.pem \<br>
-                                    -chainout chain.pem
+                                    -chainout chain_without_root.pem \<br>
+                                    -extracertsout full_chain.pem \<br>
+                                    -srvcert issuing_ca_cert.pem
                                 </code>
 
                                 <button type="button" class="copy-button" data-tooltip="Copy to clipboard" aria-label="Copy to clipboard">
@@ -302,10 +318,10 @@
                 </div>
 
             </div>
-            <div class="card-footer">
-                <div class="tp-card-btn-footer">
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <div class="tp-card-btn-footer m-1">
                     <a href="{% url 'devices:devices' %}" class="btn btn-secondary">{% trans "Back" %}</a>
-                    <a href="{% url 'devices:certificate_lifecycle_management' pk=device.pk %}" class="btn btn-primary">{% trans "Certificate Lifecycle Management Summary" %}</a>
+                    <a href="{% url 'devices:certificate_lifecycle_management' pk=device.pk %}" class="btn btn-primary">{% trans "Lifecycle Management" %}</a>
                 </div>
             </div>
         </div>

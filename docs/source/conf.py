@@ -19,9 +19,9 @@ PLANTUML_PATH = Path(__file__).parent.absolute() / Path('plantuml-mit-1.2024.6.j
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'Trustpoint'
-copyright = '2024, Trustpoint Project'
+copyright = '2025, Trustpoint Project'
 author = 'Trustpoint Project'
-release = '0.1.1'
+release = '0.2.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

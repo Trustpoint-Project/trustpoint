@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-11-15 14:14+0100\n"
+"POT-Creation-Date: 2025-02-17 08:20+0000\n"
 "PO-Revision-Date: 2024-11-15 14:15+0100\n"
 "Last-Translator: Christian Schwinne <christian.schwinne  AT hshl.de>\n"
 "Language-Team: \n"
@@ -19,150 +19,627 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: Poedit 3.5\n"
 
-#: .\home\models.py:20 .\home\tables.py:93
-msgid "New"
-msgstr "Neu"
+#: core/validator/field.py:13
+msgid ""
+"(Must start with a letter. Can only contain letters, digits, underscores and "
+"hyphens)"
+msgstr ""
 
-#: .\home\models.py:21
-msgid "Confirmed"
-msgstr "Bestätigt"
+#: core/validator/field.py:18 core/validator/field.py:29
+#, python-brace-format
+msgid "Enter a valid unique name. {self.form_label}."
+msgstr ""
 
-#: .\home\models.py:22
-msgid "In Progress"
-msgstr "Laufend"
+#: core/validator/field.py:24
+msgid ""
+"(Must start with a letter. Can only contain lower case letters, digits, "
+"underscores and hyphens)"
+msgstr ""
 
-#: .\home\models.py:23
-msgid "Solved"
-msgstr "Gelöst"
+#: core/validator/validator.py:10
+msgid "BSI Technical Guideline TR-02103"
+msgstr ""
 
-#: .\home\models.py:24
-msgid "Not Solved"
-msgstr "Nicht gelöst"
+#: core/validator/validator.py:11
+msgid "RFC5280"
+msgstr ""
 
-#: .\home\models.py:25
-msgid "Escalated"
-msgstr "Eskaliert"
+#: core/validator/validator.py:12
+msgid "Trustpoint specified constraint."
+msgstr ""
 
-#: .\home\models.py:26
-msgid "Suspended"
-msgstr "Suspendiert"
+#: core/validator/validator.py:17
+msgid "Certificate version is not v3."
+msgstr ""
 
-#: .\home\models.py:27
-msgid "Rejected"
-msgstr "Abgelehnt"
+#: core/validator/validator.py:18
+msgid "Certificate serial number is 0."
+msgstr ""
 
-#: .\home\models.py:28
-msgid "Deleted"
-msgstr "Gelöscht"
+#: core/validator/validator.py:20
+msgid "Certificate serial number is negative."
+msgstr ""
 
-#: .\home\models.py:29
-msgid "Closed"
-msgstr "Geschlossen"
+#: core/validator/validator.py:24
+msgid "Certificate serial number is shorter than 20 bytes."
+msgstr ""
 
-#: .\home\models.py:30
-msgid "Acknowledged"
-msgstr "Zur Kenntnis genommen"
+#: core/validator/validator.py:26
+msgid ""
+"The Issuer Alternative Name extension of the CA certificate is marked as "
+"critical."
+msgstr ""
 
-#: .\home\models.py:31
-msgid "Failed"
-msgstr "Fehlgeschlagen"
+#: core/validator/validator.py:29
+msgid "CA certificate does not contain the Key Usage extension."
+msgstr ""
 
-#: .\home\models.py:32
-msgid "Expired"
-msgstr "Abgelaufen"
+#: core/validator/validator.py:31
+msgid ""
+"The Key Usage extension of the CA certificate is marked as non-critical."
+msgstr ""
 
-#: .\home\models.py:33
-msgid "Pending"
-msgstr "Wartend"
+#: core/validator/validator.py:35
+msgid ""
+"The Policy Mappings extension of the CA certificate is marked as non-"
+"critical."
+msgstr ""
 
-#: .\home\models.py:82
-msgid "SETUP"
-msgstr "SETUP"
+#: core/validator/validator.py:40
+msgid ""
+"The Subject Alternative Name (SAN) extension of the CA certificate is marked "
+"as critical, while the subject is not emtpy."
+msgstr ""
 
-#: .\home\models.py:84
-msgid "INFO"
-msgstr "INFO"
+#: core/validator/validator.py:46
+msgid "Certificate does not contain the Authority Key Identifier extension."
+msgstr ""
 
-#: .\home\models.py:85
-msgid "WARNING"
-msgstr "WARNUNG"
+#: core/validator/validator.py:50
+msgid "The Authority Key Identifier extension is marked as critical."
+msgstr ""
 
-#: .\home\models.py:86
-msgid "CRITICAL"
-msgstr "KRITISCH"
+#: core/validator/validator.py:54
+msgid "The Subject Key Identifier extension is marked as critical."
+msgstr ""
 
-#: .\home\models.py:90 .\home\templates\home\notifications-tab.html:50
-msgid "System"
-msgstr "System"
+#: core/validator/validator.py:58
+msgid "CA certificate does not have a Basic Constraints extension."
+msgstr ""
 
-#: .\home\models.py:91 .\home\templates\home\notifications-tab.html:56
-msgid "Domain"
-msgstr "Domain"
+#: core/validator/validator.py:62
+msgid ""
+"The Basic Constraints extension of the CA certificate is marked as non-"
+"critical."
+msgstr ""
 
-#: .\home\models.py:92 .\home\templates\home\charts-tab.html:14
-#: .\home\templates\home\notifications-tab.html:62
+#: core/validator/validator.py:66
+msgid ""
+"CA certificate has a Basic Constraints extension stating that the "
+"certificate is not a CA."
+msgstr ""
+
+#: core/validator/validator.py:71
+msgid ""
+"The Key Usage extension of the CA certificate missing one or more "
+"appropriate key usages (keyCertSign, cRLSign, digitalSignature)."
+msgstr ""
+
+#: core/validator/validator.py:77
+msgid "Certificate does not contain the Subject Key Identifier extension."
+msgstr ""
+
+#: core/validator/validator.py:81
+msgid ""
+"The Policy Constraints extension of the CA certificate is marked as non-"
+"critical."
+msgstr ""
+
+#: core/validator/validator.py:85
+msgid ""
+"The Inhibit Any Policy extension of the CA certificate is marked as non-"
+"critical."
+msgstr ""
+
+#: core/validator/validator.py:90
+msgid ""
+"The Subject Alternative Name extension of the CA certificate is marked as "
+"non-critical, while the subject is emtpy"
+msgstr ""
+
+#: core/validator/validator.py:96
+msgid ""
+"The Authority Key Identifier Extension of the CA certificate does not "
+"contain the Key Identifier field."
+msgstr ""
+
+#: devices/forms.py:30 devices/forms.py:71 devices/forms.py:106
+#: devices/models.py:151
+#: templates/devices/credentials/certificate_download.html:43
+#: templates/devices/credentials/credential_download.html:39
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:80
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:116
+#: templates/devices/help/onboarding/cmp_shared_secret.html:112
+#: templates/devices/help/onboarding/cmp_shared_secret.html:148
+#: templates/pki/certificates/download.html:27
+#: templates/pki/certificates/download_multiple.html:29
+msgid "Common Name"
+msgstr ""
+
+#: devices/forms.py:31 devices/forms.py:75 devices/forms.py:109
+#: templates/devices/credentials/certificate_download.html:53
+#: templates/devices/credentials/credential_download.html:49
+msgid "Domain Component"
+msgstr ""
+
+#: devices/forms.py:32 devices/forms.py:76 devices/forms.py:108
+#: templates/devices/credentials/certificate_download.html:57
+#: templates/devices/credentials/credential_download.html:53
+#: templates/devices/details/sub_details.html:9
+#: templates/pki/certificates/components/general.html:11
+#: templates/pki/certificates/download.html:41
+#: templates/pki/certificates/download_multiple.html:43
+#: templates/pki/issuing_cas/confirm_delete.html:35
+#: templates/pki/issuing_cas/details.html:96
+#: templates/pki/issuing_cas/details.html:162
+#: templates/pki/truststores/sub_details.html:32
+msgid "Serial Number"
+msgstr "Seriennummer"
+
+#: devices/forms.py:39
+msgid "Password"
+msgstr ""
+
+#: devices/forms.py:41
+#, python-format
+msgid "Must be at least %d characters long."
+msgstr ""
+
+#: devices/forms.py:43
+msgid "Confirm Password"
+msgstr ""
+
+#: devices/forms.py:53
+msgid "Passwords do not match."
+msgstr ""
+
+#: devices/forms.py:56
+#, python-format
+msgid "Password must be at least %d characters long."
+msgstr ""
+
+#: devices/forms.py:74 devices/forms.py:107
+#: templates/devices/credentials/certificate_download.html:48
+#: templates/devices/credentials/credential_download.html:44
+msgid "Pseudonym"
+msgstr ""
+
+#: devices/forms.py:77 devices/forms.py:110
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:84
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:120
+#: templates/devices/help/onboarding/cmp_shared_secret.html:116
+#: templates/devices/help/onboarding/cmp_shared_secret.html:152
+msgid "Validity (days)"
+msgstr ""
+
+#: devices/forms.py:93 devices/forms.py:134
+msgid "Validity must be a positive integer."
+msgstr ""
+
+#: devices/forms.py:112 setup_wizard/forms.py:14
+msgid "IPv4-Addresses (comma-separated list)"
+msgstr ""
+
+#: devices/forms.py:114 setup_wizard/forms.py:19
+msgid "IPv6-Addresses (comma-separated list)"
+msgstr ""
+
+#: devices/forms.py:116 setup_wizard/forms.py:24
+msgid "Domain-Names (comma-separated list)"
+msgstr ""
+
+#: devices/forms.py:123
+#, python-format
+msgid "Credential with common name %s already exists for device %s."
+msgstr ""
+
+#: devices/forms.py:148
+msgid "Contains an invalid IPv4-Address."
+msgstr ""
+
+#: devices/forms.py:161
+msgid "Contains an invalid IPv6-Address."
+msgstr ""
+
+#: devices/forms.py:181
+msgid "At least one SAN entry is required."
+msgstr ""
+
+#: devices/forms.py:196
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:95
+msgid "This field is required."
+msgstr ""
+
+#: devices/forms.py:197
+msgid "The provided OTP is invalid."
+msgstr ""
+
+#: devices/forms.py:232 devices/models.py:45
+#: templates/devices/credentials/certificate_lifecycle_management.html:21
+#: templates/devices/help/onboarding/cmp_shared_secret.html:64
+msgid "Domain Credential Onboarding"
+msgstr ""
+
+#: devices/forms.py:237
+msgid "CMP with shared secret onboarding"
+msgstr ""
+
+#: devices/forms.py:238
+msgid "CMP with IDEVID onboarding"
+msgstr ""
+
+#: devices/forms.py:239
+msgid "CMP with AOKI onboarding"
+msgstr ""
+
+#: devices/forms.py:240
+msgid "CMP with BRSKI onboarding"
+msgstr ""
+
+#: devices/forms.py:241
+msgid "EST with username and password onboarding"
+msgstr ""
+
+#: devices/forms.py:242
+msgid "EST with IDEVID onboarding"
+msgstr ""
+
+#: devices/forms.py:243
+msgid "EST with AOKI onboarding"
+msgstr ""
+
+#: devices/forms.py:244
+msgid "EST with BRSKI onboarding"
+msgstr ""
+
+#: devices/forms.py:261 devices/models.py:82
+msgid "Manual Download"
+msgstr ""
+
+#: devices/forms.py:262
+msgid "CMP with shared secret authentication"
+msgstr ""
+
+#: devices/forms.py:263
+msgid "EST with username and password authentication"
+msgstr ""
+
+#: devices/models.py:32 devices/models.py:168 home/models.py:100
+#: templates/devices/credentials/certificate_download.html:26
+#: templates/devices/credentials/credential_download.html:22
+#: templates/home/notifications-tab.html:61
 msgid "Device"
 msgstr "Gerät"
 
-#: .\home\models.py:93 .\home\templates\home\notifications-tab.html:68
+#: devices/models.py:34
+msgid "Serial-Number"
+msgstr ""
+
+#: devices/models.py:37 devices/models.py:174 home/models.py:99
+#: templates/devices/credentials/certificate_download.html:30
+#: templates/devices/credentials/certificate_lifecycle_management.html:33
+#: templates/devices/credentials/certificate_lifecycle_management.html:75
+#: templates/devices/credentials/certificate_lifecycle_management.html:147
+#: templates/devices/credentials/credential_download.html:26
+#: templates/devices/details/sub_details.html:18
+#: templates/devices/details/sub_details.html:39
+#: templates/home/notifications-tab.html:55
+#: templates/pki/domains/confirm_delete.html:18
+#: templates/pki/domains/details.html:16
+msgid "Domain"
+msgstr "Domain"
+
+#: devices/models.py:53 devices/models.py:66
+msgid "No Onboarding"
+msgstr ""
+
+#: devices/models.py:54 home/models.py:37
+msgid "Pending"
+msgstr "Wartend"
+
+#: devices/models.py:55
+msgid "Onboarded"
+msgstr ""
+
+#: devices/models.py:59
+msgid "Onboarding Status"
+msgstr ""
+
+#: devices/models.py:67 devices/models.py:83
+msgid "EST - Username & Password"
+msgstr ""
+
+#: devices/models.py:68
+msgid "EST - IDevID"
+msgstr ""
+
+#: devices/models.py:69 devices/models.py:85
+msgid "CMP - Shared Secret"
+msgstr ""
+
+#: devices/models.py:70
+msgid "CMP - IDevID"
+msgstr ""
+
+#: devices/models.py:71
+msgid "AOKI"
+msgstr ""
+
+#: devices/models.py:72
+msgid "BRSKI"
+msgstr ""
+
+#: devices/models.py:76
+msgid "Onboarding Protocol"
+msgstr ""
+
+#: devices/models.py:84
+msgid "EST - LDevID"
+msgstr ""
+
+#: devices/models.py:86
+msgid "CMP - LDevID"
+msgstr ""
+
+#: devices/models.py:90
+msgid "Pki Protocol"
+msgstr ""
+
+#: devices/models.py:101
+msgid "EST Password"
+msgstr ""
+
+#: devices/models.py:107
+msgid "CMP Shared Secret"
+msgstr ""
+
+#: devices/models.py:115
+msgid "IDevID Manufacturer Truststore"
+msgstr ""
+
+#: devices/models.py:120 devices/models.py:179
+#: templates/pki/issuing_cas/config.html:58
+msgid "Created"
+msgstr ""
+
+#: devices/models.py:121 templates/pki/issuing_cas/config.html:54
+msgid "Updated"
+msgstr ""
+
+#: devices/models.py:139 devices/models.py:143
+msgid "Domain Credential"
+msgstr ""
+
+#: devices/models.py:140
+msgid "Application Credential"
+msgstr ""
+
+#: devices/models.py:144
+msgid "Generic"
+msgstr ""
+
+#: devices/models.py:145
+msgid "TLS-Client"
+msgstr ""
+
+#: devices/models.py:146
+msgid "TLS-Server"
+msgstr ""
+
+#: devices/models.py:154
+msgid "Credential Type"
+msgstr ""
+
+#: devices/models.py:157
+#: templates/devices/credentials/certificate_lifecycle_management.html:157
+msgid "Credential Purpose"
+msgstr ""
+
+#: devices/models.py:160
+msgid "Credential"
+msgstr ""
+
+#: devices/models.py:202
+msgid "OTP"
+msgstr ""
+
+#: devices/models.py:204
+msgid "Attempts"
+msgstr ""
+
+#: devices/models.py:205
+msgid "Download Token"
+msgstr ""
+
+#: devices/models.py:206
+msgid "Token Created"
+msgstr ""
+
+#: devices/views.py:127
+msgid "No Domain configured."
+msgstr ""
+
+#: devices/views.py:130
+msgid "No Issuing CA configured."
+msgstr ""
+
+#: devices/views.py:146 devices/views.py:148 devices/views.py:679
+#: templates/devices/credentials/certificate_lifecycle_management.html:99
+#: templates/devices/credentials/certificate_lifecycle_management.html:176
+msgid "Revoke"
+msgstr ""
+
+#: devices/views.py:372 devices/views.py:405
+msgid "Unknown file format."
+msgstr ""
+
+#: devices/views.py:676
+msgid "Revoked"
+msgstr ""
+
+#: devices/views.py:722
+#, python-format
+msgid "Successfully revoked one active credential."
+msgid_plural "Successfully revoked %(count)d active credentials."
+msgstr[0] ""
+msgstr[1] ""
+
+#: devices/views.py:729
+msgid "No credentials were revoked."
+msgstr ""
+
+#: devices/views.py:835
+msgid "The provided password is not valid."
+msgstr ""
+
+#: home/models.py:24 home/views.py:94
+msgid "New"
+msgstr "Neu"
+
+#: home/models.py:25
+msgid "Confirmed"
+msgstr "Bestätigt"
+
+#: home/models.py:26
+msgid "In Progress"
+msgstr "Laufend"
+
+#: home/models.py:27
+msgid "Solved"
+msgstr "Gelöst"
+
+#: home/models.py:28
+msgid "Not Solved"
+msgstr "Nicht gelöst"
+
+#: home/models.py:29
+msgid "Escalated"
+msgstr "Eskaliert"
+
+#: home/models.py:30
+msgid "Suspended"
+msgstr "Suspendiert"
+
+#: home/models.py:31
+msgid "Rejected"
+msgstr "Abgelehnt"
+
+#: home/models.py:32
+msgid "Deleted"
+msgstr "Gelöscht"
+
+#: home/models.py:33
+msgid "Closed"
+msgstr "Geschlossen"
+
+#: home/models.py:34
+msgid "Acknowledged"
+msgstr "Zur Kenntnis genommen"
+
+#: home/models.py:35
+msgid "Failed"
+msgstr "Fehlgeschlagen"
+
+#: home/models.py:36
+msgid "Expired"
+msgstr "Abgelaufen"
+
+#: home/models.py:89
+msgid "SETUP"
+msgstr "SETUP"
+
+#: home/models.py:91
+msgid "INFO"
+msgstr "INFO"
+
+#: home/models.py:92
+msgid "WARNING"
+msgstr "WARNUNG"
+
+#: home/models.py:93
+msgid "CRITICAL"
+msgstr "KRITISCH"
+
+#: home/models.py:98 templates/home/notifications-tab.html:49
+msgid "System"
+msgstr "System"
+
+#: home/models.py:101
+#: templates/devices/credentials/certificate_download.html:34
+#: templates/devices/credentials/credential_download.html:30
+#: templates/home/notifications-tab.html:67
+#: templates/pki/domains/config.html:51 templates/pki/domains/config.html:55
+#: templates/pki/issuing_cas/confirm_delete.html:19
 msgid "Issuing CA"
 msgstr "Issuing CA"
 
-#: .\home\models.py:94 .\home\templates\home\charts-tab.html:17
-#: .\home\templates\home\notifications-tab.html:74
+#: home/models.py:102 templates/home/notifications-tab.html:73
+#: templates/pki/certificates/download.html:21
+#: templates/pki/certificates/download_multiple.html:24
+#: templates/pki/issuing_cas/details.html:47
 msgid "Certificate"
 msgstr "Zertifikat"
 
-#: .\home\models.py:128
+#: home/models.py:136
 msgid "Custom Message"
 msgstr "Benutzerdefinierte Nachricht"
 
-#: .\home\models.py:132
+#: home/models.py:139
 #, python-brace-format
 msgid "Test for Issuing CA: {ca}"
 msgstr "Ein Test für Issuing CA: {ca}"
 
-#: .\home\models.py:133
+#: home/models.py:139
 #, python-brace-format
 msgid "Notification for Issuing CA: {ca}"
 msgstr "Benachrichtigung für Issuing CA: {ca}"
 
-#: .\home\models.py:136
+#: home/models.py:142
 #, python-brace-format
 msgid "Test for Domain: {domain}"
 msgstr "Test für Domain: {domain}"
 
-#: .\home\models.py:137
+#: home/models.py:142
 #, python-brace-format
 msgid "Notification for Domain: {domain}"
 msgstr "Benachrichtigung für Domain: {domain}"
 
-#: .\home\models.py:140
+#: home/models.py:145
 #, python-brace-format
 msgid "Test for Certificate: {cn}"
 msgstr "Test für Zertifikat: {cn}"
 
-#: .\home\models.py:141
+#: home/models.py:146
 #, python-brace-format
 msgid "Notification for Certificate: Common Name {cn} with Serial Number {sn}"
 msgstr ""
 "Benachrichtigung für Zertifikat: Common Name {cn} mit Seriennummer {sn}"
 
-#: .\home\models.py:144
+#: home/models.py:149
 #, python-brace-format
 msgid "Test for Device: {device}"
 msgstr "Test für Gerät: {device}"
 
-#: .\home\models.py:145
+#: home/models.py:149
 #, python-brace-format
 msgid "Notification for Device: {device}"
 msgstr "Benachrichtigung für Gerät: {device}"
 
-#: .\home\models.py:149
+#: home/models.py:153
 msgid "Populate test data"
 msgstr "Testdaten einfügen"
 
-#: .\home\models.py:150
+#: home/models.py:154
 #, python-brace-format
 msgid ""
 "Click <a href=\"{url}\">here</a> to add test issuing CAs, domains and "
@@ -171,26 +648,26 @@ msgstr ""
 "Nutzen Sie diesen <a href=\"{url}\">Link</a>, um zu Testzwecken Issuing CAs, "
 "Domains und Geräte hinzuzufügen."
 
-#: .\home\models.py:153
+#: home/models.py:157
 msgid "Access the Trustpoint Documentation"
 msgstr "Lesen Sie die Dokumentation von Trustpoint"
 
-#: .\home\models.py:154
+#: home/models.py:158
 #, python-brace-format
 msgid "You can find the official Trustpoint documentation here: {link}"
 msgstr "Die offizielle Dokumentation für Trustpoint finden Sie hier: {link}"
 
-#: .\home\models.py:157
+#: home/models.py:161
 msgid "Explore the Trustpoint project"
 msgstr "Entdecken Sie das Trustpoint-Forschungsprojekt"
 
-#: .\home\models.py:158
+#: home/models.py:163
 #, python-brace-format
 msgid ""
-"Visit the Trustpoint GitHub repository for more information: <a "
-"href=\"{url_github}\" target=\"_blank\">Trustpoint GitHub</a><br>Learn more "
-"about industrial security and the Trustpoint project on our <a "
-"href=\"{url_homepage}\" target=\"_blank\">homepage</a>"
+"Visit the Trustpoint GitHub repository for more information: <a href="
+"\"{url_github}\" target=\"_blank\">Trustpoint GitHub</a><br>Learn more about "
+"industrial security and the Trustpoint project on our <a href="
+"\"{url_homepage}\" target=\"_blank\">homepage</a>"
 msgstr ""
 "Besuchen Sie das Trustpoint GitHub-Repository für weitere Informationen: <a "
 "href=\"{url_github}\" target=\"_blank\">Trustpoint GitHub</a><br>\n"
@@ -198,11 +675,11 @@ msgstr ""
 "Sie mehr nützliche Infos über industrielle Sicherheit und das Truspoint-"
 "Forschungsprojekt"
 
-#: .\home\models.py:164
+#: home/models.py:170
 msgid "Welcome to Trustpoint!"
 msgstr "Willkommen bei Trustpoint!"
 
-#: .\home\models.py:165
+#: home/models.py:172
 msgid ""
 "Thank you for setting up Trustpoint. This system will help you manage your "
 "certificates and secure your environment."
@@ -210,11 +687,11 @@ msgstr ""
 "Vielen Dank für die Installation von Trustpoint. Dieses System wird Ihnen "
 "helfen, Ihre Zertifikate zu verwalten und Ihre Umgebung abzusichern."
 
-#: .\home\models.py:170
+#: home/models.py:177
 msgid "System health check failed"
 msgstr "Systemprüfung fehlgeschlagen"
 
-#: .\home\models.py:171
+#: home/models.py:179
 msgid ""
 "The system health check detected an issue with one or more services. Please "
 "investigate immediately."
@@ -222,11 +699,11 @@ msgstr ""
 "Bei der Überprüfung des Systemzustands wurde ein Problem mit einem oder "
 "mehreren Diensten festgestellt. Bitte gehen Sie diesem sofort nach."
 
-#: .\home\models.py:174
+#: home/models.py:183
 msgid "Security vulnerability detected"
 msgstr "Sicherheitsschwachstelle entdeckt"
 
-#: .\home\models.py:175
+#: home/models.py:185
 msgid ""
 "A security vulnerability affecting system components has been detected. "
 "Immediate attention required."
@@ -234,82 +711,82 @@ msgstr ""
 "Es wurde eine Sicherheitslücke entdeckt, die Systemkomponenten betrifft. "
 "Sofortige Aufmerksamkeit ist erforderlich."
 
-#: .\home\models.py:178
+#: home/models.py:189
 #, python-brace-format
 msgid "Certificate {common_name} is expiring soon"
 msgstr "Zertifikat {common_name} läuft bald aus"
 
-#: .\home\models.py:179
+#: home/models.py:190
 #, python-brace-format
 msgid "The certificate {common_name} is set to expire on {not_valid_after}."
 msgstr "Das Zertifikat {common_name} wird am {not_valid_after} auslaufen."
 
-#: .\home\models.py:182
+#: home/models.py:193
 #, python-brace-format
 msgid "Certificate {common_name} has expired"
 msgstr "Zertifikat {common_name} ist ausgelaufen"
 
-#: .\home\models.py:183
+#: home/models.py:194
 #, python-brace-format
 msgid "The certificate {common_name} expired on {not_valid_after}."
 msgstr "Das Zertifikat {common_name} ist am {not_valid_after} ausgelaufen."
 
-#: .\home\models.py:186
+#: home/models.py:197
 #, python-brace-format
 msgid "Issuing CA {unique_name} is expiring soon"
 msgstr "Issuing CA {unique_name} läuft bald aus"
 
-#: .\home\models.py:187
+#: home/models.py:198
 #, python-brace-format
 msgid "The issuing CA {unique_name} is set to expire on {not_valid_after}."
 msgstr "Die Issuing CA {unique_name} wird am {not_valid_after} auslaufen."
 
-#: .\home\models.py:190
+#: home/models.py:201
 #, python-brace-format
 msgid "Issuing CA {unique_name} has expired"
 msgstr "Issuing CA {unique_name} ist ausgelaufen"
 
-#: .\home\models.py:191
+#: home/models.py:202
 #, python-brace-format
 msgid "The issuing CA {unique_name} expired on {not_valid_after}."
 msgstr "Die Issuing CA {unique_name} ist am {not_valid_after} ausgelaufen."
 
-#: .\home\models.py:194
+#: home/models.py:205
 #, python-brace-format
 msgid "Domain {unique_name} has no Issuing CA assigned"
 msgstr "Domain {unique_name} ist keiner Issuing CA zugewiesen"
 
-#: .\home\models.py:195
+#: home/models.py:206
 #, python-brace-format
 msgid "The domain {unique_name} currently has no Issuing CA assigned."
 msgstr "Die Domain {unique_name} ist momentan keiner Issuing CA zugewiesen."
 
-#: .\home\models.py:198
+#: home/models.py:209
 #, python-brace-format
 msgid "Device {device} is not onboarded in {domain}"
 msgstr "Gerät {device} ist nicht in {domain} eingebunden"
 
-#: .\home\models.py:199
+#: home/models.py:210
 #, python-brace-format
 msgid "The device {device} has not completed onboarding."
 msgstr "Das Gerät {device} hat den Onboarding-Prozess nicht abgeschlossen."
 
-#: .\home\models.py:202
+#: home/models.py:213
 #, python-brace-format
 msgid "Device {device} onboarding failed"
 msgstr "Onboarding fehlgeschlagen für Gerät {device}"
 
-#: .\home\models.py:203
+#: home/models.py:213
 #, python-brace-format
 msgid "The device {device} failed onboarding."
 msgstr "Der Onboarding-Prozess für das Gerät {device} ist fehlgeschlagen."
 
-#: .\home\models.py:206
+#: home/models.py:216
 #, python-brace-format
 msgid "Device {device} certificate revoked"
 msgstr "Zertifikat von Gerät {device} widerrufen"
 
-#: .\home\models.py:207
+#: home/models.py:217
 #, python-brace-format
 msgid ""
 "The device {device} has had its certificate revoked. The device may no "
@@ -318,12 +795,12 @@ msgstr ""
 "Das Zertifikat des Geräts {device} ist widerrufen worden. Dem Gerät darf "
 "nicht mehr vertraut werden."
 
-#: .\home\models.py:210
+#: home/models.py:220
 #, python-brace-format
 msgid "Certificate {common_name} uses a weak signature algorithm"
 msgstr "Zertifikat {common_name} verwendet einen schwachen Signaturalgorithmus"
 
-#: .\home\models.py:211
+#: home/models.py:221
 #, python-brace-format
 msgid ""
 "The certificate {common_name} is signed using {signature_algorithm}, which "
@@ -332,12 +809,12 @@ msgstr ""
 "Das Zertifikat {common_name} ist mit {signature_algorithm} signiert, was als "
 "schwach angesehen wird."
 
-#: .\home\models.py:214
+#: home/models.py:224
 #, python-brace-format
 msgid "Certificate {common_name} uses insufficient key length"
 msgstr "Zertifikat {common_name} verwendet zu geringe Schlüssellänge"
 
-#: .\home\models.py:215
+#: home/models.py:226
 #, python-brace-format
 msgid ""
 "The certificate {common_name} uses an RSA key size of {spki_key_size} bits, "
@@ -346,12 +823,12 @@ msgstr ""
 "Das Zertifikat {common_name} verwendet eine RSA-Schlüssellänge von "
 "{spki_key_size} Bits, weniger als die empfohlenen 2048 Bits."
 
-#: .\home\models.py:218
+#: home/models.py:230
 #, python-brace-format
 msgid "Certificate {common_name} uses a weak ECC curve"
 msgstr "Zertifikat {common_name} nutzt eine schwache ECC-Kurve"
 
-#: .\home\models.py:219
+#: home/models.py:232
 #, python-brace-format
 msgid ""
 "The certificate {common_name} is using the {spki_ec_curve} ECC curve, which "
@@ -360,320 +837,2426 @@ msgstr ""
 "Das Zertifikat {common_name} verwendet die {spki_ec_curve} ECC-Kurve, die "
 "nicht mehr empfohlen wird."
 
-#: .\home\models.py:224
+#: home/models.py:238
 msgid "Unknown Notification message string."
 msgstr "Unbekannter Benachrichtigungstext."
 
-#: .\home\models.py:225 .\home\models.py:315
+#: home/models.py:239 home/models.py:314
 #, python-format
 msgid "Guess we messed up. Type of this notification is %(type)s"
 msgstr ""
 "Da ist etwas schiefgelaufen. Der Typ dieser Benachrichtigung ist %(type)s"
 
-#: .\home\models.py:290
+#: home/models.py:289 templates/home/notifications-tab.html:117
 msgid "Created at"
 msgstr "Erstellt um"
 
-#: .\home\models.py:304
+#: home/models.py:303
 msgid "Unknown Notification message type."
 msgstr "Unbekannte Benachrichtigungstextart."
 
-#: .\home\tables.py:31
-msgid "There are no Notifications available."
-msgstr "Es liegen keine Benachrichtigungen vor."
+#: templates/devices/add.html:7
+msgid "Add Device"
+msgstr ""
 
-#: .\home\tables.py:45
-msgid "Type"
-msgstr "Art"
+#: templates/devices/add.html:14 templates/devices/configure.html:20
+#: templates/devices/credentials/issue_application_credential.html:26
+#: templates/devices/credentials/onboarding/browser/otp_view.html:58
+#: templates/devices/details.html:20 templates/devices/revoke.html:50
+#: templates/pki/certificates/details.html:50
+#: templates/pki/certificates/download.html:63
+#: templates/pki/certificates/download_multiple.html:76
+#: templates/pki/devid_registration/add.html:71
+#: templates/pki/devid_registration/confirm_delete.html:29
+#: templates/pki/devid_registration/method_select.html:24
+#: templates/pki/domains/add.html:27 templates/pki/domains/config.html:85
+#: templates/pki/domains/confirm_delete.html:61
+#: templates/pki/domains/details.html:70
+#: templates/pki/issuing_cas/add/file_import.html:25
+#: templates/pki/issuing_cas/add/method_select.html:42
+#: templates/pki/issuing_cas/config.html:104
+#: templates/pki/issuing_cas/confirm_delete.html:49
+#: templates/pki/issuing_cas/details.html:216
+#: templates/pki/truststores/add/file_import.html:24
+#: templates/pki/truststores/confirm_delete.html:32
+#: templates/pki/truststores/details.html:29
+#: templates/pki/truststores/download.html:44
+#: templates/pki/truststores/download_multiple.html:60
+#: templates/setup_wizard/generate_tls_server_credential.html:44
+#: templates/setup_wizard/tls_server_credential_apply.html:46
+msgid "Cancel"
+msgstr ""
 
-#: .\home\tables.py:49
-msgid "Source"
-msgstr "Quelle"
+#: templates/devices/add.html:16
+msgid "Create Device"
+msgstr ""
 
-#: .\home\tables.py:54
-msgid "Description"
-msgstr "Beschreibung"
+#: templates/devices/configure.html:10
+msgid "Device configuration"
+msgstr ""
 
-#: .\home\tables.py:59 .\home\tables.py:71
-msgid "Details"
-msgstr "Details"
-
-#: .\home\templates\home\charts-tab.html:7
-msgid "Charts"
-msgstr "Diagramme"
-
-#: .\home\templates\home\charts-tab.html:20
-msgid "CA"
-msgstr "CA"
-
-#: .\home\templates\home\charts-tab.html:39
-msgid "Devices by onboarding status"
-msgstr "Geräte nach Onboarding-Status"
-
-#: .\home\templates\home\charts-tab.html:43
-msgid "Active devices by Domain"
-msgstr "Aktive Geräte nach Domain"
-
-#: .\home\templates\home\charts-tab.html:47
-msgid "Devices by onboarding protocol"
-msgstr "Geräte nach Onboarding-Protokoll"
-
-#: .\home\templates\home\charts-tab.html:56
-msgid "Certificates By Status"
-msgstr "Zertifikate nach Status"
-
-#: .\home\templates\home\charts-tab.html:60
-msgid "Certificates By Domain"
-msgstr "Zertifikate nach Domain"
-
-#: .\home\templates\home\charts-tab.html:64
-msgid "Certificates By Template"
-msgstr "Zertifikate nach Vorlage"
-
-#: .\home\templates\home\charts-tab.html:118
-msgid "Certificates By Issuing CA"
-msgstr "Zertifikate nach Issuing CA"
-
-#: .\home\templates\home\charts-tab.html:122
-msgid "Issued Certificates"
-msgstr "Ausgestellte Zertifikate"
-
-#: .\home\templates\home\charts-tab.html:126
-msgid "Issuing CAs By Type"
-msgstr "Issuing CAs nach Art"
-
-#: .\home\templates\home\command_status.html:7
-msgid "Success"
-msgstr "Erfolg"
-
-#: .\home\templates\home\command_status.html:10
-msgid "Error"
-msgstr "Fehler"
-
-#: .\home\templates\home\counts-panel.html:6
-msgid "Summary"
-msgstr "Übersicht"
-
-#: .\home\templates\home\counts-panel.html:15
-#: .\trustpoint\templates\trustpoint\base.html:69
-msgid "Certificates"
-msgstr "Zertifikate"
-
-#: .\home\templates\home\counts-panel.html:38
-msgid "Expiring Certificates"
-msgstr "Ausgelaufene Zertifikate"
-
-#: .\home\templates\home\counts-panel.html:60
-#: .\trustpoint\templates\trustpoint\base.html:52
-msgid "Devices"
-msgstr "Geräte"
-
-#: .\home\templates\home\counts-panel.html:82
-#: .\trustpoint\templates\trustpoint\base.html:67
-msgid "Issuing CAs"
-msgstr "Issuing CAs"
-
-#: .\home\templates\home\notification_details.html:9
-msgid "Notification Details"
-msgstr "Benachrichtigungsdetails"
-
-#: .\home\templates\home\notification_details.html:16
-msgid "Notification Type:"
-msgstr "Benachrichtigungsart:"
-
-#: .\home\templates\home\notification_details.html:37
-msgid "Notification Source:"
-msgstr "Quelle der Benachrichtigung:"
-
-#: .\home\templates\home\notification_details.html:49
-msgid "Domain:"
-msgstr "Domain:"
-
-#: .\home\templates\home\notification_details.html:61
-msgid "Certificate:"
-msgstr "Zertifikat:"
-
-#: .\home\templates\home\notification_details.html:73
-msgid "Device:"
-msgstr "Gerät:"
-
-#: .\home\templates\home\notification_details.html:85
-msgid "Issuing CA:"
-msgstr "Issuing CA:"
-
-#: .\home\templates\home\notification_details.html:97
-msgid "Message:"
-msgstr "Nachricht:"
-
-#: .\home\templates\home\notification_details.html:119
-msgid "Created At:"
-msgstr "Erstellt um:"
-
-#: .\home\templates\home\notification_details.html:128
-#: .\log\templates\log.html:17 .\log\templates\log_detail.html:12
+#: templates/devices/configure.html:19
+#: templates/devices/credentials/certificate_download.html:79
+#: templates/devices/credentials/certificate_lifecycle_management.html:207
+#: templates/devices/credentials/credential_download.html:72
+#: templates/devices/credentials/onboarding/browser/otp_view.html:57
+#: templates/devices/details.html:19
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:147
+#: templates/devices/help/onboarding/cmp_shared_secret.html:179
+#: templates/home/notification_details.html:128
+#: templates/pki/certificates/details.html:49
+#: templates/pki/certificates/download.html:62
+#: templates/pki/certificates/download_multiple.html:75
+#: templates/pki/devid_registration/add.html:69
+#: templates/pki/devid_registration/confirm_delete.html:28
+#: templates/pki/devid_registration/method_select.html:23
+#: templates/pki/domains/add.html:26 templates/pki/domains/config.html:84
+#: templates/pki/domains/confirm_delete.html:60
+#: templates/pki/domains/details.html:69
+#: templates/pki/issuing_cas/add/file_import.html:24
+#: templates/pki/issuing_cas/add/method_select.html:41
+#: templates/pki/issuing_cas/config.html:103
+#: templates/pki/issuing_cas/confirm_delete.html:48
+#: templates/pki/issuing_cas/details.html:214
+#: templates/pki/truststores/add/file_import.html:23
+#: templates/pki/truststores/confirm_delete.html:31
+#: templates/pki/truststores/details.html:28
+#: templates/pki/truststores/download.html:43
+#: templates/pki/truststores/download_multiple.html:59
+#: templates/settings/logging/logging_files_details.html:12
 msgid "Back"
 msgstr "Zurück"
 
-#: .\home\templates\home\notification_details.html:133
-msgid "Mark as Solved"
-msgstr "Als gelöst markieren"
+#: templates/devices/configure.html:21 templates/pki/domains/config.html:86
+#: templates/pki/issuing_cas/config.html:105
+#: templates/settings/language.html:29 templates/settings/network.html:19
+#: templates/settings/ntp.html:19 templates/settings/security.html:55
+msgid "Save"
+msgstr ""
 
-#: .\home\templates\home\notifications-tab.html:7
-msgid "Notifications"
-msgstr "Benachrichtigungen"
+#: templates/devices/credentials/certificate_download.html:14
+msgid "Download Issued"
+msgstr ""
 
-#: .\home\templates\home\notifications-tab.html:12
-msgid "Filter"
-msgstr "Filter"
+#: templates/devices/credentials/certificate_download.html:14
+msgid "Application Certificate"
+msgstr ""
 
-#: .\home\templates\home\notifications-tab.html:20
-msgid "Critical"
-msgstr "Kritisch"
+#: templates/devices/credentials/certificate_download.html:16
+msgid "Download Issued Domain Certificate"
+msgstr ""
 
-#: .\home\templates\home\notifications-tab.html:26
-msgid "Warning"
-msgstr "Warnung"
+#: templates/devices/credentials/certificate_download.html:22
+#: templates/devices/credentials/credential_download.html:18
+#: templates/home/notifications-tab.html:120
+#: templates/home/notifications-tab.html:134
+msgid "Details"
+msgstr "Details"
 
-#: .\home\templates\home\notifications-tab.html:32
-msgid "Info"
-msgstr "Info"
+#: templates/devices/credentials/certificate_download.html:63
+msgid "Download Certificate Only"
+msgstr ""
 
-#: .\home\templates\home\notifications-tab.html:38
-msgid "Setup"
-msgstr "Einrichtung"
+#: templates/devices/credentials/certificate_download.html:70
+msgid "Download Certificate Chain Including End-Entity Certificate"
+msgstr ""
 
-#: .\home\templates\home\notifications-tab.html:82
-msgid "Today"
-msgstr "Heute"
+#: templates/devices/credentials/certificate_download.html:74
+msgid "Download Certificate Chain Excluding End-Entity Certificate"
+msgstr ""
 
-#: .\home\templates\home\notifications-tab.html:85
-msgid "Last 7 Days"
-msgstr "Letzte 7 Tage"
+#: templates/devices/credentials/certificate_lifecycle_management.html:10
+msgid "Certificate Lifecycle Management"
+msgstr ""
 
-#: .\home\templates\home\notifications-tab.html:88
-msgid "Last 30 Days"
-msgstr "Letzte 30 Tage"
+#: templates/devices/credentials/certificate_lifecycle_management.html:14
+msgid "Device Details"
+msgstr ""
 
-#: .\home\templates\home\notifications-tab.html:90
-msgid "All"
-msgstr "Alle"
+#: templates/devices/credentials/certificate_lifecycle_management.html:17
+msgid "Device Name"
+msgstr ""
 
-#: .\log\templates\log.html:11
-msgid "Logs"
-msgstr "Logs"
+#: templates/devices/credentials/certificate_lifecycle_management.html:25
+msgid "Onboarding-Protocol"
+msgstr ""
 
-#: .\log\templates\log.html:19
-msgid "Download selected"
-msgstr "Ausgewählte herunterladen"
+#: templates/devices/credentials/certificate_lifecycle_management.html:29
+msgid "PKI-Protocol"
+msgstr ""
 
-#: .\log\templates\log_detail.html:13
+#: templates/devices/credentials/certificate_lifecycle_management.html:40
+#: templates/devices/details/sub_details.html:25
+#: templates/devices/details/sub_details.html:46
+msgid "This device is not part of any domain."
+msgstr ""
+
+#: templates/devices/credentials/certificate_lifecycle_management.html:45
+msgid "Signature-Suite"
+msgstr ""
+
+#: templates/devices/credentials/certificate_lifecycle_management.html:52
+msgid "Issue New Application Credentials"
+msgstr ""
+
+#: templates/devices/credentials/certificate_lifecycle_management.html:54
+msgid "Issue New TLS-Client Credential"
+msgstr ""
+
+#: templates/devices/credentials/certificate_lifecycle_management.html:55
+msgid "Issue New TLS-Server Credential"
+msgstr ""
+
+#: templates/devices/credentials/certificate_lifecycle_management.html:60
+msgid "Issued Domain Credentials"
+msgstr ""
+
+#: templates/devices/credentials/certificate_lifecycle_management.html:62
+#: templates/devices/credentials/certificate_lifecycle_management.html:131
+msgid "Help - Issue New Credentials"
+msgstr ""
+
+#: templates/devices/credentials/certificate_lifecycle_management.html:80
+#: templates/devices/credentials/certificate_lifecycle_management.html:152
+msgid "Common Name (CN)"
+msgstr ""
+
+#: templates/devices/credentials/certificate_lifecycle_management.html:85
+#: templates/devices/credentials/certificate_lifecycle_management.html:162
+#: templates/devices/revoke.html:29
+msgid "Issued at"
+msgstr ""
+
+#: templates/devices/credentials/certificate_lifecycle_management.html:90
+#: templates/devices/credentials/certificate_lifecycle_management.html:167
+msgid "Expiration date"
+msgstr ""
+
+#: templates/devices/credentials/certificate_lifecycle_management.html:95
+#: templates/devices/credentials/certificate_lifecycle_management.html:172
+msgid "Expires in"
+msgstr ""
+
+#: templates/devices/credentials/certificate_lifecycle_management.html:98
+#: templates/devices/credentials/certificate_lifecycle_management.html:114
+#: templates/devices/credentials/certificate_lifecycle_management.html:175
+#: templates/devices/credentials/certificate_lifecycle_management.html:192
+#: templates/devices/credentials/credential_download.html:13
+#: templates/devices/credentials/credential_download.html:59
+#: templates/pki/certificates/details.html:51
+#: templates/pki/truststores/details.html:30
+#: templates/settings/logging/logging_files.html:32
+#: templates/settings/logging/logging_files_details.html:13
 msgid "Download"
 msgstr "Herunterladen"
 
-#: .\users\templates\users\login.html:31
-msgid "Trustpoint - Login"
-msgstr "Trustpoint - Login"
+#: templates/devices/credentials/certificate_lifecycle_management.html:119
+msgid "No domain credential is issued to this device yet."
+msgstr ""
 
-#: .\users\templates\users\login.html:42
-msgid "Login"
-msgstr "Login"
+#: templates/devices/credentials/certificate_lifecycle_management.html:129
+#: templates/devices/credentials/certificate_lifecycle_management.html:135
+msgid "Issued Application Credentials"
+msgstr ""
 
-#: .\users\templates\users\logout.html:6
-msgid "Trustpoint - Logout"
-msgstr "Trustpoint - Logout"
+#: templates/devices/credentials/certificate_lifecycle_management.html:197
+msgid "No application credentials are issued to this device yet."
+msgstr ""
 
-#: .\users\templates\users\logout.html:10
-msgid "You have been logged out."
-msgstr "Sie wurden erfolgreich ausgeloggt."
+#: templates/devices/credentials/credential_download.html:63
+msgid "Download as PKCS#12"
+msgstr ""
 
-#: .\users\templates\users\logout.html:17
-msgid "Login again"
-msgstr "Erneut einloggen"
+#: templates/devices/credentials/credential_download.html:64
+msgid "Download as ZIP (PEM)"
+msgstr ""
 
-#: .\util\x509\credentials.py:233
+#: templates/devices/credentials/credential_download.html:65
+msgid "Download as TAR.GZ (PEM)"
+msgstr ""
+
+#: templates/devices/credentials/credential_download.html:69
+msgid "Download on Device browser"
+msgstr ""
+
+#: templates/devices/credentials/issue_application_credential.html:13
+#: templates/devices/credentials/issue_application_credential.html:27
+msgid "Issue Domain Credential"
+msgstr ""
+
+#: templates/devices/credentials/issue_application_credential.html:18
+msgid "Domain Credential Details"
+msgstr ""
+
+#: templates/devices/credentials/onboarding/browser/login.html:31
+msgid "Trustpoint - Browser Onboarding"
+msgstr ""
+
+#: templates/devices/credentials/onboarding/browser/login.html:41
+msgid "Download credentials"
+msgstr ""
+
+#: templates/devices/credentials/onboarding/browser/otp_view.html:16
+#, python-format
+msgid "Credential download authentication for %(device_name)s"
+msgstr ""
+
+#: templates/devices/details.html:10
+msgid "Device details"
+msgstr ""
+
+#: templates/devices/details.html:21 templates/pki/domains/details.html:71
+#: templates/pki/issuing_cas/details.html:215
+msgid "Config"
+msgstr ""
+
+#: templates/devices/details/sub_details.html:13
+msgid "Creation date"
+msgstr ""
+
+#: templates/devices/details/sub_details.html:31
+msgid "Device onboarding status"
+msgstr ""
+
+#: templates/devices/devices.html:9 templates/trustpoint/base.html:48
+msgid "Devices"
+msgstr "Geräte"
+
+#: templates/devices/devices.html:86
+msgid "No devices have been added yet."
+msgstr ""
+
+#: templates/devices/devices.html:97 templates/pki/domains/domain.html:56
+#: templates/pki/issuing_cas/issuing_cas.html:79
+#: templates/pki/truststores/truststores.html:60
+msgid "Delete selected"
+msgstr ""
+
+#: templates/devices/devices.html:101
+msgid "Add new Device"
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:13
+msgid "Help - No Onboarding - CMP Shared Secret"
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:18
+#: templates/devices/help/onboarding/cmp_shared_secret.html:18
+#: templates/home/counts-panel.html:6
+msgid "Summary"
+msgstr "Übersicht"
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:22
+#: templates/devices/help/onboarding/cmp_shared_secret.html:26
+msgid "TLS-Client Certificate Request URL"
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:26
+#: templates/devices/help/onboarding/cmp_shared_secret.html:30
+msgid "TLS-Server Certificate Request URL"
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:30
+#: templates/devices/help/onboarding/cmp_shared_secret.html:34
+msgid "Shared Secret"
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:34
+#: templates/devices/help/onboarding/cmp_shared_secret.html:38
+msgid "Key Identifier (KID)"
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:38
+#: templates/devices/help/onboarding/cmp_shared_secret.html:42
+msgid "Required Public Key Type"
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:45
+#: templates/devices/help/onboarding/cmp_shared_secret.html:49
+msgid "OpenSSL 3.x Commands"
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:50
+msgid "Key-Pair Generation"
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:52
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:62
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:97
+#: templates/devices/help/onboarding/cmp_shared_secret.html:56
+#: templates/devices/help/onboarding/cmp_shared_secret.html:66
+#: templates/devices/help/onboarding/cmp_shared_secret.html:87
+#: templates/devices/help/onboarding/cmp_shared_secret.html:94
+#: templates/devices/help/onboarding/cmp_shared_secret.html:129
+msgid "OpenSSL Command"
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:60
+msgid "TLS-Client Certificate Request"
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:78
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:114
+#: templates/devices/help/onboarding/cmp_shared_secret.html:110
+#: templates/devices/help/onboarding/cmp_shared_secret.html:146
+msgid "Mutable Parameters"
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:90
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:135
+#: templates/devices/help/onboarding/cmp_shared_secret.html:122
+#: templates/devices/help/onboarding/cmp_shared_secret.html:167
+msgid ""
+"Note that it is possible to use the CMP initialization (IR) and "
+"certification (CR) request message types interchangeably for this use case. "
+"Thus, if you are using a different CMP client that requires you to use the "
+"initialization request message type, this will work as well."
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:95
+msgid "TLS-Server Certificate Request"
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:124
+#: templates/devices/help/onboarding/cmp_shared_secret.html:156
+msgid "Subject Alternative Name (SAN)"
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:127
+#: templates/devices/help/onboarding/cmp_shared_secret.html:159
+msgid ""
+"Add as many SAN entries as desired, separated by whitespace. At least one "
+"must be given. The default is to make the SAN extension critical. To make it "
+"non-critical, remove the keyword critical."
+msgstr ""
+
+#: templates/devices/help/no_onboarding/cmp_shared_secret.html:148
+#: templates/devices/help/onboarding/cmp_shared_secret.html:180
+msgid "Certificate Lifecycle Management Summary"
+msgstr ""
+
+#: templates/devices/help/onboarding/cmp_shared_secret.html:13
+msgid "Help - CMP Shared Secret Onboarding"
+msgstr ""
+
+#: templates/devices/help/onboarding/cmp_shared_secret.html:22
+msgid "Domain Credential Request URL"
+msgstr ""
+
+#: templates/devices/help/onboarding/cmp_shared_secret.html:54
+#: templates/devices/help/onboarding/cmp_shared_secret.html:85
+msgid "Domain Credential Key-Pair Generation"
+msgstr ""
+
+#: templates/devices/help/onboarding/cmp_shared_secret.html:92
+msgid "TLS-Client Certificate"
+msgstr ""
+
+#: templates/devices/help/onboarding/cmp_shared_secret.html:127
+msgid "TLS-Server Certificate"
+msgstr ""
+
+#: templates/devices/revoke.html:10
+#, python-format
+msgid ""
+"\n"
+"                    Confirm credential revocation\n"
+"                    "
+msgid_plural ""
+"\n"
+"                    Confirm revocation of %(counter)s credentials\n"
+"                    "
+msgstr[0] ""
+msgstr[1] ""
+
+#: templates/devices/revoke.html:21
+msgid "Common name"
+msgstr ""
+
+#: templates/devices/revoke.html:25
+msgid "Credential purpose"
+msgstr ""
+
+#: templates/devices/revoke.html:33
+msgid "Associated device"
+msgstr ""
+
+#: templates/devices/revoke.html:41
+msgid "Revocation Reason"
+msgstr ""
+
+#: templates/devices/revoke.html:52
+#, python-format
+msgid ""
+"\n"
+"                        Revoke credential\n"
+"                        "
+msgid_plural ""
+"\n"
+"                        Revoke %(counter)s credentials\n"
+"                        "
+msgstr[0] ""
+msgstr[1] ""
+
+#: templates/home/charts-tab.html:7
+msgid "Charts"
+msgstr "Diagramme"
+
+#: templates/home/command_status.html:7
+msgid "Success"
+msgstr "Erfolg"
+
+#: templates/home/command_status.html:10
+msgid "Error"
+msgstr "Fehler"
+
+#: templates/home/notification_details.html:9
+msgid "Notification Details"
+msgstr "Benachrichtigungsdetails"
+
+#: templates/home/notification_details.html:16
+msgid "Notification Type:"
+msgstr "Benachrichtigungsart:"
+
+#: templates/home/notification_details.html:37
+msgid "Notification Source:"
+msgstr "Quelle der Benachrichtigung:"
+
+#: templates/home/notification_details.html:49
+msgid "Domain:"
+msgstr "Domain:"
+
+#: templates/home/notification_details.html:61
+msgid "Certificate:"
+msgstr "Zertifikat:"
+
+#: templates/home/notification_details.html:73
+msgid "Device:"
+msgstr "Gerät:"
+
+#: templates/home/notification_details.html:85
+msgid "Issuing CA:"
+msgstr "Issuing CA:"
+
+#: templates/home/notification_details.html:97
+msgid "Message:"
+msgstr "Nachricht:"
+
+#: templates/home/notification_details.html:119
+msgid "Created At:"
+msgstr "Erstellt um:"
+
+#: templates/home/notification_details.html:133
+msgid "Mark as Solved"
+msgstr "Als gelöst markieren"
+
+#: templates/home/notifications-tab.html:6
+msgid "Notifications"
+msgstr "Benachrichtigungen"
+
+#: templates/home/notifications-tab.html:11
+msgid "Filter"
+msgstr "Filter"
+
+#: templates/home/notifications-tab.html:19
+msgid "Critical"
+msgstr "Kritisch"
+
+#: templates/home/notifications-tab.html:25
+msgid "Warning"
+msgstr "Warnung"
+
+#: templates/home/notifications-tab.html:31
+msgid "Info"
+msgstr "Info"
+
+#: templates/home/notifications-tab.html:37
+msgid "Setup"
+msgstr "Einrichtung"
+
+#: templates/home/notifications-tab.html:81
+msgid "Today"
+msgstr "Heute"
+
+#: templates/home/notifications-tab.html:84
+msgid "Last 7 Days"
+msgstr "Letzte 7 Tage"
+
+#: templates/home/notifications-tab.html:87
+msgid "Last 30 Days"
+msgstr "Letzte 30 Tage"
+
+#: templates/home/notifications-tab.html:89
+msgid "All"
+msgstr "Alle"
+
+#: templates/home/notifications-tab.html:106
+#: templates/pki/issuing_cas/config.html:50
+msgid "Type"
+msgstr "Art"
+
+#: templates/home/notifications-tab.html:111
+msgid "Source"
+msgstr "Quelle"
+
+#: templates/home/notifications-tab.html:114
+msgid "Description"
+msgstr "Beschreibung"
+
+#: templates/home/notifications-tab.html:138
+msgid "No notifications available."
+msgstr ""
+
+#: templates/pki/certificates/certificates.html:9
+msgid "Certificates issued by the CA: "
+msgstr ""
+
+#: templates/pki/certificates/certificates.html:11
+#: templates/trustpoint/base.html:64
+msgid "Certificates"
+msgstr "Zertifikate"
+
+#: templates/pki/certificates/certificates.html:84
+msgid "No certificates are available. Add an Issuing CA first."
+msgstr ""
+
+#: templates/pki/certificates/certificates.html:96
+#: templates/pki/truststores/truststores.html:63
+msgid "Download selected"
+msgstr "Ausgewählte herunterladen"
+
+#: templates/pki/certificates/components/signature.html:4
+msgid "Signature"
+msgstr ""
+
+#: templates/pki/certificates/components/validity.html:4
+msgid "Validity"
+msgstr ""
+
+#: templates/pki/certificates/components/validity.html:8
+#: templates/pki/issuing_cas/details.html:104
+#: templates/pki/issuing_cas/details.html:170
+msgid "Not valid before"
+msgstr "Nicht gültig vor"
+
+#: templates/pki/certificates/components/validity.html:12
+#: templates/pki/issuing_cas/details.html:108
+#: templates/pki/issuing_cas/details.html:174
+msgid "Not valid after"
+msgstr "Nicht gültig nach"
+
+#: templates/pki/certificates/details.html:11
+msgid "Certificate Details"
+msgstr ""
+
+#: templates/pki/certificates/download.html:14
+#: templates/pki/certificates/download.html:48
+msgid "Download Certificate"
+msgstr ""
+
+#: templates/pki/certificates/download.html:32
+#: templates/pki/certificates/download_multiple.html:34
+msgid "Subject"
+msgstr ""
+
+#: templates/pki/certificates/download_multiple.html:14
+msgid "Download Certificates"
+msgstr ""
+
+#: templates/pki/certificates/download_multiple.html:20
+msgid "Certificates selected"
+msgstr ""
+
+#: templates/pki/certificates/download_multiple.html:54
+msgid "Download Selected Certificates"
+msgstr ""
+
+#: templates/pki/devid_registration/add.html:13
+#: templates/pki/domains/config.html:68 templates/pki/domains/details.html:62
+msgid "DevID Registration"
+msgstr ""
+
+#: templates/pki/devid_registration/add.html:72
+msgid "Add DevID Pattern"
+msgstr ""
+
+#: templates/pki/devid_registration/confirm_delete.html:13
+msgid "Confirm DevID Pattern Delete"
+msgstr ""
+
+#: templates/pki/devid_registration/method_select.html:11
+msgid "Add New DevID Onboarding Pattern"
+msgstr ""
+
+#: templates/pki/devid_registration/method_select.html:16
+msgid "Use Existing Truststore"
+msgstr ""
+
+#: templates/pki/devid_registration/method_select.html:18
+msgid "Upload New Truststore"
+msgstr ""
+
+#: templates/pki/devid_registration/table.html:10
+#: templates/pki/domains/config.html:20
+#: templates/pki/domains/confirm_delete.html:22
+#: templates/pki/domains/details.html:20
+#: templates/pki/issuing_cas/details.html:20
+msgid "Unique Name"
+msgstr ""
+
+#: templates/pki/devid_registration/table.html:15
+#: templates/pki/truststores/confirm_delete.html:18
+#: templates/pki/truststores/download.html:21
+msgid "Truststore"
+msgstr ""
+
+#: templates/pki/devid_registration/table.html:20
+msgid "Serial Number Pattern"
+msgstr ""
+
+#: templates/pki/devid_registration/table.html:35
+#: venv/lib/python3.12/site-packages/django/forms/formsets.py:499
+msgid "Delete"
+msgstr "Entfernen"
+
+#: templates/pki/devid_registration/table.html:40
+msgid "There are no DevID Registration Patterns available."
+msgstr ""
+
+#: templates/pki/domains/add.html:13 templates/pki/domains/domain.html:60
+msgid "Add new Domain"
+msgstr ""
+
+#: templates/pki/domains/add.html:18
+msgid "New Domain"
+msgstr ""
+
+#: templates/pki/domains/add.html:28
+msgid "Add New Domain"
+msgstr ""
+
+#: templates/pki/domains/config.html:10 templates/pki/issuing_cas/config.html:7
+msgid "Configuration"
+msgstr ""
+
+#: templates/pki/domains/config.html:24
+msgid "URL Path Segment"
+msgstr ""
+
+#: templates/pki/domains/config.html:28
+msgid "Devices in Domain"
+msgstr ""
+
+#: templates/pki/domains/config.html:31
+msgid "Pending devices"
+msgstr ""
+
+#: templates/pki/domains/config.html:35
+msgid "Running devices"
+msgstr ""
+
+#: templates/pki/domains/config.html:39
+msgid "Onboarded devices"
+msgstr ""
+
+#: templates/pki/domains/config.html:43
+msgid "Failed devices"
+msgstr ""
+
+#: templates/pki/domains/config.html:47
+msgid "Revoked devices"
+msgstr ""
+
+#: templates/pki/domains/config.html:59
+msgid "Expiry Date"
+msgstr ""
+
+#: templates/pki/domains/config.html:63
+msgid "Certificates Issued:"
+msgstr ""
+
+#: templates/pki/domains/config.html:73
+msgid "Create new DevID Registration Pattern"
+msgstr ""
+
+#: templates/pki/domains/confirm_delete.html:12
+msgid "Confirm Domain Deletion"
+msgstr ""
+
+#: templates/pki/domains/confirm_delete.html:26
+#: templates/pki/domains/details.html:30
+msgid "Issuing CA - Unique Name"
+msgstr ""
+
+#: templates/pki/domains/confirm_delete.html:36
+#: templates/pki/domains/confirm_delete.html:43
+#: templates/pki/domains/details.html:39 templates/pki/domains/details.html:45
+#: templates/pki/issuing_cas/confirm_delete.html:23
+#: templates/pki/issuing_cas/confirm_delete.html:29
+#: templates/pki/issuing_cas/details.html:24
+#: templates/pki/issuing_cas/details.html:30
+#: templates/pki/issuing_cas/details.html:83
+#: templates/pki/issuing_cas/details.html:89
 msgid "Issuing CA Certificate"
 msgstr "Issuing CA-Zertifikat"
 
-#: .\util\x509\credentials.py:235
-msgid "Root CA Certificate"
-msgstr "Root CA-Zertifikat"
+#: templates/pki/domains/confirm_delete.html:62
+msgid "Delete selected Domains"
+msgstr ""
 
-#: .\util\x509\credentials.py:238
-msgid "Intermediate CA Certificate"
-msgstr "Zwischen-CA-Zertifikat"
+#: templates/pki/domains/details.html:11
+msgid "Domain - Details"
+msgstr ""
 
-#: .\trustpoint\settings.py:136
-msgid "German"
-msgstr "Deutsch"
+#: templates/pki/domains/details.html:54
+msgid "No Issuing CA configured"
+msgstr ""
 
-#: .\trustpoint\settings.py:137
-msgid "English"
-msgstr "Englisch"
-
-#: .\trustpoint\templates\trustpoint\base.html:44
-msgid "Dashboard"
-msgstr "Übersicht"
-
-#: .\trustpoint\templates\trustpoint\base.html:60
-msgid "PKI"
-msgstr "PKI"
-
-#: .\trustpoint\templates\trustpoint\base.html:66
+#: templates/pki/domains/domain.html:8 templates/pki/issuing_cas/config.html:16
+#: templates/trustpoint/base.html:62
 msgid "Domains"
 msgstr "Domains"
 
-#: .\trustpoint\templates\trustpoint\base.html:68
+#: templates/pki/domains/domain.html:45
+msgid "No domains are configured yet."
+msgstr ""
+
+#: templates/pki/issuing_cas/add/file_import.html:11
+#: templates/pki/issuing_cas/issuing_cas.html:82
+msgid "Add new Issuing CA"
+msgstr ""
+
+#: templates/pki/issuing_cas/add/file_import.html:16
+#: templates/pki/truststores/add/file_import.html:16
+msgid "File Import"
+msgstr ""
+
+#: templates/pki/issuing_cas/add/file_import.html:26
+#: templates/pki/issuing_cas/add/method_select.html:11
+msgid "Add New Issuing CA"
+msgstr ""
+
+#: templates/pki/issuing_cas/add/method_select.html:16
+msgid "Import New Issuing CA From File"
+msgstr ""
+
+#: templates/pki/issuing_cas/add/method_select.html:18
+msgid "Import From PKCS#12 File"
+msgstr ""
+
+#: templates/pki/issuing_cas/add/method_select.html:20
+msgid "Import From Separate Key and Certificate Files"
+msgstr ""
+
+#: templates/pki/issuing_cas/add/method_select.html:22
+msgid "Generate A Key-Pair And Request Issuing CA Certificate"
+msgstr ""
+
+#: templates/pki/issuing_cas/add/method_select.html:24
+msgid "Request Issuing CA Certificate Using EST"
+msgstr ""
+
+#: templates/pki/issuing_cas/add/method_select.html:26
+msgid "Request Issuing CA Certificate Using CMP"
+msgstr ""
+
+#: templates/pki/issuing_cas/add/method_select.html:28
+msgid "Request Issuing CA Certificate Using SCEP"
+msgstr ""
+
+#: templates/pki/issuing_cas/add/method_select.html:30
+msgid "Configure A Remote Issuing CA"
+msgstr ""
+
+#: templates/pki/issuing_cas/add/method_select.html:32
+msgid "Configure A Remote Issuing CA Using EST"
+msgstr ""
+
+#: templates/pki/issuing_cas/add/method_select.html:34
+msgid "Configure A Remote Issuing CA Using CMP"
+msgstr ""
+
+#: templates/pki/issuing_cas/add/method_select.html:36
+msgid "Configure A Remote Issuing CA Using SCEP"
+msgstr ""
+
+#: templates/pki/issuing_cas/config.html:36
+msgid "No associated domains"
+msgstr ""
+
+#: templates/pki/issuing_cas/config.html:46
+#: templates/pki/issuing_cas/details.html:16
+msgid "General"
+msgstr ""
+
+#: templates/pki/issuing_cas/config.html:62
+msgid "Certificates issued:"
+msgstr ""
+
+#: templates/pki/issuing_cas/config.html:71
+msgid "CRL"
+msgstr ""
+
+#: templates/pki/issuing_cas/config.html:75
+msgid "Revocation list"
+msgstr ""
+
+#: templates/pki/issuing_cas/config.html:78
+msgid "Generate CRL"
+msgstr ""
+
+#: templates/pki/issuing_cas/config.html:82
+#: templates/pki/issuing_cas/config.html:86
+msgid "Download CRL"
+msgstr ""
+
+#: templates/pki/issuing_cas/config.html:92
+msgid "Last CRL issued"
+msgstr ""
+
+#: templates/pki/issuing_cas/config.html:96
+msgid "No CRL has been issued yet."
+msgstr ""
+
+#: templates/pki/issuing_cas/confirm_delete.html:13
+msgid "Confirm Issuing CA Deletion"
+msgstr ""
+
+#: templates/pki/issuing_cas/confirm_delete.html:50
+msgid "Delete selected Issuing CAs"
+msgstr ""
+
+#: templates/pki/issuing_cas/details.html:11
+msgid "Issuing CA Details"
+msgstr ""
+
+#: templates/pki/issuing_cas/details.html:36
+#: templates/pki/issuing_cas/details.html:42
+#: templates/pki/issuing_cas/details.html:53
+#: templates/pki/issuing_cas/details.html:146
+#: templates/pki/issuing_cas/details.html:150
+#: templates/pki/issuing_cas/details.html:156
+msgid "Root CA Certificate"
+msgstr "Root CA-Zertifikat"
+
+#: templates/pki/issuing_cas/details.html:47
+msgid "Intermediate CA"
+msgstr ""
+
+#: templates/pki/issuing_cas/issuing_cas.html:8
+#: templates/trustpoint/base.html:63
+msgid "Issuing CAs"
+msgstr "Issuing CAs"
+
+#: templates/pki/issuing_cas/issuing_cas.html:69
+msgid "No Issuing CA has been added yet."
+msgstr ""
+
+#: templates/pki/truststores/add/file_import.html:11
+msgid "Add new Truststore"
+msgstr ""
+
+#: templates/pki/truststores/add/file_import.html:25
+msgid "Add New Truststore"
+msgstr ""
+
+#: templates/pki/truststores/confirm_delete.html:12
+msgid "Confirm Truststore Deletion"
+msgstr ""
+
+#: templates/pki/truststores/confirm_delete.html:33
+msgid "Delete selected Truststores"
+msgstr ""
+
+#: templates/pki/truststores/details.html:11
+#: templates/pki/truststores/download_multiple.html:39
+msgid "Truststore Details"
+msgstr ""
+
+#: templates/pki/truststores/download.html:14
+#: templates/pki/truststores/download.html:30
+msgid "Download Truststore"
+msgstr ""
+
+#: templates/pki/truststores/download_multiple.html:14
+msgid "Download Truststores"
+msgstr ""
+
+#: templates/pki/truststores/download_multiple.html:20
+msgid "Truststores selected"
+msgstr ""
+
+#: templates/pki/truststores/download_multiple.html:24
+msgid "Download Selected Truststores"
+msgstr ""
+
+#: templates/pki/truststores/truststores.html:8
+#: templates/trustpoint/base.html:65
 msgid "Truststores"
 msgstr "Truststores"
 
-#: .\trustpoint\templates\trustpoint\base.html:77
-msgid "Settings"
-msgstr "Einstellungen"
+#: templates/pki/truststores/truststores.html:49
+msgid "No Truststore has been added yet."
+msgstr ""
 
-#: .\trustpoint\templates\trustpoint\base.html:83
-msgid "Language"
-msgstr "Sprache (Language)"
+#: templates/pki/truststores/truststores.html:66
+msgid "Add new Trust Store"
+msgstr ""
 
-#: .\trustpoint\templates\trustpoint\base.html:84
+#: templates/settings/language.html:7
+msgid "Language Configuration"
+msgstr ""
+
+#: templates/settings/logging/logging_files.html:8
+#: templates/trustpoint/base.html:80
 msgid "Logging"
 msgstr "Logging"
 
-#: .\trustpoint\templates\trustpoint\base.html:85
-msgid "Network"
-msgstr "Netzwerk"
+#: templates/settings/logging/logging_files.html:18
+msgid "Log file"
+msgstr ""
 
-#: .\trustpoint\templates\trustpoint\base.html:86
-msgid "NTP"
-msgstr "NTP"
+#: templates/settings/logging/logging_files.html:23
+msgid "First log entry"
+msgstr ""
 
-#: .\trustpoint\templates\trustpoint\base.html:87
-msgid "SSH"
-msgstr "SSH"
+#: templates/settings/logging/logging_files.html:28
+msgid "Last log entry"
+msgstr ""
 
-#: .\trustpoint\templates\trustpoint\base.html:88
+#: templates/settings/logging/logging_files.html:31
+msgid "View"
+msgstr ""
+
+#: templates/settings/logging/logging_files.html:53
+msgid "No log files available."
+msgstr ""
+
+#: templates/settings/logging/logging_files.html:65
+msgid "Download selected (tar.gz)"
+msgstr ""
+
+#: templates/settings/logging/logging_files.html:68
+msgid "Download selected (zip)"
+msgstr ""
+
+#: templates/settings/network.html:7
+msgid "Network Configuration"
+msgstr ""
+
+#: templates/settings/ntp.html:7
+msgid "NTP Configuration"
+msgstr ""
+
+#: templates/settings/security.html:13
+msgid "Security Configuration"
+msgstr ""
+
+#: templates/settings/security.html:24
+msgid ""
+"Some settings are hidden as they are unavailable for the selected security "
+"level."
+msgstr ""
+
+#: templates/settings/security.html:34
+msgid "WARNING!"
+msgstr ""
+
+#: templates/settings/security.html:35
+msgid ""
+"By saving, you will disable the local auto-generated PKI. This revokes all "
+"certificates issued by the local auto-generated PKI."
+msgstr ""
+
+#: templates/settings/security.html:37
+msgid "This action is irreversible."
+msgstr ""
+
+#: templates/setup_wizard/create_super_user.html:31
+#: templates/setup_wizard/demo_data.html:31
+#: templates/setup_wizard/generate_tls_server_credential.html:31
+#: templates/setup_wizard/initial.html:31
+#: templates/setup_wizard/tls_server_credential_apply.html:31
+msgid "Trustpoint - Setup Wizard"
+msgstr ""
+
+#: templates/setup_wizard/create_super_user.html:34
+#: templates/setup_wizard/create_super_user.html:43
+msgid "Create Super-User"
+msgstr ""
+
+#: templates/setup_wizard/demo_data.html:34
+msgid "Pre-population with Demo Data"
+msgstr ""
+
+#: templates/setup_wizard/demo_data.html:40
+msgid "Continue with Demo Data"
+msgstr ""
+
+#: templates/setup_wizard/demo_data.html:41
+msgid "Continue without Demo Data"
+msgstr ""
+
+#: templates/setup_wizard/generate_tls_server_credential.html:34
+#: templates/setup_wizard/initial.html:36
+msgid "Generate Self-Signed TLS-Server Credential"
+msgstr ""
+
+#: templates/setup_wizard/generate_tls_server_credential.html:45
+msgid "Generate Self-Singed TLS-Server Credential"
+msgstr ""
+
+#: templates/setup_wizard/initial.html:34
+msgid "Configure TLS-Server Credential"
+msgstr ""
+
+#: templates/setup_wizard/initial.html:38
+msgid "Import TLS-Server Credential From File"
+msgstr ""
+
+#: templates/setup_wizard/tls_server_credential_apply.html:34
+msgid "Download TLS-Server Trust-Store"
+msgstr ""
+
+#: templates/setup_wizard/tls_server_credential_apply.html:47
+msgid "Apply TLS-Configurations"
+msgstr ""
+
+#: templates/trustpoint/base.html:40
+msgid "Dashboard"
+msgstr "Übersicht"
+
+#: templates/trustpoint/base.html:56
+msgid "PKI"
+msgstr "PKI"
+
+#: templates/trustpoint/base.html:73
+msgid "Settings"
+msgstr "Einstellungen"
+
+#: templates/trustpoint/base.html:79
+msgid "Language"
+msgstr "Sprache (Language)"
+
+#: templates/trustpoint/base.html:83
 msgid "Security"
 msgstr "Sicherheit"
 
-#: .\trustpoint\templates\trustpoint\base.html:96
+#: templates/trustpoint/base.html:91
 msgid "Light theme"
 msgstr "Helles Theme"
 
-#: .\trustpoint\templates\trustpoint\base.html:99
+#: templates/trustpoint/base.html:94
 msgid "Dark theme"
 msgstr "Dunkles Theme"
 
-#: .\trustpoint\templates\trustpoint\base.html:106
+#: templates/trustpoint/base.html:101
 msgid "Logout"
 msgstr "Ausloggen"
 
-#: .\trustpoint\views\base.py:43
+#: templates/users/login.html:31
+msgid "Trustpoint - Login"
+msgstr "Trustpoint - Login"
+
+#: templates/users/login.html:42
+msgid "Login"
+msgstr "Login"
+
+#: templates/users/logout.html:6
+msgid "Trustpoint - Logout"
+msgstr "Trustpoint - Logout"
+
+#: templates/users/logout.html:10
+msgid "You have been logged out."
+msgstr "Sie wurden erfolgreich ausgeloggt."
+
+#: templates/users/logout.html:17
+msgid "Login again"
+msgstr "Erneut einloggen"
+
+#: venv/lib/python3.12/site-packages/django/contrib/messages/apps.py:16
+msgid "Messages"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/contrib/sitemaps/apps.py:8
+msgid "Site Maps"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/contrib/staticfiles/apps.py:9
+msgid "Static Files"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/contrib/syndication/apps.py:7
+msgid "Syndication"
+msgstr ""
+
+#. Translators: String used to replace omitted page numbers in elided page
+#. range generated by paginators, e.g. [1, 2, '…', 5, 6, 7, '…', 9, 10].
+#: venv/lib/python3.12/site-packages/django/core/paginator.py:30
+msgid "…"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/paginator.py:32
+msgid "That page number is not an integer"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/paginator.py:33
+msgid "That page number is less than 1"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/paginator.py:34
+msgid "That page contains no results"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:22
+msgid "Enter a valid value."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:70
+msgid "Enter a valid domain name."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:155
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:768
+msgid "Enter a valid URL."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:216
+msgid "Enter a valid integer."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:227
+msgid "Enter a valid email address."
+msgstr ""
+
+#. Translators: "letters" means latin letters: a-z and A-Z.
+#: venv/lib/python3.12/site-packages/django/core/validators.py:310
+msgid ""
+"Enter a valid “slug” consisting of letters, numbers, underscores or hyphens."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:318
+msgid ""
+"Enter a valid “slug” consisting of Unicode letters, numbers, underscores, or "
+"hyphens."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:330
+#: venv/lib/python3.12/site-packages/django/core/validators.py:339
+#: venv/lib/python3.12/site-packages/django/core/validators.py:353
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2215
+#, python-format
+msgid "Enter a valid %(protocol)s address."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:332
+msgid "IPv4"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:341
+#: venv/lib/python3.12/site-packages/django/utils/ipv6.py:43
+msgid "IPv6"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:355
+msgid "IPv4 or IPv6"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:396
+msgid "Enter only digits separated by commas."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:402
+#, python-format
+msgid "Ensure this value is %(limit_value)s (it is %(show_value)s)."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:437
+#, python-format
+msgid "Ensure this value is less than or equal to %(limit_value)s."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:446
+#, python-format
+msgid "Ensure this value is greater than or equal to %(limit_value)s."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:455
+#, python-format
+msgid "Ensure this value is a multiple of step size %(limit_value)s."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:462
+#, python-format
+msgid ""
+"Ensure this value is a multiple of step size %(limit_value)s, starting from "
+"%(offset)s, e.g. %(offset)s, %(valid_value1)s, %(valid_value2)s, and so on."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:494
+#, python-format
+msgid ""
+"Ensure this value has at least %(limit_value)d character (it has "
+"%(show_value)d)."
+msgid_plural ""
+"Ensure this value has at least %(limit_value)d characters (it has "
+"%(show_value)d)."
+msgstr[0] ""
+msgstr[1] ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:512
+#, python-format
+msgid ""
+"Ensure this value has at most %(limit_value)d character (it has "
+"%(show_value)d)."
+msgid_plural ""
+"Ensure this value has at most %(limit_value)d characters (it has "
+"%(show_value)d)."
+msgstr[0] ""
+msgstr[1] ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:535
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:359
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:398
+msgid "Enter a number."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:537
+#, python-format
+msgid "Ensure that there are no more than %(max)s digit in total."
+msgid_plural "Ensure that there are no more than %(max)s digits in total."
+msgstr[0] ""
+msgstr[1] ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:542
+#, python-format
+msgid "Ensure that there are no more than %(max)s decimal place."
+msgid_plural "Ensure that there are no more than %(max)s decimal places."
+msgstr[0] ""
+msgstr[1] ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:547
+#, python-format
+msgid ""
+"Ensure that there are no more than %(max)s digit before the decimal point."
+msgid_plural ""
+"Ensure that there are no more than %(max)s digits before the decimal point."
+msgstr[0] ""
+msgstr[1] ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:618
+#, python-format
+msgid ""
+"File extension “%(extension)s” is not allowed. Allowed extensions are: "
+"%(allowed_extensions)s."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/core/validators.py:680
+msgid "Null characters are not allowed."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/base.py:1572
+#: venv/lib/python3.12/site-packages/django/forms/models.py:908
+msgid "and"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/base.py:1574
+#, python-format
+msgid "%(model_name)s with this %(field_labels)s already exists."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/constraints.py:22
+#, python-format
+msgid "Constraint “%(name)s” is violated."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:134
+#, python-format
+msgid "Value %(value)r is not a valid choice."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:135
+msgid "This field cannot be null."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:136
+msgid "This field cannot be blank."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:137
+#, python-format
+msgid "%(model_name)s with this %(field_label)s already exists."
+msgstr ""
+
+#. Translators: The 'lookup_type' is one of 'date', 'year' or
+#. 'month'. Eg: "Title must be unique for pub_date year"
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:141
+#, python-format
+msgid ""
+"%(field_label)s must be unique for %(date_field_label)s %(lookup_type)s."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:180
+#, python-format
+msgid "Field of type: %(field_type)s"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1156
+#, python-format
+msgid "“%(value)s” value must be either True or False."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1157
+#, python-format
+msgid "“%(value)s” value must be either True, False, or None."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1159
+msgid "Boolean (Either True or False)"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1209
+#, python-format
+msgid "String (up to %(max_length)s)"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1211
+msgid "String (unlimited)"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1320
+msgid "Comma-separated integers"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1421
+#, python-format
+msgid ""
+"“%(value)s” value has an invalid date format. It must be in YYYY-MM-DD "
+"format."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1425
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1560
+#, python-format
+msgid ""
+"“%(value)s” value has the correct format (YYYY-MM-DD) but it is an invalid "
+"date."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1429
+msgid "Date (without time)"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1556
+#, python-format
+msgid ""
+"“%(value)s” value has an invalid format. It must be in YYYY-MM-DD HH:MM[:ss[."
+"uuuuuu]][TZ] format."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1564
+#, python-format
+msgid ""
+"“%(value)s” value has the correct format (YYYY-MM-DD HH:MM[:ss[.uuuuuu]]"
+"[TZ]) but it is an invalid date/time."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1569
+msgid "Date (with time)"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1696
+#, python-format
+msgid "“%(value)s” value must be a decimal number."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1698
+msgid "Decimal number"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1859
+#, python-format
+msgid ""
+"“%(value)s” value has an invalid format. It must be in [DD] [[HH:]MM:]ss[."
+"uuuuuu] format."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1863
+msgid "Duration"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1915
+msgid "Email address"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:1940
+msgid "File path"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2018
+#, python-format
+msgid "“%(value)s” value must be a float."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2020
+msgid "Floating point number"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2060
+#, python-format
+msgid "“%(value)s” value must be an integer."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2062
+msgid "Integer"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2158
+msgid "Big (8 byte) integer"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2175
+msgid "Small integer"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2183
+msgid "IPv4 address"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2214
+msgid "IP address"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2305
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2306
+#, python-format
+msgid "“%(value)s” value must be either None, True or False."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2308
+msgid "Boolean (Either True, False or None)"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2359
+msgid "Positive big integer"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2374
+msgid "Positive integer"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2389
+msgid "Positive small integer"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2405
+#, python-format
+msgid "Slug (up to %(max_length)s)"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2441
+msgid "Text"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2521
+#, python-format
+msgid ""
+"“%(value)s” value has an invalid format. It must be in HH:MM[:ss[.uuuuuu]] "
+"format."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2525
+#, python-format
+msgid ""
+"“%(value)s” value has the correct format (HH:MM[:ss[.uuuuuu]]) but it is an "
+"invalid time."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2529
+msgid "Time"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2637
+msgid "URL"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2661
+msgid "Raw binary data"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2726
+#, python-format
+msgid "“%(value)s” is not a valid UUID."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/__init__.py:2728
+msgid "Universally unique identifier"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/files.py:244
+msgid "File"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/files.py:420
+msgid "Image"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/json.py:24
+msgid "A JSON object"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/json.py:26
+msgid "Value must be valid JSON."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/related.py:932
+#, python-format
+msgid "%(model)s instance with %(field)s %(value)r does not exist."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/related.py:934
+msgid "Foreign Key (type determined by related field)"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/related.py:1228
+msgid "One-to-one relationship"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/related.py:1285
+#, python-format
+msgid "%(from)s-%(to)s relationship"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/related.py:1287
+#, python-format
+msgid "%(from)s-%(to)s relationships"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/db/models/fields/related.py:1335
+msgid "Many-to-many relationship"
+msgstr ""
+
+#. Translators: If found as last label character, these punctuation
+#. characters will prevent the default label_suffix to be appended to the label
+#: venv/lib/python3.12/site-packages/django/forms/boundfield.py:185
+msgid ":?.!"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:308
+msgid "Enter a whole number."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:479
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:1260
+msgid "Enter a valid date."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:502
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:1261
+msgid "Enter a valid time."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:529
+msgid "Enter a valid date/time."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:563
+msgid "Enter a valid duration."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:564
+#, python-brace-format
+msgid "The number of days must be between {min_days} and {max_days}."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:633
+msgid "No file was submitted. Check the encoding type on the form."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:634
+msgid "No file was submitted."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:635
+msgid "The submitted file is empty."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:637
+#, python-format
+msgid "Ensure this filename has at most %(max)d character (it has %(length)d)."
+msgid_plural ""
+"Ensure this filename has at most %(max)d characters (it has %(length)d)."
+msgstr[0] ""
+msgstr[1] ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:642
+msgid "Please either submit a file or check the clear checkbox, not both."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:710
+msgid ""
+"Upload a valid image. The file you uploaded was either not an image or a "
+"corrupted image."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:882
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:968
+#: venv/lib/python3.12/site-packages/django/forms/models.py:1592
+#, python-format
+msgid "Select a valid choice. %(value)s is not one of the available choices."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:970
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:1089
+#: venv/lib/python3.12/site-packages/django/forms/models.py:1590
+msgid "Enter a list of values."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:1090
+msgid "Enter a complete value."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:1332
+msgid "Enter a valid UUID."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/fields.py:1362
+msgid "Enter a valid JSON."
+msgstr ""
+
+#. Translators: This is the default suffix added to form field labels
+#: venv/lib/python3.12/site-packages/django/forms/forms.py:94
+msgid ":"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/forms.py:230
+#, python-format
+msgid "(Hidden field %(name)s) %(error)s"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/formsets.py:61
+#, python-format
+msgid ""
+"ManagementForm data is missing or has been tampered with. Missing fields: "
+"%(field_names)s. You may need to file a bug report if the issue persists."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/formsets.py:65
+#, python-format
+msgid "Please submit at most %(num)d form."
+msgid_plural "Please submit at most %(num)d forms."
+msgstr[0] ""
+msgstr[1] ""
+
+#: venv/lib/python3.12/site-packages/django/forms/formsets.py:70
+#, python-format
+msgid "Please submit at least %(num)d form."
+msgid_plural "Please submit at least %(num)d forms."
+msgstr[0] ""
+msgstr[1] ""
+
+#: venv/lib/python3.12/site-packages/django/forms/formsets.py:484
+#: venv/lib/python3.12/site-packages/django/forms/formsets.py:491
+msgid "Order"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/models.py:901
+#, python-format
+msgid "Please correct the duplicate data for %(field)s."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/models.py:906
+#, python-format
+msgid "Please correct the duplicate data for %(field)s, which must be unique."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/models.py:913
+#, python-format
+msgid ""
+"Please correct the duplicate data for %(field_name)s which must be unique "
+"for the %(lookup)s in %(date_field)s."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/models.py:922
+msgid "Please correct the duplicate values below."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/models.py:1359
+msgid "The inline value did not match the parent instance."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/models.py:1450
+msgid "Select a valid choice. That choice is not one of the available choices."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/models.py:1594
+#, python-format
+msgid "“%(pk)s” is not a valid value."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/utils.py:227
+#, python-format
+msgid ""
+"%(datetime)s couldn’t be interpreted in time zone %(current_timezone)s; it "
+"may be ambiguous or it may not exist."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/widgets.py:461
+msgid "Clear"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/widgets.py:462
+msgid "Currently"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/widgets.py:463
+msgid "Change"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/widgets.py:800
+msgid "Unknown"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/widgets.py:801
+msgid "Yes"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/forms/widgets.py:802
+msgid "No"
+msgstr ""
+
+#. Translators: Please do not add spaces around commas.
+#: venv/lib/python3.12/site-packages/django/template/defaultfilters.py:873
+msgid "yes,no,maybe"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/template/defaultfilters.py:903
+#: venv/lib/python3.12/site-packages/django/template/defaultfilters.py:920
+#, python-format
+msgid "%(size)d byte"
+msgid_plural "%(size)d bytes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: venv/lib/python3.12/site-packages/django/template/defaultfilters.py:922
+#, python-format
+msgid "%s KB"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/template/defaultfilters.py:924
+#, python-format
+msgid "%s MB"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/template/defaultfilters.py:926
+#, python-format
+msgid "%s GB"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/template/defaultfilters.py:928
+#, python-format
+msgid "%s TB"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/template/defaultfilters.py:930
+#, python-format
+msgid "%s PB"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dateformat.py:74
+msgid "p.m."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dateformat.py:75
+msgid "a.m."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dateformat.py:80
+msgid "PM"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dateformat.py:81
+msgid "AM"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dateformat.py:153
+msgid "midnight"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dateformat.py:155
+msgid "noon"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:7
+msgid "Monday"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:8
+msgid "Tuesday"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:9
+msgid "Wednesday"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:10
+msgid "Thursday"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:11
+msgid "Friday"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:12
+msgid "Saturday"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:13
+msgid "Sunday"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:16
+msgid "Mon"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:17
+msgid "Tue"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:18
+msgid "Wed"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:19
+msgid "Thu"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:20
+msgid "Fri"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:21
+msgid "Sat"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:22
+msgid "Sun"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:25
+msgid "January"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:26
+msgid "February"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:27
+msgid "March"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:28
+msgid "April"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:29
+msgid "May"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:30
+msgid "June"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:31
+msgid "July"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:32
+msgid "August"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:33
+msgid "September"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:34
+msgid "October"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:35
+msgid "November"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:36
+msgid "December"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:39
+msgid "jan"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:40
+msgid "feb"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:41
+msgid "mar"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:42
+msgid "apr"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:43
+msgid "may"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:44
+msgid "jun"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:45
+msgid "jul"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:46
+msgid "aug"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:47
+msgid "sep"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:48
+msgid "oct"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:49
+msgid "nov"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:50
+msgid "dec"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:53
+msgctxt "abbrev. month"
+msgid "Jan."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:54
+msgctxt "abbrev. month"
+msgid "Feb."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:55
+msgctxt "abbrev. month"
+msgid "March"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:56
+msgctxt "abbrev. month"
+msgid "April"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:57
+msgctxt "abbrev. month"
+msgid "May"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:58
+msgctxt "abbrev. month"
+msgid "June"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:59
+msgctxt "abbrev. month"
+msgid "July"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:60
+msgctxt "abbrev. month"
+msgid "Aug."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:61
+msgctxt "abbrev. month"
+msgid "Sept."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:62
+msgctxt "abbrev. month"
+msgid "Oct."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:63
+msgctxt "abbrev. month"
+msgid "Nov."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:64
+msgctxt "abbrev. month"
+msgid "Dec."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:67
+msgctxt "alt. month"
+msgid "January"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:68
+msgctxt "alt. month"
+msgid "February"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:69
+msgctxt "alt. month"
+msgid "March"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:70
+msgctxt "alt. month"
+msgid "April"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:71
+msgctxt "alt. month"
+msgid "May"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:72
+msgctxt "alt. month"
+msgid "June"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:73
+msgctxt "alt. month"
+msgid "July"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:74
+msgctxt "alt. month"
+msgid "August"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:75
+msgctxt "alt. month"
+msgid "September"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:76
+msgctxt "alt. month"
+msgid "October"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:77
+msgctxt "alt. month"
+msgid "November"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/dates.py:78
+msgctxt "alt. month"
+msgid "December"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/ipv6.py:20
+msgid "This is not a valid IPv6 address."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/text.py:75
+#, python-format
+msgctxt "String to return when truncating text"
+msgid "%(truncated_text)s…"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/text.py:286
+msgid "or"
+msgstr ""
+
+#. Translators: This string is used as a separator between list elements
+#: venv/lib/python3.12/site-packages/django/utils/text.py:305
+#: venv/lib/python3.12/site-packages/django/utils/timesince.py:135
+msgid ", "
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/utils/timesince.py:8
+#, python-format
+msgid "%(num)d year"
+msgid_plural "%(num)d years"
+msgstr[0] ""
+msgstr[1] ""
+
+#: venv/lib/python3.12/site-packages/django/utils/timesince.py:9
+#, python-format
+msgid "%(num)d month"
+msgid_plural "%(num)d months"
+msgstr[0] ""
+msgstr[1] ""
+
+#: venv/lib/python3.12/site-packages/django/utils/timesince.py:10
+#, python-format
+msgid "%(num)d week"
+msgid_plural "%(num)d weeks"
+msgstr[0] ""
+msgstr[1] ""
+
+#: venv/lib/python3.12/site-packages/django/utils/timesince.py:11
+#, python-format
+msgid "%(num)d day"
+msgid_plural "%(num)d days"
+msgstr[0] ""
+msgstr[1] ""
+
+#: venv/lib/python3.12/site-packages/django/utils/timesince.py:12
+#, python-format
+msgid "%(num)d hour"
+msgid_plural "%(num)d hours"
+msgstr[0] ""
+msgstr[1] ""
+
+#: venv/lib/python3.12/site-packages/django/utils/timesince.py:13
+#, python-format
+msgid "%(num)d minute"
+msgid_plural "%(num)d minutes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: venv/lib/python3.12/site-packages/django/views/csrf.py:29
+msgid "Forbidden"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/csrf.py:30
+msgid "CSRF verification failed. Request aborted."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/csrf.py:34
+msgid ""
+"You are seeing this message because this HTTPS site requires a “Referer "
+"header” to be sent by your web browser, but none was sent. This header is "
+"required for security reasons, to ensure that your browser is not being "
+"hijacked by third parties."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/csrf.py:40
+msgid ""
+"If you have configured your browser to disable “Referer” headers, please re-"
+"enable them, at least for this site, or for HTTPS connections, or for “same-"
+"origin” requests."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/csrf.py:45
+msgid ""
+"If you are using the <meta name=\"referrer\" content=\"no-referrer\"> tag or "
+"including the “Referrer-Policy: no-referrer” header, please remove them. The "
+"CSRF protection requires the “Referer” header to do strict referer checking. "
+"If you’re concerned about privacy, use alternatives like <a rel=\"noreferrer"
+"\" …> for links to third-party sites."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/csrf.py:54
+msgid ""
+"You are seeing this message because this site requires a CSRF cookie when "
+"submitting forms. This cookie is required for security reasons, to ensure "
+"that your browser is not being hijacked by third parties."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/csrf.py:60
+msgid ""
+"If you have configured your browser to disable cookies, please re-enable "
+"them, at least for this site, or for “same-origin” requests."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/csrf.py:66
+msgid "More information is available with DEBUG=True."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/generic/dates.py:44
+msgid "No year specified"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/generic/dates.py:64
+#: venv/lib/python3.12/site-packages/django/views/generic/dates.py:115
+#: venv/lib/python3.12/site-packages/django/views/generic/dates.py:214
+msgid "Date out of range"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/generic/dates.py:94
+msgid "No month specified"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/generic/dates.py:147
+msgid "No day specified"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/generic/dates.py:194
+msgid "No week specified"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/generic/dates.py:349
+#: venv/lib/python3.12/site-packages/django/views/generic/dates.py:380
+#, python-format
+msgid "No %(verbose_name_plural)s available"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/generic/dates.py:652
+#, python-format
+msgid ""
+"Future %(verbose_name_plural)s not available because %(class_name)s."
+"allow_future is False."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/generic/dates.py:692
+#, python-format
+msgid "Invalid date string “%(datestr)s” given format “%(format)s”"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/generic/detail.py:56
+#, python-format
+msgid "No %(verbose_name)s found matching the query"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/generic/list.py:70
+msgid "Page is not “last”, nor can it be converted to an int."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/generic/list.py:77
+#, python-format
+msgid "Invalid page (%(page_number)s): %(message)s"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/generic/list.py:169
+#, python-format
+msgid "Empty list and “%(class_name)s.allow_empty” is False."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/static.py:49
+msgid "Directory indexes are not allowed here."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/static.py:51
+#, python-format
+msgid "“%(path)s” does not exist"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/static.py:68
+#: venv/lib/python3.12/site-packages/django/views/templates/directory_index.html:8
+#: venv/lib/python3.12/site-packages/django/views/templates/directory_index.html:11
+#, python-format
+msgid "Index of %(directory)s"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/templates/default_urlconf.html:7
+#: venv/lib/python3.12/site-packages/django/views/templates/default_urlconf.html:204
+msgid "The install worked successfully! Congratulations!"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/templates/default_urlconf.html:206
+#, python-format
+msgid ""
+"View <a href=\"https://docs.djangoproject.com/en/%(version)s/releases/\" "
+"target=\"_blank\" rel=\"noopener\">release notes</a> for Django %(version)s"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/templates/default_urlconf.html:208
+#, python-format
+msgid ""
+"You are seeing this page because <a href=\"https://docs.djangoproject.com/en/"
+"%(version)s/ref/settings/#debug\" target=\"_blank\" rel=\"noopener"
+"\">DEBUG=True</a> is in your settings file and you have not configured any "
+"URLs."
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/templates/default_urlconf.html:217
+msgid "Django Documentation"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/templates/default_urlconf.html:218
+msgid "Topics, references, &amp; how-to’s"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/templates/default_urlconf.html:226
+msgid "Tutorial: A Polling App"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/templates/default_urlconf.html:227
+msgid "Get started with Django"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/templates/default_urlconf.html:235
+msgid "Django Community"
+msgstr ""
+
+#: venv/lib/python3.12/site-packages/django/views/templates/default_urlconf.html:236
+msgid "Connect, get help, or contribute"
+msgstr ""
+
+#: trustpoint/settings.py:220
+msgid "German"
+msgstr "Deutsch"
+
+#: trustpoint/settings.py:221
+msgid "English"
+msgstr "Englisch"
+
+#: trustpoint/views/base.py:120
 msgid "Login required!"
 msgstr "Login erforderlich!"
 
+#~ msgid "There are no Notifications available."
+#~ msgstr "Es liegen keine Benachrichtigungen vor."
+
+#~ msgid "CA"
+#~ msgstr "CA"
+
+#~ msgid "Devices by onboarding status"
+#~ msgstr "Geräte nach Onboarding-Status"
+
+#~ msgid "Active devices by Domain"
+#~ msgstr "Aktive Geräte nach Domain"
+
+#~ msgid "Devices by onboarding protocol"
+#~ msgstr "Geräte nach Onboarding-Protokoll"
+
+#~ msgid "Certificates By Status"
+#~ msgstr "Zertifikate nach Status"
+
+#~ msgid "Certificates By Domain"
+#~ msgstr "Zertifikate nach Domain"
+
+#~ msgid "Certificates By Template"
+#~ msgstr "Zertifikate nach Vorlage"
+
+#~ msgid "Certificates By Issuing CA"
+#~ msgstr "Zertifikate nach Issuing CA"
+
+#~ msgid "Issued Certificates"
+#~ msgstr "Ausgestellte Zertifikate"
+
+#~ msgid "Issuing CAs By Type"
+#~ msgstr "Issuing CAs nach Art"
+
+#~ msgid "Expiring Certificates"
+#~ msgstr "Ausgelaufene Zertifikate"
+
+#~ msgid "Logs"
+#~ msgstr "Logs"
+
+#~ msgid "Intermediate CA Certificate"
+#~ msgstr "Zwischen-CA-Zertifikat"
+
+#~ msgid "Network"
+#~ msgstr "Netzwerk"
+
+#~ msgid "NTP"
+#~ msgstr "NTP"
+
+#~ msgid "SSH"
+#~ msgstr "SSH"
+
 #, python-brace-format
 #~ msgid ""
-#~ "Visit the Trustpoint GitHub repository for more information: <a "
-#~ "href=\"{url_github}\" target=\"_blank\">Trustpoint GitHub</a>\n"
+#~ "Visit the Trustpoint GitHub repository for more information: <a href="
+#~ "\"{url_github}\" target=\"_blank\">Trustpoint GitHub</a>\n"
 #~ "Learn more about industrial security and the Trustpoint project on our <a "
 #~ "href=\"{url_homepage}\" target=\"_blank\">homepage</a>"
 #~ msgstr ""
@@ -693,8 +3276,8 @@ msgstr "Login erforderlich!"
 
 #, python-brace-format
 #~ msgid ""
-#~ "Visit the Trustpoint GitHub repository for more information: <a "
-#~ "href=\"{url_github}\" target=\"_blank\">Trustpoint GitHub</a>\n"
+#~ "Visit the Trustpoint GitHub repository for more information: <a href="
+#~ "\"{url_github}\" target=\"_blank\">Trustpoint GitHub</a>\n"
 #~ "Learn more about industrial security and the Trustpoint project on our <a "
 #~ "href=\"{url_homepage}\">homepage</a>"
 #~ msgstr ""
@@ -707,9 +3290,6 @@ msgstr "Login erforderlich!"
 #, python-format
 #~ msgid "You can find the official Trustpoint documentation here: %(link)s"
 #~ msgstr "Die offizielle Trustpoint-Dokumentation finden Sie hier: %(link)s"
-
-#~ msgid "Delete"
-#~ msgstr "Entfernen"
 
 # "Status" is technically the correct plural form, but I found the plural more important to convey here
 #~ msgid "Statuses:"
@@ -731,17 +3311,8 @@ msgstr "Login erforderlich!"
 #~ msgid "Version"
 #~ msgstr "Version"
 
-#~ msgid "Serial Number"
-#~ msgstr "Seriennummer"
-
 #~ msgid "Issuer"
 #~ msgstr "Aussteller"
-
-#~ msgid "Not valid before"
-#~ msgstr "Nicht gültig vor"
-
-#~ msgid "Not valid after"
-#~ msgstr "Nicht gültig nach"
 
 #~ msgid "Public Key Type"
 #~ msgstr "Typ des öffentlichen Schlüssels"

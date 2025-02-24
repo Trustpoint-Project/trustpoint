@@ -64,7 +64,8 @@ def is_postgre_available() -> bool:
         with socket.create_connection((host, port), timeout=5):
             print(f'Connection to {host}:{port} successful.')
     except OSError as e:
-        msg = f'PostgreSQL host {host} on port {port} is unreachable. Error: {e}'
+        msg = f'PostgreSQL host {host} on port {port} is unreachable. \n'
+        msg += 'Switching to SQLite Database'
         print(msg)
         return False
 
@@ -116,7 +117,6 @@ INSTALLED_APPS = [
     'devices.apps.DevicesConfig',
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
-    'est.apps.EstConfig',
     'settings.apps.SettingsConfig',
     'django.contrib.admin',
     'django.contrib.auth',

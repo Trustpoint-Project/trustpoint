@@ -41,6 +41,7 @@ Full Name is required, all other fields are optional.
 * Dominik Isaak
 * Florian Handke (FHatCSW) <florian.handke A campus-schwarzwald.de> - Campus Schwarzwald gGmbH
 * Mario Kemper
+* Mohammad Zeeshan
 * Omkar Joglekar
 * Rohit Bohara
 * Sven Bergmann <sven.bergmann A achelos.de> - achelos GmbH

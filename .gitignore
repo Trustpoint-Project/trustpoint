@@ -50,6 +50,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+behave-report.html
 
 # Translations
 *.mo
@@ -173,6 +174,7 @@ migrations/
 tests/data/issuing_ca
 tests/data/issuing_cas
 *.p12
+!tests/data/**/*.p12
 
 docs/build/
 

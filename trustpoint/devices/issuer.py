@@ -8,7 +8,7 @@ from core import oid
 
 from cryptography import x509
 from pki.models import CredentialModel
-from pki.util.keys import CryptographyUtils, KeyGenerator
+from pki.util.keys import KeyGenerator
 
 from devices.models import DeviceModel, DomainModel, IssuedCredentialModel
 
@@ -128,7 +128,8 @@ class LocalDomainCredentialIssuer(SaveCredentialToDbMixin):
 
         # TODO(AlexHx8472): Check matching public_key and signature suite.
 
-        hash_algorithm = CryptographyUtils.get_hash_algorithm_from_domain(domain=self.domain)
+        hash_algorithm = oid.SignatureSuite.from_certificate(
+            self.domain.issuing_ca.credential.get_certificate()).algorithm_identifier.hash_algorithm.hash_algorithm()
         one_day = datetime.timedelta(1, 0, 0)
 
 
@@ -202,7 +203,8 @@ class LocalDomainCredentialIssuer(SaveCredentialToDbMixin):
 
         # TODO(AlexHx8472): Check matching public_key and signature suite.
 
-        hash_algorithm = CryptographyUtils.get_hash_algorithm_from_domain(domain=self.domain)
+        hash_algorithm = oid.SignatureSuite.from_certificate(
+            self.domain.issuing_ca.credential.get_certificate()).algorithm_identifier.hash_algorithm.hash_algorithm()
         one_day = datetime.timedelta(1, 0, 0)
 
         certificate_builder = certificate_builder.subject_name(x509.Name([
@@ -302,7 +304,8 @@ class LocalTlsClientCredentialIssuer(SaveCredentialToDbMixin):
 
         application_credential_private_key = KeyGenerator.generate_private_key(domain=self.domain)
         application_credential_public_key = application_credential_private_key.public_key_serializer.as_crypto()
-        hash_algorithm = CryptographyUtils.get_hash_algorithm_from_domain(domain=self.domain)
+        hash_algorithm = oid.SignatureSuite.from_certificate(
+            self.domain.issuing_ca.credential.get_certificate()).algorithm_identifier.hash_algorithm.hash_algorithm()
         one_day = datetime.timedelta(1, 0, 0)
 
 
@@ -380,7 +383,8 @@ class LocalTlsClientCredentialIssuer(SaveCredentialToDbMixin):
             public_key: oid.PublicKey
     ) -> IssuedCredentialModel:
 
-        hash_algorithm = CryptographyUtils.get_hash_algorithm_from_domain(domain=self.domain)
+        hash_algorithm = oid.SignatureSuite.from_certificate(
+            self.domain.issuing_ca.credential.get_certificate()).algorithm_identifier.hash_algorithm.hash_algorithm()
         one_day = datetime.timedelta(1, 0, 0)
 
         certificate_builder = x509.CertificateBuilder()
@@ -495,7 +499,8 @@ class LocalTlsServerCredentialIssuer(SaveCredentialToDbMixin):
             validity_days: int
     ) -> IssuedCredentialModel:
         application_credential_private_key = KeyGenerator.generate_private_key(domain=self.domain)
-        hash_algorithm = CryptographyUtils.get_hash_algorithm_from_domain(domain=self.domain)
+        hash_algorithm = oid.SignatureSuite.from_certificate(
+            self.domain.issuing_ca.credential.get_certificate()).algorithm_identifier.hash_algorithm.hash_algorithm()
         one_day = datetime.timedelta(1, 0, 0)
 
         certificate_builder = x509.CertificateBuilder()
@@ -586,7 +591,8 @@ class LocalTlsServerCredentialIssuer(SaveCredentialToDbMixin):
             public_key: oid.PublicKey
     ) -> IssuedCredentialModel:
 
-        hash_algorithm = CryptographyUtils.get_hash_algorithm_from_domain(domain=self.domain)
+        hash_algorithm = oid.SignatureSuite.from_certificate(
+            self.domain.issuing_ca.credential.get_certificate()).algorithm_identifier.hash_algorithm.hash_algorithm()
         one_day = datetime.timedelta(1, 0, 0)
 
         certificate_builder = x509.CertificateBuilder()

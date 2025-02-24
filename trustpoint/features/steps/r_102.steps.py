@@ -1,113 +1,120 @@
-from behave import given, then, when
+"""Python steps file for R_102."""  # noqa: INP001
+
+from behave import given, runner, then, when
 
 
 @given('the system enforces encrypted communication with algorithm {algorithm}')
-def step_given_enforced_encryption(context, algorithm):
+def step_given_enforced_encryption(context: runner.Context, algorithm: str) -> None:  # noqa: ARG001
     """Ensures that the system enforces encrypted communication using the specified algorithm.
 
     Args:
+        context (runner.Context): Behave context.
         algorithm (str): The encryption algorithm enforced by the system.
-
-    Raises:
-        StepNotImplementedError: Step not yet implemented.
     """
-    assert False, f'STEP: Given the system enforces encrypted communication with algorithm {algorithm}'
+    msg = f'STEP: Given the system enforces encrypted communication with algorithm {algorithm}'
+    raise AssertionError(msg)
 
 
 @given('a machine attempts to communicate using {algorithm}')
-def step_given_machine_attempts_encryption(context, algorithm):
+def step_given_machine_attempts_encryption(context: runner.Context, algorithm: str) -> None:  # noqa: ARG001
     """Simulates a machine attempting to communicate using a specific encryption algorithm.
 
     Args:
+        context (runner.Context): Behave context.
         algorithm (str): The encryption algorithm the machine attempts to use.
-
-    Raises:
-        StepNotImplementedError: Step not yet implemented.
     """
-    assert False, f'STEP: Given a machine attempts to communicate using {algorithm}'
+    msg = f'STEP: Given a machine attempts to communicate using {algorithm}'
+    raise AssertionError(msg)
 
 
 @given('a machine attempts to communicate without encryption')
-def step_given_machine_attempts_without_encryption(context):
+def step_given_machine_attempts_without_encryption(context: runner.Context) -> None:  # noqa: ARG001
     """Simulates a machine attempting to communicate without using encryption.
 
-    Raises:
-        StepNotImplementedError: Step not yet implemented.
+    Args:
+        context (runner.Context): Behave context.
     """
-    assert False, 'STEP: Given a machine attempts to communicate without encryption'
+    msg = 'STEP: Given a machine attempts to communicate without encryption'
+    raise AssertionError(msg)
 
 
 @given('two machines establish a secure session using {key_exchange}')
-def step_given_secure_key_exchange(context, key_exchange):
+def step_given_secure_key_exchange(context: runner.Context, key_exchange: str) -> None:  # noqa: ARG001
     """Simulates two machines establishing a secure session using a specified key exchange mechanism.
 
     Args:
+        context (runner.Context): Behave context.
         key_exchange (str): The key exchange protocol being used.
-
-    Raises:
-        StepNotImplementedError: Step not yet implemented.
     """
-    assert False, f'STEP: Given two machines establish a secure session using {key_exchange}'
+    msg = f'STEP: Given two machines establish a secure session using {key_exchange}'
+    raise AssertionError(msg)
 
 
 @given('an encrypted message is tampered with')
-def step_given_encrypted_message_tampered(context):
+def step_given_encrypted_message_tampered(context: runner.Context) -> None:  # noqa: ARG001
     """Simulates an encrypted message being tampered with by a third party.
 
-    Raises:
-        StepNotImplementedError: Step not yet implemented.
+    Args:
+        context (runner.Context): Behave context.
     """
-    assert False, 'STEP: Given an encrypted message is tampered with'
+    msg = 'STEP: Given an encrypted message is tampered with'
+    raise AssertionError(msg)
 
 
 @when('the system verifies the encryption')
-def step_when_system_verifies_encryption(context):
+def step_when_system_verifies_encryption(context: runner.Context) -> None:  # noqa: ARG001
     """Simulates the system verifying the encryption mechanism of the communication.
 
-    Raises:
-        StepNotImplementedError: Step not yet implemented.
+    Args:
+        context (runner.Context): Behave context.
     """
-    assert False, 'STEP: When the system verifies the encryption'
+    msg = 'STEP: When the system verifies the encryption'
+    raise AssertionError(msg)
 
 
 @when('the system verifies the key exchange')
-def step_when_system_verifies_key_exchange(context):
+def step_when_system_verifies_key_exchange(context: runner.Context) -> None:  # noqa: ARG001
     """Simulates the system verifying that the key exchange mechanism used is correct.
 
-    Raises:
-        StepNotImplementedError: Step not yet implemented.
+    Args:
+        context (runner.Context): Behave context.
     """
-    assert False, 'STEP: When the system verifies the key exchange'
+    msg = 'STEP: When the system verifies the key exchange'
+    raise AssertionError(msg)
 
 
 @when('the system detects tampering')
-def step_when_system_detects_tampering(context):
+def step_when_system_detects_tampering(context: runner.Context) -> None:  # noqa: ARG001
     """Simulates the system detecting tampering with an encrypted message.
 
-    Raises:
-        StepNotImplementedError: Step not yet implemented.
+    Args:
+        context (runner.Context): Behave context.
     """
-    assert False, 'STEP: When the system detects tampering'
+    msg = 'STEP: When the system detects tampering'
+    raise AssertionError(msg)
 
 
 @then('the communication should be {continuing_action}')
-def step_then_allow_communication(context, continuing_action):
+def step_then_allow_communication(context: runner.Context, continuing_action: str) -> None:  # noqa: ARG001
     """Ensures that communication is allowed/denied/terminated when encryption meets the system's requirements.
 
-    Raises:
-        StepNotImplementedError: Step not yet implemented.
+    Args:
+        context (runner.Context): Behave context.
+        continuing_action (str): The continuing action.
     """
-    assert False, f'STEP: Then the communication should be {continuing_action}'
+    msg = f'STEP: Then the communication should be {continuing_action}'
+    raise AssertionError(msg)
 
 
 @then('log the failure with reason {reason}')
-def step_then_log_failure(context, reason):
+def step_then_log_failure(context: runner.Context, reason: str) -> None:  # noqa: ARG001
     """Ensures that the system logs authentication failures with the appropriate reason.
 
     Args:
         reason (str): The reason for encryption failure.
 
-    Raises:
-        StepNotImplementedError: Step not yet implemented.
+    Args:
+        context (runner.Context): Behave context.
     """
-    assert False, f'STEP: Then log the failure with reason {reason}'
+    msg = f'STEP: Then log the failure with reason {reason}'
+    raise AssertionError(msg)

@@ -37,7 +37,7 @@ def create_mock_models() -> dict:
         unique_name='test_device',
         serial_number='1234567890',
         domain=mock_domain,
-        onboarding_protocol=DeviceModel.OnboardingProtocol.MANUAL,
+        onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
         onboarding_status=DeviceModel.OnboardingStatus.PENDING
     )
     mock_device.save()

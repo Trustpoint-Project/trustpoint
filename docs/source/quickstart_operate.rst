@@ -17,15 +17,23 @@ An Issuing Certificate Authority (CA) is central to managing certificates for yo
 
    - From the main menu, click on **PKI** then **Issuing CAs**.
    - Click on **Add new Issuing CA**.
-   - Click on **Import From PKCS#12 File**
+   - Click on **Import From PKCS#12 File** or **Import From Separate Key and Certificate Files**
 
 3. **Configure Issuing CA Details**
+   #. When you click on **Import From PKCS#12 File**
+     - Fill in the required fields:
 
-   Fill in the required fields:
+       - **Unique Name**: Provide a unique name for your Issuing CA (e.g., `MyIssuingCA`).
+       - **PKCS#12 File (.p12, .pfx)**: Select and upload a file
+       - **[Optional] PKCS#12 password**: If your PKCS#12 is password protected type your password to import.
+   #.  When you click on **Import From Separate Key and Certificate Files**
+      - Fill in the required fields:
 
-   - **Unique Name**: Provide a unique name for your Issuing CA (e.g., `MyIssuingCA`).
-   - **PKCS#12 File (.p12, .pfx)**: Select and upload a file
-   - **[Optional] PKCS#12 password**: If your PKCS#12 is password protected type your password to import.
+       - **Unique Name**: Provide a unique name for your Issuing CA (e.g., `MyIssuingCA`).
+       - **Private Key File (.key, .pem)**: Select and upload a file
+       - **[Optional] Private Key password**: If your PKCS#12 is password protected type your password to import.
+       - **Issuing  CA Certificate (.cer, .der, .pem, .p7b, .p7c)**: Select and upload a file
+       - **[Optional] Certificate Chain (.pem, .p7b, .p7c)**: If you have certificate chain.
 
 
    Click **Add New Issuing CA** to create the Issuing CA.
@@ -87,9 +95,10 @@ Devices are the end nodes that will receive digital certificates. Follow these s
    Fill in the required details:
 
    - **Device Name**: Provide a name for the device (e.g., `Sensor01`).
-   - **Onboarding protocol**: Choose `Browser download` as an onboarding protocol.
+   - **Serial-Number**: Provide a serial number for the device (e.g., `1234567`).
    - **Domain**: Select the domain under which this device will be managed.
-   - **[Optional] Tags**: Define tags for devices (comma separated).
+   - **Onboarding Configuration**: Check or uncheck `Domain Credential Onboarding`.
+   - **PKI Configuration**: Based on `Domain Credential Onboarding`, you get options to select various PKI configuration, e.g., `Domain Credential Onboarding` unchecked and PKI configuration `Manual Download`
 
 3. **Onboard device**
 

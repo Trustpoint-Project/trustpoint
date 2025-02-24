@@ -4,26 +4,29 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from django.shortcuts import get_object_or_404
-from django.views.generic import DeleteView
-
 from core.file_builder.certificate import CertificateCollectionArchiveFileBuilder, CertificateCollectionBuilder
 from core.file_builder.enum import ArchiveFormat, CertificateFileFormat
+from django.contrib import messages
+from django.db.models import ProtectedError
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
-from django.urls import reverse_lazy, reverse
+from django.shortcuts import get_object_or_404
+from django.urls import reverse, reverse_lazy
+from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
-from django.contrib import messages
-from django.utils.translation import gettext_lazy as _
 
 from pki.forms import TruststoreAddForm
 from pki.models import DomainModel
 from pki.models.truststore import TruststoreModel
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTableMixin, TpLoginRequiredMixin, \
-    BulkDeleteView
+from trustpoint.views.base import (
+    BulkDeleteView,
+    PrimaryKeyListFromPrimaryKeyString,
+    SortableTableMixin,
+    TpLoginRequiredMixin,
+)
 
 if TYPE_CHECKING:
     from typing import ClassVar
@@ -237,6 +240,7 @@ class TruststoreMultipleDownloadView(
         return response
 
 class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, TpLoginRequiredMixin, BulkDeleteView):
+    """View for confirming the deletion of multiple truststores."""
 
     model = TruststoreModel
     success_url = reverse_lazy('pki:truststores')
@@ -244,11 +248,22 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, TpLoginRequiredMi
     template_name = 'pki/truststores/confirm_delete.html'
     context_object_name = 'truststores'
 
-    def form_valid(self, form):
+    def form_valid(self, form) -> HttpResponse:
+        """Attempts to delete the selected truststores on valid form."""
         queryset = self.get_queryset()
         deleted_count = queryset.count()
 
-        response = super().form_valid(form)
+        try:
+            response = super().form_valid(form)
+
+        except ProtectedError:
+            messages.error(
+                self.request,
+                _(
+                    'Cannot delete the selected Truststore(s) because they are referenced by other objects.'
+                )
+            )
+            return HttpResponseRedirect(self.success_url)
 
         messages.success(
             self.request,
