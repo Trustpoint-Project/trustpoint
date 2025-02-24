@@ -1,3 +1,7 @@
+"""Fixtures for the PKI pytest suite."""
+
+# ruff: noqa: ERA001  # commented out tests for extensions that are not yet supported
+
 import hashlib
 import ipaddress
 from datetime import UTC, datetime, timedelta
@@ -5,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 import pytest  # type: ignore  # noqa: PGH003
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509 import (
     AuthorityKeyIdentifier,
     BasicConstraints,
@@ -51,8 +56,8 @@ from pki.tests import (
 # Basic Self-Signed Certificate Fixture
 # ----------------------------
 
-@pytest.fixture(scope='function')
-def self_signed_cert_basic(rsa_private_key) -> CertificateModel:
+@pytest.fixture
+def self_signed_cert_basic(rsa_private_key: rsa.RSAPrivateKey) -> tuple[CertificateModel, x509.Certificate]:
     """Creates a self-signed CA certificate with minimal extensions and saves it to the database once per module.
 
     We manually unblock the DB because this fixture has 'module' scope.
@@ -85,8 +90,8 @@ def self_signed_cert_basic(rsa_private_key) -> CertificateModel:
 # Self-Signed Certificate with Extensions Fixture
 # ----------------------------
 
-@pytest.fixture(scope='function')
-def self_signed_cert_with_ext(rsa_private_key) -> x509.Certificate:
+@pytest.fixture
+def self_signed_cert_with_ext(rsa_private_key: rsa.RSAPrivateKey) -> x509.Certificate:
     """Create a self-signed certificate with multiple extensions."""
     subject = x509.Name([
         x509.NameAttribute(NameOID.COMMON_NAME, COMMON_NAME),
@@ -128,7 +133,7 @@ def self_signed_cert_with_ext(rsa_private_key) -> x509.Certificate:
         encoding=serialization.Encoding.DER,
         format=serialization.PublicFormat.SubjectPublicKeyInfo
     )
-    key_identifier = hashlib.sha1(public_key_bytes).digest()
+    key_identifier = hashlib.sha1(public_key_bytes).digest()  # noqa: S324  # SHA-1 according to RFC 5280 sec. 4.2.1.2
 
     aki = AuthorityKeyIdentifier(
         key_identifier=key_identifier,
@@ -199,12 +204,12 @@ def self_signed_cert_with_ext(rsa_private_key) -> x509.Certificate:
 
     # policy_mappings = x509.PolicyMappings([
     #     x509.PolicyMapping(
-    #         issuer_domain_policy=ObjectIdentifier("1.2.3.4.5"),
-    #         subject_domain_policy=ObjectIdentifier("1.2.3.4.6")
+    #         issuer_domain_policy=ObjectIdentifier('1.2.3.4.5'),
+    #         subject_domain_policy=ObjectIdentifier('1.2.3.4.6')
     #     ),
     #     x509.PolicyMapping(
-    #         issuer_domain_policy=ObjectIdentifier("1.2.3.4.7"),
-    #         subject_domain_policy=ObjectIdentifier("1.2.3.4.8")
+    #         issuer_domain_policy=ObjectIdentifier('1.2.3.4.7'),
+    #         subject_domain_policy=ObjectIdentifier('1.2.3.4.8')
     #     )
     # ])
 
@@ -218,7 +223,7 @@ def self_signed_cert_with_ext(rsa_private_key) -> x509.Certificate:
     # CRLDistribution
 
 
-    cert = (
+    return (
         x509.CertificateBuilder()
         .subject_name(subject)
         .issuer_name(issuer)
@@ -238,7 +243,7 @@ def self_signed_cert_with_ext(rsa_private_key) -> x509.Certificate:
         .add_extension(aia, critical=False)
         .add_extension(sia, critical=False)
         .add_extension(iap, critical=False)
+        # .add_extension(policy_mappings, critical=False)
         .add_extension(policy_constraints, critical=False)
         .sign(private_key=rsa_private_key, algorithm=hashes.SHA256())
     )
-    return cert

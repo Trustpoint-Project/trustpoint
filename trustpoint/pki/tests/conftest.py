@@ -12,7 +12,7 @@ def enable_db_access_for_all_tests(db: None) -> None:
 # RSA Private Key Fixture
 # ----------------------------
 
-@pytest.fixture(scope='function')
+@pytest.fixture
 def rsa_private_key() -> rsa.RSAPrivateKey:
     """Generate a reusable RSA private key."""
     return rsa.generate_private_key(
@@ -24,7 +24,7 @@ def rsa_private_key() -> rsa.RSAPrivateKey:
 # EC Private Key Fixture
 # ----------------------------
 
-@pytest.fixture(scope='function')
+@pytest.fixture
 def ec_private_key() -> ec.EllipticCurvePrivateKey:
     """Generate a reusable EC private key."""
     return ec.generate_private_key(ec.SECP256R1())

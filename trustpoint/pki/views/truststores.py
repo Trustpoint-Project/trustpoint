@@ -31,6 +31,8 @@ from trustpoint.views.base import (
 if TYPE_CHECKING:
     from typing import ClassVar
 
+    from django.forms import Form
+
 
 class TruststoresRedirectView(TpLoginRequiredMixin, RedirectView):
     """View that redirects to the index of the PKI Truststores application: Truststores."""
@@ -62,20 +64,24 @@ class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormVi
     template_name = 'pki/truststores/add/file_import.html'
     ignore_url = reverse_lazy('pki:truststores')
 
-    def form_valid(self, form):
+    def form_valid(self, form: TruststoreAddForm) -> HttpResponseRedirect:
+        """If the form is valid, redirect to Truststore overview"""
         truststore = form.cleaned_data['truststore']
         domain_id = self.kwargs.get('pk')
 
         if domain_id:
-            return HttpResponseRedirect(reverse('pki:devid_registration_create-with_truststore_id', kwargs={'pk': domain_id, 'truststore_id': truststore.id}))
+            return HttpResponseRedirect(reverse(
+                'pki:devid_registration_create-with_truststore_id',
+                kwargs={'pk': domain_id, 'truststore_id': truststore.id}
+            ))
 
         return HttpResponseRedirect(reverse('pki:truststores'))
 
-    def get_success_url(self):
+    def get_success_url(self) -> str:
         """You could still use a success URL here if needed"""
         return reverse_lazy('pki:truststores')
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: dict) -> dict:
         """Include domain in context only if pk is present."""
         context = super().get_context_data(**kwargs)
         pk = self.kwargs.get('pk')
@@ -248,7 +254,7 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, TpLoginRequiredMi
     template_name = 'pki/truststores/confirm_delete.html'
     context_object_name = 'truststores'
 
-    def form_valid(self, form) -> HttpResponse:
+    def form_valid(self, form: Form) -> HttpResponse:
         """Attempts to delete the selected truststores on valid form."""
         queryset = self.get_queryset()
         deleted_count = queryset.count()

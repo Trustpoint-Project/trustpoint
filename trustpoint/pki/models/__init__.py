@@ -1,9 +1,7 @@
 """Package that contains all models of the PKI App."""
 
-from .certificate import CertificateModel, RevokedCertificateModel
-from .credential import CertificateChainOrderModel, CredentialAlreadyExistsError, CredentialModel
-from .devid_registration import DevIdRegistration
-from .domain import DomainModel
+# ruff: noqa: I001, F401  # ignore import order as the order must be preserved to avoid circular imports
+
 from .extension import (
     AttributeTypeAndValue,
     BasicConstraintsExtension,
@@ -19,5 +17,9 @@ from .extension import (
     KeyUsageExtension,
     SubjectAlternativeNameExtension,
 )
+from .certificate import CertificateModel, RevokedCertificateModel
 from .issuing_ca import IssuingCaModel
+from .credential import CredentialAlreadyExistsError, CredentialModel, CertificateChainOrderModel
+from .domain import DomainModel
+from .devid_registration import DevIdRegistration
 from .truststore import TruststoreModel, TruststoreOrderModel

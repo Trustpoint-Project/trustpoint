@@ -1,4 +1,8 @@
+"""Views for Issuing CA management."""
+
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from django.contrib import messages
 from django.db.models import ProtectedError
@@ -25,6 +29,10 @@ from trustpoint.views.base import (
     TpLoginRequiredMixin,
 )
 
+if TYPE_CHECKING:
+    from django.forms import Form
+    from django.http import HttpRequest
+
 
 class IssuingCaContextMixin(TpLoginRequiredMixin, ContextDataMixin):
     """Mixin which adds context_data for the PKI -> Issuing CAs pages."""
@@ -43,10 +51,13 @@ class IssuingCaTableView(IssuingCaContextMixin, TpLoginRequiredMixin, SortableTa
 
 
 class IssuingCaAddMethodSelectView(IssuingCaContextMixin, TpLoginRequiredMixin, FormView):
+    """View to select the method to add an Issuing CA."""
+
     template_name = 'pki/issuing_cas/add/method_select.html'
     form_class = IssuingCaAddMethodSelectForm
 
-    def form_valid(self, form) -> HttpResponse:
+    def form_valid(self, form: IssuingCaAddMethodSelectForm) -> HttpResponseRedirect:
+        """Redirect to the next step based on the selected method."""
         method_select = form.cleaned_data.get('method_select')
         if not method_select:
             return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-method_select'))
@@ -58,6 +69,7 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, TpLoginRequiredMixin, 
 
 
 class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, TpLoginRequiredMixin, FormView):
+    """View to import an Issuing CA from a PKCS12 file."""
 
     template_name = 'pki/issuing_cas/add/file_import.html'
     form_class = IssuingCaAddFileImportPkcs12Form
@@ -65,6 +77,7 @@ class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, TpLoginRequiredMix
 
 
 class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, TpLoginRequiredMixin, FormView):
+    """View to import an Issuing CA from separate PEM files."""
 
     template_name = 'pki/issuing_cas/add/file_import.html'
     form_class = IssuingCaAddFileImportSeparateFilesForm
@@ -72,6 +85,7 @@ class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, TpLoginRequ
 
 
 class IssuingCaDetailView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailView):
+    """View to display the details of an Issuing CA."""
 
     http_method_names = ('get', )
 
@@ -84,6 +98,7 @@ class IssuingCaDetailView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailVie
 
 
 class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, TpLoginRequiredMixin, DetailView):
+    """View to configure an Issuing CA."""
 
     model = IssuingCaModel
     success_url = reverse_lazy('pki:issuing_cas')
@@ -101,7 +116,7 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, TpLoginRequiredMixin
     template_name = 'pki/issuing_cas/confirm_delete.html'
     context_object_name = 'issuing_cas'
 
-    def form_valid(self, form) -> HttpResponse:
+    def form_valid(self, form: Form) -> HttpResponse:
         """Delete the selected Issuing CAs on valid form."""
         queryset = self.get_queryset()
         deleted_count = queryset.count()
@@ -137,7 +152,8 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, TpLoginRequiredMixin, De
 
     # TODO(Air): This view should use a POST request as it is an action.
     # However, this is not trivial in the config view as that already contains a form.
-    def get(self, request, *args, **kwargs) -> HttpResponse:
+    def get(self, request: HttpRequest, *_args: tuple, **_kwargs: dict) -> HttpResponse:
+        """Generate a CRL for the Issuing CA (should be POST!)."""
         issuing_ca = self.get_object()
         if issuing_ca.issue_crl():
             messages.success(request, _('CRL for Issuing CA %s has been generated.') % issuing_ca.unique_name)
@@ -156,7 +172,8 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView):
     ignore_url = reverse_lazy('pki:issuing_cas')
     context_object_name = 'issuing_ca'
 
-    def get(self, request, *args, **kwargs) -> HttpResponse:
+    def get(self, request: HttpRequest, *_args: tuple, **_kwargs: dict) -> HttpResponse:
+        """Download the CRL of the Issuing CA."""
         issuing_ca = self.get_object()
         crl_pem = issuing_ca.crl_pem
         if not crl_pem:

@@ -57,7 +57,7 @@ class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, TpLoginRequi
     model = CertificateModel
     context_object_name = 'certificate'
 
-    def get(self, request: HttpRequest, pk: str | None = None, *args: tuple, **kwargs: dict) -> HttpResponse:
+    def get(self, _request: HttpRequest, pk: str | None = None, *_args: tuple, **_kwargs: dict) -> HttpResponse:
         """HTTP GET Method.
 
         If only the certificate primary key are passed in the url, the download summary will be displayed.
@@ -220,7 +220,9 @@ class CertificateMultipleDownloadView(
             raise Http404 from exception
 
         file_bytes = CertificateArchiveFileBuilder.build(
-            certificate_serializers=[certificate_model.get_certificate_serializer() for certificate_model in self.queryset],
+            certificate_serializers=[
+                certificate_model.get_certificate_serializer() for certificate_model in self.queryset
+            ],
             file_format=file_format_enum,
             archive_format=archive_format_enum,
         )

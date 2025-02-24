@@ -1,9 +1,18 @@
+"""Tests for the parsing and handling of certificate extensions."""
+
+# ruff: noqa: ERA001  # commented out tests for extensions that are not yet supported
+# ruff: noqa: F811  # ruff does not like pytest fixtures as arguments
+
 import hashlib
 
 import pytest  # type: ignore  # noqa: PGH003
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
+from cryptography.x509 import Certificate
 from cryptography.x509.oid import SubjectInformationAccessOID
+from pyasn1.codec.der.decoder import decode  # type: ignore  # noqa: PGH003
+from pyasn1.type import char  # type: ignore  # noqa: PGH003
+
 from pki.models.certificate import CertificateModel
 from pki.tests import (
     DNS_NAME_VALUE,
@@ -19,12 +28,11 @@ from pki.tests import (
     URI_VALUE,
 )
 from pki.tests.fixtures import self_signed_cert_with_ext  # noqa: F401
-from pyasn1.codec.der.decoder import decode  # type: ignore  # noqa: PGH003
-from pyasn1.type import char  # type: ignore  # noqa: PGH003
 
 
 @pytest.mark.django_db
-def test_key_usage_ext(self_signed_cert_with_ext) -> None:
+def test_key_usage_ext(self_signed_cert_with_ext: Certificate) -> None:
+    """Test that the KeyUsage extension is parsed and stored correctly in the database."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     kue = cert_model.key_usage_extension
     assert kue is not None
@@ -40,7 +48,8 @@ def test_key_usage_ext(self_signed_cert_with_ext) -> None:
 
 
 @pytest.mark.django_db
-def test_san_ext(self_signed_cert_with_ext) -> None:
+def test_san_ext(self_signed_cert_with_ext: Certificate) -> None:
+    """Test that the SubjectAlternativeName extension is parsed and stored correctly in the database."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     san_ext = cert_model.subject_alternative_name_extension
     assert san_ext is not None
@@ -69,7 +78,8 @@ def test_san_ext(self_signed_cert_with_ext) -> None:
 
 
 @pytest.mark.django_db
-def test_ian_ext(self_signed_cert_with_ext) -> None:
+def test_ian_ext(self_signed_cert_with_ext: Certificate) -> None:
+    """Test that the IssuerAlternativeName extension is parsed and stored correctly in the database."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     ian_ext = cert_model.issuer_alternative_name_extension
     assert ian_ext is not None
@@ -98,7 +108,8 @@ def test_ian_ext(self_signed_cert_with_ext) -> None:
 
 
 @pytest.mark.django_db
-def test_basic_constraints_ext(self_signed_cert_with_ext) -> None:
+def test_basic_constraints_ext(self_signed_cert_with_ext: Certificate) -> None:
+    """Test that the BasicConstraints extension is parsed and stored correctly in the database."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     bce = cert_model.basic_constraints_extension
     assert bce is not None
@@ -107,7 +118,8 @@ def test_basic_constraints_ext(self_signed_cert_with_ext) -> None:
 
 
 @pytest.mark.django_db
-def test_authority_key_identifier_ext(self_signed_cert_with_ext) -> None:
+def test_authority_key_identifier_ext(self_signed_cert_with_ext: Certificate) -> None:
+    """Test that the AuthorityKeyIdentifier extension is parsed and stored correctly in the database."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     aki_ext = cert_model.authority_key_identifier_extension
     assert aki_ext is not None
@@ -118,7 +130,7 @@ def test_authority_key_identifier_ext(self_signed_cert_with_ext) -> None:
         encoding=serialization.Encoding.DER,
         format=serialization.PublicFormat.SubjectPublicKeyInfo
     )
-    expected_key_identifier = hashlib.sha1(public_key_bytes).hexdigest().upper()
+    expected_key_identifier = hashlib.sha1(public_key_bytes).hexdigest().upper()  # noqa: S324
     assert aki_ext.key_identifier == expected_key_identifier
 
     # Serial
@@ -145,7 +157,8 @@ def test_authority_key_identifier_ext(self_signed_cert_with_ext) -> None:
 
 
 @pytest.mark.django_db
-def test_subject_key_identifier_ext(self_signed_cert_with_ext) -> None:
+def test_subject_key_identifier_ext(self_signed_cert_with_ext: Certificate) -> None:
+    """Test that the SubjectKeyIdentifier extension is parsed and stored correctly in the database."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     ski_ext = cert_model.subject_key_identifier_extension
     assert ski_ext is not None
@@ -155,43 +168,49 @@ def test_subject_key_identifier_ext(self_signed_cert_with_ext) -> None:
         encoding=serialization.Encoding.DER,
         format=serialization.PublicFormat.SubjectPublicKeyInfo
     )
-    expected_key_identifier = hashlib.sha1(public_key_bytes).hexdigest().upper()
+    expected_key_identifier = hashlib.sha1(public_key_bytes).hexdigest().upper()  # noqa: S324
     assert ski_ext.key_identifier == expected_key_identifier
 
 
 @pytest.mark.django_db
-def test_certificate_policies_multiple_entries(self_signed_cert_with_ext) -> None:
+def test_certificate_policies_multiple_entries(self_signed_cert_with_ext: Certificate) -> None:
+    """Test that policy extensions with multiple qualifier entries are parsed and stored correctly in the database."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     policies_ext = cert_model.certificate_policies_extension
     assert policies_ext is not None
     assert policies_ext.critical is True
-    assert policies_ext.certificate_policies.count() == 2
+    assert policies_ext.certificate_policies.count() == 2  # noqa: PLR2004
 
     # EV
     ev_policy = policies_ext.certificate_policies.filter(policy_identifier='2.23.140.1.1').first()
     assert ev_policy is not None
-    assert ev_policy.policy_qualifiers.count() == 2
+    assert ev_policy.policy_qualifiers.count() == 2  # noqa: PLR2004
 
     ev_cps_uri = ev_policy.policy_qualifiers.filter(qualifier__cps_uri__cps_uri='https://example-ev-certs.com/cps').first()
     assert ev_cps_uri is not None
 
-    ev_user_notice = ev_policy.policy_qualifiers.filter(qualifier__user_notice__explicit_text__contains='EV certificates issued').first()
+    ev_user_notice = ev_policy.policy_qualifiers.filter(
+                            qualifier__user_notice__explicit_text__contains='EV certificates issued'
+                        ).first()
     assert ev_user_notice is not None
 
     # DV
     dv_policy = policies_ext.certificate_policies.filter(policy_identifier='2.23.140.1.2.1').first()
     assert dv_policy is not None
-    assert dv_policy.policy_qualifiers.count() == 2
+    assert dv_policy.policy_qualifiers.count() == 2  # noqa: PLR2004
 
     dv_cps_uri = dv_policy.policy_qualifiers.filter(qualifier__cps_uri__cps_uri='https://example-dv-certs.com/cps').first()
     assert dv_cps_uri is not None
 
-    dv_user_notice = dv_policy.policy_qualifiers.filter(qualifier__user_notice__explicit_text__contains='DV certificates issued').first()
+    dv_user_notice = dv_policy.policy_qualifiers.filter(
+                            qualifier__user_notice__explicit_text__contains='DV certificates issued'
+                        ).first()
     assert dv_user_notice is not None
 
 
 @pytest.mark.django_db
-def test_extended_key_usage_ext(self_signed_cert_with_ext) -> None:
+def test_extended_key_usage_ext(self_signed_cert_with_ext: Certificate) -> None:
+    """Test that the ExtendedKeyUsage extension is parsed and stored correctly in the database."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     eku_ext = cert_model.extended_key_usage_extension
     assert eku_ext is not None
@@ -210,14 +229,15 @@ def test_extended_key_usage_ext(self_signed_cert_with_ext) -> None:
 
 
 @pytest.mark.django_db
-def test_name_constraints_ext(self_signed_cert_with_ext) -> None:
+def test_name_constraints_ext(self_signed_cert_with_ext: Certificate) -> None:
+    """Test that the NameConstraints extension is parsed and stored correctly in the database."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     nc_ext = cert_model.name_constraints_extension
     assert nc_ext is not None
     assert nc_ext.critical is True
 
     # permittedSubtrees
-    assert nc_ext.permitted_subtrees.count() == 3
+    assert nc_ext.permitted_subtrees.count() == 3  # noqa: PLR2004
     assert any(
         st.base.rfc822_name.value == RFC822_EMAIL if st.base.rfc822_name else False
         for st in nc_ext.permitted_subtrees.all()
@@ -232,7 +252,7 @@ def test_name_constraints_ext(self_signed_cert_with_ext) -> None:
     )
 
     # excludedSubtrees
-    assert nc_ext.excluded_subtrees.count() == 3
+    assert nc_ext.excluded_subtrees.count() == 3  # noqa: PLR2004
     excluded_directory = nc_ext.excluded_subtrees.filter(base__directory_name__isnull=False).first()
     assert excluded_directory is not None
     assert any(attr.value == ORGANIZATION_NAME for attr in excluded_directory.base.directory_name.names.all())
@@ -252,12 +272,12 @@ def test_name_constraints_ext(self_signed_cert_with_ext) -> None:
 
 
 @pytest.mark.django_db
-def test_authority_information_access_extension(self_signed_cert_with_ext):
+def test_authority_information_access_extension(self_signed_cert_with_ext: Certificate) -> None:
     """Test that the AIA extension is parsed and stored correctly in the database."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     ext = cert_model.authority_information_access_extension
     assert ext is not None
-    assert ext.authority_info_access_syntax.count() == 2
+    assert ext.authority_info_access_syntax.count() == 2  # noqa: PLR2004
 
     ad_list = ext.authority_info_access_syntax.all().order_by('id')
     ad1 = ad_list[0]
@@ -273,7 +293,7 @@ def test_authority_information_access_extension(self_signed_cert_with_ext):
 
 
 @pytest.mark.django_db
-def test_subject_information_access_extension(self_signed_cert_with_ext):
+def test_subject_information_access_extension(self_signed_cert_with_ext: Certificate) -> None:
     """Test that the SIA extension is parsed and stored correctly in the database."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     ext = cert_model.subject_information_access_extension
@@ -289,7 +309,7 @@ def test_subject_information_access_extension(self_signed_cert_with_ext):
 
 
 @pytest.mark.django_db
-def test_inhibit_any_policy(self_signed_cert_with_ext):
+def test_inhibit_any_policy(self_signed_cert_with_ext: Certificate) -> None:
     """Test that the Inhibit anyPolicy extension is parsed and stored correctly in the database."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     ext = cert_model.inhibit_any_policy_extension
@@ -305,8 +325,8 @@ def test_inhibit_any_policy(self_signed_cert_with_ext):
 #     assert pm_ext.critical is True
 
 #     expected_mappings = {
-#         ("1.2.3.4.5", "1.2.3.4.6"),
-#         ("1.2.3.4.7", "1.2.3.4.8"),
+#         ('1.2.3.4.5', '1.2.3.4.6'),
+#         ('1.2.3.4.7', '1.2.3.4.8'),
 #     }
 
 #     saved_mappings = {
@@ -318,7 +338,7 @@ def test_inhibit_any_policy(self_signed_cert_with_ext):
 
 
 @pytest.mark.django_db
-def test_policy_constraints(self_signed_cert_with_ext):
+def test_policy_constraints(self_signed_cert_with_ext: Certificate) -> None:
     """Test that the Inhibit anyPolicy extension is parsed and stored correctly in the database."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     ext = cert_model.policy_constraints_extension
@@ -328,7 +348,7 @@ def test_policy_constraints(self_signed_cert_with_ext):
 
 # No cryptography support
 # @pytest.mark.django_db
-# def test_subject_directory_attributes_extension(self_signed_cert_with_ext) -> None:
+# def test_subject_directory_attributes_extension(self_signed_cert_with_ext: Certificate) -> None:
 #     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
 #     sda_ext = cert_model.subject_directory_attributes_extension
 #     assert sda_ext is not None
@@ -347,5 +367,5 @@ def test_policy_constraints(self_signed_cert_with_ext):
 
 
 @pytest.mark.django_db
-def test_freshest_crl(self_signed_cert_with_ext):
+def test_freshest_crl(self_signed_cert_with_ext: Certificate) -> None:
     """Test that the freshest crl extension is parsed and stored correctly in the database."""

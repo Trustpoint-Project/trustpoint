@@ -32,7 +32,7 @@ class CertificateGenerator:
         return CertificateGenerator.create_issuing_ca(None, cn, cn, private_key, validity_days, hash_algorithm)
 
     @staticmethod
-    def create_issuing_ca(
+    def create_issuing_ca(  # noqa: PLR0913
             issuer_private_key: None | PrivateKey,
             issuer_cn: str,
             subject_cn: str,
