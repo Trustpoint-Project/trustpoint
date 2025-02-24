@@ -107,6 +107,8 @@ class TruststoreModel(models.Model):
 
     created_at = models.DateTimeField(verbose_name=_('Created-At'), auto_now_add=True)
 
+    objects: models.Manager[TruststoreModel]
+
     def __str__(self) -> str:
         """Returns a human-readable string representation of the TruststoreModel."""
         return self.unique_name

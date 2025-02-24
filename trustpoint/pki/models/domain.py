@@ -37,6 +37,8 @@ class DomainModel(models.Model):
         default=True,
     )
 
+    objects: models.Manager[DomainModel]
+
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
     updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
 
