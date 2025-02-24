@@ -1,5 +1,4 @@
-"""Something."""
-
+"""Management command for generating a long test PKI chain."""
 
 from __future__ import annotations
 
@@ -13,12 +12,12 @@ from .base_commands import CertificateCreationCommandMixin
 
 
 class Command(CertificateCreationCommandMixin, BaseCommand):
-    """Django management command for adding issuing CA test data."""
+    """Django management command for generating a long test PKI chain."""
 
-    help = 'Removes all migrations, deletes db and runs makemigrations and migrate afterwards.'
+    help = 'Generate a long certificate chain with 4 Intermediate CAs.'
 
-    def handle(self, *args, **kwargs) -> None:
-
+    def handle(self, *_args: tuple, **_kwargs: dict) -> None:
+        """Executes the command."""
         root_1, root_1_key = self.create_root_ca('Root CA A')
 
         issuing_1, issuing_1_key = self.create_issuing_ca(
@@ -32,7 +31,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
         issuing_5, issuing_5_key = self.create_issuing_ca(
             issuing_4_key, 'Intermediate CA D', 'Issuing CA')
 
-        ee_1, ee_key = self.create_ee(issuing_5_key, 'Issuing CA', 'EE A1')
+        ee_1, _ee_key = self.create_ee(issuing_5_key, 'Issuing CA', 'EE A1')
 
         p12 = pkcs12.serialize_key_and_certificates(
             b'my p12',
@@ -42,7 +41,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             encryption_algorithm=BestAvailableEncryption(b'testing321')
         )
 
-        with open(Path(__file__).parent.parent.parent / 'p12.p12', 'wb') as f:
+        with Path(Path(__file__).parent.parent.parent / 'p12.p12').open('wb') as f:
             f.write(p12)
         CertificateModel.save_certificate(root_1)
         CertificateModel.save_certificate(issuing_1)
@@ -51,5 +50,3 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
         CertificateModel.save_certificate(issuing_4)
         CertificateModel.save_certificate(issuing_5)
         CertificateModel.save_certificate(ee_1)
-
-

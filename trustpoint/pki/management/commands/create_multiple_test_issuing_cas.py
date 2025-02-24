@@ -10,11 +10,11 @@ from .base_commands import CertificateCreationCommandMixin
 
 
 class Command(CertificateCreationCommandMixin, BaseCommand):
-    """Django management command for adding issuing CA test data."""
+    """Adds a Root CA and three issuing CAs to the database."""
 
     help = 'Adds a Root CA and three issuing CAs to the database.'
 
-    def handle(self, *args: tuple, **kwargs: dict) -> None:
+    def handle(self, *_args: tuple, **_kwargs: dict) -> None:
         """Adds a Root CA and three issuing CAs to the database."""
         rsa2_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         rsa2_issuing_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)

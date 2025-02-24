@@ -1,19 +1,13 @@
-"""Something."""
-
+"""Command to create a test Issuing CA and some example end-entity certificates."""
 
 from __future__ import annotations
 
 import random
-from typing import Union
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, ed448, ed25519, rsa
 from django.core.management.base import BaseCommand
 
 from .base_commands import CertificateCreationCommandMixin
-
-PublicKey = Union[rsa.RSAPublicKey, ec.EllipticCurvePublicKey, ed448.Ed448PublicKey, ed25519.Ed25519PublicKey]
-PrivateKey = Union[rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey, ed448.Ed448PrivateKey, ed25519.Ed25519PrivateKey]
 
 
 class Command(CertificateCreationCommandMixin, BaseCommand):
@@ -21,7 +15,8 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
 
     help = 'Removes all migrations, deletes db and runs makemigrations and migrate afterwards.'
 
-    def handle(self, *args, **kwargs) -> None:
+    def handle(self, *_args: tuple, **_kwargs: dict) -> None:
+        """Executes the command."""
         key_usage_extension = x509.KeyUsage(
             digital_signature=True,
             content_commitment=False,
@@ -42,9 +37,9 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
 
         ee_certs = {}
         ee_keys = {}
-        for i in range(100):
-            random_integer = random.randint(20, 80)
-            sign = random.choice([1, -1])
+        for i in range(10):
+            random_integer = random.randint(20, 80)  # noqa: S311
+            sign = random.choice([1, -1])  # noqa: S311
             validity_days = random_integer * sign
             ee, key = self.create_ee(
                 issuer_private_key=issuing_1_key,

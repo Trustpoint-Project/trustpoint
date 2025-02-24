@@ -1,16 +1,21 @@
+"""Management command to reset the database and migrations."""
 from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import psycopg
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.management import BaseCommand, call_command
-from django.core.management.base import CommandParser
+
+if TYPE_CHECKING:
+    from django.core.management.base import CommandParser
 
 
 class Command(BaseCommand):
+    """Management command to reset the database and migrations."""
     help = (
         'Resets the database by deleting all migrations, dropping '
         'the database, then running makemigrations and migrate. '
@@ -18,10 +23,12 @@ class Command(BaseCommand):
     )
 
     def add_arguments(self, parser: CommandParser) -> None:
+        """Adds command arguments/options."""
         parser.add_argument('--force', action='store_true', help='Force database reset without prompt.')
         parser.add_argument('--no-user', action='store_true', help='Skip superuser creation.')
 
-    def handle(self, *args, **options) -> None:
+    def handle(self, *_args: tuple, **options: dict) -> None:
+        """Executes the command."""
         # Confirm database reset
         if not options.get('force'):
             self.stdout.write('WARNING: This will delete the database and all migration files.')
@@ -33,14 +40,7 @@ class Command(BaseCommand):
         # Remove migration files
         self.stdout.write('Removing migration files...')
         base_path = Path(__file__).resolve().parent.parent.parent.parent
-        for root, dirs, files in os.walk(base_path):
-            if 'migrations' in root:
-                for file in files:
-                    if (file.endswith('.py') and file != '__init__.py') or file.endswith('.pyc'):
-                        try:
-                            os.remove(Path(root) / file)
-                        except Exception as e:
-                            self.stderr.write(f'Error removing {file}: {e}')
+        self._remove_migration_files(base_path)
 
         # Reset database depending on engine
         engine = settings.DATABASES['default']['ENGINE']
@@ -71,14 +71,25 @@ class Command(BaseCommand):
 
         self.stdout.write('Database reset complete.')
 
+    def _remove_migration_files(self, base_path: Path) -> None:
+        """Removes all Django migration files."""
+        for root, _dirs, files in os.walk(base_path):
+            if 'migrations' in root:
+                for file in files:
+                    if (file.endswith('.py') and file != '__init__.py') or file.endswith('.pyc'):
+                        try:
+                            Path(Path(root) / file).unlink()
+                        except Exception as e: # noqa: BLE001
+                            self.stderr.write(f'Error removing {file}: {e}')
+
     def _reset_sqlite(self, base_path: Path) -> None:
         """Deletes the SQLite database file."""
         db_path = base_path / 'db.sqlite3'
         if db_path.exists():
             try:
-                os.remove(db_path)
+                Path(db_path).unlink()
                 self.stdout.write('SQLite database file deleted.')
-            except Exception as e:
+            except Exception as e: # noqa: BLE001
                 self.stderr.write(f'Error deleting SQLite database file: {e}')
         else:
             self.stdout.write('No SQLite database file found.')
@@ -130,5 +141,5 @@ class Command(BaseCommand):
             conn.close()
             self.stdout.write('PostgreSQL database reset successfully.')
 
-        except Exception as e:
+        except Exception as e: # noqa: BLE001
             self.stderr.write(f'Error resetting PostgreSQL database: {e}')
