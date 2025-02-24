@@ -72,6 +72,7 @@ class IssuingCaModel(LoggerMixin, models.Model):
         return self.unique_name
 
     def __repr__(self) -> str:
+        """Returns a string representation of the IssuingCaModel instance."""
         return f'IssuingCaModel(unique_name={self.unique_name})'
 
     @property
@@ -172,19 +173,25 @@ class IssuingCaModel(LoggerMixin, models.Model):
 
     @property
     def signature_suite(self) -> oid.SignatureSuite:
+        """The signature suite for the CA public key certificate."""
         return oid.SignatureSuite.from_certificate(self.credential.get_certificate_serializer().as_crypto())
 
     @property
     def public_key_info(self) -> oid.PublicKeyInfo:
+        """The public key info for the CA certificate's public key"""
         return self.signature_suite.public_key_info
 
     def revoke_all_issued_certificates(self, reason: str = RevokedCertificateModel.ReasonCode.UNSPECIFIED) -> None:
         """Revokes all certificates issued by this CA."""
-        # Note: This goes through all active certificates and checks issuance by this CA based on cert.issuer_public_bytes == ca.subject_public_bytes
-        # WARNING: This means that it may inadvertently revoke certificates that were issued by a different CA with the same subject name
+        # Note: This goes through all active certificates and checks issuance by this CA
+        # based on cert.issuer_public_bytes == ca.subject_public_bytes
+        # WARNING: This means that it may inadvertently revoke certificates
+        # that were issued by a different CA with the same subject name
         ca_subject_public_bytes = self.credential.certificate.subject_public_bytes
+
+        # do not self-revoke self-signed CA certificate
         qs = CertificateModel.objects.filter(issuer_public_bytes=ca_subject_public_bytes) \
-                                     .exclude(subject_public_bytes=ca_subject_public_bytes) # do not self-revoke self-signed CA certificate
+                                     .exclude(subject_public_bytes=ca_subject_public_bytes)
 
         for cert in qs:
             if cert.certificate_status != CertificateModel.CertificateStatus.OK:

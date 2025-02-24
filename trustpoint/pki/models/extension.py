@@ -5,21 +5,13 @@ from __future__ import annotations
 
 import abc
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 from core.oid import CertificateExtensionOid, NameOid
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-
-if TYPE_CHECKING:
-    from typing import Union
-
-    from cryptography.hazmat.primitives.asymmetric import ec, ed448, ed25519, rsa
-    PrivateKey = Union[rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey, ed448.Ed448PrivateKey, ed25519.Ed25519PrivateKey]
-    PublicKey = Union[rsa.RSAPublicKey, ec.EllipticCurvePublicKey, ed448.Ed448PublicKey, ed25519.Ed25519PublicKey]
-
 
 __all__ = [
     'AttributeTypeAndValue',
@@ -342,8 +334,8 @@ class KeyUsageExtension(CertificateExtension, models.Model):
                 key_agreement=crypto_basic_constraints_extension.value.key_agreement,
                 key_cert_sign=crypto_basic_constraints_extension.value.key_cert_sign,
                 crl_sign=crypto_basic_constraints_extension.value.crl_sign,
-                encipher_only=crypto_basic_constraints_extension.value._encipher_only,
-                decipher_only=crypto_basic_constraints_extension.value._decipher_only).first()
+                encipher_only=crypto_basic_constraints_extension.value._encipher_only,  # noqa: SLF001
+                decipher_only=crypto_basic_constraints_extension.value._decipher_only).first()  # noqa: SLF001
             if existing_entry:
                 return existing_entry
 
@@ -357,9 +349,9 @@ class KeyUsageExtension(CertificateExtension, models.Model):
             key_usage_extension.key_cert_sign = crypto_basic_constraints_extension.value.key_cert_sign
             key_usage_extension.crl_sign = crypto_basic_constraints_extension.value.crl_sign
             # noinspection PyProtectedMember
-            key_usage_extension.encipher_only = crypto_basic_constraints_extension.value._encipher_only
+            key_usage_extension.encipher_only = crypto_basic_constraints_extension.value._encipher_only  # noqa: SLF001
             # noinspection PyProtectedMember
-            key_usage_extension.decipher_only = crypto_basic_constraints_extension.value._decipher_only
+            key_usage_extension.decipher_only = crypto_basic_constraints_extension.value._decipher_only  # noqa: SLF001
             key_usage_extension.save()
         except ExtensionNotFound:
             return None

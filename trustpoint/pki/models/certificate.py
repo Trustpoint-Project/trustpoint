@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING
+from types import MappingProxyType
 
 from core.oid import (
     AlgorithmIdentifier,
@@ -17,7 +17,7 @@ from core.serializer import CertificateSerializer, PublicKeySerializer
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, ed448, ed25519, rsa
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 
@@ -41,12 +41,6 @@ from pki.models.extension import (
     SubjectKeyIdentifierExtension,
 )
 from trustpoint.views.base import LoggerMixin
-
-if TYPE_CHECKING:
-    from typing import Union
-    PrivateKey = Union[rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey, ed448.Ed448PrivateKey, ed25519.Ed25519PrivateKey]
-    PublicKey = Union[rsa.RSAPublicKey, ec.EllipticCurvePublicKey, ed448.Ed448PublicKey, ed25519.Ed25519PublicKey]
-
 
 __all__ = [
     'CertificateModel',
@@ -86,30 +80,12 @@ class CertificateModel(LoggerMixin, models.Model):
 
     # ----------------------------------------------- Custom Data Fields -----------------------------------------------
 
-    @property
-    def signature_suite(self) -> SignatureSuite:
-        return SignatureSuite.from_certificate(self.get_certificate_serializer().as_crypto())
-
-    @property
-    def public_key_info(self) -> PublicKeyInfo:
-        return self.signature_suite.public_key_info
-
-    @property
-    def certificate_status(self) -> CertificateStatus:
-        if RevokedCertificateModel.objects.filter(certificate=self).exists():
-            return self.CertificateStatus.REVOKED
-        if datetime.datetime.now(datetime. UTC) < self.not_valid_before:
-            return self.CertificateStatus.NOT_YET_VALID
-        if datetime.datetime.now(datetime. UTC) > self.not_valid_after:
-            return self.CertificateStatus.EXPIRED
-        return self.CertificateStatus.OK
-
     is_self_signed = models.BooleanField(verbose_name=_('Self-Signed'), null=False, blank=False)
 
-    # TODO: This is kind of a hack.
-    # TODO: This information is already available through the subject relation
-    # TODO: Property would not be sortable.
-    # TODO: We may want to resolve this later by modifying the queryset within the view
+    # TODO(Alex): This is kind of a hack.
+    # This information is already available through the subject relation
+    # Property would not be sortable.
+    # We may want to resolve this later by modifying the queryset within the view
     common_name = models.CharField(
         verbose_name=_('Common Name'),
         max_length=256,
@@ -125,20 +101,6 @@ class CertificateModel(LoggerMixin, models.Model):
         max_length=256,
         editable=False,
         choices=SignatureAlgorithmOidChoices)
-
-    # Name of the signature algorithm
-    @property
-    def signature_algorithm(self) -> str:
-        return AlgorithmIdentifier(self.signature_algorithm_oid).verbose_name
-
-    signature_algorithm.fget.short_description = _('Signature Algorithm')
-
-    # Padding scheme if RSA is used, otherwise None
-    @property
-    def signature_algorithm_padding_scheme(self) -> str:
-        return AlgorithmIdentifier(self.signature_algorithm_oid).padding_scheme.verbose_name
-
-    signature_algorithm_padding_scheme.fget.short_description = _('Signature Padding Scheme')
 
     # The DER encoded signature value as hex string. Without prefix, all uppercase, no whitespace / trimmed.
     signature_value = models.CharField(verbose_name=_('Signature Value'), max_length=65536, editable=False)
@@ -218,14 +180,6 @@ class CertificateModel(LoggerMixin, models.Model):
     # ----------------------------------------- CertificateModel Creation Data -----------------------------------------
 
     created_at = models.DateTimeField(verbose_name=_('Created-At'), auto_now_add=True)
-
-    # --------------------------------------------- Data Retrieval Methods ---------------------------------------------
-
-    def get_certificate_serializer(self) -> CertificateSerializer:
-        return CertificateSerializer(self.cert_pem)
-
-    def get_public_key_serializer(self) -> PublicKeySerializer:
-        return PublicKeySerializer(self.public_key_pem)
 
     # --------------------------------------------------- Extensions ---------------------------------------------------
     # order of extensions follows RFC5280
@@ -365,47 +319,85 @@ class CertificateModel(LoggerMixin, models.Model):
         on_delete=models.CASCADE
     )
 
-    # --------------------------------------------- No Cryptography support -------------------------------------
+    # ------------------------------------------ Magic and default methods -------------------------------------------
 
-    # policy_mappings = None
-    # ext_subject_directory_attributes = None
-    # ext_name_constraints = None
-    # ext_policy_constraints = None
-    # ext_extended_key_usage = None
-    # ext_crl_distribution_points = None
-    # ext_inhibit_any_policy = None
-    # ext_freshest_crl = None
+    def __repr__(self) -> str:
+        """Representation of the CertificateModel instance."""
+        return f'Certificate(CN={self.common_name})'
 
-    # Private Internet Access
-    # ext_authority_information_access = None
-    # ext_subject_information_access = None
+    def __str__(self) -> str:
+        """Human-readable representation of the CertificateModel instance."""
+        return self.common_name
+
+    def save(self, *_args: tuple, **_kwargs: dict) -> None:
+        """Save method must not be called directly to protect the integrity.
+
+        This method makes sure save() is not called by mistake.
+
+        Raises:
+            NotImplementedError
+        """
+        exc_msg = (
+            '.save() must not be called directly on a Certificate instance to protect the integrity of the database. '
+            'Use .save_certificate() or .save_certificate_and_key() passing the required cryptography objects.'
+        )
+        raise NotImplementedError(exc_msg)
 
     # --------------------------------------------------- Properties ---------------------------------------------------
 
     @property
+    def signature_algorithm(self) -> str:
+        """Name of the signature algorithm."""
+        return AlgorithmIdentifier(self.signature_algorithm_oid).verbose_name
+
+    signature_algorithm.fget.short_description = _('Signature Algorithm')
+
+    @property
+    def signature_algorithm_padding_scheme(self) -> str:
+        """Padding scheme if RSA is used, otherwise None."""
+        return AlgorithmIdentifier(self.signature_algorithm_oid).padding_scheme.verbose_name
+
+    signature_algorithm_padding_scheme.fget.short_description = _('Signature Padding Scheme')
+
+    @property
+    def signature_suite(self) -> SignatureSuite:
+        """Signature Suite of the certificate."""
+        return SignatureSuite.from_certificate(self.get_certificate_serializer().as_crypto())
+
+    @property
+    def public_key_info(self) -> PublicKeyInfo:
+        """Public Key Info of the certificate."""
+        return self.signature_suite.public_key_info
+
+    @property
+    def certificate_status(self) -> CertificateStatus:
+        """Status of the certificate."""
+        if RevokedCertificateModel.objects.filter(certificate=self).exists():
+            return self.CertificateStatus.REVOKED
+        if datetime.datetime.now(datetime.UTC) < self.not_valid_before:
+            return self.CertificateStatus.NOT_YET_VALID
+        if datetime.datetime.now(datetime.UTC) > self.not_valid_after:
+            return self.CertificateStatus.EXPIRED
+        return self.CertificateStatus.OK
+
+    @property
     def is_ca(self) -> bool:
-        if self.basic_constraints_extension and self.basic_constraints_extension.ca:
-            return True
-        return False
+        """Check if the certificate is a CA certificate."""
+        return self.basic_constraints_extension and self.basic_constraints_extension.ca
 
     @property
     def is_root_ca(self) -> bool:
-        if self.is_self_signed and self.is_ca:
-            return True
-        return False
+        """Check if the certificate is a root CA certificate."""
+        return self.is_self_signed and self.is_ca
 
     @property
     def is_end_entity(self) -> bool:
+        """Check if the certificate is an end entity certificate."""
         return not self.is_ca
-
-    def __repr__(self) -> str:
-        return f'Certificate(CN={self.common_name})'
-
-    def __str__(self) -> str:
-        return self.common_name
 
     @classmethod
     def get_cert_by_sha256_fingerprint(cls, sha256_fingerprint: str) -> None | CertificateModel:
+        """Get a CertificateModel instance by its SHA256 fingerprint."""
         sha256_fingerprint = sha256_fingerprint.upper()
         return cls.objects.filter(sha256_fingerprint=sha256_fingerprint).first()
 
@@ -413,20 +405,18 @@ class CertificateModel(LoggerMixin, models.Model):
     def _get_subject(cert: x509.Certificate) -> list[tuple[str, str]]:
         subject = []
         for rdn in cert.subject.rdns:
-            for attr_type_and_value in rdn:
-                subject.append(
-                    (attr_type_and_value.oid.dotted_string, attr_type_and_value.value)
-                )
+            subject.extend(
+                [attr_type_and_value.oid.dotted_string, attr_type_and_value.value] for attr_type_and_value in rdn
+            )
         return subject
 
     @staticmethod
     def _get_issuer(cert: x509.Certificate) -> list[tuple[str, str]]:
         issuer = []
         for rdn in cert.issuer.rdns:
-            for attr_type_and_value in rdn:
-                issuer.append(
-                    (attr_type_and_value.oid.dotted_string, attr_type_and_value.value)
-                )
+            issuer.extend(
+                [attr_type_and_value.oid.dotted_string, attr_type_and_value.value] for attr_type_and_value in rdn
+            )
         return issuer
 
     @staticmethod
@@ -438,13 +428,24 @@ class CertificateModel(LoggerMixin, models.Model):
             spki_algorithm_oid = PublicKeyAlgorithmOid.ECC
             spki_ec_curve_oid = NamedCurve[cert.public_key().curve.name.upper()]
         else:
-            raise ValueError('Subject Public Key Info contains an unsupported key type.')
+            exc_msg = 'Subject Public Key Info contains an unsupported key type.'
+            raise TypeError(exc_msg)
 
         return spki_algorithm_oid, cert.public_key().key_size, spki_ec_curve_oid
 
+    # --------------------------------------------- Data Retrieval Methods ---------------------------------------------
+
+    def get_certificate_serializer(self) -> CertificateSerializer:
+        """Get the serializer for the certificate."""
+        return CertificateSerializer(self.cert_pem)
+
+    def get_public_key_serializer(self) -> PublicKeySerializer:
+        """Get the serializer for the certificate's public key."""
+        return PublicKeySerializer(self.public_key_pem)
+
     # ---------------------------------------------- Private save methods ----------------------------------------------
 
-    def _save(self, *args, **kwargs) -> None:
+    def _save(self, *args: tuple, **kwargs: dict) -> None:
         return super().save(*args, **kwargs)
 
     @classmethod
@@ -547,48 +548,33 @@ class CertificateModel(LoggerMixin, models.Model):
             attr_type_and_val = cls._save_attribute_and_value_pairs(oid=oid, value=value)
             cert_model.issuer.add(attr_type_and_val)
 
+    EXTENSION_MAP = MappingProxyType({
+        x509.BasicConstraints: ('basic_constraints_extension', BasicConstraintsExtension),
+        x509.KeyUsage: ('key_usage_extension', KeyUsageExtension),
+        x509.IssuerAlternativeName: ('issuer_alternative_name_extension', IssuerAlternativeNameExtension),
+        x509.SubjectAlternativeName: ('subject_alternative_name_extension', SubjectAlternativeNameExtension),
+        x509.AuthorityKeyIdentifier: ('authority_key_identifier_extension', AuthorityKeyIdentifierExtension),
+        x509.SubjectKeyIdentifier: ('subject_key_identifier_extension', SubjectKeyIdentifierExtension),
+        x509.CertificatePolicies: ('certificate_policies_extension', CertificatePoliciesExtension),
+        x509.ExtendedKeyUsage: ('extended_key_usage_extension', ExtendedKeyUsageExtension),
+        x509.NameConstraints: ('name_constraints_extension', NameConstraintsExtension),
+        x509.CRLDistributionPoints: ('crl_distribution_points_extension', CrlDistributionPointsExtension),
+        x509.AuthorityInformationAccess:('authority_information_access_extension', AuthorityInformationAccessExtension),
+        x509.SubjectInformationAccess: ('subject_information_access_extension', SubjectInformationAccessExtension),
+        x509.InhibitAnyPolicy: ('inhibit_any_policy_extension', InhibitAnyPolicyExtension),
+        x509.PolicyConstraints: ('policy_constraints_extension', PolicyConstraintsExtension),
+        x509.FreshestCRL: ('freshest_crl_extension', FreshestCrlExtension)
+    })
 
     @staticmethod
     def _save_extensions(cert_model: CertificateModel, cert: x509.Certificate) -> None:
         for extension in cert.extensions:
-            if isinstance(extension.value, x509.BasicConstraints):
-                cert_model.basic_constraints_extension = \
-                    BasicConstraintsExtension.save_from_crypto_extensions(extension)
-            elif isinstance(extension.value, x509.KeyUsage):
-                cert_model.key_usage_extension = \
-                    KeyUsageExtension.save_from_crypto_extensions(extension)
-            elif isinstance(extension.value, x509.IssuerAlternativeName):
-                cert_model.issuer_alternative_name_extension = \
-                    IssuerAlternativeNameExtension.save_from_crypto_extensions(extension)
-            elif isinstance(extension.value, x509.SubjectAlternativeName):
-                cert_model.subject_alternative_name_extension = \
-                    SubjectAlternativeNameExtension.save_from_crypto_extensions(extension)
-            elif isinstance(extension.value, x509.AuthorityKeyIdentifier):
-                cert_model.authority_key_identifier_extension = \
-                    AuthorityKeyIdentifierExtension.save_from_crypto_extensions(extension)
-            elif isinstance(extension.value, x509.SubjectKeyIdentifier):
-                cert_model.subject_key_identifier_extension = \
-                    SubjectKeyIdentifierExtension.save_from_crypto_extensions(extension)
-            elif isinstance(extension.value, x509.CertificatePolicies):
-                cert_model.certificate_policies_extension = CertificatePoliciesExtension.save_from_crypto_extensions(extension)
-            elif isinstance(extension.value, x509.ExtendedKeyUsage):
-                cert_model.extended_key_usage_extension = ExtendedKeyUsageExtension.save_from_crypto_extensions(extension)
-            elif isinstance(extension.value, x509.NameConstraints):
-                cert_model.name_constraints_extension = NameConstraintsExtension.save_from_crypto_extensions(extension)
-            elif isinstance(extension.value, x509.CRLDistributionPoints):
-                cert_model.crl_distribution_points_extension = CrlDistributionPointsExtension.save_from_crypto_extensions(extension)
-            elif isinstance(extension.value, x509.AuthorityInformationAccess):
-                cert_model.authority_information_access_extension = AuthorityInformationAccessExtension.save_from_crypto_extensions(extension)
-            elif isinstance(extension.value, x509.SubjectInformationAccess):
-                cert_model.subject_information_access_extension = SubjectInformationAccessExtension.save_from_crypto_extensions(extension)
-            elif isinstance(extension.value, x509.InhibitAnyPolicy):
-                cert_model.inhibit_any_policy_extension = InhibitAnyPolicyExtension.save_from_crypto_extensions(extension)
-            # elif isinstance(extension.value, x509.PolicyMappings):  # no x509 PolicyMapping implemented
-            #     cert_model.pol = InhibitAnyPolicyExtension.save_from_crypto_extensions(extension)
-            elif isinstance(extension.value, x509.PolicyConstraints):
-                cert_model.policy_constraints_extension = PolicyConstraintsExtension.save_from_crypto_extensions(extension)
-            elif isinstance(extension.value, x509.FreshestCRL):
-                cert_model.freshest_crl_extension = FreshestCrlExtension.save_from_crypto_extensions(extension)
+            for x509_extension_type, (field_name, extension_model_class) in CertificateModel.EXTENSION_MAP.items():
+                if isinstance(extension.value, x509_extension_type):
+                    extension_model = extension_model_class.save_from_crypto_extensions(extension)
+                    setattr(cert_model, field_name, extension_model)
+                    break
+
 
     @classmethod
     @transaction.atomic
@@ -599,7 +585,7 @@ class CertificateModel(LoggerMixin, models.Model):
             subject: list[tuple[str, str]],
             issuer: list[tuple[str, str]]) -> CertificateModel:
 
-        cert_model._save()
+        cert_model._save()  # noqa: SLF001
         for oid, value in subject:
             if oid == NameOid.COMMON_NAME.dotted_string:
                 cert_model.common_name = value
@@ -611,19 +597,6 @@ class CertificateModel(LoggerMixin, models.Model):
         return cert_model
 
     # ---------------------------------------------- Public save methods -----------------------------------------------
-
-    def save(self, *args, **kwargs) -> None:
-        """Save method must not be called directly to protect the integrity.
-
-        This method makes sure, save() is not called by mistake.
-
-        Raises:
-            NotImplementedError
-        """
-        raise NotImplementedError(
-            '.save() must not be called directly on a Certificate instance to protect the integrity of the database. '
-            'Use .save_certificate() or .save_certificate_and_key() passing the required cryptography objects.'
-        )
 
     @classmethod
     def save_certificate(cls, certificate: x509.Certificate | CertificateSerializer) -> CertificateModel:
@@ -675,4 +648,5 @@ class RevokedCertificateModel(models.Model):
     )
 
     def __str__(self) -> str:
+        """String representation of the RevokedCertificateModel instance."""
         return f'RevokedCertificate({self.certificate.common_name})'

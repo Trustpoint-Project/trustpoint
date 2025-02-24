@@ -1,3 +1,5 @@
+"""Model for the DevID Registration."""
+
 from core.validator.field import UniqueNameValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _

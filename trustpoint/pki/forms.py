@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import ClassVar
 
 from core.serializer import (
     CertificateCollectionSerializer,
@@ -21,12 +21,6 @@ from pki.models import DevIdRegistration, IssuingCaModel
 from pki.models.certificate import CertificateModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
 from trustpoint.views.base import LoggerMixin
-
-if TYPE_CHECKING:
-    from typing import Union
-
-    from cryptography.hazmat.primitives.asymmetric import ec, ed448, ed25519, rsa
-    PrivateKey = Union[rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey, ed448.Ed448PrivateKey, ed25519.Ed25519PrivateKey]
 
 
 class DevIdAddMethodSelectForm(forms.Form):
@@ -50,15 +44,15 @@ class DevIdAddMethodSelectForm(forms.Form):
 class DevIdRegistrationForm(forms.ModelForm):
     """Form to create a new DevIdRegistration."""
 
-    class Meta:
+    class Meta:  # noqa: D106
         model = DevIdRegistration
-        fields = ['unique_name', 'truststore', 'domain', 'serial_number_pattern']
-        widgets = {
+        fields: ClassVar[list[str]] = ['unique_name', 'truststore', 'domain', 'serial_number_pattern']
+        widgets: ClassVar[dict] = {
             'serial_number_pattern': forms.TextInput(attrs={
                 'placeholder': 'Enter a regex pattern for serial numbers',
             }),
         }
-        labels = {
+        labels: ClassVar[dict] = {
             'unique_name': 'Unique Name',
             'truststore': 'Associated Truststore',
             'domain': 'Associated Domain',

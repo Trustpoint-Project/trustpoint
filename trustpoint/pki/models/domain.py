@@ -13,7 +13,6 @@ __all__ = [
     'DomainModel'
 ]
 
-
 class DomainModel(models.Model):
     """Domain Model."""
 
@@ -41,6 +40,7 @@ class DomainModel(models.Model):
     updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
 
     def __repr__(self) -> str:
+        """Representation of the Domain model instance."""
         return f'DomainModel(unique_name={self.unique_name})'
 
     def __str__(self) -> str:
@@ -52,18 +52,20 @@ class DomainModel(models.Model):
         """
         return self.unique_name
 
-    @property
-    def signature_suite(self) -> oid.SignatureSuite:
-        return oid.SignatureSuite.from_certificate(self.issuing_ca.credential.get_certificate_serializer().as_crypto())
-
-    @property
-    def public_key_info(self) -> oid.PublicKeyInfo:
-        return self.signature_suite.public_key_info
-
     def save(self, *args: tuple, **kwargs: dict) -> None:
         """Save the Domain model instance."""
         self.clean()  # Ensure validation before saving
         super().save(*args, **kwargs)
+
+    @property
+    def signature_suite(self) -> oid.SignatureSuite:
+        """Get the signature suite for the domain (based on its Issuing CA)."""
+        return oid.SignatureSuite.from_certificate(self.issuing_ca.credential.get_certificate_serializer().as_crypto())
+
+    @property
+    def public_key_info(self) -> oid.PublicKeyInfo:
+        """Get the public key info for the domain (based on its Issuing CA)."""
+        return self.signature_suite.public_key_info
 
     def clean(self) -> None:
         """Validate that the issuing CA is not an auto-generated root CA."""
