@@ -218,8 +218,8 @@ Test Idea
 
 To verify that the system automatically generates Issuing CAs based on configuration, we will test the following scenarios:
 
-#. Successful Auto-Generation of an Issuing CA
-    - The admin configures the system with predefined settings for an Issuing CA.
+#. Successful Auto-Generation of an :term:`Issuing CA`
+    - The admin configures the system with predefined settings for an :term:`Issuing CA`.
     - The system automatically generates the CA without manual intervention.
     - The CA appears in the list of available CAs.
 
