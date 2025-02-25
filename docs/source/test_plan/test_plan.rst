@@ -2,7 +2,7 @@
 Test Plan
 *********
 
-This document is providing a test plan for TrustPoint using the IEEE 829 standard for structuring this plan.
+This document is providing a test plan for Trustpoint using the IEEE 829 standard for structuring this plan.
 
 ============
 Introduction

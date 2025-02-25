@@ -46,3 +46,4 @@ Welcome to Trustpoint's documentation!
 
    development
    test_plan/test_plan
+   test_report/test_report

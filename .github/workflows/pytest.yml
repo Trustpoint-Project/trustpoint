@@ -1,11 +1,13 @@
 name: Pytest
 
-on: [pull_request]
+on: [ pull_request ]
 
 jobs:
   pytest:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -13,48 +15,42 @@ jobs:
       - name: Install the latest version of uv
         uses: astral-sh/setup-uv@v5
         with:
+          enable-cache: true
           python-version: 3.12
 
       - name: Run database migrations
         run: |
           echo "y" | uv run trustpoint/manage.py reset_db
 
-      - name: Run Pytest with Coverage
+      - name: Run Pytest and create reports
         run: |
           mkdir -p reports
           uv run pytest \
-          --cov=trustpoint \
-          --cov-report=xml \
-          --cov-report=html \
+          --md-report-flavor gfm \
           --html=reports/pytest-report.html \
-          --self-contained-html \
-          --junitxml=reports/pytest-report.xml \
-          trustpoint/ | tee reports/pytest-output.log
-          mv coverage.xml reports/coverage.xml
+          --junitxml=reports/junit-report.xml \
+          trustpoint/
 
-      - name: Upload Test Reports
+      - name: Display Summary in GitHub Actions even if tests fail
+        if: always()
+        run: |
+          echo "<details><summary>Pytest Report</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat "md-report.md" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "</details>" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Test Reports even if tests fail
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: pytest-reports
           path: reports/
 
-      - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v5
+      - name: Render the report to the PR when tests fail
+        uses: marocchino/sticky-pull-request-comment@v2
+        if: failure()
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: reports/coverage.xml
-        continue-on-error: true
-
-      - name: Display Summary in GitHub Actions
-        run: |
-          echo "## Pytest Results :white_check_mark:" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          cat reports/pytest-output.log >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-
-      - name: Fail Job if Tests Failed
-        run: |
-          if grep -q "[1-9] warnings, [1-9] errors" reports/pytest-output.log; then
-            echo "❌ Pytest failed! Failing job."
-            exit 1
-          fi
+          header: test-report
+          recreate: true
+          path: md-report.md
