@@ -106,3 +106,8 @@ Glossary
     Application Certificates
         Digital certificates issued by Trustpoint for specific applications or systems (like TLS server/client, OPC UA server/client),
         enabling secure communication and authentication for those applications within the Trustpoint-managed environment.
+
+    BDD
+        Behavior-Driven Development is a collaborative software development approach
+        that uses natural language descriptions of expected behavior to bridge communication between developers,
+        testers, and business stakeholders.
