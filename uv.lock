@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.11"
 
 [[package]]
@@ -1256,11 +1257,13 @@ dependencies = [
     { name = "psycopg-binary" },
     { name = "pyasn1" },
     { name = "pyasn1-modules" },
+    { name = "trustpoint-core" },
     { name = "zeroconf" },
 ]
 
 [package.optional-dependencies]
 dev = [
+    { name = "beautifulsoup4" },
     { name = "behave" },
     { name = "behave-django" },
     { name = "behave-html-pretty-formatter" },
@@ -1312,6 +1315,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "beautifulsoup4", marker = "extra == 'dev'", specifier = ">=4.13.3" },
     { name = "behave", marker = "extra == 'dev'", specifier = ">=1.2.7.dev6" },
     { name = "behave-django", marker = "extra == 'dev'", specifier = ">=1.5.0" },
     { name = "behave-html-pretty-formatter", marker = "extra == 'dev'", specifier = ">=1.12.3" },
@@ -1344,9 +1348,11 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.7.4" },
     { name = "sphinx", marker = "extra == 'dev'", specifier = ">=8.1.3,<9" },
     { name = "sphinxcontrib-plantuml", marker = "extra == 'dev'", specifier = ">=0.30" },
+    { name = "trustpoint-core", specifier = ">=0.0.5" },
     { name = "werkzeug", marker = "extra == 'dev'", specifier = ">=3.1.3,<4" },
     { name = "zeroconf", specifier = ">=0.145,<0.146" },
 ]
+provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1372,6 +1378,18 @@ dev = [
     { name = "sphinx", specifier = ">=8.1.3,<9" },
     { name = "sphinxcontrib-plantuml", specifier = ">=0.30" },
     { name = "werkzeug", specifier = ">=3.1.3,<4" },
+]
+
+[[package]]
+name = "trustpoint-core"
+version = "0.0.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/52/1e/16caa7cc91098fb891809fde878adee2d446ddcfc1fba55ceeca85ebc605/trustpoint_core-0.0.5.tar.gz", hash = "sha256:174279373d05298268cf6f93838d7dbd09efee9247afdc0de39c9052cebf51fb", size = 50345 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/96/27/fa70187c2688ff38e179546d742e97fbfd69a82dea3740b645d33f31d2b2/trustpoint_core-0.0.5-py3-none-any.whl", hash = "sha256:1a45be0d5707de621257e7c4502f8c16c018e91745d6331ab21fb836ee998521", size = 24954 },
 ]
 
 [[package]]

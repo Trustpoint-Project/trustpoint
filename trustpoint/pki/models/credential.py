@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from django.db.models import QuerySet
 
-from core.serializer import (
+from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
@@ -16,7 +16,7 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 from pki.models import CertificateModel
-from core import oid
+from trustpoint_core import oid
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar, Union

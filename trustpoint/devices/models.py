@@ -8,8 +8,8 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from django.contrib.contenttypes.models import ContentType
-from core.validator.field import UniqueNameValidator
-from core import oid
+from util.field import UniqueNameValidator
+from trustpoint_core import oid
 
 from pki.models import CertificateModel, DomainModel, CredentialModel, IssuingCaModel
 from pki.models.credential import CredentialModel

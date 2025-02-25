@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from core.serializer import (
+from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
     PrivateKeySerializer,
 )
-from core.validator.field import UniqueNameValidator
+from util.field import UniqueNameValidator
 from django import forms
 from django.utils.translation import gettext_lazy as _
 

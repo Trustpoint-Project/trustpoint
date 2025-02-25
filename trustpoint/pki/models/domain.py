@@ -1,11 +1,11 @@
 """Module that contains the DomainModel."""
 from __future__ import annotations
 
-from core.validator.field import UniqueNameValidator
+from util.field import UniqueNameValidator
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from core import oid
+from trustpoint_core import oid
 
 from . import IssuingCaModel
 
