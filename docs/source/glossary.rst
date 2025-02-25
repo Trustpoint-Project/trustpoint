@@ -61,11 +61,12 @@ Glossary
         or by manually downloading and distributing PKCS#12 files.
 
     Zero-Touch Onboarding
-        An automated onboarding process, currently under development, designed to allow devices to be added to Trustpoint without manual intervention,
+        An automated onboarding process, currently under development,
+        designed to allow devices to be added to Trustpoint without manual intervention,
         streamlining the integration of new devices into the system.
 
     Domain
-        Domains are an abstraction on top of the Issuing CAs. Every Domain has exactly one Issuing CA assosiated to it,
+        Domains are an abstraction on top of the Issuing CAs. Every Domain has exactly one Issuing CA associated to it,
         while an Issuing CA can be part of multiple domains.
         Certificates associated with a domain will always have the same Signature-Suite (compare Issuing-CA)
 
@@ -86,7 +87,7 @@ Glossary
         such as private keys, certificates, and any related intermediate chain certificates.
         A PKCS#12 file is often used to bundle these objects into a single file,
         making it easy to transport and securely protect using a password.
-        Common file extensions for PKCS#12 files are .p12 or .pfx.
+        Common file extensions for PKCS#12 files are ``.p12`` or ``.pfx``.
 
     PEM
         Privacy Enhanced Mail is a base64-encoded format often used for storing cryptographic keys and certificates,
@@ -122,3 +123,8 @@ Glossary
     Cucumber
         Cucumber is a tool for running automated acceptance tests, written in plain language.
         See also: `Cucumber <https://cucumber.io/>`_.
+
+    behave
+        Python behave is a :term:`BDD` framework that allows developers to write test scenarios
+        in :term:`Gherkin` syntax and execute them with step definitions implemented in Python.
+        See also: `behave <https://behave.readthedocs.io/en/latest/>`_.
