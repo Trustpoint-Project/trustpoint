@@ -3,8 +3,8 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING
 
-from core.serializer import CredentialSerializer
-from core import oid
+from trustpoint_core.serializer import CredentialSerializer
+from trustpoint_core import oid
 
 from cryptography import x509
 from pki.models import CredentialModel

@@ -1,7 +1,7 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from core.validator.field import UniqueNameValidator
+from util.field import UniqueNameValidator
 from .truststore import TruststoreModel
 from .domain import DomainModel
 

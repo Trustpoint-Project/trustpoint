@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import traceback
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -251,7 +252,7 @@ class SetupWizardGenerateTlsServerCredentialView(FormView):
             messages.add_message(self.request, messages.ERROR, f'Transition script not found: {SCRIPT_WIZARD_INITIAL}.')
             return redirect('setup_wizard:initial', permanent=False)
         except Exception as e:  # noqa: BLE001
-            messages.add_message(self.request, messages.ERROR, f'Error generating TLS Server Credential: {e}')
+            messages.add_message(self.request, messages.ERROR, f'Error generating TLS Server Credential: {e} {traceback.format_exc()}')
             return redirect('setup_wizard:initial', permanent=False)
 
     def _get_error_message_from_return_code(self, return_code: int) -> str:

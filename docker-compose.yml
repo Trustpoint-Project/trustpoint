@@ -1,7 +1,6 @@
 services:
   trustpoint:
     build: .
-    image: trustpoint2023/trustpoint:latest
     container_name: trustpoint
     ports:
       - "80:80"
@@ -20,7 +19,6 @@ services:
     build:
       context: .
       dockerfile: postgre.Dockerfile
-    image: postgres:17
     container_name: postgres
     ports:
       - "5432:5432"
