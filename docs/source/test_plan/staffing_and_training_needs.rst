@@ -6,7 +6,7 @@
 #. Training Needs
     - Developers and Testers:
         - Familiarity with Trustpoint’s core functionality, including certificate issuance, renewal, revocation, and domain validation workflows.
-        - Training on pytest for unit testing and behave for integration testing, including understanding the GitHub pipeline integration.
+        - Training on pytest for unit testing and :term:`behave` for integration testing, including understanding the GitHub pipeline integration.
 
     - End Users:
         - Training on navigating Trustpoint’s user interfaces, configuring domains, and interpreting system-generated reports.

@@ -73,8 +73,7 @@ reducing the risk of regressions and enhancing development agility.
 Integration/System Testing
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Integration testing will leverage `Python Cucumber (behave) <https://behave.readthedocs.io/en/latest/>`_
-to create behavior-driven development (BDD) test scenarios.
+Integration testing will leverage :term:`behave` to create :term:`BDD` test scenarios.
 This approach will allow us to define tests in plain language
 that are easy to understand for both technical and non-technical stakeholders.
 The scenarios will focus on validating the interactions between Trustpoint components,

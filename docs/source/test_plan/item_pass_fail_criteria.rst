@@ -21,7 +21,7 @@ The test process for the Trustpoint project will be considered complete once the
     - Certificate data exchanges and storage must adhere to security best practices.
 
 #. Deployment Readiness:
-    - The system must pass GitHub pipeline tests, including automated unit and integration tests executed through pytest and behave, with 100% of critical tests passing.
+    - The system must pass GitHub pipeline tests, including automated unit and integration tests executed through pytest and :term:`behave`, with 100% of critical tests passing.
     - The staging environment must match the production setup, with successful parallel runs simulating live scenarios for a predefined period (e.g., two weeks).
 
 Once these criteria are satisfied, Trustpoint will be considered ready for live deployment.
