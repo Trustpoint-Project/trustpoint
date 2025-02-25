@@ -1,6 +1,6 @@
 name: MyPy
 
-on: [ pull_request ]
+on: [pull_request]
 
 jobs:
   mypy:
@@ -13,7 +13,12 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          python-version: 3.12
+          version: "0.6.3"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "pyproject.toml"
 
       - name: Run MyPy
         run: uv run mypy .
