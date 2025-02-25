@@ -39,7 +39,6 @@ Welcome to Trustpoint's documentation!
 
    glossary
    issued_certificates
-   references
 
 .. toctree::
    :maxdepth: 2
