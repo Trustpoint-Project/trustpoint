@@ -48,6 +48,6 @@ jobs:
           docker push ${DOCKER_HUB_USERNAME}/trustpoint:latest
           docker push ${DOCKER_HUB_USERNAME}/trustpoint:${GITHUB_SHA}
           # Push postgres images
-          docker push ${DOCKER_HUB_USERNAME}/trustpoint_postgres:${TAG_VERSION}
-          docker push ${DOCKER_HUB_USERNAME}/trustpoint_postgres:latest
-          docker push ${DOCKER_HUB_USERNAME}/trustpoint_postgres:${GITHUB_SHA}
+          docker push ${DOCKER_HUB_USERNAME}/postgres:${TAG_VERSION}
+          docker push ${DOCKER_HUB_USERNAME}/postgres:latest
+          docker push ${DOCKER_HUB_USERNAME}/postgres:${GITHUB_SHA}
