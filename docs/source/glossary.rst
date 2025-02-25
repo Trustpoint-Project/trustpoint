@@ -111,3 +111,14 @@ Glossary
         Behavior-Driven Development is a collaborative software development approach
         that uses natural language descriptions of expected behavior to bridge communication between developers,
         testers, and business stakeholders.
+        See also: `BDD <https://cucumber.io/docs/bdd/>`_.
+
+    Gherkin
+        Gherkin is a human-readable,
+        structured language used in :term:`BDD` to write test scenarios in a Given-When-Then format,
+        making them understandable by both technical and non-technical stakeholders.
+        See also: `Gherkin <https://cucumber.io/docs/gherkin/>`_.
+
+    Cucumber
+        Cucumber is a tool for running automated acceptance tests, written in plain language.
+        See also: `Cucumber <https://cucumber.io/>`_.
