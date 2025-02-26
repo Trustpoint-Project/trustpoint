@@ -9,10 +9,6 @@ from trustpoint_core import oid
 
 from . import IssuingCaModel
 
-__all__ = [
-    'DomainModel'
-]
-
 
 class DomainModel(models.Model):
     """Domain Model."""

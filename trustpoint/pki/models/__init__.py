@@ -21,3 +21,11 @@ from .credential import CredentialAlreadyExistsError, CredentialModel, Certifica
 from .domain import DomainModel
 from .devid_registration import DevIdRegistration
 from .truststore import TruststoreModel, TruststoreOrderModel
+
+
+__all__ = [
+    'CertificateChainOrderModel',
+    'CredentialAlreadyExistsError',
+    'CredentialModel',
+    'DomainModel'
+]

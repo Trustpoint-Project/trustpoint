@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING
+from ipaddress import IPv4Address, IPv6Address
+from typing import TYPE_CHECKING, cast
 
 from trustpoint_core.serializer import CredentialSerializer
 from trustpoint_core import oid
 
 from cryptography import x509
-from pki.models import CredentialModel
+from pki.models import CredentialModel, DomainModel
 from pki.util.keys import KeyGenerator
 
-from devices.models import DeviceModel, DomainModel, IssuedCredentialModel
+from devices.models import DeviceModel, IssuedCredentialModel
 
 if TYPE_CHECKING:
     import ipaddress
@@ -96,9 +97,17 @@ class LocalDomainCredentialIssuer(SaveCredentialToDbMixin):
     def device(self) -> DeviceModel:
         return self._device
 
+    @device.setter
+    def device(self, device: DeviceModel) -> None:
+        self._device = device
+
     @property
     def domain(self) -> DomainModel:
         return self._domain
+
+    @domain.setter
+    def domain(self, domain: DomainModel) -> None:
+        self._domain = domain
 
     @property
     def serial_number(self) -> str:
@@ -275,9 +284,17 @@ class LocalTlsClientCredentialIssuer(SaveCredentialToDbMixin):
     def device(self) -> DeviceModel:
         return self._device
 
+    @device.setter
+    def device(self, device: DeviceModel) -> None:
+        self._device = device
+
     @property
     def domain(self) -> DomainModel:
         return self._domain
+
+    @domain.setter
+    def domain(self, domain: DomainModel) -> None:
+        self._domain = domain
 
     @property
     def serial_number(self) -> str:
@@ -466,9 +483,17 @@ class LocalTlsServerCredentialIssuer(SaveCredentialToDbMixin):
     def device(self) -> DeviceModel:
         return self._device
 
+    @device.setter
+    def device(self, device: DeviceModel) -> None:
+        self._device = device
+
     @property
     def domain(self) -> DomainModel:
         return self._domain
+
+    @domain.setter
+    def domain(self, domain: DomainModel) -> None:
+        self._domain = domain
 
     @property
     def serial_number(self) -> str:
@@ -493,9 +518,9 @@ class LocalTlsServerCredentialIssuer(SaveCredentialToDbMixin):
     def issue_tls_server_credential(
             self,
             common_name: str,
-            ipv4_addresses: list[ipaddress.IPv4Address],
-            ipv6_addresses: list[ipaddress.IPv6Address],
-            domain_names: list[str],
+            ipv4_addresses: list[x509.IPAddress],
+            ipv6_addresses: list[x509.IPAddress],
+            domain_names: list[x509.DNSName],
             validity_days: int
     ) -> IssuedCredentialModel:
         application_credential_private_key = KeyGenerator.generate_private_key(domain=self.domain)
@@ -550,13 +575,15 @@ class LocalTlsServerCredentialIssuer(SaveCredentialToDbMixin):
             x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False
         )
 
-        ipv4_addresses = [x509.IPAddress(ipv4_address) for ipv4_address in ipv4_addresses]
-        ipv6_addresses = [x509.IPAddress(ipv6_address) for ipv6_address in ipv6_addresses]
-        domain_names = [x509.DNSName(domain_name) for domain_name in domain_names]
+        general_names: list[x509.GeneralName] = (
+            [x509.IPAddress(cast(IPv4Address, ipv4_address)) for ipv4_address  in ipv4_addresses] +
+            [x509.IPAddress(cast(IPv6Address, ipv6_address)) for ipv6_address  in ipv6_addresses] +
+            [x509.DNSName(cast(str, domain_name)) for domain_name in domain_names]
+        )
 
         certificate_builder = certificate_builder.add_extension(
             x509.SubjectAlternativeName(
-                ipv4_addresses + ipv6_addresses + domain_names
+                general_names
             ),
             critical=False
         )
@@ -583,9 +610,9 @@ class LocalTlsServerCredentialIssuer(SaveCredentialToDbMixin):
     def issue_tls_server_certificate(
             self,
             common_name: str,
-            ipv4_addresses: list[ipaddress.IPv4Address],
-            ipv6_addresses: list[ipaddress.IPv6Address],
-            domain_names: list[str],
+            ipv4_addresses: list[x509.IPAddress],
+            ipv6_addresses: list[x509.IPAddress],
+            domain_names: list[x509.DNSName],
             san_critical: bool,
             validity_days: int,
             public_key: oid.PublicKey
@@ -641,13 +668,15 @@ class LocalTlsServerCredentialIssuer(SaveCredentialToDbMixin):
             x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False
         )
 
-        ipv4_addresses = [x509.IPAddress(ipv4_address) for ipv4_address in ipv4_addresses]
-        ipv6_addresses = [x509.IPAddress(ipv6_address) for ipv6_address in ipv6_addresses]
-        domain_names = [x509.DNSName(domain_name) for domain_name in domain_names]
+        general_names: list[x509.GeneralName] = (
+            [x509.IPAddress(cast(IPv4Address, ipv4_address)) for ipv4_address  in ipv4_addresses] +
+            [x509.IPAddress(cast(IPv6Address, ipv6_address)) for ipv6_address  in ipv6_addresses] +
+            [x509.DNSName(cast(str, domain_name)) for domain_name in domain_names]
+        )
 
         certificate_builder = certificate_builder.add_extension(
             x509.SubjectAlternativeName(
-                ipv4_addresses + ipv6_addresses + domain_names
+                general_names
             ),
             critical=san_critical
         )
