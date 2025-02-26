@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, cast
+from typing import Any, ClassVar, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
@@ -41,18 +41,18 @@ class DevIdAddMethodSelectForm(forms.Form):
         initial='configure_pattern',
         required=True)
 
-class DevIdRegistrationForm(forms.ModelForm):
+class DevIdRegistrationForm(forms.ModelForm[DevIdRegistration]):
     """Form to create a new DevIdRegistration."""
 
     class Meta:  # noqa: D106
         model = DevIdRegistration
         fields: ClassVar[list[str]] = ['unique_name', 'truststore', 'domain', 'serial_number_pattern']
-        widgets: ClassVar[dict] = {
+        widgets: ClassVar[dict[str, Any]] = {
             'serial_number_pattern': forms.TextInput(attrs={
                 'placeholder': 'Enter a regex pattern for serial numbers',
             }),
         }
-        labels: ClassVar[dict] = {
+        labels: ClassVar[dict[str, str]] = {
             'unique_name': 'Unique Name',
             'truststore': 'Associated Truststore',
             'domain': 'Associated Domain',
@@ -98,7 +98,7 @@ class TruststoreAddForm(forms.Form):
         if TruststoreModel.objects.filter(unique_name=unique_name).exists():
             error_message = 'Truststore with the provided name already exists.'
             raise ValidationError(error_message)
-        return unique_name
+        return cast(str, unique_name)
 
     @LoggerMixin.log_exceptions
     def clean(self) -> None:
@@ -112,7 +112,7 @@ class TruststoreAddForm(forms.Form):
             ValidationError: If the truststore file cannot be read, the unique name
             is not unique, or an unexpected error occurs during initialization.
         """
-        cleaned_data = super().clean()
+        cleaned_data = cast(dict[str, Any], super().clean())
         unique_name = cleaned_data.get('unique_name')
         intended_usage = cleaned_data.get('intended_usage')
 
@@ -546,7 +546,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         certificate_in_db = CertificateModel.get_cert_by_sha256_fingerprint(
             certificate_serializer.as_crypto().fingerprint(algorithm=hashes.SHA256()).hex())
         if certificate_in_db:
-            issuing_ca_in_db = IssuingCaModel.objects.get(certificate=certificate_in_db)
+            issuing_ca_in_db = IssuingCaModel.objects.get(credential__certificate=certificate_in_db)
             if issuing_ca_in_db:
                 err_msg = (
                     f'Issuing CA {issuing_ca_in_db.unique_name} is already configured '

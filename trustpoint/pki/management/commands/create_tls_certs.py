@@ -27,8 +27,8 @@ class Command(BaseCommand):
         one_day = datetime.timedelta(1, 0, 0)
         ipv4_addresses = subprocess.check_output(['hostname', '-I']).decode().strip()  # noqa: S603, S607
         #ipv4_addresses = '10.10.0.5 10.10.4.89'  # noqa: ERA001
-        ipv4_addresses = ipv4_addresses.split(' ')
-        ipv4_addresses.append('127.0.0.1')
+        ipv4_addresses_list = ipv4_addresses.split(' ')
+        ipv4_addresses_list.append('127.0.0.1')
         basic_constraints_extension = x509.BasicConstraints(ca=False, path_length=None)
         key_usage_extension = x509.KeyUsage(
             digital_signature=True,
@@ -43,7 +43,7 @@ class Command(BaseCommand):
         )
         extended_key_usage_extension = x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH])
         subject_alt_name_content = [x509.DNSName('localhost'), x509.DNSName('trustpoint.local')]
-        subject_alt_name_content.extend(x509.IPAddress(ipaddress.IPv4Address(ipv4)) for ipv4 in ipv4_addresses)
+        subject_alt_name_content.extend(x509.IPAddress(ipaddress.IPv4Address(ipv4)) for ipv4 in ipv4_addresses_list)
         subject_alternative_names_extension = x509.SubjectAlternativeName(subject_alt_name_content)
 
         subject = x509.Name([
