@@ -1,7 +1,7 @@
 All software testing involves risks, which are listed below in order to minimize them.
 
 - *Incomplete requirements:*
-    As TrustPoint is a research project,
+    As Trustpoint is a research project,
     it can happen that requirements are incomplete and only become apparent in retrospect that they would have been important.
 
 - *Incomplete test coverage:*

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from core.serializer import CertificateCollectionSerializer
-from core.validator.field import UniqueNameValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from trustpoint_core.serializer import CertificateCollectionSerializer
+from util.field import UniqueNameValidator
 
 from .certificate import CertificateModel
 

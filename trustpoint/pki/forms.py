@@ -4,18 +4,18 @@ from __future__ import annotations
 
 from typing import ClassVar, cast
 
-from core.serializer import (
-    CertificateCollectionSerializer,
-    CertificateSerializer,
-    CredentialSerializer,
-    PrivateKeySerializer,
-)
-from core.validator.field import UniqueNameValidator
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+from trustpoint_core.serializer import (
+    CertificateCollectionSerializer,
+    CertificateSerializer,
+    CredentialSerializer,
+    PrivateKeySerializer,
+)
+from util.field import UniqueNameValidator
 
 from pki.models import DevIdRegistration, IssuingCaModel
 from pki.models.certificate import CertificateModel

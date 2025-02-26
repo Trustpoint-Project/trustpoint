@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives import hashes
 
 import datetime
 
-from core.serializer import CredentialSerializer, PrivateKeySerializer
+from trustpoint_core.serializer import CredentialSerializer, PrivateKeySerializer
 
 ONE_DAY = datetime.timedelta(days=1)
 

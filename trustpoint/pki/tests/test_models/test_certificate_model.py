@@ -3,7 +3,7 @@
 # ruff: noqa: F811  # ruff does not like pytest fixtures as arguments
 
 import pytest
-from core.serializer.certificate import CertificateSerializer
+from trustpoint_core.serializer.certificate import CertificateSerializer
 from cryptography.hazmat.primitives import serialization
 
 from pki.models.certificate import CertificateModel

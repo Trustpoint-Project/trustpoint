@@ -1,8 +1,8 @@
-The test process for the TrustPoint project will be considered complete once the following criteria have been met:
+The test process for the Trustpoint project will be considered complete once the following criteria have been met:
 
 #. Core Functionalities Validation:
     - All critical and major defects identified during unit, integration, and system testing must be resolved.
-    - The core functionalities of TrustPoint, such as certificate issuance, renewal, revocation, and domain validation, must operate reliably without workarounds.
+    - The core functionalities of Trustpoint, such as certificate issuance, renewal, revocation, and domain validation, must operate reliably without workarounds.
 
 #. Integration Testing Success:
     - The PKI components must demonstrate seamless interaction, with no critical or major integration issues.
@@ -14,16 +14,16 @@ The test process for the TrustPoint project will be considered complete once the
 
 #. Data Integrity Verification:
     - Test data generated during the system/integration and acceptance phases must validate correctly against expected outcomes, ensuring the platform’s reliability and accuracy in managing certificates.
-    - Production-like scenarios must confirm data consistency across all TrustPoint modules.
+    - Production-like scenarios must confirm data consistency across all Trustpoint modules.
 
 #. PKI Compliance Validation:
-    - TrustPoint’s processes must comply with PKI standards and security protocols.
+    - Trustpoint’s processes must comply with PKI standards and security protocols.
     - Certificate data exchanges and storage must adhere to security best practices.
 
 #. Deployment Readiness:
-    - The system must pass GitHub pipeline tests, including automated unit and integration tests executed through pytest and behave, with 100% of critical tests passing.
+    - The system must pass GitHub pipeline tests, including automated unit and integration tests executed through pytest and :term:`behave`, with 100% of critical tests passing.
     - The staging environment must match the production setup, with successful parallel runs simulating live scenarios for a predefined period (e.g., two weeks).
 
-Once these criteria are satisfied, TrustPoint will be considered ready for live deployment.
+Once these criteria are satisfied, Trustpoint will be considered ready for live deployment.
 Following this, any additional configurations, user onboarding,
 or domain activations will occur incrementally as per readiness and validation.

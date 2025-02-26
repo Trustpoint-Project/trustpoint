@@ -20,7 +20,7 @@ services:
     build:
       context: .
       dockerfile: postgre.Dockerfile
-    image: postgres:17
+    image: trustpoint2023/postgres:latest
     container_name: postgres
     ports:
       - "5432:5432"

@@ -4,25 +4,26 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core import oid
-from core.serializer import (
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
+from django.db.models import QuerySet
+from django.utils.translation import gettext_lazy as _
+from trustpoint_core import oid
+from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
     PrivateKeySerializer,
 )
-from django.core.exceptions import ValidationError
-from django.db import models, transaction
-from django.utils.translation import gettext_lazy as _
 
 from pki.models import CertificateModel
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
 
-    from core.x509 import PrivateKey
     from cryptography import x509
     from django.db.models import QuerySet
+    from trustpoint_core.types import PrivateKey
 
 
 __all__ = ['CertificateChainOrderModel', 'CredentialAlreadyExistsError', 'CredentialModel']

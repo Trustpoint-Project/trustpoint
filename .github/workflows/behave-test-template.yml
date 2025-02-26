@@ -19,6 +19,7 @@ jobs:
       - name: Install and setup uv
         uses: astral-sh/setup-uv@v5
         with:
+          enable-cache: true
           python-version: 3.12
 
       - name: Run database migrations

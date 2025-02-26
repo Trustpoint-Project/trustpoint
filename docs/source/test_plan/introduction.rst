@@ -11,5 +11,5 @@ Summarized, this test plan is intended to ensure, through the execution and docu
 - security and
 - integration capability
 
-of TrustPoint.
+of Trustpoint.
 This is done by specifying and implementing the above-mentioned requirements in software tests.
