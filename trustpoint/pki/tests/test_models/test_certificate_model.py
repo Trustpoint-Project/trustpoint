@@ -3,6 +3,7 @@
 # ruff: noqa: F811  # ruff does not like pytest fixtures as arguments
 
 import pytest
+from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from trustpoint_core.serializer.certificate import CertificateSerializer
 
@@ -19,7 +20,7 @@ def test_save_certificate_method(self_signed_cert_with_ext: CertificateModel) ->
 
 
 @pytest.mark.django_db
-def test_save_certificate_with_serializer(self_signed_cert_with_ext: CertificateModel) -> None:
+def test_save_certificate_with_serializer(self_signed_cert_with_ext: x509.Certificate) -> None:
     """Test saving a certificate using a CertificateSerializer instead of a raw x509.Certificate."""
     cert_pem = self_signed_cert_with_ext.public_bytes(serialization.Encoding.PEM)
     serializer = CertificateSerializer(cert_pem)

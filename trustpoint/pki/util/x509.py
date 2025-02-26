@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
@@ -154,4 +154,4 @@ class CertificateGenerator:
 
         logger.info("Issuing CA '%s' saved successfully.", unique_name)
 
-        return issuing_ca
+        return cast(IssuingCaModel, issuing_ca)

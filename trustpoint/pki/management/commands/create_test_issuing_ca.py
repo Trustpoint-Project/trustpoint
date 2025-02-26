@@ -33,7 +33,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
         issuing_1, issuing_1_key = self.create_issuing_ca(root_1_key, 'root_ca', 'issuing_ca', validity_days=50)
 
         self.store_issuing_ca(issuing_1, [root_1], issuing_1_key, 'issuing_ca.p12')
-        self.save_issuing_ca(issuing_1, issuing_1_key, 'issuing_ca')
+        self.save_issuing_ca(issuing_1, [root_1], issuing_1_key, 'issuing_ca')
 
         ee_certs = {}
         ee_keys = {}

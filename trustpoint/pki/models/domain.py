@@ -1,6 +1,8 @@
 """Module that contains the DomainModel."""
 from __future__ import annotations
 
+from typing import Any
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -52,10 +54,10 @@ class DomainModel(models.Model):
         """
         return self.unique_name
 
-    def save(self, *args: tuple, **kwargs: dict) -> None:
+    def save(self, **kwargs: Any) -> None:
         """Save the Domain model instance."""
         self.clean()  # Ensure validation before saving
-        super().save(*args, **kwargs)
+        super().save(**kwargs)
 
     @property
     def signature_suite(self) -> oid.SignatureSuite:

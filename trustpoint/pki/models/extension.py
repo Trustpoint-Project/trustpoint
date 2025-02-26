@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import abc
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
@@ -851,11 +851,11 @@ class QualifierModel(models.Model):
             return f'Qualifier: User Notice - {self.user_notice}'
         return 'Qualifier: Undefined'
 
-    def save(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+    def save(self, **kwargs: Any) -> None:
         if self.cps_uri and self.user_notice:
             msg = "Only one of 'cps_uri' or 'user_notice' can be set, not both."
             raise ValueError(msg)
-        super().save(*args, **kwargs)
+        super().save(**kwargs)
 
 
 class PolicyQualifierInfo(models.Model):
@@ -1222,11 +1222,11 @@ class DistributionPointName(models.Model):
         nrci = ', '.join(str(a) for a in self.name_relative_to_crl_issuer.all())
         return f'DistributionPointName(nameRelativeToCRLIssuer={nrci})'
 
-    def save(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+    def save(self, **kwargs: Any) -> None:
         if self.full_name and self.name_relative_to_crl_issuer.exists():
             msg = "Only one of 'full_name' or 'name_relative_to_crl_issuer' can be set, not both."
             raise ValueError(msg)
-        super().save(*args, **kwargs)
+        super().save(**kwargs)
 
 
 class DistributionPointModel(CertificateExtension, models.Model):

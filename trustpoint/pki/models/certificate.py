@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime
 from types import MappingProxyType
+from typing import Any
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -446,8 +447,8 @@ class CertificateModel(LoggerMixin, models.Model):
 
     # ---------------------------------------------- Private save methods ----------------------------------------------
 
-    def _save(self, *args: tuple, **kwargs: dict) -> None:
-        return super().save(*args, **kwargs)
+    def _save(self, **kwargs: Any) -> None:
+        return super().save(**kwargs)
 
     @classmethod
     def _save_certificate(cls, certificate: x509.Certificate | CertificateSerializer) -> CertificateModel:

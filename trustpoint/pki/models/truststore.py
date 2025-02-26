@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core.serializer import CertificateCollectionSerializer
@@ -58,18 +60,14 @@ class ActiveTrustpointTlsServerCredentialModel(models.Model):
         """
         return f"Active TLS Credential: {self.credential.id if self.credential else 'None'}"
 
-    def save(self, *args: tuple, **kwargs: dict) -> None:
+    def save(self, **kwargs: Any) -> None:
         """Ensures the model instance always has an ID of 1 to enforce singleton-like behavior.
-
-        Args:
-            *args (tuple): Positional arguments passed to the parent save method.
-            **kwargs (dict): Keyword arguments passed to the parent save method.
 
         Returns:
             None
         """
         self.id = 1
-        super().save(*args, **kwargs)
+        super().save(**kwargs)
 
 class TruststoreModel(models.Model):
     """Represents a truststore, which is a collection of certificates used for specific purposes.
@@ -111,10 +109,10 @@ class TruststoreModel(models.Model):
         """Returns a human-readable string representation of the TruststoreModel."""
         return self.unique_name
 
-    def save(self, *args: tuple, **kwargs: dict) -> None:
+    def save(self, **kwargs: Any) -> None:
         """Ensures the model is valid before saving."""
         self.full_clean()
-        super().save(*args, **kwargs)
+        super().save(**kwargs)
 
     @property
     def number_of_certificates(self) -> int:

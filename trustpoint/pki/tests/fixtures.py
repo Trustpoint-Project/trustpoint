@@ -6,7 +6,7 @@ import hashlib
 import ipaddress
 from datetime import UTC, datetime, timedelta
 
-import pytest  # type: ignore  # noqa: PGH003
+import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
