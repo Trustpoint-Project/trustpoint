@@ -7,11 +7,11 @@ import abc
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
 from typing import ClassVar
 
-from trustpoint_core.oid import CertificateExtensionOid, NameOid
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from trustpoint_core.oid import CertificateExtensionOid, NameOid
 
 __all__ = [
     'AttributeTypeAndValue',

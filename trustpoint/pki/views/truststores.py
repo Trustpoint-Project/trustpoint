@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from trustpoint_core.file_builder.certificate import CertificateCollectionArchiveFileBuilder, CertificateCollectionBuilder
-from trustpoint_core.file_builder.enum import ArchiveFormat, CertificateFileFormat
 from django.contrib import messages
 from django.db.models import ProtectedError
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
@@ -16,6 +14,11 @@ from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
+from trustpoint_core.file_builder.certificate import (
+    CertificateCollectionArchiveFileBuilder,
+    CertificateCollectionBuilder,
+)
+from trustpoint_core.file_builder.enum import ArchiveFormat, CertificateFileFormat
 
 from pki.forms import TruststoreAddForm
 from pki.models import DomainModel

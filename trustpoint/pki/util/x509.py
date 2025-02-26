@@ -6,11 +6,11 @@ import datetime
 import logging
 from typing import TYPE_CHECKING
 
-from trustpoint_core.serializer import CredentialSerializer
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509.oid import NameOID
+from trustpoint_core.serializer import CredentialSerializer
 
 from pki.models import IssuingCaModel
 from pki.util.keys import CryptographyUtils
