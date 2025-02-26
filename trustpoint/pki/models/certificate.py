@@ -641,6 +641,8 @@ class CertificateModel(LoggerMixin, models.Model):
 class RevokedCertificateModel(models.Model):
     """Model to store revoked certificates."""
 
+    objects: models.Manager[RevokedCertificateModel]
+
     class ReasonCode(models.TextChoices):
         """Revocation reasons per RFC 5280"""
         UNSPECIFIED = 'unspecified', _('Unspecified')
