@@ -141,11 +141,13 @@ class DeviceTableView(DeviceContextMixin, TpLoginRequiredMixin, SortableTableMix
 
     @staticmethod
     def _render_revoke(record: DeviceModel) -> SafeString | str:
-        # TODO(Air): This cursed query may be slow for a large number of devices.
-        if IssuedCredentialModel.objects.filter(device=record,
-                                                credential__primarycredentialcertificate__is_primary=True).exists():
-            return format_html('<a href="revoke/{}/" class="btn btn-danger tp-table-btn w-100">{}</a>',
-                               record.pk, _('Revoke'))
+        # This may be slow for a large number of devices.
+        qs = IssuedCredentialModel.objects.filter(device=record)
+        for credential in qs:
+            if credential.credential.certificate.certificate_status == CertificateModel.CertificateStatus.OK:
+                return format_html(
+                    f'<a href="revoke/{record.pk}/" class="btn btn-danger tp-table-btn w-100">Revoke</a>',
+                )
 
         return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', _('Revoke'))
 
@@ -717,9 +719,11 @@ class DeviceRevocationView(DeviceContextMixin, TpLoginRequiredMixin, FormMixin, 
 
     def get_queryset(self):
         self.device = get_object_or_404(DeviceModel, id=self.kwargs['pk'])
-        # TODO(Air): This query is cursed but works
-        return IssuedCredentialModel.objects.filter(device=self.device,
-                                                    credential__primarycredentialcertificate__is_primary=True)
+        qs = IssuedCredentialModel.objects.filter(device=self.device)
+        for credential in qs:
+            if credential.credential.certificate.certificate_status != CertificateModel.CertificateStatus.OK:
+                qs = qs.exclude(pk=credential.pk)
+        return qs
 
     def post(self, request, *args, **kwargs):
         form = self.get_form()

@@ -63,6 +63,12 @@ class CredentialModel(models.Model):
     )
     private_key = models.CharField(verbose_name='Private key (PEM)', max_length=65536, default='', blank=True)
 
+    certificate = models.ForeignKey(
+        CertificateModel,
+        on_delete=models.PROTECT,
+        related_name='credential_set',
+        blank=False
+    )
     certificates = models.ManyToManyField(
         CertificateModel,
         through='PrimaryCredentialCertificate',
@@ -95,9 +101,14 @@ class CredentialModel(models.Model):
 
     def clean(self) -> None:
         """Validates the CredentialModel instance."""
-        if self.primarycredentialcertificate_set.filter(is_primary=True).count() > 1:
+        qs = self.primarycredentialcertificate_set.filter(is_primary=True)
+        if qs.count() > 1:
             exc_msg = 'A credential can only have one primary certificate.'
             raise ValidationError(exc_msg)
+        if qs.get().certificate != self.certificate:
+            exc_msg = ('The ForeignKey certificate must be identical to the one '
+                       'marked primary in the primarycredentialcertificate_set.')
+            raise ValidationError
 
     @classmethod
     def save_credential_serializer(
@@ -146,6 +157,7 @@ class CredentialModel(models.Model):
 
         credential_model = cls.objects.create(
             credential_type=credential_type,
+            certificate=certificate,
             private_key=normalized_credential_serializer.credential_private_key.as_pkcs8_pem().decode(),
         )
 
@@ -153,6 +165,7 @@ class CredentialModel(models.Model):
             certificate=certificate,
             credential=credential_model,
             is_primary=True)
+
 
         for order, certificate in enumerate(normalized_credential_serializer.additional_certificates.as_crypto()):
             certificate_model = CertificateModel.save_certificate(certificate)
@@ -176,6 +189,7 @@ class CredentialModel(models.Model):
 
         credential_model = cls.objects.create(
             credential_type=credential_type,
+            certificate=certificate,
             private_key=None
         )
 
@@ -223,15 +237,6 @@ class CredentialModel(models.Model):
 
         err_msg = 'Failed to get private key information.'
         raise RuntimeError(err_msg)
-
-    @property
-    def certificate(self) -> CertificateModel:
-        """Gets the primary certificate model using the through model
-
-        Returns:
-            The primary certificate model.
-        """
-        return self.primarycredentialcertificate_set.filter(is_primary=True).first().certificate
 
     def get_certificate(self) -> x509.Certificate:
         """Gets the credential certificate as x509.Certificate instance.
