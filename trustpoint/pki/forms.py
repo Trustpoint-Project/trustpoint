@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import ClassVar, cast
 
 from core.serializer import (
     CertificateCollectionSerializer,
@@ -140,9 +140,7 @@ class TruststoreAddForm(forms.Form):
 
             raise ValidationError(str(exception)) from exception
 
-
         self.cleaned_data['truststore'] = trust_store_model
-        return cleaned_data
 
     @staticmethod
     def _save_trust_store(
@@ -366,7 +364,7 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
             error_message = 'Unique name is already taken. Choose another one.'
             raise ValidationError(error_message)
-        return unique_name
+        return cast(str, unique_name)
 
     @LoggerMixin.log_exceptions
     def clean(self) -> None:
@@ -383,6 +381,9 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             is already taken or the PKCS#12 file cannot be read or parsed.
         """
         cleaned_data = super().clean()
+        if not cleaned_data:  # only for typing, cleaned_data should always be a dict, but not entirely sure
+            exc_msg = 'No data was provided.'
+            raise ValidationError(exc_msg)
         unique_name = cleaned_data.get('unique_name')
 
         try:
@@ -597,6 +598,8 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         """
         try:
             cleaned_data = super().clean()
+            if not cleaned_data:
+                return
             unique_name = cleaned_data.get('unique_name')
             private_key_file = cleaned_data.get('private_key_file')
             ca_certificate = cleaned_data.get('ca_certificate')

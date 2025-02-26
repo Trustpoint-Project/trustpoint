@@ -29,7 +29,7 @@ from trustpoint.views.base import (
 )
 
 if TYPE_CHECKING:
-    from typing import ClassVar
+    from typing import Any, ClassVar
 
     from django.forms import Form
 
@@ -46,7 +46,7 @@ class TruststoresContextMixin:
 
     extra_context: ClassVar = {'page_category': 'pki', 'page_name': 'truststores'}
 
-class TruststoreTableView(TruststoresContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView):
+class TruststoreTableView(TruststoresContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView[TruststoreModel]):
     """Truststore Table View."""
 
     model = TruststoreModel
@@ -56,7 +56,7 @@ class TruststoreTableView(TruststoresContextMixin, TpLoginRequiredMixin, Sortabl
     default_sort_param = 'unique_name'
 
 
-class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormView):
+class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormView[TruststoreAddForm]):
     """View for creating a new Truststore."""
 
     model = TruststoreModel
@@ -81,7 +81,7 @@ class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormVi
         """You could still use a success URL here if needed"""
         return reverse_lazy('pki:truststores')
 
-    def get_context_data(self, **kwargs: dict) -> dict:
+    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
         """Include domain in context only if pk is present."""
         context = super().get_context_data(**kwargs)
         pk = self.kwargs.get('pk')
@@ -89,7 +89,7 @@ class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormVi
             context['domain'] = get_object_or_404(DomainModel, id=pk)
         return context
 
-class TruststoreDetailView(TruststoresContextMixin, TpLoginRequiredMixin, DetailView):
+class TruststoreDetailView(TruststoresContextMixin, TpLoginRequiredMixin, DetailView[TruststoreModel]):
     """The truststore detail view."""
 
     model = TruststoreModel
@@ -98,7 +98,7 @@ class TruststoreDetailView(TruststoresContextMixin, TpLoginRequiredMixin, Detail
     template_name = 'pki/truststores/details.html'
     context_object_name = 'truststore'
 
-class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, DetailView):
+class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, DetailView[TruststoreModel]):
     """View for downloading a single truststore."""
 
     model = TruststoreModel
@@ -108,7 +108,8 @@ class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, Deta
     context_object_name = 'truststore'
 
     def get(
-        self, request: HttpRequest, pk: str | None = None, file_format: str | None = None, *args: tuple, **kwargs: dict
+        self, request: HttpRequest, pk: str | None = None, file_format: str | None = None,
+        *args: tuple[Any], **kwargs: dict[str, Any]
     ) -> HttpResponse:
         """HTTP GET Method.
 
@@ -153,7 +154,7 @@ class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, Deta
         return response
 
 class TruststoreMultipleDownloadView(
-    TruststoresContextMixin, TpLoginRequiredMixin, PrimaryKeyListFromPrimaryKeyString, ListView
+    TruststoresContextMixin, TpLoginRequiredMixin, PrimaryKeyListFromPrimaryKeyString, ListView[TruststoreModel]
 ):
     """View for downloading multiple truststores at once as archived files."""
 
@@ -163,7 +164,7 @@ class TruststoreMultipleDownloadView(
     template_name = 'pki/truststores/download_multiple.html'
     context_object_name = 'truststores'
 
-    def get_context_data(self, **kwargs: dict) -> dict:
+    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
         """Adding the part of the url to the context, that contains the truststores primary keys.
 
         This is used for the {% url }% tags in the template to download files.
@@ -184,8 +185,8 @@ class TruststoreMultipleDownloadView(
         pks: str | None = None,
         file_format: None | str = None,
         archive_format: None | str = None,
-        *args: tuple,
-        **kwargs: dict,
+        *args: tuple[Any],
+        **kwargs: dict[str, Any],
     ) -> HttpResponse:
         """HTTP GET Method.
 

@@ -273,9 +273,10 @@ def test_name_constraints_ext(self_signed_cert_with_ext: Certificate) -> None:
 
     excluded_other_name = nc_ext.excluded_subtrees.filter(base__other_name__isnull=False).first()
     assert excluded_other_name is not None
-    assert excluded_other_name.base.other_name.type_id == OTHER_NAME_OID
+    base_other_name = cast(GeneralNameOtherName, excluded_other_name.base.other_name)
+    assert base_other_name.type_id == OTHER_NAME_OID
     decoded_asn1, _ = decode(
-        bytes.fromhex(excluded_other_name.base.other_name.value), asn1Spec=char.UTF8String()
+        bytes.fromhex(base_other_name.value), asn1Spec=char.UTF8String()
     )
     assert str(decoded_asn1) == OTHER_NAME_CONTENT
 

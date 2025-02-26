@@ -7,11 +7,11 @@ from .models import CertificateChainOrderModel, CertificateModel, CredentialMode
 from .models.devid_registration import DevIdRegistration
 
 
-class DevIdRegistrationAdmin(admin.ModelAdmin):
+class DevIdRegistrationAdmin(admin.ModelAdmin[DevIdRegistration]):
     """Admin configuration for the DevIdRegistrationModel."""
 
 
-class CertificateModelAdmin(admin.ModelAdmin):
+class CertificateModelAdmin(admin.ModelAdmin[CertificateModel]):
     """Admin configuration for the CertificateModel."""
 
     def get_readonly_fields(self, _request: HttpRequest, _obj: CertificateModel=None) -> list[str]:
@@ -19,15 +19,15 @@ class CertificateModelAdmin(admin.ModelAdmin):
         return [f.name for f in CertificateModel._meta.fields]  # noqa: SLF001
 
 
-class CredentialModelAdmin(admin.ModelAdmin):
+class CredentialModelAdmin(admin.ModelAdmin[CredentialModel]):
     """Admin configuration for the CredentialModel."""
 
 
-class CertificateChainOrderModelAdmin(admin.ModelAdmin):
+class CertificateChainOrderModelAdmin(admin.ModelAdmin[CertificateChainOrderModel]):
     """Admin configuration for the CertificateChainOrderModel."""
 
 
-class IssuingCaModelAdmin(admin.ModelAdmin):
+class IssuingCaModelAdmin(admin.ModelAdmin[IssuingCaModel]):
     """Admin configuration for the IssuingCaModel."""
 
 

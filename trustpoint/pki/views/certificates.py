@@ -33,7 +33,8 @@ class CertificatesContextMixin:
     extra_context: ClassVar = {'page_category': 'pki', 'page_name': 'certificates'}
 
 
-class CertificateTableView(CertificatesContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView):
+class CertificateTableView(
+    CertificatesContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView[CertificateModel]):
     """Certificate Table View."""
 
     model = CertificateModel
@@ -42,7 +43,7 @@ class CertificateTableView(CertificatesContextMixin, TpLoginRequiredMixin, Sorta
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'common_name'
 
-class CertificateDetailView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView):
+class CertificateDetailView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView[CertificateModel]):
     """The certificate detail view."""
 
     model = CertificateModel
@@ -51,7 +52,7 @@ class CertificateDetailView(CertificatesContextMixin, TpLoginRequiredMixin, Deta
     template_name = 'pki/certificates/details.html'
     context_object_name = 'cert'
 
-class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView):
+class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView[CertificateModel]):
     """View for downloading a single certificate."""
 
     model = CertificateModel
@@ -90,7 +91,7 @@ class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, TpLoginRequi
         return response
 
 
-class CertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView):
+class CertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView[CertificateModel]):
     """View for downloading a single certificate."""
 
     model = CertificateModel
@@ -100,7 +101,8 @@ class CertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, De
     context_object_name = 'certificate'
 
     def get(
-        self, request: HttpRequest, pk: str | None = None, file_format: str | None = None, *args: tuple, **kwargs: dict
+        self, request: HttpRequest, pk: str | None = None, file_format: str | None = None,
+        *args: tuple[Any], **kwargs: dict[str, Any]
     ) -> HttpResponse:
         """HTTP GET Method.
 
@@ -143,7 +145,7 @@ class CertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, De
 
 
 class CertificateMultipleDownloadView(
-    CertificatesContextMixin, TpLoginRequiredMixin, PrimaryKeyListFromPrimaryKeyString, ListView
+    CertificatesContextMixin, TpLoginRequiredMixin, PrimaryKeyListFromPrimaryKeyString, ListView[CertificateModel]
 ):
     """View for downloading multiple certificates at once as archived files."""
 
@@ -153,7 +155,7 @@ class CertificateMultipleDownloadView(
     template_name = 'pki/certificates/download_multiple.html'
     context_object_name = 'certificates'
 
-    def get_context_data(self, **kwargs: dict) -> dict:
+    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
         """Adding the part of the url to the context, that contains the certificate primary keys.
 
         This is used for the {% url }% tags in the template to download files.
@@ -174,8 +176,8 @@ class CertificateMultipleDownloadView(
         pks: str | None = None,
         file_format: None | str = None,
         archive_format: None | str = None,
-        *args: tuple,
-        **kwargs: dict,
+        *args: tuple[Any],
+        **kwargs: dict[str, Any],
     ) -> HttpResponse:
         """HTTP GET Method.
 

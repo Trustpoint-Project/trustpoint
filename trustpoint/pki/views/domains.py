@@ -39,7 +39,7 @@ class DomainContextMixin(ContextDataMixin):
     context_page_name = 'domains'
 
 
-class DomainTableView(DomainContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView):
+class DomainTableView(DomainContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView[DomainModel]):
     """Domain Table View."""
 
     model = DomainModel
@@ -49,7 +49,7 @@ class DomainTableView(DomainContextMixin, TpLoginRequiredMixin, SortableTableMix
     default_sort_param = 'unique_name'
 
 
-class DomainCreateView(DomainContextMixin, TpLoginRequiredMixin, CreateView):
+class DomainCreateView(DomainContextMixin, TpLoginRequiredMixin, CreateView[DomainModel]):
     """View to create a new domain."""
 
     model = DomainModel
@@ -70,7 +70,7 @@ class DomainCreateView(DomainContextMixin, TpLoginRequiredMixin, CreateView):
         return form
 
 
-class DomainUpdateView(DomainContextMixin, TpLoginRequiredMixin, UpdateView):
+class DomainUpdateView(DomainContextMixin, TpLoginRequiredMixin, UpdateView[DomainModel]):
     """View to edit a domain."""
 
     # TODO(Air): This view is currently UNUSED.
@@ -105,7 +105,7 @@ class DomainConfigView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegi
     detail_context_object_name = 'domain'
     success_url = reverse_lazy('pki:domains')
 
-    def get_context_data(self, **kwargs: dict) -> dict[str, Any]:
+    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
         """Adds (no) additional context data."""
         context = super().get_context_data(**kwargs)
 
@@ -158,7 +158,7 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, TpLoginRequiredMixin, Bu
         return response
 
 
-class DevIdRegistrationCreateView(DomainContextMixin, TpLoginRequiredMixin, FormView):
+class DevIdRegistrationCreateView(DomainContextMixin, TpLoginRequiredMixin, FormView[DevIdRegistrationForm]):
     """View to create a new DevID Registration."""
 
     http_method_names = ('get', 'post')

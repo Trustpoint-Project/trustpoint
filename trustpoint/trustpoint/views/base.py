@@ -17,7 +17,7 @@ from django.db.models import QuerySet
 from django.http import Http404
 from django.core.exceptions import ImproperlyConfigured
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import RedirectView
@@ -163,34 +163,38 @@ class BulkDeletionMixin:
     success_url = None
     object_list = list
 
-    def delete(self, *args, **kwargs):
+    def delete(self, *_args : tuple, **_kwargs: dict[str, Any]) -> HttpResponse:
         self.queryset = self.get_queryset()
         success_url = self.get_success_url()
         self.queryset.delete()
         return HttpResponseRedirect(success_url)
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request: HttpRequest, *args: tuple[Any], **kwargs: dict[str, Any]) -> HttpResponse:
         return self.delete(request, *args, **kwargs)
 
     def get_success_url(self):
         if self.success_url:
             return self.success_url
 
-        raise ImproperlyConfigured("No URL to redirect to. Provide a success_url.")
+        exc_msg = 'No URL to redirect to. Provide a success_url.'
+        raise ImproperlyConfigured(exc_msg)
 
 
 class BaseBulkDeleteView(BulkDeletionMixin, FormMixin, BaseListView):
+    """Base view for bulk deletion of objects."""
 
     form_class = dj_forms.Form
 
-    def post(self, *args, **kwargs):
+    def post(self, *_args: tuple[Any], **_kwargs: dict[str, Any]) -> HttpResponse:
+        """Handles POST requests to the BulkDeleteView."""
         self.queryset = self.get_queryset()
         form = self.get_form()
         if form.is_valid():
             return self.form_valid(form)
         return self.form_invalid(form)
 
-    def form_valid(self, form):
+    def form_valid(self, _form: form_class) -> HttpResponse:
+        """Delete the selected objects on valid form."""
         success_url = self.get_success_url()
         self.queryset.delete()
         return HttpResponseRedirect(success_url)
@@ -252,7 +256,7 @@ class LoggerMixin:
 
 
     @staticmethod
-    def log_exceptions(function):
+    def log_exceptions(function: Callable) -> Callable:
         """
         Decorator that gets an appropriate logger and logs any unhandled exception.
 
@@ -264,7 +268,7 @@ class LoggerMixin:
         """
 
         @functools.wraps(function)
-        def _wrapper(*args, **kwargs):
+        def _wrapper(*args, **kwargs) -> Callable:
             try:
                 return function(*args, **kwargs)
             except Exception as exception:

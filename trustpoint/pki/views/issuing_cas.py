@@ -12,7 +12,7 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
-from django.views.generic.list import ListView  # type: ignore[import-untyped]
+from django.views.generic.list import ListView
 
 from pki.forms import (
     IssuingCaAddFileImportPkcs12Form,
@@ -40,7 +40,7 @@ class IssuingCaContextMixin(TpLoginRequiredMixin, ContextDataMixin):
     context_page_category = 'pki'
     context_page_name = 'issuing_cas'
 
-class IssuingCaTableView(IssuingCaContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView):
+class IssuingCaTableView(IssuingCaContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView[IssuingCaModel]):
     """Issuing CA Table View."""
 
     model = IssuingCaModel
@@ -50,7 +50,7 @@ class IssuingCaTableView(IssuingCaContextMixin, TpLoginRequiredMixin, SortableTa
     default_sort_param = 'unique_name'
 
 
-class IssuingCaAddMethodSelectView(IssuingCaContextMixin, TpLoginRequiredMixin, FormView):
+class IssuingCaAddMethodSelectView(IssuingCaContextMixin, TpLoginRequiredMixin, FormView[IssuingCaAddMethodSelectForm]):
     """View to select the method to add an Issuing CA."""
 
     template_name = 'pki/issuing_cas/add/method_select.html'
@@ -68,7 +68,8 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, TpLoginRequiredMixin, 
         return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-method_select'))
 
 
-class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, TpLoginRequiredMixin, FormView):
+class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, TpLoginRequiredMixin,
+                                       FormView[IssuingCaAddFileImportPkcs12Form]):
     """View to import an Issuing CA from a PKCS12 file."""
 
     template_name = 'pki/issuing_cas/add/file_import.html'
@@ -76,7 +77,8 @@ class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, TpLoginRequiredMix
     success_url = reverse_lazy('pki:issuing_cas')
 
 
-class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, TpLoginRequiredMixin, FormView):
+class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, TpLoginRequiredMixin,
+                                              FormView[IssuingCaAddFileImportSeparateFilesForm]):
     """View to import an Issuing CA from separate PEM files."""
 
     template_name = 'pki/issuing_cas/add/file_import.html'
@@ -84,7 +86,7 @@ class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, TpLoginRequ
     success_url = reverse_lazy('pki:issuing_cas')
 
 
-class IssuingCaDetailView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailView):
+class IssuingCaDetailView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailView[IssuingCaModel]):
     """View to display the details of an Issuing CA."""
 
     http_method_names = ('get', )
@@ -97,7 +99,7 @@ class IssuingCaDetailView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailVie
 
 
 
-class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, TpLoginRequiredMixin, DetailView):
+class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, TpLoginRequiredMixin, DetailView[IssuingCaModel]):
     """View to configure an Issuing CA."""
 
     model = IssuingCaModel
@@ -140,7 +142,7 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, TpLoginRequiredMixin
         return response
 
 
-class IssuingCaCrlGenerationView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailView):
+class IssuingCaCrlGenerationView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailView[IssuingCaModel]):
     """View to manually generate a CRL for an Issuing CA."""
 
     model = IssuingCaModel
@@ -162,7 +164,7 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, TpLoginRequiredMixin, De
         return redirect('pki:issuing_cas-config', pk=issuing_ca.id)
 
 
-class CrlDownloadView(IssuingCaContextMixin, DetailView):
+class CrlDownloadView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
     """Unauthenticated view to download the certificate revocation list of an Issuing CA."""
 
     http_method_names = ('get', )
