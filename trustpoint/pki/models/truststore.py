@@ -80,6 +80,8 @@ class TruststoreModel(models.Model):
     or serializing its content.
     """
 
+    objects: models.Manager[TruststoreModel]
+
     class IntendedUsage(models.IntegerChoices):
         """Intended Usage of the Truststore."""
 

@@ -7,6 +7,7 @@ from typing import Any, cast
 import secrets
 
 from django import forms
+from django.forms import ModelChoiceField
 from django.utils.translation import gettext_lazy as _
 
 from devices.models import DeviceModel, IssuedCredentialModel
@@ -191,8 +192,8 @@ class BrowserLoginForm(forms.Form):
     def clean(self) -> dict[str, Any]:
         """Cleans the form data, extracting the credential ID and OTP."""
         # splits the submitted OTP, which is in the format 'credential_id.otp'
-        cleaned_data = super().clean()
-        otp = cleaned_data.get('otp')
+        cleaned_data = super().clean() or {}
+        otp = cleaned_data.get('otp') or ''
         if not otp:
             self.add_error('otp', _('This field is required.'))
         err_msg = _('The provided OTP is invalid.')
@@ -208,14 +209,14 @@ class BrowserLoginForm(forms.Form):
         return cleaned_data
 
 
-class CredentialRevocationForm(forms.ModelForm):
+class CredentialRevocationForm(forms.ModelForm[RevokedCertificateModel]):
     """Form to revoke a device credential."""
     class Meta:
         model = RevokedCertificateModel
         fields = ['revocation_reason']
 
 
-class CreateDeviceForm(forms.ModelForm):
+class CreateDeviceForm(forms.ModelForm[DeviceModel]):
 
     class Meta:
         model = DeviceModel
@@ -233,7 +234,7 @@ class CreateDeviceForm(forms.ModelForm):
                 _('Domain Credential Onboarding'),
         }
 
-    domain_queryset = cast(QuerySet[DomainModel], DomainModel.objects.filter(is_active=True))
+    domain_queryset = DomainModel.objects.filter(is_active=True)
     domain = forms.ModelChoiceField(
         queryset=domain_queryset,
         empty_label=None
@@ -277,10 +278,14 @@ class CreateDeviceForm(forms.ModelForm):
         initial='cmp_shared_secret'
     )
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
-        self.fields['idevid_trust_store'].queryset = TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.IDEVID)
+        truststore_field = self.fields['idevid_trust_store']
+        if isinstance(truststore_field, ModelChoiceField):
+            truststore_field.queryset = TruststoreModel.objects.filter(
+                intended_usage=TruststoreModel.IntendedUsage.IDEVID
+            )
 
         self.helper = FormHelper()
         self.helper.form_tag = False
@@ -309,7 +314,7 @@ class CreateDeviceForm(forms.ModelForm):
         )
 
     def clean(self) -> dict[str, Any]:
-        cleaned_data = super().clean()
+        cleaned_data = super().clean() or {}
         instance: DeviceModel = super().save(commit=False)
         domain_credential_onboarding = cleaned_data.get('domain_credential_onboarding')
         if domain_credential_onboarding:
@@ -326,7 +331,7 @@ class CreateDeviceForm(forms.ModelForm):
                     instance.cmp_shared_secret = secrets.token_urlsafe(16)
                 case 'cmp_idevid':
                     idevid_trust_store = cleaned_data.get('idevid_trust_store')
-                    if not cleaned_data.get('idevid_trust_store'):
+                    if not idevid_trust_store:
                         raise forms.ValidationError('Must specify an IDevID Trust-Store for IDevID onboarding.')
                     if not idevid_trust_store.intended_usage == TruststoreModel.IntendedUsage.IDEVID.value:
                         raise forms.ValidationError('The Trust-Store must have the intended usage IDevID.')
