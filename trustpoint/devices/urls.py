@@ -57,22 +57,35 @@ urlpatterns = [
          views.DeviceRevocationView.as_view(),
          name='device_revocation'),
     path(
-        'help/dispatch/<int:pk>/',
-        views.HelpDispatchView.as_view(),
-        name='help_dispatch'
+        'help/dispatchDomain/<int:pk>/',
+        views.HelpDispatchDomainView.as_view(),
+        name='help_dispatch_domain'
+    ),
+    path(
+        'help/dispatchApplication/<int:pk>/',
+        views.HelpDispatchApplicationView.as_view(),
+        name='help_dispatch_application'
     ),
     path(
         'help/no-onboarding/cmp-shared-secret/<int:pk>/',
         views.NoOnboardingCmpSharedSecretHelpView.as_view(),
         name='help_no-onboarding_cmp-shared-secret'),
     path(
-        'help/onboarding/cmp-shared-secret/<int:pk>/',
-        views.OnboardingCmpSharedSecretHelpView.as_view(),
-        name='help-onboarding_cmp-shared-secret'),
+        'help/onboarding/cmp-shared-secret-domain/<int:pk>/',
+        views.OnboardingCmpSharedSecretDomainHelpView.as_view(),
+        name='help-onboarding_cmp-shared-secret-domain'),
     path(
-        'help/onboarding/cmp-idevid/<int:pk>/',
-        views.OnboardingCmpIdevidHelpView.as_view(),
-        name='help-onboarding_cmp-idevid'),
+        'help/onboarding/cmp-idevid-domain/<int:pk>/',
+        views.OnboardingCmpIdevidDomainHelpView.as_view(),
+        name='help-onboarding_cmp-idevid-domain'),
+    path(
+        'help/onboarding/cmp-shared-secret-application/<int:pk>/',
+        views.OnboardingCmpSharedSecretApplicationHelpView.as_view(),
+        name='help-onboarding_cmp-shared-secret-application'),
+    path(
+        'help/onboarding/cmp-idevid-application/<int:pk>/',
+        views.OnboardingCmpIdevidApplicationHelpView.as_view(),
+        name='help-onboarding_cmp-idevid-application'),
     path(
         'help/onboarding/cmp-idevid-registration/<int:pk>/',
         views.OnboardingIdevidRegistrationHelpView.as_view(),
