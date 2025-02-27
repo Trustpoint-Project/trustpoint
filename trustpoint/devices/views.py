@@ -26,7 +26,9 @@ from django.views.generic.detail import DetailView, SingleObjectMixin
 from django.views.generic.edit import CreateView, FormMixin, FormView
 from django.views.generic.list import ListView
 from trustpoint_core import oid
-from pki.models import CertificateModel, CredentialModel, DevIdRegistration
+from pki.models.certificate import CertificateModel
+from pki.models.credential import CredentialModel
+from pki.models.devid_registration import DevIdRegistration
 
 from devices.forms import (
     BrowserLoginForm,
@@ -43,7 +45,7 @@ from devices.models import (
     RemoteDeviceCredentialDownloadModel)
 from devices.revocation import DeviceCredentialRevocation
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import ListInDetailView, SortableTableMixin, TpLoginRequiredMixin
+from trustpoint.views.base import ListInDetailView, SortableTableMixin, TpLoginRequiredMixin, ContextDataMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -66,12 +68,11 @@ class Detail404RedirectView(DetailView):
             )
             return redirect(redirection_view)
 
-
-class DeviceContextMixin:
+class DeviceContextMixin(TpLoginRequiredMixin, ContextDataMixin):
     """Mixin which adds context_data for the Devices -> Devices pages."""
 
-    extra_context: ClassVar = {'page_category': 'devices', 'page_name': 'devices'}
-
+    context_page_category = 'devices'
+    context_page_name = 'devices'
 
 class DownloadTokenRequiredMixin:
     """Mixin which checks the token included in the URL for browser download views."""

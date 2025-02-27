@@ -518,9 +518,9 @@ class LocalTlsServerCredentialIssuer(SaveCredentialToDbMixin):
     def issue_tls_server_credential(
             self,
             common_name: str,
-            ipv4_addresses: list[x509.IPAddress],
-            ipv6_addresses: list[x509.IPAddress],
-            domain_names: list[x509.DNSName],
+            ipv4_addresses: list[ipaddress.IPv4Address],
+            ipv6_addresses: list[ipaddress.IPv6Address],
+            domain_names: list[str],
             validity_days: int
     ) -> IssuedCredentialModel:
         application_credential_private_key = KeyGenerator.generate_private_key(domain=self.domain)
@@ -576,9 +576,9 @@ class LocalTlsServerCredentialIssuer(SaveCredentialToDbMixin):
         )
 
         general_names: list[x509.GeneralName] = (
-            [x509.IPAddress(cast(IPv4Address, ipv4_address)) for ipv4_address  in ipv4_addresses] +
-            [x509.IPAddress(cast(IPv6Address, ipv6_address)) for ipv6_address  in ipv6_addresses] +
-            [x509.DNSName(cast(str, domain_name)) for domain_name in domain_names]
+            [x509.IPAddress(ipv4_address) for ipv4_address  in ipv4_addresses] +
+            [x509.IPAddress(ipv6_address) for ipv6_address  in ipv6_addresses] +
+            [x509.DNSName(domain_name) for domain_name in domain_names]
         )
 
         certificate_builder = certificate_builder.add_extension(
@@ -610,9 +610,9 @@ class LocalTlsServerCredentialIssuer(SaveCredentialToDbMixin):
     def issue_tls_server_certificate(
             self,
             common_name: str,
-            ipv4_addresses: list[x509.IPAddress],
-            ipv6_addresses: list[x509.IPAddress],
-            domain_names: list[x509.DNSName],
+            ipv4_addresses: list[ipaddress.IPv4Address],
+            ipv6_addresses: list[ipaddress.IPv6Address],
+            domain_names: list[str],
             san_critical: bool,
             validity_days: int,
             public_key: oid.PublicKey
@@ -669,9 +669,9 @@ class LocalTlsServerCredentialIssuer(SaveCredentialToDbMixin):
         )
 
         general_names: list[x509.GeneralName] = (
-            [x509.IPAddress(cast(IPv4Address, ipv4_address)) for ipv4_address  in ipv4_addresses] +
-            [x509.IPAddress(cast(IPv6Address, ipv6_address)) for ipv6_address  in ipv6_addresses] +
-            [x509.DNSName(cast(str, domain_name)) for domain_name in domain_names]
+            [x509.IPAddress(ipv4_address) for ipv4_address  in ipv4_addresses] +
+            [x509.IPAddress(ipv6_address) for ipv6_address  in ipv6_addresses] +
+            [x509.DNSName(domain_name) for domain_name in domain_names]
         )
 
         certificate_builder = certificate_builder.add_extension(

@@ -189,11 +189,11 @@ class BrowserLoginForm(forms.Form):
     """Form for the browser login via OTP for remote credential download."""
     otp = forms.CharField(widget=forms.PasswordInput(), label='OTP', max_length=32)
 
-    def clean(self) -> dict[str, Any]:
+    def clean(self) -> dict[str, Any] | None:
         """Cleans the form data, extracting the credential ID and OTP."""
         # splits the submitted OTP, which is in the format 'credential_id.otp'
-        cleaned_data = super().clean() or {}
-        otp = cleaned_data.get('otp') or ''
+        cleaned_data = super().clean()
+        otp = cleaned_data.get('otp')
         if not otp:
             self.add_error('otp', _('This field is required.'))
         err_msg = _('The provided OTP is invalid.')
@@ -314,7 +314,7 @@ class CreateDeviceForm(forms.ModelForm[DeviceModel]):
         )
 
     def clean(self) -> dict[str, Any]:
-        cleaned_data = super().clean() or {}
+        cleaned_data: bool = super().clean() or {}
         instance: DeviceModel = super().save(commit=False)
         domain_credential_onboarding = cleaned_data.get('domain_credential_onboarding')
         if domain_credential_onboarding:
