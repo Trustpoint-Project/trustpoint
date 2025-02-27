@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Any, ClassVar, cast
+
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from django import forms
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -9,25 +16,11 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 from util.field import UniqueNameValidator
-from django import forms
-from django.utils.translation import gettext_lazy as _
 
-from pki.models import IssuingCaModel, DevIdRegistration
-from trustpoint.views.base import LoggerMixin
-
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes
-from django.core.exceptions import ValidationError
+from pki.models import DevIdRegistration, IssuingCaModel
 from pki.models.certificate import CertificateModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
-from typing import TYPE_CHECKING
-
-
-if TYPE_CHECKING:
-    from typing import Union
-
-    from cryptography.hazmat.primitives.asymmetric import ec, ed448, ed25519, rsa
-    PrivateKey = Union[rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey, ed448.Ed448PrivateKey, ed25519.Ed25519PrivateKey]
+from trustpoint.views.base import LoggerMixin
 
 
 class DevIdAddMethodSelectForm(forms.Form):
@@ -48,18 +41,18 @@ class DevIdAddMethodSelectForm(forms.Form):
         initial='configure_pattern',
         required=True)
 
-class DevIdRegistrationForm(forms.ModelForm):
+class DevIdRegistrationForm(forms.ModelForm[DevIdRegistration]):
     """Form to create a new DevIdRegistration."""
 
-    class Meta:
+    class Meta:  # noqa: D106
         model = DevIdRegistration
-        fields = ['unique_name', 'truststore', 'domain', 'serial_number_pattern']
-        widgets = {
+        fields: ClassVar[list[str]] = ['unique_name', 'truststore', 'domain', 'serial_number_pattern']
+        widgets: ClassVar[dict[str, Any]] = {
             'serial_number_pattern': forms.TextInput(attrs={
                 'placeholder': 'Enter a regex pattern for serial numbers',
             }),
         }
-        labels = {
+        labels: ClassVar[dict[str, str]] = {
             'unique_name': 'Unique Name',
             'truststore': 'Associated Truststore',
             'domain': 'Associated Domain',
@@ -105,7 +98,7 @@ class TruststoreAddForm(forms.Form):
         if TruststoreModel.objects.filter(unique_name=unique_name).exists():
             error_message = 'Truststore with the provided name already exists.'
             raise ValidationError(error_message)
-        return unique_name
+        return cast(str, unique_name)
 
     @LoggerMixin.log_exceptions
     def clean(self) -> None:
@@ -119,7 +112,7 @@ class TruststoreAddForm(forms.Form):
             ValidationError: If the truststore file cannot be read, the unique name
             is not unique, or an unexpected error occurs during initialization.
         """
-        cleaned_data = super().clean()
+        cleaned_data = cast(dict[str, Any], super().clean())
         unique_name = cleaned_data.get('unique_name')
         intended_usage = cleaned_data.get('intended_usage')
 
@@ -147,9 +140,7 @@ class TruststoreAddForm(forms.Form):
 
             raise ValidationError(str(exception)) from exception
 
-
         self.cleaned_data['truststore'] = trust_store_model
-        return cleaned_data
 
     @staticmethod
     def _save_trust_store(
@@ -373,7 +364,7 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
             error_message = 'Unique name is already taken. Choose another one.'
             raise ValidationError(error_message)
-        return unique_name
+        return cast(str, unique_name)
 
     @LoggerMixin.log_exceptions
     def clean(self) -> None:
@@ -390,6 +381,9 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             is already taken or the PKCS#12 file cannot be read or parsed.
         """
         cleaned_data = super().clean()
+        if not cleaned_data:  # only for typing, cleaned_data should always be a dict, but not entirely sure
+            exc_msg = 'No data was provided.'
+            raise ValidationError(exc_msg)
         unique_name = cleaned_data.get('unique_name')
 
         try:
@@ -552,7 +546,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         certificate_in_db = CertificateModel.get_cert_by_sha256_fingerprint(
             certificate_serializer.as_crypto().fingerprint(algorithm=hashes.SHA256()).hex())
         if certificate_in_db:
-            issuing_ca_in_db = IssuingCaModel.objects.get(certificate=certificate_in_db)
+            issuing_ca_in_db = IssuingCaModel.objects.get(credential__certificate=certificate_in_db)
             if issuing_ca_in_db:
                 err_msg = (
                     f'Issuing CA {issuing_ca_in_db.unique_name} is already configured '
@@ -604,6 +598,8 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         """
         try:
             cleaned_data = super().clean()
+            if not cleaned_data:
+                return
             unique_name = cleaned_data.get('unique_name')
             private_key_file = cleaned_data.get('private_key_file')
             ca_certificate = cleaned_data.get('ca_certificate')
