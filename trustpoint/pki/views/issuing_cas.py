@@ -86,7 +86,7 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, TpLoginRequiredMix
             issuer_public_bytes=issuing_ca.credential.certificate.subject_public_bytes
         )
 
-        context['issued_certificates'] = issued_certificates  # ✅ Pass queryset
+        context['issued_certificates'] = issued_certificates
         return context
 
 
@@ -94,7 +94,7 @@ class IssuedCertificatesListView(ListView):
     """View to display all certificates issued by a specific Issuing CA."""
 
     model = CertificateModel
-    template_name = 'pki/issuing_cas/issued_certificates.html'  # ✅ Create this template
+    template_name = 'pki/issuing_cas/issued_certificates.html'
     context_object_name = 'certificates'
 
     def get_queryset(self):

@@ -107,9 +107,9 @@ urlpatterns = [
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
     path('issuing-cas/crl-gen/<int:pk>/', issuing_cas.IssuingCaCrlGenerationView.as_view(), name='issuing_cas-crl-gen'),
     path(
-        'issuing-cas/<int:pk>/issued-certificates/',
+        'issuing-cas/issued-certificates/<int:pk>',
         IssuedCertificatesListView.as_view(),
-        name='issued_certificates',
+        name='issuing_ca-issued_certificates',
     ),
 
     re_path(
@@ -125,6 +125,11 @@ urlpatterns = [
         r'^domains/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
         domains.DomainCaBulkDeleteConfirmView.as_view(),
         name='domains-delete_confirm',
+    ),
+    path(
+        'domains/issued-certificates/<int:pk>/',
+        domains.IssuedCertificatesView.as_view(),
+        name='domain-issued_certificates',
     ),
     path(
         'devid-registration/method_select/<int:pk>/',

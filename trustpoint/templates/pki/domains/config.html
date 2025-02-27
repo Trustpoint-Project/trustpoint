@@ -41,33 +41,47 @@
                             <div>{% trans 'Expiry Date' %}</div>
                             <div> {{ domain.issuing_ca.credential.certificate.not_valid_after }} </div>
                         </div>
-
+                        <div>
+                            <div>{% trans 'Certificates issued:' %}</div>
+                            <div>
+                                {% if certificates %}
+                                    <a href="{% url 'pki:domain-issued_certificates' pk=domain.pk %}"
+                                    >
+                                        {{ certificates|length }}
+                                    </a>
+                                {% else %}
+                                    {{ certificates|length }}
+                                {% endif %}
+                            </div>
+                        </div>
                     </div>
 
-                    <h2>{% trans 'Add New DevID Registration Pattern' %}</h2>
-                    <hr>
-                    <a href="{% url 'pki:devid_registration-method_select' pk=domain.id %}"
-                           class="btn btn-primary tp-table-btn min-width-20">
-                            {% trans 'Create new DevID Registration Pattern' %}
-                    </a>
-
-                    <h2 class="mt-5">{% trans 'DevID Registration Patterns' %}</h2>
-                    <hr>
-
-                    {% include 'pki/devid_registration/table.html' %}
-
-
-
                 </div>
-            </div>
-            <div class="card-footer d-flex justify-content-between align-items-center">
-                <div class="tp-card-btn-footer m-1">
-                    <button type="button" value="Back" class="btn btn-secondary btn-half" onClick="history.back()">{% trans 'Back' %}</button>
-                    <a href="{% url 'pki:domains' %}" class="btn btn-secondary btn-half">{% trans "Cancel" %}</a>
-                    <button type="submit" class="btn btn-primary disabled">{% trans "Save" %}</button>
-                </div>
+
+                <h2>{% trans 'Add New DevID Registration Pattern' %}</h2>
+                <hr>
+                <a href="{% url 'pki:devid_registration-method_select' pk=domain.id %}"
+                   class="btn btn-primary tp-table-btn min-width-20">
+                    {% trans 'Create new DevID Registration Pattern' %}
+                </a>
+
+                <h2 class="mt-5">{% trans 'DevID Registration Patterns' %}</h2>
+                <hr>
+
+                {% include 'pki/devid_registration/table.html' %}
+
+
             </div>
         </div>
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <div class="tp-card-btn-footer m-1">
+                <button type="button" value="Back" class="btn btn-secondary btn-half"
+                        onClick="history.back()">{% trans 'Back' %}</button>
+                <a href="{% url 'pki:domains' %}" class="btn btn-secondary btn-half">{% trans "Cancel" %}</a>
+                <button type="submit" class="btn btn-primary disabled">{% trans "Save" %}</button>
+            </div>
+        </div>
+    </div>
     </div>
 
 {% endblock content %}
