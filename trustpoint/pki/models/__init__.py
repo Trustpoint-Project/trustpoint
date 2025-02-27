@@ -25,7 +25,10 @@ from .truststore import TruststoreModel, TruststoreOrderModel
 
 __all__ = [
     'CertificateChainOrderModel',
+    'CertificateModel',
     'CredentialAlreadyExistsError',
     'CredentialModel',
-    'DomainModel'
+    'DevIdRegistration',
+    'DomainModel',
+    'IssuingCaModel'
 ]

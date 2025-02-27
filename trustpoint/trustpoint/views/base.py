@@ -14,6 +14,7 @@ import functools
 from django import forms as dj_forms
 from django.contrib import messages
 from django.db.models import QuerySet
+from django.db import models
 from django.http import Http404
 from django.core.exceptions import ImproperlyConfigured
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -67,7 +68,6 @@ class SortableTableMixin:
 
     default_sort_param must be set in the view to specify default sorting order.
     """
-
     @staticmethod
     def _sort_list_of_dicts(list_of_dicts: list[dict], sort_param: str) -> list[dict]:
         """Sorts a list of dictionaries by the given sort parameter.
@@ -81,7 +81,7 @@ class SortableTableMixin:
         """
         return sorted(list_of_dicts, key=lambda x: x[sort_param.lstrip('-')], reverse=sort_param.startswith('-'))
 
-    def get_queryset(self) -> QuerySet | list:
+    def get_queryset(self) -> QuerySet:
         if hasattr(self, 'queryset') and self.queryset is not None:
             queryset = self.queryset
         else:

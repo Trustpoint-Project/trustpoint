@@ -188,6 +188,7 @@ class IssuedCredentialModel(models.Model):
 
 class RemoteDeviceCredentialDownloadModel(models.Model):
     """Model to associate a credential model with an OTP and token for unauthenticated remoted download."""
+    objects: models.Manager[RemoteDeviceCredentialDownloadModel]
     BROWSER_MAX_OTP_ATTEMPTS = 3
     TOKEN_VALIDITY = datetime.timedelta(minutes=3)
 
