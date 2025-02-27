@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import logging
 import secrets
+from typing import Any
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -11,7 +12,7 @@ from django.contrib.contenttypes.models import ContentType
 from util.field import UniqueNameValidator
 from trustpoint_core import oid
 
-from pki.models import CertificateModel, DomainModel, CredentialModel, IssuingCaModel
+from pki.models import DomainModel, CredentialModel
 from pki.models.credential import CredentialModel
 from pki.models.truststore import TruststoreModel
 
@@ -187,6 +188,7 @@ class IssuedCredentialModel(models.Model):
 
 class RemoteDeviceCredentialDownloadModel(models.Model):
     """Model to associate a credential model with an OTP and token for unauthenticated remoted download."""
+    objects: models.Manager[RemoteDeviceCredentialDownloadModel]
     BROWSER_MAX_OTP_ATTEMPTS = 3
     TOKEN_VALIDITY = datetime.timedelta(minutes=3)
 
@@ -201,7 +203,7 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
         """Return a string representation of the model."""
         return f'RemoteDeviceCredentialDownloadModel(credential={self.issued_credential_model.id})'
 
-    def save(self, *args: dict, **kwargs: dict) -> None:
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Generates a new random OTP on initial save of the model."""
         if not self.otp:
             self.otp = secrets.token_urlsafe(8)

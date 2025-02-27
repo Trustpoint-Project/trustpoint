@@ -9,13 +9,11 @@ from trustpoint_core import oid
 
 from . import IssuingCaModel
 
-__all__ = [
-    'DomainModel'
-]
-
 
 class DomainModel(models.Model):
     """Domain Model."""
+
+    objects: models.Manager[DomainModel]
 
     unique_name = models.CharField(
         _('Domain Name'),
