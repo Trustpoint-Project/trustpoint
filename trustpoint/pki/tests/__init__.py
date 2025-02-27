@@ -1,10 +1,4 @@
-import hashlib
-import ipaddress
-from datetime import datetime, timedelta, timezone
-
-from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
-from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID, ObjectIdentifier
+"""Test module for the PKI app."""
 
 # General constant for tests
 COMMON_NAME = 'example common name'
