@@ -10,7 +10,7 @@ import secrets
 import uuid
 from typing import TYPE_CHECKING, Protocol, cast
 
-from core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
+from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, hmac

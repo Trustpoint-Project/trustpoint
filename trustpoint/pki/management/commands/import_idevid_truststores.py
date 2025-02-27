@@ -26,9 +26,7 @@ class Command(BaseCommand):
 
     def handle(self, *_args: tuple[str], **_kwargs: dict[str,str]) -> None:
         """Execute the command."""
-        base_path = Path.resolve(
-            Path(Path.parent(__file__) / '../../../../tests/data/idevid_hierarchies')
-        )
+        base_path = Path(__file__).resolve().parent.joinpath('../../../../tests/data/idevid_hierarchies').resolve()
 
         for relative_path, unique_name in self.TRUSTSTORE_RELATIVE_PATHS.items():
             pem_path = Path(base_path / relative_path)

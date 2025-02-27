@@ -1,8 +1,10 @@
 """Model for the DevID Registration."""
 
-from core.validator.field import UniqueNameValidator
+from typing import Any
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from util.field import UniqueNameValidator
 
 from .domain import DomainModel
 from .truststore import TruststoreModel
@@ -43,7 +45,7 @@ class DevIdRegistration(models.Model):
         """Returns a human-readable string representation of the DevIdRegistration instance."""
         return f'DevIdRegistration: {self.unique_name}'
 
-    def save(self, *args: tuple, **kwargs: dict) -> None:
+    def save(self, **kwargs: Any) -> None:
         """Ensures the model is valid and enforces validations before saving."""
         self.full_clean()
-        super().save(*args, **kwargs)
+        super().save(**kwargs)

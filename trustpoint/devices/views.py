@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, cast
 
 from cryptography.hazmat.primitives import serialization
 
-from core.file_builder.enum import ArchiveFormat
-from core.serializer import CredentialSerializer
-from core.validator.field import UniqueNameValidator
+from trustpoint_core.file_builder.enum import ArchiveFormat
+from trustpoint_core.serializer import CredentialSerializer
+from util.field import UniqueNameValidator
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Q
@@ -25,7 +25,7 @@ from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView, SingleObjectMixin
 from django.views.generic.edit import CreateView, FormMixin, FormView
 from django.views.generic.list import ListView
-from core import oid
+from trustpoint_core import oid
 from pki.models import CertificateModel, CredentialModel, DevIdRegistration
 
 from devices.forms import (

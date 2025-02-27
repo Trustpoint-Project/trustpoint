@@ -6,7 +6,7 @@
 import hashlib
 from typing import cast
 
-import pytest  # type: ignore  # noqa: PGH003
+import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from cryptography.x509 import Certificate
@@ -20,6 +20,8 @@ from pki.models.extension import (
     GeneralNameDirectoryName,
     GeneralNameOtherName,
     GeneralNamesModel,
+    InhibitAnyPolicyExtension,
+    PolicyConstraintsExtension,
 )
 from pki.tests import (
     DNS_NAME_VALUE,
@@ -323,6 +325,7 @@ def test_inhibit_any_policy(self_signed_cert_with_ext: Certificate) -> None:
     """Test that the Inhibit anyPolicy extension is parsed and stored correctly in the database."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     ext = cert_model.inhibit_any_policy_extension
+    assert isinstance(ext, InhibitAnyPolicyExtension)
     assert ext.inhibit_any_policy == INHIBIT_ANY_POLICY_VALUE
 
 
@@ -352,6 +355,7 @@ def test_policy_constraints(self_signed_cert_with_ext: Certificate) -> None:
     """Test that the Inhibit anyPolicy extension is parsed and stored correctly in the database."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     ext = cert_model.policy_constraints_extension
+    assert isinstance(ext, PolicyConstraintsExtension)
     assert ext.require_explicit_policy == REQUIRE_EXPLICIT_POLICY
     assert ext.inhibit_policy_mapping == INHIBIT_POLICY_MAPPING
 

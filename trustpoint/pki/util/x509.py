@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import datetime
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
-from core.serializer import CredentialSerializer
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509.oid import NameOID
+from trustpoint_core.serializer import CredentialSerializer
 
 from pki.models import IssuingCaModel
 from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
-    from core.x509 import PrivateKey
+    from trustpoint_core.types import PrivateKey
 
 logger = logging.getLogger(__name__)
 
@@ -154,4 +154,4 @@ class CertificateGenerator:
 
         logger.info("Issuing CA '%s' saved successfully.", unique_name)
 
-        return issuing_ca
+        return cast(IssuingCaModel, issuing_ca)

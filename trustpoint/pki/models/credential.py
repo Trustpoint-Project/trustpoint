@@ -4,25 +4,26 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core import oid
-from core.serializer import (
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
+from django.db.models import QuerySet
+from django.utils.translation import gettext_lazy as _
+from trustpoint_core import oid
+from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
     PrivateKeySerializer,
 )
-from django.core.exceptions import ValidationError
-from django.db import models, transaction
-from django.utils.translation import gettext_lazy as _
 
 from pki.models import CertificateModel
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
 
-    from core.x509 import PrivateKey
     from cryptography import x509
     from django.db.models import QuerySet
+    from trustpoint_core.types import PrivateKey
 
 
 __all__ = ['CertificateChainOrderModel', 'CredentialAlreadyExistsError', 'CredentialModel']
@@ -333,13 +334,13 @@ class PrimaryCredentialCertificate(models.Model):
         """Returns a human-readable string that represents this PrimaryCredentialCertificate entry."""
         return self.__repr__()
 
-    def save(self, *args: Any, **kwargs: Any) -> None:
+    def save(self, **kwargs: Any) -> None:
         """If a new certificate is added to a credential, it is set to primary and all others to non-primary."""
         if not self.pk or self.is_primary:
             PrimaryCredentialCertificate.objects.filter(credential=self.credential).update(is_primary=False)
 
         self.is_primary = True
-        super().save(*args, **kwargs)
+        super().save(**kwargs)
 
 class CertificateChainOrderModel(models.Model):
     """This Model is used to preserve the order of certificates in credential certificate chains."""
@@ -375,7 +376,7 @@ class CertificateChainOrderModel(models.Model):
         return self.__repr__()
 
     # TODO(AlexHx8472): Validate certificate chain!
-    def save(self, *args: tuple[Any], **kwargs: dict[str, Any]) -> None:
+    def save(self, **kwargs: Any) -> None:
         """Stores a CertificateChainOrderModel in the database.
 
         This is only possible if the order takes the next available value. That is, e.g. if the corresponding
@@ -383,7 +384,6 @@ class CertificateChainOrderModel(models.Model):
         entry to be stored must have order 2.
 
         Args:
-            *args: Positional arguments, passed to super().save()
             **kwargs: Keyword arguments, passed to super().save()
 
         Returns:
@@ -398,7 +398,7 @@ class CertificateChainOrderModel(models.Model):
         if self.order != max_order + 1:
             err_msg = f'Cannot add Membership with order {self.order}. Expected {max_order + 1}.'
             raise ValidationError(err_msg)
-        super().save(*args, **kwargs)
+        super().save(**kwargs)
 
     def delete(self, *args: tuple[Any], **kwargs: dict[str, Any]) -> None:
         """Tries to delete the CertificateChainOrderModel entry.

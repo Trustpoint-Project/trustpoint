@@ -101,10 +101,10 @@ This testcase is related to requirement `R_103`_.
 Test Idea
 """""""""
 
-To verify that administrators can configure security levels for different TrustPoint components, we will test the following scenarios:
+To verify that administrators can configure security levels for different Trustpoint components, we will test the following scenarios:
 
 #. Set Security Level for a Component
-    - The admin selects a TrustPoint component.
+    - The admin selects a Trustpoint component.
     - The admin sets the security level to "High".
     - The system successfully applies and saves the security level.
 

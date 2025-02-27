@@ -3,8 +3,15 @@ from __future__ import annotations
 
 import datetime
 from types import MappingProxyType
+from typing import Any
 
-from core.oid import (
+from cryptography import x509
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from django.db import models, transaction
+from django.utils.translation import gettext_lazy as _
+from trustpoint_core.oid import (
     AlgorithmIdentifier,
     CertificateExtensionOid,
     NamedCurve,
@@ -13,13 +20,7 @@ from core.oid import (
     PublicKeyInfo,
     SignatureSuite,
 )
-from core.serializer import CertificateSerializer, PublicKeySerializer
-from cryptography import x509
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
-from django.db import models, transaction
-from django.utils.translation import gettext_lazy as _
+from trustpoint_core.serializer import CertificateSerializer, PublicKeySerializer
 
 from pki.models.extension import (
     AttributeTypeAndValue,
@@ -446,8 +447,8 @@ class CertificateModel(LoggerMixin, models.Model):
 
     # ---------------------------------------------- Private save methods ----------------------------------------------
 
-    def _save(self, *args: tuple, **kwargs: dict) -> None:
-        return super().save(*args, **kwargs)
+    def _save(self, **kwargs: Any) -> None:
+        return super().save(**kwargs)
 
     @classmethod
     def _save_certificate(cls, certificate: x509.Certificate | CertificateSerializer) -> CertificateModel:
