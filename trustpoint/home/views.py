@@ -67,6 +67,7 @@ class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView):
         return [(start_date + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
 
     def get_queryset(self) -> QuerySet[NotificationModel]:
+        """Returns a queryset of NotificationModel instances."""
         all_notifications = NotificationModel.objects.all()
 
         notification_filter = NotificationFilter(self.request.GET, queryset=all_notifications)
@@ -168,7 +169,6 @@ class AddDomainsAndDevicesView(TpLoginRequiredMixin, TemplateView):
         """Handles GET requests and redirects to the dashboard."""
         try:
             call_command('add_domains_and_devices')
-
             messages.add_message(request, SUCCESS, 'Successfully added test data.')
         except Exception:
             # TODO(AlexHx8472): Catch the correct and proper error messages.
@@ -460,16 +460,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
                 .annotate(cert_count=Count('id'))
             )
 
-            # cert_domain_counts = (
-            #     IssuedDomainCredentialModel.objects.filter(created_at__gt=start_date)
-            #     .values(domain_name=F('domain__unique_name'))
-            #     .annotate(cert_count=Count('id'))
-            # )
-
-            # Use a union query to combine results
-            #cert_domain_qr = cert_app_counts.union(cert_domain_counts)
-
-            #   # Convert the queryset to a list
+            # Convert the queryset to a list
             cert_counts_by_domain = list(cert_counts_domain_qr)
         except Exception:
             self._logger.exception('Error occurred in certificate count by issuing ca query')

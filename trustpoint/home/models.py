@@ -8,9 +8,8 @@ from devices.models import DeviceModel
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from pki.models.certificate import CertificateModel
-
-from pki.models.issuing_ca import IssuingCaModel
 from pki.models.domain import DomainModel
+from pki.models.issuing_ca import IssuingCaModel
 
 log = logging.getLogger('tp.home')
 
@@ -87,7 +86,6 @@ class NotificationModel(models.Model):
         """Supported Notification Types."""
 
         SETUP = 'SET', _('SETUP')
-        # DEBUG = 'DEB', _('DEBUG')
         INFO = 'INF', _('INFO')
         WARNING = 'WAR', _('WARNING')
         CRITICAL = 'CRI', _('CRITICAL')
@@ -169,20 +167,23 @@ class NotificationModel(models.Model):
                 self.WELCOME_MESSAGE: NotificationMessage(
                     _('Welcome to Trustpoint!'),
                     _(
-                        'Thank you for setting up Trustpoint. This system will help you manage your certificates and secure your environment.'
+                        'Thank you for setting up Trustpoint. '
+                        'This system will help you manage your certificates and secure your environment.'
                     ),
                 ),
                 # Periodic task notifications
                 self.SYSTEM_NOT_HEALTHY: NotificationMessage(
                     _('System health check failed'),
                     _(
-                        'The system health check detected an issue with one or more services. Please investigate immediately.'
+                        'The system health check detected an issue with one or more services. '
+                        'Please investigate immediately.'
                     ),
                 ),
                 self.VULNERABILITY: NotificationMessage(
                     _('Security vulnerability detected'),
                     _(
-                        'A security vulnerability affecting system components has been detected. Immediate attention required.'
+                        'A security vulnerability affecting system components has been detected. '
+                        'Immediate attention required.'
                     ),
                 ),
                 self.CERT_EXPIRING: NotificationMessage(
@@ -223,13 +224,15 @@ class NotificationModel(models.Model):
                 self.INSUFFICIENT_KEY_LENGTH: NotificationMessage(
                     _('Certificate {common_name} uses insufficient key length'),
                     _(
-                        'The certificate {common_name} uses an RSA key size of {spki_key_size} bits, which is less than the recommended 2048 bits.'
+                        'The certificate {common_name} uses an RSA key size of {spki_key_size} bits, '
+                        'which is less than the recommended 2048 bits.'
                     ),
                 ),
                 self.WEAK_ECC_CURVE: NotificationMessage(
                     _('Certificate {common_name} uses a weak ECC curve'),
                     _(
-                        'The certificate {common_name} is using the {spki_ec_curve} ECC curve, which is no longer recommended.'
+                        'The certificate {common_name} is using the {spki_ec_curve} ECC curve, '
+                        'which is no longer recommended.'
                     ),
                 ),
             }
