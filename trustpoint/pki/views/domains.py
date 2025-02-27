@@ -13,8 +13,9 @@ from django.views.generic import DeleteView
 from django.views.generic.edit import CreateView, FormView, UpdateView
 from django.views.generic.list import ListView
 
+from devices.models import IssuedCredentialModel
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
-from pki.models import DevIdRegistration, DomainModel, IssuingCaModel
+from pki.models import DevIdRegistration, DomainModel, IssuingCaModel, CertificateModel
 from pki.models.truststore import TruststoreModel
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -27,7 +28,6 @@ from trustpoint.views.base import (
 
 
 class PkiProtocol(enum.Enum):
-
     EST = 'est'
     CMP = 'cmp'
     REST = 'rest'
@@ -68,7 +68,7 @@ class DomainCreateView(DomainContextMixin, TpLoginRequiredMixin, CreateView):
         form.fields['issuing_ca'].queryset = IssuingCaModel.objects.exclude(
             issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
         ).filter(is_active=True)
-        form.fields['issuing_ca'].empty_label = None # Remove empty "---------" choice
+        form.fields['issuing_ca'].empty_label = None  # Remove empty "---------" choice
         del form.fields['is_active']
         return form
 
@@ -87,7 +87,6 @@ class DomainUpdateView(DomainContextMixin, TpLoginRequiredMixin, UpdateView):
 
 
 class DomainDevIdRegistrationTableMixin(SortableTableMixin, ListInDetailView):
-
     model = DevIdRegistration
     paginate_by = UIConfig.paginate_by
     context_object_name = 'devid_registrations'
@@ -108,6 +107,12 @@ class DomainConfigView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegi
         context = super().get_context_data(**kwargs)
         domain = self.get_object()
 
+        issued_credentials = domain.issued_credentials.all()
+
+        certificates = CertificateModel.objects.filter(
+            credential__in=[issued_credential.credential for issued_credential in issued_credentials])
+
+        context['certificates'] = certificates
         context['protocols'] = {
             'cmp': domain.cmp_protocol if hasattr(domain, 'cmp_protocol') else None,
             'est': domain.est_protocol if hasattr(domain, 'est_protocol') else None,
@@ -135,7 +140,6 @@ class DomainConfigView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegi
 
 
 class DomainDetailView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegistrationTableMixin, ListInDetailView):
-
     detail_model = DomainModel
     template_name = 'pki/domains/details.html'
     detail_context_object_name = 'domain'
@@ -241,6 +245,7 @@ class DevIdRegistrationCreateView(DomainContextMixin, TpLoginRequiredMixin, Form
         domain = self.get_domain()
         return cast('str', reverse_lazy('pki:domains-config', kwargs={'pk': domain.id}))
 
+
 class DevIdRegistrationDeleteView(DomainContextMixin, TpLoginRequiredMixin, DeleteView):
     """View to delete a DevID Registration."""
     model = DevIdRegistration
@@ -252,6 +257,7 @@ class DevIdRegistrationDeleteView(DomainContextMixin, TpLoginRequiredMixin, Dele
         response = super().delete(request, *args, **kwargs)
         messages.success(request, _('DevID Registration Pattern deleted successfully.'))
         return response
+
 
 class DevIdMethodSelectView(DomainContextMixin, TpLoginRequiredMixin, FormView):
     template_name = 'pki/devid_registration/method_select.html'
@@ -279,3 +285,32 @@ class DevIdMethodSelectView(DomainContextMixin, TpLoginRequiredMixin, FormView):
             return HttpResponseRedirect(reverse('pki:devid_registration_create', kwargs={'pk': domain_pk}))
 
         return HttpResponseRedirect(reverse('pki:devid_registration-method_select', kwargs={'pk': domain_pk}))
+
+
+class IssuedCertificatesView(ListView):
+    """View to list certificates issued by a specific Issuing CA for a Domain."""
+
+    model = CertificateModel
+    template_name = 'pki/domains/issued_certificates.html'
+    context_object_name = 'certificates'
+
+    def get_queryset(self):
+        """Return only certificates associated with the domain's issued credentials."""
+        domain = self.get_domain()  # Get the domain
+        issued_credentials = IssuedCredentialModel.objects.filter(
+            domain=domain)
+        certificates = CertificateModel.objects.filter(
+            credential__in=[issued_credential.credential for issued_credential in issued_credentials])
+        return certificates
+
+    def get_domain(self):
+        """Get the domain object based on the URL parameter."""
+        domain_id = self.kwargs.get('pk')
+        return DomainModel.objects.get(pk=domain_id)
+
+    def get_context_data(self, **kwargs):
+        """Pass additional context data to the template."""
+        context = super().get_context_data(**kwargs)
+        domain = self.get_domain()
+        context['domain'] = domain
+        return context
