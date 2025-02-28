@@ -25,14 +25,13 @@ from trustpoint.views.base import (
     BulkDeleteView,
     PrimaryKeyListFromPrimaryKeyString,
     SortableTableMixin,
-    TpLoginRequiredMixin,
 )
 
 if TYPE_CHECKING:
     from typing import ClassVar
 
 
-class TruststoresRedirectView(TpLoginRequiredMixin, RedirectView):
+class TruststoresRedirectView(RedirectView):
     """View that redirects to the index of the PKI Truststores application: Truststores."""
 
     permanent = False
@@ -44,7 +43,7 @@ class TruststoresContextMixin:
 
     extra_context: ClassVar = {'page_category': 'pki', 'page_name': 'truststores'}
 
-class TruststoreTableView(TruststoresContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView):
+class TruststoreTableView(TruststoresContextMixin, SortableTableMixin, ListView):
     """Truststore Table View."""
 
     model = TruststoreModel
@@ -54,7 +53,7 @@ class TruststoreTableView(TruststoresContextMixin, TpLoginRequiredMixin, Sortabl
     default_sort_param = 'unique_name'
 
 
-class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormView):
+class TruststoreCreateView(TruststoresContextMixin, FormView):
     """View for creating a new Truststore."""
 
     model = TruststoreModel
@@ -83,7 +82,7 @@ class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormVi
             context["domain"] = get_object_or_404(DomainModel, id=pk)
         return context
 
-class TruststoreDetailView(TruststoresContextMixin, TpLoginRequiredMixin, DetailView):
+class TruststoreDetailView(TruststoresContextMixin, DetailView):
     """The truststore detail view."""
 
     model = TruststoreModel
@@ -92,7 +91,7 @@ class TruststoreDetailView(TruststoresContextMixin, TpLoginRequiredMixin, Detail
     template_name = 'pki/truststores/details.html'
     context_object_name = 'truststore'
 
-class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, DetailView):
+class TruststoreDownloadView(TruststoresContextMixin, DetailView):
     """View for downloading a single truststore."""
 
     model = TruststoreModel
@@ -147,7 +146,7 @@ class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, Deta
         return response
 
 class TruststoreMultipleDownloadView(
-    TruststoresContextMixin, TpLoginRequiredMixin, PrimaryKeyListFromPrimaryKeyString, ListView
+    TruststoresContextMixin, PrimaryKeyListFromPrimaryKeyString, ListView
 ):
     """View for downloading multiple truststores at once as archived files."""
 
@@ -239,7 +238,7 @@ class TruststoreMultipleDownloadView(
 
         return response
 
-class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, TpLoginRequiredMixin, BulkDeleteView):
+class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
     """View for confirming the deletion of multiple truststores."""
 
     model = TruststoreModel

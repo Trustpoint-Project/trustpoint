@@ -22,7 +22,7 @@ from trustpoint.views.base import (
     ContextDataMixin,
     ListInDetailView,
     SortableTableMixin,
-    TpLoginRequiredMixin,
+    no_login,
 )
 
 
@@ -42,7 +42,7 @@ class DomainContextMixin(ContextDataMixin):
     context_page_name = 'domains'
 
 
-class DomainTableView(DomainContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView):
+class DomainTableView(DomainContextMixin, SortableTableMixin, ListView):
     """Domain Table View."""
 
     model = DomainModel
@@ -52,7 +52,7 @@ class DomainTableView(DomainContextMixin, TpLoginRequiredMixin, SortableTableMix
     default_sort_param = 'unique_name'
 
 
-class DomainCreateView(DomainContextMixin, TpLoginRequiredMixin, CreateView):
+class DomainCreateView(DomainContextMixin, CreateView):
     """View to create a new domain."""
 
     model = DomainModel
@@ -73,7 +73,7 @@ class DomainCreateView(DomainContextMixin, TpLoginRequiredMixin, CreateView):
         return form
 
 
-class DomainUpdateView(DomainContextMixin, TpLoginRequiredMixin, UpdateView):
+class DomainUpdateView(DomainContextMixin, UpdateView):
     """View to edit a domain."""
 
     # TODO(Air): This view is currently UNUSED.
@@ -98,7 +98,7 @@ class DomainDevIdRegistrationTableMixin(SortableTableMixin, ListInDetailView):
         return super().get_queryset()
 
 
-class DomainConfigView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegistrationTableMixin, ListInDetailView):
+class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, ListInDetailView):
     detail_model = DomainModel
     template_name = 'pki/domains/config.html'
     detail_context_object_name = 'domain'
@@ -134,14 +134,14 @@ class DomainConfigView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegi
         return HttpResponseRedirect(self.success_url)
 
 
-class DomainDetailView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegistrationTableMixin, ListInDetailView):
+class DomainDetailView(DomainContextMixin, DomainDevIdRegistrationTableMixin, ListInDetailView):
 
     detail_model = DomainModel
     template_name = 'pki/domains/details.html'
     detail_context_object_name = 'domain'
 
 
-class DomainCaBulkDeleteConfirmView(DomainContextMixin, TpLoginRequiredMixin, BulkDeleteView):
+class DomainCaBulkDeleteConfirmView(DomainContextMixin, BulkDeleteView):
     """View to confirm the deletion of multiple Domains."""
 
     model = DomainModel
@@ -174,7 +174,7 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, TpLoginRequiredMixin, Bu
         return response
 
 
-class DevIdRegistrationCreateView(DomainContextMixin, TpLoginRequiredMixin, FormView):
+class DevIdRegistrationCreateView(DomainContextMixin, FormView):
     """View to create a new DevID Registration."""
 
     http_method_names = ('get', 'post')
@@ -241,7 +241,7 @@ class DevIdRegistrationCreateView(DomainContextMixin, TpLoginRequiredMixin, Form
         domain = self.get_domain()
         return cast('str', reverse_lazy('pki:domains-config', kwargs={'pk': domain.id}))
 
-class DevIdRegistrationDeleteView(DomainContextMixin, TpLoginRequiredMixin, DeleteView):
+class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView):
     """View to delete a DevID Registration."""
     model = DevIdRegistration
     template_name = 'pki/devid_registration/confirm_delete.html'
@@ -253,7 +253,7 @@ class DevIdRegistrationDeleteView(DomainContextMixin, TpLoginRequiredMixin, Dele
         messages.success(request, _('DevID Registration Pattern deleted successfully.'))
         return response
 
-class DevIdMethodSelectView(DomainContextMixin, TpLoginRequiredMixin, FormView):
+class DevIdMethodSelectView(DomainContextMixin, FormView):
     template_name = 'pki/devid_registration/method_select.html'
     form_class = DevIdAddMethodSelectForm
 

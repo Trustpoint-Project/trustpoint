@@ -22,6 +22,7 @@ from setup_wizard import SetupWizardState
 from setup_wizard.forms import EmptyForm, StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import Generator
 from trustpoint.settings import DOCKER_CONTAINER
+from trustpoint.views.base import no_login
 
 APACHE_PATH = Path(__file__).parent.parent.parent / 'docker/apache/tls'
 APACHE_KEY_PATH = APACHE_PATH / Path('apache-tls-server-key.key')
@@ -34,7 +35,6 @@ SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY = STATE_FILE_DIR / Path('wizard_tls_se
 SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY_CANCEL = STATE_FILE_DIR / Path('wizard_tls_server_credential_apply_cancel.sh')
 SCRIPT_WIZARD_DEMO_DATA = STATE_FILE_DIR / Path('wizard_demo_data.sh')
 SCRIPT_WIZARD_CREATE_SUPER_USER = STATE_FILE_DIR / Path('wizard_create_super_user.sh')
-
 
 class TrustpointWizardError(Exception):
     """Custom exception for Trustpoint wizard-related issues."""
@@ -119,7 +119,6 @@ class StartupWizardRedirect:
             return redirect('users:login', permanent=False)
         err_msg = 'Unknown wizard state found. Failed to redirect by state.'
         raise ValueError(err_msg)
-
 
 class SetupWizardInitialView(TemplateView):
     """View for the initial step of the setup wizard.

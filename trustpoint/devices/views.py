@@ -43,7 +43,7 @@ from devices.models import (
     RemoteDeviceCredentialDownloadModel)
 from devices.revocation import DeviceCredentialRevocation
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import ListInDetailView, SortableTableMixin, TpLoginRequiredMixin
+from trustpoint.views.base import ListInDetailView, SortableTableMixin, no_login
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -94,7 +94,7 @@ class DownloadTokenRequiredMixin:
         return super().dispatch(request, *args, **kwargs)
 
 
-class DeviceTableView(DeviceContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView):
+class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView):
     """Device Table View."""
 
     model = DeviceModel
@@ -151,7 +151,7 @@ class DeviceTableView(DeviceContextMixin, TpLoginRequiredMixin, SortableTableMix
 
 
 
-class CreateDeviceView(DeviceContextMixin, TpLoginRequiredMixin, CreateView):
+class CreateDeviceView(DeviceContextMixin, CreateView):
     """Device Create View."""
 
     http_method_names = ('get', 'post')
@@ -190,7 +190,7 @@ class CreateDeviceView(DeviceContextMixin, TpLoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView[DeviceModel]):
+class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, Detail404RedirectView[DeviceModel]):
 
     model = DeviceModel
     template_name = 'devices/help/no_onboarding/cmp_shared_secret.html'
@@ -216,7 +216,7 @@ class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, TpLoginRequiredMix
         return context
 
 
-class OnboardingCmpSharedSecretHelpView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView[DeviceModel]):
+class OnboardingCmpSharedSecretHelpView(DeviceContextMixin, Detail404RedirectView[DeviceModel]):
 
     model = DeviceModel
     template_name = 'devices/help/onboarding/cmp_shared_secret.html'
@@ -249,7 +249,7 @@ class OnboardingCmpSharedSecretHelpView(DeviceContextMixin, TpLoginRequiredMixin
         return context
 
 
-class OnboardingCmpIdevidHelpView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView[DeviceModel]):
+class OnboardingCmpIdevidHelpView(DeviceContextMixin, Detail404RedirectView[DeviceModel]):
 
     model = DeviceModel
     template_name = 'devices/help/onboarding/cmp_idevid.html'
@@ -282,7 +282,7 @@ class OnboardingCmpIdevidHelpView(DeviceContextMixin, TpLoginRequiredMixin, Deta
         return context
 
 
-class DeviceDetailsView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView[DeviceModel]):
+class DeviceDetailsView(DeviceContextMixin, Detail404RedirectView[DeviceModel]):
     """Device Details View."""
 
     http_method_names = ('get',)
@@ -293,7 +293,7 @@ class DeviceDetailsView(DeviceContextMixin, TpLoginRequiredMixin, Detail404Redir
     context_object_name = 'device'
 
 
-class DeviceConfigureView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView[DeviceModel]):
+class DeviceConfigureView(DeviceContextMixin, Detail404RedirectView[DeviceModel]):
     """Device Configuration View."""
 
     http_method_names = ('get',)
@@ -432,13 +432,13 @@ class DeviceBaseCredentialDownloadView(DeviceContextMixin,
         return cast('HttpResponse', response)
 
 
-class DeviceManualCredentialDownloadView(TpLoginRequiredMixin, DeviceBaseCredentialDownloadView):
+class DeviceManualCredentialDownloadView(DeviceBaseCredentialDownloadView):
     """View to download a password protected domain or application credential in the desired format.
 
     This CBV does intentionally not require the authentication mixin.
     """
 
-
+@no_login
 class DeviceBrowserCredentialDownloadView(DownloadTokenRequiredMixin, DeviceBaseCredentialDownloadView):
     """View to download a password protected domain or app credential in the desired format from a remote client.
 
@@ -449,7 +449,7 @@ class DeviceBrowserCredentialDownloadView(DownloadTokenRequiredMixin, DeviceBase
 
 
 class DeviceIssueTlsClientCredential(
-    DeviceContextMixin, TpLoginRequiredMixin, DetailView[DeviceModel], FormView[IssueTlsClientCredentialForm]
+    DeviceContextMixin, DetailView[DeviceModel], FormView[IssueTlsClientCredentialForm]
 ):
     """View to issue a new TLS client credential."""
 
@@ -519,7 +519,7 @@ class DeviceIssueTlsClientCredential(
 
 
 class DeviceIssueTlsServerCredential(
-    DeviceContextMixin, TpLoginRequiredMixin, DetailView[DeviceModel], FormView[IssueTlsServerCredentialForm]
+    DeviceContextMixin, DetailView[DeviceModel], FormView[IssueTlsServerCredentialForm]
 ):
     """View to issue a new TLS server credential."""
 
@@ -604,7 +604,7 @@ class DeviceIssueTlsServerCredential(
 
 
 class DeviceCertificateLifecycleManagementSummaryView(
-    DeviceContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListInDetailView[DeviceModel]
+    DeviceContextMixin, SortableTableMixin, ListInDetailView[DeviceModel]
 ):
     """This is the CLM summary view in the devices section."""
 
@@ -703,7 +703,7 @@ class DeviceCertificateLifecycleManagementSummaryView(
                            record.pk, _('Revoke'))
 
 
-class DeviceRevocationView(DeviceContextMixin, TpLoginRequiredMixin, FormMixin, ListView):
+class DeviceRevocationView(DeviceContextMixin, FormMixin, ListView):
     """Revokes all active credentials for a given device."""
 
     http_method_names = ('get', 'post')
@@ -755,7 +755,7 @@ class DeviceRevocationView(DeviceContextMixin, TpLoginRequiredMixin, FormMixin, 
         return super().form_valid(form)
 
 
-class DeviceCredentialRevocationView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView, FormView):
+class DeviceCredentialRevocationView(DeviceContextMixin, Detail404RedirectView, FormView):
     """Revokes a specific issued credential."""
 
     http_method_names = ('get', 'post')
@@ -791,7 +791,7 @@ class DeviceCredentialRevocationView(DeviceContextMixin, TpLoginRequiredMixin, D
         return super().form_valid(form)
 
 
-class DeviceBrowserOnboardingOTPView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView, RedirectView):
+class DeviceBrowserOnboardingOTPView(DeviceContextMixin, Detail404RedirectView, RedirectView):
     """View to display the OTP for remote credential download (aka. browser onboarding)."""
 
     model = IssuedCredentialModel
@@ -822,7 +822,7 @@ class DeviceBrowserOnboardingOTPView(DeviceContextMixin, TpLoginRequiredMixin, D
         return render(request, self.template_name, context)
 
 
-class DeviceBrowserOnboardingCancelView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView, RedirectView):
+class DeviceBrowserOnboardingCancelView(DeviceContextMixin, Detail404RedirectView, RedirectView):
     """View to cancel the browser onboarding process and delete the associated RemoteDeviceCredentialDownloadModel."""
 
     model = IssuedCredentialModel
@@ -847,7 +847,7 @@ class DeviceBrowserOnboardingCancelView(DeviceContextMixin, TpLoginRequiredMixin
 
         return redirect(self.get_redirect_url())
 
-
+@no_login
 class DeviceOnboardingBrowserLoginView(FormView):
     """View to handle certificate download requests."""
 
@@ -880,7 +880,7 @@ class DeviceOnboardingBrowserLoginView(FormView):
         return redirect(url)
 
 
-class HelpDispatchView(DeviceContextMixin, TpLoginRequiredMixin, SingleObjectMixin, RedirectView):
+class HelpDispatchView(DeviceContextMixin, SingleObjectMixin, RedirectView):
 
     model: type[DeviceModel] = DeviceModel
     permanent = False
@@ -901,7 +901,7 @@ class HelpDispatchView(DeviceContextMixin, TpLoginRequiredMixin, SingleObjectMix
         return f"{reverse('devices:devices')}"
 
 
-class DownloadPageDispatcherView(DeviceContextMixin, TpLoginRequiredMixin, SingleObjectMixin, RedirectView):
+class DownloadPageDispatcherView(DeviceContextMixin, SingleObjectMixin, RedirectView):
 
     model: type[IssuedCredentialModel] = IssuedCredentialModel
     permanent = False
@@ -913,7 +913,7 @@ class DownloadPageDispatcherView(DeviceContextMixin, TpLoginRequiredMixin, Singl
         return f'{reverse("devices:certificate-download", kwargs={"pk": issued_credential.id})}'
 
 
-class CertificateDownloadView(DeviceContextMixin, TpLoginRequiredMixin, DetailView):
+class CertificateDownloadView(DeviceContextMixin, DetailView):
 
     http_method_names = ('get',)
 
@@ -922,7 +922,7 @@ class CertificateDownloadView(DeviceContextMixin, TpLoginRequiredMixin, DetailVi
     context_object_name = 'issued_credential'
 
 
-class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView[DevIdRegistration]):
+class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, Detail404RedirectView[DevIdRegistration]):
 
     model = DevIdRegistration
     template_name = 'devices/help/onboarding/cmp_idevid_registration.html'

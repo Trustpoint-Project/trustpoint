@@ -6,7 +6,7 @@ which can be used within the apps.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, Type, TypeVar
 import logging
 import traceback
 import functools
@@ -16,13 +16,28 @@ from django.contrib import messages
 from django.db.models import QuerySet
 from django.http import Http404
 from django.core.exceptions import ImproperlyConfigured
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponseRedirect, HttpResponseBase
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
+from django.views import View
 from django.views.generic.base import RedirectView
 from django.views.generic.edit import FormMixin
 from django.views.generic.list import BaseListView, ListView, MultipleObjectTemplateResponseMixin
+
+V = TypeVar("V", bound=Type[View])
+
+def no_login(view_class: V) -> V:
+    """Decorator to exempt a class-based view from login requirement."""
+    original_as_view: Callable[..., Callable[..., HttpResponseBase]] = view_class.as_view
+
+    @functools.wraps(original_as_view)
+    def new_as_view(**initkwargs: object) -> Callable[..., HttpResponseBase]:
+        view = original_as_view(**initkwargs)
+        setattr(view, "login_required", False)
+        return view
+
+    setattr(view_class, "as_view", new_as_view)
+    return view_class
 
 
 class IndexView(RedirectView):
@@ -109,16 +124,6 @@ class SortableTableMixin:
         # Pass sorting details to the template
         context['current_sort'] = sort_param
         return context
-
-
-class TpLoginRequiredMixin(LoginRequiredMixin):
-    """LoginRequiredMixin that adds a warning message if the user is not logged in."""
-    request: HttpRequest
-
-    def handle_no_permission(self) -> HttpResponseRedirect:
-        """Redirects to the login page with a warning message if the user is not logged in."""
-        messages.add_message(self.request, messages.WARNING, message=_('Login required!'))
-        return super().handle_no_permission()
 
 
 class ContextDataMixin:
