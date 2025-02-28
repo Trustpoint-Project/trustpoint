@@ -18,7 +18,7 @@ from django.views.generic.base import RedirectView
 from django.views.generic.list import ListView
 
 from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH, UIConfig
-from trustpoint.views.base import LoggerMixin, SortableTableMixin, TpLoginRequiredMixin
+from trustpoint.views.base import LoggerMixin, SortableTableMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -52,7 +52,7 @@ class LoggingContextMixin:
     }
 
 
-class LoggingFilesTableView(LoggerMixin, TpLoginRequiredMixin, LoggingContextMixin, SortableTableMixin, ListView):
+class LoggingFilesTableView(LoggerMixin, LoggingContextMixin, SortableTableMixin, ListView):
     """View to display all log files in the log directory in a table."""
     http_method_names = ('get', )
 
@@ -113,7 +113,7 @@ class LoggingFilesTableView(LoggerMixin, TpLoginRequiredMixin, LoggingContextMix
         self.queryset = [self._get_log_file_data(log_file_name) for log_file_name in valid_log_files]
         return super().get_queryset()
 
-class LoggingFilesDetailsView(LoggerMixin, LoggingContextMixin, TpLoginRequiredMixin, TemplateView):
+class LoggingFilesDetailsView(LoggerMixin, LoggingContextMixin, TemplateView):
     """Log file detail view, allows to view the content of a single log file without download."""
     http_method_names = ('get', )
 
@@ -136,7 +136,7 @@ class LoggingFilesDetailsView(LoggerMixin, LoggingContextMixin, TpLoginRequiredM
         return context
 
 
-class LoggingFilesDownloadView(LoggerMixin, LoggingContextMixin, TpLoginRequiredMixin, TemplateView):
+class LoggingFilesDownloadView(LoggerMixin, LoggingContextMixin, TemplateView):
     """View to download a single log file"""
     http_method_names = ('get', )
 
@@ -155,7 +155,7 @@ class LoggingFilesDownloadView(LoggerMixin, LoggingContextMixin, TpLoginRequired
         return response
 
 
-class LoggingFilesDownloadMultipleView(LoggerMixin, LoggingContextMixin, TpLoginRequiredMixin, View):
+class LoggingFilesDownloadMultipleView(LoggerMixin, LoggingContextMixin, View):
     """View to download multiple log files as a single archive."""
     http_method_names = ('get', )
 

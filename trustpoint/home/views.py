@@ -23,7 +23,7 @@ from django.views.generic.list import ListView
 from pki.models import CertificateModel, IssuingCaModel
 
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import SortableTableMixin, TpLoginRequiredMixin
+from trustpoint.views.base import SortableTableMixin
 
 from .filters import NotificationFilter
 from .models import NotificationModel, NotificationStatus
@@ -35,14 +35,14 @@ SUCCESS = 25
 ERROR = 40
 
 
-class IndexView(TpLoginRequiredMixin, RedirectView):
+class IndexView(RedirectView):
     """Redirects authenticated users to the dashboard page."""
 
     permanent = False
     pattern_name = 'home:dashboard'
 
 
-class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView):
+class DashboardView(SortableTableMixin, ListView):
     """Renders the dashboard page for authenticated users. Uses the 'home/dashboard.html' template."""
 
     template_name = 'home/dashboard.html'
@@ -159,7 +159,7 @@ def mark_as_solved(request: HttpRequest, pk: int | str) -> HttpResponse:
     return render(request, 'home/notification_details.html', context)
 
 
-class AddDomainsAndDevicesView(TpLoginRequiredMixin, TemplateView):
+class AddDomainsAndDevicesView(TemplateView):
     """View to execute the add_domains_and_devices management command and pass status to the template."""
 
     _logger = logging.getLogger(__name__)
@@ -177,7 +177,7 @@ class AddDomainsAndDevicesView(TpLoginRequiredMixin, TemplateView):
         return redirect('home:dashboard')
 
 
-class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
+class DashboardChartsAndCountsView(TemplateView):
     """View to mark the notification as Solved."""
 
     _logger = logging.getLogger(__name__)

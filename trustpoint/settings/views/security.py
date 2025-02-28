@@ -14,16 +14,13 @@ from settings.forms import SecurityConfigForm
 from settings.models import SecurityConfig
 from settings.security.features import AutoGenPkiFeature
 from settings.security.mixins import SecurityLevelMixin
-from trustpoint.views.base import (
-    TpLoginRequiredMixin,
-)
 
 if TYPE_CHECKING:
     from typing import Any
 
 
 
-class SecurityView(TpLoginRequiredMixin, SecurityLevelMixin, FormView):
+class SecurityView(SecurityLevelMixin, FormView):
     template_name = 'settings/security.html'
     form_class = SecurityConfigForm
     success_url = reverse_lazy('settings:security')

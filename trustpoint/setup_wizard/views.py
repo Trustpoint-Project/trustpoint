@@ -22,6 +22,7 @@ from setup_wizard import SetupWizardState
 from setup_wizard.forms import EmptyForm, StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import Generator
 from trustpoint.settings import DOCKER_CONTAINER
+from trustpoint.views.base import no_login
 
 APACHE_PATH = Path(__file__).parent.parent.parent / 'docker/apache/tls'
 APACHE_KEY_PATH = APACHE_PATH / Path('apache-tls-server-key.key')
@@ -34,7 +35,6 @@ SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY = STATE_FILE_DIR / Path('wizard_tls_se
 SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY_CANCEL = STATE_FILE_DIR / Path('wizard_tls_server_credential_apply_cancel.sh')
 SCRIPT_WIZARD_DEMO_DATA = STATE_FILE_DIR / Path('wizard_demo_data.sh')
 SCRIPT_WIZARD_CREATE_SUPER_USER = STATE_FILE_DIR / Path('wizard_create_super_user.sh')
-
 
 class TrustpointWizardError(Exception):
     """Custom exception for Trustpoint wizard-related issues."""
@@ -120,7 +120,7 @@ class StartupWizardRedirect:
         err_msg = 'Unknown wizard state found. Failed to redirect by state.'
         raise ValueError(err_msg)
 
-
+@no_login
 class SetupWizardInitialView(TemplateView):
     """View for the initial step of the setup wizard.
 
@@ -163,6 +163,7 @@ class SetupWizardInitialView(TemplateView):
         return super().get(*args, **kwargs)
 
 
+@no_login
 class SetupWizardGenerateTlsServerCredentialView(FormView):
     """View for generating TLS Server Credentials in the setup wizard.
 
@@ -266,6 +267,7 @@ class SetupWizardGenerateTlsServerCredentialView(FormView):
         return error_messages.get(return_code, 'An unknown error occurred.')
 
 
+@no_login
 class SetupWizardImportTlsServerCredentialView(View):
     """View for handling the import of TLS Server Credentials."""
 
@@ -292,6 +294,7 @@ class SetupWizardImportTlsServerCredentialView(View):
         return redirect('setup_wizard:initial', permanent=False)
 
 
+@no_login
 class SetupWizardTlsServerCredentialApplyView(FormView):
     """View for handling the application of TLS Server Credentials in the setup wizard.
 
@@ -481,6 +484,7 @@ class SetupWizardTlsServerCredentialApplyView(FormView):
         APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
 
 
+@no_login
 class SetupWizardTlsServerCredentialApplyCancelView(View):
     """View for handling the cancellation of TLS Server Credential application.
 
@@ -551,6 +555,7 @@ class SetupWizardTlsServerCredentialApplyCancelView(View):
         return error_messages.get(return_code, 'An unknown error occurred during the cancel operation.')
 
 
+@no_login
 class SetupWizardDemoDataView(FormView):
     """View for handling the demo data setup during the setup wizard.
 
@@ -648,6 +653,7 @@ class SetupWizardDemoDataView(FormView):
         return error_messages.get(return_code, 'An unknown error occurred while executing the demo data script.')
 
 
+@no_login
 class SetupWizardCreateSuperUserView(FormView):
     """View for handling the creation of a superuser during the setup wizard.
 

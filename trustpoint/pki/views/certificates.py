@@ -14,13 +14,13 @@ from django.views.generic.list import ListView
 
 from pki.models import CertificateModel
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTableMixin, TpLoginRequiredMixin
+from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTableMixin
 
 if TYPE_CHECKING:
     from typing import ClassVar
 
 
-class CertificatesRedirectView(TpLoginRequiredMixin, RedirectView):
+class CertificatesRedirectView(RedirectView):
     """View that redirects to the index of the PKI Issuing CA application: Issuing CAs."""
 
     permanent = False
@@ -33,7 +33,7 @@ class CertificatesContextMixin:
     extra_context: ClassVar = {'page_category': 'pki', 'page_name': 'certificates'}
 
 
-class CertificateTableView(CertificatesContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView):
+class CertificateTableView(CertificatesContextMixin, SortableTableMixin, ListView):
     """Certificate Table View."""
 
     model = CertificateModel
@@ -42,7 +42,7 @@ class CertificateTableView(CertificatesContextMixin, TpLoginRequiredMixin, Sorta
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'common_name'
 
-class CertificateDetailView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView):
+class CertificateDetailView(CertificatesContextMixin, DetailView):
     """The certificate detail view."""
 
     model = CertificateModel
@@ -51,7 +51,7 @@ class CertificateDetailView(CertificatesContextMixin, TpLoginRequiredMixin, Deta
     template_name = 'pki/certificates/details.html'
     context_object_name = 'cert'
 
-class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView):
+class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, DetailView):
     """View for downloading a single certificate."""
 
     model = CertificateModel
@@ -89,7 +89,7 @@ class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, TpLoginRequi
         return response
 
 
-class CertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView):
+class CertificateDownloadView(CertificatesContextMixin, DetailView):
     """View for downloading a single certificate."""
 
     model = CertificateModel
@@ -142,7 +142,7 @@ class CertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, De
 
 
 class CertificateMultipleDownloadView(
-    CertificatesContextMixin, TpLoginRequiredMixin, PrimaryKeyListFromPrimaryKeyString, ListView
+    CertificatesContextMixin, PrimaryKeyListFromPrimaryKeyString, ListView
 ):
     """View for downloading multiple certificates at once as archived files."""
 
