@@ -3,8 +3,7 @@ from django.contrib.auth.middleware import LoginRequiredMiddleware
 
 
 class LoginRequired(LoginRequiredMiddleware):
-    """asd"""
-
+    """Middleware that redirects all unauthenticated requests to a login page."""
 
     def process_view(self, request, view_func, view_args, view_kwargs):  # noqa: ANN001, ANN201, D102
         if any(request.path.startswith(path) for path in settings.PUBLIC_PATHS) and not request.user.is_authenticated:
