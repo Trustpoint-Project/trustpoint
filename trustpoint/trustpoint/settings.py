@@ -140,7 +140,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.auth.middleware.LoginRequiredMiddleware',
+    'trustpoint.middleware.LoginRequiredMiddleware.LoginRequired',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -310,3 +310,11 @@ class UIConfig:
     """User interface configuration defaults."""
     paginate_by: ClassVar[int] = 50
     notifications_paginate_by: ClassVar[int] = 5
+
+
+PUBLIC_PATHS = [
+    '/setup-wizard',
+    '/.well-known/cmp',
+    '/.well-known/est',
+    '/crl',
+]
