@@ -147,6 +147,9 @@ class IssuedCredentialModel(models.Model):
         GENERIC = 1, _('Generic')
         TLS_CLIENT = 2, _('TLS-Client')
         TLS_SERVER = 3, _('TLS-Server')
+        OPCUA_CLIENT = 4, _('OpcUa-Client')
+        OPCUA_SERVER = 5, _('OpcUa-Server')
+
 
 
     id = models.AutoField(primary_key=True)

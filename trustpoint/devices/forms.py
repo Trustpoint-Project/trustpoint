@@ -95,7 +95,6 @@ class IssueTlsClientCredentialForm(forms.Form):
             raise forms.ValidationError(err_msg)
         return validity
 
-
 class IssueTlsServerCredentialForm(forms.Form):
     """Form to issue a new TLS server credential."""
 
@@ -183,6 +182,137 @@ class IssueTlsServerCredentialForm(forms.Form):
             raise forms.ValidationError(err_msg)
         return cleaned_data
 
+class IssueOpcUaClientCredentialForm(forms.Form):
+    """Form to issue a new OPC UA client credential."""
+
+    def __init__(self, *args: Any, device: DeviceModel, **kwargs: Any) -> None:
+        """Overwrite the constructor to accept the current device instance."""
+        self.device = device
+        super().__init__(*args, **kwargs)
+
+    common_name = forms.CharField(
+        max_length=255,
+        label=_('Common Name'),
+        required=True,
+    )
+    application_uri = forms.CharField(max_length=100, label=_('Application URI'), required=True)
+    pseudonym = forms.CharField(max_length=255, label=_('Pseudonym'), required=True, disabled=True)
+    domain_component = forms.CharField(max_length=255, label=_('Domain Component'), required=True, disabled=True)
+    serial_number = forms.CharField(max_length=255, label=_('Serial Number'), required=True, disabled=True)
+    validity = forms.IntegerField(label=_('Validity (days)'), initial=10, required=True)
+
+    def clean_common_name(self) -> str:
+        """Checks the common name."""
+        common_name = cast(str, self.cleaned_data['common_name'])
+        if IssuedCredentialModel.objects.filter(common_name=common_name, device=self.device).exists():
+            err_msg = (
+                f'Credential with common name {common_name} ' f'already exists for device {self.device.unique_name}.'
+            )
+            raise forms.ValidationError(err_msg)
+        return common_name
+
+    def clean_validity(self) -> int:
+        """Checks the validity."""
+        validity = cast(int, self.cleaned_data['validity'])
+        if validity <= 0:
+            err_msg = _('Validity must be a positive integer.')
+            raise forms.ValidationError(err_msg)
+        return validity
+
+    def clean(self) -> dict[str, Any]:
+        """Checks that at least the Application URI is set."""
+        cleaned_data = cast(dict[str, Any], super().clean())
+        application_uri = cleaned_data.get('application_uri')
+        if not (application_uri):
+            err_msg = _('Application URI entry is required.')
+            raise forms.ValidationError(err_msg)
+        return cleaned_data
+
+class IssueOpcUaServerCredentialForm(forms.Form):
+    """Form to issue a new TLS server credential."""
+
+    def __init__(self, *args: Any, device: DeviceModel, **kwargs: Any) -> None:
+        """Overwrite the constructor to accept the current device instance."""
+        self.device = device
+        super().__init__(*args, **kwargs)
+
+    common_name = forms.CharField(max_length=100, label=_('Common Name'), required=True)
+    pseudonym = forms.CharField(max_length=100, label=_('Pseudonym'), required=True, disabled=True)
+    serial_number = forms.CharField(max_length=100, label=_('Serial Number'), required=True, disabled=True)
+    domain_component = forms.CharField(max_length=255, label=_('Domain Component'), required=True, disabled=True)
+    validity = forms.IntegerField(label=_('Validity (days)'), initial=10, required=True)
+    application_uri = forms.CharField(max_length=100, label=_('Application URI'), required=True)
+    ipv4_addresses = forms.CharField(
+        label=_('IPv4-Addresses (comma-separated list)'), initial='127.0.0.1, ', required=False
+    )
+    ipv6_addresses = forms.CharField(label=_('IPv6-Addresses (comma-separated list)'), initial='::1, ', required=False)
+    domain_names = forms.CharField(
+        label=_('Domain-Names (comma-separated list)'), initial='localhost, ', required=False
+    )
+
+    def clean_common_name(self) -> str:
+        """Checks the common name."""
+        common_name = cast(str, self.cleaned_data['common_name'])
+        if IssuedCredentialModel.objects.filter(common_name=common_name, device=self.device).exists():
+            err_msg = _('Credential with common name %s already exists for device %s.') % (
+                common_name,
+                self.device.unique_name,
+            )
+            raise forms.ValidationError(err_msg)
+        return common_name
+
+    def clean_validity(self) -> int:
+        """Checks the validity."""
+        validity = cast(int, self.cleaned_data['validity'])
+        if validity <= 0:
+            err_msg = _('Validity must be a positive integer.')
+            raise forms.ValidationError(err_msg)
+        return validity
+
+    def clean_ipv4_addresses(self) -> list[ipaddress.IPv4Address]:
+        """Checks the IPv4 addresses."""
+        data = self.cleaned_data['ipv4_addresses'].strip()
+        if not data:
+            return []
+
+        addresses = data.split(',')
+        try:
+            return [ipaddress.IPv4Address(address.strip()) for address in addresses if address.strip() != '']
+        except ipaddress.AddressValueError as exception:
+            err_msg = _('Contains an invalid IPv4-Address.')
+            raise forms.ValidationError(err_msg) from exception
+
+    def clean_ipv6_addresses(self) -> list[ipaddress.IPv6Address]:
+        """Checks the IPv6 addresses."""
+        data = self.cleaned_data['ipv6_addresses'].strip()
+        if not data:
+            return []
+
+        addresses = data.split(',')
+        try:
+            return [ipaddress.IPv6Address(address.strip()) for address in addresses if address.strip() != '']
+        except ipaddress.AddressValueError as exception:
+            err_msg = _('Contains an invalid IPv6-Address.')
+            raise forms.ValidationError(err_msg) from exception
+
+    def clean_domain_names(self) -> list[str]:
+        """Checks the domain names."""
+        data = self.cleaned_data['domain_names'].strip()
+        if not data:
+            return []
+
+        domain_names = data.split(',')
+        # TODO(AlexHx8472): Check for valid domains.
+        return [domain_name.strip() for domain_name in domain_names if domain_name.strip() != '']
+
+    def clean(self) -> dict[str, Any]:
+        """Checks that at least the Application URI is set."""
+        cleaned_data = cast(dict[str, Any], super().clean())
+        application_uri = cleaned_data.get('application_uri')
+        if not (application_uri):
+            err_msg = _('Application URI entry is required.')
+            raise forms.ValidationError(err_msg)
+        return cleaned_data
 
 class BrowserLoginForm(forms.Form):
     """Form for the browser login via OTP for remote credential download."""

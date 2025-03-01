@@ -34,9 +34,10 @@ from devices.forms import (
     CredentialRevocationForm,
     IssueTlsClientCredentialForm,
     IssueTlsServerCredentialForm,
-    CreateDeviceForm
+    CreateDeviceForm, IssueOpcUaServerCredentialForm, IssueOpcUaClientCredentialForm
 )
-from devices.issuer import LocalTlsClientCredentialIssuer, LocalTlsServerCredentialIssuer
+from devices.issuer import (LocalTlsClientCredentialIssuer, LocalTlsServerCredentialIssuer,
+                            OpcUaServerCredentialIssuer, OpcUaClientCredentialIssuer)
 from devices.models import (
     DeviceModel,
     IssuedCredentialModel,
@@ -517,7 +518,6 @@ class DeviceIssueTlsClientCredential(
         )
         return super().form_valid(form)
 
-
 class DeviceIssueTlsServerCredential(
     DeviceContextMixin, TpLoginRequiredMixin, DetailView[DeviceModel], FormView[IssueTlsServerCredentialForm]
 ):
@@ -602,6 +602,163 @@ class DeviceIssueTlsServerCredential(
 
         return super().form_valid(form)
 
+class DeviceIssueOpcUaClientCredential(
+    DeviceContextMixin, TpLoginRequiredMixin, DetailView[DeviceModel], FormView[IssueTlsClientCredentialForm]
+):
+    """View to issue a new TLS client credential."""
+
+    http_method_names = ('get', 'post')
+
+    model = DeviceModel
+    context_object_name = 'device'
+    template_name = 'devices/credentials/issue_application_credential.html'
+    form_class = IssueOpcUaClientCredentialForm
+
+    def get_initial(self) -> dict[str, Any]:
+        """Gets the initial data for the form.
+
+        Returns:
+            Dictionary containing the initial form data.
+        """
+        initial = super().get_initial()
+        device = self.get_object()
+        initial.update(OpcUaClientCredentialIssuer.get_fixed_values(device=device, domain=device.domain))
+        return initial
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        form_kwargs = super().get_form_kwargs()
+        form_kwargs.update({'device': self.get_object()})
+        return form_kwargs
+
+    def get_success_url(self) -> str:
+        """Returns the URL to redirect to if the form is valid and was successfully processed."""
+        kwargs = {'pk': self.get_object().id}
+        return cast('str', reverse_lazy('devices:certificate_lifecycle_management', kwargs=kwargs))
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Processing of all POST requests, i.e. the expected form data.
+
+        Args:
+            request: The POST request to process.
+            *args: Any positional arguments are passed to super().get().
+            **kwargs: Any keyword arguments are passed to super().get().
+
+        Returns:
+            The HttpResponse to display the view.
+        """
+        self.object = self.get_object()
+        return FormView.post(self, request, *args, **kwargs)
+
+    def form_valid(self, form: IssueOpcUaClientCredentialForm) -> HttpResponse:
+        """Processing the valid form data.
+
+        This will use the contained form data to issue a new OPC UA client credential.
+
+        Args:
+            form: The valid form including the cleaned data.
+
+        Returns:
+            The HttpResponse that will display the CLM summary view.
+        """
+        device = self.get_object()
+        common_name = cast('str', form.cleaned_data.get('common_name'))
+        validity = cast('int', form.cleaned_data.get('validity'))
+        application_uri = cast('str', form.cleaned_data.get('application_uri'))
+
+        opcua_client_issuer = OpcUaClientCredentialIssuer(device=device, domain=device.domain)
+        _ = opcua_client_issuer.issue_opcua_client_credential(common_name=common_name,
+                                                              application_uri=application_uri,
+                                                              validity_days=validity)
+        messages.success(
+            self.request, 'Successfully issued OPC UA Client credential device ' f'{opcua_client_issuer.device.unique_name}'
+        )
+        return super().form_valid(form)
+
+class DeviceIssueOpcUaServerCredential(
+    DeviceContextMixin, TpLoginRequiredMixin, DetailView[DeviceModel], FormView[IssueTlsServerCredentialForm]
+):
+    """View to issue a new OPC UA server credential."""
+
+    http_method_names = ('get', 'post')
+
+    model = DeviceModel
+    context_object_name = 'device'
+    template_name = 'devices/credentials/issue_application_credential.html'
+    form_class = IssueOpcUaServerCredentialForm
+
+    def get_initial(self) -> dict[str, Any]:
+        """Gets the initial data for the form.
+
+        Returns:
+            Dictionary containing the initial form data.
+        """
+        initial = super().get_initial()
+        device = self.get_object()
+        initial.update(OpcUaServerCredentialIssuer.get_fixed_values(device=device, domain=device.domain))
+        return initial
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        form_kwargs = super().get_form_kwargs()
+        form_kwargs.update({'device': self.get_object()})
+        return form_kwargs
+
+    def get_success_url(self) -> str:
+        """Returns the URL to redirect to if the form is valid and was successfully processed."""
+        kwargs = {'pk': self.get_object().id}
+        return cast('str', reverse_lazy('devices:certificate_lifecycle_management', kwargs=kwargs))
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Processing of all POST requests, i.e. the expected form data.
+
+        Args:
+            request: The POST request to process.
+            *args: Any positional arguments are passed to super().get().
+            **kwargs: Any keyword arguments are passed to super().get().
+
+        Returns:
+            The HttpResponse to display the view.
+        """
+        self.object = self.get_object()
+        return FormView.post(self, request, *args, **kwargs)
+
+    def form_valid(self, form: IssueOpcUaServerCredentialForm) -> HttpResponse:
+        """Processing the valid form data.
+
+        This will use the contained form data to issue a new TLS server credential.
+
+        Args:
+            form: The valid form including the cleaned data.
+
+        Returns:
+            The HttpResponse that will display the CLM summary view.
+        """
+        device = self.get_object()
+
+        common_name = cast('str', form.cleaned_data.get('common_name'))
+        application_uri = cast('str', form.cleaned_data.get('application_uri'))
+        ipv4_addresses = cast('list[ipaddress.IPv4Address]', form.cleaned_data.get('ipv4_addresses'))
+        ipv6_addresses = cast('list[ipaddress.IPv6Address]', form.cleaned_data.get('ipv6_addresses'))
+        domain_names = cast('list[str]', form.cleaned_data.get('domain_names'))
+        validity = cast('int', form.cleaned_data.get('validity'))
+
+        if not common_name:
+            raise Http404
+
+        opcua_server_credential_issuer = OpcUaServerCredentialIssuer(device=device, domain=device.domain)
+        _ = opcua_server_credential_issuer.issue_opcua_server_credential(
+            common_name=common_name,
+            application_uri=application_uri,
+            ipv4_addresses=ipv4_addresses,
+            ipv6_addresses=ipv6_addresses,
+            domain_names=domain_names,
+            validity_days=validity,
+        )
+        messages.success(
+            self.request,
+            'Successfully issued OPC UA Server credential device ' f'{opcua_server_credential_issuer.device.unique_name}',
+        )
+
+        return super().form_valid(form)
 
 class DeviceCertificateLifecycleManagementSummaryView(
     DeviceContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListInDetailView[DeviceModel]

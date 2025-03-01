@@ -50,6 +50,15 @@ urlpatterns = [
         'certificate-lifecycle-management/<int:pk>/issue-tls-server-credential/',
         views.DeviceIssueTlsServerCredential.as_view(),
         name='certificate_lifecycle_management-issue_tls_server_credential'),
+    path(
+        'certificate-lifecycle-management/<int:pk>/issue-opcua-client-credential/',
+        views.DeviceIssueOpcUaClientCredential.as_view(),
+        name='certificate_lifecycle_management-issue_opcua_client_credential'),
+    path(
+        'certificate-lifecycle-management/<int:pk>/issue-opcua-server-credential/',
+        views.DeviceIssueOpcUaServerCredential.as_view(),
+        name='certificate_lifecycle_management-issue_opcua_server_credential'),
+
     path('certificate-lifecycle-management/<int:pk>/revoke/<int:credential_pk>/',
          views.DeviceCredentialRevocationView.as_view(),
          name='credential_revocation'),
