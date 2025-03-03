@@ -20,8 +20,7 @@ RUN apt-get update && \
         apache2 \
         apache2-utils \
         gettext \
-        libapache2-mod-wsgi-py3 \
-        sed && \
+        libapache2-mod-wsgi-py3 && \
     rm -rf /var/lib/apt/lists/*
 
 # Sets the current WORKDIR for the following commands
@@ -50,9 +49,6 @@ USER root
 RUN sed -i '/DEBUG = True/s/True/False/' trustpoint/trustpoint/settings.py && \
     sed -i '/DOCKER_CONTAINER = False/s/False/True/' trustpoint/trustpoint/settings.py
 
-# Place executables in the environment at the front of the path
-#ENV PATH="/var/www/html/trustpoint/.venv/bin:$PATH"
-
 # Create and setup the /etc/trustpoint/ directory
 RUN mkdir -p /etc/trustpoint/ && \
     cp -r /var/www/html/trustpoint/docker/* /etc/trustpoint/ && \
@@ -65,7 +61,7 @@ RUN cp ./docker/wizard/sudoers /etc/sudoers && \
     chmod 440 /etc/sudoers && \
     service sudo restart
 
-# TODO(AlexHx8472): User proper docker secrets handling.
+# TODO(AlexHx8472): We may want to use proper docker secrets handling in the future
 RUN mkdir -p /etc/trustpoint/secrets && \
     uv run python -c "from pathlib import Path; from django.core.management.utils import get_random_secret_key; Path('/etc/trustpoint/secrets/django_secret_key.env').write_text(get_random_secret_key())" && \
     chown -R www-data:www-data /etc/trustpoint/secrets && \
