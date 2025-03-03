@@ -184,20 +184,18 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:  # noqa: ARG002
         """Get dashboard data for panels, tables and charts"""
-        start_date: str = request.GET.get('start_date', None)
-        start_date_object = None
+        start_date: str|None = request.GET.get('start_date', None)
+
+        start_date_object: datetime = timezone.now()
         # Parse the date string into a datetime.date object
         if start_date:
-            start_date_object = dateparse.parse_datetime(start_date)  # Returns a datetime object
-            if not start_date_object:
+            parsed_date = dateparse.parse_datetime(start_date)  # Returns a datetime object
+            if not parsed_date:
                 return JsonResponse({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=400)
-        else:
-            tz = timezone.get_current_timezone()
-            start_date_object = datetime.now(tz).date()
-
+            start_date_object = parsed_date
         dashboard_data: dict[str, Any] = {}
 
-        start_date_object = timezone.make_aware(datetime.combine(start_date_object, datetime.min.time()))
+        start_date_object = timezone.make_aware(datetime.combine(start_date_object.date(), datetime.min.time()))
         device_counts = self.get_device_count_by_onboarding_status(start_date_object)
         dashboard_data['device_counts'] = device_counts
         self._logger.debug('device counts %s', device_counts)
