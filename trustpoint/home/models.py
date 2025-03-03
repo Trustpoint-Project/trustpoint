@@ -19,7 +19,7 @@ log = logging.getLogger('tp.home')
 class NotificationStatus(models.Model):
     """Model representing a status a notification can have."""
 
-    objects: models.Manager[CertificateModel]
+    objects: models.Manager[NotificationStatus]
 
     class StatusChoices(models.TextChoices):
         """Status Types"""
@@ -86,7 +86,7 @@ class NotificationMessage:
 class NotificationModel(models.Model):
     """Notifications Model."""
 
-    objects: models.Manager[CertificateModel]
+    objects: models.Manager[NotificationModel]
 
     class NotificationTypes(models.TextChoices):
         """Supported Notification Types."""
