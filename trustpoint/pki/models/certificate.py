@@ -61,6 +61,8 @@ class CertificateModel(LoggerMixin, models.Model):
     See RFC5280 for more information.
     """
 
+    objects: models.Manager[CertificateModel]
+
     class CertificateStatus(models.TextChoices):
         """CertificateModel status"""
         OK = 'OK', _('OK')

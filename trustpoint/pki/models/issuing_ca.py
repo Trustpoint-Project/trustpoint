@@ -26,6 +26,8 @@ class IssuingCaModel(LoggerMixin, models.Model):
     This model contains the configurations of all Issuing CAs available within the Trustpoint.
     """
 
+    objects: models.Manager[IssuingCaModel]
+
     class IssuingCaTypeChoice(models.IntegerChoices):
         """The IssuingCaTypeChoice defines the type of Issuing CA.
 
