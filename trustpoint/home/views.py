@@ -66,7 +66,7 @@ class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView[Notificat
         start_date = end_date - timedelta(days=6)
         return [(start_date + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
 
-    def get_queryset(self) -> QuerySet[NotificationModel]:
+    def get_queryset(self) -> Any:
         """Returns a queryset of NotificationModel instances."""
         all_notifications = NotificationModel.objects.all()
 
