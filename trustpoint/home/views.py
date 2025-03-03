@@ -42,7 +42,7 @@ class IndexView(TpLoginRequiredMixin, RedirectView):
     pattern_name = 'home:dashboard'
 
 
-class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView):
+class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView[NotificationModel]):
     """Renders the dashboard page for authenticated users. Uses the 'home/dashboard.html' template."""
 
     template_name = 'home/dashboard.html'
@@ -51,7 +51,7 @@ class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView):
     default_sort_param = '-created_at'
     paginate_by = UIConfig.notifications_paginate_by
 
-    def __init__(self, *args: tuple, **kwargs: dict) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the parent class with the given arguments and keyword arguments."""
         super().__init__(*args, **kwargs)
         self.last_week_dates = self.generate_last_week_dates()
@@ -74,7 +74,7 @@ class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView):
         self.queryset = notification_filter.qs
         return super().get_queryset()
 
-    def get_context_data(self, **kwargs: dict) -> dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Fetch context data"""
         context = super().get_context_data(**kwargs)
 
@@ -165,7 +165,7 @@ class AddDomainsAndDevicesView(TpLoginRequiredMixin, TemplateView):
 
     _logger = logging.getLogger(__name__)
 
-    def get(self, request: HttpRequest, *args: tuple, **kwargs: dict) -> HttpResponse:  # noqa: ARG002
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:  # noqa: ARG002
         """Handles GET requests and redirects to the dashboard."""
         try:
             call_command('add_domains_and_devices')
@@ -182,7 +182,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
 
     _logger = logging.getLogger(__name__)
 
-    def get(self, request: HttpRequest, *args: tuple, **kwargs: dict) -> HttpResponse:  # noqa: ARG002
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:  # noqa: ARG002
         """Get dashboard data for panels, tables and charts"""
         start_date: str = request.GET.get('start_date', None)
         start_date_object = None
@@ -303,9 +303,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
         cert_counts_by_status = []
         try:
             cert_status_qr = (
-                CertificateModel.objects.annotate(
-                    issue_date=TruncDate('not_valid_before')
-                )
+                CertificateModel.objects.annotate(issue_date=TruncDate('not_valid_before'))
                 .values('issue_date', 'certificate_status')
                 .annotate(cert_count=Count('id'))
                 .order_by('issue_date', 'certificate_status')
@@ -473,16 +471,12 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
         }
         try:
             cert_template_qr = (
-                IssuedCredentialModel.objects.filter(
-                    credential__certificates__created_at__gt=start_date
-                )
+                IssuedCredentialModel.objects.filter(credential__certificates__created_at__gt=start_date)
                 .values(cert_type=F('issued_credential_purpose'))
                 .annotate(count=Count('credential__certificates'))
             )
             # Mapping from short code to human-readable name
-            template_mapping = {
-                key: str(value) for key, value in IssuedCredentialModel.IssuedCredentialPurpose.choices
-            }
+            template_mapping = {key: str(value) for key, value in IssuedCredentialModel.IssuedCredentialPurpose.choices}
             cert_counts_by_template = {template_mapping[item['cert_type']]: item['count'] for item in cert_template_qr}
         except Exception:
             self._logger.exception('Error occurred in certificate count by template query')
