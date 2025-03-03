@@ -3,24 +3,21 @@
 from __future__ import annotations
 
 import ipaddress
-from typing import Any, cast
 import secrets
+from typing import Any, cast
 
+from crispy_bootstrap5.bootstrap5 import Field
+from crispy_forms.helper import FormHelper
+from crispy_forms.layout import HTML, Div, Layout
 from django import forms
+from django.db.models.query import QuerySet
 from django.utils.translation import gettext_lazy as _
-
-from devices.models import DeviceModel, IssuedCredentialModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.domain import DomainModel
-
-from crispy_forms.helper import FormHelper
-from crispy_forms.layout import Layout, HTML, Div
-from crispy_bootstrap5.bootstrap5 import Field
-
 from pki.models.truststore import TruststoreModel
-from devices.widgets import DisableSelectOptionsWidget
-from django.db.models.query import QuerySet
 
+from devices.models import DeviceModel, IssuedCredentialModel
+from devices.widgets import DisableSelectOptionsWidget
 
 PASSWORD_MIN_LENGTH = 12
 
@@ -67,7 +64,7 @@ class BaseCredentialForm(forms.Form):
     serial_number = forms.CharField(max_length=255, label=_('Serial Number'), required=True, disabled=True)
     validity = forms.IntegerField(label=_('Validity (days)'), initial=10, required=True)
 
-    def __init__(self, *args: Any, device, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, device: DeviceModel, **kwargs: Any) -> None:
         """Overwrite the constructor to accept the current device instance."""
         self.device = device
         super().__init__(*args, **kwargs)
@@ -98,7 +95,9 @@ class BaseServerCredentialForm(BaseCredentialForm):
         label=_('IPv4-Addresses (comma-separated list)'), initial='127.0.0.1, ', required=False
     )
     ipv6_addresses = forms.CharField(label=_('IPv6-Addresses (comma-separated list)'), initial='::1, ', required=False)
-    domain_names = forms.CharField(label=_('Domain-Names (comma-separated list)'), initial='localhost, ', required=False)
+    domain_names = forms.CharField(label=_('Domain-Names (comma-separated list)'),
+                                   initial='localhost, ',
+                                   required=False)
 
     def clean_ipv4_addresses(self) -> list[ipaddress.IPv4Address]:
         """Checks the IPv4 addresses."""
@@ -134,7 +133,9 @@ class BaseServerCredentialForm(BaseCredentialForm):
     def clean(self) -> dict[str, Any]:
         """Ensures at least one SAN entry is set."""
         cleaned_data = super().clean()
-        if not (cleaned_data.get('ipv4_addresses') or cleaned_data.get('ipv6_addresses') or cleaned_data.get('domain_names')):
+        if not (cleaned_data.get('ipv4_addresses') or
+                cleaned_data.get('ipv6_addresses') or
+                cleaned_data.get('domain_names')):
             err_msg = _('At least one SAN entry is required.')
             raise forms.ValidationError(err_msg)
         return cleaned_data
@@ -142,12 +143,10 @@ class BaseServerCredentialForm(BaseCredentialForm):
 
 class IssueTlsClientCredentialForm(BaseCredentialForm):
     """Form to issue a new TLS client credential."""
-    pass
 
 
 class IssueTlsServerCredentialForm(BaseServerCredentialForm):
     """Form to issue a new TLS server credential."""
-    pass
 
 
 class IssueOpcUaClientCredentialForm(BaseCredentialForm):
@@ -271,7 +270,8 @@ class CreateDeviceForm(forms.ModelForm):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
-        self.fields['idevid_trust_store'].queryset = TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.IDEVID)
+        self.fields['idevid_trust_store'].queryset = TruststoreModel.objects.filter(
+            intended_usage=TruststoreModel.IntendedUsage.IDEVID)
 
         self.helper = FormHelper()
         self.helper.form_tag = False

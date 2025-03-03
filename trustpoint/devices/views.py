@@ -4,17 +4,14 @@ from __future__ import annotations
 
 import datetime
 import io
-from typing import TYPE_CHECKING, cast
+from abc import abstractmethod
+from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
 from cryptography.hazmat.primitives import serialization
-
-from trustpoint_core.file_builder.enum import ArchiveFormat
-from trustpoint_core.serializer import CredentialSerializer
-from util.field import UniqueNameValidator
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.forms import BaseModelForm
+from django.forms import BaseModelForm, Form
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -25,33 +22,43 @@ from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView, SingleObjectMixin
 from django.views.generic.edit import CreateView, FormMixin, FormView
 from django.views.generic.list import ListView
-from trustpoint_core import oid
 from pki.models import CertificateModel, CredentialModel, DevIdRegistration
+from trustpoint_core import oid
+from trustpoint_core.file_builder.enum import ArchiveFormat
+from trustpoint_core.serializer import CredentialSerializer
+from util.field import UniqueNameValidator
 
 from devices.forms import (
     BrowserLoginForm,
+    CreateDeviceForm,
     CredentialDownloadForm,
     CredentialRevocationForm,
+    IssueOpcUaClientCredentialForm,
+    IssueOpcUaServerCredentialForm,
     IssueTlsClientCredentialForm,
     IssueTlsServerCredentialForm,
-    CreateDeviceForm, IssueOpcUaServerCredentialForm, IssueOpcUaClientCredentialForm
 )
-from devices.issuer import (LocalTlsClientCredentialIssuer, LocalTlsServerCredentialIssuer,
-                            OpcUaServerCredentialIssuer, OpcUaClientCredentialIssuer)
-from devices.models import (
-    DeviceModel,
-    IssuedCredentialModel,
-    RemoteDeviceCredentialDownloadModel)
+from devices.issuer import (
+    BaseTlsCredentialIssuer,
+    LocalTlsClientCredentialIssuer,
+    LocalTlsServerCredentialIssuer,
+    OpcUaClientCredentialIssuer,
+    OpcUaServerCredentialIssuer,
+)
+from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
 from devices.revocation import DeviceCredentialRevocation
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import ListInDetailView, SortableTableMixin, TpLoginRequiredMixin
 
 if TYPE_CHECKING:
+    import ipaddress
     from typing import Any, ClassVar
 
     from django.http.request import HttpRequest
     from django.utils.safestring import SafeString
 
+F = TypeVar('F', bound='BaseCredentialForm')
+I = TypeVar('I', bound='BaseTlsCredentialIssuer')
 
 class Detail404RedirectView(DetailView):
     """A detail view that redirects to self.redirection_view on 404 and adds a message."""
@@ -187,7 +194,6 @@ class CreateDeviceView(DeviceContextMixin, TpLoginRequiredMixin, CreateView):
         Returns:
             If successful, this will start the file download. Otherwise, a Http404 will be raised and displayed.
         """
-
         return super().form_valid(form)
 
 
@@ -306,7 +312,7 @@ class DeviceConfigureView(DeviceContextMixin, TpLoginRequiredMixin, Detail404Red
 
 
 class DeviceBaseCredentialDownloadView(DeviceContextMixin,
-                                       Detail404RedirectView[IssuedCredentialModel],
+                                       Detail404RedirectView,
                                        FormView[CredentialDownloadForm]
 ):
     """View to download a password protected application credential in the desired format.
@@ -448,16 +454,20 @@ class DeviceBrowserCredentialDownloadView(DownloadTokenRequiredMixin, DeviceBase
 
     is_browser_download = True
 
-class DeviceIssueCredentialView(DeviceContextMixin, TpLoginRequiredMixin, DetailView[DeviceModel], FormView):
+class DeviceIssueCredentialView(DeviceContextMixin,
+                                TpLoginRequiredMixin,
+                                DetailView[DeviceModel],
+                                FormView[F],
+                                Generic[F, I]):
     """Base view to issue device credentials."""
 
     http_method_names = ('get', 'post')
     model = DeviceModel
     context_object_name = 'device'
     template_name = 'devices/credentials/issue_application_credential.html'
-
-    issuer_class = None
-    friendly_name = None
+    form_class: type[F]
+    issuer_class: type[I]
+    friendly_name = type[str]
 
     def get_initial(self) -> dict[str, Any]:
         """Gets the initial data for the form."""
@@ -482,37 +492,59 @@ class DeviceIssueCredentialView(DeviceContextMixin, TpLoginRequiredMixin, Detail
         self.object = self.get_object()
         return super().post(request, *args, **kwargs)
 
-    def form_valid(self, form) -> HttpResponse:
+    def form_valid(self, form: F) -> HttpResponse:
         """Issues the credential and shows success message."""
         device = self.get_object()
-        credential = self.issue_credential(device, form.cleaned_data)
-        messages.success(self.request, f'Successfully issued {self.friendly_name} for device {device.unique_name}')
+        credential = self.issue_credential(device=device, cleaned_data=form.cleaned_data)
+        messages.success(self.request,
+                         f'Successfully issued {self.friendly_name} for device {credential.device.unique_name}')
         return super().form_valid(form)
 
-    def issue_credential(self, device, cleaned_data):
+    @abstractmethod
+    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
         """To be implemented by subclasses."""
-        raise NotImplementedError("Subclasses must implement issue_credential method.")
 
 
-class DeviceIssueTlsClientCredential(DeviceIssueCredentialView):
+class DeviceIssueTlsClientCredential(
+    DeviceIssueCredentialView[IssueTlsClientCredentialForm, LocalTlsClientCredentialIssuer]):
     """View to issue a new TLS client credential."""
     form_class = IssueTlsClientCredentialForm
     issuer_class = LocalTlsClientCredentialIssuer
-    friendly_name = "TLS client credential"
+    friendly_name = 'TLS client credential'
 
-    def issue_credential(self, device, cleaned_data):
+    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
+        """Issues an TLS client credential.
+
+        Args:
+            device (DeviceModel): The device for which the credential is issued.
+            cleaned_data (dict[str, Any]): The validated form data.
+
+        Returns:
+            IssuedCredentialModel: The issued TLS client credential.
+        """
         common_name = cast(str, cleaned_data.get('common_name'))
         validity = cast(int, cleaned_data.get('validity'))
         issuer = self.issuer_class(device=device, domain=device.domain)
+
         return issuer.issue_tls_client_credential(common_name=common_name, validity_days=validity)
 
-class DeviceIssueTlsServerCredential(DeviceIssueCredentialView):
+class DeviceIssueTlsServerCredential(
+    DeviceIssueCredentialView[IssueTlsServerCredentialForm, LocalTlsServerCredentialIssuer]):
     """View to issue a new TLS server credential."""
     form_class = IssueTlsServerCredentialForm
     issuer_class = LocalTlsServerCredentialIssuer
-    friendly_name = "TLS server credential"
+    friendly_name = 'TLS server credential'
 
-    def issue_credential(self, device, cleaned_data):
+    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
+        """Issues an TLS server credential.
+
+        Args:
+            device (DeviceModel): The device for which the credential is issued.
+            cleaned_data (dict[str, Any]): The validated form data.
+
+        Returns:
+            IssuedCredentialModel: The issued TLS server credential.
+        """
         common_name = cast(str, cleaned_data.get('common_name'))
         if not common_name:
             raise Http404
@@ -526,13 +558,23 @@ class DeviceIssueTlsServerCredential(DeviceIssueCredentialView):
             validity_days=cast(int, cleaned_data.get('validity')),
         )
 
-class DeviceIssueOpcUaClientCredential(DeviceIssueCredentialView):
+class DeviceIssueOpcUaClientCredential(
+    DeviceIssueCredentialView[IssueOpcUaClientCredentialForm, OpcUaClientCredentialIssuer]):
     """View to issue a new OPC UA client credential."""
     form_class = IssueOpcUaClientCredentialForm
     issuer_class = OpcUaClientCredentialIssuer
-    friendly_name = "OPC UA client credential"
+    friendly_name = 'OPC UA client credential'
 
-    def issue_credential(self, device, cleaned_data):
+    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
+        """Issues an OPC UA client credential.
+
+        Args:
+            device (DeviceModel): The device for which the credential is issued.
+            cleaned_data (dict[str, Any]): The validated form data.
+
+        Returns:
+            IssuedCredentialModel: The issued OPC UA client credential.
+        """
         issuer = self.issuer_class(device=device, domain=device.domain)
         return issuer.issue_opcua_client_credential(
             common_name=cast(str, cleaned_data.get('common_name')),
@@ -540,13 +582,23 @@ class DeviceIssueOpcUaClientCredential(DeviceIssueCredentialView):
             validity_days=cast(int, cleaned_data.get('validity')),
         )
 
-class DeviceIssueOpcUaServerCredential(DeviceIssueCredentialView):
+class DeviceIssueOpcUaServerCredential(
+    DeviceIssueCredentialView[IssueOpcUaServerCredentialForm, OpcUaServerCredentialIssuer]):
     """View to issue a new OPC UA server credential."""
     form_class = IssueOpcUaServerCredentialForm
     issuer_class = OpcUaServerCredentialIssuer
-    friendly_name = "OPC UA server credential"
+    friendly_name = 'OPC UA server credential'
 
-    def issue_credential(self, device, cleaned_data):
+    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
+        """Issues an OPC UA server credential.
+
+        Args:
+            device (DeviceModel): The device for which the credential is issued.
+            cleaned_data (dict[str, Any]): The validated form data.
+
+        Returns:
+            IssuedCredentialModel: The issued OPC UA server credential.
+        """
         common_name = cast(str, cleaned_data.get('common_name'))
         if not common_name:
             raise Http404
@@ -636,7 +688,7 @@ class DeviceCertificateLifecycleManagementSummaryView(
     def _render_expires_in(record: IssuedCredentialModel) -> str | SafeString:
         if record.credential.certificate.certificate_status != CertificateModel.CertificateStatus.OK:
             return record.credential.certificate.certificate_status.label
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         expire_timedelta = record.credential.certificate.not_valid_after - now
         days = expire_timedelta.days
         hours, remainder = divmod(expire_timedelta.seconds, 3600)
