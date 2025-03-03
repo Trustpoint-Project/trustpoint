@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, ed448, ed25519, rsa
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
+from django_stubs_ext.db.models import TypedModelMeta
 
 
 from trustpoint_core.oid import (
@@ -60,6 +61,11 @@ class CertificateModel(LoggerMixin, models.Model):
 
     See RFC5280 for more information.
     """
+
+    objects: models.Manager[CertificateModel]
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     class CertificateStatus(models.TextChoices):
         """CertificateModel status"""
@@ -640,6 +646,11 @@ class CertificateModel(LoggerMixin, models.Model):
 
 class RevokedCertificateModel(models.Model):
     """Model to store revoked certificates."""
+
+    objects: models.Manager[RevokedCertificateModel]
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     class ReasonCode(models.TextChoices):
         """Revocation reasons per RFC 5280"""

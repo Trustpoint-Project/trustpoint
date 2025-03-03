@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core import oid
+from django_stubs_ext.db.models import TypedModelMeta
 
 from . import IssuingCaModel
 
@@ -16,6 +17,11 @@ __all__ = [
 
 class DomainModel(models.Model):
     """Domain Model."""
+
+    objects: models.Manager[DomainModel]
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     unique_name = models.CharField(
         _('Domain Name'),
