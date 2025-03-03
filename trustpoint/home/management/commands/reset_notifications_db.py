@@ -1,8 +1,10 @@
 """This module defines a Django management command to delete all existing notifications."""
 
+from typing import Any
+
 from django.core.management.base import BaseCommand  # type: ignore[import-untyped]
 from home.models import NotificationModel
-from typing import Any
+
 from trustpoint.settings import DOCKER_CONTAINER
 
 
