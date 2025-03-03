@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from trustpoint_core.file_builder.certificate import CertificateCollectionArchiveFileBuilder, CertificateCollectionBuilder
-from trustpoint_core.file_builder.enum import ArchiveFormat, CertificateFileFormat
 from django.contrib import messages
 from django.db.models import ProtectedError
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
@@ -16,6 +14,11 @@ from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
+from trustpoint_core.file_builder.certificate import (
+    CertificateCollectionArchiveFileBuilder,
+    CertificateCollectionBuilder,
+)
+from trustpoint_core.file_builder.enum import ArchiveFormat, CertificateFileFormat
 
 from pki.forms import TruststoreAddForm
 from pki.models import DomainModel
@@ -29,7 +32,9 @@ from trustpoint.views.base import (
 )
 
 if TYPE_CHECKING:
-    from typing import ClassVar
+    from typing import Any, ClassVar
+
+    from django.forms import Form
 
 
 class TruststoresRedirectView(TpLoginRequiredMixin, RedirectView):
@@ -44,7 +49,7 @@ class TruststoresContextMixin:
 
     extra_context: ClassVar = {'page_category': 'pki', 'page_name': 'truststores'}
 
-class TruststoreTableView(TruststoresContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView):
+class TruststoreTableView(TruststoresContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView[TruststoreModel]):
     """Truststore Table View."""
 
     model = TruststoreModel
@@ -54,7 +59,7 @@ class TruststoreTableView(TruststoresContextMixin, TpLoginRequiredMixin, Sortabl
     default_sort_param = 'unique_name'
 
 
-class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormView):
+class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormView[TruststoreAddForm]):
     """View for creating a new Truststore."""
 
     model = TruststoreModel
@@ -62,28 +67,32 @@ class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormVi
     template_name = 'pki/truststores/add/file_import.html'
     ignore_url = reverse_lazy('pki:truststores')
 
-    def form_valid(self, form):
+    def form_valid(self, form: TruststoreAddForm) -> HttpResponseRedirect:
+        """If the form is valid, redirect to Truststore overview"""
         truststore = form.cleaned_data['truststore']
-        domain_id = self.kwargs.get("pk")
+        domain_id = self.kwargs.get('pk')
 
         if domain_id:
-            return HttpResponseRedirect(reverse('pki:devid_registration_create-with_truststore_id', kwargs={'pk': domain_id, 'truststore_id': truststore.id}))
+            return HttpResponseRedirect(reverse(
+                'pki:devid_registration_create-with_truststore_id',
+                kwargs={'pk': domain_id, 'truststore_id': truststore.id}
+            ))
 
         return HttpResponseRedirect(reverse('pki:truststores'))
 
-    def get_success_url(self):
+    def get_success_url(self) -> str:
         """You could still use a success URL here if needed"""
         return reverse_lazy('pki:truststores')
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
         """Include domain in context only if pk is present."""
         context = super().get_context_data(**kwargs)
-        pk = self.kwargs.get("pk")
+        pk = self.kwargs.get('pk')
         if pk:
-            context["domain"] = get_object_or_404(DomainModel, id=pk)
+            context['domain'] = get_object_or_404(DomainModel, id=pk)
         return context
 
-class TruststoreDetailView(TruststoresContextMixin, TpLoginRequiredMixin, DetailView):
+class TruststoreDetailView(TruststoresContextMixin, TpLoginRequiredMixin, DetailView[TruststoreModel]):
     """The truststore detail view."""
 
     model = TruststoreModel
@@ -92,7 +101,7 @@ class TruststoreDetailView(TruststoresContextMixin, TpLoginRequiredMixin, Detail
     template_name = 'pki/truststores/details.html'
     context_object_name = 'truststore'
 
-class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, DetailView):
+class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, DetailView[TruststoreModel]):
     """View for downloading a single truststore."""
 
     model = TruststoreModel
@@ -102,7 +111,8 @@ class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, Deta
     context_object_name = 'truststore'
 
     def get(
-        self, request: HttpRequest, pk: str | None = None, file_format: str | None = None, *args: tuple, **kwargs: dict
+        self, request: HttpRequest, pk: str | None = None, file_format: str | None = None,
+        *args: tuple[Any], **kwargs: dict[str, Any]
     ) -> HttpResponse:
         """HTTP GET Method.
 
@@ -147,7 +157,7 @@ class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, Deta
         return response
 
 class TruststoreMultipleDownloadView(
-    TruststoresContextMixin, TpLoginRequiredMixin, PrimaryKeyListFromPrimaryKeyString, ListView
+    TruststoresContextMixin, TpLoginRequiredMixin, PrimaryKeyListFromPrimaryKeyString, ListView[TruststoreModel]
 ):
     """View for downloading multiple truststores at once as archived files."""
 
@@ -157,7 +167,7 @@ class TruststoreMultipleDownloadView(
     template_name = 'pki/truststores/download_multiple.html'
     context_object_name = 'truststores'
 
-    def get_context_data(self, **kwargs: dict) -> dict:
+    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
         """Adding the part of the url to the context, that contains the truststores primary keys.
 
         This is used for the {% url }% tags in the template to download files.
@@ -178,8 +188,8 @@ class TruststoreMultipleDownloadView(
         pks: str | None = None,
         file_format: None | str = None,
         archive_format: None | str = None,
-        *args: tuple,
-        **kwargs: dict,
+        *args: tuple[Any],
+        **kwargs: dict[str, Any],
     ) -> HttpResponse:
         """HTTP GET Method.
 
@@ -248,7 +258,7 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, TpLoginRequiredMi
     template_name = 'pki/truststores/confirm_delete.html'
     context_object_name = 'truststores'
 
-    def form_valid(self, form) -> HttpResponse:
+    def form_valid(self, form: Form) -> HttpResponse:
         """Attempts to delete the selected truststores on valid form."""
         queryset = self.get_queryset()
         deleted_count = queryset.count()
