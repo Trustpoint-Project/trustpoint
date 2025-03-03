@@ -2,7 +2,7 @@
 
 from django.core.management.base import BaseCommand  # type: ignore[import-untyped]
 from home.models import NotificationModel
-
+from typing import Any
 from trustpoint.settings import DOCKER_CONTAINER
 
 
@@ -15,7 +15,7 @@ class Command(BaseCommand):
 
     help = 'Deletes all existing notifications'
 
-    def handle(self, **options: any) -> None:
+    def handle(self, **options: Any) -> None:
         """Entrypoint for the command."""
         if DOCKER_CONTAINER:
             self.delete_notifications()
