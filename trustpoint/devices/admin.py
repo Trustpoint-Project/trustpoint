@@ -13,7 +13,5 @@ class IssuedCredentialModelAdmin(admin.ModelAdmin[IssuedCredentialModel]):
     """Registers the IssuedCredentialModelAdmin with Django Admin."""
 
 
-
 admin.site.register(DeviceModel, DeviceModelAdmin)
 admin.site.register(IssuedCredentialModel, IssuedCredentialModelAdmin)
-

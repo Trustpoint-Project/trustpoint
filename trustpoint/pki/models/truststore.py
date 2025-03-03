@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from trustpoint_core.serializer import CertificateSerializer, CertificateCollectionSerializer
+from trustpoint_core.serializer import CertificateCollectionSerializer
+from django_stubs_ext.db.models import TypedModelMeta
 from util.field import UniqueNameValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -25,6 +26,12 @@ class TrustpointTlsServerCredentialModel(models.Model):
     communication, storing the private key and linking it to a specific
     certificate.
     """
+
+    objects: models.Manager[TrustpointTlsServerCredentialModel]
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
+
     private_key_pem = models.CharField(verbose_name=_('Private Key (PEM)'), max_length=65536, editable=False)
     certificate = models.ForeignKey(CertificateModel, on_delete=models.CASCADE)
 
@@ -43,6 +50,12 @@ class ActiveTrustpointTlsServerCredentialModel(models.Model):
     This model tracks the active server credential, ensuring that it is always
     up-to-date and linked to a specific `TrustpointTlsServerCredentialModel` instance.
     """
+
+    objects: models.Manager[ActiveTrustpointTlsServerCredentialModel]
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
+
     credential = models.ForeignKey(
         TrustpointTlsServerCredentialModel,
         on_delete=models.CASCADE,
@@ -79,6 +92,11 @@ class TruststoreModel(models.Model):
     by a unique name and supports operations like retrieving the number of certificates
     or serializing its content.
     """
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
+
+    objects: models.Manager[TruststoreModel]
 
     class IntendedUsage(models.IntegerChoices):
         """Intended Usage of the Truststore."""
@@ -136,9 +154,14 @@ class TruststoreModel(models.Model):
         )
 
 
-
 class TruststoreOrderModel(models.Model):
     """Represents the order of certificates in a truststore."""
+
+    objects: models.Manager[TruststoreOrderModel]
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
+        unique_together = ('order', 'trust_store')
 
     order = models.PositiveSmallIntegerField(
         verbose_name=_('Trust Store Certificate Index (Order)'),
@@ -156,9 +179,6 @@ class TruststoreOrderModel(models.Model):
         editable=False
     )
 
-    class Meta:
-        """Meta options for TruststoreOrderModel."""
-        unique_together = ('order', 'trust_store')
 
     def __str__(self) -> str:
         """Returns a human-readable string representation of the TruststoreOrderModel."""
