@@ -16,6 +16,7 @@ from pki.models.truststore import TruststoreModel
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 from trustpoint_core import oid  # type: ignore[import-untyped]
 from util.field import UniqueNameValidator
+from django_stubs_ext.db.models import TypedModelMeta
 
 if TYPE_CHECKING:
     from typing import Any
@@ -33,6 +34,9 @@ class DeviceModel(models.Model):
     """The DeviceModel."""
 
     objects: models.Manager[DeviceModel]
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     id = models.AutoField(primary_key=True)
     unique_name = models.CharField(
@@ -132,6 +136,9 @@ class IssuedCredentialModel(models.Model):
 
     objects: models.Manager[IssuedCredentialModel]
 
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
+
     class IssuedCredentialType(models.IntegerChoices):
         """The type of the credential."""
 
@@ -179,6 +186,11 @@ class IssuedCredentialModel(models.Model):
 
 class RemoteDeviceCredentialDownloadModel(models.Model):
     """Model to associate a credential model with an OTP and token for unauthenticated remoted download."""
+
+    objects: models.Manager[RemoteDeviceCredentialDownloadModel]
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     BROWSER_MAX_OTP_ATTEMPTS = 3
     TOKEN_VALIDITY = datetime.timedelta(minutes=3)
