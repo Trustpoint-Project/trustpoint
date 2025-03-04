@@ -1,13 +1,23 @@
 name: Ruff
 
+# Trigger this workflow on pull requests to ensure tests are executed before merging.
 on: [pull_request]
 
 jobs:
-  ruff:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  setup:
+    uses: ./.github/workflows/setup-env.yml  # Call the reusable setup workflow.
 
-      - name: Install and run ruff
-        uses: astral-sh/ruff-action@v3
+  ruff:
+    needs: setup  # Ensures setup runs first.
+    runs-on: ubuntu-latest  # Use the latest Ubuntu runner for compatibility and performance.
+
+    steps:
+      - name: Run Ruff Linting
+        run: ruff check .
+
+      - name: Upload Ruff Logs
+        if: failure()  # Only upload logs if the step fails.
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruff-report
+          path: ruff-report.txt
