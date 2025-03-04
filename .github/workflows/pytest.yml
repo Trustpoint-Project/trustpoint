@@ -24,6 +24,7 @@ jobs:
         run: |
           mkdir -p reports
           uv run pytest \
+          -n 4 \
           --md-report-flavor gfm \
           --html=reports/pytest-report.html \
           --junitxml=reports/junit-report.xml \
