@@ -40,7 +40,6 @@ class DomainModel(models.Model):
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
     updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
 
-    def __repr__(self) -> str:
     auto_create_new_device = models.BooleanField(
         _('Auto-create New Device'),
         default=False,
