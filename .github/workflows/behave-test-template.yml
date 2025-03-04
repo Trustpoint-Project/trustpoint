@@ -1,46 +1,34 @@
 name: Behave Tests
 
+# This workflow is designed to be reusable by other workflows via `workflow_call`.
 on:
   workflow_call:
     inputs:
       feature_file:
-        description: 'Feature file to test'
-        required: true
-        type: string
+        description: 'Feature file to test'  # The specific feature file to be tested.
+        required: true  # This input is mandatory.
+        type: string  # The input type is a string.
 
 jobs:
-  run-behave:
-    runs-on: ubuntu-latest
-
+  behave:
+    runs-on: ubuntu-latest  # Use the latest Ubuntu runner for compatibility and performance.
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4  # Ensures the repository code is available.
 
-      - name: Install and setup uv
-        uses: astral-sh/setup-uv@v5
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.
         with:
-          enable-cache: true
-          python-version: 3.12
-
-      - name: Run database migrations
-        run: |
-          echo "y" | uv run trustpoint/manage.py reset_db
+          run_migrations: true  # Enable database migrations.
 
       - name: Run Behave Tests and Generate HTML Report for ${{ inputs.feature_file }}.feature
         run: |
           uv run trustpoint/manage.py behave \
-          trustpoint/features/${{ inputs.feature_file }}.feature || echo "Test failed"
+          trustpoint/features/${{ inputs.feature_file }}.feature
 
       - name: Upload Test Report
-        uses: actions/upload-artifact@v4
-        if: always()
+        uses: actions/upload-artifact@v4  # Uploads the test report for review.
+        if: always()  # Ensures the report is uploaded even if tests fail.
         with:
-          name: ${{ inputs.feature_file }}-html-report
-          path: behave-report.html
-
-      - name: Fail Job if Tests Failed
-        run: |
-          if grep -q ">Failed:\s[1-99]" behave-report.html; then
-            echo "❌ Behave tests failed! Failing job."
-            exit 1
-          fi
+          name: ${{ inputs.feature_file }}-html-report  # Name report based on the feature file tested.
+          path: behave-report.html  # Ensure this file is generated correctly before uploading.

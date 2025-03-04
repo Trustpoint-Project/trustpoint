@@ -128,3 +128,7 @@ Glossary
         Python behave is a :term:`BDD` framework that allows developers to write test scenarios
         in :term:`Gherkin` syntax and execute them with step definitions implemented in Python.
         See also: `behave <https://behave.readthedocs.io/en/latest/>`_.
+
+    uv
+        Astrals uv is a really fast python package manager.
+        See also: `uv <https://astral.sh/blog/uv>`_.

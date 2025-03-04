@@ -4,8 +4,8 @@ from enum import Enum
 
 from behave import given, runner, then, when
 
-Validity = Enum('valid', 'expired', 'revoked', 'self-signed', 'tampered')
-Allow_Deny = Enum('allow', 'deny')
+Validity = Enum('Validity', ['valid', 'expired', 'revoked', 'self-signed', 'tampered'])
+Allow_Deny = Enum('Allow_Deny', ['allow', 'deny'])
 
 
 @given('the system enforces certificate validation for all devices')

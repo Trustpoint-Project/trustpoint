@@ -45,5 +45,6 @@ Welcome to Trustpoint's documentation!
    :caption: 🧑‍💻 Development :
 
    development
+   ci_cd
    test_plan/test_plan
    test_report/test_report
