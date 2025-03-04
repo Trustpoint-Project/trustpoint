@@ -13,7 +13,7 @@ jobs:
       - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.
         with:
-          run_migrations: 'true'  # Enable database migrations.
+          run_migrations: true  # Enable database migrations.
 
       - name: Run Pytest with Coverage
         run: uv run pytest --cov=trustpoint --cov-report=xml trustpoint/
