@@ -3,9 +3,6 @@ description: Checks out code and installs the current uv version and it's depend
 runs:
   using: "composite"
   steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4  # Ensures the repository code is available.
-
     - name: Install and setup uv
       uses: astral-sh/setup-uv@v5  # Sets up `uv` package manager.
       with:
