@@ -34,7 +34,7 @@ jobs:
       - name: Run Behave Tests and Generate HTML Report for ${{ inputs.feature_file }}.feature
         run: |
           uv run trustpoint/manage.py behave \
-          trustpoint/features/${{ inputs.feature_file }}.feature || echo "Test failed"
+          trustpoint/features/${{ inputs.feature_file }}.feature
 
       - name: Upload Test Report
         uses: actions/upload-artifact@v4
@@ -42,10 +42,3 @@ jobs:
         with:
           name: ${{ inputs.feature_file }}-html-report
           path: behave-report.html
-
-      - name: Fail Job if Tests Failed
-        run: |
-          if grep -q ">Failed:\s[1-99]" behave-report.html; then
-            echo "❌ Behave tests failed! Failing job."
-            exit 1
-          fi
