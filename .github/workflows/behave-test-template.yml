@@ -16,8 +16,8 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4  # Ensures the repository code is available.
 
-      - name: Setup uv
-        uses: ./.github/workflows/setup-env.yml  # Call the reusable setup workflow.
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.
         with:
           run_migrations: true  # Enable database migrations.
 
