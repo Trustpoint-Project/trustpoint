@@ -4,7 +4,13 @@ name: Pytest
 on: [pull_request]
 
 jobs:
+  setup:
+    uses: ./.github/workflows/setup-env.yml  # Call the reusable setup workflow.
+    with:
+      run_migrations: true  # Enable database migrations.
+
   pytest:
+    needs: setup  # Ensures setup runs first.
     runs-on: ubuntu-latest  # Use the latest Ubuntu runner for compatibility and performance.
 
     permissions:
@@ -12,24 +18,6 @@ jobs:
       pull-requests: write  # Allows posting test reports as comments on pull requests.
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4  # Ensures the repository code is available in the runner.
-
-      - name: Install the latest version of uv
-        uses: astral-sh/setup-uv@v5  # Sets up `uv` package manager.
-        with:
-          enable-cache: true  # Caches `uv` installation for faster runs.
-          version: "0.6.3"  # Specify a fixed version for consistency across runs.
-
-      - name: Set up Python
-        uses: actions/setup-python@v5  # Sets up Python environment.
-        with:
-          python-version-file: "pyproject.toml"  # Ensures the correct Python version is used.
-
-      - name: Run database migrations # Resets the database before running tests.
-        run: |
-          echo "y" | uv run trustpoint/manage.py reset_db  
-
       - name: Run Pytest and create reports
         run: |
           mkdir -p reports

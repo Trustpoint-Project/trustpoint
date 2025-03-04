@@ -1,24 +1,18 @@
 name: Codecov upload
 
-on: [ pull_request ]
+# Trigger this workflow on pull requests to ensure tests are executed before merging.
+on: [pull_request]
 
 jobs:
+  setup:
+    uses: ./.github/workflows/setup-env.yml  # Call the reusable setup workflow.
+    with:
+      run_migrations: true  # Enable database migrations.
+
   codecov-upload:
-    runs-on: ubuntu-latest
+    needs: setup  # Ensures setup runs first.
+    runs-on: ubuntu-latest # Use the latest Ubuntu runner for compatibility and performance.
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Install the latest version of uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          python-version: 3.12
-
-      - name: Run database migrations
-        run: |
-          echo "y" | uv run trustpoint/manage.py reset_db
-
       - name: Run Pytest with Coverage
         run: uv run pytest --cov=trustpoint --cov-report=xml trustpoint/
 

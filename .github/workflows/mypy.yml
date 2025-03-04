@@ -4,23 +4,12 @@ name: MyPy
 on: [pull_request]
 
 jobs:
+  setup:
+    uses: ./.github/workflows/setup-env.yml  # Call the reusable setup workflow.
+
   mypy:
-    runs-on: ubuntu-latest  # Use the latest Ubuntu runner for compatibility and performance.
-
+    needs: setup  # Ensures setup runs first.
+    runs-on: ubuntu-latest # Use the latest Ubuntu runner for compatibility and performance.
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4  # Ensures the repository code is available in the runner.
-
-      - name: Install the latest version of uv
-        uses: astral-sh/setup-uv@v5  # Sets up `uv` package manager.
-        with:
-          enable-cache: true  # Caches `uv` installation for faster runs.
-          version: "0.6.3"  # Specify a fixed version for consistency across runs.
-
-      - name: Set up Python
-        uses: actions/setup-python@v5  # Sets up Python environment.
-        with:
-          python-version-file: "pyproject.toml"  # Ensures the correct Python version is used.
-
       - name: Run MyPy
-        run: uv run mypy .  # Runs MyPy type checker using `uv` package manager.
+        run: uv run mypy . # Runs MyPy type checker using `uv` package manager.
