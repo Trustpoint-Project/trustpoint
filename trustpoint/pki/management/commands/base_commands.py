@@ -3,13 +3,12 @@
 
 from __future__ import annotations
 
-import datetime
 from pathlib import Path
-from typing import Union
+from typing import TYPE_CHECKING
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import ec, ed448, ed25519, rsa
+from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import (
     BestAvailableEncryption,
     Encoding,
@@ -18,95 +17,22 @@ from cryptography.hazmat.primitives.serialization import (
     pkcs12,
 )
 from cryptography.x509.oid import NameOID
+from pki.models import CertificateModel
+from pki.util.x509 import CertificateGenerator
 
-from core.serializer import CredentialSerializer
-from pki.models import CertificateModel, IssuingCaModel, CredentialModel
-
-PublicKey = Union[rsa.RSAPublicKey, ec.EllipticCurvePublicKey, ed448.Ed448PublicKey, ed25519.Ed25519PublicKey]
-PrivateKey = Union[rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey, ed448.Ed448PrivateKey, ed25519.Ed25519PrivateKey]
+if TYPE_CHECKING:
+    from trustpoint_core.types import PrivateKey
 
 
-class CertificateCreationCommandMixin:
-
-    @staticmethod
-    def create_root_ca(cn: str,
-            validity_days: int = 7300) -> tuple[x509.Certificate, rsa.RSAPrivateKey]:
-        one_day = datetime.timedelta(1, 0, 0)
-        private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048,
-        )
-        public_key = private_key.public_key()
-        builder = x509.CertificateBuilder()
-        builder = builder.subject_name(x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, cn),
-        ]))
-        builder = builder.issuer_name(x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, cn),
-        ]))
-        builder = builder.not_valid_before(datetime.datetime.today() - one_day)
-        builder = builder.not_valid_after(datetime.datetime.today() + (one_day * validity_days))
-        builder = builder.serial_number(x509.random_serial_number())
-        builder = builder.public_key(public_key)
-        builder = builder.add_extension(
-            x509.BasicConstraints(ca=True, path_length=None), critical=True,
-        )
-        builder = builder.add_extension(
-            x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False
-        )
-        builder = builder.add_extension(
-            x509.AuthorityKeyIdentifier.from_issuer_public_key(public_key), critical=False
-        )
-        certificate = builder.sign(
-            private_key=private_key, algorithm=hashes.SHA256(),
-        )
-        return certificate, private_key
-
-    @staticmethod
-    def create_issuing_ca(
-            issuer_private_key: rsa.RSAPrivateKey,
-            issuer_cn: str, subject_cn,
-            private_key: None | rsa.RSAPrivateKey = None,
-            validity_days: int = 3650
-    ) -> tuple[x509.Certificate, rsa.RSAPrivateKey]:
-        one_day = datetime.timedelta(1, 0, 0)
-        if private_key is None:
-            private_key = rsa.generate_private_key(
-                public_exponent=65537,
-                key_size=2048,
-            )
-        public_key = private_key.public_key()
-        builder = x509.CertificateBuilder()
-        builder = builder.subject_name(x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, subject_cn),
-        ]))
-        builder = builder.issuer_name(x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, issuer_cn),
-        ]))
-        builder = builder.not_valid_before(datetime.datetime.today() - one_day)
-        builder = builder.not_valid_after(datetime.datetime.today() + (one_day * validity_days))
-        builder = builder.serial_number(x509.random_serial_number())
-        builder = builder.public_key(public_key)
-        builder = builder.add_extension(
-            x509.BasicConstraints(ca=True, path_length=None), critical=True
-        )
-        builder = builder.add_extension(
-            x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False
-        )
-        builder = builder.add_extension(
-            x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_private_key.public_key()), critical=False
-        )
-        certificate = builder.sign(
-            private_key=issuer_private_key, algorithm=hashes.SHA256(),
-        )
-        return certificate, private_key
+class CertificateCreationCommandMixin(CertificateGenerator):
+    """Mixin for management commands that create certificates."""
 
     @classmethod
     def store_issuing_ca(
             cls,
             issuing_ca_cert: x509.Certificate,
             chain: list[x509.Certificate],
-            private_key: rsa.RSAPrivateKey,
+            private_key: PrivateKey,
             filename: str) -> None:
 
         tests_data_path = Path(__file__).parent.parent.parent.parent.parent / Path('tests/data/issuing_cas')
@@ -126,31 +52,7 @@ class CertificateCreationCommandMixin:
             f.write(p12)
 
         print(f'Issuing CA: {issuing_ca_path}')
-        print(f'Issuing CA - Password: testing321\n')
-
-    @staticmethod
-    def save_issuing_ca(
-            issuing_ca_cert: x509.Certificate,
-            root_ca_cert: x509.Certificate,
-            chain: list[x509.Certificate],
-            private_key: rsa.RSAPrivateKey,
-            unique_name: str ='issuing_ca') -> None:
-
-        issuing_ca_credential_serializer = CredentialSerializer(
-            (
-                private_key,
-                issuing_ca_cert,
-                [root_ca_cert],
-            )
-        )
-
-        IssuingCaModel.create_new_issuing_ca(
-            unique_name=unique_name,
-            credential_serializer=issuing_ca_credential_serializer,
-            issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED
-        )
-
-        print(f"Issuing CA '{unique_name}' saved successfully.")
+        print('Issuing CA - Password: testing321\n')
 
 
     @staticmethod
@@ -181,46 +83,6 @@ class CertificateCreationCommandMixin:
         for name, cert in certs.items():
             print(f'Saving EE certificate in DB: {name}')
             CertificateModel.save_certificate(cert)
-
-    @staticmethod
-    def create_ee(
-            issuer_private_key: rsa.RSAPrivateKey,
-            issuer_cn: str, subject_cn,
-            key_usage_extension: x509.KeyUsage=None,
-            validity_days: int = 365) -> tuple[x509.Certificate, rsa.RSAPrivateKey]:
-        one_day = datetime.timedelta(1, 0, 0)
-        private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048
-        )
-        if validity_days >= 0:
-            not_valid_before = datetime.datetime.today()
-            not_valid_after = not_valid_before + (one_day * validity_days)
-        else:
-            not_valid_after = datetime.datetime.today() + (one_day * validity_days / 2)
-            not_valid_before = not_valid_after + (one_day * validity_days)
-        public_key = private_key.public_key()
-        builder = x509.CertificateBuilder()
-        builder = builder.subject_name(x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, subject_cn),
-        ]))
-        builder = builder.issuer_name(x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, issuer_cn),
-        ]))
-        builder = builder.not_valid_before(not_valid_before)
-        builder = builder.not_valid_after(not_valid_after)
-        builder = builder.serial_number(x509.random_serial_number())
-        builder = builder.public_key(public_key)
-        builder = builder.add_extension(
-            x509.BasicConstraints(ca=False, path_length=None), critical=True,
-        )
-        if key_usage_extension:
-            builder = builder.add_extension(key_usage_extension, critical=False)
-
-        certificate = builder.sign(
-            private_key=issuer_private_key, algorithm=hashes.SHA256(),
-        )
-        return certificate, private_key
 
     @staticmethod
     def create_csr(number: int) -> None:

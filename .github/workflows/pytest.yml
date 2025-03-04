@@ -1,0 +1,56 @@
+name: Pytest
+
+on: [ pull_request ]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: 3.12
+
+      - name: Run database migrations
+        run: |
+          echo "y" | uv run trustpoint/manage.py reset_db
+
+      - name: Run Pytest and create reports
+        run: |
+          mkdir -p reports
+          uv run pytest \
+          --md-report-flavor gfm \
+          --html=reports/pytest-report.html \
+          --junitxml=reports/junit-report.xml \
+          trustpoint/
+
+      - name: Display Summary in GitHub Actions even if tests fail
+        if: always()
+        run: |
+          echo "<details><summary>Pytest Report</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat "md-report.md" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "</details>" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Test Reports even if tests fail
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pytest-reports
+          path: reports/
+
+      - name: Render the report to the PR when tests fail
+        uses: marocchino/sticky-pull-request-comment@v2
+        if: failure()
+        with:
+          header: test-report
+          recreate: true
+          path: md-report.md

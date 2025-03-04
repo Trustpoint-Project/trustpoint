@@ -486,6 +486,10 @@ table .tp-onboarding-btn {
     vertical-align: middle;
 }
 
+tr.text-muted td {
+    color: inherit;
+}
+
 td {
     vertical-align: middle;
 }
@@ -503,6 +507,10 @@ td {
 
 .card-footer a, .card-footer button {
     width: 15rem;
+}
+
+.card-footer .btn-half {
+    width: 7.5rem;
 }
 
 /* ----- General layout utility classes ----- */
@@ -709,6 +717,7 @@ pre {
 code {
     padding: 10px;
     tab-size: 4;
+    color: inherit;
 }
 
 .breathing-anim {
@@ -909,6 +918,10 @@ code {
 
 .copy-button:hover::after {
     opacity: 1;
+}
+
+.asteriskField {
+    display: none;
 }
 
 

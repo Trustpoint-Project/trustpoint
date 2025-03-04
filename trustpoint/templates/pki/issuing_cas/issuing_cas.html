@@ -8,78 +8,78 @@
         <h1>{% trans "Issuing CAs" %}</h1>
     </div>
     <div class="card-body text-start" style="overflow-y: auto; flex: 1;">
-      <table class="table table-striped">
-        <thead>
-          <tr>
-            <th id="checkbox-column"><input type="checkbox"/></th>
-            <th>
-              <a href="?sort={% if current_sort == 'unique_name' %}-{% endif %}unique_name">
-                Issuing CA Name
-              </a>
-            </th>
-            <th>
-              <a href="?sort={% if current_sort == 'credential__certificate___common_name' %}-{% endif %}issuing_ca__unique_name">
-                Common Name
-              </a>
-            </th>
-            <th>
-              <a href="?sort={% if current_sort == 'credential__certificate___not_valid_after' %}-{% endif %}issuing_ca__unique_name">
-                Not Valid After
-              </a>
-            </th>
-            <th>
-              <a href="?sort={% if current_sort == 'credential__certificate___signature_algorithm' %}-{% endif %}credential__certificate___signature_algorithm">
-                Signature-Suite
-              </a>
-            </th>
-            <th>
-              <a href="?sort={% if current_sort == 'updated_at' %}-{% endif %}updated_at">
-                Updated
-              </a>
-            </th>
-            <th>
-              <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
-                Created
-              </a>
-            </th>
-            <th>Details</th>
-            <th>Config</th>
-            <th>Delete</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for ca in page_obj %}
-          <tr>
-            <td class="row_checkbox">
-              <input type="checkbox" name="row_checkbox" value="{{ ca.id }}" />
-            </td>
-            <td>{{ ca.unique_name }}</td>
-            <td>{{ ca.credential.certificate.common_name }}</td>
-            <td>{{ ca.credential.certificate.not_valid_after }}</td>
-            <td>{{ ca.credential.certificate.signature_algorithm }}</td>
-            <td>{{ ca.updated_at }}</td>
-            <td>{{ ca.created_at }}</td>
-            <td><a href="detail/{{ca.id}}/" class="btn btn-primary tp-table-btn">Details</a></td>
-            <td><a href="config/{{ca.id}}/" class="btn btn-primary tp-table-btn">Config</a></td>
-            <td><a href="delete/{{ca.id}}/" class="btn btn-secondary tp-table-btn">Delete</a></td>
-          </tr>
-          {% empty %}
-          <tr>
-            <td colspan="3">No data available.</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-  
-      {% include 'trustpoint/pagination.html' %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th id="checkbox-column"><input type="checkbox"/></th>
+                    <th>
+                        <a href="?sort={% if current_sort == 'unique_name' %}-{% endif %}unique_name">
+                            Issuing CA Name
+                        </a>
+                    </th>
+                    <th>
+                        <a href="?sort={% if current_sort == 'credential__certificates__common_name' %}-{% endif %}credential__certificates__common_name">
+                            Common Name
+                        </a>
+                    </th>
+                    <th>
+                        <a href="?sort={% if current_sort == 'credential__certificates__not_valid_after' %}-{% endif %}credential__certificates__not_valid_after">
+                            Not Valid After
+                        </a>
+                    </th>
+                    <th>
+                            {% trans 'Signature-Suite' %}
+                    </th>
+                    <th>
+                        <a href="?sort={% if current_sort == 'updated_at' %}-{% endif %}updated_at">
+                            Updated
+                        </a>
+                    </th>
+                    <th>
+                        <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
+                            Created
+                        </a>
+                    </th>
+                    <th>Config</th>
+                    <th>Delete</th>
+                </tr>
+            </thead>
+            <tbody>
+                {# When adding or removing columns, please update the "colspan" attribute in the {% empty %} section accordingly #}
+                {% for ca in page_obj %}
+                    <tr{% if not ca.is_active %} class="text-muted"{% endif %}>
+                        <td class="row_checkbox">
+                            <input type="checkbox" name="row_checkbox" value="{{ ca.id }}"/>
+                        </td>
+                        <td>{{ ca.unique_name }}</td>
+                        <td>{{ ca.credential.certificate.common_name }}</td>
+                        <td>{{ ca.credential.certificate.not_valid_after }}</td>
+                        <td>{{ ca.signature_suite }}</td>
+                        <td>{{ ca.updated_at }}</td>
+                        <td>{{ ca.created_at }}</td>
+                        <td><a href="config/{{ ca.id }}/" class="btn btn-primary tp-table-btn w-100">Config</a></td>
+                        <td><a href="delete/{{ ca.id }}/" class="btn btn-danger tp-table-btn w-100">Delete</a></td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="9" class="middle">{% trans 'No Issuing CA has been added yet.' %}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% include 'trustpoint/pagination.html' %}
     </div>
-    <div class="card-footer d-flex justify-content-between align-items-center tp-sticky-footer">
-        <button type="button" class="btn btn-secondary tp-table-select-btn" data-tp-url="delete">
-            {% trans "Delete selected" %}
-        </button>
-        <a class="btn btn-primary" href="{% url 'pki:issuing_cas-add-method_select' %}">
-            {% trans "Add new Issuing CA" %}
-        </a>
+
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <button type="button" class="btn btn-danger tp-table-select-btn me-2" data-tp-url="delete">{% trans 'Delete selected' %}</button>
+        </div>
+        <div class="m-1">
+            <a class="btn btn-primary ms-2" href="{% url 'pki:issuing_cas-add-method_select' %}">
+                {% trans 'Add new Issuing CA' %}
+            </a>
+        </div>
     </div>
 </div>
 

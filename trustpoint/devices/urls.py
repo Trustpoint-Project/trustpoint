@@ -11,10 +11,6 @@ urlpatterns = [
     path('add/', views.CreateDeviceView.as_view(), name='add'),
     path('details/<int:pk>/', views.DeviceDetailsView.as_view(), name='details'),
     path('configure/<int:pk>/', views.DeviceConfigureView.as_view(), name='config'),
-    path(
-        'onboarding/<int:pk>/manual/issue-domain-credential/',
-        views.DeviceManualOnboardingIssueDomainCredentialView.as_view(),
-        name='manual_issue_domain_credential'),
     path('browser/', views.DeviceOnboardingBrowserLoginView.as_view(), name='browser_login'),
     path('browser/credential-download/<int:pk>/',
          views.DeviceBrowserCredentialDownloadView.as_view(),
@@ -28,9 +24,20 @@ urlpatterns = [
         views.DeviceBrowserOnboardingCancelView.as_view(),
         name='browser_cancel'),
     path(
-        'credential-download/<int:pk>/',
+        'download/<int:pk>/',
+        views.DownloadPageDispatcherView.as_view(),
+        name='download'
+    ),
+    path(
+        'credential/download/<int:pk>/',
         views.DeviceManualCredentialDownloadView.as_view(),
-        name='domain_credential_download'),
+        name='credential-download'
+    ),
+    path(
+        'certificate/download/<int:pk>/',
+        views.CertificateDownloadView.as_view(),
+        name='certificate-download'
+    ),
     path(
         'certificate-lifecycle-management/<int:pk>/',
         views.DeviceCertificateLifecycleManagementSummaryView.as_view(),
@@ -50,24 +57,24 @@ urlpatterns = [
          views.DeviceRevocationView.as_view(),
          name='device_revocation'),
     path(
-        'onboarding/<int:pk>/trustpoint-client/',
-        views.TrustPointClientOnboardingSelectAuthenticationMethodView.as_view(),
-        name='trustpoint_client_auth_method_select'),
-    path(
-        'onboarding/<int:pk>/trustpoint-client/password-based-mac/',
-        views.TrustpointClientOnboardingPasswordBasedMacView.as_view(),
-        name='trustpoint_client_password_based_mac'
+        'help/dispatch/<int:pk>/',
+        views.HelpDispatchView.as_view(),
+        name='help_dispatch'
     ),
     path(
-        'onboarding/<int:pk>/trustpoint-client/cancel/',
-        views.TrustpointClientCancelOnboardingProcessView.as_view(),
-        name='trustpoint_client_cancel_onboarding_process'
-    ),
-    path('onboard-status/',
-         views.DeviceOnboardStatusView.as_view(),
-         name='device_onboard_status'
-         ),
-    path('onboarded/<int:pk>/',
-         views.DeviceOnboardRedirectView.as_view(),
-         name='device_onboard_redirect'),
+        'help/no-onboarding/cmp-shared-secret/<int:pk>/',
+        views.NoOnboardingCmpSharedSecretHelpView.as_view(),
+        name='help_no-onboarding_cmp-shared-secret'),
+    path(
+        'help/onboarding/cmp-shared-secret/<int:pk>/',
+        views.OnboardingCmpSharedSecretHelpView.as_view(),
+        name='help-onboarding_cmp-shared-secret'),
+    path(
+        'help/onboarding/cmp-idevid/<int:pk>/',
+        views.OnboardingCmpIdevidHelpView.as_view(),
+        name='help-onboarding_cmp-idevid'),
+    path(
+        'help/onboarding/cmp-idevid-registration/<int:pk>/',
+        views.OnboardingIdevidRegistrationHelpView.as_view(),
+        name='help-onboarding_cmp-idevid-registration')
 ]

@@ -13,22 +13,20 @@
                     <h1>{% trans 'Confirm DevID Pattern Delete' %}</h1>
                 </div>
             </div>
-            <div class="card-body">
-                <div class="tp-card-centered-content">
-                    <p>Are you sure you want to delete the registration pattern: <strong>{{ object.unique_name }}</strong>?</p>
-                    <form method="post">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-danger">Delete</button>
-                        <a href="{{ request.META.HTTP_REFERER }}" class="btn btn-secondary">Cancel</a>
-                    </form>
+            <form method="post">
+                {% csrf_token %}
+                <div class="card-body">
+                    <div class="tp-card-centered-content">
+                        <p>Are you sure you want to delete the registration pattern: <strong>{{ object.unique_name }}</strong>?</p>
+                    </div>
                 </div>
-            </div>
-            <div class="card-footer">
-                <div class="tp-card-btn-footer">
-                    <button type="button" value="Back" class="btn btn-secondary" onClick="history.back()">{% trans 'Back' %}</button>
-                    <a href="{% url 'pki:domains-add' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
+                <div class="card-footer d-flex">
+                    <div class="tp-card-btn-footer m-1">
+                        <a href="{{ request.META.HTTP_REFERER }}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                        <button type="submit" class="btn btn-danger">{% trans 'Delete' %}</button>
+                    </div>
                 </div>
-            </div>
+            </form>
         </div>
     </form>
 {% endblock content %}

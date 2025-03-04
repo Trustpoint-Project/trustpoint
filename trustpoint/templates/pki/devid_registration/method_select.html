@@ -18,10 +18,10 @@
                     <a href="{% url 'pki:truststores-add-with-pk' pk=domain.id %}" class="btn btn-primary min-width-30 mb-5">{% trans 'Upload New Truststore' %}</a>
                 </div>
             </div>
-            <div class="card-footer">
-                <div class="tp-card-btn-footer">
+            <div class="card-footer d-flex tp-sticky-footer">
+                <div class="tp-card-btn-footer m-1">
                     <button type="button" value="Back" class="btn btn-secondary" onClick="history.back()">{% trans 'Back' %}</button>
-                    <a href="{% url 'pki:domains' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
+                    <a href="{% url 'pki:domains' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
                 </div>
             </div>
         </div>

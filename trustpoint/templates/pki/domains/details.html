@@ -64,11 +64,12 @@
                         {% include 'pki/devid_registration/table.html' %}
                     </div>
                 </div>
-                <div class="card-footer">
-                    <div class="tp-card-btn-footer">
-                        <button type="button" value="Back" class="btn btn-secondary" onClick="history.back()">{% trans 'Back' %}</button>
-                        <a href="{% url 'pki:issuing_cas' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                        <a href="{% url 'pki:issuing_cas-config' pk=domain.pk%}" class="btn btn-primary">{% trans 'Config' %}</a>
+
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <div class="tp-card-btn-footer m-1">
+                        <button type="button" value="Back" class="btn btn-secondary btn-half" onClick="history.back()">{% trans 'Back' %}</button>
+                        <a href="{% url 'pki:domains' %}" class="btn btn-secondary btn-half">{% trans 'Cancel' %}</a>
+                        <a href="{% url 'pki:domains-config' pk=domain.pk%}" class="btn btn-primary">{% trans 'Config' %}</a>
                     </div>
                 </div>
         </div>

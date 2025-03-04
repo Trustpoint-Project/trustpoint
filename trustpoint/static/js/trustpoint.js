@@ -95,7 +95,6 @@ if (checkboxColumn) {
     tableSelectButtons.forEach(function(el) {
         el.addEventListener('click', function(event) {
             let url_path = event.target.getAttribute('data-tp-url') + '/';
-            console.log(url_path)
             let at_least_one_checked = false;
             checkboxes.forEach(function(el) {
                 if (el.checked) {
@@ -238,9 +237,51 @@ function togglePemSelectDisable() {
     }
 }
 
-// ----------------------------------------------- Global Popper Enable ------------------------------------------------
+// ------------------------------------------------- Device Creation --------------------------------------------------
 
-// Air: disabled as we are not currently using popovers and this requires jQuery 
-// $(function () {
-//   $('[data-toggle="popover"]').popover()
-// })
+const onboardingAndPkiConfigurationSelect = document.getElementById('id_onboarding_and_pki_configuration');
+const idevidTrustStoreSelectWrapper = document.getElementById('id_idevid_trust_store_select_wrapper');
+
+const domainCredentialOnboardingCheckbox = document.getElementById('id_domain_credential_onboarding');
+const onboardingAndPkiConfigurationWrapper = document.getElementById('id_onboarding_and_pki_configuration_wrapper');
+const pkiConfigurationWrapper = document.getElementById('id_pki_configuration_wrapper');
+
+onboardingAndPkiConfigurationSelect?.addEventListener('change', function(event) {
+   const selectedOptionValue = event.target.options[event.target.selectedIndex].value;
+
+    switch (selectedOptionValue) {
+        case 'est_username_password':
+        case 'cmp_shared_secret':
+        case 'aoki_est':
+        case 'aoki_cmp':
+            addClassIfNotPresent(idevidTrustStoreSelectWrapper, 'd-none');
+            break;
+        case 'est_idevid':
+        case 'cmp_idevid':
+            removeClassIfPresent(idevidTrustStoreSelectWrapper, 'd-none');
+            break;
+    }
+});
+
+domainCredentialOnboardingCheckbox?.addEventListener('change', function(event) {
+    if (event.target.checked) {
+        addClassIfNotPresent(pkiConfigurationWrapper, 'd-none');
+        removeClassIfPresent(onboardingAndPkiConfigurationWrapper, 'd-none');
+    } else {
+        removeClassIfPresent(pkiConfigurationWrapper, 'd-none');
+        addClassIfNotPresent(onboardingAndPkiConfigurationWrapper, 'd-none');
+    }
+});
+
+function addClassIfNotPresent(element, className) {
+  if (!element.classList.contains(className)) {
+    element.classList.add(className);
+  }
+}
+
+function removeClassIfPresent(element, className) {
+  if (element.classList.contains(className)) {
+    element.classList.remove(className);
+  }
+}
+

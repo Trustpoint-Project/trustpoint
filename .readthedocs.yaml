@@ -5,31 +5,21 @@
 # Required
 version: 2
 
-# Set the OS, Python version and other tools you might need
+# Build all formats
+formats: all
+
+# Set the OS, Python version, and other tools you might need
 build:
-  os: ubuntu-22.04
+  os: ubuntu-24.04
   tools:
     python: "3.12"
-
-# TODO(AlexHx8472): Use poetry directly instead of the docs/source/requirements.txt
-#  jobs:
-#    post_create_environment:
-#      - pip install poetry
-#      - poetry config virtualenvs.create false
-#      - poetry install --with docs
 
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:
   configuration: docs/source/conf.py
 
-# Optionally build your docs in additional formats such as PDF and ePub
-# formats:
-#    - pdf
-#    - epub
-
-# Optional but recommended, declare the Python requirements required
-# to build your documentation
-# See https://docs.readthedocs.io/en/stable/guides/reproducible-builds.html
+# Use pyproject.toml for dependencies
 python:
   install:
-  - requirements: docs/source/requirements.txt
+    - method: pip
+      path: .[dev]

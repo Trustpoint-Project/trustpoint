@@ -23,10 +23,9 @@
                     {% include 'pki/truststores/sub_details.html' %}
                 </div>
             </div>
-            <div class="card-footer">
-                <div class="tp-card-btn-footer">
-                    <button type="button" value="Back" class="btn btn-secondary" onClick="history.back()">{% trans 'Back' %}</button>
-                    <a href="{% url 'pki:truststores' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+            <div class="card-footer d-flex">
+                <div class="tp-card-btn-footer m-1">
+                    <button type="button" value="Back" class="btn btn-secondary btn-half" onClick="history.back()">{% trans 'Back' %}</button>
                     <a href="{% url 'pki:truststore-download' pk=truststore.id %}" class="btn btn-primary">{% trans 'Download' %}</a>
                 </div>
             </div>

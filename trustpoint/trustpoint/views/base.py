@@ -29,7 +29,7 @@ class IndexView(RedirectView):
     """View that redirects to the index home page."""
 
     permanent: bool = False
-    pattern_name: str = 'pki:certificates'
+    pattern_name: str = 'home:dashboard'
 
 
 class ListInDetailView(ListView):
@@ -90,15 +90,17 @@ class SortableTableMixin:
         # Get sort parameter (e.g., "name" or "-name")
         sort_param = self.request.GET.get('sort', self.default_sort_param)
         queryset_type = type(queryset)
-        if queryset_type == QuerySet:
+        if queryset_type is QuerySet:
+            if hasattr(self.model, 'is_active'):
+                return queryset.order_by('-is_active', sort_param)
             return queryset.order_by(sort_param)
-        if queryset_type == list:
+        if queryset_type is list:
             return self._sort_list_of_dicts(queryset, sort_param)
 
         exc_msg = f'Unknown queryset type: {type}'
         raise TypeError(exc_msg)
 
-    def get_context_data(self, **kwargs) -> dict:
+    def get_context_data(self, **kwargs: dict) -> dict:
         context = super().get_context_data(**kwargs)
 
         # Get current sorting column

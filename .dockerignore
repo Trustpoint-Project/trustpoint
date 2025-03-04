@@ -1,3 +1,8 @@
 **/.git
 **/.gitignore
 **/.vscode
+**/.venv
+**/postgres_data
+**/*.log
+**/*.log.*
+**/db.sqlite3

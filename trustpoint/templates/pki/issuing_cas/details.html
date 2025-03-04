@@ -71,7 +71,7 @@
                         </div>
 
                         <h2>
-                            {% if issuing_ca.issuing_ca_certificate.subject_public_bytes == issuing_ca.issuing_ca_certificate.issuer_public_bytes %}
+                            {% if issuing_ca.credential.certificate.subject_public_bytes == issuing_ca.credential.certificate.issuer_public_bytes %}
                                 Issuing CA Certificate (This is a self-signed Root CA Certificate)
                             {% else %}
                                 Issuing CA Certificate
@@ -209,11 +209,10 @@
                     {% endif %}
                 </div>
             </div>
-                <div class="card-footer">
-                    <div class="tp-card-btn-footer">
-                        <button type="button" value="Back" class="btn btn-secondary" onClick="history.back()">{% trans 'Back' %}</button>
-                        <a href="{% url 'pki:issuing_cas-config' pk=issuing_ca.pk%}" class="btn btn-secondary">{% trans 'Config' %}</a>
+                <div class="card-footer d-flex">
+                    <div class="tp-card-btn-footer m-1">
                         <a href="{% url 'pki:issuing_cas' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                        <a href="{% url 'pki:issuing_cas-config' pk=issuing_ca.pk%}" class="btn btn-primary">{% trans 'Config' %}</a>
                     </div>
                 </div>
         </div>

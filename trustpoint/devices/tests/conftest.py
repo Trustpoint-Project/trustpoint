@@ -1,25 +1,31 @@
+"""pytest configuration for the tests in the devices app."""
+
 import pytest
-from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
-from devices.issuer import LocalDomainCredentialIssuer
 from pki.models import DomainModel, IssuingCaModel
-from pki.management.commands.base_commands import CertificateCreationCommandMixin
+from pki.util.x509 import CertificateGenerator
+
+from devices.issuer import LocalDomainCredentialIssuer
+from devices.models import DeviceModel, RemoteDeviceCredentialDownloadModel
+
 
 @pytest.fixture(autouse=True)
-def enable_db_access_for_all_tests(db):
+def enable_db_access_for_all_tests(db: None) -> None:
     """Fixture to enable database access for all tests."""
-    pass
 
 @pytest.fixture
 def mock_models() -> dict:
-    root_1, root_1_key = CertificateCreationCommandMixin.create_root_ca('Test Root CA')
-    issuing_1, issuing_1_key = CertificateCreationCommandMixin.create_issuing_ca(
+    return create_mock_models()
+
+def create_mock_models() -> dict:
+    """Fixture to create mock CA, domain, device, and credential models for testing."""
+    root_1, root_1_key = CertificateGenerator.create_root_ca('Test Root CA')
+    issuing_1, issuing_1_key = CertificateGenerator.create_issuing_ca(
                                     root_1_key, 'Root CA', 'Issuing CA A')
 
-    CertificateCreationCommandMixin.save_issuing_ca(
+    CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=issuing_1,
-        root_ca_cert=root_1,
         private_key=issuing_1_key,
-        chain=[],
+        chain=[root_1],
         unique_name='test_local_ca')
 
     mock_ca = IssuingCaModel.objects.get(unique_name='test_local_ca')
@@ -31,7 +37,7 @@ def mock_models() -> dict:
         unique_name='test_device',
         serial_number='1234567890',
         domain=mock_domain,
-        onboarding_protocol=DeviceModel.OnboardingProtocol.MANUAL,
+        onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
         onboarding_status=DeviceModel.OnboardingStatus.PENDING
     )
     mock_device.save()

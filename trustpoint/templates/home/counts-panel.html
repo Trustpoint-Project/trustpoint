@@ -10,7 +10,7 @@
   <!-- number of Certificates-->
   <div class="col-3">
     <div class="row p-2">
-      <div class="card count bg-gray shadow">
+      <div class="card count bg-gray shadow cursor" onclick="window.location.href = '{% url 'pki:certificates' %}'">
         <!-- <h2 class="text-center pb-4"><i class="bi bi-key"></i></h2> -->
         <h2 class="text-center pb-4 pt-2">Certificates</h2>
         <p style="font-size: 40px" class="text-center font-weight-bold" id="total-cert-count">
@@ -33,7 +33,9 @@
   <!-- number of Expiring Certificates -->
   <div class="col-3">
     <div class="row p-2">
-      <div class="card count bg-gray shadow">
+      <!-- TODO: The link should not only sort by not valid after, but also filter out any already expired certs -->
+      <!-- Perhaps it's better to split it to expiring device credentials and expiring CAs, because the user cannot take action in the certificates view -->
+      <div class="card count bg-gray shadow cursor" onclick="window.location.href = '{% url 'pki:certificates' %}?sort=not_valid_after'">
         <!-- <h2 class="text-center pb-4"><i class="bi bi-key"></i></h2> -->
         <h2 class="text-center pb-4 pt-2">Expiring Certificates</h2>
         <p style="font-size: 40px" class="text-center font-weight-bold" id="total-expiring-cert-count"></p>
@@ -55,7 +57,7 @@
   <!-- Onboarded Devices -->
   <div class="col-3">
     <div class="row p-2">
-      <div class="card count bg-gray shadow">
+      <div class="card count bg-gray shadow cursor" onclick="window.location.href = '{% url 'devices:devices' %}'">
         <!-- <h2 class="text-center pb-4"><i class="bi bi-key"></i></h2> -->
         <h2 class="text-center pb-4 pt-2">Devices</h2>
         <p style="font-size: 40px" class="text-center font-weight-bold"  id="total-device-count"></p>
@@ -77,9 +79,9 @@
    <!-- number of issuing CAs -->
    <div class="col-3">
     <div class="row p-2">
-      <div class="card count bg-gray shadow">
+      <div class="card count bg-gray shadow cursor" onclick="window.location.href = '{% url 'pki:issuing_cas' %}'">
         <!-- <h2 class="text-center pb-4"><i class="bi bi-cpu"></i></h2> -->
-        <h2 class="text-center pb-4 pt-2">Issuing Cas</h2>
+        <h2 class="text-center pb-4 pt-2">Issuing CAs</h2>
         <p style="font-size: 40px" class="text-center font-weight-bold" id="total-issuing-ca-count"></p>
         <div class="row p-0 px-3">
           <div class="col-6 small p-0" id="active-issuing-ca-count"></div>

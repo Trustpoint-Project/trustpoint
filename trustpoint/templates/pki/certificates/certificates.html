@@ -12,7 +12,7 @@
     {% endif %}
   </div>
   <div class="card-body text-start" style="overflow: auto; flex-grow: 1; max-height: 90%">
-    <table class="table table-striped">
+    <table class="table">
       <thead>
         <tr>
           <th id="checkbox-column"><input type="checkbox"/></th>
@@ -76,12 +76,12 @@
           <td>{{ certificate.certificate_status }}</td>
           <td>{{ certificate.created_at }}</td>
           <td>{% if certificate.is_self_signed == 1 %} ✔ {% else %} ✘ {% endif %}</td>
-          <td><a href="details/{{certificate.id}}/" class="btn btn-primary tp-table-btn">Details</a></td>
-          <td><a href="download/{{certificate.id}}/" class="btn btn-primary tp-table-btn">Download</a></td>
+          <td><a href="details/{{certificate.id}}/" class="btn btn-primary tp-table-btn w-100">Details</a></td>
+          <td><a href="download/{{certificate.id}}/" class="btn btn-primary tp-table-btn w-100">Download</a></td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="3">No data available.</td>
+          <td colspan="11" class="middle">{% trans 'No certificates are available. Add an Issuing CA first.' %}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -89,12 +89,14 @@
 
     {% include 'trustpoint/pagination.html' %}
   </div>
-  <div
-    class="card-footer tp-table-footer-btn-group d-flex justify-content-between align-items-center tp-sticky-footer"
-  >
-    <button type="button" class="btn btn-primary tp-table-select-btn" data-tp-url="download">
-      {% trans "Download selected" %}
-    </button>
+  <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+      <div class="tp-card-btn-footer m-1">
+          <button type="button" class="btn btn-primary tp-table-select-btn" data-tp-url="download">
+            {% trans 'Download selected' %}
+          </button>
+      </div>
+      <div class="m-1">
+      </div>
   </div>
 </div>
 {% endblock content %}

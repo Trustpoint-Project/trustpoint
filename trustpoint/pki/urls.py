@@ -45,6 +45,11 @@ urlpatterns = [
     path('truststores/details/<int:pk>/',
          truststores.TruststoreDetailView.as_view(),
          name='truststore-detail'),
+    re_path(
+        r'^truststores/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        truststores.TruststoreBulkDeleteConfirmView.as_view(),
+        name='truststore-delete_confirm',
+    ),
     path(
         'certificates/',
         certificates.CertificateTableView.as_view(),
@@ -72,6 +77,11 @@ urlpatterns = [
         r'^certificates/download/(?P<file_format>[a-zA-Z0-9_]+)/(?P<pk>[0-9]+)/?$',
         certificates.CertificateDownloadView.as_view(),
         name='certificate-file-download',
+    ),
+    path(
+        'certificates/download/issuing-ca/<int:pk>/',
+        certificates.CmpIssuingCaCertificateDownloadView.as_view(),
+        name='certificate-issuing-ca-download',
     ),
     path('certificates/details/<int:pk>/',
          certificates.CertificateDetailView.as_view(),

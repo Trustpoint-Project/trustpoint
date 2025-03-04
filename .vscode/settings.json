@@ -1,0 +1,3 @@
+{
+    "behave-vsc.featuresPath": "${workspaceFolder}/trustpoint/features"
+}

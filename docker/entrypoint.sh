@@ -16,17 +16,17 @@ fi
 
 # Reset the database
 echo "Resetting the database..."
-run_as_www_data "python trustpoint/manage.py reset_db --no-user --force"
-echo "Database resetted."
+run_as_www_data "uv run trustpoint/manage.py reset_db --no-user --force"
+echo "Database reset."
 
 # Collect static files
 echo "Collecting static files..."
-run_as_www_data "python trustpoint/manage.py collectstatic --noinput"
+run_as_www_data "uv run trustpoint/manage.py collectstatic --noinput"
 echo "Static files collected."
 
 # Compile messages (translations)
 echo "Compiling Messages..."
-run_as_www_data "python trustpoint/manage.py compilemessages"
+run_as_www_data "uv run trustpoint/manage.py compilemessages -l de -l en"
 echo "Messages compiled."
 
 # Start Apache server

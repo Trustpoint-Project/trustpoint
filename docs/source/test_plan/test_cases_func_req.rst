@@ -86,7 +86,7 @@ This testcase is related to requirement `R_004`_.
 Test Idea
 """""""""
 
-To test the REST API for interacting with TrustPoint programmatically,
+To test the REST API for interacting with Trustpoint programmatically,
 we focus on verifying CRUD operations (Create, Read, Update, Delete) and additional actions like querying and filtering.
 We begin by validating that authorized API clients can authenticate successfully and perform each operation on digital identities.
 This includes creating a new identity,
@@ -114,7 +114,7 @@ This testcase is related to requirement `R_005`_.
 Test Idea
 """""""""
 
-This requirement states that we want to distribute TrustPoint in a fully-configured Docker container.
+This requirement states that we want to distribute Trustpoint in a fully-configured Docker container.
 The idea for testing would be to build the container,
 run it on a production system and then check all other requirements manually or build a test suite and check the requirements automatically.
 Since the code is the same, just executed in a Docker environment, we see no need to let those tests run automatically.
@@ -218,8 +218,8 @@ Test Idea
 
 To verify that the system automatically generates Issuing CAs based on configuration, we will test the following scenarios:
 
-#. Successful Auto-Generation of an Issuing CA
-    - The admin configures the system with predefined settings for an Issuing CA.
+#. Successful Auto-Generation of an :term:`Issuing CA`
+    - The admin configures the system with predefined settings for an :term:`Issuing CA`.
     - The system automatically generates the CA without manual intervention.
     - The CA appears in the list of available CAs.
 
@@ -258,7 +258,7 @@ This testcase is related to requirement `R_009`_.
 Test Idea
 """""""""
 
-There is no High Availability Concept for TrustPoint yet,
+There is no High Availability Concept for Trustpoint yet,
 so that the test needs to be redesigned after we decided on which concept top use.
 For now, the test assumes a multi-server setup.
 
@@ -306,10 +306,10 @@ This testcase is related to requirement `R_010`_.
 Test Idea
 """""""""
 
-To verify that the system provides a CMP endpoint for onboarding devices, we will test the following scenarios:
+To verify that the system provides a :term:`CMP` endpoint for onboarding devices, we will test the following scenarios:
 
 #. Device Registration and Certificate Enrollment
-    - A new device initiates a CMP request to the endpoint.
+    - A new device initiates a :term:`CMP` request to the endpoint.
     - The system processes the request and issues a certificate.
     - The device successfully receives and stores the issued certificate.
 
@@ -319,7 +319,7 @@ To verify that the system provides a CMP endpoint for onboarding devices, we wil
     - The device replaces its old certificate with the new one.
 
 #. Handling Unauthorized Requests
-    - A device with invalid credentials tries to access the CMP endpoint.
+    - A device with invalid credentials tries to access the :term:`CMP` endpoint.
     - The system rejects the request with an appropriate error response.
 
 #. Certificate Revocation for a Compromised Device
@@ -335,7 +335,7 @@ Edge cases:
 
 - Expired certificates being used for renewal.
 - Partial network outages during certificate issuance.
-- Unexpected payloads being sent to the CMP endpoint.
+- Unexpected payloads being sent to the :term:`CMP` endpoint.
 
 """"""""""""
 Feature File
@@ -349,27 +349,27 @@ R_011
 ^^^^^
 
 This testcase is related to requirement `R_011`_.
-Note that EST and CMP could be tested the same way.
+Note that :term:`EST` and :term:`CMP` could be tested the same way.
 This is still w.i.p.
 
 """""""""
 Test Idea
 """""""""
 
-To verify that the system provides an EST endpoint for onboarding devices, we will test the following scenarios:
+To verify that the system provides an :term:`EST` endpoint for onboarding devices, we will test the following scenarios:
 
 #. Device Registration and Certificate Enrollment
-    - A new device initiates an EST request to the endpoint.
+    - A new device initiates an :term:`EST` request to the endpoint.
     - The system processes the request and issues a certificate.
     - The device successfully receives and stores the issued certificate.
 
 #. Certificate Renewal for an Onboarded Device
-    - An onboarded device requests certificate renewal using EST.
+    - An onboarded device requests certificate renewal using :term:`EST`.
     - The system validates the request and issues a new certificate.
     - The device replaces its old certificate with the new one.
 
 #. Handling Unauthorized Requests
-    - A device with invalid credentials tries to access the EST endpoint.
+    - A device with invalid credentials tries to access the :term:`EST` endpoint.
     - The system rejects the request with an appropriate error response.
 
 #. Certificate Revocation for a Compromised Device
@@ -378,14 +378,14 @@ To verify that the system provides an EST endpoint for onboarding devices, we wi
     - The revoked device is unable to authenticate using its certificate.
 
 #. High Load Handling
-    - Simulate multiple devices requesting certificate issuance simultaneously via EST.
+    - Simulate multiple devices requesting certificate issuance simultaneously via :term:`EST`.
     - Verify that the system handles high traffic without performance degradation.
 
 Edge cases:
 
 - Expired certificates being used for renewal.
 - Partial network outages during certificate issuance.
-- Unexpected payloads being sent to the EST endpoint.
+- Unexpected payloads being sent to the :term:`EST` endpoint.
 
 """"""""""""
 Feature File
@@ -429,4 +429,48 @@ Feature File
 """"""""""""
 
 .. literalinclude:: ../../../trustpoint/features/R_012_multi_language_support.feature
+   :language: gherkin
+
+^^^^^
+R_013
+^^^^^
+
+This testcase is related to requirement `R_013`_.
+
+"""""""""
+Test Idea
+"""""""""
+
+The Remote Credential Download feature allows users to download an issued application credential
+from a remote device using a one-time password (OTP).
+The test covers the following scenarios:
+
+#. Admin Generates One-Time Password
+    - An admin successfully generates a one-time password (OTP) for a specific issued credential.
+    - The OTP is displayed in the "Download on Device Browser" view.
+    - The OTP should be valid for a limited time.
+
+#. User Enters OTP Correctly
+    - The user visits the "/devices/browser" endpoint.
+    - They enter a valid OTP.
+    - The system grants access to a page where the user can select the format for the credential download.
+
+#. User Enters OTP Incorrectly
+    - The user visits the "/devices/browser" endpoint.
+    - They enter an invalid OTP.
+    - The system displays a warning message indicating the OTP is incorrect.
+    - The user is not granted access to download the credential.
+
+#. User Downloads Credential
+    - The user is on the credential download page.
+    - The download token is still valid (not expired).
+    - The user enters a password to encrypt the private key.
+    - The user selects a file format.
+    - The credential is successfully downloaded in the selected format.
+
+""""""""""""
+Feature File
+""""""""""""
+
+.. literalinclude:: ../../../trustpoint/features/R_013_remote_credential_download.feature
    :language: gherkin

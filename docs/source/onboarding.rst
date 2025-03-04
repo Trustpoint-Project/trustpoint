@@ -3,25 +3,111 @@
 Onboarding Mechanisms
 =====================
 
-This document outlines the different mechanisms available to onboard devices to Trustpoint, including user-driven and automated methods. These methods aim to streamline the process of issuing initial certificates that are used for secure device authentication with Trustpoint.
+This document outlines the different mechanisms available to onboard devices to Trustpoint, including user-driven and automated methods. These methods aim to streamline the process of issuing initial certificates (domain credentials) that are used for secure device authentication with Trustpoint.
 
 Overview
 --------
 Trustpoint provides multiple ways to onboard a device. Currently, the primary onboarding mechanism is user-driven, with zero-touch onboarding being a future enhancement. The following sections provide detailed information on each of these methods.
 
-Onboarding a device to Trustpoint involves issuing an initial certificate, which allows the device to securely authenticate with Trustpoint. There are two categories of onboarding available: user-driven onboarding and zero-touch onboarding.
+Onboarding a device to Trustpoint involves issuing a domain credential, which allows the device to securely authenticate with Trustpoint. There are two categories of onboarding available: user-driven onboarding and zero-touch onboarding.
+
+No Onboarding
+-------------
+
+In certain industrial environments, especially those with air-gapped systems, legacy devices, or extremely restrictive policies, onboarding devices to Trustpoint may not always be feasible or necessary.
+
+In these cases, devices may continue to operate without a domain credential managed by Trustpoint. However, this approach is discouraged as it introduces security risks and limits the device’s ability to participate in secure, authenticated communication within the industrial network.
+
+Trustpoint aims to reduce the need for "No Onboarding" scenarios by providing flexible onboarding methods and supporting various industrial standards. However, it acknowledges that in specific edge cases, operating without an onboarding process may still occur.
 
 User-Driven Onboarding
 ----------------------
 User-driven onboarding is the primary method available for onboarding devices to Trustpoint. This method offers several options, depending on the user's preferences and available resources.
 
-Using the Trustpoint Client
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Authentication
+^^^^^^^^^^^^^^
+
+To initially secure the client's request for a domain credential, various methods can be used depending on the onboarding:
+ - **IDevID onboarding**: EST (WIP) and CMP both support an initial onboarding with the IDevID on the device. To do this, the initial request (for CMP an initialization request [ir]; for EST a /simpleenroll) must be signed with the IDevID.
+ - **Shared secret**: Onboard a new device using CMP and a shared secret.
+ - **Password**: Onboard a new device with EST protocol using a username and password
+ - **One Time Password (OTP)**: Browser onboarding can be carried out using a one-time password
+
+Using the device CLI
+^^^^^^^^^^^^^^^^^^^^
+Users can also onboard their device manually by executing commands on the device command line interface (CLI).
+
+How It Works:
+
+- A new device with one of the the following options:
+    - **CMP with shared secret onboarding**
+    - **CMP with IDevID onboarding**
+    - **EST with username and password onboarding** (WIP)
+    - **EST with IDevID onbaording** (WIP)
+- In **Devices** click **Manage** on the new device
+- Click **Help - Issue New Credentials**
+- Copy the provided (OpenSSL) commands to your clipboard and execute it on the device
+- Upon successful submission, the device is issued a domain credential for authentication.
+
+Requirements:
+
+- A Linux machine with access to the command line.
+- Necessary permissions.
+- A connection to communicate with Trustpoint services.
+
+Example for CMP with shared secret onboarding
+"""""""""""""""""""""""""""""""""""""""""""""
+
+This approach allows a device to obtain a domain credential from Trustpoint using the CMP protocol and a shared secret for authentication. It is a commonly used method when no initial identity certificate (IDevID) is available on the device.
+
+.. note::
+
+        The following commands are provided by Trustpoint in Devices > Manage > Help Issue New Credentials
+
+The first step is to generate a key pair for the domain credential that will be requested from Trustpoint:
+
+.. code-block:: bash
+
+    openssl genrsa -out domain_credential_key.pem 2048
+
+This will create a private key file named ``domain_credential_key.pem`` for the domain credential.
+
+Next, use the CMP protocol with a shared secret to request the domain credential certificate from Trustpoint:
+
+.. code-block:: bash
+
+    openssl cmp \
+    -cmd ir \
+    -implicit_confirm \
+    -server http://127.0.0.1:8000/.well-known/cmp/initialization/custom_domain/ \
+    -ref 11 \
+    -secret pass:None \
+    -subject "/CN=Trustpoint Domain Credential" \
+    -newkey domain_credential_key.pem \
+    -certout cert.pem \
+    -chainout chain.pem
+
+Explanation of the Key Parameters:
+
+- ``-cmd ir``: Initialization Request to obtain a new certificate.
+- ``-implicit_confirm``: Enables implicit confirmation to finalize the certificate enrollment.
+- ``-server``: The URL of the Trustpoint CMP endpoint. Replace this with the actual server URL in your setup.
+- ``-ref 11``: Reference identifier provided during device registration.
+- ``-secret pass:None``: The shared secret for onboarding. Replace ``None`` with the actual secret provided by Trustpoint.
+- ``-subject "/CN=Trustpoint Domain Credential"``: The subject name for the domain credential certificate.
+- ``-newkey domain_credential_key.pem``: The key pair generated earlier is used for the certificate request.
+- ``-certout cert.pem``: The resulting certificate will be saved to ``cert.pem``.
+- ``-chainout chain.pem``: The certificate chain will be saved to ``chain.pem``.
+
+Upon successful execution, the device will receive its domain credential certificate, enabling secure authentication with Trustpoint.
+
+Using the Trustpoint Client (Work in Progress)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Trustpoint provides a user-friendly client application that simplifies the onboarding process. The Trustpoint client is available at `Trustpoint Client GitHub <https://github.com/TrustPoint-Project/trustpoint-client>`_. This method is recommended for users who prefer a guided approach to onboarding.
 
 How It Works:
 
-- A new device with the Onboarded protocol **Trustpoint client** is added to Trustpoint
+- A new device with the onboarding protocol **Trustpoint client** is added to Trustpoint
 - In **Devices** click **Start Onboarding** on the new device
 - Copy the provided command to your clipboard and execute it on the device
 - The device is onboarded
@@ -30,59 +116,9 @@ How It Works:
 Requirements:
 
 - Access to the Device.
-- Python 3.10 or greater on device.
+- Python 3.12 or greater on device.
 - Trustpoint-Client installed on the device (via `pip install trustpoint-client`).
-- An connection to communicate with Trustpoint services.
-
-Using the CLI of a Linux Machine
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Users can also onboard their device manually by executing commands on a Linux machine. This option is suitable for advanced users comfortable with the command line interface (CLI).
-
-How It Works:
-
-- A new device with the Onboarded protocol **Device CLI** is added to Trustpoint
-- In **Devices** click **Start Onboarding** on the new device
-- Copy the provided commands to your clipboard and execute it on the device
-- Upon successful submission, the device is issued an initial certificate for authentication.
-
-Requirements:
-
-- A Linux machine with access to the command line.
-- Necessary permissions.
-- An connection to communicate with Trustpoint services.
-
-Browser-Based Onboarding
-^^^^^^^^^^^^^^^^^^^^^^^^
-Trustpoint also offers browser-based onboarding, allowing users to onboard their devices conveniently through a web interface. This method is ideal for users who prefer a straightforward, intuitive onboarding experience without needing to install additional software.
-
-How It Works:
-
-- A new device with the Onboarded protocol **Browser download** is added to Trustpoint
-- In **Devices** click **Start Onboarding** on the new device
-- Open a browser on your device
-- Visit the provided Download URL
-- Copy / Paste the Device ID and the provided OTP in the form
-- Click **Download credentials**
-- Click **Download PKCS12**
-
-Requirements:
-
-- A web browser.
-- An connection to access the onboarding web page.
-
-Manual Download of a P12 File
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-In cases in which there is no direct connection to the Trustpoint, an admin with access to the Trustpoint-GUI can download the desired domain credential (PKCS#12 or PEM files) and manually onboard the device with it, e.g. by using an USB-Stick.
-How It Works:
-
-- A new device with the Onboarded protocol **Manual download** is added to Trustpoint
-- In **Devices** click **Start Onboarding** on the new device
-- Click **Download PKCS12** or **Download PEM**
-- The user manually transfers the .p12 or .pem file to the target device and imports it.
-
-Requirements:
-
-- Ability to download and securely transfer the .p12 file.
+- A connection to communicate with Trustpoint services.
 
 Zero-Touch Onboarding (Work in Progress)
 ----------------------------------------
@@ -125,6 +161,4 @@ How to
 5. **Onboard the device**
     Execute ``trustpoint-client provision zero-touch`` command on the client to onboard the device.
 
-Summary
--------
-Trustpoint offers a variety of mechanisms for device onboarding, ranging from user-driven methods with flexible options to future plans for automated zero-touch onboarding. Users can choose the method that best fits their needs, whether it's through the Trustpoint client, a web interface, or manual distribution.
+

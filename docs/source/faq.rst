@@ -50,21 +50,7 @@ The current version of Trustpoint uses a Python Django framework.
 
 How can I set up the development environment for Trustpoint?
 ---------------------------------------------------------------
-To set up the development environment, follow these steps:
-
-- **Install Python**: Ensure Python 3.12.2 is installed. Using `pyenv` is recommended for managing different Python versions.
-- **Install Poetry**: Use Poetry to create a virtual environment and manage dependencies.
-- **Install Dependencies**: Navigate to the project root and run `poetry install`.
-- **Activate the Environment**: Run `poetry shell` to activate the virtual environment.
-- **Set Up the Database**: Navigate to the `trustpoint` directory and run the following commands:
-
-  .. code-block:: bash
-
-     python manage.py makemigrations
-     python manage.py migrate
-     python manage.py createsuperuser
-
-- **Run the Development Server**: Start the server with `python manage.py runserver`.
+To set up the development environment, follow the steps in :ref:`development`
 
 How can I build and run Trustpoint using Docker?
 ---------------------------------------------------
@@ -86,6 +72,6 @@ How can I contribute to the Trustpoint project?
 --------------------------------------------------
 Contributions are welcome. You can fork the repository, make your changes, and submit a pull request. Ensure that your contributions align with the `project's guidelines and standards <https://github.com/TrustPoint-Project/trustpoint/blob/main/AUTHORS.md>`_.
 
-8. What license does Trustpoint use?
+1. What license does Trustpoint use?
 ------------------------------------
 Trustpoint is released under the MIT license. This allows for broad usage, modification, and distribution of the software, promoting open collaboration and development. You can find the license `here <https://github.com/TrustPoint-Project/trustpoint/blob/main/LICENSE>`_

@@ -19,11 +19,10 @@
                     {{ form|crispy }}
                 </div>
             </div>
-            <div class="card-footer">
-                <div class="tp-card-btn-footer">
-                    <button type="button" value="Back" class="btn btn-secondary" onClick="history.back()">{% trans 'Back' %}</button>
-                    <a href="{% url 'pki:issuing_cas' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
-                    <button type="submit" class="btn btn-primary">{% trans "Add New Issuing CA" %}</button>
+            <div class="card-footer d-flex">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'pki:issuing_cas' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                    <button type="submit" class="btn btn-primary">{% trans 'Add new Issuing CA' %}</button>
                 </div>
             </div>
         </div>

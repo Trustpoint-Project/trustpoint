@@ -1,0 +1,9 @@
+name: R_101
+
+on: [pull_request]
+
+jobs:
+  test:
+    uses: ./.github/workflows/behave-test-template.yml
+    with:
+      feature_file: R_101_device_cert_validation

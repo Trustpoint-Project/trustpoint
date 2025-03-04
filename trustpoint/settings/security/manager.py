@@ -1,62 +1,68 @@
-from django.core.cache import cache
+"""Logic managing the security level setting of the Trustpoint."""
+from __future__ import annotations
 
-from . import SecurityFeatures, SecurityModeChoices
+from typing import TYPE_CHECKING
 
+from settings.models import SecurityConfig
+from settings.security import LEVEL_FEATURE_MAP
+from trustpoint.views.base import LoggerMixin
 
-class SecurityManager:
-    """Manages the security level setting of the Trustpoint.
-    
-    Define below the features allowed in each level. At development level, all features are allowed.
-    Please note that when making changes, for features that have user-side preferences (e.g. auto-generated PKI),
-    you also need to adjust 'data-sl-defaults' and 'data-hide-at-sl' in the SecurityConfigForm.
-    """
-
-    highest_features = (SecurityFeatures.LOG_ACCESS, )
-    high_features = (*highest_features, )
-    medium_features = (*high_features, )
-    low_features = (*medium_features, SecurityFeatures.AUTO_GEN_PKI )
+if TYPE_CHECKING:
+    from settings.security.features import SecurityFeature
 
 
-    @classmethod
-    def is_feature_allowed(cls, feature_name: SecurityFeatures, target_level: None | SecurityModeChoices = None):
-        """Checks if the specified feature is allowed in the currently set security level."""
+class SecurityManager(LoggerMixin):
+    """Manages the security level setting of the Trustpoint."""
 
-        if (target_level is None):
-            sec_level = cls.get_security_level()
-        else:
-            sec_level = target_level
+    def is_feature_allowed(self,
+                           feature: SecurityFeature,
+                           target_level: None | str = None) -> bool:
+        """Checks if the specified feature is allowed under the given security level.
 
-        if sec_level == SecurityModeChoices.DEV:
-            return True
-        if sec_level == SecurityModeChoices.LOW:
-            return feature_name in cls.low_features
-        elif sec_level == SecurityModeChoices.MEDIUM:
-            return feature_name in cls.medium_features
-        elif sec_level == SecurityModeChoices.HIGH:
-            return feature_name in cls.high_features
-        elif sec_level == SecurityModeChoices.HIGHEST:
-            return feature_name in cls.highest_features
-        return False
-
-    @classmethod
-    def get_security_level(cls) -> str:
-        """Returns the security mode of the current security level instance.
-
-        Returns:
-        --------
-        str
-            The security mode of the current security level instance.
+        If 'target_level' is None, the current security level is used.
         """
-        security_level = cache.get('security_level')
-        if not security_level:
-            cls._set_cache()
-        return cache.get('security_level')
+        sec_level = self.get_security_level() if target_level is None else target_level
+
+        if sec_level == SecurityConfig.SecurityModeChoices.DEV:
+            return True
+
+        # Convert or cast sec_level to actual SecurityModeChoices if needed:
+        # If sec_level is just a string like '1', get the enumerated type:
+        level_choice = SecurityConfig.SecurityModeChoices(sec_level)
+
+        # If the level is defined in the dictionary, check membership
+        allowed_features = LEVEL_FEATURE_MAP.get(level_choice, set())
+        return feature in allowed_features
+
+
+    def get_security_level(self) -> str:
+        """Returns the string representation of the security_mode, e.g. '0', '1', etc."""
+        return self.get_security_config_model().security_mode
 
     @classmethod
-    def _set_cache(cls) -> None:
-        """Sets the security level in the cache by fetching it from the database."""
-        from settings.models import SecurityConfig
+    def get_features_to_disable(cls, sec_level: str) -> list[SecurityFeature]:
+        """Returns a list of features that must be disabled at the given security level."""
+        dev_features = LEVEL_FEATURE_MAP[SecurityConfig.SecurityModeChoices.DEV]
+        level_choice = SecurityConfig.SecurityModeChoices(sec_level)
+        valid_features = LEVEL_FEATURE_MAP.get(level_choice, set())
 
-        current_sec_config = SecurityConfig.objects.first()
-        if current_sec_config:
-            cache.set('security_level', current_sec_config.security_mode)
+        # The difference is the set of features that are NOT allowed at this level.
+        must_disable = dev_features - valid_features
+        return list(must_disable)
+
+    def reset_settings(self, new_sec_mode: str) -> None:
+        """Disables any feature that is not allowed by the new security mode."""
+        features_to_disable = self.get_features_to_disable(new_sec_mode)
+        for feature in features_to_disable:
+            log_msg = f'Disabling Feature: {feature}'
+            self.logger.info(log_msg)
+            feature.disable()
+
+    def get_security_config_model(self) -> SecurityConfig:
+        """Returns the model holding the security settings."""
+        return SecurityConfig.objects.first()
+
+    def enable_feature(self, feature: SecurityFeature, *args: dict) -> None:
+        """Enables a feature if it is allowed at the current security level."""
+        if self.is_feature_allowed(feature):
+            feature.enable(*args)

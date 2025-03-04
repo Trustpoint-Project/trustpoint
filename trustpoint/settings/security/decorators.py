@@ -2,11 +2,11 @@ from functools import wraps
 
 from django.core.exceptions import PermissionDenied
 
-from settings.security import SecurityFeatures
+from settings.security import SecurityFeature
 from settings.security.manager import SecurityManager
 
 
-def security_level(feature_name: SecurityFeatures):
+def security_level(feature_name: SecurityFeature):
     """A decorator that checks whether a specific security feature is allowed based on the current security level.
 
     This decorator uses the SecurityManager to determine if the provided feature is permitted under the current

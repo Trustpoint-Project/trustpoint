@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from core.serializer import CertificateSerializer, CertificateCollectionSerializer
-from core.validator.field import UniqueNameValidator
+from trustpoint_core.serializer import CertificateSerializer, CertificateCollectionSerializer
+from util.field import UniqueNameValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -83,7 +83,7 @@ class TruststoreModel(models.Model):
     class IntendedUsage(models.IntegerChoices):
         """Intended Usage of the Truststore."""
 
-        IDEV_ID = 0, _('IDevID')
+        IDEVID = 0, _('IDevID')
         TLS = 1, _('TLS')
         GENERIC = 2, _('Generic')
 

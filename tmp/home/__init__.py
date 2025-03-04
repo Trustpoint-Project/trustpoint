@@ -1,1 +1,0 @@
-"""Django Home Application."""

@@ -1,18 +1,35 @@
-from enum import Enum
+from settings.models import SecurityConfig
+from settings.security.features import AutoGenPkiFeature
 
-from django.db import models
-from django.utils.translation import gettext_lazy as _
+# 1) Minimal set: HIGHEST
+HIGHEST_FEATURES = {
+    None
+}
 
+# 2) HIGH inherits everything from HIGHEST,
+HIGH_FEATURES = HIGHEST_FEATURES | {
+    None
+}
 
-class SecurityModeChoices(models.TextChoices):
-    """Types of security modes"""
-    DEV = '0', _('Testing env')
-    LOW = '1', _('Basic')
-    MEDIUM = '2', _('Medium')
-    HIGH = '3', _('High')
-    HIGHEST = '4', _('Highest')
+# 3) MEDIUM inherits from HIGH
+MEDIUM_FEATURES = HIGH_FEATURES | {
+    None
+}
 
-class SecurityFeatures(Enum):
-    """A class that defines various security features used throughout the application."""
-    AUTO_GEN_PKI = 'Auto-Generated PKI'
-    LOG_ACCESS = 'Log Access'
+# 4) LOW inherits from MEDIUM
+LOW_FEATURES = MEDIUM_FEATURES | {
+    AutoGenPkiFeature
+}
+
+# 5) DEV inherits from LOW (All features available)
+DEV_FEATURES = LOW_FEATURES | {
+    None
+}
+
+LEVEL_FEATURE_MAP = {
+    SecurityConfig.SecurityModeChoices.HIGHEST: HIGHEST_FEATURES,
+    SecurityConfig.SecurityModeChoices.HIGH: HIGH_FEATURES,
+    SecurityConfig.SecurityModeChoices.MEDIUM: MEDIUM_FEATURES,
+    SecurityConfig.SecurityModeChoices.LOW: LOW_FEATURES,
+    SecurityConfig.SecurityModeChoices.DEV: DEV_FEATURES,
+}

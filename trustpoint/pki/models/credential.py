@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from django.db.models import QuerySet
 
-from core.serializer import (
+from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
@@ -16,6 +16,7 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 from pki.models import CertificateModel
+from trustpoint_core import oid
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar, Union
@@ -288,6 +289,14 @@ class CredentialModel(models.Model):
                 self.get_certificate_chain_serializer()
             )
         )
+
+    @property
+    def signature_suite(self) -> oid.SignatureSuite:
+        return oid.SignatureSuite.from_certificate(self.get_certificate_serializer().as_crypto())
+
+    @property
+    def public_key_info(self) -> oid.PublicKeyInfo:
+        return self.signature_suite.public_key_info
 
     def is_valid_domain_credential(self) -> tuple[bool, str]:
         """Determines if this credential is valid for domain usage.

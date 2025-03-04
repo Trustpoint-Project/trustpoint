@@ -9,17 +9,18 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
+# ruff: noqa: T201  # print is used for DB connection status prior to log availability
+
 import logging
 import os
 import socket
 import time
 from pathlib import Path
-
-import psycopg
-from django.core.management.utils import get_random_secret_key
-from django.utils.translation import gettext_lazy as _
+from typing import ClassVar
 
 import django_stubs_ext
+import psycopg
+from django.utils.translation import gettext_lazy as _
 
 # Monkeypatching Django, so stubs will work for all generics,
 # see: https://github.com/typeddjango/django-stubs
@@ -61,9 +62,10 @@ def is_postgre_available() -> bool:
     try:
         print(f'Trying to connect to {host}:{port}...')
         with socket.create_connection((host, port), timeout=5):
-            print(f"Connection to {host}:{port} successful.")
-    except socket.error as e:
-        msg = f'PostgreSQL host {host} on port {port} is unreachable. Error: {e}'
+            print(f'Connection to {host}:{port} successful.')
+    except OSError as e:
+        msg = f'PostgreSQL host {host} on port {port} is unreachable. \n'
+        msg += 'Switching to SQLite Database'
         print(msg)
         return False
 
@@ -90,12 +92,12 @@ def is_postgre_available() -> bool:
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
-ADMIN_ENABLED = True if DEBUG else False
+ADMIN_ENABLED = bool(DEBUG)
 DEVELOPMENT_ENV = True
 
 # SECURITY WARNING: keep the secret key used in production secret!
 if DEBUG:
-    SECRET_KEY = 'DEV-ENVIRON-SECRET-KEY-lh2rw0b0z$s9e=!4see)@_8ta_up&ad&m01$i+g5z@nz5u$0wi'
+    SECRET_KEY = 'DEV-ENVIRON-SECRET-KEY-lh2rw0b0z$s9e=!4see)@_8ta_up&ad&m01$i+g5z@nz5u$0wi'  # noqa: S105
 else:
     # TODO(AlexHx8472): Use proper docker secrets handling.
     SECRET_KEY = Path('/etc/trustpoint/secrets/django_secret_key.env').read_text()
@@ -115,7 +117,6 @@ INSTALLED_APPS = [
     'devices.apps.DevicesConfig',
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
-    'est.apps.EstConfig',
     'settings.apps.SettingsConfig',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -125,11 +126,12 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'crispy_forms',
     'crispy_bootstrap5',
-    'behave_django'
 ]
 
-if DEVELOPMENT_ENV:
+if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
     INSTALLED_APPS.append('django_extensions')
+    INSTALLED_APPS.append('behave_django')
+    TEST_RUNNER = 'django_behave.runner.DjangoBehaveTestSuiteRunner'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -215,8 +217,8 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = 'en-us'
 
 LANGUAGES = [
-    ("de", _("German")),
-    ("en", _("English")),
+    ('de', _('German')),
+    ('en', _('English')),
 ]
 
 
@@ -296,10 +298,14 @@ LOGGING = {
     },
     'loggers': {
         '': {
-            'level': 'DEBUG',
+            'level': 'INFO',
             'handlers': ['console', 'rotatingFile'],
         },
     },
 }
 
-TEST_RUNNER = "django_behave.runner.DjangoBehaveTestSuiteRunner"
+# User interface config defaults
+class UIConfig:
+    """User interface configuration defaults."""
+    paginate_by: ClassVar[int] = 50
+    notifications_paginate_by: ClassVar[int] = 5

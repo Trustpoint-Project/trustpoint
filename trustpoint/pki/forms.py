@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from core.serializer import (
+from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
     PrivateKeySerializer,
 )
-from core.validator.field import UniqueNameValidator
+from util.field import UniqueNameValidator
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
@@ -134,7 +134,7 @@ class TruststoreAddForm(forms.Form):
         try:
             certificates = x509.load_pem_x509_certificates(trust_store_file)
         except Exception as exception:
-            error_message = f'Unable to process the Trust-Store. May be malformed / corrupted.'
+            error_message = 'Unable to process the Truststore. May be malformed / corrupted.'
             raise ValidationError(error_message) from exception
 
         try:
@@ -144,7 +144,9 @@ class TruststoreAddForm(forms.Form):
                 certificates=certificates,
             )
         except Exception as exception:
+
             raise ValidationError(str(exception)) from exception
+
 
         self.cleaned_data['truststore'] = trust_store_model
         return cleaned_data
@@ -163,6 +165,7 @@ class TruststoreAddForm(forms.Form):
                 saved_certs.append(CertificateModel.objects.get(sha256_fingerprint=sha256_fingerprint))
             except CertificateModel.DoesNotExist:
                 saved_certs.append(CertificateModel.save_certificate(certificate))
+
 
         trust_store_model = TruststoreModel(
             unique_name=unique_name,

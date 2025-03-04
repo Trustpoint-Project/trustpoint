@@ -13,39 +13,136 @@
             <div>{% trans 'Creation date' %}</div>
             <div>{{ device.created_at }}</div>
         </li>
-        {% if short %}
         <li>
-            <div>{% trans 'Domain' %}</div>
-            <div>
-                {% if device.domain %}
-                    <a href="{% url 'pki:domains-detail' pk=device.domain.id %}">
-                        {{ device.domain.unique_name }}
-                    </a>
-                {% else %}
-                    {% trans 'This device is not part of any domain.' %}
-                {% endif %}
-            </div>
+            <div>{% trans 'Updated date' %}</div>
+            <div>{{ device.updated_at }}</div>
         </li>
+        {% if short %}
+            <li>
+                <div>{% trans 'Domain' %}</div>
+                <div>
+                    {% if device.domain %}
+                        <a href="{% url 'pki:domains-detail' pk=device.domain.id %}">
+                            {{ device.domain.unique_name }}
+                        </a>
+                    {% else %}
+                        {% trans 'This device is not part of any domain.' %}
+                    {% endif %}
+                </div>
+            </li>
         {% endif %}
         <li>
             <div>{% trans 'Device onboarding status' %}</div>
             <div>{{ device.get_onboarding_status_display }}</div>
         </li>
+        <li>
+            <div>{% trans 'Onboarding Protocol' %}</div>
+            <div>{{ device.get_onboarding_protocol_display }}</div>
+        </li>
+        <li>
+            <div>{% trans 'PKI Protocol' %}</div>
+            <div>{{ device.get_pki_protocol_display }}</div>
+        </li>
+        <li>
+            <div>{% trans 'Domain Credential Onboarding' %}</div>
+            <div>
+                {% if device.domain_credential_onboarding %}{% trans 'Yes' %}{% else %}{% trans 'No' %}{% endif %}</div>
+        </li>
+        {% if device.idevid_trust_store %}
+            <li>
+                <div>{% trans 'IDevID Manufacturer Truststore' %}</div>
+                <div>{{ device.idevid_trust_store.unique_name }}</div>
+            </li>
+        {% endif %}
     </ul>
 
-    {% if not short %}
-    <hr class="hr-m">
-    <ul class="tp-kvp-list">
-        <div>{% trans 'Domain' %}</div>
-        <div>
-            {% if device.domain %}
-                <a href="{% url 'pki:domains-detail' pk=device.domain.id %}">
-                    {{ device.domain.unique_name }}
-                </a>
-            {% else %}
-            <div>{% trans 'This device is not part of any domain.' %}</div>
-            {% endif %}
-        </div>
-    </ul>
+    {% if device and device.domain %}
+        <hr class="hr-m">
+        <h5>{% trans 'Domain Details' %}</h5>
+        <ul class="tp-kvp-list">
+            <li>
+                <div>{% trans 'Domain Name' %}</div>
+                <div>
+                    <a href="{% url 'pki:domains-detail' pk=device.domain.id %}">
+                        {{ device.domain.unique_name }}
+                    </a>
+                </div>
+            </li>
+        </ul>
+        {% if device.onboarding_protocol == device.OnboardingProtocol.CMP_IDEVID %}
+            <h6 class="mt-3">{% trans 'DevID Registration Patterns' %}</h6>
+            {% with device.domain.devid_registrations.all as registrations %}
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>{% trans 'Unique Name' %}</th>
+                            <th>{% trans 'Truststore' %}</th>
+                            <th>{% trans 'Serial Number Pattern' %}</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for registration in registrations %}
+                            <tr>
+                                <td>
+                                    {{ registration.unique_name }}
+                                </td>
+                                <td>
+                                    <a href="{% url 'pki:truststore-detail' pk=registration.truststore.id %}">
+                                        {{ registration.truststore.unique_name }}
+                                    </a>
+                                </td>
+                                <td>{{ registration.serial_number_pattern }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="4"
+                                    class="middle">{% trans 'There are no DevID Registration Patterns available.' %}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endwith %}
+        {% endif %}
+    {% else %}
+        {% trans 'This device is not part of any domain.' %}
+    {% endif %}
+
+
+    {% if device.domain and device.domain.issuing_ca %}
+        <hr class="hr-m">
+        <h5>{% trans 'Issuing CA Details' %}</h5>
+        <ul class="tp-kvp-list">
+            <li>
+                <div>{% trans 'Issuing CA Name' %}</div>
+                <div>
+                    <a href="{% url 'pki:issuing_cas-config' pk=device.domain.issuing_ca.id %}">
+                        {{ device.domain.issuing_ca.unique_name }}
+                    </a>
+                </div>
+            </li>
+            <li>
+                <div>{% trans 'Issuing CA Type' %}</div>
+                <div>{{ device.domain.issuing_ca.get_issuing_ca_type_display }}</div>
+            </li>
+            <li>
+                <div>{% trans 'Common Name (CN)' %}</div>
+                <div>{{ device.domain.issuing_ca.common_name }}</div>
+            </li>
+            <li>
+                <div>{% trans 'Last CRL Issued At' %}</div>
+                <div>{{ device.domain.issuing_ca.last_crl_issued_at|default:"-" }}</div>
+            </li>
+            <li>
+                <div>{% trans 'Status' %}</div>
+                <div>{% if device.domain.issuing_ca.is_active %}{% trans 'Active' %}{% else %}
+                    {% trans 'Inactive' %}{% endif %}</div>
+            </li>
+            <li>
+                <div>{% trans 'Created At' %}</div>
+                <div>{{ device.domain.issuing_ca.created_at }}</div>
+            </li>
+        </ul>
     {% endif %}
 {% endblock sub_details %}

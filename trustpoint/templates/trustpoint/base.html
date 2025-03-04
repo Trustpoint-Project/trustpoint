@@ -23,11 +23,9 @@
                     <svg id="menu-icon-back" class="bi bi-size100 d-none" fill="currentColor" role="img" aria-label="Hide Menu">
                         <use href="{% static 'img/icons.svg' %}#icon-x"></use></svg>
                 </div>
-                <a class="navbar-brand tp-primary" href="#">
-                    <!--<img src="{% static 'img/tp-logo-128.png' %}" width="64" height="45" alt="Trustpoint"></a> -->
+                <a class="navbar-brand tp-primary" href="{% url 'home:dashboard' %}">
                     <img src="{% static 'img/tp-logo-horizontal-512.png' %}" alt="Trustpoint" id="tp-logo" class="light-only">
                     <img src="{% static 'img/tp-logo-horizontal-white-point.png' %}" alt="Trustpoint" id="tp-logo" class="dark-only">
-                    <!-- <img src="{% static 'img/tp-logo-horizontal-0A74FF.png' %}" alt="Trustpoint" id="tp-logo" class="dark-only"> -->
                 </a>
                 <div><!-- Intentionally empty for flex layout --></div>
             </header>
@@ -82,7 +80,7 @@
                     <a href="{% url 'settings:logging-files' %}" class="tp-menu-item {% if page_name == 'logging' %}tp-menu-active{% endif %}">{% trans "Logging" %}</a>
 {#                    <a href="{% url 'settings:network' %}" class="tp-menu-item {% if page_name == 'network' %}tp-menu-active{% endif %}">{% trans "Network" %}</a>#}
 {#                    <a href="{% url 'settings:ntp' %}" class="tp-menu-item {% if page_name == 'ntp' %}tp-menu-active{% endif %}">{% trans "NTP" %}</a>#}
-{#                    <a href="{% url 'settings:security' %}" class="tp-menu-item {% if page_name == 'security' %}tp-menu-active{% endif %}">{% trans "Security" %}</a>#}
+                    <a href="{% url 'settings:security' %}" class="tp-menu-item {% if page_name == 'security' %}tp-menu-active{% endif %}">{% trans "Security" %}</a>
                 </div>
             </div>
             <div class="tp-menu-footer">
@@ -106,7 +104,7 @@
 
                 </div>
                 <div id="tp-version">
-                    v0.1.1
+                    v0.2.0
                 </div>
             </div>
         </nav>

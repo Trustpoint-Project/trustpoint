@@ -45,9 +45,11 @@
                         {% endfor %}
                     </select>
                 </div>
+            </div>
 
-                <div class="tp-form-btn-group tp-form-btn-group pt-4">
-                    <a href="{% url 'devices:devices' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <div class="tp-card-btn-footer m-1">
+                    <button type="button" value="Cancel" class="btn btn-secondary" onClick="history.back()">{% trans 'Cancel' %}</button>
                     <button type="submit" class="btn btn-danger">
                         {% blocktranslate count counter=credentials|length %}
                         Revoke credential
@@ -56,7 +58,6 @@
                         {% endblocktranslate %}
                     </button>
                 </div>
-
             </div>
         </div>
     </form>

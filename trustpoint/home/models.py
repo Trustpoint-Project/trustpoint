@@ -241,15 +241,15 @@ class NotificationModel(models.Model):
             return message_dict.get(self, default)
 
     notification_type = models.CharField(
-        max_length=3, choices=NotificationTypes.choices, default=NotificationTypes.INFO
+        max_length=3, choices=NotificationTypes, default=NotificationTypes.INFO
     )
 
     notification_source = models.CharField(
-        max_length=1, choices=NotificationSource.choices, default=NotificationSource.SYSTEM
+        max_length=1, choices=NotificationSource, default=NotificationSource.SYSTEM
     )
 
     message_type = models.CharField(
-        max_length=32, choices=NotificationMessageType.choices, default=NotificationMessageType.CUSTOM
+        max_length=32, choices=NotificationMessageType, default=NotificationMessageType.CUSTOM
     )
 
     message_data = models.JSONField(blank=True, default=dict)

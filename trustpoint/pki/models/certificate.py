@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
+import datetime
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
@@ -11,17 +12,37 @@ from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 
 
-from core.oid import PublicKeyAlgorithmOid, CertificateExtensionOid, NameOid, AlgorithmIdentifier, NamedCurve
-from core.serializer import CertificateSerializer, PublicKeySerializer
-from trustpoint.views.base import LoggerMixin
+from trustpoint_core.oid import (
+    PublicKeyAlgorithmOid,
+    CertificateExtensionOid,
+    NameOid,
+    AlgorithmIdentifier,
+    NamedCurve,
+    SignatureSuite,
+    PublicKeyInfo
+)
+from trustpoint_core.serializer import CertificateSerializer, PublicKeySerializer
 
 from pki.models.extension import (
     AttributeTypeAndValue,
+    AuthorityInformationAccessExtension,
+    AuthorityKeyIdentifierExtension,
     BasicConstraintsExtension,
-    KeyUsageExtension,
+    CertificatePoliciesExtension,
+    CrlDistributionPointsExtension,
+    ExtendedKeyUsageExtension,
+    FreshestCrlExtension,
+    InhibitAnyPolicyExtension,
     IssuerAlternativeNameExtension,
-    SubjectAlternativeNameExtension
+    KeyUsageExtension,
+    NameConstraintsExtension,
+    PolicyConstraintsExtension,
+    SubjectAlternativeNameExtension,
+    SubjectDirectoryAttributesExtension,
+    SubjectInformationAccessExtension,
+    SubjectKeyIdentifierExtension,
 )
+from trustpoint.views.base import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Union
@@ -31,6 +52,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     'CertificateModel',
+    'RevokedCertificateModel'
 ]
 
 class CertificateModel(LoggerMixin, models.Model):
@@ -66,8 +88,23 @@ class CertificateModel(LoggerMixin, models.Model):
 
     # ----------------------------------------------- Custom Data Fields -----------------------------------------------
 
-    certificate_status = models.CharField(verbose_name=_('Status'), max_length=4, choices=CertificateStatus,
-                                          editable=False, default=CertificateStatus.OK)
+    @property
+    def signature_suite(self) -> SignatureSuite:
+        return SignatureSuite.from_certificate(self.get_certificate_serializer().as_crypto())
+
+    @property
+    def public_key_info(self) -> PublicKeyInfo:
+        return self.signature_suite.public_key_info
+
+    @property
+    def certificate_status(self) -> CertificateStatus:
+        if RevokedCertificateModel.objects.filter(certificate=self).exists():
+            return self.CertificateStatus.REVOKED
+        elif datetime.datetime.now(datetime. UTC) < self.not_valid_before:
+            return self.CertificateStatus.NOT_YET_VALID
+        elif datetime.datetime.now(datetime. UTC) > self.not_valid_after:
+            return self.CertificateStatus.EXPIRED
+        return self.CertificateStatus.OK
 
     is_self_signed = models.BooleanField(verbose_name=_('Self-Signed'), null=False, blank=False)
 
@@ -231,14 +268,108 @@ class CertificateModel(LoggerMixin, models.Model):
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.PROTECT)
+        on_delete=models.CASCADE)
 
-    # ext_authority_key_id = None
-    # ext_subject_key_id = None
-    # ext_certificate_policies = None
-    # ext_policy_mappings = None
-    # ext_subject_alternative_name = None
-    # ext_issuer_alternative_name = None
+    authority_key_identifier_extension = models.ForeignKey(
+        verbose_name=CertificateExtensionOid.AUTHORITY_KEY_IDENTIFIER.verbose_name,
+        to=AuthorityKeyIdentifierExtension,
+        related_name='certificates',
+        editable=False,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE
+    )
+
+    subject_key_identifier_extension = models.ForeignKey(
+        verbose_name=CertificateExtensionOid.SUBJECT_KEY_IDENTIFIER.verbose_name,
+        to=SubjectKeyIdentifierExtension,
+        related_name='certificates',
+        editable=False,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE
+    )
+
+    certificate_policies_extension = models.ForeignKey(
+        verbose_name=CertificateExtensionOid.CERTIFICATE_POLICIES.verbose_name,
+        to=CertificatePoliciesExtension,
+        related_name='certificates',
+        editable=False,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE
+    )
+
+    extended_key_usage_extension = models.ForeignKey(
+        verbose_name=CertificateExtensionOid.EXTENDED_KEY_USAGE.verbose_name,
+        to=ExtendedKeyUsageExtension,
+        related_name='certificates',
+        editable=False,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE
+    )
+
+    name_constraints_extension = models.ForeignKey(
+        NameConstraintsExtension,
+        related_name='certificates',
+        editable=False,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE
+    )
+
+    crl_distribution_points_extension = models.ForeignKey(
+        CrlDistributionPointsExtension,
+        related_name='certificates',
+        editable=False,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE
+    )
+
+    authority_information_access_extension = models.ForeignKey(
+        AuthorityInformationAccessExtension,
+        null=True, blank=True, on_delete=models.CASCADE
+    )
+
+    subject_information_access_extension = models.ForeignKey(
+        SubjectInformationAccessExtension,
+        null=True, blank=True, on_delete=models.CASCADE
+    )
+
+    inhibit_any_policy_extension = models.ForeignKey(
+        InhibitAnyPolicyExtension,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE
+    )
+
+    policy_constraints_extension = models.ForeignKey(
+        PolicyConstraintsExtension,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE
+    )
+
+    subject_directory_attributes_extension = models.ForeignKey(
+        SubjectDirectoryAttributesExtension,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE
+    )
+
+
+    freshest_crl_extension = models.ForeignKey(
+        FreshestCrlExtension,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE
+    )
+
+    # --------------------------------------------- No Cryptography support -------------------------------------
+
+    # policy_mappings = None
     # ext_subject_directory_attributes = None
     # ext_name_constraints = None
     # ext_policy_constraints = None
@@ -434,6 +565,32 @@ class CertificateModel(LoggerMixin, models.Model):
             elif isinstance(extension.value, x509.SubjectAlternativeName):
                 cert_model.subject_alternative_name_extension = \
                     SubjectAlternativeNameExtension.save_from_crypto_extensions(extension)
+            elif isinstance(extension.value, x509.AuthorityKeyIdentifier):
+                cert_model.authority_key_identifier_extension = \
+                    AuthorityKeyIdentifierExtension.save_from_crypto_extensions(extension)
+            elif isinstance(extension.value, x509.SubjectKeyIdentifier):
+                cert_model.subject_key_identifier_extension = \
+                    SubjectKeyIdentifierExtension.save_from_crypto_extensions(extension)
+            elif isinstance(extension.value, x509.CertificatePolicies):
+                cert_model.certificate_policies_extension = CertificatePoliciesExtension.save_from_crypto_extensions(extension)
+            elif isinstance(extension.value, x509.ExtendedKeyUsage):
+                cert_model.extended_key_usage_extension = ExtendedKeyUsageExtension.save_from_crypto_extensions(extension)
+            elif isinstance(extension.value, x509.NameConstraints):
+                cert_model.name_constraints_extension = NameConstraintsExtension.save_from_crypto_extensions(extension)
+            elif isinstance(extension.value, x509.CRLDistributionPoints):
+                cert_model.crl_distribution_points_extension = CrlDistributionPointsExtension.save_from_crypto_extensions(extension)
+            elif isinstance(extension.value, x509.AuthorityInformationAccess):
+                cert_model.authority_information_access_extension = AuthorityInformationAccessExtension.save_from_crypto_extensions(extension)
+            elif isinstance(extension.value, x509.SubjectInformationAccess):
+                cert_model.subject_information_access_extension = SubjectInformationAccessExtension.save_from_crypto_extensions(extension)
+            elif isinstance(extension.value, x509.InhibitAnyPolicy):
+                cert_model.inhibit_any_policy_extension = InhibitAnyPolicyExtension.save_from_crypto_extensions(extension)
+            # elif isinstance(extension.value, x509.PolicyMappings):  # no x509 PolicyMapping implemented
+            #     cert_model.pol = InhibitAnyPolicyExtension.save_from_crypto_extensions(extension)
+            elif isinstance(extension.value, x509.PolicyConstraints):
+                cert_model.policy_constraints_extension = PolicyConstraintsExtension.save_from_crypto_extensions(extension)
+            elif isinstance(extension.value, x509.FreshestCRL):
+                cert_model.freshest_crl_extension = FreshestCrlExtension.save_from_crypto_extensions(extension)
 
     @classmethod
     @transaction.atomic
@@ -450,10 +607,9 @@ class CertificateModel(LoggerMixin, models.Model):
                 cert_model.common_name = value
         cls._save_subject(cert_model, subject)
         cls._save_issuer(cert_model, issuer)
-
         cls._save_extensions(cert_model, certificate)
-        cert_model._save()  # noqa: SLF001
 
+        cert_model._save()  # noqa: SLF001
         return cert_model
 
     # ---------------------------------------------- Public save methods -----------------------------------------------
@@ -480,11 +636,6 @@ class CertificateModel(LoggerMixin, models.Model):
             trustpoint.pki.models.Certificate: The certificate object that has just been saved.
         """
         return cls._save_certificate(certificate=certificate)
-
-    def set_status(self, status: CertificateStatus) -> None:
-        """Set the certificate status."""
-        self.certificate_status = status
-        self._save()
 
 
 class RevokedCertificateModel(models.Model):
@@ -514,7 +665,7 @@ class RevokedCertificateModel(models.Model):
 
     revocation_reason = models.TextField(
         verbose_name=_('Revocation Reason'),
-        choices=ReasonCode.choices,
+        choices=ReasonCode,
         default=ReasonCode.UNSPECIFIED
     )
 
@@ -528,9 +679,3 @@ class RevokedCertificateModel(models.Model):
 
     def __str__(self) -> str:
         return f'RevokedCertificate({self.certificate.common_name})'
-
-    @transaction.atomic
-    def save(self, *args, **kwargs) -> None:
-        """Save the revoked certificate and set the certificate status to 'REVOKED'."""
-        self.certificate.set_status(CertificateModel.CertificateStatus.REVOKED)
-        super().save(*args, **kwargs)

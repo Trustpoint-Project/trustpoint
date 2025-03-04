@@ -1,0 +1,9 @@
+name: R_006
+
+on: [pull_request]
+
+jobs:
+  test:
+    uses: ./.github/workflows/behave-test-template.yml
+    with:
+      feature_file: R_006_backup_restore_update

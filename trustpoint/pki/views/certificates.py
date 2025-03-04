@@ -4,15 +4,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.file_builder.certificate import CertificateArchiveFileBuilder, CertificateFileBuilder
-from core.file_builder.enum import ArchiveFormat, CertificateFileFormat
-from django.http import Http404, HttpRequest, HttpResponse  # type: ignore[import-untyped]
-from django.urls import reverse_lazy  # type: ignore[import-untyped]
-from django.views.generic.base import RedirectView  # type: ignore[import-untyped]
-from django.views.generic.detail import DetailView  # type: ignore[import-untyped]
-from django.views.generic.list import ListView  # type: ignore[import-untyped]
+from trustpoint_core.file_builder.certificate import CertificateArchiveFileBuilder, CertificateFileBuilder
+from trustpoint_core.file_builder.enum import ArchiveFormat, CertificateFileFormat
+from django.http import Http404, HttpRequest, HttpResponse
+from django.urls import reverse_lazy
+from django.views.generic.base import RedirectView
+from django.views.generic.detail import DetailView
+from django.views.generic.list import ListView
 
 from pki.models import CertificateModel
+from trustpoint.settings import UIConfig
 from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTableMixin, TpLoginRequiredMixin
 
 if TYPE_CHECKING:
@@ -38,7 +39,7 @@ class CertificateTableView(CertificatesContextMixin, TpLoginRequiredMixin, Sorta
     model = CertificateModel
     template_name = 'pki/certificates/certificates.html'  # Template file
     context_object_name = 'certificates'
-    paginate_by = 5  # Number of items per page
+    paginate_by = UIConfig.paginate_by
     default_sort_param = 'common_name'
 
 class CertificateDetailView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView):
@@ -49,6 +50,44 @@ class CertificateDetailView(CertificatesContextMixin, TpLoginRequiredMixin, Deta
     ignore_url = reverse_lazy('pki:certificates')
     template_name = 'pki/certificates/details.html'
     context_object_name = 'cert'
+
+class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView):
+    """View for downloading a single certificate."""
+
+    model = CertificateModel
+    context_object_name = 'certificate'
+
+    def get(self, request: HttpRequest, pk: str | None = None, *args: tuple, **kwargs: dict) -> HttpResponse:
+        """HTTP GET Method.
+
+        If only the certificate primary key are passed in the url, the download summary will be displayed.
+        If value for file_format is also provided, a file download will be performed.
+
+        Compare the re_path regex in the pki.urls package.
+
+        Args:
+            request: The HttpRequest object.
+            pk: A string containing the certificate primary key.
+            *args: Positional arguments.
+            **kwargs: Keyword arguments.
+
+        Returns:
+            HttpResponse: The HTTP response with either the download summary or a file download.
+
+        Raises:
+            Http404
+        """
+        if not pk:
+            raise Http404
+
+        certificate_serializer = CertificateModel.objects.get(pk=pk).get_certificate_serializer()
+        file_bytes = CertificateFileBuilder.build(certificate_serializer, file_format=CertificateFileFormat.PEM)
+
+        response = HttpResponse(file_bytes, content_type=CertificateFileFormat.PEM.mime_type)
+        response['Content-Disposition'] = f'attachment; filename="issuing_ca_cert.pem"'
+
+        return response
+
 
 class CertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView):
     """View for downloading a single certificate."""

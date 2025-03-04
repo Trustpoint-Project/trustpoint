@@ -1,7 +1,9 @@
-name: MyPy Code Quality Check
+name: MyPy
+
 on: [ pull_request ]
+
 jobs:
-  ruff:
+  mypy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -10,6 +12,7 @@ jobs:
       - name: Install the latest version of uv
         uses: astral-sh/setup-uv@v5
         with:
+          enable-cache: true
           python-version: 3.12
 
       - name: Run MyPy

@@ -4,8 +4,8 @@ Trustpoint Development environment setup
 Installation
 ------------
 
-| The current version uses a Python Django framework.
-| We are using pyenv and poetry to manage different python versions and
+| Trustpoint uses the Python Django framework.
+| We are using `uv <https://docs.astral.sh/uv/>`__ to manage different python versions and
   dependencies.
 
 Please note that the current version is in **development status** and
@@ -13,69 +13,22 @@ still subject to **major changes**. Our aim is to make an operational
 version of the software available quickly in order to receive as much
 feedback as possible from users.
 
-Pyenv
-~~~~~
+Install uv
+^^^^^^^^^^
 
-| [OPTIONAL] You can use pyenv to install and manage different Python
-  versions in parallel.
-| To install it, install all `required build
-  dependencies <https://github.com/pyenv/pyenv/wiki#suggested-build-environment>`__.
-
-Then follow the `installation
-manual <https://github.com/pyenv/pyenv?tab=readme-ov-file#installation>`__.
-
-You can add the following to your .bashrc:
-
-.. code:: shell
-
-   export PATH="$PATH:/home/<your-user-name>/.pyenv/bin/"
-
-   export PYENV_ROOT="$HOME/.pyenv"
-   [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
-   eval "$(pyenv init -)"
-
-Restart your shell
-
-.. code:: shell
-
-   exec "$SHELL"
-
-You can install the desired python version as follows
-
-.. code:: shell
-
-   pyenv install 3.12.2
-   pyenv global 3.12.2
-
-Poetry
-~~~~~~
-
-| You should use poetry to create a virtual environment and to manage
+| You should use uv to create a virtual environment and to manage
   the dependencies (instead of pip directly).
-| The easiest way to install poetry is their offered
-  `installer <https://python-poetry.org/docs/#installing-with-the-official-installer>`__
+| Check out the official documentation for the `installer
+  <https://docs.astral.sh/uv/getting-started/installation>`__
 
-You can also follow the manual steps, without just executing a
-downloaded script (security wise, the better decision).
-
-You can add the following to your .bashrc
+In simple cases, installing uv is as straightforward as:
 
 .. code:: shell
 
-   export PATH="$PATH:/home/<your-user-name>/.local/bin/"
+   pip install uv
 
-To configure the python environment, see `the Poetry documentation on
-managing
-environments <https://python-poetry.org/docs/managing-environments/>`__
-
-If you are using pyenv, make sure to add the following configuration:
-
-.. code:: shell
-
-   poetry config virtualenvs.prefer-active-python true
-
-Install dependencies with poetry.
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Install dependencies with uv
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If you have an existing virtual environment, e.g. through using python3
 -m venv, exit the virtual environment (that is make sure you are not in
@@ -88,53 +41,56 @@ the environment). You can usually exit it with:
 Then, remove any virtual environment you may have set up, e.g. .venv/
 directory.
 
-Finally, install everything through poetry:
+Finally, install everything through uv:
 
 .. code:: shell
 
    cd /path/to/trustpoint/
-   poetry install
+   uv sync
 
 Activating the environment
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+It is generally not required to manually activate the virtual environment,
+just start your command with ``uv run`` instead of ``python``.
+However, if you do want to activate the environment manually, you can do so using
 
 .. code:: shell
 
-   poetry shell
+   source .venv/bin/activate
 
-You can now use the manage.py file as usual.
+Usage
+-----
 
 Setting up the DB and SuperUser
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Firstly, we need to create a sqlite database for development, migrate /
-create the required tables and create a superuser. The superuser
-credentials ``admin``/``testing321`` can later be used to access the
-admin page: localhost:8000/admin/.
+The development server supports a PostgreSQL database by default.
+The connection settings can be configured in the ``settings.py`` file.
+If the configured database is not available, the server will fall back
+to a built-in SQLite database.
+
+Next, it is required to migrate (creating the required tables) and create a superuser.
+The superuser credentials ``admin``/``testing321`` can later be used to access the
+Trustpoint user interface at localhost:8000.
 
 .. code:: bash
 
    cd trustpoint
-   python manage.py reset_db
-
-Use any database client to connect to the database. you need to
-configure two settings
-
--  database type : SQLite
--  database file path: path to ``db.sqlite3`` file in trustpoint folder
+   uv run manage.py reset_db
 
 Finally, compile the translation strings for non-English language support:
 
 .. code:: bash
 
-   python manage.py compilemsg
+   uv run manage.py compilemsg -l de
 
 Running the development server
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code:: bash
 
-   python manage.py runserver
+   uv run manage.py runserver
 
 You can then access the GUI through localhost:8000.
 
@@ -166,27 +122,27 @@ Management commands for testing and development purposes
 
 .. code:: bash
 
-   python manage.py reset_db
+   uv run manage.py reset_db
 
 Clears the database and restores Trustpoint to the initial state.
 
 .. code:: bash
 
-   python manage.py add_domains_and_devices
+   uv run manage.py add_domains_and_devices
 
 Populates the database with an example CA, domain and device instances.
 
 .. code:: bash
 
-   python manage.py makemsg -l de
-   python manage.py makemsg -l de -d djangojs
+   uv run manage.py makemsg -l de
+   uv run manage.py makemsg -l de -d djangojs
 
 Makes the translation (.po) files from translatable strings. gettext
 must be installed on your system.
 
 .. code:: bash
 
-   python manage.py compilemsg
+   uv run manage.py compilemsg -l de
 
 Compiles the translation files (.po) to binary (.mo) files actually used
 by Django.
@@ -208,14 +164,17 @@ following:
 
 .. code:: shell
 
-   poetry add <name-of-package>
+   uv add <name-of-package>
 
 Dependencies that are only required in development, use the following to
 add in within the dev section:
 
 .. code:: shell
 
-   poetry add --group=dev <name-of-package>
+   uv add <name-of-package> --dev
+
+Testing & CI
+------------
 
 Using the ruff linter and formatter
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -224,10 +183,36 @@ For linting everything in the current directory use:
 
 .. code:: shell
 
-   ruff check .
+   uv run ruff check . --output-format=concise
 
 For active formatting everything in the current directory use:
 
 .. code:: shell
 
-   ruff format .
+   uv run ruff format .
+
+For type checking, we use mypy:
+
+.. code:: shell
+
+   uv run mypy .
+
+Running pytest unit tests
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Trustpoint uses pytest to run self-contained tests, either unit tests
+or integration tests that do not involve a request-response cycle:
+
+.. code:: shell
+
+   uv run pytest
+
+Running BDD tests with behave
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Trustpoint uses behave to run BDD tests. The tests are located in the
+``features/`` directory:
+
+.. code:: shell
+
+   uv run behave

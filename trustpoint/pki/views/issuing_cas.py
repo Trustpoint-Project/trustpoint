@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.contrib import messages
+from django.db.models import ProtectedError
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.utils.translation import gettext as _
@@ -14,6 +15,7 @@ from pki.forms import (
     IssuingCaAddMethodSelectForm,
 )
 from pki.models import IssuingCaModel
+from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     LoggerMixin,
     BulkDeleteView,
@@ -35,7 +37,7 @@ class IssuingCaTableView(IssuingCaContextMixin, TpLoginRequiredMixin, SortableTa
     model = IssuingCaModel
     template_name = 'pki/issuing_cas/issuing_cas.html'  # Template file
     context_object_name = 'issuing_ca'
-    paginate_by = 5  # Number of items per page
+    paginate_by = UIConfig.paginate_by  # Number of items per page
     default_sort_param = 'unique_name'
 
 
@@ -90,12 +92,36 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, TpLoginRequiredMix
 
 
 class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, TpLoginRequiredMixin, BulkDeleteView):
+    """View to confirm the deletion of multiple Issuing CAs."""
 
     model = IssuingCaModel
     success_url = reverse_lazy('pki:issuing_cas')
     ignore_url = reverse_lazy('pki:issuing_cas')
     template_name = 'pki/issuing_cas/confirm_delete.html'
     context_object_name = 'issuing_cas'
+
+    def form_valid(self, form) -> HttpResponse:
+        """Delete the selected Issuing CAs on valid form."""
+        queryset = self.get_queryset()
+        deleted_count = queryset.count()
+
+        try:
+            response = super().form_valid(form)
+        except ProtectedError:
+            messages.error(
+                self.request,
+                _(
+                    'Cannot delete the selected Issuing CA(s) because they are referenced by other objects.'
+                )
+            )
+            return HttpResponseRedirect(self.success_url)
+
+        messages.success(
+            self.request,
+            _('Successfully deleted {count} Issuing CA(s).').format(count=deleted_count)
+        )
+
+        return response
 
 
 class IssuingCaCrlGenerationView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailView):

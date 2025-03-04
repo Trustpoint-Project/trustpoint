@@ -8,29 +8,29 @@
 
         <div class="card">
             <div class="card-header">
-                <div>
-                    <h1>{% trans 'Confirm Truststore Deletion' %}</h1>
-                </div>
+                <h1>{% trans 'Confirm Truststore Deletion' %}</h1>
             </div>
             <div class="card-body">
                 <div class="tp-card-centered-content">
-                    {% for truststore in truststores %}
-                        <h2>({{ forloop.counter }}) {% trans 'Truststore' %}: {{ truststore.unique_name }}</h2>
-                        <hr class="hr-m">
-                        <div class="tp-kvp-list">
-
-                            {% include 'pki/truststores/sub_details.html' %}
-
-                        </div>
-                    {% endfor %}
-
+                    {% if truststores %}
+                        {% for truststore in truststores %}
+                            <h2>({{ forloop.counter }}) {% trans 'Truststore' %}: {{ truststore.unique_name }}</h2>
+                            <hr class="hr-m">
+                            {% include 'pki/truststores/sub_details.html' with truststore=truststore %}
+                            <input type="hidden" name="truststore_ids" value="{{ truststore.id }}">
+                        {% empty %}
+                            <p>{% trans 'No Truststores selected.' %}</p>
+                        {% endfor %}
+                    {% else %}
+                        <p>{% trans 'No Truststores found.' %}</p>
+                    {% endif %}
                 </div>
             </div>
-            <div class="card-footer">
-                <div class="tp-card-btn-footer">
-                    <button type="button" value="Back" class="btn btn-secondary" onClick="history.back()">{% trans 'Back' %}</button>
-                    <a href="{% url 'pki:issuing_cas' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
-                    <button type="submit" class="btn btn-danger">{% trans "Delete selected Truststores" %}</button>
+            <div class="card-footer d-flex">
+                <div class="tp-card-btn-footer m-1">
+                    <button type="button" class="btn btn-secondary btn-half" onClick="history.back()">{% trans 'Back' %}</button>
+                    <a href="{% url 'pki:truststores' %}" class="btn btn-secondary btn-half">{% trans 'Cancel' %}</a>
+                    <button type="submit" class="btn btn-danger">{% trans 'Delete Truststores' %}</button>
                 </div>
             </div>
         </div>

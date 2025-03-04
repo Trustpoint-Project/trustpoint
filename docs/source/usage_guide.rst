@@ -10,11 +10,11 @@ Stages of Trustpoint Operation
 Trustpoint works in two main stages:
 
 1. **Onboarding a Device**
-    - Onboarding a device to Trustpoint by issuing an initial certificate, which enables secure authentication to Trustpoint.
+    - Onboarding a device to Trustpoint by issuing an initial certificate (so called domain credential), which enables secure authentication to Trustpoint.
     - Onboarding is available in two ways:
         - **User-driven Onboarding**: This is the primary method currently available, offering several options for onboarding devices:
             - **Using the Trustpoint Client**: The Trustpoint client, available at `Trustpoint Client GitHub <https://github.com/TrustPoint-Project/trustpoint-client>`_, provides a user-friendly interface to onboard devices.
-            - **Using the CLI of a Linux Machine**: Users can manually onboard a device by executing commands on a Linux machine.
+            - **Using the device CLI**: Users can request a domain credential via CMP or EST (WIP).
             - **Browser-Based Onboarding**: Trustpoint offers a web interface for convenient onboarding through a browser.
             - **Manual Download of a P12 File**: Users can download a PKCS#12 file containing the certificate and manually distribute it to the target machine.
         - **Zero-touch Onboarding (Work in Progress)**: A feature under development that will allow fully automated device onboarding without user intervention.
@@ -24,11 +24,16 @@ Trustpoint works in two main stages:
 .. admonition:: Why Onboarding First is Crucial!
    :class: tip
 
-   It is essential to onboard a device before issuing application certificates to ensure the device has a trusted identity and secure communication channel with Trustpoint. The initial certificate obtained during onboarding establishes the device's authenticity and allows it to authenticate to Trustpoint. Without this foundational step, the security of subsequent application certificate requests could be compromised, potentially exposing the system to unauthorized access and other security risks.
+   It is essential to onboard a device before issuing application certificates to ensure the device has a trusted identity and secure communication channel with Trustpoint. The initial certificate (domain credential) obtained during onboarding establishes the device's authenticity and allows it to authenticate to Trustpoint. Without this foundational step, the security of subsequent application certificate requests could be compromised, potentially exposing the system to unauthorized access and other security risks.
 
+.. admonition:: No Onbaording Desired
+   :class: tip
+
+   Although we recommend the use of domain credentials, many applications do not support this functionality. Trustpoint therefore also offers the issuing of application certificates without prior onboarding. To do this, ‘Domain Credential Onboarding’ must be deactivated when configuring a new device.
 
 2. **Issuing and Managing Application Certificates**
     - Requesting certificates for applications or systems.
+    - Trustpoint currently supports **TLS server** and **TLS client** application certificates. In the future, additional certificate types will be supported for generic requests or specific applications such as OPC UA server or client certificates.
     - Issuing certificates from the configured Issuing CA.
     - Managing the lifecycle of certificates, including renewal, revocation, and status monitoring.
 
@@ -43,8 +48,8 @@ Trustpoint can be configured to operate in different modes in relation to the Is
     - This configuration is ideal for integrating with existing PKI setups.
     - **Steps to Configure:**
         - In PKI > Issuing CAs > Add new Issuing CA
-        - You can Import a new Issuing Ca from a file by importing an PKCS#12 file oder by importing the key and certificate seperatedly
-        - or you can generate a key-pair and request an issuing CA Certificate by rerquesting it via EST (wip), CMP or SCEP
+        - You can Import a new Issuing CA from a file by importing an PKCS#12 file oder by importing the key and certificate separately
+        - or you can generate a keypair and request an issuing CA Certificate by rerquesting it via EST (WIP), CMP or SCEP
     - **Use Case:** Issuing certificates in air-gapped environments
 
 2. **Operating as a Registration Authority (RA)**
@@ -56,12 +61,19 @@ Trustpoint can be configured to operate in different modes in relation to the Is
         - Scalability for large environments.
     - **Use Case:** Management of certificate requests from multiple departments while maintaining tight control over the actual certificate issuance process, which is handled by a trusted external CA.
 
+.. admonition:: RA mode is WIP
+   :class: tip
+
+   We are working on making the RA mode available as soon as possible.
+
+
 3. **Self-Generated Root and Issuing CA (Testing Purposes)**
     - Suitable for development, testing, or non-production environments.
     - Trustpoint can generate its own Root and Issuing CA to simplify testing.
     - **Steps to Configure:**
         - In Settings > Security > Advanced security settings
         - Activate "Enable local auto-generated PKI"
+        - Select a key algorithm
         - Click save
     - **Note:** This setup is not recommended for production use.
     - **Use Case:** Testing Trustpoint and its features
@@ -100,13 +112,9 @@ Managing Truststores in Trustpoint
     - Import a certificate file in **PEM** or **PKCS#7** format.
     - Save the Truststore configuration to ensure the new trusted certificates are active and ready for use.
 
+- **IDevID onboarding**: Truststores can be used to onboard new devices to Trustpoint. For this purpose, serial number patterns can be stored in the domain configuration to check the associated IDevID of a request.
+
 - **Integrating Truststores with Domains**: Truststores can be added to specific Domains, and once configured, they will automatically be provided to devices associated with those Domains. This feature is currently a work in progress (WIP).
-
-- **Configuration Steps**:
-
-  - Navigate to **Domains > Config > PKI Truststore Config**.
-  - Select the desired Truststore to associate with the Domain.
-  - Save the configuration.
 
 .. note::
 

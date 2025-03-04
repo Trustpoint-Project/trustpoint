@@ -24,10 +24,12 @@
             </fieldset>
         </form>
     </div>
-    <div class="card-footer text-body-secondary">
-        <button class="btn btn-primary ms-3 float-end" type="submit" form="language_configuration">
-            {% trans "Save" %}
-        </button>
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <button class="btn btn-primary " type="submit" form="language_configuration">
+                {% trans "Save" %}
+            </button>
+        </div>
     </div>
 </div>
 {% endblock content %}
