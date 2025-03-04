@@ -1,10 +1,6 @@
 name: R_004
 
-#on: [pull_request]
-on:
-  push:
-    branches:
-      - test-documentation
+on: [pull_request]
 
 jobs:
   test:
