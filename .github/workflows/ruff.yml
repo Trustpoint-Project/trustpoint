@@ -4,14 +4,18 @@ name: Ruff
 on: [pull_request]
 
 jobs:
-  setup:
-    uses: ./.github/workflows/setup-env.yml  # Call the reusable setup workflow.
-
   ruff:
-    needs: setup  # Ensures setup runs first.
     runs-on: ubuntu-latest  # Use the latest Ubuntu runner for compatibility and performance.
 
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4  # Ensures the repository code is available.
+
+      - name: Setup uv
+        uses: ./.github/workflows/setup-env.yml  # Call the reusable setup workflow.
+        with:
+          run_migrations: true  # Enable database migrations.
+
       - name: Run Ruff Linting
         run: ruff check .
 

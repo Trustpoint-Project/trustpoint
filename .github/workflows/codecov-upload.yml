@@ -7,6 +7,9 @@ jobs:
   codecov-upload:
     runs-on: ubuntu-latest # Use the latest Ubuntu runner for compatibility and performance.
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4  # Ensures the repository code is available.
+
       - name: Setup uv
         uses: ./.github/workflows/setup-env.yml  # Call the reusable setup workflow.
         with:

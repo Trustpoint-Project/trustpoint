@@ -4,12 +4,16 @@ name: MyPy
 on: [pull_request]
 
 jobs:
-  setup:
-    uses: ./.github/workflows/setup-env.yml  # Call the reusable setup workflow.
-
   mypy:
-    needs: setup  # Ensures setup runs first.
     runs-on: ubuntu-latest # Use the latest Ubuntu runner for compatibility and performance.
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4  # Ensures the repository code is available.
+
+      - name: Setup uv
+        uses: ./.github/workflows/setup-env.yml  # Call the reusable setup workflow.
+        with:
+          run_migrations: true  # Enable database migrations.
+
       - name: Run MyPy
         run: uv run mypy . # Runs MyPy type checker using `uv` package manager.
