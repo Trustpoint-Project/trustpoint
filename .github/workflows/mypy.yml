@@ -12,8 +12,6 @@ jobs:
 
       - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.
-        with:
-          run_migrations: true  # Enable database migrations.
 
       - name: Run MyPy
         run: uv run mypy . # Runs MyPy type checker using `uv` package manager.

@@ -13,8 +13,6 @@ jobs:
 
       - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.
-        with:
-          run_migrations: true  # Enable database migrations.
 
       - name: Run Ruff Linting
         run: ruff check .
