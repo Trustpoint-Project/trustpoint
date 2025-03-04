@@ -4,7 +4,7 @@ inputs:
   run_migrations:
     description: "Boolean to run the database migrations or not."
     required: false
-    default: "false"
+    default: 'false'
 runs:
   using: "composite"
   steps:
@@ -21,7 +21,7 @@ runs:
         python-version-file: "pyproject.toml"  # Ensures the correct Python version is used.
 
     - name: Run database migrations # Resets the database before running tests.
-      if: inputs.run_migrations == true  # Only run migrations if input is true.
+      if: ${{ inputs.debug_mode == 'true' }} # Only run migrations if input is true.
       shell: bash
       run: |
         echo "y" | uv run trustpoint/manage.py reset_db  
