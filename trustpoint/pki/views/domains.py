@@ -116,19 +116,55 @@ class DomainConfigView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegi
             'rest': domain.rest_protocol if hasattr(domain, 'rest_protocol') else None
         }
 
+        context['registration_options'] = {
+            'auto_create_new_device': domain.auto_create_new_device,
+            'allow_username_password_registration': domain.allow_username_password_registration,
+            'allow_idevid_registration': domain.allow_idevid_registration,
+            'domain_credential_auth': domain.domain_credential_auth,
+            'username_password_auth': domain._meta.get_field('username_password_auth').help_text,
+            'allow_app_certs_without_domain': domain._meta.get_field('allow_app_certs_without_domain').help_text,
+        }
+
+        context['registration_help_texts'] = {
+            'auto_create_new_device': domain._meta.get_field('auto_create_new_device').help_text,
+            'allow_username_password_registration': domain._meta.get_field('allow_username_password_registration').help_text,
+            'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').help_text,
+            'domain_credential_auth': domain._meta.get_field('domain_credential_auth').help_text,
+            'username_password_auth': domain._meta.get_field('username_password_auth').help_text,
+            'allow_app_certs_without_domain': domain._meta.get_field('allow_app_certs_without_domain').help_text,
+        }
+
+        context['registration_verbose_name'] = {
+            'auto_create_new_device': domain._meta.get_field('auto_create_new_device').verbose_name,
+            'allow_username_password_registration': domain._meta.get_field('allow_username_password_registration').verbose_name,
+            'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').verbose_name,
+            'domain_credential_auth': domain._meta.get_field('domain_credential_auth').verbose_name,
+            'username_password_auth': domain._meta.get_field('username_password_auth').verbose_name,
+            'allow_app_certs_without_domain': domain._meta.get_field('allow_app_certs_without_domain').verbose_name,
+        }
+
         return context
 
     def post(self, request, *args, **kwargs):
         domain = self.get_object()
 
-        active_protocols = request.POST.getlist('protocols')
+        # active_protocols = request.POST.getlist('protocols')
+        #
+        # for protocol in PkiProtocol:
+        #     protocol_name = protocol.value
+        #     protocol_object = domain.get_protocol_object(protocol_name)
+        #     if protocol_object is not None:
+        #         protocol_object.status = protocol_name in active_protocols
+        #         protocol_object.save()
 
-        for protocol in PkiProtocol:
-            protocol_name = protocol.value
-            protocol_object = domain.get_protocol_object(protocol_name)
-            if protocol_object is not None:
-                protocol_object.status = protocol_name in active_protocols
-                protocol_object.save()
+        domain.auto_create_new_device = 'auto_create_new_device' in request.POST
+        domain.allow_username_password_registration = 'allow_username_password_registration' in request.POST
+        domain.allow_idevid_registration = 'allow_idevid_registration' in request.POST
+        domain.domain_credential_auth = 'domain_credential_auth' in request.POST
+        domain.username_password_auth = 'username_password_auth' in request.POST
+        domain.allow_app_certs_without_domain = 'allow_app_certs_without_domain' in request.POST
+
+        domain.save()
 
         messages.success(request, _("Settings updated successfully."))
         return HttpResponseRedirect(self.success_url)
