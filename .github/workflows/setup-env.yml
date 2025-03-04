@@ -21,7 +21,7 @@ jobs:
         uses: astral-sh/setup-uv@v5  # Sets up `uv` package manager.
         with:
           enable-cache: true  # Caches `uv` installation for faster runs.
-          version: "0.6.3"  # Use a fixed version for consistency.
+          version: "0.6.4"  # Use a fixed version for consistency.
           cache-dependency-glob: "uv.lock" # Invalidate cache when the lockfile changes.
 
       - name: Set up Python
