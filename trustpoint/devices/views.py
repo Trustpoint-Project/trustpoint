@@ -71,6 +71,8 @@ else:
 CredentialFormClass = TypeVar('CredentialFormClass', bound='BaseCredentialForm')
 TlsCredentialIssuerClass = TypeVar('TlsCredentialIssuerClass', bound='BaseTlsCredentialIssuer')
 
+# TODO(AlexHx8472): Derived CBVs must only derive from one Django view which must be the last one.  # noqa: FIX002
+
 
 # --------------------------------------------------- Device Mixins ----------------------------------------------------
 
