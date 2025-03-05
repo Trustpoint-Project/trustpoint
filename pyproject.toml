@@ -111,6 +111,8 @@ convention = "google"
 [tool.mypy]
 strict = true
 plugins = ["mypy_django_plugin.main"]
+# TODO(AlexHx8472): Are we sure to exclude the tests?
+exclude = "^(tests/|.*/tests/|migrations/|.*/migrations/)"
 
 [[tool.mypy.overrides]]
 module = ["crispy_bootstrap5.*", "crispy_forms.*"]

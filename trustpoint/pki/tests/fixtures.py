@@ -52,16 +52,19 @@ from pki.tests import (
 # Basic Self-Signed Certificate Fixture
 # ----------------------------
 
-@pytest.fixture(scope="function")
+
+@pytest.fixture(scope='function')
 def self_signed_cert_basic(rsa_private_key) -> CertificateModel:
     """Creates a self-signed CA certificate with minimal extensions and saves it to the database once per module.
 
     We manually unblock the DB because this fixture has 'module' scope.
     """
-    subject = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, COMMON_NAME),
-        x509.NameAttribute(NameOID.COUNTRY_NAME, COUNTRY_NAME),
-    ])
+    subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, COMMON_NAME),
+            x509.NameAttribute(NameOID.COUNTRY_NAME, COUNTRY_NAME),
+        ]
+    )
     issuer = subject
     now = datetime.now(timezone.utc)
 
@@ -82,17 +85,21 @@ def self_signed_cert_basic(rsa_private_key) -> CertificateModel:
     cert_model = CertificateModel.save_certificate(cert)
     return (cert_model, cert)
 
+
 # ----------------------------
 # Self-Signed Certificate with Extensions Fixture
 # ----------------------------
 
-@pytest.fixture(scope="function")
+
+@pytest.fixture(scope='function')
 def self_signed_cert_with_ext(rsa_private_key) -> x509.Certificate:
     """Create a self-signed certificate with multiple extensions."""
-    subject = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, COMMON_NAME),
-        x509.NameAttribute(NameOID.COUNTRY_NAME, COUNTRY_NAME),
-    ])
+    subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, COMMON_NAME),
+            x509.NameAttribute(NameOID.COUNTRY_NAME, COUNTRY_NAME),
+        ]
+    )
     issuer = subject
     now = datetime.now(timezone.utc)
 
@@ -100,101 +107,95 @@ def self_signed_cert_with_ext(rsa_private_key) -> x509.Certificate:
     rfc822_name = RFC822Name(RFC822_EMAIL)
     dns_name = DNSName(DNS_NAME_VALUE)
     uri = UniformResourceIdentifier(URI_VALUE)
-    directory_name = DirectoryName(
-        x509.Name([x509.NameAttribute(NameOID.ORGANIZATION_NAME, ORGANIZATION_NAME)])
-    )
+    directory_name = DirectoryName(x509.Name([x509.NameAttribute(NameOID.ORGANIZATION_NAME, ORGANIZATION_NAME)]))
     registered_id = RegisteredID(ObjectIdentifier(REGISTERED_ID_OID))
     ip_addr = IPAddress(ipaddress.ip_address(IP_ADDRESS_VALUE))
 
     other_name_content = char.UTF8String(OTHER_NAME_CONTENT)
     other_name_der = encode(other_name_content)
-    other_name = OtherName(
-        type_id=ObjectIdentifier(OTHER_NAME_OID),
-        value=other_name_der
-    )
+    other_name = OtherName(type_id=ObjectIdentifier(OTHER_NAME_OID), value=other_name_der)
 
     serial_number = x509.random_serial_number()
 
-    san = SubjectAlternativeName([
-        rfc822_name, dns_name, uri, directory_name, registered_id, ip_addr, other_name
-    ])
-    ian = IssuerAlternativeName([
-        rfc822_name, dns_name, uri, directory_name, registered_id, ip_addr, other_name
-    ])
+    san = SubjectAlternativeName([rfc822_name, dns_name, uri, directory_name, registered_id, ip_addr, other_name])
+    ian = IssuerAlternativeName([rfc822_name, dns_name, uri, directory_name, registered_id, ip_addr, other_name])
 
     key_usage = KeyUsage(**KEY_USAGE_FLAGS)
 
     public_key = rsa_private_key.public_key()
     public_key_bytes = public_key.public_bytes(
-        encoding=serialization.Encoding.DER,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
+        encoding=serialization.Encoding.DER, format=serialization.PublicFormat.SubjectPublicKeyInfo
     )
     key_identifier = hashlib.sha1(public_key_bytes).digest()
 
     aki = AuthorityKeyIdentifier(
         key_identifier=key_identifier,
         authority_cert_issuer=[rfc822_name, dns_name, uri, directory_name, registered_id, ip_addr, other_name],
-        authority_cert_serial_number=serial_number
+        authority_cert_serial_number=serial_number,
     )
     ski = SubjectKeyIdentifier(digest=key_identifier)
 
-    cp = x509.CertificatePolicies([
-        PolicyInformation(
-            policy_identifier=ObjectIdentifier("2.23.140.1.1"),
-            policy_qualifiers=[
-                "https://example-ev-certs.com/cps",
-                UserNotice(
-                    notice_reference=NoticeReference(
-                        organization="Example EV Certification Authority",
-                        notice_numbers=[1, 2]
+    cp = x509.CertificatePolicies(
+        [
+            PolicyInformation(
+                policy_identifier=ObjectIdentifier('2.23.140.1.1'),
+                policy_qualifiers=[
+                    'https://example-ev-certs.com/cps',
+                    UserNotice(
+                        notice_reference=NoticeReference(
+                            organization='Example EV Certification Authority', notice_numbers=[1, 2]
+                        ),
+                        explicit_text="EV certificates issued under Example EV CA's CP/CPS.",
                     ),
-                    explicit_text="EV certificates issued under Example EV CA's CP/CPS."
-                ),
-            ],
-        ),
-        x509.PolicyInformation(
-            policy_identifier=x509.ObjectIdentifier("2.23.140.1.2.1"),
-            policy_qualifiers=[
-                'https://example-dv-certs.com/cps',
-                x509.UserNotice(
-                    notice_reference=None,
-                    explicit_text='DV certificates issued with minimal identity validation.'
-                )
-            ]
-        )
-    ])
-
-    eku = ExtendedKeyUsage([
-        ExtendedKeyUsageOID.SERVER_AUTH,
-        ExtendedKeyUsageOID.CLIENT_AUTH,
-        ExtendedKeyUsageOID.CODE_SIGNING,
-        ExtendedKeyUsageOID.EMAIL_PROTECTION,
-        ExtendedKeyUsageOID.TIME_STAMPING,
-        ExtendedKeyUsageOID.OCSP_SIGNING,
-    ])
-
-    name_constraints = NameConstraints(
-        permitted_subtrees=[rfc822_name, dns_name, uri],
-        excluded_subtrees=[directory_name, registered_id, other_name]
+                ],
+            ),
+            x509.PolicyInformation(
+                policy_identifier=x509.ObjectIdentifier('2.23.140.1.2.1'),
+                policy_qualifiers=[
+                    'https://example-dv-certs.com/cps',
+                    x509.UserNotice(
+                        notice_reference=None, explicit_text='DV certificates issued with minimal identity validation.'
+                    ),
+                ],
+            ),
+        ]
     )
 
-    aia = x509.AuthorityInformationAccess([
-        x509.AccessDescription(
-            access_method=x509.AuthorityInformationAccessOID.CA_ISSUERS,
-            access_location=x509.DNSName(DNS_NAME_VALUE)
-        ),
-        x509.AccessDescription(
-            access_method=x509.AuthorityInformationAccessOID.OCSP,
-            access_location=x509.UniformResourceIdentifier(URI_VALUE)
-        )
-    ])
+    eku = ExtendedKeyUsage(
+        [
+            ExtendedKeyUsageOID.SERVER_AUTH,
+            ExtendedKeyUsageOID.CLIENT_AUTH,
+            ExtendedKeyUsageOID.CODE_SIGNING,
+            ExtendedKeyUsageOID.EMAIL_PROTECTION,
+            ExtendedKeyUsageOID.TIME_STAMPING,
+            ExtendedKeyUsageOID.OCSP_SIGNING,
+        ]
+    )
 
-    sia = x509.SubjectInformationAccess([
-        x509.AccessDescription(
-            access_method=SubjectInformationAccessOID.CA_REPOSITORY,
-            access_location=x509.DNSName(DNS_NAME_VALUE)
-        )
-    ])
+    name_constraints = NameConstraints(
+        permitted_subtrees=[rfc822_name, dns_name, uri], excluded_subtrees=[directory_name, registered_id, other_name]
+    )
+
+    aia = x509.AuthorityInformationAccess(
+        [
+            x509.AccessDescription(
+                access_method=x509.AuthorityInformationAccessOID.CA_ISSUERS,
+                access_location=x509.DNSName(DNS_NAME_VALUE),
+            ),
+            x509.AccessDescription(
+                access_method=x509.AuthorityInformationAccessOID.OCSP,
+                access_location=x509.UniformResourceIdentifier(URI_VALUE),
+            ),
+        ]
+    )
+
+    sia = x509.SubjectInformationAccess(
+        [
+            x509.AccessDescription(
+                access_method=SubjectInformationAccessOID.CA_REPOSITORY, access_location=x509.DNSName(DNS_NAME_VALUE)
+            )
+        ]
+    )
 
     iap = x509.InhibitAnyPolicy(INHIBIT_ANY_POLICY_VALUE)
 
@@ -210,14 +211,11 @@ def self_signed_cert_with_ext(rsa_private_key) -> x509.Certificate:
     # ])
 
     policy_constraints = x509.PolicyConstraints(
-        inhibit_policy_mapping=INHIBIT_POLICY_MAPPING,
-        require_explicit_policy=REQUIRE_EXPLICIT_POLICY
+        inhibit_policy_mapping=INHIBIT_POLICY_MAPPING, require_explicit_policy=REQUIRE_EXPLICIT_POLICY
     )
-
 
     # freshest_crl = x509.FreshestCRL()
     # CRLDistribution
-
 
     cert = (
         x509.CertificateBuilder()

@@ -221,7 +221,7 @@ class BrowserLoginForm(CleanedDataNotNoneMixin, forms.Form):
         cleaned_data['credential_download'] = credential_download
 
         if not credential_download.check_otp(otp_parts[1]):
-            err_msg = 'OTP is invalid.'
+            err_msg = _('OTP is invalid.')
             raise forms.ValidationError(err_msg)
 
         return cleaned_data

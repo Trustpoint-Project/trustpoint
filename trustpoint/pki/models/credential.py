@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from typing import Any, ClassVar, Union
     from cryptography import x509
     from cryptography.hazmat.primitives.asymmetric import ec, ed448, ed25519, rsa
+
     PrivateKey = Union[ec.EllipticCurvePrivateKey, rsa.RSAPrivateKey, ed448.Ed448PrivateKey, ed25519.Ed25519PrivateKey]
 
 
@@ -29,7 +30,6 @@ __all__ = ['CredentialAlreadyExistsError', 'CredentialModel', 'CertificateChainO
 
 
 class CredentialAlreadyExistsError(ValidationError):
-
     def __init__(self, *args: tuple, **kwargs: dict) -> None:
         super().__init__(message=_('Credential already exists.'), *args, **kwargs)
 
@@ -56,31 +56,20 @@ class CredentialModel(models.Model):
         ISSUING_CA = 2, _('Issuing CA')
         ISSUED_CREDENTIAL = 3, _('Issued Credential')
 
-    credential_type = models.IntegerField(
-        verbose_name=_('Credential Type'), choices=CredentialTypeChoice
-    )
+    credential_type = models.IntegerField(verbose_name=_('Credential Type'), choices=CredentialTypeChoice)
     private_key = models.CharField(verbose_name='Private key (PEM)', max_length=65536, null=True, blank=True)
 
     certificates = models.ManyToManyField(
-        CertificateModel,
-        through='PrimaryCredentialCertificate',
-        blank=False,
-        related_name='credential'
+        CertificateModel, through='PrimaryCredentialCertificate', blank=False, related_name='credential'
     )
     certificate_chain = models.ManyToManyField(
-        CertificateModel,
-        blank=True,
-        through='CertificateChainOrderModel',
-        related_name='credential_certificate_chains'
+        CertificateModel, blank=True, through='CertificateChainOrderModel', related_name='credential_certificate_chains'
     )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
     def __repr__(self) -> str:
-        return (
-            f'CredentialModel(credential_type={self.credential_type}, '
-            f'certificate=)'
-        )
+        return f'CredentialModel(credential_type={self.credential_type}, certificate=)'
 
     def __str__(self) -> str:
         """Returns a human-readable string that represents this CertificateChainOrderModel entry.
@@ -96,8 +85,7 @@ class CredentialModel(models.Model):
 
     @classmethod
     def save_credential_serializer(
-            cls, credential_serializer: CredentialSerializer,
-            credential_type: CredentialModel.CredentialTypeChoice
+        cls, credential_serializer: CredentialSerializer, credential_type: CredentialModel.CredentialTypeChoice
     ) -> CredentialModel:
         """This method will try to normalize the credential_serializer and then save it to the database.
 
@@ -114,8 +102,7 @@ class CredentialModel(models.Model):
         # logger.error(normalized_credential_serializer.additional_certificates.as_pem())
         # logger.error(credential_serializer.additional_certificates.as_pem())
         return cls._save_normalized_credential_serializer(
-            normalized_credential_serializer=credential_serializer,
-            credential_type=credential_type
+            normalized_credential_serializer=credential_serializer, credential_type=credential_type
         )
 
     @property
@@ -125,9 +112,9 @@ class CredentialModel(models.Model):
     @classmethod
     @transaction.atomic
     def _save_normalized_credential_serializer(
-            cls,
-            normalized_credential_serializer: CredentialSerializer,
-            credential_type: CredentialModel.CredentialTypeChoice
+        cls,
+        normalized_credential_serializer: CredentialSerializer,
+        credential_type: CredentialModel.CredentialTypeChoice,
     ) -> CredentialModel:
         """This method will store a credential that is expected to be normalized..
 
@@ -138,9 +125,7 @@ class CredentialModel(models.Model):
             CredentialModel: The stored credential model.
         """
 
-        certificate = CertificateModel.save_certificate(
-            normalized_credential_serializer.credential_certificate
-        )
+        certificate = CertificateModel.save_certificate(normalized_credential_serializer.credential_certificate)
         # TODO(AlexHx8472): Verify that the credential is valid in respect to the credential_type!!!
 
         credential_model = cls.objects.create(
@@ -149,9 +134,8 @@ class CredentialModel(models.Model):
         )
 
         PrimaryCredentialCertificate.objects.create(
-            certificate=certificate,
-            credential=credential_model,
-            is_primary=True)
+            certificate=certificate, credential=credential_model, is_primary=True
+        )
 
         for order, certificate in enumerate(normalized_credential_serializer.additional_certificates.as_crypto()):
             certificate_model = CertificateModel.save_certificate(certificate)
@@ -164,23 +148,17 @@ class CredentialModel(models.Model):
     @classmethod
     @transaction.atomic
     def save_keyless_credential(
-            cls,
-            certificate: x509.Certificate,
-            certificate_chain: list[x509.Certificate],
-            credential_type: CredentialModel.CredentialTypeChoice) -> CredentialModel:
-        certificate = CertificateModel.save_certificate(
-            certificate
-        )
+        cls,
+        certificate: x509.Certificate,
+        certificate_chain: list[x509.Certificate],
+        credential_type: CredentialModel.CredentialTypeChoice,
+    ) -> CredentialModel:
+        certificate = CertificateModel.save_certificate(certificate)
 
-        credential_model = cls.objects.create(
-            credential_type=credential_type,
-            private_key=None
-        )
+        credential_model = cls.objects.create(credential_type=credential_type, private_key=None)
 
         PrimaryCredentialCertificate.objects.create(
-            certificate=certificate,
-            credential=credential_model,
-            is_primary=True
+            certificate=certificate, credential=credential_model, is_primary=True
         )
 
         for order, certificate in enumerate(certificate_chain):
@@ -190,7 +168,6 @@ class CredentialModel(models.Model):
             )
 
         return credential_model
-
 
     # TODO(AlexHx8472): Implement the delete method,
     # TODO(AlexHx8472): so that the corresponding CertificateChainOrderModels are removed as well
@@ -286,7 +263,7 @@ class CredentialModel(models.Model):
             (
                 self.get_private_key_serializer(),
                 self.get_certificate_serializer(),
-                self.get_certificate_chain_serializer()
+                self.get_certificate_chain_serializer(),
             )
         )
 
@@ -300,7 +277,6 @@ class CredentialModel(models.Model):
 
 
 class PrimaryCredentialCertificate(models.Model):
-
     credential = models.ForeignKey(CredentialModel, on_delete=models.CASCADE)
     certificate = models.OneToOneField(CertificateModel, on_delete=models.CASCADE)
     is_primary = models.BooleanField(default=False)
@@ -312,6 +288,7 @@ class PrimaryCredentialCertificate(models.Model):
 
         self.is_primary = True
         super().save(*args, **kwargs)
+
 
 class CertificateChainOrderModel(models.Model):
     """This Model is used to preserve the order of certificates in credential certificate chains."""

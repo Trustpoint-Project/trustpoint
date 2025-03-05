@@ -1,4 +1,5 @@
 """Module that contains the DomainModel."""
+
 from __future__ import annotations
 
 from util.field import UniqueNameValidator
@@ -10,9 +11,7 @@ from django_stubs_ext.db.models import TypedModelMeta
 
 from . import IssuingCaModel
 
-__all__ = [
-    'DomainModel'
-]
+__all__ = ['DomainModel']
 
 
 class DomainModel(models.Model):
@@ -23,11 +22,7 @@ class DomainModel(models.Model):
     class Meta(TypedModelMeta):
         """Meta class configuration."""
 
-    unique_name = models.CharField(
-        _('Domain Name'),
-        max_length=100,
-        unique=True,
-        validators=[UniqueNameValidator()])
+    unique_name = models.CharField(_('Domain Name'), max_length=100, unique=True, validators=[UniqueNameValidator()])
 
     issuing_ca = models.ForeignKey(
         IssuingCaModel,

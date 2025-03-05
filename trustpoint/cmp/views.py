@@ -17,8 +17,13 @@ from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.serialization import Encoding, load_der_public_key, load_pem_private_key
 from cryptography.x509.oid import ExtensionOID
-from devices.issuer import LocalDomainCredentialIssuer, LocalTlsClientCredentialIssuer, LocalTlsServerCredentialIssuer, \
-    OpcUaServerCredentialIssuer, OpcUaClientCredentialIssuer
+from devices.issuer import (
+    LocalDomainCredentialIssuer,
+    LocalTlsClientCredentialIssuer,
+    LocalTlsServerCredentialIssuer,
+    OpcUaServerCredentialIssuer,
+    OpcUaClientCredentialIssuer,
+)
 from devices.models import DeviceModel
 from django.http import HttpResponse
 from django.utils.decorators import method_decorator
@@ -1333,11 +1338,11 @@ class CmpCertificationRequestView(
                         if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
                     ]
                     if len(san_extensions) != 1:
-                        raise ValueError("Invalid SAN extension count")
+                        raise ValueError('Invalid SAN extension count')
 
                     san_extension = san_extensions[0]
-                    #san_critical = str(san_extension['critical']) == 'True'
-                    #TODO (FHKatCSW): san_critical not supported in OpcUaServerCredentialIssuer
+                    # san_critical = str(san_extension['critical']) == 'True'
+                    # TODO (FHKatCSW): san_critical not supported in OpcUaServerCredentialIssuer
                     san_extension_bytes = bytes(san_extension['extnValue'])
                     san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
 
@@ -1363,10 +1368,10 @@ class CmpCertificationRequestView(
                             application_uri = str(value)
 
                     if not application_uri:
-                        raise ValueError("Missing OPC UA Application URI in SAN extension")
+                        raise ValueError('Missing OPC UA Application URI in SAN extension')
 
                 else:
-                    raise ValueError("SAN extension is required for OPC UA Server Certificates")
+                    raise ValueError('SAN extension is required for OPC UA Server Certificates')
 
                 issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
                 issued_app_cred = issuer.issue_opcua_server_certificate(
@@ -1376,7 +1381,7 @@ class CmpCertificationRequestView(
                     ipv6_addresses=ipv6_addresses,
                     domain_names=dns_names,
                     validity_days=validity_in_days,
-                    public_key=loaded_public_key
+                    public_key=loaded_public_key,
                 )
 
             elif self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_CLIENT:
@@ -1387,11 +1392,11 @@ class CmpCertificationRequestView(
                         if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
                     ]
                     if len(san_extensions) != 1:
-                        raise ValueError("Invalid SAN extension count")
+                        raise ValueError('Invalid SAN extension count')
 
                     san_extension = san_extensions[0]
-                    #san_critical = str(san_extension['critical']) == 'True'
-                    #TODO (FHKatCSW): san_critical not supported in OpcUaClientCredentialIssuer
+                    # san_critical = str(san_extension['critical']) == 'True'
+                    # TODO (FHKatCSW): san_critical not supported in OpcUaClientCredentialIssuer
                     san_extension_bytes = bytes(san_extension['extnValue'])
                     san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
 
@@ -1405,17 +1410,17 @@ class CmpCertificationRequestView(
                             application_uri = str(value)
 
                     if not application_uri:
-                        raise ValueError("Missing OPC UA Application URI in SAN extension")
+                        raise ValueError('Missing OPC UA Application URI in SAN extension')
 
                 else:
-                    raise ValueError("SAN extension is required for OPC UA Client Certificates")
+                    raise ValueError('SAN extension is required for OPC UA Client Certificates')
 
                 issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
                 issued_app_cred = issuer.issue_opcua_client_certificate(
                     common_name=common_name_value,
                     application_uri=application_uri,
                     validity_days=validity_in_days,
-                    public_key=loaded_public_key
+                    public_key=loaded_public_key,
                 )
             else:
                 raise ValueError
@@ -1742,10 +1747,10 @@ class CmpCertificationRequestView(
                         if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
                     ]
                     if len(san_extensions) != 1:
-                        raise ValueError("Invalid SAN extension count")
+                        raise ValueError('Invalid SAN extension count')
 
                     san_extension = san_extensions[0]
-                    #san_critical = str(san_extension['critical']) == 'True'
+                    # san_critical = str(san_extension['critical']) == 'True'
                     san_extension_bytes = bytes(san_extension['extnValue'])
                     san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
 
@@ -1771,10 +1776,10 @@ class CmpCertificationRequestView(
                             application_uri = str(value)
 
                     if not application_uri:
-                        raise ValueError("Missing OPC UA Application URI in SAN extension")
+                        raise ValueError('Missing OPC UA Application URI in SAN extension')
 
                 else:
-                    raise ValueError("SAN extension is required for OPC UA Server Certificates")
+                    raise ValueError('SAN extension is required for OPC UA Server Certificates')
 
                 issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
                 issued_app_cred = issuer.issue_opcua_server_certificate(
@@ -1784,7 +1789,7 @@ class CmpCertificationRequestView(
                     ipv6_addresses=ipv6_addresses,
                     domain_names=dns_names,
                     validity_days=validity_in_days,
-                    public_key=loaded_public_key
+                    public_key=loaded_public_key,
                 )
 
             elif self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_CLIENT:
@@ -1795,10 +1800,10 @@ class CmpCertificationRequestView(
                         if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
                     ]
                     if len(san_extensions) != 1:
-                        raise ValueError("Invalid SAN extension count")
+                        raise ValueError('Invalid SAN extension count')
 
                     san_extension = san_extensions[0]
-                    #san_critical = str(san_extension['critical']) == 'True'
+                    # san_critical = str(san_extension['critical']) == 'True'
                     san_extension_bytes = bytes(san_extension['extnValue'])
                     san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
 
@@ -1812,17 +1817,17 @@ class CmpCertificationRequestView(
                             application_uri = str(value)
 
                     if not application_uri:
-                        raise ValueError("Missing OPC UA Application URI in SAN extension")
+                        raise ValueError('Missing OPC UA Application URI in SAN extension')
 
                 else:
-                    raise ValueError("SAN extension is required for OPC UA Client Certificates")
+                    raise ValueError('SAN extension is required for OPC UA Client Certificates')
 
                 issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
                 issued_app_cred = issuer.issue_opcua_client_certificate(
                     common_name=common_name_value,
                     application_uri=application_uri,
                     validity_days=validity_in_days,
-                    public_key=loaded_public_key
+                    public_key=loaded_public_key,
                 )
             else:
                 raise ValueError

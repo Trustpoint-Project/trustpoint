@@ -1,6 +1,5 @@
 """Something."""
 
-
 from __future__ import annotations
 
 import ipaddress
@@ -19,7 +18,7 @@ PublicKey = Union[rsa.RSAPublicKey, ec.EllipticCurvePublicKey, ed448.Ed448Public
 PrivateKey = Union[rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey, ed448.Ed448PrivateKey, ed25519.Ed25519PrivateKey]
 
 BASE_PATH = Path(__file__).parent.parent.parent.parent.parent / 'tests/data/x509/'
-SERVER_CERT_PATH =  BASE_PATH / 'https_server.crt'
+SERVER_CERT_PATH = BASE_PATH / 'https_server.crt'
 SERVER_KEY_PATH = BASE_PATH / 'https_server.pem'
 
 
@@ -31,7 +30,7 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs) -> None:
         one_day = datetime.timedelta(1, 0, 0)
         ipv4_addresses = subprocess.check_output('hostname -I', shell=True).decode().strip()
-        #ipv4_addresses = '10.10.0.5 10.10.4.89'
+        # ipv4_addresses = '10.10.0.5 10.10.4.89'
         ipv4_addresses = ipv4_addresses.split(' ')
         ipv4_addresses.append('127.0.0.1')
         basic_constraints_extension = x509.BasicConstraints(ca=False, path_length=None)
@@ -44,7 +43,7 @@ class Command(BaseCommand):
             key_cert_sign=False,
             crl_sign=False,
             decipher_only=False,
-            encipher_only=False
+            encipher_only=False,
         )
         extended_key_usage_extension = x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH])
         subject_alt_name_content = [x509.DNSName('localhost'), x509.DNSName('trustpoint.local')]
@@ -52,11 +51,13 @@ class Command(BaseCommand):
             subject_alt_name_content.append(x509.IPAddress(ipaddress.IPv4Address(ipv4)))
         subject_alternative_names_extension = x509.SubjectAlternativeName(subject_alt_name_content)
 
-        subject = x509.Name([
-            x509.NameAttribute(x509.oid.NameOID.COMMON_NAME, 'Trustpoint TLS Server Certificate'),
-            x509.NameAttribute(x509.oid.NameOID.COUNTRY_NAME, 'DE'),
-            x509.NameAttribute(x509.oid.NameOID.ORGANIZATION_NAME, 'Trustpoint Project')
-        ])
+        subject = x509.Name(
+            [
+                x509.NameAttribute(x509.oid.NameOID.COMMON_NAME, 'Trustpoint TLS Server Certificate'),
+                x509.NameAttribute(x509.oid.NameOID.COUNTRY_NAME, 'DE'),
+                x509.NameAttribute(x509.oid.NameOID.ORGANIZATION_NAME, 'Trustpoint Project'),
+            ]
+        )
         issuer = subject
 
         private_key = rsa.generate_private_key(
@@ -84,6 +85,6 @@ class Command(BaseCommand):
             private_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PrivateFormat.TraditionalOpenSSL,
-                encryption_algorithm=serialization.NoEncryption()
+                encryption_algorithm=serialization.NoEncryption(),
             ).decode()
         )

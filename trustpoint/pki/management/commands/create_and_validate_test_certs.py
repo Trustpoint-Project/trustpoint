@@ -1,6 +1,5 @@
 """Something."""
 
-
 from __future__ import annotations
 
 import datetime
@@ -26,18 +25,16 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
     help = 'Removes all migrations, deletes db and runs makemigrations and migrate afterwards.'
 
     def _create_cert_chain(self, algorithm: KeyAlgorithm, path: Path) -> None:
-
         pem_root_cert, root_cert, root_private_key = self._create_certificate(
-            common_name=f'{algorithm.value}-root-ca',
-            algorithm=algorithm,
-            path=path)
+            common_name=f'{algorithm.value}-root-ca', algorithm=algorithm, path=path
+        )
 
         pem_issuing_cert, issuing_cert, issuing_private = self._create_certificate(
             common_name=f'{algorithm.value}-issuing-ca',
             algorithm=algorithm,
             path=path,
             issuer=root_cert,
-            issuer_priv_key=root_private_key
+            issuer_priv_key=root_private_key,
         )
 
         pem_ee_cert, ee_cert, ee_key = self._create_certificate(
@@ -45,7 +42,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             algorithm=algorithm,
             path=path,
             issuer=issuing_cert,
-            issuer_priv_key=issuing_private
+            issuer_priv_key=issuing_private,
         )
 
         p12 = pkcs12.serialize_key_and_certificates(
@@ -53,7 +50,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             key=ee_key,
             cert=ee_cert,
             cas=[root_cert, issuing_cert],
-            encryption_algorithm=BestAvailableEncryption(b"password")
+            encryption_algorithm=BestAvailableEncryption(b'password'),
         )
 
         with open(path / f'{algorithm.value}.p12', 'wb') as f:
@@ -65,27 +62,35 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
 
     @classmethod
     def _create_certificate(
-            cls,
-            common_name: str,
-            algorithm: KeyAlgorithm,
-            path: Path,
-            issuer: None | x509.Certificate = None,
-            issuer_priv_key: None | rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey = None,
-            validity_days: int = 365) -> tuple[str, x509.Certificate, rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey]:
-        
+        cls,
+        common_name: str,
+        algorithm: KeyAlgorithm,
+        path: Path,
+        issuer: None | x509.Certificate = None,
+        issuer_priv_key: None | rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey = None,
+        validity_days: int = 365,
+    ) -> tuple[str, x509.Certificate, rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey]:
         kg = KeyGenerator(algorithm)
         private_key = kg.generate_key()
 
         one_day = datetime.timedelta(1, 0, 0)
         public_key = private_key.public_key()
         builder = x509.CertificateBuilder()
-        builder = builder.subject_name(x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, common_name),
-        ]))
+        builder = builder.subject_name(
+            x509.Name(
+                [
+                    x509.NameAttribute(NameOID.COMMON_NAME, common_name),
+                ]
+            )
+        )
         if issuer is None:
-            builder = builder.issuer_name(x509.Name([
-                x509.NameAttribute(NameOID.COMMON_NAME, common_name),
-            ]))
+            builder = builder.issuer_name(
+                x509.Name(
+                    [
+                        x509.NameAttribute(NameOID.COMMON_NAME, common_name),
+                    ]
+                )
+            )
         else:
             builder = builder.issuer_name(issuer.subject)
         builder = builder.not_valid_before(datetime.datetime.today() - one_day)
@@ -104,9 +109,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             ca = False
             path_length = None
 
-        builder = builder.add_extension(
-            x509.BasicConstraints(ca=ca, path_length=path_length), critical=True
-        )
+        builder = builder.add_extension(x509.BasicConstraints(ca=ca, path_length=path_length), critical=True)
 
         builder = builder.add_extension(
             x509.KeyUsage(
@@ -118,9 +121,9 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
                 key_cert_sign=True,
                 crl_sign=True,
                 encipher_only=True,
-                decipher_only=True
+                decipher_only=True,
             ),
-            critical=True
+            critical=True,
         )
 
         some_arbitrary_der_as_hex = (
@@ -142,16 +145,17 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
                     x509.IPAddress(ipaddress.IPv6Network('2001:db8:1234::/48')),
                     x509.RegisteredID(x509.ObjectIdentifier('2.5.4.3')),
                     x509.OtherName(type_id=x509.ObjectIdentifier('2.5.4.3'), value=some_arbitrary_der),
-
                     x509.DirectoryName(
-                        x509.Name([
-                            x509.NameAttribute(NameOID.COMMON_NAME, 'Trustpoint Model Test'),
-                            x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Trustpoint')
-                        ])
-                    )
+                        x509.Name(
+                            [
+                                x509.NameAttribute(NameOID.COMMON_NAME, 'Trustpoint Model Test'),
+                                x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Trustpoint'),
+                            ]
+                        )
+                    ),
                 ]
             ),
-            critical=False
+            critical=False,
         )
 
         builder = builder.add_extension(
@@ -166,31 +170,34 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
                     x509.IPAddress(ipaddress.IPv6Network('2001:db8:1234::/48')),
                     x509.RegisteredID(x509.ObjectIdentifier('2.5.4.3')),
                     x509.OtherName(type_id=x509.ObjectIdentifier('2.5.4.3'), value=some_arbitrary_der),
-
                     x509.DirectoryName(
-                        x509.Name([
-                            x509.NameAttribute(NameOID.COMMON_NAME, 'Subject Trustpoint Model Test'),
-                            x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Subject Trustpoint')
-                        ])
-                    )
+                        x509.Name(
+                            [
+                                x509.NameAttribute(NameOID.COMMON_NAME, 'Subject Trustpoint Model Test'),
+                                x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Subject Trustpoint'),
+                            ]
+                        )
+                    ),
                 ]
             ),
-            critical=False
+            critical=False,
         )
 
         if issuer_priv_key is None:
             certificate = builder.sign(
-                private_key=private_key, algorithm=hashes.SHA256(),
+                private_key=private_key,
+                algorithm=hashes.SHA256(),
             )
         else:
             certificate = builder.sign(
-                private_key=issuer_priv_key, algorithm=hashes.SHA256(),
+                private_key=issuer_priv_key,
+                algorithm=hashes.SHA256(),
             )
 
         pem_priv_key = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
+            encryption_algorithm=serialization.NoEncryption(),
         )
 
         pem_cert = certificate.public_bytes(serialization.Encoding.PEM)

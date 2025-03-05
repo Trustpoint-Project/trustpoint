@@ -27,7 +27,6 @@ from trustpoint.views.base import (
 
 
 class PkiProtocol(enum.Enum):
-
     EST = 'est'
     CMP = 'cmp'
     REST = 'rest'
@@ -68,7 +67,7 @@ class DomainCreateView(DomainContextMixin, TpLoginRequiredMixin, CreateView):
         form.fields['issuing_ca'].queryset = IssuingCaModel.objects.exclude(
             issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
         ).filter(is_active=True)
-        form.fields['issuing_ca'].empty_label = None # Remove empty "---------" choice
+        form.fields['issuing_ca'].empty_label = None  # Remove empty "---------" choice
         del form.fields['is_active']
         return form
 
@@ -87,7 +86,6 @@ class DomainUpdateView(DomainContextMixin, TpLoginRequiredMixin, UpdateView):
 
 
 class DomainDevIdRegistrationTableMixin(SortableTableMixin, ListInDetailView):
-
     model = DevIdRegistration
     paginate_by = UIConfig.paginate_by
     context_object_name = 'devid_registrations'
@@ -113,7 +111,7 @@ class DomainConfigView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegi
             'est': domain.est_protocol if hasattr(domain, 'est_protocol') else None,
             'acme': domain.acme_protocol if hasattr(domain, 'acme_protocol') else None,
             'scep': domain.scep_protocol if hasattr(domain, 'scep_protocol') else None,
-            'rest': domain.rest_protocol if hasattr(domain, 'rest_protocol') else None
+            'rest': domain.rest_protocol if hasattr(domain, 'rest_protocol') else None,
         }
 
         return context
@@ -130,12 +128,11 @@ class DomainConfigView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegi
                 protocol_object.status = protocol_name in active_protocols
                 protocol_object.save()
 
-        messages.success(request, _("Settings updated successfully."))
+        messages.success(request, _('Settings updated successfully.'))
         return HttpResponseRedirect(self.success_url)
 
 
 class DomainDetailView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegistrationTableMixin, ListInDetailView):
-
     detail_model = DomainModel
     template_name = 'pki/domains/details.html'
     detail_context_object_name = 'domain'
@@ -159,17 +156,11 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, TpLoginRequiredMixin, Bu
             response = super().form_valid(form)
         except ProtectedError:
             messages.error(
-                self.request,
-                _(
-                    'Cannot delete the selected Domains(s) because they are referenced by other objects.'
-                )
+                self.request, _('Cannot delete the selected Domains(s) because they are referenced by other objects.')
             )
             return HttpResponseRedirect(self.success_url)
 
-        messages.success(
-            self.request,
-            _('Successfully deleted {count} Domains.').format(count=deleted_count)
-        )
+        messages.success(self.request, _('Successfully deleted {count} Domains.').format(count=deleted_count))
 
         return response
 
@@ -241,8 +232,10 @@ class DevIdRegistrationCreateView(DomainContextMixin, TpLoginRequiredMixin, Form
         domain = self.get_domain()
         return cast('str', reverse_lazy('pki:domains-config', kwargs={'pk': domain.id}))
 
+
 class DevIdRegistrationDeleteView(DomainContextMixin, TpLoginRequiredMixin, DeleteView):
     """View to delete a DevID Registration."""
+
     model = DevIdRegistration
     template_name = 'pki/devid_registration/confirm_delete.html'
     success_url = reverse_lazy('pki:domains')
@@ -253,26 +246,26 @@ class DevIdRegistrationDeleteView(DomainContextMixin, TpLoginRequiredMixin, Dele
         messages.success(request, _('DevID Registration Pattern deleted successfully.'))
         return response
 
+
 class DevIdMethodSelectView(DomainContextMixin, TpLoginRequiredMixin, FormView):
     template_name = 'pki/devid_registration/method_select.html'
     form_class = DevIdAddMethodSelectForm
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["domain"] = get_object_or_404(DomainModel, id=self.kwargs.get("pk"))
+        context['domain'] = get_object_or_404(DomainModel, id=self.kwargs.get('pk'))
         return context
 
     def form_valid(self, form) -> HttpResponseRedirect:
         method_select = form.cleaned_data.get('method_select')
-        domain_pk = self.kwargs.get("pk")  # Get domain ID
+        domain_pk = self.kwargs.get('pk')  # Get domain ID
 
         if not method_select:
             return HttpResponseRedirect(reverse('pki:devid_registration-method_select', kwargs={'pk': domain_pk}))
 
         if method_select == 'import_truststore':
             if domain_pk:
-                return HttpResponseRedirect(
-                    reverse('pki:truststores-add-with-pk', kwargs={'pk': domain_pk}))
+                return HttpResponseRedirect(reverse('pki:truststores-add-with-pk', kwargs={'pk': domain_pk}))
             return HttpResponseRedirect(reverse('pki:truststores-add'))
 
         if method_select == 'configure_pattern':

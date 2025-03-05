@@ -16,6 +16,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 
 """
+
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
@@ -31,10 +32,8 @@ from .views import base
 last_modified_date = timezone.now()
 
 
-if  settings.DEBUG:
-    urlpatterns = [
-        path('admin/', admin.site.urls)
-    ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+if settings.DEBUG:
+    urlpatterns = [path('admin/', admin.site.urls)] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 else:
     urlpatterns = []
 
@@ -48,14 +47,11 @@ urlpatterns += [
     path('home/', include('home.urls')),
     path('devices/', include('devices.urls')),
     path('settings/', include('settings.urls')),
-    path('i18n/', include("django.conf.urls.i18n")),
+    path('i18n/', include('django.conf.urls.i18n')),
     path(
         'jsi18n/',
-        vary_on_cookie(
-            last_modified(lambda req, **kw: last_modified_date)(
-                JavaScriptCatalog.as_view()
-        )),
-        name='javascript-catalog'
+        vary_on_cookie(last_modified(lambda req, **kw: last_modified_date)(JavaScriptCatalog.as_view())),
+        name='javascript-catalog',
     ),
     path('', base.IndexView.as_view()),
 ]

@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from typing import Union
 
     from cryptography.hazmat.primitives.asymmetric import ec, ed448, ed25519, rsa
+
     PrivateKey = Union[rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey, ed448.Ed448PrivateKey, ed25519.Ed25519PrivateKey]
 
 
@@ -46,7 +47,9 @@ class DevIdAddMethodSelectForm(forms.Form):
             ('configure_pattern', _('Use an existing truststore to define a new pattern')),
         ],
         initial='configure_pattern',
-        required=True)
+        required=True,
+    )
+
 
 class DevIdRegistrationForm(forms.ModelForm):
     """Form to create a new DevIdRegistration."""
@@ -55,9 +58,11 @@ class DevIdRegistrationForm(forms.ModelForm):
         model = DevIdRegistration
         fields = ['unique_name', 'truststore', 'domain', 'serial_number_pattern']
         widgets = {
-            'serial_number_pattern': forms.TextInput(attrs={
-                'placeholder': 'Enter a regex pattern for serial numbers',
-            }),
+            'serial_number_pattern': forms.TextInput(
+                attrs={
+                    'placeholder': 'Enter a regex pattern for serial numbers',
+                }
+            ),
         }
         labels = {
             'unique_name': 'Unique Name',
@@ -65,6 +70,7 @@ class DevIdRegistrationForm(forms.ModelForm):
             'domain': 'Associated Domain',
             'serial_number_pattern': 'Serial Number Pattern (Regex)',
         }
+
 
 class TruststoreAddForm(forms.Form):
     """Form for adding a new truststore.
@@ -78,18 +84,20 @@ class TruststoreAddForm(forms.Form):
         intended_usage (ChoiceField): Specifies the intended usage of the truststore.
         trust_store_file (FileField): The PEM or PKCS#7 file to be uploaded.
     """
+
     unique_name = forms.CharField(
         max_length=256,
         label=_('Unique Name') + ' ' + UniqueNameValidator.form_label,
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
         required=True,
-        validators=[UniqueNameValidator()])
+        validators=[UniqueNameValidator()],
+    )
 
     intended_usage = forms.ChoiceField(
         choices=TruststoreModel.IntendedUsage,
         label=_('Intended Usage'),
         widget=forms.Select(attrs={'class': 'form-control'}),
-        required=True
+        required=True,
     )
 
     trust_store_file = forms.FileField(label=_('PEM or PKCS#7 File'), required=True)
@@ -127,7 +135,8 @@ class TruststoreAddForm(forms.Form):
             trust_store_file = cleaned_data.get('trust_store_file').read()
         except (OSError, AttributeError) as original_exception:
             error_message = _(
-                'Unexpected error occurred while trying to get file contents. Please see logs for further details.')
+                'Unexpected error occurred while trying to get file contents. Please see logs for further details.'
+            )
             raise ValidationError(error_message, code='unexpected-error') from original_exception
 
         # TODO(FHatCSW): Also support PKCS#7 PEM and PKCS#7 DER files.
@@ -144,18 +153,14 @@ class TruststoreAddForm(forms.Form):
                 certificates=certificates,
             )
         except Exception as exception:
-
             raise ValidationError(str(exception)) from exception
-
 
         self.cleaned_data['truststore'] = trust_store_model
         return cleaned_data
 
     @staticmethod
     def _save_trust_store(
-            unique_name: str,
-            intended_usage: TruststoreModel.IntendedUsage,
-            certificates: list[x509.Certificate]
+        unique_name: str, intended_usage: TruststoreModel.IntendedUsage, certificates: list[x509.Certificate]
     ) -> TruststoreModel:
         saved_certs = []
 
@@ -166,10 +171,7 @@ class TruststoreAddForm(forms.Form):
             except CertificateModel.DoesNotExist:
                 saved_certs.append(CertificateModel.save_certificate(certificate))
 
-
-        trust_store_model = TruststoreModel(
-            unique_name=unique_name,
-            intended_usage=intended_usage)
+        trust_store_model = TruststoreModel(unique_name=unique_name, intended_usage=intended_usage)
         trust_store_model.save()
 
         for number, certificate in enumerate(saved_certs):
@@ -180,6 +182,7 @@ class TruststoreAddForm(forms.Form):
             trust_store_order_model.save()
 
         return trust_store_model
+
 
 class TruststoreDownloadForm(forms.Form):
     """Form for downloading truststores in various formats.
@@ -203,24 +206,23 @@ class TruststoreDownloadForm(forms.Form):
             - `pkcs7_pem`: PKCS#7 format in PEM encoding (.p7b, .p7c, .keystore).
             - `pkcs7_der`: PKCS#7 format in DER encoding (.p7b, .p7c, .keystore).
     """
+
     cert_file_container = forms.ChoiceField(
         label=_('Select Truststore Container Type'),
         choices=[
             ('single_file', _('Single File')),
             ('zip', _('Separate Certificate Files (as .zip file)')),
-            ('tar_gz', _('Separate Certificate Files (as .tar.gz file)'))
+            ('tar_gz', _('Separate Certificate Files (as .tar.gz file)')),
         ],
         initial='single_file',
-        required=True)
+        required=True,
+    )
 
     cert_chain_incl = forms.ChoiceField(
         label=_('Select Included Certificates'),
-        choices=[
-            ('cert_only', _('Selected certificates only')),
-            ('chain_incl', _('Include certificate chains'))
-        ],
+        choices=[('cert_only', _('Selected certificates only')), ('chain_incl', _('Include certificate chains'))],
         initial='selected_cert_only',
-        required=True
+        required=True,
     )
 
     cert_file_format = forms.ChoiceField(
@@ -229,10 +231,12 @@ class TruststoreDownloadForm(forms.Form):
             ('pem', _('PEM (.pem, .crt, .ca-bundle)')),
             ('der', _('DER (.der, .cer)')),
             ('pkcs7_pem', _('PKCS#7 (PEM) (.p7b, .p7c, .keystore)')),
-            ('pkcs7_der', _('PKCS#7 (DER) (.p7b, .p7c, .keystore)'))
+            ('pkcs7_der', _('PKCS#7 (DER) (.p7b, .p7c, .keystore)')),
         ],
         initial='pem',
-        required=True)
+        required=True,
+    )
+
 
 class CertificateDownloadForm(forms.Form):
     """Form for downloading certificates in various formats.
@@ -256,24 +260,23 @@ class CertificateDownloadForm(forms.Form):
             - `pkcs7_pem`: PKCS#7 format in PEM encoding (.p7b, .p7c, .keystore).
             - `pkcs7_der`: PKCS#7 format in DER encoding (.p7b, .p7c, .keystore).
     """
+
     cert_file_container = forms.ChoiceField(
         label=_('Select Certificate Container Type'),
         choices=[
             ('single_file', _('Single File')),
             ('zip', _('Separate Certificate Files (as .zip file)')),
-            ('tar_gz', _('Separate Certificate Files (as .tar.gz file)'))
+            ('tar_gz', _('Separate Certificate Files (as .tar.gz file)')),
         ],
         initial='single_file',
-        required=True)
+        required=True,
+    )
 
     cert_chain_incl = forms.ChoiceField(
         label=_('Select Included Certificates'),
-        choices=[
-            ('cert_only', _('Selected certificates only')),
-            ('chain_incl', _('Include certificate chains'))
-        ],
+        choices=[('cert_only', _('Selected certificates only')), ('chain_incl', _('Include certificate chains'))],
         initial='selected_cert_only',
-        required=True
+        required=True,
     )
 
     cert_file_format = forms.ChoiceField(
@@ -282,10 +285,12 @@ class CertificateDownloadForm(forms.Form):
             ('pem', _('PEM (.pem, .crt, .ca-bundle)')),
             ('der', _('DER (.der, .cer)')),
             ('pkcs7_pem', _('PKCS#7 (PEM) (.p7b, .p7c, .keystore)')),
-            ('pkcs7_der', _('PKCS#7 (DER) (.p7b, .p7c, .keystore)'))
+            ('pkcs7_der', _('PKCS#7 (DER) (.p7b, .p7c, .keystore)')),
         ],
         initial='pem',
-        required=True)
+        required=True,
+    )
+
 
 class IssuingCaAddMethodSelectForm(forms.Form):
     """Form for selecting the method to add an Issuing Certificate Authority (CA).
@@ -309,7 +314,8 @@ class IssuingCaAddMethodSelectForm(forms.Form):
             ('remote_est', _('Configure a remote Issuing CA')),
         ],
         initial='local_file_import',
-        required=True)
+        required=True,
+    )
 
 
 class IssuingCaFileTypeSelectForm(forms.Form):
@@ -331,7 +337,8 @@ class IssuingCaFileTypeSelectForm(forms.Form):
             ('other', _('PEM, PKCS#1, PKCS#7, PKCS#8')),
         ],
         initial='pkcs_12',
-        required=True)
+        required=True,
+    )
 
 
 class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
@@ -353,14 +360,16 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         label=_('Unique Name') + ' ' + UniqueNameValidator.form_label,
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
         required=True,
-        validators=[UniqueNameValidator()])
+        validators=[UniqueNameValidator()],
+    )
 
     pkcs12_file = forms.FileField(label=_('PKCS#12 File (.p12, .pfx)'), required=True)
     pkcs12_password = forms.CharField(
         # hack, force autocomplete off in chrome with: one-time-code
         widget=forms.PasswordInput(attrs={'autocomplete': 'one-time-code'}),
         label=_('[Optional] PKCS#12 password'),
-        required=False)
+        required=False,
+    )
 
     @LoggerMixin.log_exceptions
     def clean_unique_name(self) -> str:
@@ -398,7 +407,8 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         except (OSError, AttributeError) as original_exception:
             # These exceptions are likely to occur if the file cannot be read or is missing attributes.
             error_message = _(
-                'Unexpected error occurred while trying to get file contents. Please see logs for further details.')
+                'Unexpected error occurred while trying to get file contents. Please see logs for further details.'
+            )
             raise ValidationError(error_message, code='unexpected-error') from original_exception
 
         if pkcs12_password:
@@ -420,7 +430,7 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             IssuingCaModel.create_new_issuing_ca(
                 unique_name=unique_name,
                 credential_serializer=credential_serializer,
-                issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED
+                issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED,
             )
         # TODO(AlexHx8472): Filter credentials and check if any issuing ca corresponds to it.
         # TODO(AlexHx8472): If it does get and display the name of the issuing ca in the message.
@@ -452,19 +462,17 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         max_length=256,
         label=_('Unique Name') + ' ' + UniqueNameValidator.form_label,
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
-        validators=[UniqueNameValidator()])
-    private_key_file = forms.FileField(
-        label=_('Private Key File (.key, .pem)'), required=True)
+        validators=[UniqueNameValidator()],
+    )
+    private_key_file = forms.FileField(label=_('Private Key File (.key, .pem)'), required=True)
     private_key_file_password = forms.CharField(
         # hack, force autocomplete off in chrome with: one-time-code
         widget=forms.PasswordInput(attrs={'autocomplete': 'one-time-code'}),
         label=_('[Optional] Private Key File Password'),
-        required=False)
-    ca_certificate = forms.FileField(
-        label=_('Issuing CA Certificate (.cer, .der, .pem, .p7b, .p7c)'),
-        required=True)
-    ca_certificate_chain = forms.FileField(
-        label=_('[Optional] Certificate Chain (.pem, .p7b, .p7c).'), required=False)
+        required=False,
+    )
+    ca_certificate = forms.FileField(label=_('Issuing CA Certificate (.cer, .der, .pem, .p7b, .p7c)'), required=True)
+    ca_certificate_chain = forms.FileField(label=_('[Optional] Certificate Chain (.pem, .p7b, .p7c).'), required=False)
 
     @LoggerMixin.log_exceptions
     def clean_unique_name(self) -> str:
@@ -496,8 +504,9 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             corrupted, or if the password is invalid or incompatible.
         """
         private_key_file = self.cleaned_data.get('private_key_file')
-        private_key_file_password = self.data.get('private_key_file_password') \
-            if self.data.get('private_key_file_password') else None
+        private_key_file_password = (
+            self.data.get('private_key_file_password') if self.data.get('private_key_file_password') else None
+        )
 
         if not private_key_file:
             err_msg = 'No private key file was uploaded.'
@@ -542,7 +551,6 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             err_msg = 'Issuing CA file is too large, max. 64 kiB.'
             raise ValidationError(err_msg)
 
-
         try:
             certificate_serializer = CertificateSerializer(ca_certificate.read())
         except Exception as exception:
@@ -550,13 +558,15 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             raise ValidationError(err_msg) from exception
 
         certificate_in_db = CertificateModel.get_cert_by_sha256_fingerprint(
-            certificate_serializer.as_crypto().fingerprint(algorithm=hashes.SHA256()).hex())
+            certificate_serializer.as_crypto().fingerprint(algorithm=hashes.SHA256()).hex()
+        )
         if certificate_in_db:
             issuing_ca_in_db = IssuingCaModel.objects.get(certificate=certificate_in_db)
             if issuing_ca_in_db:
                 err_msg = (
                     f'Issuing CA {issuing_ca_in_db.unique_name} is already configured '
-                    'with the same Issuing CA certificate.')
+                    'with the same Issuing CA certificate.'
+                )
                 raise ValidationError(err_msg)
 
         return certificate_serializer
@@ -589,7 +599,6 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
 
         return None
 
-
     @LoggerMixin.log_exceptions
     def clean(self) -> None:
         """Cleans and validates the form data.
@@ -607,25 +616,19 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             unique_name = cleaned_data.get('unique_name')
             private_key_file = cleaned_data.get('private_key_file')
             ca_certificate = cleaned_data.get('ca_certificate')
-            ca_certificate_chain = cleaned_data.get('ca_certificate_chain') \
-                if cleaned_data.get('ca_certificate_chain') else None
+            ca_certificate_chain = (
+                cleaned_data.get('ca_certificate_chain') if cleaned_data.get('ca_certificate_chain') else None
+            )
 
             if not unique_name or not private_key_file or not ca_certificate:
                 return
 
-            credential_serializer = CredentialSerializer(
-                (
-                    private_key_file,
-                    ca_certificate,
-                    ca_certificate_chain
-                )
-            )
-
+            credential_serializer = CredentialSerializer((private_key_file, ca_certificate, ca_certificate_chain))
 
             IssuingCaModel.create_new_issuing_ca(
                 unique_name=unique_name,
                 credential_serializer=credential_serializer,
-                issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED
+                issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED,
             )
         # TODO(AlexHx8472): Filter credentials and check if any issuing ca corresponds to it.
         # TODO(AlexHx8472): If it does get and display the name of the issuing ca in the message.

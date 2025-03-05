@@ -288,7 +288,7 @@ class DeviceCertificateLifecycleManagementSummaryView(DeviceContextMixin, Sortab
 
 class DeviceIssueCredentialViewMixin(
     DeviceContextMixin,
-    DetailView[DeviceModel],
+    SingleObjectMixin[DeviceModel],
     FormView[CredentialFormClass],
     Generic[CredentialFormClass, TlsCredentialIssuerClass],
 ):
@@ -919,7 +919,7 @@ class DeviceOnboardingBrowserLoginView(FormView[BrowserLoginForm]):
     template_name = 'devices/credentials/onboarding/browser/login.html'
     form_class = BrowserLoginForm
 
-    cleaned_data: dict[str, Any] | None = None
+    cleaned_data: dict[str, Any]
 
     def get_success_url(self) -> str:
         """Gets the success url to redirect to after successful processing of the POST data following a form submit.
@@ -927,12 +927,12 @@ class DeviceOnboardingBrowserLoginView(FormView[BrowserLoginForm]):
         Returns:
             The success url to redirect to after successful processing of the POST data following a form submit.
         """
-        credential_id: int = self.cleaned_data.get('credential_id')
-        credential_download: RemoteDeviceCredentialDownloadModel = self.cleaned_data.get('credential_download')
+
+        credential_id = cast(int, self.cleaned_data.get('credential_id'))
+        credential_download = cast(RemoteDeviceCredentialDownloadModel, self.cleaned_data.get('credential_download'))
         token: str = credential_download.download_token
         return (
-            f'{reverse_lazy("devices:browser_domain_credential_download", kwargs={"pk": credential_id})}'
-            f'?token={token}'
+            f'{reverse_lazy("devices:browser_domain_credential_download", kwargs={"pk": credential_id})}?token={token}'
         )
 
     def form_invalid(self, form: BrowserLoginForm) -> HttpResponse:
@@ -995,6 +995,7 @@ class DownloadTokenRequiredAuthenticationMixin(_DispatchableType):
 
 class DeviceBrowserCredentialDownloadView(DownloadTokenRequiredAuthenticationMixin, DeviceBaseCredentialDownloadView):
     """View to download a password protected domain or app credential in the desired format from a remote client."""
+
     is_browser_download = True
 
 
@@ -1005,7 +1006,7 @@ class DeviceBrowserOnboardingCancelView(DeviceContextMixin, SingleObjectMixin[Is
 
     model = IssuedCredentialModel
     context_object_name = 'credential'
-    object: IssuedCredentialModel | None = None
+    object: IssuedCredentialModel
     permanent = False
 
     def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
@@ -1034,14 +1035,15 @@ class DeviceBrowserOnboardingCancelView(DeviceContextMixin, SingleObjectMixin[Is
         self.object = self.get_object()
         try:
             cdm = RemoteDeviceCredentialDownloadModel.objects.get(
-                issued_credential_model=self.object,
-                device=self.object.device)
+                issued_credential_model=self.object, device=self.object.device
+            )
             cdm.delete()
             messages.info(request, 'The browser onboarding process was canceled.')
         except RemoteDeviceCredentialDownloadModel.DoesNotExist:
             pass
 
         return super().get(request, *args, **kwargs)
+
 
 #  ---------------------------------------- Revocation Views ----------------------------------------
 
@@ -1059,7 +1061,14 @@ class DeviceRevocationView(DeviceContextMixin, FormMixin[CredentialRevocationFor
     device: DeviceModel
 
     def form_valid(self, form: CredentialRevocationForm) -> HttpResponse:
-        """Handles revocation upon a POST request containing a valid form."""
+        """Performed if the form was validated successfully and revokes the credentials.
+
+        Args:
+            form: The corresponding form object.
+
+        Returns:
+            The Django HttpResponse object.
+        """
         n_revoked = 0
         credentials = self.get_queryset()
         for credential in credentials:
@@ -1099,17 +1108,36 @@ class DeviceCredentialRevocationView(
     form_class = CredentialRevocationForm
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the credential information to be revoked to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to render the page.
+        """
+
         context = super().get_context_data(**kwargs)
         context['credentials'] = [context['credential']]
         return context
 
     def get_success_url(self) -> str:
-        """Returns the URL to redirect to if the form is valid and was successfully processed."""
-        kwargs = {'pk': self.get_object().device.id}
-        return cast('str', reverse_lazy('devices:certificate_lifecycle_management', kwargs=kwargs))
+        """Gets the success url to redirect to after successful processing of the POST data following a form submit.
+
+        Returns:
+            The success url to redirect to after successful processing of the POST data following a form submit.
+        """
+        return str(reverse_lazy('devices:certificate_lifecycle_management', {'pk': self.get_object().device.id}))
 
     def form_valid(self, form: CredentialRevocationForm) -> HttpResponse:
-        """Handles revocation upon a POST request containing a valid form."""
+        """Performed if the form was validated successfully and revokes the credential.
+
+        Args:
+            form: The corresponding form object.
+
+        Returns:
+            The Django HttpResponse object.
+        """
         revoked_successfully, revocation_msg = DeviceCredentialRevocation.revoke_certificate(
             self.get_object().id, form.cleaned_data['revocation_reason']
         )

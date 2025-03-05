@@ -21,13 +21,15 @@ class Command(BaseCommand):
     }
 
     def handle(self, *args, **kwargs):
-        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../tests/data/idevid_hierarchies"))
+        base_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), '../../../../tests/data/idevid_hierarchies')
+        )
 
         for relative_path, unique_name in self.TRUSTSTORE_RELATIVE_PATHS.items():
             pem_path = os.path.join(base_path, relative_path)
 
             if not os.path.exists(pem_path):
-                self.stderr.write(self.style.ERROR(f"File not found: {pem_path}"))
+                self.stderr.write(self.style.ERROR(f'File not found: {pem_path}'))
                 continue
 
             try:
@@ -37,20 +39,18 @@ class Command(BaseCommand):
                 certificates = x509.load_pem_x509_certificates(pem_content)
 
                 self._save_trust_store(
-                    unique_name=f"idevid-truststore-{unique_name}",
+                    unique_name=f'idevid-truststore-{unique_name}',
                     intended_usage=TruststoreModel.IntendedUsage.IDEVID,
-                    certificates=certificates
+                    certificates=certificates,
                 )
 
-                self.stdout.write(self.style.SUCCESS(f"Imported Truststore: {unique_name}"))
+                self.stdout.write(self.style.SUCCESS(f'Imported Truststore: {unique_name}'))
             except Exception as e:
-                self.stderr.write(self.style.ERROR(f"Failed to import {pem_path}: {e}"))
+                self.stderr.write(self.style.ERROR(f'Failed to import {pem_path}: {e}'))
 
     @staticmethod
     def _save_trust_store(
-        unique_name: str,
-        intended_usage: TruststoreModel.IntendedUsage,
-        certificates: list[x509.Certificate]
+        unique_name: str, intended_usage: TruststoreModel.IntendedUsage, certificates: list[x509.Certificate]
     ) -> TruststoreModel:
         saved_certs = []
 
@@ -61,17 +61,10 @@ class Command(BaseCommand):
             except CertificateModel.DoesNotExist:
                 saved_certs.append(CertificateModel.save_certificate(certificate))
 
-        trust_store_model = TruststoreModel(
-            unique_name=unique_name,
-            intended_usage=intended_usage
-        )
+        trust_store_model = TruststoreModel(unique_name=unique_name, intended_usage=intended_usage)
         trust_store_model.save()
 
         for number, certificate in enumerate(saved_certs):
-            TruststoreOrderModel.objects.create(
-                order=number,
-                certificate=certificate,
-                trust_store=trust_store_model
-            )
+            TruststoreOrderModel.objects.create(order=number, certificate=certificate, trust_store=trust_store_model)
 
         return trust_store_model
