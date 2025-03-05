@@ -16,15 +16,18 @@ from django.utils.translation import gettext_lazy as _
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
+from util.field import UniqueNameValidator
 
-from devices.models import DeviceModel, IssuedCredentialModel
+from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
 from devices.widgets import DisableSelectOptionsWidget
 from trustpoint.forms import CleanedDataNotNoneMixin
+
 
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet
 
 PASSWORD_MIN_LENGTH = 12
+OTP_SPLIT_PARTS = 2
 
 
 class IssueDomainCredentialForm(forms.Form):
@@ -191,21 +194,36 @@ class BrowserLoginForm(CleanedDataNotNoneMixin, forms.Form):
 
     def clean(self) -> dict[str, Any]:
         """Cleans the form data, extracting the credential ID and OTP."""
-        # splits the submitted OTP, which is in the format 'credential_id.otp'
+
         cleaned_data = super().clean()
+
         otp: str = cleaned_data.get('otp', '')
         if not otp:
             self.add_error('otp', _('This field is required.'))
+
         err_msg = _('The provided OTP is invalid.')
+
         otp_parts = otp.split('.')
-        if len(otp_parts) != 2:  # noqa: PLR2004
+        if len(otp_parts) != OTP_SPLIT_PARTS:
             raise forms.ValidationError(err_msg)
         try:
-            cred_id = int(otp_parts[0])
+            credential_id = int(otp_parts[0])
         except ValueError as exception:
             raise forms.ValidationError(err_msg) from exception
-        cleaned_data['cred_id'] = cred_id
+        cleaned_data['credential_id'] = credential_id
         cleaned_data['otp'] = otp_parts[1]
+
+        try:
+            credential_download = RemoteDeviceCredentialDownloadModel.objects.get(issued_credential_model=credential_id)
+        except RemoteDeviceCredentialDownloadModel.DoesNotExist as exception:
+            err_msg = _('The credential download process is not valid, it may have expired.')
+            raise forms.ValidationError(err_msg) from exception
+        cleaned_data['credential_download'] = credential_download
+
+        if not credential_download.check_otp(otp_parts[1]):
+            err_msg = 'OTP is invalid.'
+            raise forms.ValidationError(err_msg)
+
         return cleaned_data
 
 
@@ -296,6 +314,19 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             Div(Field('pki_configuration'), css_class='d-none', id='id_pki_configuration_wrapper'),
             HTML('<div class="mb-4"></div>'),
         )
+
+    @staticmethod
+    def clean_device_name(device_name: str) -> str:
+        """Validates the device name, i.e. checks if it is unique.
+
+        Args:
+            device_name: The desired name of the new device.
+
+        Returns:
+            The device name if it passed the checks.
+        """
+        UniqueNameValidator(device_name)
+        return device_name
 
     def clean(self) -> dict[str, Any]:
         """Cleans the form data.

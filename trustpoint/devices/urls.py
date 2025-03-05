@@ -7,34 +7,20 @@ from . import views
 app_name = 'devices'
 
 urlpatterns = [
+
+    # Main Pages
     path('', views.DeviceTableView.as_view(), name='devices'),
     path('add/', views.CreateDeviceView.as_view(), name='add'),
     path('details/<int:pk>/', views.DeviceDetailsView.as_view(), name='details'),
-    path('configure/<int:pk>/', views.DeviceConfigureView.as_view(), name='config'),
-    path('browser/', views.DeviceOnboardingBrowserLoginView.as_view(), name='browser_login'),
-    path(
-        'browser/credential-download/<int:pk>/',
-        views.DeviceBrowserCredentialDownloadView.as_view(),
-        name='browser_domain_credential_download',
-    ),
-    path(
-        'credential-download/browser/<int:pk>/', views.DeviceBrowserOnboardingOTPView.as_view(), name='browser_otp_view'
-    ),
-    path(
-        'credential-download/browser/<int:pk>/cancel',
-        views.DeviceBrowserOnboardingCancelView.as_view(),
-        name='browser_cancel',
-    ),
-    path('download/<int:pk>/', views.DownloadPageDispatcherView.as_view(), name='download'),
-    path(
-        'credential/download/<int:pk>/', views.DeviceManualCredentialDownloadView.as_view(), name='credential-download'
-    ),
-    path('certificate/download/<int:pk>/', views.CertificateDownloadView.as_view(), name='certificate-download'),
+
+    # Certificate Lifecycle Management
     path(
         'certificate-lifecycle-management/<int:pk>/',
         views.DeviceCertificateLifecycleManagementSummaryView.as_view(),
         name='certificate_lifecycle_management',
     ),
+
+    # Certificate Lifecycle Management - Credential Issuance
     path(
         'certificate-lifecycle-management/<int:pk>/issue-tls-client-credential/',
         views.DeviceIssueTlsClientCredential.as_view(),
@@ -55,12 +41,8 @@ urlpatterns = [
         views.DeviceIssueOpcUaServerCredential.as_view(),
         name='certificate_lifecycle_management-issue_opcua_server_credential',
     ),
-    path(
-        'certificate-lifecycle-management/<int:pk>/revoke/<int:credential_pk>/',
-        views.DeviceCredentialRevocationView.as_view(),
-        name='credential_revocation',
-    ),
-    path('revoke/<int:pk>/', views.DeviceRevocationView.as_view(), name='device_revocation'),
+
+    # Certificate Lifecycle Management - Help Pages
     path('help/dispatch/<int:pk>/', views.HelpDispatchView.as_view(), name='help_dispatch'),
     path(
         'help/no-onboarding/cmp-shared-secret/<int:pk>/',
@@ -82,4 +64,42 @@ urlpatterns = [
         views.OnboardingIdevidRegistrationHelpView.as_view(),
         name='help-onboarding_cmp-idevid-registration',
     ),
+
+    # Certificate Lifecycle Management - Downloads
+    path('download/<int:pk>/', views.DownloadPageDispatcherView.as_view(), name='download'),
+    path('certificate/download/<int:pk>/', views.CertificateDownloadView.as_view(), name='certificate-download'),
+    path(
+        'credential/download/<int:pk>/', views.DeviceManualCredentialDownloadView.as_view(), name='credential-download'
+    ),
+    path(
+        'credential-download/browser/<int:pk>/', views.DeviceBrowserOnboardingOTPView.as_view(), name='browser_otp_view'
+    ),
+    path('browser/', views.DeviceOnboardingBrowserLoginView.as_view(), name='browser_login'),
+
+    # Revoke Views
+    path('browser/', views.DeviceOnboardingBrowserLoginView.as_view(), name='browser_login'),
+    path(
+        'browser/credential-download/<int:pk>/',
+        views.DeviceBrowserCredentialDownloadView.as_view(),
+        name='browser_domain_credential_download',
+    ),
+
+    path(
+        'credential-download/browser/<int:pk>/cancel',
+        views.DeviceBrowserOnboardingCancelView.as_view(),
+        name='browser_cancel',
+    ),
+
+
+
+
+
+
+    path(
+        'certificate-lifecycle-management/<int:pk>/revoke/<int:credential_pk>/',
+        views.DeviceCredentialRevocationView.as_view(),
+        name='credential_revocation',
+    ),
+    path('revoke/<int:pk>/', views.DeviceRevocationView.as_view(), name='device_revocation'),
+
 ]

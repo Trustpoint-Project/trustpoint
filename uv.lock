@@ -1456,7 +1456,7 @@ requires-dist = [
     { name = "crispy-bootstrap5", specifier = "~=2024.10" },
     { name = "cryptography", specifier = ">=44.0.1" },
     { name = "devtools", marker = "extra == 'dev'", specifier = ">=0.12.2,<0.13" },
-    { name = "django", specifier = ">=5.1.6,<6" },
+    { name = "django", specifier = ">=5.1.6" },
     { name = "django-crispy-forms", specifier = "~=2.3" },
     { name = "django-extensions", marker = "extra == 'dev'", specifier = ">=3.2.3" },
     { name = "django-filter", specifier = "~=25.1" },
