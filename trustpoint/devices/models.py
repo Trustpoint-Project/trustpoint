@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django_stubs_ext.db.models import TypedModelMeta
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 from trustpoint_core import oid  # type: ignore[import-untyped]
 from util.field import UniqueNameValidator
-from django_stubs_ext.db.models import TypedModelMeta
 
 if TYPE_CHECKING:
     from typing import Any
@@ -34,9 +34,6 @@ class DeviceModel(models.Model):
     """The DeviceModel."""
 
     objects: models.Manager[DeviceModel]
-
-    class Meta(TypedModelMeta):
-        """Meta class configuration."""
 
     id = models.AutoField(primary_key=True)
     unique_name = models.CharField(
@@ -109,6 +106,9 @@ class DeviceModel(models.Model):
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
+
     def __str__(self) -> str:
         """Returns a human-readable string representation."""
         return f'DeviceModel(unique_name={self.unique_name})'
@@ -135,9 +135,6 @@ class IssuedCredentialModel(models.Model):
     """Model for all credentials and certificates that have been issued or requested by the Trustpoint."""
 
     objects: models.Manager[IssuedCredentialModel]
-
-    class Meta(TypedModelMeta):
-        """Meta class configuration."""
 
     class IssuedCredentialType(models.IntegerChoices):
         """The type of the credential."""
@@ -179,6 +176,9 @@ class IssuedCredentialModel(models.Model):
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
+
     def __str__(self) -> str:
         """Returns a human-readable string representation."""
         return f'IssuedCredentialModel(common_name={common_name})'
@@ -189,9 +189,6 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
 
     objects: models.Manager[RemoteDeviceCredentialDownloadModel]
 
-    class Meta(TypedModelMeta):
-        """Meta class configuration."""
-
     BROWSER_MAX_OTP_ATTEMPTS = 3
     TOKEN_VALIDITY = datetime.timedelta(minutes=3)
 
@@ -201,6 +198,9 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
     attempts = models.IntegerField(_('Attempts'), default=0)
     download_token = models.CharField(_('Download Token'), max_length=64, default='')
     token_created_at = models.DateTimeField(_('Token Created'), null=True)
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     def __str__(self) -> str:
         """Return a string representation of the model."""

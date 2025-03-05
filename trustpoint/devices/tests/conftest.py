@@ -15,6 +15,7 @@ def enable_db_access_for_all_tests(db: None) -> None:
 
 @pytest.fixture
 def mock_models() -> dict:
+    """Creates mock models."""
     return create_mock_models()
 
 

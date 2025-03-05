@@ -512,7 +512,7 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
         Returns:
             IssuedCredentialModel: The issued domain credential certificate model.
         """
-        # TODO(AlexHx8472): Check matching public_key and signature suite.
+        # TODO(AlexHx8472): Check matching public_key and signature suite.  # noqa: FIX002
 
         certificate = self._build_certificate(
             common_name=self._pseudonym,

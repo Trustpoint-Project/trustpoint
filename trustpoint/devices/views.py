@@ -515,9 +515,9 @@ class HelpDispatchView(DeviceContextMixin, SingleObjectMixin[DeviceModel], Redir
         del kwargs
 
         device: DeviceModel = self.get_object()
-        if not device.domain_credential_onboarding:
-            if device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value:
-                return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
+        if not device.domain_credential_onboarding and \
+                device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value:
+            return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
 
         if device.onboarding_protocol == device.OnboardingProtocol.CMP_SHARED_SECRET.value:
             return f'{reverse("devices:help-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
@@ -579,7 +579,8 @@ class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceMo
                 f'-genkey -noout -out key.pem'
             )
         else:
-            raise ValueError('Unsupported public key algorithm')
+            err_msg = _('Unsupported public key algorithm')
+            raise ValueError(err_msg)
 
         context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
         context['key_gen_command'] = key_gen_command
@@ -613,7 +614,6 @@ class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, DetailView[DeviceM
         Returns:
             The context to render the page.
         """
-
         context = super().get_context_data(**kwargs)
         device: DeviceModel = self.object
 
@@ -625,7 +625,8 @@ class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, DetailView[DeviceM
                 f'-genkey -noout -out key.pem'
             )
         else:
-            raise ValueError('Unsupported public key algorithm')
+            err_msg = _('Unsupported public key algorithm')
+            raise ValueError(err_msg)
         context['host'] = (
             self.request.META.get('REMOTE_ADDR', '127.0.0.1') + ':' + self.request.META.get('SERVER_PORT'),
             '443',
@@ -667,7 +668,6 @@ class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdR
         Returns:
             The context to render the page.
         """
-
         context = super().get_context_data(**kwargs)
         devid_registration: DevIdRegistration = self.object
 
@@ -763,7 +763,7 @@ class DeviceBaseCredentialDownloadView(
     is_browser_download = False
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds information about the credential to the context
+        """Adds information about the credential to the context.
 
         Args:
             **kwargs: Keyword arguments are passed to super().get_context_data(**kwargs).
@@ -802,8 +802,8 @@ class DeviceBaseCredentialDownloadView(
         context['issued_credential'] = issued_credential
         return context
 
-    # TODO(AlexHx8472): This needs to return a success url redirect and then download the file.
-    # TODO(AlexHx8472): The FileResponse must then be returned from a get or post method.
+    # TODO(AlexHx8472): This needs to return a success url redirect and then download the file. # noqa: FIX002
+    # TODO(AlexHx8472): The FileResponse must then be returned from a get or post method.       # noqa: FIX002
     def form_valid(self, form: CredentialDownloadForm) -> HttpResponse:
         """Processing the valid form data.
 
@@ -885,7 +885,6 @@ class DeviceBrowserOnboardingOTPView(DeviceContextMixin, DetailView[IssuedCreden
         Returns:
             The context to render the page.
         """
-
         credential = self.get_object()
         device = credential.device
         context = super().get_context_data(**kwargs)
@@ -927,7 +926,6 @@ class DeviceOnboardingBrowserLoginView(FormView[BrowserLoginForm]):
         Returns:
             The success url to redirect to after successful processing of the POST data following a form submit.
         """
-
         credential_id = cast(int, self.cleaned_data.get('credential_id'))
         credential_download = cast(RemoteDeviceCredentialDownloadModel, self.cleaned_data.get('credential_download'))
         token: str = credential_download.download_token
@@ -1019,6 +1017,9 @@ class DeviceBrowserOnboardingCancelView(DeviceContextMixin, SingleObjectMixin[Is
         Returns:
             The redirect URL.
         """
+        del args
+        del kwargs
+
         return str(reverse_lazy('devices:credential-download', kwargs={'pk': self.object.id}))
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
@@ -1116,7 +1117,6 @@ class DeviceCredentialRevocationView(
         Returns:
             The context to render the page.
         """
-
         context = super().get_context_data(**kwargs)
         context['credentials'] = [context['credential']]
         return context

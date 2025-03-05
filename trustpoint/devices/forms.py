@@ -22,7 +22,6 @@ from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCrede
 from devices.widgets import DisableSelectOptionsWidget
 from trustpoint.forms import CleanedDataNotNoneMixin
 
-
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet
 
@@ -194,7 +193,6 @@ class BrowserLoginForm(CleanedDataNotNoneMixin, forms.Form):
 
     def clean(self) -> dict[str, Any]:
         """Cleans the form data, extracting the credential ID and OTP."""
-
         cleaned_data = super().clean()
 
         otp: str = cleaned_data.get('otp', '')
@@ -341,7 +339,7 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             instance.onboarding_status = DeviceModel.OnboardingStatus.PENDING
             onboarding_and_pki_configuration = cleaned_data.get('onboarding_and_pki_configuration')
 
-            # TODO(AlexHx8472): Integrate EST
+            # TODO(AlexHx8472): Integrate EST   # noqa: FIX002
             match onboarding_and_pki_configuration:
                 case 'cmp_shared_secret':
                     instance.onboarding_protocol = DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET
@@ -368,7 +366,7 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             instance.idevid_trust_store = None
             pki_configuration = cleaned_data.get('pki_configuration')
 
-            # TODO(AlexHx8472): Integrate EST
+            # TODO(AlexHx8472): Integrate EST   # noqa: FIX002
             match pki_configuration:
                 case 'manual_download':
                     instance.pki_protocol = DeviceModel.PkiProtocol.MANUAL
