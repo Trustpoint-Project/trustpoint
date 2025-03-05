@@ -1,6 +1,7 @@
 """Views for EST (Enrollment over Secure Transport) handling authentication and certificate issuance."""
 
 import base64
+import datetime
 import ipaddress
 from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol, cast
@@ -10,7 +11,7 @@ from cryptography.hazmat._oid import NameOID
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives._serialization import Encoding
-from cryptography.hazmat.primitives.asymmetric import dsa, ec, padding, rsa
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from devices.issuer import LocalDomainCredentialIssuer, LocalTlsClientCredentialIssuer, LocalTlsServerCredentialIssuer
 from devices.models import DeviceModel, IssuedCredentialModel
 from django.contrib.auth import authenticate
@@ -19,10 +20,14 @@ from django.http import HttpRequest, HttpResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-from pki.models import CertificateModel, CredentialModel, DomainModel
-from trustpoint_core import oid
-from trustpoint_core.oid import SignatureSuite
-from trustpoint_core.serializer import CertificateCollectionSerializer
+from pki.models.certificate import CertificateModel, RevokedCertificateModel
+from pki.models.credential import CredentialModel
+from pki.models.domain import DomainModel
+from pki.models.issuing_ca import IssuingCaModel
+from pyasn1.type.univ import ObjectIdentifier  # type: ignore[import-untyped]
+from trustpoint_core import oid  # type: ignore[import-untyped]
+from trustpoint_core.oid import SignatureSuite  # type: ignore[import-untyped]
+from trustpoint_core.serializer import CertificateCollectionSerializer  # type: ignore[import-untyped]
 
 
 class ClientCertificateAuthenticationError(Exception):
@@ -48,7 +53,7 @@ class Dispatchable(Protocol):
 class EstAuthenticationMixin:
     """Checks for HTTP Basic Authentication before processing the request."""
 
-    def get_credential_for_certificate(self, cert: x509.Certificate) -> 'CredentialModel':
+    def get_credential_for_certificate(self, cert: x509.Certificate) -> CredentialModel:
         """Retrieve a CredentialModel instance associated with the given certificate.
 
         :param cert: x509.Certificate to search for.
@@ -60,7 +65,7 @@ class EstAuthenticationMixin:
         if not credential:
             error_message = f'No credential found for certificate with fingerprint {cert_fingerprint}'
             raise ClientCertificateAuthenticationError(error_message)
-        return credential
+        return cast(CredentialModel, credential)
 
     def authenticate_username_password(self, request: HttpRequest) -> None:
         """Authenticate a user using HTTP Basic credentials provided in the request headers.
@@ -265,14 +270,11 @@ class EstRequestedCertTemplateExtractorMixin:
     requested_cert_template_str: str
     allowed_cert_templates: ClassVar[list[str]] = ['tlsserver', 'tlsclient', 'domaincredential']
 
-    cert_template_classes: ClassVar[dict[str, type]] = {
+    cert_template_classes: ClassVar[dict[str, type[object]]] = {
         'tlsserver': LocalTlsServerCredentialIssuer,
         'tlsclient': LocalTlsClientCredentialIssuer,
         'domaincredential': LocalDomainCredentialIssuer,
     }
-    requested_cert_template_class: (LocalTlsServerCredentialIssuer |
-                                    LocalTlsClientCredentialIssuer |
-                                    LocalDomainCredentialIssuer)
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Extract and validate the 'certtemplate' parameter, then delegate request processing."""
@@ -286,7 +288,6 @@ class EstRequestedCertTemplateExtractorMixin:
             )
 
         self.requested_cert_template_str = cert_template
-        self.requested_cert_template_class = self.cert_template_classes[cert_template]
 
         return cast(Dispatchable, super()).dispatch(request, *args, **kwargs)
 
@@ -316,36 +317,34 @@ class EstPkiMessageSerializerMixin:
         Supports RSA, ECDSA, and DSA public keys.
         """
         public_key = csr.public_key()
+
+        signature_hash_algorithm = csr.signature_hash_algorithm
+        if signature_hash_algorithm is None:
+            error_message = 'CSR signature hash algorithm is missing.'
+            raise ValueError(error_message)
+
+        if not isinstance(public_key, rsa.RSAPublicKey | ec.EllipticCurvePublicKey) :
+            error_message = 'Unsupported public key type for CSR signature verification.'
+            raise TypeError(error_message)
+
+
         try:
             if isinstance(public_key, rsa.RSAPublicKey):
                 public_key.verify(
                     signature=csr.signature,
                     data=csr.tbs_certrequest_bytes,
                     padding=padding.PKCS1v15(),
-                    algorithm=csr.signature_hash_algorithm,
+                    algorithm=signature_hash_algorithm,
                 )
             elif isinstance(public_key, ec.EllipticCurvePublicKey):
                 public_key.verify(
                     signature=csr.signature,
                     data=csr.tbs_certrequest_bytes,
-                    signature_algorithm=ec.ECDSA(csr.signature_hash_algorithm)
+                    signature_algorithm=ec.ECDSA(signature_hash_algorithm)
                 )
-            elif isinstance(public_key, dsa.DSAPublicKey):
-                public_key.verify(
-                    signature=csr.signature,
-                    data=csr.tbs_certrequest_bytes,
-                    algorithm=csr.signature_hash_algorithm
-                )
-            else:
-                self._raise_verification_error('Unsupported public key type for CSR signature verification.')
         except Exception as e:
             error_message = 'CSR signature verification failed.'
             raise ValueError(error_message) from e
-
-    def _raise_verification_error(self, message: str, cause: Exception | None = None) -> None:
-        """Helper function to raise a ValueError with the provided message and cause."""
-        raise ValueError(message) from cause
-
 
 class DeviceHandlerMixin:
     """Extract the serial number from an X.509 CSR and retrieve or create a DeviceModel instance.
@@ -366,7 +365,13 @@ class DeviceHandlerMixin:
         if not attributes:
             error_message = 'Serial number not found in CSR subject.'
             raise ValidationError(error_message)
-        return attributes[0].value
+
+        serial_number = attributes[0].value
+
+        if isinstance(serial_number, bytes):
+            serial_number = serial_number.decode('utf-8')
+
+        return serial_number
 
     def get_or_create_device_from_csr(self,
                                       csr: x509.CertificateSigningRequest,
@@ -409,6 +414,7 @@ class DeviceHandlerMixin:
             onboarding_status=onboarding_status,
         )
 
+
 @dataclass
 class CredentialRequest:
     """Encapsulates the details extracted from a CSR."""
@@ -416,7 +422,8 @@ class CredentialRequest:
     ipv4_addresses: list[ipaddress.IPv4Address]
     ipv6_addresses: list[ipaddress.IPv6Address]
     dns_names: list[str]
-    public_key: oid.PublicKey
+    public_key: oid.PublicKeyInfo
+
 
 class CredentialIssuanceMixin:
     """Mixin to handle issuing credentials based on a given certificate template input.
@@ -458,7 +465,7 @@ class CredentialIssuanceMixin:
 
     def _validate_subject_attributes(self,
                                      subject_attributes: list[x509.NameAttribute],
-                                     allowed_subject_oids: set[str]) -> None:
+                                     allowed_subject_oids: set[ObjectIdentifier]) -> None:
         """Helper method to validate subject attributes."""
         for attr in subject_attributes:
             if attr.oid not in allowed_subject_oids:
@@ -475,7 +482,13 @@ class CredentialIssuanceMixin:
         if len(common_name_attrs) > 1:
             error_message = 'CSR subject must contain only one Common Name attribute.'
             raise ValueError(error_message)
-        return common_name_attrs[0].value
+
+        common_name = common_name_attrs[0].value
+
+        if isinstance(common_name, bytes):
+            common_name = common_name.decode('utf-8')
+
+        return common_name
 
     def _extract_san(self,
                      csr: x509.CertificateSigningRequest
@@ -499,12 +512,11 @@ class CredentialIssuanceMixin:
 
         return dns_names, ipv4_addresses, ipv6_addresses
 
-
     def issue_credential(self,
                          cert_template_str: str,
                          device: DeviceModel,
                          domain: DomainModel,
-                         csr: x509.CertificateSigningRequest) -> IssuedCredentialModel:
+                         csr: x509.CertificateSigningRequest) -> IssuedCredentialModel | None:
         """Issues a credential based on the specified certificate template and CSR.
 
         This method handles the credential issuance process, which includes extracting
@@ -531,29 +543,43 @@ class CredentialIssuanceMixin:
 
         credential_request = self.extract_details_from_csr(csr)
 
-        cert_template_class = self.cert_template_classes[cert_template_str]
-        issuer_instance = cert_template_class(device=device, domain=domain)
+        return self._issue_based_on_template(cert_template_str=cert_template_str,
+                                             credential_request=credential_request,
+                                             device=device,
+                                             domain=domain)
 
-        return self._issue_based_on_template(cert_template_str, issuer_instance, credential_request)
-
-    def _issue_based_on_template(self, cert_template_str: str, issuer_instance: cert_template_classes,
-                                 credential_request: CredentialRequest) -> Any | None:
+    def _issue_based_on_template(self,
+                                 cert_template_str: str,
+                                 credential_request: CredentialRequest,
+                                 device: DeviceModel,
+                                 domain: DomainModel) -> IssuedCredentialModel | None:
         """Issues the credential based on the selected template."""
         if cert_template_str == 'domaincredential':
             self._validate_domain_credential(credential_request.common_name)
-            return issuer_instance.issue_domain_credential(public_key=credential_request.public_key)
+            domain_credential = LocalDomainCredentialIssuer(device=device, domain=domain)
+            return domain_credential.issue_domain_credential_certificate(
+                public_key=credential_request.public_key
+            )
 
         if cert_template_str == 'tlsclient':
-            return issuer_instance.issue_tls_client_credential(common_name=credential_request.common_name)
+            tls_client_credential = LocalTlsClientCredentialIssuer(device=device, domain=domain)
 
+            return tls_client_credential.issue_tls_client_certificate(
+                common_name=credential_request.common_name,
+                public_key=credential_request.public_key,
+                validity_days=365
+            )
         if cert_template_str == 'tlsserver':
-            return issuer_instance.issue_tls_server_credential(
+            tls_server_credential = LocalTlsServerCredentialIssuer(device=device, domain=domain)
+            return tls_server_credential.issue_tls_server_certificate(
                 common_name=credential_request.common_name,
                 ipv4_addresses=credential_request.ipv4_addresses,
                 ipv6_addresses=credential_request.ipv6_addresses,
-                domain_names=credential_request.dns_names
+                domain_names=credential_request.dns_names,
+                san_critical=False,
+                public_key=credential_request.public_key,
+                validity_days=365
             )
-
         return None
 
     def _validate_domain_credential(self, common_name: str) -> None:
@@ -561,6 +587,7 @@ class CredentialIssuanceMixin:
         if common_name != 'Trustpoint Domain Credential':
             error_message = 'Domain Credentials must use the Common Name >Trustpoint Domain Credential<'
             raise ValueError(error_message)
+
 
 @method_decorator(csrf_exempt, name='dispatch')
 class EstSimpleEnrollmentView(EstAuthenticationMixin,
@@ -642,26 +669,36 @@ class EstSimpleEnrollmentView(EstAuthenticationMixin,
     def _process_credential(self, device: DeviceModel, csr: x509.CertificateSigningRequest) -> HttpResponse:
         """Handles the credential issuance and returns the final response."""
         try:
-            issued_credential = self.issue_credential(
-                cert_template_str=self.requested_cert_template_str,
-                device=device,
-                domain=self.requested_domain,
-                csr=csr,
-            )
-            encoded_cert = issued_credential.credential.get_certificate().public_bytes(encoding=Encoding.DER)
-            response = HttpResponse(encoded_cert, status=200, content_type='application/pkix-cert')
+            return self._issue_and_respond(device, csr)
+        except ValueError as e:
+            return HttpResponse(f'Error while issuing credential: {e!s}', status=400)
         except Exception as e:  # noqa: BLE001
             return HttpResponse(f'Error while issuing credential: {e!s}', status=400)
 
+    def _issue_and_respond(self, device: DeviceModel, csr: x509.CertificateSigningRequest) -> HttpResponse:
+        """Handles the credential issuance and raises an error if issuance fails."""
+        issued_credential: IssuedCredentialModel | None = self.issue_credential(
+            cert_template_str=self.requested_cert_template_str,
+            device=device,
+            domain=self.requested_domain,
+            csr=csr
+        )
+
+        if issued_credential is None:
+            error_message = 'Credential cannot be found'
+            raise ValueError(error_message)
+
+        encoded_cert = issued_credential.credential.get_certificate().public_bytes(encoding=Encoding.DER)
+
         self._update_onboarding_status(device)
-        return response
+
+        return HttpResponse(encoded_cert, status=200, content_type='application/pkix-cert')
 
     def _update_onboarding_status(self, device: DeviceModel) -> None:
         """Updates the onboarding status of the device if necessary."""
         if self.requested_cert_template_str == 'domaincredential':
             device.onboarding_status = DeviceModel.OnboardingStatus.ONBOARDED
             device.save()
-
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -736,6 +773,10 @@ class EstSimpleReenrollmentView(EstAuthenticationMixin,
     requested_cert_template_str: str
     issued_credential: IssuedCredentialModel
     issuing_ca_certificate: x509.Certificate
+    device: DeviceModel
+    csr: x509.CertificateSigningRequest
+    renewal_type:str
+
 
     def _find_certificate_by_public_key(self, csr: x509.CertificateSigningRequest) -> CertificateModel | None:
         """Searches for an existing certificate in the database with the same public key as the CSR.
@@ -748,7 +789,15 @@ class EstSimpleReenrollmentView(EstAuthenticationMixin,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         ).decode()
 
-        return CertificateModel.objects.filter(public_key_pem=public_key_pem).first()
+        if public_key_pem is None:
+            return None
+
+        certificate: CertificateModel = CertificateModel.objects.filter(public_key_pem=public_key_pem).first()
+
+        if certificate is None:
+            return None
+
+        return certificate
 
     def _find_certificate_by_subject_and_san(self, csr: x509.CertificateSigningRequest) -> CertificateModel | None:
         """Searches for an existing certificate in the database with the same Subject and SAN as the CSR.
@@ -761,26 +810,30 @@ class EstSimpleReenrollmentView(EstAuthenticationMixin,
         # Extract SAN from CSR
         try:
             csr_san_ext = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
-            csr_san_list = set(csr_san_ext.get_values_for_type(x509.DNSName) +
-                               csr_san_ext.get_values_for_type(x509.IPAddress))
+            dns_names: set[str] = set(csr_san_ext.get_values_for_type(x509.DNSName))
+            ip_addresses: set[str] = {str(ip) for ip in csr_san_ext.get_values_for_type(x509.IPAddress)}
+            csr_san_list: set[str] = dns_names | ip_addresses
         except x509.ExtensionNotFound:
             csr_san_list = set()
 
-        # Check certificates with matching subject
         matching_certs = CertificateModel.objects.filter(subject_public_bytes=csr_subject)
+        matched_cert: CertificateModel | None = matching_certs.first()
+
+        if matched_cert is None:
+            return None
 
         # Further filter by SAN
-        for cert in matching_certs:
-            try:
-                cert_san_ext = cert.subject_alternative_name_extension
-                if cert_san_ext:
-                    cert_san_list = set(cert_san_ext.get_values_for_type(x509.DNSName) +
-                                        cert_san_ext.get_values_for_type(x509.IPAddress))
-                    if csr_san_list == cert_san_list:
-                        return cert
-            except AttributeError:
-                if not csr_san_list:  # If neither have SAN, it's a match
-                    return cert
+        try:
+            cert_san_ext = matched_cert.subject_alternative_name_extension
+            if cert_san_ext:
+                cert_san_list_from_cert = set(cert_san_ext.get_values_for_type(x509.DNSName)) | {
+                    str(ip) for ip in cert_san_ext.get_values_for_type(x509.IPAddress)
+                }
+                if csr_san_list == cert_san_list_from_cert:
+                    return matched_cert
+        except AttributeError:
+            if not csr_san_list:
+                return matched_cert
 
         return None
 
@@ -789,7 +842,26 @@ class EstSimpleReenrollmentView(EstAuthenticationMixin,
 
         :param certificate: The CertificateModel instance to be revoked.
         """
-        certificate.set_status(CertificateModel.CertificateStatus.REVOKED)
+        credential = CredentialModel.objects.filter(primarycredentialcertificate__certificate=certificate).first()
+
+        if credential and credential.credential_type == CredentialModel.CredentialTypeChoice.ISSUING_CA:
+            issuing_ca_model = IssuingCaModel.objects.filter(credential=credential).first()
+
+            if not issuing_ca_model:
+                error_message = f'Could not determine issuing CA for certificate {certificate.common_name}.'
+                raise ValueError(error_message)
+
+            RevokedCertificateModel.objects.create(
+                certificate=certificate,
+                revocation_reason=RevokedCertificateModel.ReasonCode.SUPERSEDED,
+                ca=issuing_ca_model,
+                revoked_at=datetime.datetime.now(datetime.UTC)
+            )
+
+            issuing_ca_model.issue_crl()
+        else:
+            error_message = f'Certificate {certificate.common_name} is not issued by a known Issuing CA.'
+            raise ValidationError(error_message)
 
     def _get_device_from_certificate(self, certificate: CertificateModel) -> DeviceModel | None:
         """Retrieves the device associated with the given certificate.
@@ -798,23 +870,31 @@ class EstSimpleReenrollmentView(EstAuthenticationMixin,
         :return: DeviceModel instance if found, else None.
         """
         try:
-            credential = CredentialModel.objects.filter(
-                primarycredentialcertificate__certificate=certificate,
-                primarycredentialcertificate__is_primary=True
-            ).select_related('issuedcredential').first()
-        except CredentialModel.DoesNotExist:
-            return None
-        except IssuedCredentialModel.DoesNotExist:
-            return None
-        except Exception:  # noqa: BLE001
-            return None
-        else:
-            issued_credential = IssuedCredentialModel.objects.filter(credential=credential).first()
+            credential: CredentialModel = (
+                CredentialModel.objects.filter(
+                    primarycredentialcertificate__certificate=certificate,
+                    primarycredentialcertificate__is_primary=True
+                )
+                .select_related('issuedcredential')
+                .first()
+            )
+
+            if credential is None:
+                return None
+
+            issued_credential: IssuedCredentialModel | None = IssuedCredentialModel.objects.filter(
+                credential=credential
+            ).first()
 
             if not issued_credential:
                 return None
-            return issued_credential.device
 
+            device: DeviceModel | None = issued_credential.device
+
+        except Exception:  # noqa: BLE001
+            return None
+        else:
+            return device
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle POST requests for simple re-enrollment.
@@ -826,62 +906,85 @@ class EstSimpleReenrollmentView(EstAuthenticationMixin,
 
         auth_response = self.authenticate_request(request=request,
                                                   domain=self.requested_domain,
-                                                  cert_template_str=self.requested_cert_template_str,
-                                                  issuing_ca_certificate=self.issuing_ca_certificate)
+                                                  cert_template_str=self.requested_cert_template_str)
         if auth_response:
             return auth_response
 
         try:
-            csr = self.deserialize_pki_message(self.raw_message)
+            self.csr = self.deserialize_pki_message(self.raw_message)
         except ValueError as e:
             return HttpResponse(f'Invalid PKCS#10 request: {e!s}', status=400)
 
-        existing_certificate_model = self._find_certificate_by_public_key(csr)
+        existing_certificate = self._retrieve_existing_certificate(self.csr)
+        if isinstance(existing_certificate, HttpResponse):
+            return existing_certificate
 
-        if not existing_certificate_model:
-            existing_certificate_model = self._find_certificate_by_subject_and_san(csr)
+        self.renewal_type = self._determine_renewal_type(existing_certificate, self.csr)
 
-        if not existing_certificate_model:
-            return HttpResponse('No existing certificate found matching the CSR.', status=400)
+        device = self._get_device_from_certificate(certificate=existing_certificate)
 
-        if existing_certificate_model.certificate_status in [CertificateModel.CertificateStatus.REVOKED,
-                                                             CertificateModel.CertificateStatus.EXPIRED]:
-            return HttpResponse(f'Cannot reenroll: Certificate is '
-                                f'{existing_certificate_model.certificate_status}.',
-                                status=400)
+        if device is None:
+            return HttpResponse('No associated device found for the certificate.', status=400)
 
-        is_renewal = existing_certificate_model.public_key_pem == csr.public_key().public_bytes(
+        self.device = device
+
+        self._revoke_existing_certificate(certificate=existing_certificate)
+
+        if self.device is None:
+            return HttpResponse('No associated device found for the certificate.', status=400)
+
+        return self._handle_credential_issue()
+
+    def _determine_renewal_type(self, existing_certificate: CertificateModel,
+                                csr: x509.CertificateSigningRequest) -> str:
+        """Determines whether the request is for renewal (same key) or rekey (new key)."""
+        is_renewal = existing_certificate.public_key_pem == csr.public_key().public_bytes(
             serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         ).decode()
+        return 'Renewal (same public key)' if is_renewal else 'Rekey (new public key)'
 
-        renewal_type = 'Renewal (same public key)' if is_renewal else 'Rekey (new public key)'
+    def _retrieve_existing_certificate(self, csr: x509.CertificateSigningRequest) -> CertificateModel | HttpResponse:
+        """Finds an existing certificate matching the CSR."""
+        existing_certificate = self._find_certificate_by_public_key(csr)
 
-        self._revoke_existing_certificate(certificate=existing_certificate_model)
+        if not existing_certificate:
+            existing_certificate = self._find_certificate_by_subject_and_san(csr)
 
-        device = self._get_device_from_certificate(certificate=existing_certificate_model)
+        if not existing_certificate:
+            return HttpResponse('No existing certificate found matching the CSR.', status=400)
 
-        try:
+        if existing_certificate.certificate_status in [
+            CertificateModel.CertificateStatus.REVOKED,
+            CertificateModel.CertificateStatus.EXPIRED
+        ]:
+            return HttpResponse(f'Cannot reenroll: Certificate is {existing_certificate.certificate_status}.',
+                                status=400)
 
-            allowed_subject_oids = {x509.NameOID.COMMON_NAME, x509.NameOID.SERIAL_NUMBER}
-            self._validate_subject_attributes(list(csr.subject), allowed_subject_oids)
+        return existing_certificate
 
-            issued_credential = self.issue_credential(
-                cert_template_str=self.requested_cert_template_str,
-                device=device,
-                domain=self.requested_domain,
-                csr=csr,
-                reenrollment=True
-            )
+    def _handle_credential_issue(self) -> HttpResponse:
+        """Handles credential issuance and raises an error if issuance fails."""
+        allowed_subject_oids = {
+            x509.NameOID.COMMON_NAME.dotted_string,
+            x509.NameOID.SERIAL_NUMBER.dotted_string
+        }
+        self._validate_subject_attributes(list(self.csr.subject), allowed_subject_oids)
 
-            encoded_cert = issued_credential.credential.get_certificate().public_bytes(Encoding.DER)
+        issued_credential = self.issue_credential(
+            cert_template_str=self.requested_cert_template_str,
+            device=self.device,
+            domain=self.requested_domain,
+            csr=self.csr
+        )
 
-        except Exception as e:  # noqa: BLE001
-            return HttpResponse(f'Error while issuing credential: {e!s}', status=400)
+        if issued_credential is None:
+            return HttpResponse('Error: Credential not found', status=400)
 
+        encoded_cert = issued_credential.credential.get_certificate().public_bytes(Encoding.DER)
         return HttpResponse(
             encoded_cert,
             status=200,
             content_type='application/pkix-cert',
-            headers={'X-EST-Renewal-Type': renewal_type}
+            headers={'X-EST-Renewal-Type': self.renewal_type}
         )

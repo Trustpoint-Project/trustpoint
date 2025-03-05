@@ -256,7 +256,6 @@ class CreateDeviceForm(forms.ModelForm):
                 'brski_est',
                 'aoki_cmp',
                 'brski_cmp',
-                'est_username_password',
                 'est_idevid'
             ]
         ),
@@ -271,7 +270,6 @@ class CreateDeviceForm(forms.ModelForm):
         ],
         widget=DisableSelectOptionsWidget(
             disabled_values=[
-                'est_username_password'
             ]
         ),
         initial='cmp_shared_secret'
@@ -332,6 +330,10 @@ class CreateDeviceForm(forms.ModelForm):
                         raise forms.ValidationError('The Trust-Store must have the intended usage IDevID.')
                     instance.onboarding_protocol = DeviceModel.OnboardingProtocol.CMP_IDEVID
                     instance.pki_protocol = DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE
+                case 'est_username_password':
+                    instance.onboarding_protocol = DeviceModel.OnboardingProtocol.EST_PASSWORD
+                    instance.pki_protocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE
+                    instance.idevid_trust_store = None
                 case _:
                     raise forms.ValidationError('Unknown Onboarding and PKI configuration value found.')
         else:
@@ -348,6 +350,8 @@ class CreateDeviceForm(forms.ModelForm):
                     instance.pki_protocol = DeviceModel.PkiProtocol.CMP_SHARED_SECRET
                     # 16 * 8 = 128 random bits
                     instance.cmp_shared_secret = secrets.token_urlsafe(16)
+                case 'est_username_password':
+                    instance.pki_protocol = DeviceModel.PkiProtocol.EST_PASSWORD
                 case _:
                     raise forms.ValidationError('Unknown PKI configuration value found.')
 

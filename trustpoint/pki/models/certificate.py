@@ -22,7 +22,6 @@ from trustpoint_core.oid import (
     PublicKeyInfo
 )
 from trustpoint_core.serializer import CertificateSerializer, PublicKeySerializer
-
 from pki.models.extension import (
     AttributeTypeAndValue,
     AuthorityInformationAccessExtension,
@@ -54,6 +53,7 @@ __all__ = [
     'CertificateModel',
     'RevokedCertificateModel'
 ]
+
 
 class CertificateModel(LoggerMixin, models.Model):
     """X509 Certificate Model.
