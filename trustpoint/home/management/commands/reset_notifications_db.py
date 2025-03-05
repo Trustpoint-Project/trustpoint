@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from django.core.management.base import BaseCommand  # type: ignore[import-untyped]
+from django.core.management.base import BaseCommand
 from home.models import NotificationModel
 
 from trustpoint.settings import DOCKER_CONTAINER

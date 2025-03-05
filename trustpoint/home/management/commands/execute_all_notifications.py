@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.core.management import CommandError, call_command  # type: ignore[import-untyped]
-from django.core.management.base import BaseCommand  # type: ignore[import-untyped]
+from django.core.management import CommandError, call_command
+from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
