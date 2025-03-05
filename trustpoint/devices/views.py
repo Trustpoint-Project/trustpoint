@@ -820,9 +820,9 @@ class DeviceBaseCredentialDownloadView(
 
         try:
             file_format = CredentialSerializer.FileFormat(self.request.POST.get('file_format'))
-        except ValueError:
+        except ValueError as exception:
             err_msg = _('Unknown file format.')
-            raise Http404(err_msg) from ValueError
+            raise Http404(err_msg) from exception
 
         credential_model = issued_credential_model.credential
         credential_serializer = credential_model.get_credential_serializer()
@@ -922,6 +922,11 @@ class DeviceOnboardingBrowserLoginView(FormView[BrowserLoginForm]):
     cleaned_data: dict[str, Any] | None = None
 
     def get_success_url(self) -> str:
+        """Gets the success url to redirect to after successful processing of the POST data following a form submit.
+
+        Returns:
+            The success url to redirect to after successful processing of the POST data following a form submit.
+        """
         credential_id: int = self.cleaned_data.get('credential_id')
         credential_download: RemoteDeviceCredentialDownloadModel = self.cleaned_data.get('credential_download')
         token: str = credential_download.download_token
@@ -931,21 +936,47 @@ class DeviceOnboardingBrowserLoginView(FormView[BrowserLoginForm]):
         )
 
     def form_invalid(self, form: BrowserLoginForm) -> HttpResponse:
+        """Adds an error message in the case of an invalid OTP.
+
+        Args:
+            form: The corresponding form object.
+
+        Returns:
+            The Django HttpResponse object.
+        """
         messages.error(self.request, _('The provided password is not valid.'))
         return super().form_invalid(form)
 
     def form_valid(self, form: BrowserLoginForm) -> HttpResponse:
+        """Performed if the form was validated successfully and adds the cleaned data to the instance.
+
+        Args:
+            form: The corresponding form object.
+
+        Returns:
+            The Django HttpResponse object.
+        """
         self.cleaned_data = form.cleaned_data
         return super().form_valid(form)
 
 
-class DownloadTokenRequiredMixin(_DispatchableType):
+class DownloadTokenRequiredAuthenticationMixin(_DispatchableType):
     """Mixin which checks the token included in the URL for browser download views."""
 
+    http_method_names = ('get', 'post')
     credential_download: RemoteDeviceCredentialDownloadModel
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Checks the validity of the token included in the URL for browser download views."""
+        """Checks the validity of the token included in the URL for browser download views and redirects if invalid.
+
+        Args:
+            request: The django request object.
+            *args: Positional arguments passed to super().dispatch().
+            **kwargs: Keyword arguments passed to super().dispatch().
+
+        Returns:
+            A Django HttpResponseBase object.
+        """
         token = request.GET.get('token')
         try:
             self.credential_download = RemoteDeviceCredentialDownloadModel.objects.get(
@@ -954,18 +985,65 @@ class DownloadTokenRequiredMixin(_DispatchableType):
         except RemoteDeviceCredentialDownloadModel.DoesNotExist:
             messages.warning(request, 'Invalid download token.')
             return redirect('devices:browser_login')
+
         if not token or not self.credential_download.check_token(token):
             messages.warning(request, 'Invalid download token.')
             return redirect('devices:browser_login')
+
         return super().dispatch(request, *args, **kwargs)
 
 
-class DeviceBrowserCredentialDownloadView(DownloadTokenRequiredMixin, DeviceBaseCredentialDownloadView):
-    """View to download a password protected domain or app credential in the desired format from a remote client.
-
-    This CBV does intentionally not require the authentication mixin.
-    """
+class DeviceBrowserCredentialDownloadView(DownloadTokenRequiredAuthenticationMixin, DeviceBaseCredentialDownloadView):
+    """View to download a password protected domain or app credential in the desired format from a remote client."""
     is_browser_download = True
+
+
+class DeviceBrowserOnboardingCancelView(DeviceContextMixin, SingleObjectMixin[IssuedCredentialModel], RedirectView):
+    """View to cancel the browser onboarding process and delete the associated RemoteDeviceCredentialDownloadModel."""
+
+    http_method_names = ('get',)
+
+    model = IssuedCredentialModel
+    context_object_name = 'credential'
+    object: IssuedCredentialModel | None = None
+    permanent = False
+
+    def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
+        """Gets the redirection URL.
+
+        Args:
+            *args: Positional arguments are discarded.
+            **kwargs: Keyword arguments are discarded.
+
+        Returns:
+            The redirect URL.
+        """
+        return str(reverse_lazy('devices:credential-download', kwargs={'pk': self.object.id}))
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Cancels the browser onboarding process and deletes the associated RemoteDeviceCredentialDownloadModel.
+
+        Args:
+            request: The Django request object.
+            *args: Positional arguments passed to super().get().
+            **kwargs: Keyword arguments passed to super().get().
+
+        Returns:
+            The HttpResponseBase object with the desired redirection URL.
+        """
+        self.object = self.get_object()
+        try:
+            cdm = RemoteDeviceCredentialDownloadModel.objects.get(
+                issued_credential_model=self.object,
+                device=self.object.device)
+            cdm.delete()
+            messages.info(request, 'The browser onboarding process was canceled.')
+        except RemoteDeviceCredentialDownloadModel.DoesNotExist:
+            pass
+
+        return super().get(request, *args, **kwargs)
+
+#  ---------------------------------------- Revocation Views ----------------------------------------
 
 
 class DeviceRevocationView(DeviceContextMixin, FormMixin[CredentialRevocationForm], ListView[DeviceModel]):
@@ -1042,41 +1120,3 @@ class DeviceCredentialRevocationView(
             messages.error(self.request, revocation_msg)
 
         return super().form_valid(form)
-
-
-
-
-
-class DeviceBrowserOnboardingCancelView(DeviceContextMixin, DetailView[IssuedCredentialModel], RedirectView):
-    """View to cancel the browser onboarding process and delete the associated RemoteDeviceCredentialDownloadModel."""
-
-    model = IssuedCredentialModel
-    redirection_view = 'devices:credential-download'
-    context_object_name = 'credential'
-
-    def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
-        """Returns the URL to redirect to after the browser onboarding process was canceled."""
-        pk = self.kwargs.get('pk')
-        return reverse(self.redirection_view, kwargs={'pk': pk})
-
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Cancels the browser onboarding process and deletes the associated RemoteDeviceCredentialDownloadModel."""
-        credential = self.get_object()
-        device = credential.device
-        try:
-            cdm = RemoteDeviceCredentialDownloadModel.objects.get(issued_credential_model=credential, device=device)
-            cdm.delete()
-            messages.info(request, 'The browser onboarding process was canceled.')
-        except RemoteDeviceCredentialDownloadModel.DoesNotExist:
-            messages.error(request, 'The browser onboarding process was not found.')
-
-        return redirect(self.get_redirect_url())
-
-
-
-
-
-
-
-
-
