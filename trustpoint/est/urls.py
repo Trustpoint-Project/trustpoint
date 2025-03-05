@@ -1,3 +1,4 @@
+"""URL configuration for the 'est' app."""
 from django.urls import path
 
 from est import views
