@@ -109,6 +109,8 @@ we add a comment to the current pull request.
     :language: yaml
     :caption: Pytest Workflow
 
+.. _mypy_pipeline:
+
 =============
 MyPy Pipeline
 =============
@@ -124,5 +126,9 @@ This pipeline is actually really short because it just sets up :term:`uv` from :
 Ruff Pipeline
 =============
 
+Also, the ruff action is nearly as short as the :ref:`mypy_pipeline`.
+The only difference is that we now run :term:`ruff` and upload the report if there are any errors.
+
 .. literalinclude:: ../../.github/workflows/ruff.yml
-   :language: yaml
+    :language: yaml
+    :caption: ruff Workflow
