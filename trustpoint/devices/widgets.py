@@ -29,18 +29,19 @@ class DisableSelectOptionsWidget(forms.Select):
         else:
             self.disabled_values = disabled_values
 
-    def create_option(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    def create_option(self, name: str, value: Any, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Creates the options in the select and disables the desired ones.
 
         Args:
+            name: The name of the option.
+            value: The value of the option.
             *args: Positional arguments passed to forms.Select.create_option.
             **kwargs: Positional arguments passed to forms.Select.create_option.
 
         Returns:
             The option dictionary.
         """
-        value = kwargs.get('value')
-        option_dict = super().create_option(*args, **kwargs)
+        option_dict = super().create_option(name, value, *args, **kwargs)
         if value in self.disabled_values:
             option_dict['attrs'].setdefault('disabled', 'disabled')
 
