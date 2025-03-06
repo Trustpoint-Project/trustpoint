@@ -16,8 +16,8 @@ Below is an overview of the key workflows included in the project:
 
 - **Behave Pipeline**: Runs :term:`behave` tests and uploads the results.
 - **Codecov Pipeline**: Runs unit tests via pytest and uploads the test coverage.
-- **MyPy Pipeline**: Runs mypy checks and uploads the results.
 - **Pytest Pipeline**: Runs unit tests via pytest and uploads the results.
+- **MyPy Pipeline**: Runs mypy checks and uploads the results.
 - **Ruff Pipeline**: Runs ruff checks and uploads the results.
 
 -------------------------------
