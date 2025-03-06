@@ -117,6 +117,7 @@ INSTALLED_APPS = [
     'devices.apps.DevicesConfig',
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
+    'est.apps.EstConfig',
     'settings.apps.SettingsConfig',
     'django.contrib.admin',
     'django.contrib.auth',

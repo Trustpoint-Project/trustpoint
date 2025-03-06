@@ -53,11 +53,11 @@ class Dispatchable(Protocol):
 class EstAuthenticationMixin:
     """Checks for HTTP Basic Authentication before processing the request."""
 
-    def get_credential_for_certificate(self, cert: x509.Certificate) -> CredentialModel:
-        """Retrieve a CredentialModel instance associated with the given certificate.
+    def get_credential_for_certificate(self, cert: x509.Certificate) -> tuple[CredentialModel, DeviceModel]:
+        """Retrieve a CredentialModel and associated DeviceModel instance for the given certificate.
 
         :param cert: x509.Certificate to search for.
-        :return: Matching CredentialModel instance.
+        :return: Tuple containing CredentialModel and DeviceModel instances.
         :raises ClientCertificateAuthenticationError: if no matching credential is found.
         """
         cert_fingerprint = cert.fingerprint(hashes.SHA256()).hex().upper()
@@ -65,33 +65,53 @@ class EstAuthenticationMixin:
         if not credential:
             error_message = f'No credential found for certificate with fingerprint {cert_fingerprint}'
             raise ClientCertificateAuthenticationError(error_message)
-        return cast(CredentialModel, credential)
 
-    def authenticate_username_password(self, request: HttpRequest) -> None:
-        """Authenticate a user using HTTP Basic credentials provided in the request headers.
+        issued_credential = IssuedCredentialModel.objects.get(credential=credential)
+        device = issued_credential.device
 
-        The credentials must be provided in the format:
-            Authorization: Basic base64(username:password)
+        return credential, device
+
+    def authenticate_username_password(self, request: HttpRequest) -> DeviceModel:
+        """Authenticate a user using HTTP Basic credentials and return associated DeviceModel.
 
         :param request: Django HttpRequest containing the headers.
-        :raises UsernamePasswordAuthenticationError: if authentication fails due to missing,
-            invalid, or malformed credentials.
+        :return: Authenticated DeviceModel instance.
+        :raises UsernamePasswordAuthenticationError: if authentication fails.
         """
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Basic '):
-            error_message = f'Invalid auth header: {auth_header}'
-            raise UsernamePasswordAuthenticationError(error_message)
+            raise UsernamePasswordAuthenticationError('Invalid auth header')
 
         try:
             decoded_credentials = base64.b64decode(auth_header.split(' ', 1)[1].strip()).decode('utf-8')
             username, password = decoded_credentials.split(':', 1)
-        except Exception as e:
-            error_message = 'Malformed authentication credentials'
-            raise UsernamePasswordAuthenticationError(error_message) from e
+        except Exception:
+            raise UsernamePasswordAuthenticationError('Malformed authentication credentials')
 
-        if not authenticate(request, username=username, password=password):
-            error_message = 'Invalid authentication credentials'
-            raise UsernamePasswordAuthenticationError(error_message)
+        device = DeviceModel.objects.filter(est_password=password, unique_name=username).first()
+        if not device:
+            raise UsernamePasswordAuthenticationError('Invalid authentication credentials')
+
+        return device
+
+    def authenticate_domain_credential(self, request: HttpRequest) -> DeviceModel:
+        """Authenticate the client using an SSL/TLS certificate (Mutual TLS) and return the associated DeviceModel."""
+        cert_data = request.META.get('SSL_CLIENT_CERT')
+
+        if not cert_data:
+            raise ClientCertificateAuthenticationError('Missing SSL_CLIENT_CERT header')
+
+        try:
+            client_cert = x509.load_pem_x509_certificate(cert_data.encode('utf-8'), default_backend())
+        except Exception as e:
+            raise ClientCertificateAuthenticationError(f'Invalid SSL_CLIENT_CERT header: {e}')
+
+        credential, device = self.get_credential_for_certificate(client_cert)
+        is_valid, reason = credential.is_valid_domain_credential()
+        if not is_valid:
+            raise ClientCertificateAuthenticationError(f'Invalid SSL_CLIENT_CERT header: {reason}')
+
+        return device
 
     def authenticate_idev_id(self) -> None:
         """Placeholder for IDevID authentication.
@@ -101,79 +121,56 @@ class EstAuthenticationMixin:
         error_message = 'IDevID authentication not implemented'
         raise IDevIDAuthenticationError(error_message)
 
-    def authenticate_domain_credential(self, request: HttpRequest) -> None:
-        """Authenticate the client using an SSL/TLS certificate (Mutual TLS)."""
-        cert_data = request.META.get('SSL_CLIENT_CERT')
-
-        if not cert_data:
-            error_message = 'Missing SSL_CLIENT_CERT header'
-            raise ClientCertificateAuthenticationError(error_message)
-
-        try:
-            client_cert = x509.load_pem_x509_certificate(cert_data.encode('utf-8'), default_backend())
-        except Exception as e:
-            error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
-            raise ClientCertificateAuthenticationError(error_message) from e
-
-        credential = self.get_credential_for_certificate(client_cert)
-        is_valid, reason = credential.is_valid_domain_credential()
-        if not is_valid:
-            error_message = f'Invalid SSL_CLIENT_CERT header: {reason}'
-            raise ClientCertificateAuthenticationError(error_message)
-
-    def authenticate_request(self,
-                             request: HttpRequest,
-                             domain: DomainModel,
-                             cert_template_str: str
-                             ) -> HttpResponse | None:
-        """Helper method to authenticate the request based on the requested certificate template.
-
-        Returns an HttpResponse if an error occurs; otherwise, returns None.
-        """
+    def authenticate_request(self, request: HttpRequest, domain: DomainModel, cert_template_str: str) -> tuple[
+        DeviceModel, HttpResponse | None]:
+        """Authenticate the request and return a DeviceModel if authentication succeeds."""
         if cert_template_str == 'domaincredential':
             return self._authenticate_domain_credential_request(request, domain)
+        return self._authenticate_application_certificate_request(request, domain)
 
-        return self._authenticate_non_domain_credential_request(request, domain)
-
-    def _authenticate_domain_credential_request(self, request: HttpRequest, domain: DomainModel) -> HttpResponse | None:
-        """Authenticate requests for 'domaincredential' certificates."""
+    def _authenticate_domain_credential_request(self, request: HttpRequest, domain: DomainModel) -> tuple[
+        DeviceModel | None, HttpResponse | None]:
+        """Authenticate requests for 'domaincredential' certificates and return the associated DeviceModel."""
         if not (domain.allow_idevid_registration or domain.allow_username_password_registration):
-            return HttpResponse('Both IDevID registration and username:password registration are disabled',
-                                status=400)
+            return None, HttpResponse('Both IDevID registration and username:password registration are disabled',
+                                      status=400)
 
         if domain.allow_idevid_registration:
             try:
                 self.authenticate_idev_id()
             except IDevIDAuthenticationError as e:
-                return HttpResponse(f'Error validating the IDevID: {e!s}', status=400)
+                return None, HttpResponse(f'Error validating the IDevID: {e!s}', status=400)
 
         if domain.allow_username_password_registration:
             try:
-                self.authenticate_username_password(request=request)
+                device = self.authenticate_username_password(request)
+                return device, None
             except UsernamePasswordAuthenticationError as e:
-                return HttpResponse(f'Error validating the credentials: {e!s}', status=400)
+                return None, HttpResponse(f'Error validating the credentials: {e!s}', status=400)
 
-        return None
+        return None, None
 
-    def _authenticate_non_domain_credential_request(self, request: HttpRequest,
-                                                    domain: DomainModel) -> HttpResponse | None:
-        """Authenticate requests for non-domaincredential certificate templates."""
+    def _authenticate_application_certificate_request(self, request: HttpRequest, domain: DomainModel) -> tuple[
+        DeviceModel  | None, HttpResponse | None]:
+        """Authenticate requests for application certificate templates and return the associated DeviceModel."""
         if not (domain.domain_credential_auth or domain.username_password_auth):
-            return HttpResponse('Domain credential and username:password authentication are disabled', status=400)
+            return None, HttpResponse('Domain credential and username:password authentication are disabled', status=400)
 
         if domain.domain_credential_auth:
             try:
-                self.authenticate_domain_credential(request=request)
+                device = self.authenticate_domain_credential(request)
+                return device, None
             except ClientCertificateAuthenticationError as e:
-                return HttpResponse(f'Error validating the client certificate: {e!s}', status=400)
+                return None, HttpResponse(f'Error validating the client certificate: {e!s}', status=400)
 
         if domain.username_password_auth:
             try:
-                self.authenticate_username_password(request=request)
+                device = self.authenticate_username_password(request)
+                return device, None
             except UsernamePasswordAuthenticationError as e:
-                return HttpResponse(f'Error validating the credentials: {e!s}', status=400)
+                return None, HttpResponse(f'Error validating the credentials: {e!s}', status=400)
 
-        return None
+        return None, None
 
 
 class EstHttpMixin:
@@ -303,11 +300,10 @@ class EstPkiMessageSerializerMixin:
         :raises ValueError: If deserialization fails.
         """
         try:
-            csr = x509.load_der_x509_csr(data, default_backend())
+            csr = x509.load_pem_x509_csr(data, default_backend())
         except Exception as e:
             error_message = 'Failed to deserialize PKCS#10 certificate signing request'
             raise ValueError(error_message) from e
-
         self.verify_csr_signature(csr)
         return csr
 
@@ -376,18 +372,18 @@ class DeviceHandlerMixin:
     def get_or_create_device_from_csr(self,
                                       csr: x509.CertificateSigningRequest,
                                       domain: DomainModel,
-                                      cert_template: str) -> DeviceModel:
+                                      cert_template: str,
+                                      device: DeviceModel) -> DeviceModel:
         """Retrieves a DeviceModel instance using the serial number extracted from the provided CSR.
 
         If a device with that serial number does not exist, a new one is created.
 
         :param csr: A cryptography.x509.CertificateSigningRequest instance.
         :param domain: The DomainModel instance associated with this device.
+        :param cert_template: The X509 Certificate Template to use for this device.
+        :param device: The DeviceModel instance associated with this device.
         :return: A DeviceModel instance corresponding to the extracted serial number.
         """
-        serial_number = self.extract_serial_number_from_csr(csr)
-
-        device = DeviceModel.objects.filter(serial_number=serial_number, domain=domain).first()
         if device:
             return device
 
@@ -400,15 +396,24 @@ class DeviceHandlerMixin:
             raise ValueError(error_message)
 
         if cert_template == 'domaincredential':
-            onboarding_protocol = DeviceModel.OnboardingProtocol.EST_PASSWORD
-            onboarding_status = DeviceModel.OnboardingStatus.PENDING
+            if domain.allow_username_password_registration:
+                onboarding_protocol = DeviceModel.OnboardingProtocol.EST_PASSWORD
+                onboarding_status = DeviceModel.OnboardingStatus.PENDING
+            elif domain.allow_idevid_registration:
+                error_message = 'IDevID registration is not supported implemented'
+                raise ValueError(error_message)
+            else:
+                error_message = 'For registering a new device activate Username:Password registration or IDevid registration'
+                raise ValueError(error_message)
         else:
             onboarding_protocol = DeviceModel.OnboardingProtocol.NO_ONBOARDING
             onboarding_status = DeviceModel.OnboardingStatus.NO_ONBOARDING
 
+        serial_number = self.extract_serial_number_from_csr(csr)
+
         return DeviceModel.objects.create(
             serial_number=serial_number,
-            unique_name=f'Device-{serial_number}',
+            unique_name=f'Auto-Create-Device-{serial_number}',
             domain=domain,
             onboarding_protocol=onboarding_protocol,
             onboarding_status=onboarding_status,
@@ -422,7 +427,7 @@ class CredentialRequest:
     ipv4_addresses: list[ipaddress.IPv4Address]
     ipv6_addresses: list[ipaddress.IPv6Address]
     dns_names: list[str]
-    public_key: oid.PublicKeyInfo
+    public_key: oid.PublicKey
 
 
 class CredentialIssuanceMixin:
@@ -612,11 +617,12 @@ class EstSimpleEnrollmentView(EstAuthenticationMixin,
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle POST requests for simple enrollment."""
-        del args, kwargs, request
+        #del args, kwargs, request
 
-        response = self._authenticate_request()
-        if response:
-            return response
+        device, http_response = self._authenticate_request()
+
+        if http_response:
+            return http_response
 
         csr = self._deserialize_csr()
         if isinstance(csr, HttpResponse):
@@ -626,19 +632,26 @@ class EstSimpleEnrollmentView(EstAuthenticationMixin,
         if isinstance(device, HttpResponse):
             return device
 
+        print("test")
+
         response = self._validate_onboarding(device)
         if response:
             return response
 
         return self._process_credential(device, csr)
 
-    def _authenticate_request(self) -> HttpResponse | None:
+    def _authenticate_request(self) -> tuple[DeviceModel | None, HttpResponse | None]:
         """Handles authentication of the request."""
-        return self.authenticate_request(
+        device, http_response = self.authenticate_request(
             request=self.request,
             domain=self.requested_domain,
             cert_template_str=self.requested_cert_template_str,
         )
+
+        if device is None and http_response is None:
+            return None, HttpResponse("Authentication failed: No valid authentication method used", status=400)
+
+        return device, http_response
 
     def _deserialize_csr(self) -> x509.CertificateSigningRequest | HttpResponse:
         """Attempts to deserialize the PKI message into a CSR."""

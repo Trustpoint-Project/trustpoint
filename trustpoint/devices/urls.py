@@ -76,5 +76,9 @@ urlpatterns = [
     path(
         'help/onboarding/cmp-idevid-registration/<int:pk>/',
         views.OnboardingIdevidRegistrationHelpView.as_view(),
-        name='help-onboarding_cmp-idevid-registration')
+        name='help-onboarding_cmp-idevid-registration'),
+    path(
+        'help/no-onboarding/est-username-password/<int:pk>/',
+        views.NoOnboardingEstUsernamePasswordHelpView.as_view(),
+        name='help_no-onboarding_est-username-password'),
 ]

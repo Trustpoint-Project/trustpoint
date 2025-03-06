@@ -1,11 +1,15 @@
 from django.contrib import admin
 from .models import CertificateModel, CredentialModel, CertificateChainOrderModel, IssuingCaModel
+from .models.truststore import ActiveTrustpointTlsServerCredentialModel
 from .models.devid_registration import DevIdRegistration
 
 
 class DevIdRegistrationAdmin(admin.ModelAdmin):
     pass
 
+
+class ActiveTrustpointTlsServerCredentialAdmin(admin.ModelAdmin):
+    pass
 
 class CertificateModelAdmin(admin.ModelAdmin):
     readonly_fields = (
@@ -64,3 +68,4 @@ admin.site.register(CredentialModel, CredentialModelAdmin)
 admin.site.register(CertificateChainOrderModel, CertificateChainOrderModelAdmin)
 admin.site.register(IssuingCaModel, IssuingCaModelAdmin)
 admin.site.register(DevIdRegistration, DevIdRegistrationAdmin)
+admin.site.register(ActiveTrustpointTlsServerCredentialModel, ActiveTrustpointTlsServerCredentialAdmin)

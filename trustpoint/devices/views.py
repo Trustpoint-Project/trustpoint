@@ -10,6 +10,8 @@ from cryptography.hazmat.primitives import serialization
 
 from trustpoint_core.file_builder.enum import ArchiveFormat
 from trustpoint_core.serializer import CredentialSerializer
+
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from util.field import UniqueNameValidator
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -210,6 +212,38 @@ class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, TpLoginRequiredMix
             raise ValueError('Unsupported public key algorithm')
         context['host'] = self.request.META.get('REMOTE_ADDR') + ':' + self.request.META.get('SERVER_PORT')
         context['key_gen_command'] = key_gen_command
+        number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
+        context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
+        context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
+        return context
+
+
+class NoOnboardingEstUsernamePasswordHelpView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView[DeviceModel]):
+
+    model = DeviceModel
+    template_name = 'devices/help/no_onboarding/est_username_password.html'
+    context_object_name = 'device'
+
+    def get_context_data(self, **kwargs) -> dict[str, Any]:
+        context = super().get_context_data()
+        device: DeviceModel = self.object
+
+        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
+            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
+        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
+            key_gen_command = (
+                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
+                f'-genkey -noout -out key.pem')
+        else:
+            raise ValueError('Unsupported public key algorithm')
+        context['host'] = self.request.META.get('REMOTE_ADDR') + ':' + self.request.META.get('SERVER_PORT')
+        context['key_gen_command'] = key_gen_command
+
+        tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
+
+        print(tls_cert)
+        context['trustpoint_server_certificate'] = tls_cert.credential.certificate.public_key_pem
+
         number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
         context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
         context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
@@ -892,11 +926,16 @@ class HelpDispatchView(DeviceContextMixin, TpLoginRequiredMixin, SingleObjectMix
             if device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value:
                 return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
 
+            if device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value:
+                return f'{reverse("devices:help_no-onboarding_est-username-password", kwargs={"pk": device.id})}'
+
         if device.onboarding_protocol == device.OnboardingProtocol.CMP_SHARED_SECRET.value:
             return f'{reverse("devices:help-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
 
         if device.onboarding_protocol == device.OnboardingProtocol.CMP_IDEVID.value:
             return f'{reverse("devices:help-onboarding_cmp-idevid", kwargs={"pk": device.id})}'
+
+
 
         return f"{reverse('devices:devices')}"
 

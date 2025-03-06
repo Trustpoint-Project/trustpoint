@@ -334,6 +334,7 @@ class CreateDeviceForm(forms.ModelForm):
                     instance.onboarding_protocol = DeviceModel.OnboardingProtocol.EST_PASSWORD
                     instance.pki_protocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE
                     instance.idevid_trust_store = None
+                    instance.est_password = secrets.token_urlsafe(16)
                 case _:
                     raise forms.ValidationError('Unknown Onboarding and PKI configuration value found.')
         else:
@@ -352,6 +353,7 @@ class CreateDeviceForm(forms.ModelForm):
                     instance.cmp_shared_secret = secrets.token_urlsafe(16)
                 case 'est_username_password':
                     instance.pki_protocol = DeviceModel.PkiProtocol.EST_PASSWORD
+                    instance.est_password = secrets.token_urlsafe(16)
                 case _:
                     raise forms.ValidationError('Unknown PKI configuration value found.')
 
