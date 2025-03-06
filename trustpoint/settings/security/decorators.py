@@ -27,6 +27,7 @@ def security_level(feature_name: SecurityFeature):
     PermissionDenied
         If the security level does not permit the requested feature.
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -35,4 +36,5 @@ def security_level(feature_name: SecurityFeature):
             return func(*args, **kwargs)
 
         return wrapper
+
     return decorator

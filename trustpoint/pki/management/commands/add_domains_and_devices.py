@@ -13,7 +13,7 @@ from pki.models import DevIdRegistration, DomainModel, IssuingCaModel, Truststor
 
 
 class Command(BaseCommand):
-    """Add domains and associated device names with random onboarding protocol and serial number"""
+    """Add domains and associated device names with random onboarding protocol and serial number."""
 
     help = 'Add domains and associated device names with random onboarding protocol and serial number'
 
@@ -141,9 +141,9 @@ class Command(BaseCommand):
                         onboarding_protocol
                         in (DeviceModel.OnboardingProtocol.CMP_IDEVID, DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET)
                     )
-                    else random.choice(
+                    else random.choice(  # noqa: S311
                         [
-                            DeviceModel.PkiProtocol.MANUAL.value,  # noqa: S311
+                            DeviceModel.PkiProtocol.MANUAL.value,
                             DeviceModel.PkiProtocol.CMP_SHARED_SECRET.value,
                         ]
                     )
@@ -155,7 +155,7 @@ class Command(BaseCommand):
                         onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET.value
                         or pki_protocol == DeviceModel.PkiProtocol.CMP_SHARED_SECRET.value
                     )
-                    else None
+                    else ''
                 )
 
                 idevid_trust_store = (

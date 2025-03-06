@@ -31,7 +31,7 @@ class CertificateGenerator:
         private_key: None | rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey = None,
         hash_algorithm: None | HashAlgorithm = None,
     ) -> tuple[x509.Certificate, PrivateKey]:
-        """Creates a root CA certificate. (for testing and AutoGenPKI)"""
+        """Creates a root CA certificate for testing and AutoGenPKI."""
         return CertificateGenerator.create_issuing_ca(None, cn, cn, private_key, validity_days, hash_algorithm)
 
     @staticmethod

@@ -6,23 +6,25 @@ which can be used within the apps.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+import functools
 import logging
 import traceback
-import functools
+from typing import TYPE_CHECKING, Any
 
 from django import forms as dj_forms
 from django.contrib import messages
-from django.db.models import QuerySet
-from django.http import Http404
-from django.core.exceptions import ImproperlyConfigured
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.core.exceptions import ImproperlyConfigured
+from django.db.models import Model, QuerySet
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import RedirectView
 from django.views.generic.edit import FormMixin
 from django.views.generic.list import BaseListView, ListView, MultipleObjectTemplateResponseMixin
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class IndexView(RedirectView):
@@ -39,16 +41,18 @@ class ListInDetailView(ListView):
     Note that 'model' and 'context_object_name' refer to the ListView.
     Use 'detail_model' and 'detail_context_object_name' for the DetailView.
     """
-    detail_context_object_name = 'object'
 
-    def get(self, request, *args, **kwargs):
+    detail_context_object_name = 'object'
+    object: Model
+
+    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
         self.object = self.get_object()
-        return super().get(request, *args, **kwargs)
+        return super().get(*args, **kwargs)
 
     def get_queryset_for_object(self):
         return self.detail_model.objects.all()
 
-    def get_object(self):
+    def get_object(self) -> Model:
         queryset = self.get_queryset_for_object()
         pk = self.kwargs.get('pk')
         if pk is None:
@@ -60,7 +64,7 @@ class ListInDetailView(ListView):
         context = super().get_context_data(**kwargs)
         context[self.detail_context_object_name] = self.object
         return context
-    
+
 
 class SortableTableMixin:
     """Adds utility for sorting a ListView query by URL parameters
@@ -81,7 +85,7 @@ class SortableTableMixin:
         """
         return sorted(list_of_dicts, key=lambda x: x[sort_param.lstrip('-')], reverse=sort_param.startswith('-'))
 
-    def get_queryset(self) -> QuerySet | list:
+    def get_queryset(self) -> QuerySet[Any]:
         if hasattr(self, 'queryset') and self.queryset is not None:
             queryset = self.queryset
         else:
@@ -113,6 +117,7 @@ class SortableTableMixin:
 
 class TpLoginRequiredMixin(LoginRequiredMixin):
     """LoginRequiredMixin that adds a warning message if the user is not logged in."""
+
     request: HttpRequest
 
     def handle_no_permission(self) -> HttpResponseRedirect:
@@ -147,17 +152,15 @@ class ContextDataMixin:
         prefix = 'context_'
         for attr in dir(self):
             if attr.startswith(prefix) and len(attr) > len(prefix):
-                kwargs.setdefault(attr[len(prefix):], getattr(self, attr))
+                kwargs.setdefault(attr[len(prefix) :], getattr(self, attr))
 
         super_get_context_method = getattr(super(), 'get_context_data', None)
         if super_get_context_method is None:
             return kwargs
-        else:
-            return super_get_context_method(**kwargs)
+        return super_get_context_method(**kwargs)
 
 
 class BulkDeletionMixin:
-
     queryset: Any
     get_queryset: Callable
     success_url = None
@@ -201,7 +204,6 @@ class BaseBulkDeleteView(BulkDeletionMixin, FormMixin, BaseListView):
 
 
 class PrimaryKeyListFromPrimaryKeyString:
-
     @staticmethod
     def get_pks_as_list(pks: str) -> list[str]:
         if pks:
@@ -217,7 +219,8 @@ class PrimaryKeyListFromPrimaryKeyString:
             return pks_list
 
         return []
-    
+
+
 class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
     def get_pks_path(self) -> str:
         return self.kwargs.get('pks')
@@ -254,11 +257,9 @@ class LoggerMixin:
 
         cls.logger = logging.getLogger('trustpoint').getChild(cls.__module__).getChild(cls.__name__)
 
-
     @staticmethod
     def log_exceptions(function: Callable) -> Callable:
-        """
-        Decorator that gets an appropriate logger and logs any unhandled exception.
+        """Decorator that gets an appropriate logger and logs any unhandled exception.
 
         Logs the type and message to both levels error and debug.
         Also adds the traceback to the debug level log.
@@ -268,16 +269,13 @@ class LoggerMixin:
         """
 
         @functools.wraps(function)
-        def _wrapper(*args, **kwargs) -> Callable:
+        def _wrapper(*args: Any, **kwargs: Any) -> Callable:
             try:
                 return function(*args, **kwargs)
             except Exception as exception:
                 logger = logging.getLogger('trustpoint').getChild(function.__module__).getChild(function.__qualname__)
-                logger.error(
-                    f'Exception in {function.__name__}. '
-                    f'Type: {type(exception)}, '
-                    f'Message: {exception}'
-                )
+                logger.error(f'Exception in {function.__name__}. Type: {type(exception)}, Message: {exception}')
+
                 logger.debug(
                     f'Exception in {function.__name__}. '
                     f'Type: {type(exception)}, '

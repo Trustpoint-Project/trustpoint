@@ -303,9 +303,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
         cert_counts_by_status = []
         try:
             cert_status_qr = (
-                CertificateModel.objects.annotate(
-                    issue_date=TruncDate('not_valid_before')
-                )
+                CertificateModel.objects.annotate(issue_date=TruncDate('not_valid_before'))
                 .values('issue_date', 'certificate_status')
                 .annotate(cert_count=Count('id'))
                 .order_by('issue_date', 'certificate_status')
@@ -467,7 +465,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
             # )
 
             # Use a union query to combine results
-            #cert_domain_qr = cert_app_counts.union(cert_domain_counts)
+            # cert_domain_qr = cert_app_counts.union(cert_domain_counts)
 
             #   # Convert the queryset to a list
             cert_counts_by_domain = list(cert_counts_domain_qr)
@@ -482,16 +480,12 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
         }
         try:
             cert_template_qr = (
-                IssuedCredentialModel.objects.filter(
-                    credential__certificates__created_at__gt=start_date
-                )
+                IssuedCredentialModel.objects.filter(credential__certificates__created_at__gt=start_date)
                 .values(cert_type=F('issued_credential_purpose'))
                 .annotate(count=Count('credential__certificates'))
             )
             # Mapping from short code to human-readable name
-            template_mapping = {
-                key: str(value) for key, value in IssuedCredentialModel.IssuedCredentialPurpose.choices
-            }
+            template_mapping = {key: str(value) for key, value in IssuedCredentialModel.IssuedCredentialPurpose.choices}
             cert_counts_by_template = {template_mapping[item['cert_type']]: item['count'] for item in cert_template_qr}
         except Exception:
             self._logger.exception('Error occurred in certificate count by template query')

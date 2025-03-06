@@ -10,6 +10,7 @@ from behave import given, runner, step, then, when
 # Function to wrap steps and enforce failure on any exception
 def fail_on_exception(func: Callable) -> Callable:
     """Wrapper that ensures uncaught exceptions fail the scenario and are logged to the HTML report."""
+
     @functools.wraps(func)
     def wrapper(context: runner.Context, *args: tuple, **kwargs: dict) -> Callable:
         try:
@@ -20,7 +21,9 @@ def fail_on_exception(func: Callable) -> Callable:
             traceback.print_exc()  # Print full traceback for debugging
             exc_msg = f'Step failed due to exception: {e}'
             raise AssertionError(exc_msg) from e
+
     return wrapper
+
 
 # Monkey-patch Behave's step decorators to automatically wrap all steps
 original_step = step
@@ -28,29 +31,42 @@ original_given = given
 original_when = when
 original_then = then
 
+
 def patched_step(*args: tuple, **kwargs: dict) -> Callable:
     """Monkey-patched step decorator that wraps the step function to fail on any exception."""
+
     def decorator(func: Callable) -> Callable:
         return original_step(*args, **kwargs)(fail_on_exception(func))
+
     return decorator
+
 
 def patched_given(*args: tuple, **kwargs: dict) -> Callable:
     """Monkey-patched given decorator that wraps the step function to fail on any exception."""
+
     def decorator(func: Callable) -> Callable:
         return original_given(*args, **kwargs)(fail_on_exception(func))
+
     return decorator
+
 
 def patched_when(*args: tuple, **kwargs: dict) -> Callable:
     """Monkey-patched when decorator that wraps the step function to fail on any exception."""
+
     def decorator(func: Callable) -> Callable:
         return original_when(*args, **kwargs)(fail_on_exception(func))
+
     return decorator
+
 
 def patched_then(*args: tuple, **kwargs: dict) -> Callable:
     """Monkey-patched then decorator that wraps the step function to fail on any exception."""
+
     def decorator(func: Callable) -> Callable:
         return original_then(*args, **kwargs)(fail_on_exception(func))
+
     return decorator
+
 
 # Override Behave's step registration functions
 step = patched_step

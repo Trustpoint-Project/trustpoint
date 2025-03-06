@@ -315,6 +315,7 @@ class PrimaryCredentialCertificate(models.Model):
         super().save(**kwargs)
 
 
+
 class CertificateChainOrderModel(models.Model):
     """This Model is used to preserve the order of certificates in credential certificate chains."""
 

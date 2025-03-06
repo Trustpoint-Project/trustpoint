@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from cryptography.hazmat.primitives.serialization import BestAvailableEncryption, pkcs12
 from django.core.management.base import BaseCommand
@@ -16,7 +17,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
 
     help = 'Generate a long certificate chain with 4 Intermediate CAs.'
 
-    def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
+    def handle(self, *_args: Any, **_kwargs: Any) -> None:
         """Executes the command."""
         root_1, root_1_key = self.create_root_ca('Root CA A')
 

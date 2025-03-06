@@ -46,18 +46,13 @@ class AutoGenPkiFeature(SecurityFeature):
     def enable(key_alg: AutoGenPkiKeyAlgorithm) -> None:
         """Starts a thread that enables the auto-generated PKI.Pass thread arguments as a tuple to avoid any issues."""
         if __class__.is_enabled():
-            thread = threading.Thread(
-                target=AutoGenPki.enable_auto_gen_pki,
-                args=(key_alg,)
-            )
+            thread = threading.Thread(target=AutoGenPki.enable_auto_gen_pki, args=(key_alg,))
             thread.start()
 
     @staticmethod
     def disable() -> None:
         """Starts a thread that disables the auto-generated PKI."""
-        thread = threading.Thread(
-            target=AutoGenPki.disable_auto_gen_pki
-        )
+        thread = threading.Thread(target=AutoGenPki.disable_auto_gen_pki)
         thread.start()
 
         conf = SecurityConfig.objects.first()

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.core.management.base import BaseCommand
 from pki.models import CertificateModel
 
@@ -13,7 +15,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
 
     help = 'Generates two cross-signed certificate chains.'
 
-    def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
+    def handle(self, *_args: Any, **_kwargs: Any) -> None:
         """Executes the command."""
         root_1, root_1_key = self.create_root_ca('Root CA A')
         root_2, root_2_key = self.create_root_ca('Root CA B')

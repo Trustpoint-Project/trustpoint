@@ -69,7 +69,7 @@ class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormVi
     ignore_url = reverse_lazy('pki:truststores')
 
     def form_valid(self, form: TruststoreAddForm) -> HttpResponseRedirect:
-        """If the form is valid, redirect to Truststore overview"""
+        """If the form is valid, redirect to Truststore overview."""
         truststore = form.cleaned_data['truststore']
         domain_id = self.kwargs.get('pk')
 
@@ -84,7 +84,7 @@ class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormVi
         return HttpResponseRedirect(reverse('pki:truststores'))
 
     def get_success_url(self) -> str:
-        """You could still use a success URL here if needed"""
+        """You could still use a success URL here if needed."""
         return reverse_lazy('pki:truststores')
 
     def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:

@@ -7,6 +7,7 @@ from typing import Any
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from django_stubs_ext.db.models import TypedModelMeta
 from trustpoint_core import oid
 from util.field import UniqueNameValidator
 
@@ -17,6 +18,8 @@ __all__ = ['DomainModel']
 
 class DomainModel(models.Model):
     """Domain Model."""
+
+    objects: models.Manager[DomainModel]
 
     unique_name = models.CharField(_('Domain Name'), max_length=100, unique=True, validators=[UniqueNameValidator()])
 
@@ -36,6 +39,9 @@ class DomainModel(models.Model):
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
     updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     def __repr__(self) -> str:
         """Representation of the Domain model instance."""

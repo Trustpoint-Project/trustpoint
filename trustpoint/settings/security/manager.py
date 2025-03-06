@@ -1,4 +1,5 @@
 """Logic managing the security level setting of the Trustpoint."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -14,9 +15,7 @@ if TYPE_CHECKING:
 class SecurityManager(LoggerMixin):
     """Manages the security level setting of the Trustpoint."""
 
-    def is_feature_allowed(self,
-                           feature: SecurityFeature,
-                           target_level: None | str = None) -> bool:
+    def is_feature_allowed(self, feature: SecurityFeature, target_level: None | str = None) -> bool:
         """Checks if the specified feature is allowed under the given security level.
 
         If 'target_level' is None, the current security level is used.
@@ -33,7 +32,6 @@ class SecurityManager(LoggerMixin):
         # If the level is defined in the dictionary, check membership
         allowed_features = LEVEL_FEATURE_MAP.get(level_choice, set())
         return feature in allowed_features
-
 
     def get_security_level(self) -> str:
         """Returns the string representation of the security_mode, e.g. '0', '1', etc."""

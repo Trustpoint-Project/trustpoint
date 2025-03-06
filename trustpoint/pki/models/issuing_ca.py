@@ -76,7 +76,7 @@ class IssuingCaModel(LoggerMixin, models.Model):
 
     @property
     def common_name(self) -> str:
-        """Returns common name"""
+        """Returns common name."""
         return self.credential.certificate.common_name
 
     @classmethod
