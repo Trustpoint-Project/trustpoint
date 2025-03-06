@@ -84,8 +84,13 @@ To have an example on how to use this workflow, below there is the workflow for 
 Codecov Pipeline
 ================
 
+We are using `Codecov <https://about.codecov.io/>`_ for analyzing our pytest code coverage and showing this with a badge.
+This workflow is also setting up :term:`uv` as in :ref:`composite_setup_action`
+and using it to run pytest with a coverage report which will be uploaded to codecov in the next step.
+
 .. literalinclude:: ../../.github/workflows/codecov-upload.yml
-   :language: yaml
+    :language: yaml
+    :caption: Upload to codecov workflow
 
 =============
 MyPy Pipeline
