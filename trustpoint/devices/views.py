@@ -288,7 +288,7 @@ class DeviceCertificateLifecycleManagementSummaryView(DeviceContextMixin, Sortab
 #  ------------------------------ Certificate Lifecycle Management - Credential Issuance -------------------------------
 
 
-class DeviceIssueCredentialViewMixin(
+class DeviceIssueCredentialView(
     DeviceContextMixin,
     SingleObjectMixin[DeviceModel],
     FormView[CredentialFormClass],
@@ -365,7 +365,7 @@ class DeviceIssueCredentialViewMixin(
 
 
 class DeviceIssueTlsClientCredential(
-    DeviceIssueCredentialViewMixin[IssueTlsClientCredentialForm, LocalTlsClientCredentialIssuer]
+    DeviceIssueCredentialView[IssueTlsClientCredentialForm, LocalTlsClientCredentialIssuer]
 ):
     """View to issue a new TLS client credential."""
 
@@ -391,7 +391,7 @@ class DeviceIssueTlsClientCredential(
 
 
 class DeviceIssueTlsServerCredential(
-    DeviceIssueCredentialViewMixin[IssueTlsServerCredentialForm, LocalTlsServerCredentialIssuer]
+    DeviceIssueCredentialView[IssueTlsServerCredentialForm, LocalTlsServerCredentialIssuer]
 ):
     """View to issue a new TLS server credential."""
 
@@ -424,7 +424,7 @@ class DeviceIssueTlsServerCredential(
 
 
 class DeviceIssueOpcUaClientCredential(
-    DeviceIssueCredentialViewMixin[IssueOpcUaClientCredentialForm, OpcUaClientCredentialIssuer]
+    DeviceIssueCredentialView[IssueOpcUaClientCredentialForm, OpcUaClientCredentialIssuer]
 ):
     """View to issue a new OPC UA client credential."""
 
@@ -451,7 +451,7 @@ class DeviceIssueOpcUaClientCredential(
 
 
 class DeviceIssueOpcUaServerCredential(
-    DeviceIssueCredentialViewMixin[IssueOpcUaServerCredentialForm, OpcUaServerCredentialIssuer]
+    DeviceIssueCredentialView[IssueOpcUaServerCredentialForm, OpcUaServerCredentialIssuer]
 ):
     """View to issue a new OPC UA server credential."""
 
