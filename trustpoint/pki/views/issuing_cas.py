@@ -31,6 +31,7 @@ class IssuingCaContextMixin(TpLoginRequiredMixin, ContextDataMixin):
     context_page_category = 'pki'
     context_page_name = 'issuing_cas'
 
+
 class IssuingCaTableView(IssuingCaContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView):
     """Issuing CA Table View."""
 
@@ -57,22 +58,19 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, TpLoginRequiredMixin, 
 
 
 class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, TpLoginRequiredMixin, FormView):
-
     template_name = 'pki/issuing_cas/add/file_import.html'
     form_class = IssuingCaAddFileImportPkcs12Form
     success_url = reverse_lazy('pki:issuing_cas')
 
 
 class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, TpLoginRequiredMixin, FormView):
-
     template_name = 'pki/issuing_cas/add/file_import.html'
     form_class = IssuingCaAddFileImportSeparateFilesForm
     success_url = reverse_lazy('pki:issuing_cas')
 
 
 class IssuingCaDetailView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailView):
-
-    http_method_names = ('get', )
+    http_method_names = ('get',)
 
     model = IssuingCaModel
     success_url = reverse_lazy('pki:issuing_cas')
@@ -81,9 +79,7 @@ class IssuingCaDetailView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailVie
     context_object_name = 'issuing_ca'
 
 
-
 class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, TpLoginRequiredMixin, DetailView):
-
     model = IssuingCaModel
     success_url = reverse_lazy('pki:issuing_cas')
     ignore_url = reverse_lazy('pki:issuing_cas')
@@ -110,16 +106,11 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, TpLoginRequiredMixin
         except ProtectedError:
             messages.error(
                 self.request,
-                _(
-                    'Cannot delete the selected Issuing CA(s) because they are referenced by other objects.'
-                )
+                _('Cannot delete the selected Issuing CA(s) because they are referenced by other objects.'),
             )
             return HttpResponseRedirect(self.success_url)
 
-        messages.success(
-            self.request,
-            _('Successfully deleted {count} Issuing CA(s).').format(count=deleted_count)
-        )
+        messages.success(self.request, _('Successfully deleted {count} Issuing CA(s).').format(count=deleted_count))
 
         return response
 
@@ -132,7 +123,7 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, TpLoginRequiredMixin, De
     ignore_url = reverse_lazy('pki:issuing_cas')
     context_object_name = 'issuing_ca'
 
-    http_method_names = ('get', )
+    http_method_names = ('get',)
 
     # TODO(Air): This view should use a POST request as it is an action.
     # However, this is not trivial in the config view as that already contains a form.
@@ -148,7 +139,7 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, TpLoginRequiredMixin, De
 class CrlDownloadView(IssuingCaContextMixin, DetailView):
     """Unauthenticated view to download the certificate revocation list of an Issuing CA."""
 
-    http_method_names = ('get', )
+    http_method_names = ('get',)
 
     model = IssuingCaModel
     success_url = reverse_lazy('pki:issuing_cas')

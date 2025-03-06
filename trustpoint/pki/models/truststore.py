@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from trustpoint_core.serializer import CertificateSerializer, CertificateCollectionSerializer
+from trustpoint_core.serializer import CertificateCollectionSerializer
+from django_stubs_ext.db.models import TypedModelMeta
 from util.field import UniqueNameValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -13,9 +14,8 @@ __all__ = [
     'TrustpointTlsServerCredentialModel',
     'ActiveTrustpointTlsServerCredentialModel',
     'TruststoreModel',
-    'TruststoreOrderModel'
+    'TruststoreOrderModel',
 ]
-
 
 
 class TrustpointTlsServerCredentialModel(models.Model):
@@ -25,6 +25,12 @@ class TrustpointTlsServerCredentialModel(models.Model):
     communication, storing the private key and linking it to a specific
     certificate.
     """
+
+    objects: models.Manager[TrustpointTlsServerCredentialModel]
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
+
     private_key_pem = models.CharField(verbose_name=_('Private Key (PEM)'), max_length=65536, editable=False)
     certificate = models.ForeignKey(CertificateModel, on_delete=models.CASCADE)
 
@@ -43,12 +49,13 @@ class ActiveTrustpointTlsServerCredentialModel(models.Model):
     This model tracks the active server credential, ensuring that it is always
     up-to-date and linked to a specific `TrustpointTlsServerCredentialModel` instance.
     """
-    credential = models.ForeignKey(
-        TrustpointTlsServerCredentialModel,
-        on_delete=models.CASCADE,
-        blank=True,
-        null=True
-    )
+
+    objects: models.Manager[ActiveTrustpointTlsServerCredentialModel]
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
+
+    credential = models.ForeignKey(TrustpointTlsServerCredentialModel, on_delete=models.CASCADE, blank=True, null=True)
 
     def __str__(self) -> str:
         """Returns a human-readable string representation of the active credential.
@@ -56,7 +63,7 @@ class ActiveTrustpointTlsServerCredentialModel(models.Model):
         Returns:
             str: Description of the active TLS server credential.
         """
-        return f"Active TLS Credential: {self.credential.id if self.credential else 'None'}"
+        return f'Active TLS Credential: {self.credential.id if self.credential else "None"}'
 
     def save(self, *args: tuple, **kwargs: dict) -> None:
         """Ensures the model instance always has an ID of 1 to enforce singleton-like behavior.
@@ -71,6 +78,7 @@ class ActiveTrustpointTlsServerCredentialModel(models.Model):
         self.id = 1
         super().save(*args, **kwargs)
 
+
 class TruststoreModel(models.Model):
     """Represents a truststore, which is a collection of certificates used for specific purposes.
 
@@ -80,6 +88,11 @@ class TruststoreModel(models.Model):
     or serializing its content.
     """
 
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
+
+    objects: models.Manager[TruststoreModel]
+
     class IntendedUsage(models.IntegerChoices):
         """Intended Usage of the Truststore."""
 
@@ -88,22 +101,16 @@ class TruststoreModel(models.Model):
         GENERIC = 2, _('Generic')
 
     unique_name = models.CharField(
-        verbose_name=_('Unique Name'),
-        max_length=100,
-        validators=[UniqueNameValidator()],
-        unique=True
+        verbose_name=_('Unique Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
     )
 
     certificates = models.ManyToManyField(
-        to=CertificateModel,
-        verbose_name=_('Truststore certificates'),
-        through='TruststoreOrderModel')
+        to=CertificateModel, verbose_name=_('Truststore certificates'), through='TruststoreOrderModel'
+    )
 
     intended_usage = models.IntegerField(
-        verbose_name=_('Intended Usage'),
-        choices=IntendedUsage,
-        null=False,
-        blank=False)
+        verbose_name=_('Intended Usage'), choices=IntendedUsage, null=False, blank=False
+    )
 
     created_at = models.DateTimeField(verbose_name=_('Created-At'), auto_now_add=True)
 
@@ -136,29 +143,21 @@ class TruststoreModel(models.Model):
         )
 
 
-
 class TruststoreOrderModel(models.Model):
     """Represents the order of certificates in a truststore."""
 
-    order = models.PositiveSmallIntegerField(
-        verbose_name=_('Trust Store Certificate Index (Order)'),
-                                             editable=False
-    )
-    certificate = models.ForeignKey(
-        CertificateModel,
-        on_delete=models.CASCADE,
-        editable=False,
-        related_name='trust_store_components'
-    )
-    trust_store = models.ForeignKey(
-        TruststoreModel,
-        on_delete=models.CASCADE,
-        editable=False
-    )
+    objects: models.Manager[TruststoreOrderModel]
 
-    class Meta:
-        """Meta options for TruststoreOrderModel."""
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
+
         unique_together = ('order', 'trust_store')
+
+    order = models.PositiveSmallIntegerField(verbose_name=_('Trust Store Certificate Index (Order)'), editable=False)
+    certificate = models.ForeignKey(
+        CertificateModel, on_delete=models.CASCADE, editable=False, related_name='trust_store_components'
+    )
+    trust_store = models.ForeignKey(TruststoreModel, on_delete=models.CASCADE, editable=False)
 
     def __str__(self) -> str:
         """Returns a human-readable string representation of the TruststoreOrderModel."""

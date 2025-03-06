@@ -1,6 +1,5 @@
 """Something."""
 
-
 from __future__ import annotations
 
 import random
@@ -31,7 +30,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             key_cert_sign=False,
             crl_sign=False,
             decipher_only=False,
-            encipher_only=False
+            encipher_only=False,
         )
 
         root_1, root_1_key = self.create_root_ca('root_ca')
@@ -51,7 +50,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
                 issuer_cn='issuing_ca',
                 subject_cn=f'EE {i}',
                 key_usage_extension=key_usage_extension,
-                validity_days=validity_days
+                validity_days=validity_days,
             )
             ee_certs[f'ee{i}'] = ee
             ee_keys[f'key{i}'] = key

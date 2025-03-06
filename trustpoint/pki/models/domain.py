@@ -1,4 +1,5 @@
 """Module that contains the DomainModel."""
+
 from __future__ import annotations
 
 from util.field import UniqueNameValidator
@@ -6,22 +7,22 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core import oid
+from django_stubs_ext.db.models import TypedModelMeta
 
 from . import IssuingCaModel
 
-__all__ = [
-    'DomainModel'
-]
+__all__ = ['DomainModel']
 
 
 class DomainModel(models.Model):
     """Domain Model."""
 
-    unique_name = models.CharField(
-        _('Domain Name'),
-        max_length=100,
-        unique=True,
-        validators=[UniqueNameValidator()])
+    objects: models.Manager[DomainModel]
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
+
+    unique_name = models.CharField(_('Domain Name'), max_length=100, unique=True, validators=[UniqueNameValidator()])
 
     issuing_ca = models.ForeignKey(
         IssuingCaModel,

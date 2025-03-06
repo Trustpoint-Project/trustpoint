@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 class AutoGenPkiKeyAlgorithm(models.TextChoices):
     """The key algorithms supported by the AutoGenPKI."""
+
     RSA2048 = 'RSA2048SHA256', 'RSA2048'
     RSA4096 = 'RSA4096SHA256', 'RSA4096'
     SECP256R1 = 'SECP256R1SHA256', 'SECP256R1'
@@ -33,6 +34,7 @@ class AutoGenPkiKeyAlgorithm(models.TextChoices):
             return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC, named_curve=NamedCurve.SECP256R1)
         exc_msg = f'Unsupported key algorithm type for AutoGenPKI: {self.value}'
         raise ValueError(exc_msg)
+
 
 class KeyGenerator:
     """Utility class for generating private keys."""

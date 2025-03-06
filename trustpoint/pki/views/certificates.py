@@ -42,6 +42,7 @@ class CertificateTableView(CertificatesContextMixin, TpLoginRequiredMixin, Sorta
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'common_name'
 
+
 class CertificateDetailView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView):
     """The certificate detail view."""
 
@@ -50,6 +51,7 @@ class CertificateDetailView(CertificatesContextMixin, TpLoginRequiredMixin, Deta
     ignore_url = reverse_lazy('pki:certificates')
     template_name = 'pki/certificates/details.html'
     context_object_name = 'cert'
+
 
 class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView):
     """View for downloading a single certificate."""
@@ -220,7 +222,9 @@ class CertificateMultipleDownloadView(
             raise Http404 from exception
 
         file_bytes = CertificateArchiveFileBuilder.build(
-            certificate_serializers=[certificate_model.get_certificate_serializer() for certificate_model in self.queryset],
+            certificate_serializers=[
+                certificate_model.get_certificate_serializer() for certificate_model in self.queryset
+            ],
             file_format=file_format_enum,
             archive_format=archive_format_enum,
         )

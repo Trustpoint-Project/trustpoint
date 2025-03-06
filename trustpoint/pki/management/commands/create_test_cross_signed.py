@@ -1,6 +1,5 @@
 """Something."""
 
-
 from __future__ import annotations
 
 import datetime
@@ -19,14 +18,13 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
     """Django management command for adding issuing CA test data."""
 
     help = 'Removes all migrations, deletes db and runs makemigrations and migrate afterwards.'
-    def handle(self, *args, **kwargs) -> None:
 
+    def handle(self, *args, **kwargs) -> None:
         root_1, root_1_key = self.create_root_ca('Root CA A')
         root_2, root_2_key = self.create_root_ca('Root CA B')
 
         issuing_1, issuing_1_key = self.create_issuing_ca(root_1_key, 'Root CA A', 'Issuing CA')
-        issuing_2, issuing_2_key = self.create_issuing_ca(
-            root_2_key, 'Root CA B', 'Issuing CA', issuing_1_key)
+        issuing_2, issuing_2_key = self.create_issuing_ca(root_2_key, 'Root CA B', 'Issuing CA', issuing_1_key)
 
         ee_1, _ = self.create_ee(issuing_1_key, 'Issuing CA', 'EE A1')
         ee_2, _ = self.create_ee(issuing_1_key, 'Issuing CA', 'EE A2')
@@ -41,4 +39,3 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
         CertificateModel.save_certificate(ee_2)
         CertificateModel.save_certificate(ee_3)
         CertificateModel.save_certificate(ee_4)
-

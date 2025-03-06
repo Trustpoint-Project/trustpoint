@@ -8,5 +8,5 @@ class PkiConfig(AppConfig):
     def ready(self) -> None:
         from pki.signals.issuing_ca import (
             delete_related_credential_certificate_chain_order_records,
-            delete_related_credential_record
+            delete_related_credential_record,
         )

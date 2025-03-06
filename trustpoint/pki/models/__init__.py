@@ -13,7 +13,7 @@ from .extension import (
     BasicConstraintsExtension,
     KeyUsageExtension,
     IssuerAlternativeNameExtension,
-    SubjectAlternativeNameExtension
+    SubjectAlternativeNameExtension,
 )
 from .certificate import CertificateModel, RevokedCertificateModel
 from .issuing_ca import IssuingCaModel

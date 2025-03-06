@@ -1,4 +1,5 @@
 """Views for the users application."""
+
 from __future__ import annotations
 
 from django.contrib.auth.views import LoginView
