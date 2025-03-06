@@ -140,3 +140,7 @@ Glossary
     mypy
         mypy is a static type checker for python.
         See also: `mypy <https://mypy.readthedocs.io/en/stable/>`_.
+
+    ruff
+        Astrals ruff ist a really fast python linter and code formatter.
+        See also: `ruff <https://docs.astral.sh/ruff/>`_.
