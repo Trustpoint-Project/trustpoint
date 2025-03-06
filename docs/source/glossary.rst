@@ -132,3 +132,7 @@ Glossary
     uv
         Astrals uv is a really fast python package manager.
         See also: `uv <https://astral.sh/blog/uv>`_.
+
+    Django
+        Django is a python web framework which simplifies the development of web apps.
+        See also: `Django <https://www.djangoproject.com/>`_.
