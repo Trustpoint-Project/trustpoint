@@ -74,7 +74,7 @@ Once the tests are ran, an artifact with the test reports is uploaded.
     :language: yaml
     :caption: Behave template workflow
 
-To have an example on how to use this workflow, below there is the workflow for executing the test for `R_013`_:
+We provide an example on how to use this workflow below:
 
 .. literalinclude:: ../../.github/workflows/r_013_feature_test.yml
     :language: yaml
@@ -107,7 +107,7 @@ we add a comment to the current pull request.
 
 .. literalinclude:: ../../.github/workflows/pytest.yml
     :language: yaml
-    :caption: Pytest Workflow
+    :caption: Pytest workflow
 
 .. _mypy_pipeline:
 
@@ -120,7 +120,7 @@ This pipeline is actually really short because it just sets up :term:`uv` from :
 
 .. literalinclude:: ../../.github/workflows/mypy.yml
     :language: yaml
-    :caption: mypy Workflow
+    :caption: mypy workflow
 
 =============
 Ruff Pipeline
@@ -131,4 +131,4 @@ The only difference is that we now run :term:`ruff` and upload the report if the
 
 .. literalinclude:: ../../.github/workflows/ruff.yml
     :language: yaml
-    :caption: ruff Workflow
+    :caption: ruff workflow
