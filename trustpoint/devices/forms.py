@@ -182,7 +182,7 @@ class IssueOpcUaClientCredentialForm(CleanedDataNotNoneMixin, ApplicationUriForm
     """Form to issue a new OPC UA client credential."""
 
 
-class IssueOpcUaServerCredentialForm(BaseServerCredentialForm):
+class IssueOpcUaServerCredentialForm(ApplicationUriFormMixin, BaseServerCredentialForm):
     """Form to issue a new OPC UA server credential."""
 
 
