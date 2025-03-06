@@ -1,4 +1,5 @@
 """Module that contains the DomainModel."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -11,18 +12,13 @@ from util.field import UniqueNameValidator
 
 from . import IssuingCaModel
 
-__all__ = [
-    'DomainModel'
-]
+__all__ = ['DomainModel']
+
 
 class DomainModel(models.Model):
     """Domain Model."""
 
-    unique_name = models.CharField(
-        _('Domain Name'),
-        max_length=100,
-        unique=True,
-        validators=[UniqueNameValidator()])
+    unique_name = models.CharField(_('Domain Name'), max_length=100, unique=True, validators=[UniqueNameValidator()])
 
     issuing_ca = models.ForeignKey(
         IssuingCaModel,

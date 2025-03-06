@@ -40,6 +40,7 @@ class IssuingCaContextMixin(TpLoginRequiredMixin, ContextDataMixin):
     context_page_category = 'pki'
     context_page_name = 'issuing_cas'
 
+
 class IssuingCaTableView(IssuingCaContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView[IssuingCaModel]):
     """Issuing CA Table View."""
 
@@ -68,8 +69,9 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, TpLoginRequiredMixin, 
         return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-method_select'))
 
 
-class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, TpLoginRequiredMixin,
-                                       FormView[IssuingCaAddFileImportPkcs12Form]):
+class IssuingCaAddFileImportPkcs12View(
+    IssuingCaContextMixin, TpLoginRequiredMixin, FormView[IssuingCaAddFileImportPkcs12Form]
+):
     """View to import an Issuing CA from a PKCS12 file."""
 
     template_name = 'pki/issuing_cas/add/file_import.html'
@@ -77,8 +79,9 @@ class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, TpLoginRequiredMix
     success_url = reverse_lazy('pki:issuing_cas')
 
 
-class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, TpLoginRequiredMixin,
-                                              FormView[IssuingCaAddFileImportSeparateFilesForm]):
+class IssuingCaAddFileImportSeparateFilesView(
+    IssuingCaContextMixin, TpLoginRequiredMixin, FormView[IssuingCaAddFileImportSeparateFilesForm]
+):
     """View to import an Issuing CA from separate PEM files."""
 
     template_name = 'pki/issuing_cas/add/file_import.html'
@@ -89,14 +92,13 @@ class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, TpLoginRequ
 class IssuingCaDetailView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailView[IssuingCaModel]):
     """View to display the details of an Issuing CA."""
 
-    http_method_names = ('get', )
+    http_method_names = ('get',)
 
     model = IssuingCaModel
     success_url = reverse_lazy('pki:issuing_cas')
     ignore_url = reverse_lazy('pki:issuing_cas')
     template_name = 'pki/issuing_cas/details.html'
     context_object_name = 'issuing_ca'
-
 
 
 class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, TpLoginRequiredMixin, DetailView[IssuingCaModel]):
@@ -128,16 +130,11 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, TpLoginRequiredMixin
         except ProtectedError:
             messages.error(
                 self.request,
-                _(
-                    'Cannot delete the selected Issuing CA(s) because they are referenced by other objects.'
-                )
+                _('Cannot delete the selected Issuing CA(s) because they are referenced by other objects.'),
             )
             return HttpResponseRedirect(self.success_url)
 
-        messages.success(
-            self.request,
-            _('Successfully deleted {count} Issuing CA(s).').format(count=deleted_count)
-        )
+        messages.success(self.request, _('Successfully deleted {count} Issuing CA(s).').format(count=deleted_count))
 
         return response
 
@@ -150,11 +147,11 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, TpLoginRequiredMixin, De
     ignore_url = reverse_lazy('pki:issuing_cas')
     context_object_name = 'issuing_ca'
 
-    http_method_names = ('get', )
+    http_method_names = ('get',)
 
     # TODO(Air): This view should use a POST request as it is an action.
     # However, this is not trivial in the config view as that already contains a form.
-    def get(self, request: HttpRequest, *_args: tuple[Any], **_kwargs: dict[str,Any]) -> HttpResponse:
+    def get(self, request: HttpRequest, *_args: tuple[Any], **_kwargs: dict[str, Any]) -> HttpResponse:
         """Generate a CRL for the Issuing CA (should be POST!)."""
         issuing_ca = self.get_object()
         if issuing_ca.issue_crl():
@@ -167,14 +164,14 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, TpLoginRequiredMixin, De
 class CrlDownloadView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
     """Unauthenticated view to download the certificate revocation list of an Issuing CA."""
 
-    http_method_names = ('get', )
+    http_method_names = ('get',)
 
     model = IssuingCaModel
     success_url = reverse_lazy('pki:issuing_cas')
     ignore_url = reverse_lazy('pki:issuing_cas')
     context_object_name = 'issuing_ca'
 
-    def get(self, request: HttpRequest, *_args: tuple[Any], **_kwargs: dict[str,Any]) -> HttpResponse:
+    def get(self, request: HttpRequest, *_args: tuple[Any], **_kwargs: dict[str, Any]) -> HttpResponse:
         """Download the CRL of the Issuing CA."""
         issuing_ca = self.get_object()
         crl_pem = issuing_ca.crl_pem

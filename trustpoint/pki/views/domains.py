@@ -65,7 +65,7 @@ class DomainCreateView(DomainContextMixin, TpLoginRequiredMixin, CreateView[Doma
         form.fields['issuing_ca'].queryset = IssuingCaModel.objects.exclude(
             issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
         ).filter(is_active=True)
-        form.fields['issuing_ca'].empty_label = None # Remove empty "---------" choice
+        form.fields['issuing_ca'].empty_label = None  # Remove empty "---------" choice
         del form.fields['is_active']
         return form
 
@@ -111,7 +111,7 @@ class DomainConfigView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegi
 
         return context  # noqa: RET504
 
-    def post(self, request: HttpRequest, *_args: tuple[Any], **_kwargs: dict[str,Any]) -> HttpResponse:
+    def post(self, request: HttpRequest, *_args: tuple[Any], **_kwargs: dict[str, Any]) -> HttpResponse:
         """Handle config form submission."""
         messages.success(request, _('Settings updated successfully.'))
         return HttpResponseRedirect(self.success_url)
@@ -143,17 +143,11 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, TpLoginRequiredMixin, Bu
             response = super().form_valid(form)
         except ProtectedError:
             messages.error(
-                self.request,
-                _(
-                    'Cannot delete the selected Domains(s) because they are referenced by other objects.'
-                )
+                self.request, _('Cannot delete the selected Domains(s) because they are referenced by other objects.')
             )
             return HttpResponseRedirect(self.success_url)
 
-        messages.success(
-            self.request,
-            _('Successfully deleted {count} Domains.').format(count=deleted_count)
-        )
+        messages.success(self.request, _('Successfully deleted {count} Domains.').format(count=deleted_count))
 
         return response
 
@@ -227,8 +221,10 @@ class DevIdRegistrationCreateView(DomainContextMixin, TpLoginRequiredMixin, Form
         domain = self.get_domain()
         return cast('str', reverse_lazy('pki:domains-config', kwargs={'pk': domain.id}))
 
+
 class DevIdRegistrationDeleteView(DomainContextMixin, TpLoginRequiredMixin, DeleteView):
     """View to delete a DevID Registration."""
+
     model = DevIdRegistration
     template_name = 'pki/devid_registration/confirm_delete.html'
     success_url = reverse_lazy('pki:domains')
@@ -238,6 +234,7 @@ class DevIdRegistrationDeleteView(DomainContextMixin, TpLoginRequiredMixin, Dele
         response = super().delete(request, *args, **kwargs)
         messages.success(request, _('DevID Registration Pattern deleted successfully.'))
         return response
+
 
 class DevIdMethodSelectView(DomainContextMixin, TpLoginRequiredMixin, FormView[DevIdAddMethodSelectForm]):
     """View to select the method to add a DevID Registration pattern."""
@@ -258,8 +255,7 @@ class DevIdMethodSelectView(DomainContextMixin, TpLoginRequiredMixin, FormView[D
 
         if method_select == 'import_truststore':
             if domain_pk:
-                return HttpResponseRedirect(
-                    reverse('pki:truststores-add-with-pk', kwargs={'pk': domain_pk}))
+                return HttpResponseRedirect(reverse('pki:truststores-add-with-pk', kwargs={'pk': domain_pk}))
             return HttpResponseRedirect(reverse('pki:truststores-add'))
 
         if method_select == 'configure_pattern':

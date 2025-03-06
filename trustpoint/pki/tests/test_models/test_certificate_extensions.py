@@ -138,8 +138,7 @@ def test_authority_key_identifier_ext(self_signed_cert_with_ext: Certificate) ->
     # Schlüssel-ID
     public_key = self_signed_cert_with_ext.public_key()
     public_key_bytes = public_key.public_bytes(
-        encoding=serialization.Encoding.DER,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
+        encoding=serialization.Encoding.DER, format=serialization.PublicFormat.SubjectPublicKeyInfo
     )
     expected_key_identifier = hashlib.sha1(public_key_bytes).hexdigest().upper()  # noqa: S324
     assert aki_ext.key_identifier == expected_key_identifier
@@ -176,8 +175,7 @@ def test_subject_key_identifier_ext(self_signed_cert_with_ext: Certificate) -> N
 
     public_key = self_signed_cert_with_ext.public_key()
     public_key_bytes = public_key.public_bytes(
-        encoding=serialization.Encoding.DER,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
+        encoding=serialization.Encoding.DER, format=serialization.PublicFormat.SubjectPublicKeyInfo
     )
     expected_key_identifier = hashlib.sha1(public_key_bytes).hexdigest().upper()  # noqa: S324
     assert ski_ext.key_identifier == expected_key_identifier
@@ -197,12 +195,14 @@ def test_certificate_policies_multiple_entries(self_signed_cert_with_ext: Certif
     assert ev_policy is not None
     assert ev_policy.policy_qualifiers.count() == 2  # noqa: PLR2004
 
-    ev_cps_uri = ev_policy.policy_qualifiers.filter(qualifier__cps_uri__cps_uri='https://example-ev-certs.com/cps').first()
+    ev_cps_uri = ev_policy.policy_qualifiers.filter(
+        qualifier__cps_uri__cps_uri='https://example-ev-certs.com/cps'
+    ).first()
     assert ev_cps_uri is not None
 
     ev_user_notice = ev_policy.policy_qualifiers.filter(
-                            qualifier__user_notice__explicit_text__contains='EV certificates issued'
-                        ).first()
+        qualifier__user_notice__explicit_text__contains='EV certificates issued'
+    ).first()
     assert ev_user_notice is not None
 
     # DV
@@ -210,12 +210,14 @@ def test_certificate_policies_multiple_entries(self_signed_cert_with_ext: Certif
     assert dv_policy is not None
     assert dv_policy.policy_qualifiers.count() == 2  # noqa: PLR2004
 
-    dv_cps_uri = dv_policy.policy_qualifiers.filter(qualifier__cps_uri__cps_uri='https://example-dv-certs.com/cps').first()
+    dv_cps_uri = dv_policy.policy_qualifiers.filter(
+        qualifier__cps_uri__cps_uri='https://example-dv-certs.com/cps'
+    ).first()
     assert dv_cps_uri is not None
 
     dv_user_notice = dv_policy.policy_qualifiers.filter(
-                            qualifier__user_notice__explicit_text__contains='DV certificates issued'
-                        ).first()
+        qualifier__user_notice__explicit_text__contains='DV certificates issued'
+    ).first()
     assert dv_user_notice is not None
 
 
@@ -257,10 +259,7 @@ def test_name_constraints_ext(self_signed_cert_with_ext: Certificate) -> None:
         st.base.dns_name.value == DNS_NAME_VALUE if st.base.dns_name else False
         for st in nc_ext.permitted_subtrees.all()
     )
-    assert any(
-        st.base.uri.value == URI_VALUE if st.base.uri else False
-        for st in nc_ext.permitted_subtrees.all()
-    )
+    assert any(st.base.uri.value == URI_VALUE if st.base.uri else False for st in nc_ext.permitted_subtrees.all())
 
     # excludedSubtrees
     assert nc_ext.excluded_subtrees.count() == 3  # noqa: PLR2004
@@ -277,9 +276,7 @@ def test_name_constraints_ext(self_signed_cert_with_ext: Certificate) -> None:
     assert excluded_other_name is not None
     base_other_name = cast(GeneralNameOtherName, excluded_other_name.base.other_name)
     assert base_other_name.type_id == OTHER_NAME_OID
-    decoded_asn1, _ = decode(
-        bytes.fromhex(base_other_name.value), asn1Spec=char.UTF8String()
-    )
+    decoded_asn1, _ = decode(bytes.fromhex(base_other_name.value), asn1Spec=char.UTF8String())
     assert str(decoded_asn1) == OTHER_NAME_CONTENT
 
 
@@ -317,7 +314,6 @@ def test_subject_information_access_extension(self_signed_cert_with_ext: Certifi
     assert ad.access_location is not None
     assert ad.access_location.dns_name is not None
     assert ad.access_location.dns_name.value == DNS_NAME_VALUE
-
 
 
 @pytest.mark.django_db

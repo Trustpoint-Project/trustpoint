@@ -13,18 +13,21 @@ from pki.models import CertificateModel, TruststoreModel, TruststoreOrderModel
 
 class Command(BaseCommand):
     """Imports Truststores from specific PEM files in tests/data/idevid_hierarchies."""
+
     help = 'Imports Truststores from specific PEM files in tests/data/idevid_hierarchies'
 
-    TRUSTSTORE_RELATIVE_PATHS = MappingProxyType({
-        'ecc1/ecc1_chain.pem': 'EC-256',
-        'ecc2/ecc2_chain.pem': 'EC-283',
-        'ecc3/ecc3_chain.pem': 'EC-570',
-        'rsa2/rsa2_chain.pem': 'RSA-2048',
-        'rsa3/rsa3_chain.pem': 'RSA-3072',
-        'rsa4/rsa4_chain.pem': 'RSA-4096',
-    })
+    TRUSTSTORE_RELATIVE_PATHS = MappingProxyType(
+        {
+            'ecc1/ecc1_chain.pem': 'EC-256',
+            'ecc2/ecc2_chain.pem': 'EC-283',
+            'ecc3/ecc3_chain.pem': 'EC-570',
+            'rsa2/rsa2_chain.pem': 'RSA-2048',
+            'rsa3/rsa3_chain.pem': 'RSA-3072',
+            'rsa4/rsa4_chain.pem': 'RSA-4096',
+        }
+    )
 
-    def handle(self, *_args: tuple[str], **_kwargs: dict[str,str]) -> None:
+    def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Execute the command."""
         base_path = Path(__file__).resolve().parent.joinpath('../../../../tests/data/idevid_hierarchies').resolve()
 
@@ -44,7 +47,7 @@ class Command(BaseCommand):
                 self._save_trust_store(
                     unique_name=f'idevid-truststore-{unique_name}',
                     intended_usage=TruststoreModel.IntendedUsage.IDEVID,
-                    certificates=certificates
+                    certificates=certificates,
                 )
 
                 self.stdout.write(self.style.SUCCESS(f'Imported Truststore: {unique_name}'))
@@ -53,9 +56,7 @@ class Command(BaseCommand):
 
     @staticmethod
     def _save_trust_store(
-        unique_name: str,
-        intended_usage: TruststoreModel.IntendedUsage,
-        certificates: list[x509.Certificate]
+        unique_name: str, intended_usage: TruststoreModel.IntendedUsage, certificates: list[x509.Certificate]
     ) -> TruststoreModel:
         saved_certs = []
 
@@ -66,17 +67,10 @@ class Command(BaseCommand):
             except CertificateModel.DoesNotExist:
                 saved_certs.append(CertificateModel.save_certificate(certificate))
 
-        trust_store_model = TruststoreModel(
-            unique_name=unique_name,
-            intended_usage=intended_usage
-        )
+        trust_store_model = TruststoreModel(unique_name=unique_name, intended_usage=intended_usage)
         trust_store_model.save()
 
         for number, certificate in enumerate(saved_certs):
-            TruststoreOrderModel.objects.create(
-                order=number,
-                certificate=certificate,
-                trust_store=trust_store_model
-            )
+            TruststoreOrderModel.objects.create(order=number, certificate=certificate, trust_store=trust_store_model)
 
         return trust_store_model

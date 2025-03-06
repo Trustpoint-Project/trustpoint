@@ -1,4 +1,5 @@
 """Management command to reset the database and migrations."""
+
 from __future__ import annotations
 
 import os
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
 
 class Command(BaseCommand):
     """Management command to reset the database and migrations."""
+
     help = (
         'Resets the database by deleting all migrations, dropping '
         'the database, then running makemigrations and migrate. '
@@ -27,7 +29,7 @@ class Command(BaseCommand):
         parser.add_argument('--force', action='store_true', help='Force database reset without prompt.')
         parser.add_argument('--no-user', action='store_true', help='Skip superuser creation.')
 
-    def handle(self, *_args: tuple[str], **options: dict[str,str]) -> None:
+    def handle(self, *_args: tuple[str], **options: dict[str, str]) -> None:
         """Executes the command."""
         # Confirm database reset
         if not options.get('force'):
@@ -79,7 +81,7 @@ class Command(BaseCommand):
                     if (file.endswith('.py') and file != '__init__.py') or file.endswith('.pyc'):
                         try:
                             Path(Path(root) / file).unlink()
-                        except Exception as e: # noqa: BLE001
+                        except Exception as e:  # noqa: BLE001
                             self.stderr.write(f'Error removing {file}: {e}')
 
     def _reset_sqlite(self, base_path: Path) -> None:
@@ -89,7 +91,7 @@ class Command(BaseCommand):
             try:
                 Path(db_path).unlink()
                 self.stdout.write('SQLite database file deleted.')
-            except Exception as e: # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
                 self.stderr.write(f'Error deleting SQLite database file: {e}')
         else:
             self.stdout.write('No SQLite database file found.')
@@ -141,5 +143,5 @@ class Command(BaseCommand):
             conn.close()
             self.stdout.write('PostgreSQL database reset successfully.')
 
-        except Exception as e: # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             self.stderr.write(f'Error resetting PostgreSQL database: {e}')

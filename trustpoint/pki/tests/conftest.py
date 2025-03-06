@@ -1,4 +1,5 @@
 """pytest configuration for the tests in the PKI app."""
+
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
@@ -12,6 +13,7 @@ def enable_db_access_for_all_tests(db: None) -> None:
 # RSA Private Key Fixture
 # ----------------------------
 
+
 @pytest.fixture
 def rsa_private_key() -> rsa.RSAPrivateKey:
     """Generate a reusable RSA private key."""
@@ -20,9 +22,11 @@ def rsa_private_key() -> rsa.RSAPrivateKey:
         key_size=2048,
     )
 
+
 # ----------------------------
 # EC Private Key Fixture
 # ----------------------------
+
 
 @pytest.fixture
 def ec_private_key() -> ec.EllipticCurvePrivateKey:

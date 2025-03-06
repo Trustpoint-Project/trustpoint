@@ -30,18 +30,16 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
     help = 'Creates a certificate chain and validates it uing OpenSSL.'
 
     def _create_cert_chain(self, algorithm: PublicKeyInfo, path: Path) -> None:
-
         pem_root_cert, root_cert, root_private_key = self._create_certificate(
-            common_name=f'{algorithm}-root-ca',
-            algorithm=algorithm,
-            path=path)
+            common_name=f'{algorithm}-root-ca', algorithm=algorithm, path=path
+        )
 
         pem_issuing_cert, issuing_cert, issuing_private = self._create_certificate(
             common_name=f'{algorithm}-issuing-ca',
             algorithm=algorithm,
             path=path,
             issuer=root_cert,
-            issuer_priv_key=root_private_key
+            issuer_priv_key=root_private_key,
         )
 
         pem_ee_cert, ee_cert, ee_key = self._create_certificate(
@@ -49,7 +47,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             algorithm=algorithm,
             path=path,
             issuer=issuing_cert,
-            issuer_priv_key=issuing_private
+            issuer_priv_key=issuing_private,
         )
 
         p12 = pkcs12.serialize_key_and_certificates(
@@ -57,7 +55,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             key=ee_key,
             cert=ee_cert,
             cas=[root_cert, issuing_cert],
-            encryption_algorithm=BestAvailableEncryption(b'password')
+            encryption_algorithm=BestAvailableEncryption(b'password'),
         )
 
         with Path(path / f'{algorithm}.p12').open('wb') as f:
@@ -68,27 +66,35 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             f.write(cert_chain.encode())
 
     @classmethod
-    def _create_certificate( # noqa: PLR0913
-            cls,
-            common_name: str,
-            algorithm: PublicKeyInfo,
-            path: Path,
-            issuer: None | x509.Certificate = None,
-            issuer_priv_key: None | rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey = None,
-            validity_days: int = 365) -> tuple[str, x509.Certificate, rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey]:
-
+    def _create_certificate(  # noqa: PLR0913
+        cls,
+        common_name: str,
+        algorithm: PublicKeyInfo,
+        path: Path,
+        issuer: None | x509.Certificate = None,
+        issuer_priv_key: None | rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey = None,
+        validity_days: int = 365,
+    ) -> tuple[str, x509.Certificate, rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey]:
         private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(algorithm)
 
         one_day = datetime.timedelta(1, 0, 0)
         public_key = private_key.public_key()
         builder = x509.CertificateBuilder()
-        builder = builder.subject_name(x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, common_name),
-        ]))
+        builder = builder.subject_name(
+            x509.Name(
+                [
+                    x509.NameAttribute(NameOID.COMMON_NAME, common_name),
+                ]
+            )
+        )
         if issuer is None:
-            builder = builder.issuer_name(x509.Name([
-                x509.NameAttribute(NameOID.COMMON_NAME, common_name),
-            ]))
+            builder = builder.issuer_name(
+                x509.Name(
+                    [
+                        x509.NameAttribute(NameOID.COMMON_NAME, common_name),
+                    ]
+                )
+            )
         else:
             builder = builder.issuer_name(issuer.subject)
         builder = builder.not_valid_before(datetime.datetime.now(tz=datetime.UTC) - one_day)
@@ -107,9 +113,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             ca = False
             path_length = None
 
-        builder = builder.add_extension(
-            x509.BasicConstraints(ca=ca, path_length=path_length), critical=True
-        )
+        builder = builder.add_extension(x509.BasicConstraints(ca=ca, path_length=path_length), critical=True)
 
         builder = builder.add_extension(
             x509.KeyUsage(
@@ -121,9 +125,9 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
                 key_cert_sign=True,
                 crl_sign=True,
                 encipher_only=True,
-                decipher_only=True
+                decipher_only=True,
             ),
-            critical=True
+            critical=True,
         )
 
         some_arbitrary_der_as_hex = (
@@ -145,16 +149,17 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
                     x509.IPAddress(ipaddress.IPv6Network('2001:db8:1234::/48')),
                     x509.RegisteredID(x509.ObjectIdentifier('2.5.4.3')),
                     x509.OtherName(type_id=x509.ObjectIdentifier('2.5.4.3'), value=some_arbitrary_der),
-
                     x509.DirectoryName(
-                        x509.Name([
-                            x509.NameAttribute(NameOID.COMMON_NAME, 'Trustpoint Model Test'),
-                            x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Trustpoint')
-                        ])
-                    )
+                        x509.Name(
+                            [
+                                x509.NameAttribute(NameOID.COMMON_NAME, 'Trustpoint Model Test'),
+                                x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Trustpoint'),
+                            ]
+                        )
+                    ),
                 ]
             ),
-            critical=False
+            critical=False,
         )
 
         builder = builder.add_extension(
@@ -169,31 +174,34 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
                     x509.IPAddress(ipaddress.IPv6Network('2001:db8:1234::/48')),
                     x509.RegisteredID(x509.ObjectIdentifier('2.5.4.3')),
                     x509.OtherName(type_id=x509.ObjectIdentifier('2.5.4.3'), value=some_arbitrary_der),
-
                     x509.DirectoryName(
-                        x509.Name([
-                            x509.NameAttribute(NameOID.COMMON_NAME, 'Subject Trustpoint Model Test'),
-                            x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Subject Trustpoint')
-                        ])
-                    )
+                        x509.Name(
+                            [
+                                x509.NameAttribute(NameOID.COMMON_NAME, 'Subject Trustpoint Model Test'),
+                                x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Subject Trustpoint'),
+                            ]
+                        )
+                    ),
                 ]
             ),
-            critical=False
+            critical=False,
         )
 
         if issuer_priv_key is None:
             certificate = builder.sign(
-                private_key=private_key, algorithm=hashes.SHA256(),
+                private_key=private_key,
+                algorithm=hashes.SHA256(),
             )
         else:
             certificate = builder.sign(
-                private_key=issuer_priv_key, algorithm=hashes.SHA256(),
+                private_key=issuer_priv_key,
+                algorithm=hashes.SHA256(),
             )
 
         pem_priv_key = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
+            encryption_algorithm=serialization.NoEncryption(),
         )
 
         pem_cert = certificate.public_bytes(serialization.Encoding.PEM)
@@ -216,7 +224,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
         with Path(path / 'trust-store.pem').open('w') as f:
             f.write(certs)
 
-    def handle(self, *_args: tuple[str], **_kwargs: dict[str,str]) -> None:
+    def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Executes the command."""
         tests_data_path = Path(__file__).parent.parent.parent.parent.parent / Path('tests/data/certs')
         shutil.rmtree(tests_data_path, ignore_errors=True)
@@ -224,7 +232,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
 
         public_key_algorithms = [
             PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=4096),
-            PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC, named_curve=NamedCurve.SECP256R1)
+            PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC, named_curve=NamedCurve.SECP256R1),
         ]
 
         for algo in public_key_algorithms:
@@ -234,10 +242,13 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
 
         for algo in public_key_algorithms:
             cmd = (
-                'openssl', 'verify',
-                '-CAfile', f'{tests_data_path}/{algo}-root-ca-cert.pem',
-                '-untrusted', f'{tests_data_path}/{algo}-issuing-ca-cert.pem',
-                f'{tests_data_path}/{algo}-ee-cert.pem'
+                'openssl',
+                'verify',
+                '-CAfile',
+                f'{tests_data_path}/{algo}-root-ca-cert.pem',
+                '-untrusted',
+                f'{tests_data_path}/{algo}-issuing-ca-cert.pem',
+                f'{tests_data_path}/{algo}-ee-cert.pem',
             )
             print(f'Created certificate chain with {algo} and SHA256.')
             print(f'Verifying certificate chain with {algo} and SHA256.')

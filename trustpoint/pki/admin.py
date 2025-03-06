@@ -14,7 +14,7 @@ class DevIdRegistrationAdmin(admin.ModelAdmin[DevIdRegistration]):
 class CertificateModelAdmin(admin.ModelAdmin[CertificateModel]):
     """Admin configuration for the CertificateModel."""
 
-    def get_readonly_fields(self, _request: HttpRequest, _obj: CertificateModel=None) -> list[str]:
+    def get_readonly_fields(self, _request: HttpRequest, _obj: CertificateModel = None) -> list[str]:
         """Sets all fields as read-only."""
         return [f.name for f in CertificateModel._meta.fields]  # noqa: SLF001
 

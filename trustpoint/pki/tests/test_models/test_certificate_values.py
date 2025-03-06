@@ -33,6 +33,7 @@ CertificateTuple = tuple[CertificateModel, Certificate]
 # Certificate Property Tests
 # ----------------------------
 
+
 @pytest.mark.django_db
 def test_certificate_status(self_signed_cert_basic: CertificateTuple) -> None:
     """Test if the certificate status is correctly set to OK."""
@@ -131,19 +132,19 @@ def test_subject_attributes(self_signed_cert_basic: CertificateTuple) -> None:
 def test_certificate_pem(self_signed_cert_basic: CertificateTuple) -> None:
     """Test if the PEM-encoded certificate is correctly saved."""
     cert_model, cert = self_signed_cert_basic
-    assert cert.public_bytes(
-        encoding=serialization.Encoding.PEM
-    ).decode() == cert_model.cert_pem
+    assert cert.public_bytes(encoding=serialization.Encoding.PEM).decode() == cert_model.cert_pem
 
 
 @pytest.mark.django_db
 def test_public_key_pem(self_signed_cert_basic: CertificateTuple) -> None:
     """Test if the PEM-encoded public key is correctly saved."""
     cert_model, cert = self_signed_cert_basic
-    assert cert.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
-    ).decode() == cert_model.public_key_pem
+    assert (
+        cert.public_key()
+        .public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
+        .decode()
+        == cert_model.public_key_pem
+    )
 
 
 @pytest.mark.django_db
@@ -152,7 +153,9 @@ def test_subject_public_bytes(self_signed_cert_basic: CertificateTuple) -> None:
     cert_model, cert = self_signed_cert_basic
     assert cert.subject.public_bytes().hex().upper() == cert_model.subject_public_bytes
 
+
 ONE_MINUTE = 60
+
 
 @pytest.mark.django_db
 def test_created_at_timestamp(self_signed_cert_basic: CertificateTuple) -> None:

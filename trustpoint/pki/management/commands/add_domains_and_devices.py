@@ -14,9 +14,10 @@ from pki.models import DevIdRegistration, DomainModel, IssuingCaModel, Truststor
 
 class Command(BaseCommand):
     """Add domains and associated device names with random onboarding protocol and serial number"""
+
     help = 'Add domains and associated device names with random onboarding protocol and serial number'
 
-    def handle(self, *_args: tuple[str], **_kwargs: dict[str,str]) -> None:
+    def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Execute the command."""
         call_command('create_multiple_test_issuing_cas')
         call_command('import_idevid_truststores')
@@ -28,7 +29,7 @@ class Command(BaseCommand):
                 'SELOGICA-Control-System',
                 'MULTILIFT-Robotic-Systems',
                 'ARBIDRIVE-Servo-Motor',
-                'ALS_Arburg-Leitrechner-System'
+                'ALS_Arburg-Leitrechner-System',
             ],
             'homag': [
                 'CENTATEQ-CNC-Processing-Center',
@@ -36,14 +37,14 @@ class Command(BaseCommand):
                 'powerTouch-Control',
                 'intelliGuide-Assist-System',
                 'DRILLTEQ-Drilling-and-Dowel-Insertion-Machine',
-                'STORETEQ-Storage-System'
+                'STORETEQ-Storage-System',
             ],
             'belden': [
                 'Hirschmann-Industrial-Ethernet-Switches',
                 'Lumberg-Automation-Connectors',
                 'GarrettCom-Magnum-Routers',
                 'TROMPETER-Coaxial-Connectors',
-                'Belden-I_O-Modules'
+                'Belden-I_O-Modules',
             ],
             'siemens': [
                 'SIMATIC-PLC',
@@ -51,7 +52,7 @@ class Command(BaseCommand):
                 'SIRIUS-Control-Devices',
                 'SIMOTICS-Electric-Motors',
                 'SIMATIC-HMI-Panels',
-                'SITOP-Power-Supplies'
+                'SITOP-Power-Supplies',
             ],
             'phoenix_contact': [
                 'CLIPLINE-Terminal-Blocks',
@@ -59,7 +60,7 @@ class Command(BaseCommand):
                 'PLCnext-Control',
                 'TERMITRAB-Surge-Protection',
                 'CONTACTRON-Motor-Starters',
-                'ME-PLC_Modular-Controller'
+                'ME-PLC_Modular-Controller',
             ],
             'schmalz': [
                 'Vacuum-Generators',
@@ -67,8 +68,8 @@ class Command(BaseCommand):
                 'Vacuum-Clamping-Systems',
                 'Suction-Pads',
                 'Vacuum-Layer-Grippers',
-                'Vacuum-Ejectors'
-            ]
+                'Vacuum-Ejectors',
+            ],
         }
 
         domain_ca_truststore_map = {
@@ -79,7 +80,6 @@ class Command(BaseCommand):
             'phoenix_contact': ('issuing-ca-e', 'idevid-truststore-EC-283'),
             'schmalz': ('issuing-ca-f', 'idevid-truststore-EC-570'),
         }
-
 
         onboarding_protocols = [
             DeviceModel.OnboardingProtocol.NO_ONBOARDING.value,
@@ -127,27 +127,40 @@ class Command(BaseCommand):
                 print(f'  - Serial Number: {serial_number}')
                 print(f'  - Onboarding Protocol: {onboarding_protocol}')
 
-                onboarding_status = DeviceModel.OnboardingStatus.NO_ONBOARDING \
-                    if onboarding_protocol == DeviceModel.OnboardingProtocol.NO_ONBOARDING \
+                onboarding_status = (
+                    DeviceModel.OnboardingStatus.NO_ONBOARDING
+                    if onboarding_protocol == DeviceModel.OnboardingProtocol.NO_ONBOARDING
                     else DeviceModel.OnboardingStatus.PENDING
+                )
 
                 domain_credential_onboarding = onboarding_protocol != DeviceModel.OnboardingProtocol.NO_ONBOARDING
 
-                pki_protocol = DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE.value \
-                    if (onboarding_protocol in (
-                        DeviceModel.OnboardingProtocol.CMP_IDEVID,
-                        DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET)) \
-                    else random.choice([DeviceModel.PkiProtocol.MANUAL.value,  # noqa: S311
-                                        DeviceModel.PkiProtocol.CMP_SHARED_SECRET.value])
+                pki_protocol = (
+                    DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE.value
+                    if (
+                        onboarding_protocol
+                        in (DeviceModel.OnboardingProtocol.CMP_IDEVID, DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET)
+                    )
+                    else random.choice(
+                        [
+                            DeviceModel.PkiProtocol.MANUAL.value,  # noqa: S311
+                            DeviceModel.PkiProtocol.CMP_SHARED_SECRET.value,
+                        ]
+                    )
+                )
 
-                cmp_shared_secret = secrets.token_urlsafe(16) \
-                    if (onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET.value or
-                        pki_protocol == DeviceModel.PkiProtocol.CMP_SHARED_SECRET.value) \
+                cmp_shared_secret = (
+                    secrets.token_urlsafe(16)
+                    if (
+                        onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET.value
+                        or pki_protocol == DeviceModel.PkiProtocol.CMP_SHARED_SECRET.value
+                    )
                     else None
+                )
 
-                idevid_trust_store = truststore \
-                    if onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_IDEVID.value \
-                    else None
+                idevid_trust_store = (
+                    truststore if onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_IDEVID.value else None
+                )
 
                 dev = DeviceModel(
                     unique_name=device_name,

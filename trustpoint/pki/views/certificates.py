@@ -34,7 +34,8 @@ class CertificatesContextMixin:
 
 
 class CertificateTableView(
-    CertificatesContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView[CertificateModel]):
+    CertificatesContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView[CertificateModel]
+):
     """Certificate Table View."""
 
     model = CertificateModel
@@ -42,6 +43,7 @@ class CertificateTableView(
     context_object_name = 'certificates'
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'common_name'
+
 
 class CertificateDetailView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView[CertificateModel]):
     """The certificate detail view."""
@@ -52,14 +54,16 @@ class CertificateDetailView(CertificatesContextMixin, TpLoginRequiredMixin, Deta
     template_name = 'pki/certificates/details.html'
     context_object_name = 'cert'
 
+
 class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, DetailView[CertificateModel]):
     """View for downloading a single certificate."""
 
     model = CertificateModel
     context_object_name = 'certificate'
 
-    def get(self, _request: HttpRequest, pk: str | None = None,
-            *_args: tuple[Any], **_kwargs: dict[str, Any]) -> HttpResponse:
+    def get(
+        self, _request: HttpRequest, pk: str | None = None, *_args: tuple[Any], **_kwargs: dict[str, Any]
+    ) -> HttpResponse:
         """HTTP GET Method.
 
         If only the certificate primary key are passed in the url, the download summary will be displayed.
@@ -101,8 +105,12 @@ class CertificateDownloadView(CertificatesContextMixin, TpLoginRequiredMixin, De
     context_object_name = 'certificate'
 
     def get(
-        self, request: HttpRequest, pk: str | None = None, file_format: str | None = None,
-        *args: tuple[Any], **kwargs: dict[str, Any]
+        self,
+        request: HttpRequest,
+        pk: str | None = None,
+        file_format: str | None = None,
+        *args: tuple[Any],
+        **kwargs: dict[str, Any],
     ) -> HttpResponse:
         """HTTP GET Method.
 

@@ -49,6 +49,7 @@ class TruststoresContextMixin:
 
     extra_context: ClassVar = {'page_category': 'pki', 'page_name': 'truststores'}
 
+
 class TruststoreTableView(TruststoresContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView[TruststoreModel]):
     """Truststore Table View."""
 
@@ -73,10 +74,12 @@ class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormVi
         domain_id = self.kwargs.get('pk')
 
         if domain_id:
-            return HttpResponseRedirect(reverse(
-                'pki:devid_registration_create-with_truststore_id',
-                kwargs={'pk': domain_id, 'truststore_id': truststore.id}
-            ))
+            return HttpResponseRedirect(
+                reverse(
+                    'pki:devid_registration_create-with_truststore_id',
+                    kwargs={'pk': domain_id, 'truststore_id': truststore.id},
+                )
+            )
 
         return HttpResponseRedirect(reverse('pki:truststores'))
 
@@ -92,6 +95,7 @@ class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormVi
             context['domain'] = get_object_or_404(DomainModel, id=pk)
         return context
 
+
 class TruststoreDetailView(TruststoresContextMixin, TpLoginRequiredMixin, DetailView[TruststoreModel]):
     """The truststore detail view."""
 
@@ -100,6 +104,7 @@ class TruststoreDetailView(TruststoresContextMixin, TpLoginRequiredMixin, Detail
     ignore_url = reverse_lazy('pki:truststores')
     template_name = 'pki/truststores/details.html'
     context_object_name = 'truststore'
+
 
 class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, DetailView[TruststoreModel]):
     """View for downloading a single truststore."""
@@ -111,8 +116,12 @@ class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, Deta
     context_object_name = 'truststore'
 
     def get(
-        self, request: HttpRequest, pk: str | None = None, file_format: str | None = None,
-        *args: tuple[Any], **kwargs: dict[str, Any]
+        self,
+        request: HttpRequest,
+        pk: str | None = None,
+        file_format: str | None = None,
+        *args: tuple[Any],
+        **kwargs: dict[str, Any],
     ) -> HttpResponse:
         """HTTP GET Method.
 
@@ -147,14 +156,13 @@ class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, Deta
 
         certificate_serializer = TruststoreModel.objects.get(pk=pk).get_certificate_collection_serializer()
 
-        file_bytes = CertificateCollectionBuilder.build(
-            certificate_serializer,
-            file_format=file_format_enum)
+        file_bytes = CertificateCollectionBuilder.build(certificate_serializer, file_format=file_format_enum)
 
         response = HttpResponse(file_bytes, content_type=file_format_enum.mime_type)
         response['Content-Disposition'] = f'attachment; filename="truststore{file_format_enum.file_extension}"'
 
         return response
+
 
 class TruststoreMultipleDownloadView(
     TruststoresContextMixin, TpLoginRequiredMixin, PrimaryKeyListFromPrimaryKeyString, ListView[TruststoreModel]
@@ -241,13 +249,14 @@ class TruststoreMultipleDownloadView(
         file_bytes = CertificateCollectionArchiveFileBuilder.build(
             certificate_collection_serializers=certificate_collection_serializers,
             file_format=file_format_enum,
-            archive_format=archive_format_enum
+            archive_format=archive_format_enum,
         )
 
         response = HttpResponse(file_bytes, content_type=archive_format_enum.mime_type)
         response['Content-Disposition'] = f'attachment; filename="truststores{archive_format_enum.file_extension}"'
 
         return response
+
 
 class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, TpLoginRequiredMixin, BulkDeleteView):
     """View for confirming the deletion of multiple truststores."""
@@ -269,15 +278,10 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, TpLoginRequiredMi
         except ProtectedError:
             messages.error(
                 self.request,
-                _(
-                    'Cannot delete the selected Truststore(s) because they are referenced by other objects.'
-                )
+                _('Cannot delete the selected Truststore(s) because they are referenced by other objects.'),
             )
             return HttpResponseRedirect(self.success_url)
 
-        messages.success(
-            self.request,
-            _('Successfully deleted {count} Truststore(s).').format(count=deleted_count)
-        )
+        messages.success(self.request, _('Successfully deleted {count} Truststore(s).').format(count=deleted_count))
 
         return response
