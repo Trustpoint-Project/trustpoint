@@ -80,6 +80,8 @@ To have an example on how to use this workflow, below there is the workflow for 
     :language: yaml
     :caption: R_013 workflow
 
+.. _codecov_pipeline:
+
 ================
 Codecov Pipeline
 ================
@@ -92,19 +94,30 @@ and using it to run pytest with a coverage report which will be uploaded to code
     :language: yaml
     :caption: Upload to codecov workflow
 
-=============
-MyPy Pipeline
-=============
-
-.. literalinclude:: ../../.github/workflows/mypy.yml
-   :language: yaml
-
 ===============
 Pytest Pipeline
 ===============
 
+This pipeline/workflow is kind of the same as `the one above <codecov_pipeline>`_
+except from not running the coverage reports and therefore also not uploading them.
+Here, we use a git flavored markdown report for printing the report nicely to the job summary.
+After this, there is the full report uploaded first and lastly,
+if one or more tests fail,
+we add a comment to the current pull request.
+
 .. literalinclude:: ../../.github/workflows/pytest.yml
+    :language: yaml
+    :caption: Pytest Workflow
+
+=============
+MyPy Pipeline
+=============
+
+
+
+.. literalinclude:: ../../.github/workflows/mypy.yml
    :language: yaml
+
 
 =============
 Ruff Pipeline
