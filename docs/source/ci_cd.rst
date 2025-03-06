@@ -27,12 +27,14 @@ Sequence Diagram CI/CD Pipeline
 .. plantuml:: diagrams/sequence_pipeline.puml
     :caption: Sequence Diagram of the automatically triggered pipelines
 
--------------------------------
+--------------------------------
 Component Diagram CI/CD Pipeline
--------------------------------
+--------------------------------
 
 .. plantuml:: diagrams/component_pipeline.puml
     :caption: Component Diagram of the automatically triggered pipelines
+
+.. _composite_setup_action:
 
 ======================
 Composite Setup action
@@ -44,7 +46,8 @@ The so called `"composite action" <https://docs.github.com/en/actions/sharing-au
 looks like the following:
 
 .. literalinclude:: ../../.github/actions/setup-uv-action/action.yml
-   :language: yaml
+    :language: yaml
+    :caption: Setup uv composite action
 
 As said, this action sets up the environment by installing :term:`uv` via Astrals github action
 `setup-uv <https://github.com/marketplace/actions/astral-sh-setup-uv>`_ and uses a pinned version, as well as caching.
@@ -57,8 +60,25 @@ The action ends with maybe running database migrations depending on the switch p
 Behave Pipeline
 ===============
 
+The following workflow file is a reusable template workflow
+because we want to have exactly one result for every feature file executed.
+That is to show the progress inside the README.md file which features are working and which do not work just yet.
+This workflow template uses a string as an input value which just specifies which feature file to run.
+First of all, we checkout the code via `actions/checkout <https://github.com/actions/checkout>`_.
+Then, we are using the previously defined action (see :ref:`composite_setup_action`) to make :term:`uv` usable inside this workflow.
+Having :term:`uv` activated, the behave action is triggered for the given feature file.
+Note that we need to use ``uv run trustpoint/manage.py behave`` instead of ``uv run behave`` to make :term:`Django` available for behave.
+Once the tests are ran, an artifact with the test reports is uploaded.
+
 .. literalinclude:: ../../.github/workflows/behave-test-template.yml
-   :language: yaml
+    :language: yaml
+    :caption: Behave template workflow
+
+To have an example on how to use this workflow, below there is the workflow for executing the test for `R_013`_:
+
+.. literalinclude:: ../../.github/workflows/r_013_feature_test.yml
+    :language: yaml
+    :caption: R_013 workflow
 
 ================
 Codecov Pipeline
