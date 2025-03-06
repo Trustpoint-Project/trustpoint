@@ -8,6 +8,7 @@ from devices.models import DeviceModel
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from pki.models.certificate import CertificateModel
+from django_stubs_ext.db.models import TypedModelMeta
 
 from pki.models.issuing_ca import IssuingCaModel
 from pki.models.domain import DomainModel
@@ -15,8 +16,18 @@ from pki.models.domain import DomainModel
 log = logging.getLogger('tp.home')
 
 
+__all__ = [
+    'NotificationStatus',
+    'NotificationMessageModel',
+    'NotificationMessage',
+    'NotificationModel',
+]
+
+
 class NotificationStatus(models.Model):
     """Model representing a status a notification can have."""
+
+    objects: models.Manager[NotificationStatus]
 
     class StatusChoices(models.TextChoices):
         """Status Types"""
@@ -38,6 +49,9 @@ class NotificationStatus(models.Model):
 
     status = models.CharField(max_length=20, choices=StatusChoices, unique=True)
 
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
+
     def __str__(self) -> str:
         """Returns a human-readable string."""
         return self.get_status_display()
@@ -46,8 +60,13 @@ class NotificationStatus(models.Model):
 class NotificationMessageModel(models.Model):
     """Message Model for Notifications with Short and Optional Long Descriptions."""
 
+    objects: models.Manager[NotificationMessageModel]
+
     short_description = models.CharField(max_length=255)
     long_description = models.CharField(max_length=65536, default='No description provided')
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     def __str__(self) -> str:
         """Returns a human-readable string."""
@@ -57,8 +76,13 @@ class NotificationMessageModel(models.Model):
 class NotificationMessage:
     """Class for notification content with short and optional long descriptions."""
 
+    objects: models.Manager[NotificationMessage]
+
     short_description: str
     long_description: str = 'No description provided'
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     def __init__(self, short_description: str, long_description: str = 'No description provided') -> None:
         """Initializes a NotificationMessageModel instance."""
@@ -82,6 +106,8 @@ class NotificationMessage:
 
 class NotificationModel(models.Model):
     """Notifications Model."""
+
+    objects: models.Manager[NotificationModel]
 
     class NotificationTypes(models.TextChoices):
         """Supported Notification Types."""
@@ -275,6 +301,9 @@ class NotificationModel(models.Model):
     statuses = models.ManyToManyField(NotificationStatus, related_name='notifications')
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Created at'))
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     def __str__(self) -> str:
         """Returns a human-readable string."""

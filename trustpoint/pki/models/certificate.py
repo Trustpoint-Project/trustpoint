@@ -53,7 +53,10 @@ if TYPE_CHECKING:
     PublicKey = Union[rsa.RSAPublicKey, ec.EllipticCurvePublicKey, ed448.Ed448PublicKey, ed25519.Ed25519PublicKey]
 
 
-__all__ = ['CertificateModel', 'RevokedCertificateModel']
+__all__ = [
+    'CertificateModel',
+    'RevokedCertificateModel',
+]
 
 
 class CertificateModel(LoggerMixin, models.Model):
@@ -63,9 +66,6 @@ class CertificateModel(LoggerMixin, models.Model):
     """
 
     objects: models.Manager[CertificateModel]
-
-    class Meta(TypedModelMeta):
-        """Meta class configuration."""
 
     class CertificateStatus(models.TextChoices):
         """CertificateModel status"""
@@ -345,7 +345,7 @@ class CertificateModel(LoggerMixin, models.Model):
 
     freshest_crl_extension = models.ForeignKey(FreshestCrlExtension, null=True, blank=True, on_delete=models.CASCADE)
 
-    # --------------------------------------------- No Cryptography support -------------------------------------
+    # -------------------------------------------- No Cryptography support ---------------------------------------------
 
     # policy_mappings = None
     # ext_subject_directory_attributes = None
@@ -359,6 +359,11 @@ class CertificateModel(LoggerMixin, models.Model):
     # Private Internet Access
     # ext_authority_information_access = None
     # ext_subject_information_access = None
+
+    # -------------------------------------------- Meta-Class configuration --------------------------------------------
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     # --------------------------------------------------- Properties ---------------------------------------------------
 
@@ -636,9 +641,6 @@ class RevokedCertificateModel(models.Model):
 
     objects: models.Manager[RevokedCertificateModel]
 
-    class Meta(TypedModelMeta):
-        """Meta class configuration."""
-
     class ReasonCode(models.TextChoices):
         """Revocation reasons per RFC 5280"""
 
@@ -670,6 +672,9 @@ class RevokedCertificateModel(models.Model):
         on_delete=models.SET_NULL,  # Safe to remove CRL if CA is removed?
         null=True,
     )
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     def __str__(self) -> str:
         return f'RevokedCertificate({self.certificate.common_name})'
