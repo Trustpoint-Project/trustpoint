@@ -136,3 +136,7 @@ Glossary
     Django
         Django is a python web framework which simplifies the development of web apps.
         See also: `Django <https://www.djangoproject.com/>`_.
+
+    mypy
+        mypy is a static type checker for python.
+        See also: `mypy <https://mypy.readthedocs.io/en/stable/>`_.
