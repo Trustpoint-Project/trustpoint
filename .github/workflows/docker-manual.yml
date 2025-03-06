@@ -33,13 +33,13 @@ jobs:
       - name: Tag additional versions for trustpoint and postgres images
         run: |
           # For the trustpoint container:
-            docker tag trustpoint2023/trustpoint:latest ${DOCKER_HUB_USERNAME}/trustpoint:${TAG_VERSION}
-            docker tag trustpoint2023/trustpoint:latest ${DOCKER_HUB_USERNAME}/trustpoint:latest
-            docker tag trustpoint2023/trustpoint:latest ${DOCKER_HUB_USERNAME}/trustpoint:${GITHUB_SHA}
+            docker tag ${DOCKER_HUB_USERNAME}/trustpoint:latest ${DOCKER_HUB_USERNAME}/trustpoint:${TAG_VERSION}
+            docker tag ${DOCKER_HUB_USERNAME}/trustpoint:latest ${DOCKER_HUB_USERNAME}/trustpoint:latest
+            docker tag ${DOCKER_HUB_USERNAME}/trustpoint:latest ${DOCKER_HUB_USERNAME}/trustpoint:${GITHUB_SHA}
           # For the postgres container:
-            docker tag trustpoint2023/postgres:latest ${DOCKER_HUB_USERNAME}/postgres:${TAG_VERSION}
-            docker tag trustpoint2023/postgres:latest ${DOCKER_HUB_USERNAME}/postgres:latest
-            docker tag trustpoint2023/postgres:latest ${DOCKER_HUB_USERNAME}/postgres:${GITHUB_SHA}
+            docker tag ${DOCKER_HUB_USERNAME}/postgres:latest ${DOCKER_HUB_USERNAME}/postgres:${TAG_VERSION}
+            docker tag ${DOCKER_HUB_USERNAME}/postgres:latest ${DOCKER_HUB_USERNAME}/postgres:latest
+            docker tag ${DOCKER_HUB_USERNAME}/postgres:latest ${DOCKER_HUB_USERNAME}/postgres:${GITHUB_SHA}
 
       - name: Push docker images to Docker Hub
         run: |
