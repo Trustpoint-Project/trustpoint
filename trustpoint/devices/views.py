@@ -304,6 +304,7 @@ class DeviceIssueCredentialView(
     form_class: type[CredentialFormClass]
     issuer_class: type[TlsCredentialIssuerClass]
     friendly_name: str
+    object: DeviceModel
 
     def get_initial(self) -> dict[str, Any]:
         """Gets the initial data for the corresponding form.
@@ -312,9 +313,8 @@ class DeviceIssueCredentialView(
             The initial data for the corresponding form.
         """
         initial = super().get_initial()
-        device = self.get_object()
         if self.issuer_class:
-            initial.update(self.issuer_class.get_fixed_values(device=device, domain=device.domain))
+            initial.update(self.issuer_class.get_fixed_values(device=self.object, domain=self.object.domain))
         return initial
 
     def get_form_kwargs(self) -> dict[str, Any]:
@@ -324,7 +324,7 @@ class DeviceIssueCredentialView(
             The form kwargs including the concerning device model.
         """
         form_kwargs = super().get_form_kwargs()
-        form_kwargs.update({'device': self.get_object()})
+        form_kwargs.update({'device': self.object})
         return form_kwargs
 
     def get_success_url(self) -> str:
@@ -344,8 +344,7 @@ class DeviceIssueCredentialView(
         Returns:
             The HTTP Response object after successful validation of the form data.
         """
-        device = self.get_object()
-        credential = self.issue_credential(device=device, cleaned_data=form.cleaned_data)
+        credential = self.issue_credential(device=self.object, cleaned_data=form.cleaned_data)
         messages.success(
             self.request, f'Successfully issued {self.friendly_name} for device {credential.device.unique_name}'
         )
@@ -362,6 +361,34 @@ class DeviceIssueCredentialView(
         Returns:
             The IssuedCredentialModel object that was created and saved.
         """
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Adds the object model to the instance and forwards to super().post().
+
+        Args:
+            request: The Django request object.
+            *args: Positional arguments passed to super().post().
+            **kwargs: Keyword arguments passed to super().post().
+
+        Returns:
+            The HttpResponseBase object returned by super().post().
+        """
+        self.object = self.get_object()
+        return super().post(request, *args, **kwargs)
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Adds the object model to the instance and forwards to super().get().
+
+        Args:
+            request: The Django request object.
+            *args: Positional arguments passed to super().get().
+            **kwargs: Keyword arguments passed to super().get().
+
+        Returns:
+            The HttpResponseBase object returned by super().get().
+        """
+        self.object = self.get_object()
+        return super().get(request, *args, **kwargs)
 
 
 class DeviceIssueTlsClientCredential(
@@ -517,8 +544,10 @@ class HelpDispatchView(DeviceContextMixin, SingleObjectMixin[DeviceModel], Redir
         del kwargs
 
         device: DeviceModel = self.get_object()
-        if not device.domain_credential_onboarding and \
-                device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value:
+        if (
+            not device.domain_credential_onboarding
+            and device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value
+        ):
             return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
 
         if device.onboarding_protocol == device.OnboardingProtocol.CMP_SHARED_SECRET.value:
