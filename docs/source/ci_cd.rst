@@ -17,8 +17,8 @@ Below is an overview of the key workflows included in the project:
 - **Behave Pipeline**: Runs :term:`behave` tests and uploads the results.
 - **Codecov Pipeline**: Runs unit tests via pytest and uploads the test coverage.
 - **Pytest Pipeline**: Runs unit tests via pytest and uploads the results.
-- **MyPy Pipeline**: Runs mypy checks and uploads the results.
-- **Ruff Pipeline**: Runs ruff checks and uploads the results.
+- **mypy Pipeline**: Runs :term:`mypy` checks and uploads the results.
+- **Ruff Pipeline**: Runs :term:`ruff` checks and uploads the results.
 
 -------------------------------
 Sequence Diagram CI/CD Pipeline
@@ -112,11 +112,11 @@ we add a comment to the current pull request.
 .. _mypy_pipeline:
 
 =============
-MyPy Pipeline
+mypy Pipeline
 =============
 
 We use :term:`mypy` for static type checking in python.
-This pipeline is actually really short because it just sets up :term:`uv` from :ref:`composite_setup_action` and then runs mypy.
+This pipeline is actually really short because it just sets up :term:`uv` from :ref:`composite_setup_action` and then runs :term:`mypy`.
 
 .. literalinclude:: ../../.github/workflows/mypy.yml
     :language: yaml
@@ -126,7 +126,7 @@ This pipeline is actually really short because it just sets up :term:`uv` from :
 Ruff Pipeline
 =============
 
-Also, the ruff action is nearly as short as the :ref:`mypy_pipeline`.
+Also, the :term:`ruff` action is nearly as short as the :ref:`mypy_pipeline`.
 The only difference is that we now run :term:`ruff` and upload the report if there are any errors.
 
 .. literalinclude:: ../../.github/workflows/ruff.yml
