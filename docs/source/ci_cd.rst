@@ -113,11 +113,12 @@ we add a comment to the current pull request.
 MyPy Pipeline
 =============
 
-
+We use :term:`mypy` for static type checking in python.
+This pipeline is actually really short because it just sets up :term:`uv` from :ref:`composite_setup_action` and then runs mypy.
 
 .. literalinclude:: ../../.github/workflows/mypy.yml
-   :language: yaml
-
+    :language: yaml
+    :caption: mypy Workflow
 
 =============
 Ruff Pipeline
