@@ -132,3 +132,15 @@ Glossary
     uv
         Astrals uv is a really fast python package manager.
         See also: `uv <https://astral.sh/blog/uv>`_.
+
+    Django
+        Django is a python web framework which simplifies the development of web apps.
+        See also: `Django <https://www.djangoproject.com/>`_.
+
+    mypy
+        mypy is a static type checker for python.
+        See also: `mypy <https://mypy.readthedocs.io/en/stable/>`_.
+
+    ruff
+        Astrals ruff ist a really fast python linter and code formatter.
+        See also: `ruff <https://docs.astral.sh/ruff/>`_.

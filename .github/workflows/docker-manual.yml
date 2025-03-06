@@ -1,4 +1,4 @@
-name: Trustpoint pipeline
+name: Docker manual action
 
 on: workflow_dispatch
 
