@@ -11,7 +11,7 @@ The pipelines automate various tasks such as testing, building, and deploying.
 Overview
 ========
 
-GitHub Actions is used to manage automated workflows.
+GitHub Actions are used to manage automated workflows.
 Below is an overview of the key workflows included in the project:
 
 - **Behave Pipeline**: Runs :term:`behave` tests and uploads the results.
@@ -19,6 +19,20 @@ Below is an overview of the key workflows included in the project:
 - **MyPy Pipeline**: Runs mypy checks and uploads the results.
 - **Pytest Pipeline**: Runs unit tests via pytest and uploads the results.
 - **Ruff Pipeline**: Runs ruff checks and uploads the results.
+
+-------------------------------
+Sequence Diagram CI/CD Pipeline
+-------------------------------
+
+.. plantuml:: diagrams/sequence_pipeline.puml
+    :caption: Sequence Diagram of the automatically triggered pipelines
+
+-------------------------------
+Component Diagram CI/CD Pipeline
+-------------------------------
+
+.. plantuml:: diagrams/component_pipeline.puml
+    :caption: Component Diagram of the automatically triggered pipelines
 
 ======================
 Composite Setup action
