@@ -149,7 +149,7 @@ class Command(BaseCommand):
                         onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET.value
                         or pki_protocol == DeviceModel.PkiProtocol.CMP_SHARED_SECRET.value
                     )
-                    else None
+                    else ''
                 )
 
                 idevid_trust_store = (
