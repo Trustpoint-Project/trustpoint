@@ -26,7 +26,6 @@ from trustpoint.views.base import (
     ContextDataMixin,
     LoggerMixin,
     SortableTableMixin,
-    TpLoginRequiredMixin,
 )
 
 if TYPE_CHECKING:
@@ -34,14 +33,14 @@ if TYPE_CHECKING:
     from django.http import HttpRequest
 
 
-class IssuingCaContextMixin(TpLoginRequiredMixin, ContextDataMixin):
+class IssuingCaContextMixin(ContextDataMixin):
     """Mixin which adds context_data for the PKI -> Issuing CAs pages."""
 
     context_page_category = 'pki'
     context_page_name = 'issuing_cas'
 
 
-class IssuingCaTableView(IssuingCaContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView[IssuingCaModel]):
+class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin, ListView[IssuingCaModel]):
     """Issuing CA Table View."""
 
     model = IssuingCaModel
@@ -51,7 +50,7 @@ class IssuingCaTableView(IssuingCaContextMixin, TpLoginRequiredMixin, SortableTa
     default_sort_param = 'unique_name'
 
 
-class IssuingCaAddMethodSelectView(IssuingCaContextMixin, TpLoginRequiredMixin, FormView[IssuingCaAddMethodSelectForm]):
+class IssuingCaAddMethodSelectView(IssuingCaContextMixin, FormView[IssuingCaAddMethodSelectForm]):
     """View to select the method to add an Issuing CA."""
 
     template_name = 'pki/issuing_cas/add/method_select.html'
@@ -70,7 +69,7 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, TpLoginRequiredMixin, 
 
 
 class IssuingCaAddFileImportPkcs12View(
-    IssuingCaContextMixin, TpLoginRequiredMixin, FormView[IssuingCaAddFileImportPkcs12Form]
+    IssuingCaContextMixin, FormView[IssuingCaAddFileImportPkcs12Form]
 ):
     """View to import an Issuing CA from a PKCS12 file."""
 
@@ -80,7 +79,7 @@ class IssuingCaAddFileImportPkcs12View(
 
 
 class IssuingCaAddFileImportSeparateFilesView(
-    IssuingCaContextMixin, TpLoginRequiredMixin, FormView[IssuingCaAddFileImportSeparateFilesForm]
+    IssuingCaContextMixin, FormView[IssuingCaAddFileImportSeparateFilesForm]
 ):
     """View to import an Issuing CA from separate PEM files."""
 
@@ -89,7 +88,7 @@ class IssuingCaAddFileImportSeparateFilesView(
     success_url = reverse_lazy('pki:issuing_cas')
 
 
-class IssuingCaDetailView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailView[IssuingCaModel]):
+class IssuingCaDetailView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
     """View to display the details of an Issuing CA."""
 
     http_method_names = ('get',)
@@ -101,7 +100,7 @@ class IssuingCaDetailView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailVie
     context_object_name = 'issuing_ca'
 
 
-class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, TpLoginRequiredMixin, DetailView[IssuingCaModel]):
+class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[IssuingCaModel]):
     """View to configure an Issuing CA."""
 
     model = IssuingCaModel
@@ -111,7 +110,7 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, TpLoginRequiredMix
     context_object_name = 'issuing_ca'
 
 
-class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, TpLoginRequiredMixin, BulkDeleteView):
+class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, BulkDeleteView):
     """View to confirm the deletion of multiple Issuing CAs."""
 
     model = IssuingCaModel
@@ -139,7 +138,7 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, TpLoginRequiredMixin
         return response
 
 
-class IssuingCaCrlGenerationView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailView[IssuingCaModel]):
+class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
     """View to manually generate a CRL for an Issuing CA."""
 
     model = IssuingCaModel

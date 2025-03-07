@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from django import forms
 from typing import TYPE_CHECKING
+
+from django import forms
 
 if TYPE_CHECKING:
     from typing import Any
+
     from django.forms import BaseForm
 
     _TypingForm = BaseForm
