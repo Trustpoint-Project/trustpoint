@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import abc
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
-from typing import Any, ClassVar
+from typing import Any, ClassVar, TypeVar, cast
 
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
@@ -45,6 +45,8 @@ class AttributeTypeAndValue(models.Model):
     oid = models.CharField(max_length=256, editable=False, verbose_name='OID')
     value = models.CharField(max_length=16384, editable=False, verbose_name='Value')
 
+    objects: models.Manager[AttributeTypeAndValue]
+
     class Meta:  # noqa: D106
         unique_together = ('oid', 'value')
 
@@ -77,6 +79,8 @@ class GeneralNameRFC822Name(models.Model):
 
     value = models.CharField(max_length=1024, editable=False, verbose_name='Value', unique=True)
 
+    objects: models.Manager[GeneralNameRFC822Name]
+
     def __str__(self) -> str:
         """Returns a string representation of the GeneralNameRFC822Name."""
         return f'{self.value}'
@@ -89,6 +93,8 @@ class GeneralNameDNSName(models.Model):
     """
 
     value = models.CharField(max_length=1024, editable=False, verbose_name='Value', unique=True)
+
+    objects: models.Manager[GeneralNameDNSName]
 
     def __str__(self) -> str:
         """Returns a string representation of the GeneralNameDNSName."""
@@ -104,6 +110,8 @@ class GeneralNameDirectoryName(models.Model):
     """
 
     names = models.ManyToManyField(AttributeTypeAndValue, verbose_name=_('Name'), editable=False)
+
+    objects: models.Manager[GeneralNameDirectoryName]
 
     def __str__(self) -> str:
         """Returns a string representation of the GeneralNameDirectoryName."""
@@ -124,6 +132,8 @@ class GeneralNameUniformResourceIdentifier(models.Model):
     """
 
     value = models.CharField(max_length=16384, editable=False, verbose_name='Value', unique=True)
+
+    objects: models.Manager[GeneralNameUniformResourceIdentifier]
 
     def __str__(self) -> str:
         """Returns a string representation of the GeneralNameUniformResourceIdentifier."""
@@ -147,6 +157,8 @@ class GeneralNameIpAddress(models.Model):
     ip_type = models.CharField(max_length=2, choices=IpType, editable=False, verbose_name='IP Type')
     value = models.CharField(max_length=16384, editable=False, verbose_name='Value')
 
+    objects: models.Manager[GeneralNameIpAddress]
+
     class Meta:  # noqa: D106
         unique_together = ('ip_type', 'value')
 
@@ -165,6 +177,8 @@ class GeneralNameRegisteredId(models.Model):
 
     value = models.CharField(max_length=256, editable=False, verbose_name='Value')
 
+    objects: models.Manager[GeneralNameRegisteredId]
+
     def __str__(self) -> str:
         """Returns a string representation of the GeneralNameRegisteredId."""
         return f'{self.value}'
@@ -181,6 +195,8 @@ class GeneralNameOtherName(models.Model):
     type_id = models.CharField(max_length=256, editable=False, verbose_name='OID')
     value = models.CharField(max_length=16384, editable=False, verbose_name='Value')
 
+    objects: models.Manager[GeneralNameOtherName]
+
     class Meta:  # noqa: D106
         unique_together = ('type_id', 'value')
 
@@ -189,6 +205,9 @@ class GeneralNameOtherName(models.Model):
         return f'OID: {self.type_id}, DER: {self.value[:10]}...'
 
 
+T = TypeVar('T', bound=x509.ExtensionType)
+RT = TypeVar('RT', bound='CertificateExtension')
+
 class CertificateExtension:
     """Abstract Base Class of Extension Models.
 
@@ -196,9 +215,21 @@ class CertificateExtension:
     # TODO: check if this can be rectified
     """
 
+    _extension_oid: str
+
+    @property
+    def extension_oid(self) -> str:
+        """Returns the OID of the extension."""
+        if hasattr(self, '_extension_oid'):
+            return self._extension_oid
+        exc_msg = f'Extension OID not set for {self.__class__.__name__}.'
+        raise AttributeError(exc_msg)
+
+    extension_oid.fget.short_description = EXTENSION_STR
+
     @classmethod
     @abc.abstractmethod
-    def save_from_crypto_extensions(cls, extension: x509.Extension) -> None | CertificateExtension:
+    def save_from_crypto_extensions(cls: type[RT], extension: x509.Extension[T]) -> None | RT:
         """Stores the extension in the database.
 
         Meant to be called within an atomic transaction while storing a certificate.
@@ -217,6 +248,8 @@ class BasicConstraintsExtension(CertificateExtension, models.Model):
     This extension indicates whether a certificate is a CA and its path length.
     """
 
+    objects: models.Manager[BasicConstraintsExtension]
+
     critical = models.BooleanField(verbose_name=_('Critical'), editable=False)
     ca = models.BooleanField(verbose_name=_('CA'), editable=False)
     path_length_constraint = models.PositiveSmallIntegerField(
@@ -230,15 +263,11 @@ class BasicConstraintsExtension(CertificateExtension, models.Model):
         """Returns a string representation of the extension."""
         return f'BasicConstraintsExtension(critical={self.critical}, oid={self.extension_oid})'
 
-    @property
-    def extension_oid(self) -> str:  # noqa: D102
-        return CertificateExtensionOid.BASIC_CONSTRAINTS.dotted_string
-
-    extension_oid.fget.short_description = EXTENSION_STR
+    _extension_oid = CertificateExtensionOid.BASIC_CONSTRAINTS.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
-        cls, crypto_basic_constraints_extension: x509.Extension[x509.BasicConstraints]
+        cls, crypto_basic_constraints_extension: x509.Extension[T]
     ) -> None | BasicConstraintsExtension:
         """Stores the BasicConstraintsExtension in the database.
 
@@ -249,6 +278,8 @@ class BasicConstraintsExtension(CertificateExtension, models.Model):
         Returns:
             BasicConstraintsExtension: The instance of the saved extension.
         """
+        if not isinstance(crypto_basic_constraints_extension.value, x509.BasicConstraints):
+            return None
         try:
             existing_entry = BasicConstraintsExtension.objects.filter(
                 critical=crypto_basic_constraints_extension.critical,
@@ -274,6 +305,8 @@ class KeyUsageExtension(CertificateExtension, models.Model):
 
     Specifies the permitted usage of the certificate's public key.
     """
+
+    objects: models.Manager[KeyUsageExtension]
 
     critical = models.BooleanField(verbose_name=_('Critical'), editable=False)
     digital_signature = models.BooleanField(verbose_name=_('Digital Signature'), default=False, editable=False)
@@ -303,15 +336,11 @@ class KeyUsageExtension(CertificateExtension, models.Model):
         """Returns a string representation of the extension."""
         return f'KeyUsageExtension(critical={self.critical}, oid={self.extension_oid})'
 
-    @property
-    def extension_oid(self) -> str:  # noqa: D102
-        return CertificateExtensionOid.KEY_USAGE.dotted_string
-
-    extension_oid.fget.short_description = EXTENSION_STR
+    _extension_oid = CertificateExtensionOid.KEY_USAGE.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
-        cls, crypto_basic_constraints_extension: x509.Extension[x509.KeyUsage]
+        cls, crypto_basic_constraints_extension: x509.Extension[T]
     ) -> None | KeyUsageExtension:
         """Stores the KeyUsage extension in the database.
 
@@ -322,6 +351,8 @@ class KeyUsageExtension(CertificateExtension, models.Model):
         Returns:
             KeyUsageExtension: The instance of the saved extension.
         """
+        if not isinstance(crypto_basic_constraints_extension.value, x509.KeyUsage):
+            return None
         try:
             # noinspection PyProtectedMember
             existing_entry = KeyUsageExtension.objects.filter(
@@ -364,6 +395,8 @@ class GeneralNamesModel(models.Model):
 
     Used for both SubjectAlternativeName and IssuerAlternativeName extensions.
     """
+
+    objects: models.Manager[GeneralNamesModel]
 
     _alternative_name_extension_type: str
 
@@ -415,13 +448,6 @@ class GeneralNamesModel(models.Model):
                 parts.append(f'{field_name}: {", ".join(values)}')
 
         return f'GeneralNamesModel({"; ".join(parts)})' if parts else 'GeneralNamesModel(Empty)'
-
-    @property
-    def extension_oid(self) -> str:  # noqa: D102
-        msg = 'This base class (AlternativeNameExtensionModel) does not have an extension_oid.'
-        raise NotImplementedError(msg)
-
-    extension_oid.fget.short_description = EXTENSION_STR
 
     def _save_rfc822_name(self, entry: x509.RFC822Name) -> None:
         existing_entry = GeneralNameRFC822Name.objects.filter(value=entry.value).first()
@@ -515,7 +541,7 @@ class GeneralNamesModel(models.Model):
 
         directory_name.save()
 
-    def save_general_names(self, general_names: x509.Extension | list[x509.GeneralName]) -> None | GeneralNamesModel:
+    def save_general_names(self, general_names: x509.Extension[x509.ExtensionType] | list[x509.GeneralName]) -> None | GeneralNamesModel:
         """Stores general names in the database.
 
         Args:
@@ -553,6 +579,8 @@ class IssuerAlternativeNameExtension(CertificateExtension, models.Model):
     See RFC5280 for more information.
     """
 
+    objects: models.Manager[IssuerAlternativeNameExtension]
+
     critical = models.BooleanField(verbose_name=_('Critical'), editable=False)
     issuer_alt_name = models.ForeignKey(
         GeneralNamesModel,
@@ -566,15 +594,11 @@ class IssuerAlternativeNameExtension(CertificateExtension, models.Model):
         """Returns a string representation of the IssuerAlternativeName extension."""
         return f'{self.__class__.__name__}(critical={self.critical}, oid={self.extension_oid})'
 
-    @property
-    def extension_oid(self) -> str:  # noqa: D102
-        return CertificateExtensionOid.ISSUER_ALTERNATIVE_NAME.dotted_string
-
-    extension_oid.fget.short_description = EXTENSION_STR
+    _extension_oid = CertificateExtensionOid.ISSUER_ALTERNATIVE_NAME.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
-        cls, extension: x509.Extension[x509.IssuerAlternativeName]
+        cls, extension: x509.Extension[T]
     ) -> None | IssuerAlternativeNameExtension:
         """Stores the IssuerAlternativeNameExtension in the database.
 
@@ -588,6 +612,8 @@ class IssuerAlternativeNameExtension(CertificateExtension, models.Model):
             trustpoint.pki.models.IssuerAlternativeNameExtension:
             The instance of the saved IssuerAlternativeNameExtension.
         """
+        if not isinstance(extension.value, x509.IssuerAlternativeName):
+            return None
         try:
             gn = GeneralNamesModel()
             gn.save()
@@ -606,6 +632,8 @@ class SubjectAlternativeNameExtension(CertificateExtension, models.Model):
     Stores alternative names for the certificate's subject.
     """
 
+    objects: models.Manager[SubjectAlternativeNameExtension]
+
     critical = models.BooleanField(verbose_name=_('Critical'), editable=False)
     subject_alt_name = models.ForeignKey(
         GeneralNamesModel,
@@ -619,15 +647,11 @@ class SubjectAlternativeNameExtension(CertificateExtension, models.Model):
         """Returns a string representation of the SubjectAlternativeName extension."""
         return f'{self.__class__.__name__}(critical={self.critical}, oid={self.extension_oid})'
 
-    @property
-    def extension_oid(self) -> str:  # noqa: D102
-        return CertificateExtensionOid.SUBJECT_ALTERNATIVE_NAME.dotted_string
-
-    extension_oid.fget.short_description = EXTENSION_STR
+    _extension_oid = CertificateExtensionOid.SUBJECT_ALTERNATIVE_NAME.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
-        cls, extension: x509.Extension[x509.SubjectAlternativeName]
+        cls, extension: x509.Extension[T]
     ) -> None | SubjectAlternativeNameExtension:
         """Stores the SubjectAlternativeName extension in the database.
 
@@ -637,6 +661,8 @@ class SubjectAlternativeNameExtension(CertificateExtension, models.Model):
         Returns:
             SubjectAlternativeNameExtension: The instance of the saved extension.
         """
+        if not isinstance(extension.value, x509.SubjectAlternativeName):
+            return None
         try:
             gn = GeneralNamesModel()
             gn.save()
@@ -655,6 +681,8 @@ class AuthorityKeyIdentifierExtension(CertificateExtension, models.Model):
 
     Identifies the public key of the issuing CA.
     """
+
+    objects: models.Manager[AuthorityKeyIdentifierExtension]
 
     _extension_type = 'AuthorityKeyIdentifier'
 
@@ -677,15 +705,11 @@ class AuthorityKeyIdentifierExtension(CertificateExtension, models.Model):
         """Returns a string representation of the AuthorityKeyIdentifier extension."""
         return f'{self._extension_type}(critical={self.critical}, oid={self.extension_oid})'
 
-    @property
-    def extension_oid(self) -> str:
-        return CertificateExtensionOid.AUTHORITY_KEY_IDENTIFIER.dotted_string
-
-    extension_oid.fget.short_description = EXTENSION_STR
+    _extension_oid = CertificateExtensionOid.AUTHORITY_KEY_IDENTIFIER.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
-        cls, extension: x509.Extension[x509.AuthorityKeyIdentifier]
+        cls, extension: x509.Extension[T]
     ) -> None | AuthorityKeyIdentifierExtension:
         """Stores the AuthorityKeyIdentifier extension in the database.
 
@@ -695,6 +719,8 @@ class AuthorityKeyIdentifierExtension(CertificateExtension, models.Model):
         Returns:
             AuthorityKeyIdentifierExtension: The instance of the saved extension.
         """
+        if not isinstance(extension.value, x509.AuthorityKeyIdentifier):
+            return None
         try:
             aki: x509.AuthorityKeyIdentifier = extension.value
             key_identifier = aki.key_identifier.hex().upper() if aki.key_identifier else None
@@ -729,6 +755,8 @@ class SubjectKeyIdentifierExtension(CertificateExtension, models.Model):
 
     # TODO(Anyone): Add critical and storage mechanism
 
+    objects: models.Manager[SubjectKeyIdentifierExtension]
+
     # The key_identifier is a hex-encoded, uppercase string representing the SKI
     key_identifier = models.CharField(max_length=256, editable=False, verbose_name='Key Identifier', unique=True)
 
@@ -736,15 +764,11 @@ class SubjectKeyIdentifierExtension(CertificateExtension, models.Model):
         """Returns a string representation of the SubjectKeyIdentifier extension."""
         return f'SubjectKeyIdentifierExtension(key_identifier={self.key_identifier})'
 
-    @property
-    def extension_oid(self) -> str:
-        return CertificateExtensionOid.SUBJECT_KEY_IDENTIFIER.dotted_string
-
-    extension_oid.fget.short_description = EXTENSION_STR
+    _extension_oid = CertificateExtensionOid.SUBJECT_KEY_IDENTIFIER.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
-        cls, extension: x509.Extension[x509.SubjectKeyIdentifier]
+        cls, extension: x509.Extension[T]
     ) -> None | SubjectKeyIdentifierExtension:
         """Stores the SubjectKeyIdentifierExtension in the database.
 
@@ -757,6 +781,8 @@ class SubjectKeyIdentifierExtension(CertificateExtension, models.Model):
         Returns:
             SubjectKeyIdentifierExtension: The saved instance of SubjectKeyIdentifierExtension.
         """
+        if not isinstance(extension.value, x509.SubjectKeyIdentifier):
+            return None
         try:
             ski_value: x509.SubjectKeyIdentifier = extension.value
             key_id_hex = ski_value.digest.hex().upper()
@@ -780,6 +806,8 @@ class NoticeReference(models.Model):
         max_length=1024, editable=False, verbose_name='Notice Numbers', null=True, blank=True
     )
 
+    objects = models.Manager['NoticeReference']
+
     def __str__(self) -> str:
         """Returns a string representation of the NoticeReference."""
         return f'{self.organization or "Unknown"}: {self.notice_numbers}'
@@ -793,6 +821,8 @@ class UserNotice(models.Model):
         max_length=200, editable=False, verbose_name='Explicit Text', null=True, blank=True
     )
 
+    objects = models.Manager['UserNotice']
+
     def __str__(self) -> str:
         """Returns a string representation of the UserNotice."""
         return f'UserNotice: {self.explicit_text or "No Explicit Text"}'
@@ -802,6 +832,8 @@ class CPSUriModel(models.Model):
     """Represents a CPS URI as per RFC5280."""
 
     cps_uri = models.CharField(max_length=2048, editable=False, verbose_name='CPS URI')
+
+    objects = models.Manager['CPSUriModel']
 
     def __str__(self) -> str:
         """Returns a string representation of the CPSUriModel."""
@@ -816,6 +848,8 @@ class QualifierModel(models.Model):
         UserNotice, null=True, blank=True, on_delete=models.CASCADE, related_name='qualifiers'
     )
 
+    objects = models.Manager['QualifierModel']
+
     def __str__(self) -> str:
         """Returns a string representation of the QualifierModel."""
         if self.cps_uri:
@@ -824,11 +858,11 @@ class QualifierModel(models.Model):
             return f'Qualifier: User Notice - {self.user_notice}'
         return 'Qualifier: Undefined'
 
-    def save(self, **kwargs: Any) -> None:
+    def save(self, *args: Any, **kwargs: Any) -> None:
         if self.cps_uri and self.user_notice:
             msg = "Only one of 'cps_uri' or 'user_notice' can be set, not both."
             raise ValueError(msg)
-        super().save(**kwargs)
+        super().save(*args, **kwargs)
 
 
 class PolicyQualifierInfo(models.Model):
@@ -836,6 +870,8 @@ class PolicyQualifierInfo(models.Model):
 
     policy_qualifier_id = models.CharField(max_length=256, editable=False, verbose_name='Policy Qualifier ID')
     qualifier = models.ForeignKey(QualifierModel, null=True, blank=True, on_delete=models.CASCADE)
+
+    objects = models.Manager['PolicyQualifierInfo']
 
     def __str__(self) -> str:
         """Returns a string representation of the PolicyQualifierInfo."""
@@ -847,6 +883,8 @@ class PolicyInformation(models.Model):
 
     policy_identifier = models.CharField(max_length=256, editable=False, verbose_name='Policy Identifier')
     policy_qualifiers = models.ManyToManyField(PolicyQualifierInfo, blank=True, related_name='policies', editable=False)
+
+    objects = models.Manager['PolicyInformation']
 
     def __str__(self) -> str:
         """Returns a string representation of the PolicyInformation."""
@@ -864,6 +902,8 @@ class CertificatePoliciesExtension(CertificateExtension, models.Model):
         PolicyInformation, related_name='certificate_policies', editable=False
     )
 
+    objects = models.Manager['CertificatePoliciesExtension']
+
     def __str__(self) -> str:
         """Returns a string representation of the CertificatePolicies extension."""
         return (
@@ -871,15 +911,11 @@ class CertificatePoliciesExtension(CertificateExtension, models.Model):
             f'policies={[policy.policy_identifier for policy in self.certificate_policies.all()]})'
         )
 
-    @property
-    def extension_oid(self) -> str:
-        return CertificateExtensionOid.CERTIFICATE_POLICIES.dotted_string
-
-    extension_oid.fget.short_description = EXTENSION_STR
+    _extension_oid = CertificateExtensionOid.CERTIFICATE_POLICIES.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
-        cls, extension: x509.Extension[x509.CertificatePolicies]
+        cls, extension: x509.Extension[T]
     ) -> None | CertificatePoliciesExtension:
         """Stores the CertificatePoliciesExtension in the database.
 
@@ -951,6 +987,8 @@ class KeyPurposeIdModel(models.Model):
 
     oid = models.CharField(max_length=256, editable=False, verbose_name='Key Purpose OID', unique=True)
 
+    objects = models.Manager['KeyPurposeIdModel']
+
     def __str__(self) -> str:
         """Returns a string representation of the KeyPurposeIdModel."""
         return f'KeyPurposeId({self.oid})'
@@ -965,18 +1003,18 @@ class ExtendedKeyUsageExtension(models.Model):
     critical = models.BooleanField(verbose_name='Critical', editable=False)
     key_purpose_ids = models.ManyToManyField(KeyPurposeIdModel, related_name='extended_key_usages', editable=False)
 
+    objects = models.Manager['ExtendedKeyUsageExtension']
+
     def __str__(self) -> str:
         """Returns a string representation of the ExtendedKeyUsage extension."""
         purposes = [k.oid for k in self.key_purpose_ids.all()]
         return f'ExtendedKeyUsageExtension(critical={self.critical}, key_purposes={purposes})'
 
-    @property
-    def extension_oid(self) -> str:
-        return CertificateExtensionOid.EXTENDED_KEY_USAGE.dotted_string
+    _extension_oid = CertificateExtensionOid.EXTENDED_KEY_USAGE.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
-        cls, extension: x509.Extension[x509.ExtendedKeyUsage]
+        cls, extension: x509.Extension[T]
     ) -> None | ExtendedKeyUsageExtension:
         """Stores the ExtendedKeyUsage extension in the database.
 
@@ -1018,9 +1056,11 @@ class GeneralNameModel(models.Model):
     registered_id = models.ForeignKey(GeneralNameRegisteredId, null=True, blank=True, on_delete=models.CASCADE)
     other_name = models.ForeignKey(GeneralNameOtherName, null=True, blank=True, on_delete=models.CASCADE)
 
+    objects = models.Manager['GeneralNameModel']
+
     def __str__(self) -> str:
         """Returns a string representation of the GeneralNameModel."""
-        return f'GeneralSubtree(GeneralName={self.get_str()}, min={self.minimum}, max={self.maximum})'
+        return f'GeneralName({self.get_str()})'
 
     def get_str(self) -> str:  # noqa: PLR0911
         """Returns a string representation of the GeneralNameModel."""
@@ -1054,12 +1094,12 @@ class GeneralNameModel(models.Model):
         gn_model.save()
 
         if isinstance(gname, x509.RFC822Name):
-            obj, _ = GeneralNameRFC822Name.objects.get_or_create(value=gname.value)
-            gn_model.rfc822_name = obj
+            rfc822_obj, _ = GeneralNameRFC822Name.objects.get_or_create(value=gname.value)
+            gn_model.rfc822_name = rfc822_obj
 
         elif isinstance(gname, x509.DNSName):
-            obj, _ = GeneralNameDNSName.objects.get_or_create(value=gname.value)
-            gn_model.dns_name = obj
+            dns_obj, _ = GeneralNameDNSName.objects.get_or_create(value=gname.value)
+            gn_model.dns_name = dns_obj
 
         elif isinstance(gname, x509.DirectoryName):
             dir_name = GeneralNameDirectoryName()
@@ -1076,8 +1116,8 @@ class GeneralNameModel(models.Model):
             gn_model.directory_name = dir_name
 
         elif isinstance(gname, x509.UniformResourceIdentifier):
-            obj, _ = GeneralNameUniformResourceIdentifier.objects.get_or_create(value=gname.value)
-            gn_model.uri = obj
+            uri_obj, _ = GeneralNameUniformResourceIdentifier.objects.get_or_create(value=gname.value)
+            gn_model.uri = uri_obj
 
         elif isinstance(gname, x509.IPAddress):
             ip_str = str(gname.value)
@@ -1086,18 +1126,18 @@ class GeneralNameModel(models.Model):
                 if gname.value.version == 4  # noqa: PLR2004
                 else GeneralNameIpAddress.IpType.IPV6_ADDRESS
             )
-            obj, _ = GeneralNameIpAddress.objects.get_or_create(ip_type=ip_type, value=ip_str)
-            gn_model.ip_address = obj
+            ip_obj, _ = GeneralNameIpAddress.objects.get_or_create(ip_type=ip_type, value=ip_str)
+            gn_model.ip_address = ip_obj
 
         elif isinstance(gname, x509.RegisteredID):
-            obj, _ = GeneralNameRegisteredId.objects.get_or_create(value=gname.value.dotted_string)
-            gn_model.registered_id = obj
+            regid_obj, _ = GeneralNameRegisteredId.objects.get_or_create(value=gname.value.dotted_string)
+            gn_model.registered_id = regid_obj
 
         elif isinstance(gname, x509.OtherName):
             # Convert the value to hex
             hex_val = gname.value.hex().upper()
-            obj, _ = GeneralNameOtherName.objects.get_or_create(type_id=gname.type_id.dotted_string, value=hex_val)
-            gn_model.other_name = obj
+            on_obj, _ = GeneralNameOtherName.objects.get_or_create(type_id=gname.type_id.dotted_string, value=hex_val)
+            gn_model.other_name = on_obj
 
         else:
             raise TypeError(gname)
@@ -1106,7 +1146,7 @@ class GeneralNameModel(models.Model):
         return gn_model
 
 
-class GeneralSubtree(models.Model):  # noqa: DJ008
+class GeneralSubtree(models.Model):
     """Represents a single GeneralSubtree as per RFC5280.
 
     Base is a single GeneralName.
@@ -1118,11 +1158,19 @@ class GeneralSubtree(models.Model):  # noqa: DJ008
     minimum = models.PositiveIntegerField(default=0, editable=False)
     maximum = models.PositiveIntegerField(null=True, blank=True, editable=False, default=None)
 
+    objects = models.Manager['GeneralSubtree']
+
+    def __str__(self) -> str:
+        """Returns a string representation of the GeneralSubtree."""
+        return f'GeneralSubtree(GeneralName={self.base}, min={self.minimum}, max={self.maximum})'
+
 
 class NameConstraintsExtension(CertificateExtension, models.Model):
     critical = models.BooleanField(verbose_name='Critical', editable=False)
     permitted_subtrees = models.ManyToManyField(GeneralSubtree, related_name='permitted_subtrees_set', editable=False)
     excluded_subtrees = models.ManyToManyField(GeneralSubtree, related_name='excluded_subtrees_set', editable=False)
+
+    objects = models.Manager['NameConstraintsExtension']
 
     def __str__(self) -> str:
         """Returns a string representation of the NameConstraintsExtension."""
@@ -1134,15 +1182,11 @@ class NameConstraintsExtension(CertificateExtension, models.Model):
 
         return f'NameConstraintsExtension(critical={self.critical}, {permitted_str}; {excluded_str})'
 
-    @property
-    def extension_oid(self) -> str:
-        return CertificateExtensionOid.NAME_CONSTRAINTS.dotted_string
-
-    extension_oid.fget.short_description = EXTENSION_STR
+    _extension_oid = CertificateExtensionOid.NAME_CONSTRAINTS.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
-        cls, extension: x509.Extension[x509.NameConstraints]
+        cls, extension: x509.Extension[T]
     ) -> None | NameConstraintsExtension:
         """Stores the NameConstraints extension in the database.
 
@@ -1193,6 +1237,8 @@ class DistributionPointName(models.Model):
         blank=True,
     )
 
+    objects = models.Manager['DistributionPointName']
+
     def __str__(self) -> str:
         """Returns a string representation of the DistributionPointName."""
         if self.full_name:
@@ -1200,11 +1246,11 @@ class DistributionPointName(models.Model):
         nrci = ', '.join(str(a) for a in self.name_relative_to_crl_issuer.all())
         return f'DistributionPointName(nameRelativeToCRLIssuer={nrci})'
 
-    def save(self, **kwargs: Any) -> None:
+    def save(self, *args: Any, **kwargs: Any) -> None:
         if self.full_name and self.name_relative_to_crl_issuer.exists():
             msg = "Only one of 'full_name' or 'name_relative_to_crl_issuer' can be set, not both."
             raise ValueError(msg)
-        super().save(**kwargs)
+        super().save(*args, **kwargs)
 
 
 class DistributionPointModel(CertificateExtension, models.Model):
@@ -1215,6 +1261,8 @@ class DistributionPointModel(CertificateExtension, models.Model):
     crl_issuer = models.ForeignKey(
         GeneralNamesModel, on_delete=models.CASCADE, null=True, blank=True, verbose_name=_('CRL Issuer')
     )
+
+    objects = models.Manager['DistributionPointModel']
 
     mapping: ClassVar[dict[str, int]] = {
         'unused': 0,
@@ -1260,7 +1308,7 @@ class DistributionPointModel(CertificateExtension, models.Model):
         return reasons
 
     @classmethod
-    def parse_distribution_points(cls, extension: x509.Extension) -> list[DistributionPointModel]:
+    def parse_distribution_points(cls, extension: x509.Extension[T]) -> list[DistributionPointModel]:
         """Parses and stores DistributionPoints from an x509.Extension.
 
         Args:
@@ -1338,19 +1386,17 @@ class CrlDistributionPointsExtension(CertificateExtension, models.Model):
     critical = models.BooleanField(verbose_name=_('Critical'), editable=False)
     distribution_points = models.ManyToManyField(DistributionPointModel, verbose_name='Distribution Points', blank=True)
 
+    objects = models.Manager['CrlDistributionPointsExtension']
+
     def __str__(self) -> str:
         """Returns a string representation of the extension."""
         return f'CRLDistributionPointsExtension(critical={self.critical}, dp_count={self.distribution_points.count()})'
 
-    @property
-    def extension_oid(self) -> str:
-        return CertificateExtensionOid.CRL_DISTRIBUTION_POINTS.dotted_string
-
-    extension_oid.fget.short_description = EXTENSION_STR
+    _extension_oid = CertificateExtensionOid.CRL_DISTRIBUTION_POINTS.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
-        cls, extension: x509.Extension[x509.CRLDistributionPoints]
+        cls, extension: x509.Extension[T]
     ) -> CrlDistributionPointsExtension | None:
         """Stores the CRLDistributionPoints extension in the database.
 
@@ -1372,9 +1418,11 @@ class CrlDistributionPointsExtension(CertificateExtension, models.Model):
         return ext_instance
 
 
-class AccessDescriptionModel(CertificateExtension, models.Model):
+class AccessDescriptionModel(models.Model):
     access_method = models.CharField(max_length=256, editable=False, verbose_name='Access Method OID')
     access_location = models.ForeignKey(GeneralNameModel, verbose_name='Access Location', on_delete=models.CASCADE)
+
+    objects = models.Manager['AccessDescriptionModel']
 
     def __str__(self) -> str:
         """Returns a string representation of the AccessDescriptionModel."""
@@ -1387,18 +1435,16 @@ class AuthorityInformationAccessExtension(CertificateExtension, models.Model):
         AccessDescriptionModel, related_name='authority_info_access_syntax', blank=True
     )
 
+    objects = models.Manager['AuthorityInformationAccessExtension']
+
     def __str__(self) -> str:
         return f'AuthorityInformationAccessExtension(critical={self.critical}, #authority_info_access_syntax={self.authority_info_access_syntax.count()})'  # noqa: E501
 
-    @property
-    def extension_oid(self) -> str:
-        return CertificateExtensionOid.AUTHORITY_INFORMATION_ACCESS.dotted_string
-
-    extension_oid.fget.short_description = EXTENSION_STR
+    _extension_oid = CertificateExtensionOid.AUTHORITY_INFORMATION_ACCESS.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
-        cls, extension: x509.Extension[x509.AuthorityInformationAccess]
+        cls, extension: x509.Extension[T]
     ) -> AuthorityInformationAccessExtension | None:
         """Creates an AuthorityInformationAccessExtension from the cryptography AuthorityInformationAccess object."""
         if not isinstance(extension.value, x509.AuthorityInformationAccess):
@@ -1433,19 +1479,17 @@ class SubjectInformationAccessExtension(CertificateExtension, models.Model):
         AccessDescriptionModel, related_name='subject_info_access_syntax', blank=True
     )
 
+    objects = models.Manager['SubjectInformationAccessExtension']
+
     def __str__(self) -> str:
         """Returns a string representation of the SubjectInformationAccess extension."""
         return f'SubjectInformationAccessExtension(critical={self.critical}, #subject_info_access_syntax={self.subject_info_access_syntax.count()})'  # noqa: E501
 
-    @property
-    def extension_oid(self) -> str:
-        return CertificateExtensionOid.SUBJECT_INFORMATION_ACCESS.dotted_string
-
-    extension_oid.fget.short_description = EXTENSION_STR
+    _extension_oid = CertificateExtensionOid.SUBJECT_INFORMATION_ACCESS.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
-        cls, extension: x509.Extension[x509.SubjectInformationAccess]
+        cls, extension: x509.Extension[T]
     ) -> SubjectInformationAccessExtension | None:
         """Creates a SubjectInformationAccessExtension from the cryptography.x509.SubjectInformationAccess object."""
         if not isinstance(extension.value, x509.SubjectInformationAccess):
@@ -1484,6 +1528,8 @@ class InhibitAnyPolicyExtension(CertificateExtension, models.Model):
         blank=True, null=True, verbose_name='InhibitAnyPolicy', editable=False
     )
 
+    objects = models.Manager['InhibitAnyPolicyExtension']
+
     def __str__(self) -> str:
         """Returns a string representation of the InhibitAnyPolicyExtension."""
         return (
@@ -1491,15 +1537,11 @@ class InhibitAnyPolicyExtension(CertificateExtension, models.Model):
             f'inhibit_any_policy={self.inhibit_any_policy if self.inhibit_any_policy is not None else "None"})'
         )
 
-    @property
-    def extension_oid(self) -> str:
-        return CertificateExtensionOid.INHIBIT_ANY_POLICY.dotted_string
-
-    extension_oid.fget.short_description = EXTENSION_STR
+    _extension_oid = CertificateExtensionOid.INHIBIT_ANY_POLICY.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
-        cls, extension: x509.Extension[x509.InhibitAnyPolicy]
+        cls, extension: x509.Extension[T]
     ) -> InhibitAnyPolicyExtension | None:
         """Creates a InhibitAnyPolicyExtension from the cryptography.x509.InhibitAnyPolicy object."""
         if not isinstance(extension.value, x509.InhibitAnyPolicy):
@@ -1523,6 +1565,8 @@ class PolicyMappingModel(models.Model):
     issuer_domain_policy = models.CharField(max_length=256, verbose_name='Issuer Domain Policy OID', editable=False)
     subject_domain_policy = models.CharField(max_length=256, verbose_name='Subject Domain Policy OID', editable=False)
 
+    objects = models.Manager['PolicyMappingModel']
+
     class Meta:
         unique_together = ('issuer_domain_policy', 'subject_domain_policy')
 
@@ -1537,6 +1581,8 @@ class PolicyMappingsExtension(CertificateExtension, models.Model):
         PolicyMappingModel, related_name='policy_mappings_extension', editable=False
     )
 
+    objects = models.Manager['PolicyMappingsExtension']
+
     def __str__(self) -> str:
         mappings = ', '.join(
             f'{mapping.issuer_domain_policy} -> {mapping.subject_domain_policy}'
@@ -1544,15 +1590,11 @@ class PolicyMappingsExtension(CertificateExtension, models.Model):
         )
         return f'PolicyMappingsExtension(critical={self.critical}, mappings=[{mappings}])'
 
-    @property
-    def extension_oid(self) -> str:
-        return CertificateExtensionOid.POLICY_MAPPINGS.dotted_string
-
-    extension_oid.fget.short_description = EXTENSION_STR
+    _extension_oid = CertificateExtensionOid.POLICY_MAPPINGS.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
-        cls, extension: x509.Extension[x509.PolicyMappings]
+        cls, extension: x509.Extension[T]
     ) -> None | PolicyMappingsExtension:
         """Stores the PolicyMappingsExtension in the database.
 
@@ -1561,6 +1603,9 @@ class PolicyMappingsExtension(CertificateExtension, models.Model):
 
         Returns:
             PolicyMappingsExtension: The saved instance of PolicyMappingsExtension or None.
+        """
+        # Not supported by cryptography
+        return None
         """
         if not isinstance(extension.value, x509.PolicyMappings):
             msg = 'Expected a PolicyMappings extension.'
@@ -1583,6 +1628,7 @@ class PolicyMappingsExtension(CertificateExtension, models.Model):
         except x509.ExtensionNotFound:
             return None
         return mappings_ext
+        """
 
 
 class PolicyConstraintsExtension(CertificateExtension, models.Model):
@@ -1599,6 +1645,8 @@ class PolicyConstraintsExtension(CertificateExtension, models.Model):
         blank=True, null=True, verbose_name='inhibitPolicyMapping', editable=False
     )
 
+    objects = models.Manager['PolicyConstraintsExtension']
+
     def __str__(self) -> str:
         """Returns a string representation of the PolicyConstraintsExtension."""
         return (
@@ -1607,15 +1655,11 @@ class PolicyConstraintsExtension(CertificateExtension, models.Model):
             f'inhibit_policy_mapping={self.inhibit_policy_mapping})'
         )
 
-    @property
-    def extension_oid(self) -> str:
-        return CertificateExtensionOid.POLICY_CONSTRAINTS.dotted_string
-
-    extension_oid.fget.short_description = EXTENSION_STR
+    _extension_oid = CertificateExtensionOid.POLICY_CONSTRAINTS.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
-        cls, extension: x509.Extension[x509.PolicyConstraints]
+        cls, extension: x509.Extension[T]
     ) -> None | PolicyConstraintsExtension:
         """Stores the PolicyMappingsExtension in the database.
 
@@ -1652,21 +1696,19 @@ class SubjectDirectoryAttributesExtension(CertificateExtension, models.Model):
         AttributeTypeAndValue, verbose_name=_('Subject Directory Attributes'), editable=False, blank=True
     )
 
+    objects = models.Manager['SubjectDirectoryAttributesExtension']
+
     def __str__(self) -> str:
         """Returns a string representation of the SubjectDirectoryAttributesExtension."""
         attributes = ', '.join(str(attr) for attr in self.subject_directory_attributes.all())
         return f'SubjectDirectoryAttributesExtension(critical={self.critical}, attributes=[{attributes}])'
 
-    @property
-    def extension_oid(self) -> str:
-        return CertificateExtensionOid.SUBJECT_DIRECTORY_ATTRIBUTES.dotted_string
-
-    extension_oid.fget.short_description = EXTENSION_STR
+    _extension_oid = CertificateExtensionOid.SUBJECT_DIRECTORY_ATTRIBUTES.dotted_string
 
     @classmethod
     def save_from_crypto_extensions(
         cls,
-        extension: x509.Extension,  # [x509.SubjectDirectoryAttributes]
+        extension: x509.Extension[T],
     ) -> None | SubjectDirectoryAttributesExtension:
         """Stores the SubjectDirectoryAttributesExtension in the database.
 
@@ -1676,10 +1718,11 @@ class SubjectDirectoryAttributesExtension(CertificateExtension, models.Model):
         Returns:
             SubjectDirectoryAttributesExtension: The saved instance of SubjectDirectoryAttributesExtension or None.
         """
-        # Not supported
+        # Not supported by cryptography
+        return None
         """if not isinstance(extension.value, x509.SubjectDirectoryAttributes):
             msg = 'Expected a SubjectDirectoryAttributes extension.'
-            raise TypeError(msg)"""
+            raise TypeError(msg)
 
         try:
             subject_directory_attributes = cls(critical=extension.critical)
@@ -1694,7 +1737,7 @@ class SubjectDirectoryAttributesExtension(CertificateExtension, models.Model):
             subject_directory_attributes.save()
         except x509.ExtensionNotFound:
             return None
-        return subject_directory_attributes
+        return subject_directory_attributes"""
 
 
 class FreshestCrlExtension(CertificateExtension, models.Model):
@@ -1706,6 +1749,8 @@ class FreshestCrlExtension(CertificateExtension, models.Model):
     critical = models.BooleanField(verbose_name='Critical', editable=False)
     distribution_points = models.ManyToManyField(DistributionPointModel, blank=True)
 
+    objects = models.Manager['FreshestCrlExtension']
+
     def __str__(self) -> str:
         """Returns a string representation of the FreshestCrlExtension."""
         return f'FreshestCrlExtension(critical={self.critical}, distribution_points={self.distribution_points.count()})'
@@ -1715,7 +1760,7 @@ class FreshestCrlExtension(CertificateExtension, models.Model):
         return CertificateExtensionOid.FRESHEST_CRL.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(cls, extension: x509.Extension[x509.FreshestCRL]) -> FreshestCrlExtension | None:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> FreshestCrlExtension | None:
         """Stores the Freshest CRL extension in the database.
 
         Args:
