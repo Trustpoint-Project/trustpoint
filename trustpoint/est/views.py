@@ -10,6 +10,8 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives._serialization import Encoding
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+from pyasn1_modules.rfc2459 import common_name
+
 from devices.issuer import LocalDomainCredentialIssuer, LocalTlsClientCredentialIssuer, LocalTlsServerCredentialIssuer
 from devices.models import DeviceModel, IssuedCredentialModel
 from django.http import HttpRequest, HttpResponse, HttpResponseBase
@@ -19,7 +21,6 @@ from django.views.decorators.csrf import csrf_exempt
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
 from pyasn1.type.univ import ObjectIdentifier  # type: ignore[import-untyped]
-from pyasn1_modules.rfc2459 import common_name
 from trustpoint_core.oid import SignatureSuite  # type: ignore[import-untyped]
 from trustpoint_core.serializer import CertificateCollectionSerializer  # type: ignore[import-untyped]
 
@@ -266,7 +267,7 @@ class EstHttpMixin(LoggedHttpResponse):
         return parent.dispatch(request, *args, **kwargs)
 
 
-class EstRequestedDomainExtractorMixin(LoggedHttpResponse):
+class EstRequestedDomainExtractorMixin:
     """Mixin to extract the requested domain.
 
     This mixin sets:
@@ -336,6 +337,7 @@ class EstPkiMessageSerializerMixin:
                                  ) -> CredentialRequest:
         """Loads the CSR (x509.CertificateSigningRequest) and extracts subject and SAN"""
         subject_attributes = list(csr.subject)
+        common_name = self._extract_common_name(subject_attributes)
         serial_number = self._extract_serial_number(subject_attributes)
         dns_names, ipv4_addresses, ipv6_addresses = self._extract_san(csr)
         public_key = csr.public_key()
