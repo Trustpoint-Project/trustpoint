@@ -67,14 +67,14 @@ class ActiveTrustpointTlsServerCredentialModel(models.Model):
         """
         return f'Active TLS Credential: {self.credential.id if self.credential else "None"}'
 
-    def save(self, **kwargs: Any) -> None:
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Ensures the model instance always has an ID of 1 to enforce singleton-like behavior.
 
         Returns:
             None
         """
         self.id = 1
-        super().save(**kwargs)
+        super().save(*args, **kwargs)
 
 
 

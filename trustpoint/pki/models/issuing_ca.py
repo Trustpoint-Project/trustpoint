@@ -62,6 +62,8 @@ class IssuingCaModel(LoggerMixin, models.Model):
 
     crl_pem = models.TextField(editable=False, default='', verbose_name=_('CRL in PEM format'))
 
+    objects: models.Manager[IssuingCaModel]
+
     def __str__(self) -> str:
         """Returns a human-readable string that represents this IssuingCaModel entry.
 

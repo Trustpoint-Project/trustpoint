@@ -105,9 +105,9 @@ class DomainConfigView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegi
     detail_context_object_name = 'domain'
     success_url = reverse_lazy('pki:domains')
 
-    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
+    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Adds (no) additional context data."""
-        context = super().get_context_data(**kwargs)
+        context = super().get_context_data(*args, **kwargs)
 
         return context  # noqa: RET504
 

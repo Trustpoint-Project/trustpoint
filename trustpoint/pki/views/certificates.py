@@ -62,7 +62,7 @@ class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, TpLoginRequi
     context_object_name = 'certificate'
 
     def get(
-        self, _request: HttpRequest, pk: str | None = None, *_args: tuple[Any], **_kwargs: dict[str, Any]
+        self, _request: HttpRequest, pk: str | None = None, *_args: Any, **_kwargs: Any
     ) -> HttpResponse:
         """HTTP GET Method.
 
@@ -163,18 +163,19 @@ class CertificateMultipleDownloadView(
     template_name = 'pki/certificates/download_multiple.html'
     context_object_name = 'certificates'
 
-    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
+    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Adding the part of the url to the context, that contains the certificate primary keys.
 
         This is used for the {% url }% tags in the template to download files.
 
         Args:
+            *args: Positional arguments passed to super().get_context_data().
             **kwargs: Keyword arguments passed to super().get_context_data().
 
         Returns:
             dict: The context data.
         """
-        context = super().get_context_data(**kwargs)
+        context = super().get_context_data(*args, **kwargs)
         context['pks_path'] = self.kwargs.get('pks')
         return context
 

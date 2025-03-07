@@ -67,7 +67,7 @@ class ListInDetailView(ListView):
 
 
 class SortableTableMixin:
-    """Adds utility for sorting a ListView query by URL parameters
+    """Adds utility for sorting a ListView query by URL parameters.
 
     default_sort_param must be set in the view to specify default sorting order.
     """
@@ -104,8 +104,8 @@ class SortableTableMixin:
         exc_msg = f'Unknown queryset type: {type}'
         raise TypeError(exc_msg)
 
-    def get_context_data(self, **kwargs: dict) -> dict:
-        context = super().get_context_data(**kwargs)
+    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str,Any]:
+        context = super().get_context_data(*args, **kwargs)
 
         # Get current sorting column
         sort_param = self.request.GET.get('sort', self.default_sort_param)
