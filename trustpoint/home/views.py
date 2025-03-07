@@ -23,7 +23,7 @@ from django.views.generic.list import ListView
 from pki.models import CertificateModel, IssuingCaModel
 
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import SortableTableMixin, TpLoginRequiredMixin
+from trustpoint.views.base import SortableTableMixin, LoggerMixin
 
 from .filters import NotificationFilter
 from .models import NotificationModel, NotificationStatus
@@ -35,14 +35,14 @@ SUCCESS = 25
 ERROR = 40
 
 
-class IndexView(TpLoginRequiredMixin, RedirectView):
+class IndexView(RedirectView):
     """Redirects authenticated users to the dashboard page."""
 
     permanent = False
     pattern_name = 'home:dashboard'
 
 
-class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView[NotificationModel]):
+class DashboardView(SortableTableMixin, ListView[NotificationModel]):
     """Renders the dashboard page for authenticated users. Uses the 'home/dashboard.html' template."""
 
     template_name = 'home/dashboard.html'
@@ -61,7 +61,7 @@ class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView[Notificat
         return NotificationModel.objects.all()
 
     def generate_last_week_dates(self) -> list[str]:
-        """Generates date strings for last one week"""
+        """Generates date strings for last one week."""
         end_date = timezone.now()
         start_date = end_date - timedelta(days=6)
         return [(start_date + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
@@ -75,7 +75,7 @@ class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView[Notificat
         return super().get_queryset()
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Fetch context data"""
+        """Fetch context data."""
         context = super().get_context_data(**kwargs)
 
         for notification in context['notifications']:
@@ -115,7 +115,7 @@ class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView[Notificat
 
 @login_required
 def notification_details_view(request: HttpRequest, pk: int | str) -> HttpResponse:
-    """Rends notification details view"""
+    """Rends notification details view."""
     notification = get_object_or_404(NotificationModel, pk=pk)
 
     notification_statuses = notification.statuses.values_list('status', flat=True)
@@ -160,12 +160,12 @@ def mark_as_solved(request: HttpRequest, pk: int | str) -> HttpResponse:
     return render(request, 'home/notification_details.html', context)
 
 
-class AddDomainsAndDevicesView(TpLoginRequiredMixin, TemplateView):
+class AddDomainsAndDevicesView(TemplateView):
     """View to execute the add_domains_and_devices management command and pass status to the template."""
 
     _logger = logging.getLogger(__name__)
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:  # noqa: ARG002
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handles GET requests and redirects to the dashboard."""
         try:
             call_command('add_domains_and_devices')
@@ -176,14 +176,17 @@ class AddDomainsAndDevicesView(TpLoginRequiredMixin, TemplateView):
         return redirect('home:dashboard')
 
 
-class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
+class DashboardChartsAndCountsView(TemplateView):
     """View to mark the notification as Solved."""
 
     _logger = logging.getLogger(__name__)
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:  # noqa: ARG002
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Get dashboard data for panels, tables and charts."""
         start_date: str | None = request.GET.get('start_date', None)
+
+        del args
+        del kwargs
 
         start_date_object: datetime = timezone.now()
         # Parse the date string into a datetime.date object
