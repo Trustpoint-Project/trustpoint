@@ -24,11 +24,8 @@ class NotificationFilter(django_filters.FilterSet):
         fields: ClassVar[list[str]] = ['notification_type', 'notification_source']
 
     def filter_by_multiple_types(
-            self,
-            queryset: QuerySet[NotificationModel],
-            _: str,
-            value: str
-        ) -> QuerySet[NotificationModel]:
+        self, queryset: QuerySet[NotificationModel], _: str, value: str
+    ) -> QuerySet[NotificationModel]:
         """Split the comma-separated values into a list for types"""
         if value:
             types = value.split(',')
@@ -36,11 +33,8 @@ class NotificationFilter(django_filters.FilterSet):
         return queryset
 
     def filter_by_multiple_sources(
-            self,
-            queryset: QuerySet[NotificationModel],
-            _: str,
-            value: str
-        ) -> QuerySet[NotificationModel]:
+        self, queryset: QuerySet[NotificationModel], _: str, value: str
+    ) -> QuerySet[NotificationModel]:
         """Split the comma-separated values into a list for sources"""
         if value:
             sources = value.split(',')
@@ -48,11 +42,8 @@ class NotificationFilter(django_filters.FilterSet):
         return queryset
 
     def filter_by_date_range(
-            self,
-            queryset: QuerySet[NotificationModel],
-            _: str,
-            value: str
-        ) -> QuerySet[NotificationModel]:
+        self, queryset: QuerySet[NotificationModel], _: str, value: str
+    ) -> QuerySet[NotificationModel]:
         """Filter the given QuerySet by date range"""
         now = timezone.now()
         if value == 'today':

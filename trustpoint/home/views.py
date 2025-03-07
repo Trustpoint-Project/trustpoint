@@ -184,7 +184,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:  # noqa: ARG002
         """Get dashboard data for panels, tables and charts"""
-        start_date: str|None = request.GET.get('start_date', None)
+        start_date: str | None = request.GET.get('start_date', None)
 
         start_date_object: datetime = timezone.now()
         # Parse the date string into a datetime.date object
@@ -455,7 +455,6 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
                 .values(domain_name=F('domain__unique_name'))
                 .annotate(cert_count=Count('id'))
             )
-
 
             # Convert the queryset to a list
             cert_counts_by_domain = list(cert_counts_domain_qr)
