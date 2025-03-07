@@ -153,7 +153,7 @@ class TruststoreAddForm(forms.Form):
     def _save_trust_store(
         unique_name: str, intended_usage: TruststoreModel.IntendedUsage, certificates: list[x509.Certificate]
     ) -> TruststoreModel:
-        saved_certs = []
+        saved_certs: list[CertificateModel] = []
 
         for certificate in certificates:
             sha256_fingerprint = certificate.fingerprint(algorithm=hashes.SHA256()).hex().upper()
@@ -165,10 +165,10 @@ class TruststoreAddForm(forms.Form):
         trust_store_model = TruststoreModel(unique_name=unique_name, intended_usage=intended_usage)
         trust_store_model.save()
 
-        for number, certificate in enumerate(saved_certs):
+        for number, certificate_model in enumerate(saved_certs):
             trust_store_order_model = TruststoreOrderModel()
             trust_store_order_model.order = number
-            trust_store_order_model.certificate = certificate
+            trust_store_order_model.certificate = certificate_model
             trust_store_order_model.trust_store = trust_store_model
             trust_store_order_model.save()
 

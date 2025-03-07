@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import abc
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
-from typing import Any, ClassVar, TypeVar, cast
+from typing import Any, ClassVar, TypeVar
 
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
@@ -541,7 +541,9 @@ class GeneralNamesModel(models.Model):
 
         directory_name.save()
 
-    def save_general_names(self, general_names: x509.Extension[x509.ExtensionType] | list[x509.GeneralName]) -> None | GeneralNamesModel:
+    def save_general_names(
+        self, general_names: x509.Extension[x509.ExtensionType] | list[x509.GeneralName]
+    ) -> None | GeneralNamesModel:
         """Stores general names in the database.
 
         Args:
@@ -1605,6 +1607,7 @@ class PolicyMappingsExtension(CertificateExtension, models.Model):
             PolicyMappingsExtension: The saved instance of PolicyMappingsExtension or None.
         """
         # Not supported by cryptography
+        del extension
         return None
         """
         if not isinstance(extension.value, x509.PolicyMappings):
@@ -1719,6 +1722,7 @@ class SubjectDirectoryAttributesExtension(CertificateExtension, models.Model):
             SubjectDirectoryAttributesExtension: The saved instance of SubjectDirectoryAttributesExtension or None.
         """
         # Not supported by cryptography
+        del extension
         return None
         """if not isinstance(extension.value, x509.SubjectDirectoryAttributes):
             msg = 'Expected a SubjectDirectoryAttributes extension.'

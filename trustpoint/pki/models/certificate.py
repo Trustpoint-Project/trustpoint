@@ -307,7 +307,7 @@ class CertificateModel(LoggerMixin, models.Model):
         """Human-readable representation of the CertificateModel instance."""
         return self.common_name
 
-    def save(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
+    def save(self, *_args: Any, **_kwargs: Any) -> None:
         """Save method must not be called directly to protect the integrity.
 
         This method makes sure save() is not called by mistake.
@@ -361,7 +361,7 @@ class CertificateModel(LoggerMixin, models.Model):
     @property
     def is_ca(self) -> bool:
         """Check if the certificate is a CA certificate."""
-        return self.basic_constraints_extension and self.basic_constraints_extension.ca
+        return self.basic_constraints_extension is not None and self.basic_constraints_extension.ca
 
     @property
     def is_root_ca(self) -> bool:
@@ -381,7 +381,7 @@ class CertificateModel(LoggerMixin, models.Model):
 
     @staticmethod
     def _get_subject(cert: x509.Certificate) -> list[tuple[str, str]]:
-        subject = []
+        subject: list[tuple[str, str]] = []
         for rdn in cert.subject.rdns:
             subject.extend(
                 [attr_type_and_value.oid.dotted_string, attr_type_and_value.value] for attr_type_and_value in rdn
@@ -390,7 +390,7 @@ class CertificateModel(LoggerMixin, models.Model):
 
     @staticmethod
     def _get_issuer(cert: x509.Certificate) -> list[tuple[str, str]]:
-        issuer = []
+        issuer: list[tuple[str, str]] = []
         for rdn in cert.issuer.rdns:
             issuer.extend(
                 [attr_type_and_value.oid.dotted_string, attr_type_and_value.value] for attr_type_and_value in rdn

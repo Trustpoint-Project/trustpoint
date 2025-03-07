@@ -32,9 +32,9 @@ __all__ = ['CertificateChainOrderModel', 'CredentialAlreadyExistsError', 'Creden
 class CredentialAlreadyExistsError(ValidationError):
     """The CredentialAlreadyExistsError is raised if a credential already exists in the database."""
 
-    def __init__(self, *args: tuple, **kwargs: dict) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the CredentialAlreadyExistsError with a default message."""
-        super().__init__(*args, **kwargs, message=_('Credential already exists.'))
+        super().__init__(_('Credential already exists.'), *args, **kwargs)
 
 
 class CredentialModel(models.Model):
@@ -70,6 +70,8 @@ class CredentialModel(models.Model):
     )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
+
+    objects: models.Manager[CredentialModel]
 
     def __repr__(self) -> str:
         """Returns a string representation of this CredentialModel entry."""
@@ -107,7 +109,7 @@ class CredentialModel(models.Model):
         )
 
     @property
-    def ordered_certificate_chain_queryset(self) -> QuerySet:
+    def ordered_certificate_chain_queryset(self) -> QuerySet[CertificateChainOrderModel]:
         """Gets the ordered certificate chain queryset."""
         return self.certificatechainordermodel_set.order_by('order')
 
@@ -156,16 +158,16 @@ class CredentialModel(models.Model):
         credential_type: CredentialModel.CredentialTypeChoice,
     ) -> CredentialModel:
         """Stores a credential without a private key."""
-        certificate = CertificateModel.save_certificate(certificate)
+        certificate_model = CertificateModel.save_certificate(certificate)
 
         credential_model = cls.objects.create(credential_type=credential_type, private_key=None)
 
         PrimaryCredentialCertificate.objects.create(
-            certificate=certificate, credential=credential_model, is_primary=True
+            certificate=certificate_model, credential=credential_model, is_primary=True
         )
 
-        for order, certificate in enumerate(certificate_chain):
-            certificate_model = CertificateModel.save_certificate(certificate)
+        for order, certificate_in_chain in enumerate(certificate_chain):
+            certificate_model = CertificateModel.save_certificate(certificate_in_chain)
             CertificateChainOrderModel.objects.create(
                 certificate=certificate_model, credential=credential_model, order=order
             )
@@ -294,6 +296,8 @@ class PrimaryCredentialCertificate(models.Model):
     certificate = models.OneToOneField(CertificateModel, on_delete=models.CASCADE)
     is_primary = models.BooleanField(default=False)
 
+    objects: models.Manager[PrimaryCredentialCertificate]
+
     def __repr__(self) -> str:
         """Returns a string representation of this PrimaryCredentialCertificate entry."""
         return (
@@ -306,13 +310,13 @@ class PrimaryCredentialCertificate(models.Model):
         """Returns a human-readable string that represents this PrimaryCredentialCertificate entry."""
         return self.__repr__()
 
-    def save(self, **kwargs: Any) -> None:
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """If a new certificate is added to a credential, it is set to primary and all others to non-primary."""
         if not self.pk or self.is_primary:
             PrimaryCredentialCertificate.objects.filter(credential=self.credential).update(is_primary=False)
 
         self.is_primary = True
-        super().save(**kwargs)
+        super().save(*args, **kwargs)
 
 
 
@@ -322,6 +326,8 @@ class CertificateChainOrderModel(models.Model):
     certificate = models.ForeignKey(CertificateModel, on_delete=models.PROTECT, null=False, blank=False, editable=False)
     credential = models.ForeignKey(CredentialModel, on_delete=models.PROTECT, null=False, blank=False, editable=False)
     order = models.PositiveIntegerField(null=False, blank=False, editable=False)
+
+    objects: models.Manager[CertificateChainOrderModel]
 
     class Meta:
         """This Meta class add some configuration to the CertificateChainOrderModel.
@@ -350,7 +356,7 @@ class CertificateChainOrderModel(models.Model):
         return self.__repr__()
 
     # TODO(AlexHx8472): Validate certificate chain!
-    def save(self, **kwargs: Any) -> None:
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Stores a CertificateChainOrderModel in the database.
 
         This is only possible if the order takes the next available value. That is, e.g. if the corresponding
@@ -358,6 +364,7 @@ class CertificateChainOrderModel(models.Model):
         entry to be stored must have order 2.
 
         Args:
+            *args: Positional arguments, passed to super().save()
             **kwargs: Keyword arguments, passed to super().save()
 
         Returns:
@@ -372,9 +379,9 @@ class CertificateChainOrderModel(models.Model):
         if self.order != max_order + 1:
             err_msg = f'Cannot add Membership with order {self.order}. Expected {max_order + 1}.'
             raise ValidationError(err_msg)
-        super().save(**kwargs)
+        super().save(*args, **kwargs)
 
-    def delete(self, *args: tuple[Any], **kwargs: dict[str, Any]) -> None:
+    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
         """Tries to delete the CertificateChainOrderModel entry.
 
         A CertificateChainOrderModel entry can only be deleted if it has the highest order in the
@@ -385,7 +392,7 @@ class CertificateChainOrderModel(models.Model):
             **kwargs: Keyword arguments, passed to super().delete()
 
         Returns:
-            None
+            tuple[int, dict[str, int]] (returned by parent)
 
         Raises:
             ValueError:
@@ -401,7 +408,7 @@ class CertificateChainOrderModel(models.Model):
             )
             raise ValidationError(err_msg)
 
-        super().delete(*args, **kwargs)
+        return super().delete(*args, **kwargs)
 
     def _get_max_order(self) -> int:
         """Gets highest order of a certificate of a credential certificate chain.
