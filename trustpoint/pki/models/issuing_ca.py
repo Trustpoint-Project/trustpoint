@@ -174,7 +174,7 @@ class IssuingCaModel(LoggerMixin, models.Model):
 
     @property
     def public_key_info(self) -> oid.PublicKeyInfo:
-        """The public key info for the CA certificate's public key"""
+        """The public key info for the CA certificate's public key."""
         return self.signature_suite.public_key_info
 
     def revoke_all_issued_certificates(self, reason: str = RevokedCertificateModel.ReasonCode.UNSPECIFIED) -> None:

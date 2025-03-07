@@ -334,8 +334,8 @@ class KeyUsageExtension(CertificateExtension, models.Model):
                 key_cert_sign=crypto_basic_constraints_extension.value.key_cert_sign,
                 crl_sign=crypto_basic_constraints_extension.value.crl_sign,
                 encipher_only=crypto_basic_constraints_extension.value._encipher_only,  # noqa: SLF001
-                decipher_only=crypto_basic_constraints_extension.value._decipher_only,
-            ).first()  # noqa: SLF001
+                decipher_only=crypto_basic_constraints_extension.value._decipher_only,  # noqa: SLF001
+            ).first()
             if existing_entry:
                 return existing_entry
 
@@ -869,7 +869,7 @@ class CertificatePoliciesExtension(CertificateExtension, models.Model):
         return (
             f'CertificatePoliciesExtension(critical={self.critical}, '
             f'policies={[policy.policy_identifier for policy in self.certificate_policies.all()]})'
-        )  # noqa: ISC002
+        )
 
     @property
     def extension_oid(self) -> str:

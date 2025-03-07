@@ -204,7 +204,7 @@ class CredentialModel(models.Model):
 
     @property
     def certificate(self) -> CertificateModel:
-        """Gets the primary certificate model using the through model
+        """Gets the primary certificate model using the through model.
 
         Returns:
             The primary certificate model.

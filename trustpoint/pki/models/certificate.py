@@ -13,8 +13,6 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
-
-
 from trustpoint_core.oid import (
     AlgorithmIdentifier,
     CertificateExtensionOid,
@@ -23,7 +21,6 @@ from trustpoint_core.oid import (
     PublicKeyAlgorithmOid,
     PublicKeyInfo,
     SignatureSuite,
-    PublicKeyInfo,
 )
 from trustpoint_core.serializer import CertificateSerializer, PublicKeySerializer
 
@@ -59,11 +56,8 @@ class CertificateModel(LoggerMixin, models.Model):
 
     objects: models.Manager[CertificateModel]
 
-    class Meta(TypedModelMeta):
-        """Meta class configuration."""
-
     class CertificateStatus(models.TextChoices):
-        """CertificateModel status"""
+        """CertificateModel status."""
 
         OK = 'OK', _('OK')
         REVOKED = 'REV', _('Revoked')
@@ -299,6 +293,9 @@ class CertificateModel(LoggerMixin, models.Model):
     )
 
     freshest_crl_extension = models.ForeignKey(FreshestCrlExtension, null=True, blank=True, on_delete=models.CASCADE)
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     # ------------------------------------------ Magic and default methods -------------------------------------------
 
@@ -601,11 +598,8 @@ class RevokedCertificateModel(models.Model):
 
     objects: models.Manager[RevokedCertificateModel]
 
-    class Meta(TypedModelMeta):
-        """Meta class configuration."""
-
     class ReasonCode(models.TextChoices):
-        """Revocation reasons per RFC 5280"""
+        """Revocation reasons per RFC 5280."""
 
         UNSPECIFIED = 'unspecified', _('Unspecified')
         KEY_COMPROMISE = 'keyCompromise', _('Key Compromise')
@@ -635,6 +629,9 @@ class RevokedCertificateModel(models.Model):
         on_delete=models.SET_NULL,  # Safe to remove CRL if CA is removed?
         null=True,
     )
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     def __str__(self) -> str:
         """String representation of the RevokedCertificateModel instance."""
