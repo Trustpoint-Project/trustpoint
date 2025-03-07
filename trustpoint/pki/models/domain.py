@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from util.field import UniqueNameValidator
+from typing import Any
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from trustpoint_core import oid
 from django_stubs_ext.db.models import TypedModelMeta
+from trustpoint_core import oid
+from util.field import UniqueNameValidator
 
 from . import IssuingCaModel
 
@@ -18,9 +20,6 @@ class DomainModel(models.Model):
     """Domain Model."""
 
     objects: models.Manager[DomainModel]
-
-    class Meta(TypedModelMeta):
-        """Meta class configuration."""
 
     unique_name = models.CharField(_('Domain Name'), max_length=100, unique=True, validators=[UniqueNameValidator()])
 
@@ -41,7 +40,11 @@ class DomainModel(models.Model):
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
     updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
 
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
+
     def __repr__(self) -> str:
+        """Representation of the Domain model instance."""
         return f'DomainModel(unique_name={self.unique_name})'
 
     def __str__(self) -> str:
@@ -53,18 +56,20 @@ class DomainModel(models.Model):
         """
         return self.unique_name
 
+    def save(self, **kwargs: Any) -> None:
+        """Save the Domain model instance."""
+        self.clean()  # Ensure validation before saving
+        super().save(**kwargs)
+
     @property
     def signature_suite(self) -> oid.SignatureSuite:
+        """Get the signature suite for the domain (based on its Issuing CA)."""
         return oid.SignatureSuite.from_certificate(self.issuing_ca.credential.get_certificate_serializer().as_crypto())
 
     @property
     def public_key_info(self) -> oid.PublicKeyInfo:
+        """Get the public key info for the domain (based on its Issuing CA)."""
         return self.signature_suite.public_key_info
-
-    def save(self, *args: tuple, **kwargs: dict) -> None:
-        """Save the Domain model instance."""
-        self.clean()  # Ensure validation before saving
-        super().save(*args, **kwargs)
 
     def clean(self) -> None:
         """Validate that the issuing CA is not an auto-generated root CA."""

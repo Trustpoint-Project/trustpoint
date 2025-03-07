@@ -1,14 +1,19 @@
+"""Views for Issuing CA management."""
+
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
 from django.db.models import ProtectedError
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect
-from django.utils.translation import gettext as _
 from django.urls import reverse_lazy
+from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
-from django.views.generic.list import ListView  # type: ignore[import-untyped]
 from django.views.generic.edit import FormView
+from django.views.generic.list import ListView
+
 from pki.forms import (
     IssuingCaAddFileImportPkcs12Form,
     IssuingCaAddFileImportSeparateFilesForm,
@@ -17,12 +22,16 @@ from pki.forms import (
 from pki.models import IssuingCaModel
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
-    LoggerMixin,
     BulkDeleteView,
     ContextDataMixin,
+    LoggerMixin,
     SortableTableMixin,
     TpLoginRequiredMixin,
 )
+
+if TYPE_CHECKING:
+    from django.forms import Form
+    from django.http import HttpRequest
 
 
 class IssuingCaContextMixin(TpLoginRequiredMixin, ContextDataMixin):
@@ -32,7 +41,7 @@ class IssuingCaContextMixin(TpLoginRequiredMixin, ContextDataMixin):
     context_page_name = 'issuing_cas'
 
 
-class IssuingCaTableView(IssuingCaContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView):
+class IssuingCaTableView(IssuingCaContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView[IssuingCaModel]):
     """Issuing CA Table View."""
 
     model = IssuingCaModel
@@ -42,11 +51,14 @@ class IssuingCaTableView(IssuingCaContextMixin, TpLoginRequiredMixin, SortableTa
     default_sort_param = 'unique_name'
 
 
-class IssuingCaAddMethodSelectView(IssuingCaContextMixin, TpLoginRequiredMixin, FormView):
+class IssuingCaAddMethodSelectView(IssuingCaContextMixin, TpLoginRequiredMixin, FormView[IssuingCaAddMethodSelectForm]):
+    """View to select the method to add an Issuing CA."""
+
     template_name = 'pki/issuing_cas/add/method_select.html'
     form_class = IssuingCaAddMethodSelectForm
 
-    def form_valid(self, form) -> HttpResponse:
+    def form_valid(self, form: IssuingCaAddMethodSelectForm) -> HttpResponseRedirect:
+        """Redirect to the next step based on the selected method."""
         method_select = form.cleaned_data.get('method_select')
         if not method_select:
             return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-method_select'))
@@ -57,19 +69,29 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, TpLoginRequiredMixin, 
         return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-method_select'))
 
 
-class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, TpLoginRequiredMixin, FormView):
+class IssuingCaAddFileImportPkcs12View(
+    IssuingCaContextMixin, TpLoginRequiredMixin, FormView[IssuingCaAddFileImportPkcs12Form]
+):
+    """View to import an Issuing CA from a PKCS12 file."""
+
     template_name = 'pki/issuing_cas/add/file_import.html'
     form_class = IssuingCaAddFileImportPkcs12Form
     success_url = reverse_lazy('pki:issuing_cas')
 
 
-class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, TpLoginRequiredMixin, FormView):
+class IssuingCaAddFileImportSeparateFilesView(
+    IssuingCaContextMixin, TpLoginRequiredMixin, FormView[IssuingCaAddFileImportSeparateFilesForm]
+):
+    """View to import an Issuing CA from separate PEM files."""
+
     template_name = 'pki/issuing_cas/add/file_import.html'
     form_class = IssuingCaAddFileImportSeparateFilesForm
     success_url = reverse_lazy('pki:issuing_cas')
 
 
-class IssuingCaDetailView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailView):
+class IssuingCaDetailView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailView[IssuingCaModel]):
+    """View to display the details of an Issuing CA."""
+
     http_method_names = ('get',)
 
     model = IssuingCaModel
@@ -79,7 +101,9 @@ class IssuingCaDetailView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailVie
     context_object_name = 'issuing_ca'
 
 
-class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, TpLoginRequiredMixin, DetailView):
+class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, TpLoginRequiredMixin, DetailView[IssuingCaModel]):
+    """View to configure an Issuing CA."""
+
     model = IssuingCaModel
     success_url = reverse_lazy('pki:issuing_cas')
     ignore_url = reverse_lazy('pki:issuing_cas')
@@ -96,7 +120,7 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, TpLoginRequiredMixin
     template_name = 'pki/issuing_cas/confirm_delete.html'
     context_object_name = 'issuing_cas'
 
-    def form_valid(self, form) -> HttpResponse:
+    def form_valid(self, form: Form) -> HttpResponse:
         """Delete the selected Issuing CAs on valid form."""
         queryset = self.get_queryset()
         deleted_count = queryset.count()
@@ -115,7 +139,7 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, TpLoginRequiredMixin
         return response
 
 
-class IssuingCaCrlGenerationView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailView):
+class IssuingCaCrlGenerationView(IssuingCaContextMixin, TpLoginRequiredMixin, DetailView[IssuingCaModel]):
     """View to manually generate a CRL for an Issuing CA."""
 
     model = IssuingCaModel
@@ -127,7 +151,8 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, TpLoginRequiredMixin, De
 
     # TODO(Air): This view should use a POST request as it is an action.
     # However, this is not trivial in the config view as that already contains a form.
-    def get(self, request, *args, **kwargs) -> HttpResponse:
+    def get(self, request: HttpRequest, *_args: tuple[Any], **_kwargs: dict[str, Any]) -> HttpResponse:
+        """Generate a CRL for the Issuing CA (should be POST!)."""
         issuing_ca = self.get_object()
         if issuing_ca.issue_crl():
             messages.success(request, _('CRL for Issuing CA %s has been generated.') % issuing_ca.unique_name)
@@ -136,7 +161,7 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, TpLoginRequiredMixin, De
         return redirect('pki:issuing_cas-config', pk=issuing_ca.id)
 
 
-class CrlDownloadView(IssuingCaContextMixin, DetailView):
+class CrlDownloadView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
     """Unauthenticated view to download the certificate revocation list of an Issuing CA."""
 
     http_method_names = ('get',)
@@ -146,7 +171,8 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView):
     ignore_url = reverse_lazy('pki:issuing_cas')
     context_object_name = 'issuing_ca'
 
-    def get(self, request, *args, **kwargs) -> HttpResponse:
+    def get(self, request: HttpRequest, *_args: tuple[Any], **_kwargs: dict[str, Any]) -> HttpResponse:
+        """Download the CRL of the Issuing CA."""
         issuing_ca = self.get_object()
         crl_pem = issuing_ca.crl_pem
         if not crl_pem:

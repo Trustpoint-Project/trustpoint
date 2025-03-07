@@ -1,25 +1,22 @@
-"""Something."""
+"""Command for generating test cross-signed CA certificates."""
 
 from __future__ import annotations
 
-import datetime
+from typing import Any
 
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import NameOID
+from django.core.management.base import BaseCommand
 from pki.models import CertificateModel
 
 from .base_commands import CertificateCreationCommandMixin
-from django.core.management.base import BaseCommand
 
 
 class Command(CertificateCreationCommandMixin, BaseCommand):
     """Django management command for adding issuing CA test data."""
 
-    help = 'Removes all migrations, deletes db and runs makemigrations and migrate afterwards.'
+    help = 'Generates two cross-signed certificate chains.'
 
-    def handle(self, *args, **kwargs) -> None:
+    def handle(self, *_args: Any, **_kwargs: Any) -> None:
+        """Executes the command."""
         root_1, root_1_key = self.create_root_ca('Root CA A')
         root_2, root_2_key = self.create_root_ca('Root CA B')
 

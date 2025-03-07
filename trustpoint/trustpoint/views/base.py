@@ -9,20 +9,22 @@ from __future__ import annotations
 import functools
 import logging
 import traceback
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django import forms as dj_forms
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models import QuerySet, Model
-from django.http import Http404, HttpRequest, HttpResponseRedirect, HttpResponse
+from django.db.models import Model, QuerySet
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import RedirectView
 from django.views.generic.edit import FormMixin
 from django.views.generic.list import BaseListView, ListView, MultipleObjectTemplateResponseMixin
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class IndexView(RedirectView):
@@ -65,7 +67,7 @@ class ListInDetailView(ListView):
 
 
 class SortableTableMixin:
-    """Adds utility for sorting a ListView query by URL parameters
+    """Adds utility for sorting a ListView query by URL parameters.
 
     default_sort_param must be set in the view to specify default sorting order.
     """
@@ -102,8 +104,8 @@ class SortableTableMixin:
         exc_msg = f'Unknown queryset type: {type}'
         raise TypeError(exc_msg)
 
-    def get_context_data(self, **kwargs: dict) -> dict:
-        context = super().get_context_data(**kwargs)
+    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str,Any]:
+        context = super().get_context_data(*args, **kwargs)
 
         # Get current sorting column
         sort_param = self.request.GET.get('sort', self.default_sort_param)
@@ -164,33 +166,38 @@ class BulkDeletionMixin:
     success_url = None
     object_list = list
 
-    def delete(self, *args, **kwargs):
+    def delete(self, *_args : tuple, **_kwargs: dict[str, Any]) -> HttpResponse:
         self.queryset = self.get_queryset()
         success_url = self.get_success_url()
         self.queryset.delete()
         return HttpResponseRedirect(success_url)
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request: HttpRequest, *args: tuple[Any], **kwargs: dict[str, Any]) -> HttpResponse:
         return self.delete(request, *args, **kwargs)
 
     def get_success_url(self):
         if self.success_url:
             return self.success_url
 
-        raise ImproperlyConfigured('No URL to redirect to. Provide a success_url.')
+        exc_msg = 'No URL to redirect to. Provide a success_url.'
+        raise ImproperlyConfigured(exc_msg)
 
 
 class BaseBulkDeleteView(BulkDeletionMixin, FormMixin, BaseListView):
+    """Base view for bulk deletion of objects."""
+
     form_class = dj_forms.Form
 
-    def post(self, *args, **kwargs):
+    def post(self, *_args: tuple[Any], **_kwargs: dict[str, Any]) -> HttpResponse:
+        """Handles POST requests to the BulkDeleteView."""
         self.queryset = self.get_queryset()
         form = self.get_form()
         if form.is_valid():
             return self.form_valid(form)
         return self.form_invalid(form)
 
-    def form_valid(self, form):
+    def form_valid(self, _form: form_class) -> HttpResponse:
+        """Delete the selected objects on valid form."""
         success_url = self.get_success_url()
         self.queryset.delete()
         return HttpResponseRedirect(success_url)
@@ -251,7 +258,7 @@ class LoggerMixin:
         cls.logger = logging.getLogger('trustpoint').getChild(cls.__module__).getChild(cls.__name__)
 
     @staticmethod
-    def log_exceptions(function):
+    def log_exceptions(function: Callable) -> Callable:
         """Decorator that gets an appropriate logger and logs any unhandled exception.
 
         Logs the type and message to both levels error and debug.
@@ -262,7 +269,7 @@ class LoggerMixin:
         """
 
         @functools.wraps(function)
-        def _wrapper(*args, **kwargs):
+        def _wrapper(*args: Any, **kwargs: Any) -> Callable:
             try:
                 return function(*args, **kwargs)
             except Exception as exception:

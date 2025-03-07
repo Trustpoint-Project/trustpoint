@@ -1,39 +1,45 @@
+"""Imports Truststores from specific PEM files in tests/data/idevid_hierarchies."""
+
 from __future__ import annotations
 
-import os
-from django.core.management.base import BaseCommand
+from pathlib import Path
+from types import MappingProxyType
+
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
-
+from django.core.management.base import BaseCommand
 from pki.models import CertificateModel, TruststoreModel, TruststoreOrderModel
 
 
 class Command(BaseCommand):
+    """Imports Truststores from specific PEM files in tests/data/idevid_hierarchies."""
+
     help = 'Imports Truststores from specific PEM files in tests/data/idevid_hierarchies'
 
-    TRUSTSTORE_RELATIVE_PATHS = {
-        'ecc1/ecc1_chain.pem': 'EC-256',
-        'ecc2/ecc2_chain.pem': 'EC-283',
-        'ecc3/ecc3_chain.pem': 'EC-570',
-        'rsa2/rsa2_chain.pem': 'RSA-2048',
-        'rsa3/rsa3_chain.pem': 'RSA-3072',
-        'rsa4/rsa4_chain.pem': 'RSA-4096',
-    }
+    TRUSTSTORE_RELATIVE_PATHS = MappingProxyType(
+        {
+            'ecc1/ecc1_chain.pem': 'EC-256',
+            'ecc2/ecc2_chain.pem': 'EC-283',
+            'ecc3/ecc3_chain.pem': 'EC-570',
+            'rsa2/rsa2_chain.pem': 'RSA-2048',
+            'rsa3/rsa3_chain.pem': 'RSA-3072',
+            'rsa4/rsa4_chain.pem': 'RSA-4096',
+        }
+    )
 
-    def handle(self, *args, **kwargs):
-        base_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), '../../../../tests/data/idevid_hierarchies')
-        )
+    def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
+        """Execute the command."""
+        base_path = Path(__file__).resolve().parent.joinpath('../../../../tests/data/idevid_hierarchies').resolve()
 
         for relative_path, unique_name in self.TRUSTSTORE_RELATIVE_PATHS.items():
-            pem_path = os.path.join(base_path, relative_path)
+            pem_path = Path(base_path / relative_path)
 
-            if not os.path.exists(pem_path):
+            if not Path.exists(pem_path):
                 self.stderr.write(self.style.ERROR(f'File not found: {pem_path}'))
                 continue
 
             try:
-                with open(pem_path, 'rb') as f:
+                with pem_path.open('rb') as f:
                     pem_content = f.read()
 
                 certificates = x509.load_pem_x509_certificates(pem_content)
@@ -45,7 +51,7 @@ class Command(BaseCommand):
                 )
 
                 self.stdout.write(self.style.SUCCESS(f'Imported Truststore: {unique_name}'))
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.stderr.write(self.style.ERROR(f'Failed to import {pem_path}: {e}'))
 
     @staticmethod

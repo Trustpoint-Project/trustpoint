@@ -86,9 +86,9 @@ class SecurityConfigForm(forms.ModelForm):
 
     class Meta:
         model = SecurityConfig
-        fields: ClassVar[list] = ['security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm']
+        fields: ClassVar[list[str]] = ['security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm']
 
-    def clean_auto_gen_pki_key_algorithm(self):
+    def clean_auto_gen_pki_key_algorithm(self) -> AutoGenPkiKeyAlgorithm:
         """Keep the current value of `auto_gen_pki_key_algorithm` from the instance if the field was disabled."""
         form_value = self.cleaned_data.get('auto_gen_pki_key_algorithm')
         if form_value is None:

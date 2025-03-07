@@ -1,19 +1,24 @@
 """Adds Issuing CAs, Domains and Devices with different onboarding protocols."""
 
+# ruff: noqa: T201  # print is fine in management commands
+
 import random
 import secrets
 import string
-from django.core.management.base import BaseCommand
 
-from pki.models import DomainModel, IssuingCaModel, TruststoreModel, DevIdRegistration
 from devices.models import DeviceModel
 from django.core.management import call_command
+from django.core.management.base import BaseCommand
+from pki.models import DevIdRegistration, DomainModel, IssuingCaModel, TruststoreModel
 
 
 class Command(BaseCommand):
+    """Add domains and associated device names with random onboarding protocol and serial number."""
+
     help = 'Add domains and associated device names with random onboarding protocol and serial number'
 
-    def handle(self, *args, **kwargs):
+    def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
+        """Execute the command."""
         call_command('create_multiple_test_issuing_cas')
         call_command('import_idevid_truststores')
 
@@ -114,9 +119,9 @@ class Command(BaseCommand):
             print(f'Domain({domain_name}, Issuing CA: {domain.issuing_ca})')
 
             for device_name in devices:
-                onboarding_protocol = random.choice(onboarding_protocols)
+                onboarding_protocol = random.choice(onboarding_protocols)  # noqa: S311
 
-                serial_number = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
+                serial_number = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))  # noqa: S311
 
                 print(f"Creating device '{device_name}' in domain '{domain_name}' with:")
                 print(f'  - Serial Number: {serial_number}')
@@ -128,18 +133,19 @@ class Command(BaseCommand):
                     else DeviceModel.OnboardingStatus.PENDING
                 )
 
-                domain_credential_onboarding = (
-                    False if onboarding_protocol == DeviceModel.OnboardingProtocol.NO_ONBOARDING else True
-                )
+                domain_credential_onboarding = onboarding_protocol != DeviceModel.OnboardingProtocol.NO_ONBOARDING
 
                 pki_protocol = (
                     DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE.value
                     if (
-                        onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_IDEVID
-                        or onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET
+                        onboarding_protocol
+                        in (DeviceModel.OnboardingProtocol.CMP_IDEVID, DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET)
                     )
-                    else random.choice(
-                        [DeviceModel.PkiProtocol.MANUAL.value, DeviceModel.PkiProtocol.CMP_SHARED_SECRET.value]
+                    else random.choice(  # noqa: S311
+                        [
+                            DeviceModel.PkiProtocol.MANUAL.value,
+                            DeviceModel.PkiProtocol.CMP_SHARED_SECRET.value,
+                        ]
                     )
                 )
 
@@ -177,7 +183,7 @@ class Command(BaseCommand):
                         print(f'  - PKI Protocol: {dev.pki_protocol}')
                     else:
                         print(f"Device '{device_name}' was not saved correctly.")
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     print(f"Failed to create device '{device_name}': {e}")
 
         print('\nProcess completed. All domains and devices have been added.')

@@ -1,54 +1,34 @@
+"""Django admin configuration for the PKI app."""
+
 from django.contrib import admin
-from .models import CertificateModel, CredentialModel, CertificateChainOrderModel, IssuingCaModel
+from django.http import HttpRequest
+
+from .models import CertificateChainOrderModel, CertificateModel, CredentialModel, IssuingCaModel
 from .models.devid_registration import DevIdRegistration
 
 
-class DevIdRegistrationAdmin(admin.ModelAdmin):
-    pass
+class DevIdRegistrationAdmin(admin.ModelAdmin[DevIdRegistration]):
+    """Admin configuration for the DevIdRegistrationModel."""
 
 
-class CertificateModelAdmin(admin.ModelAdmin):
-    readonly_fields = (
-        'sha256_fingerprint',
-        'common_name',
-        'certificate_status',
-        'signature_algorithm_oid',
-        'signature_algorithm',
-        'signature_algorithm_padding_scheme',
-        'signature_value',
-        'version',
-        'serial_number',
-        'issuer_public_bytes',
-        'issuer',
-        'not_valid_before',
-        'not_valid_after',
-        'subject_public_bytes',
-        'subject',
-        'spki_algorithm_oid',
-        'spki_algorithm',
-        'spki_key_size',
-        'spki_ec_curve_oid',
-        'spki_ec_curve',
-        'cert_pem',
-        'public_key_pem',
-        'is_self_signed',
-        'key_usage_extension',
-        'subject_alternative_name_extension',
-        'issuer_alternative_name_extension',
-        'basic_constraints_extension',
-    )
+class CertificateModelAdmin(admin.ModelAdmin[CertificateModel]):
+    """Admin configuration for the CertificateModel."""
+
+    def get_readonly_fields(self, _request: HttpRequest, _obj: CertificateModel = None) -> list[str]:
+        """Sets all fields as read-only."""
+        return [f.name for f in CertificateModel._meta.fields]  # noqa: SLF001
 
 
-class CredentialModelAdmin(admin.ModelAdmin):
-    pass
+class CredentialModelAdmin(admin.ModelAdmin[CredentialModel]):
+    """Admin configuration for the CredentialModel."""
 
 
-class CertificateChainOrderModelAdmin(admin.ModelAdmin):
-    pass
+class CertificateChainOrderModelAdmin(admin.ModelAdmin[CertificateChainOrderModel]):
+    """Admin configuration for the CertificateChainOrderModel."""
 
 
-class IssuingCaModelAdmin(admin.ModelAdmin):
-    pass
+class IssuingCaModelAdmin(admin.ModelAdmin[IssuingCaModel]):
+    """Admin configuration for the IssuingCaModel."""
 
 
 admin.site.register(CertificateModel, CertificateModelAdmin)

@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-from trustpoint_core.serializer import CertificateCollectionSerializer
-from django_stubs_ext.db.models import TypedModelMeta
-from util.field import UniqueNameValidator
+from typing import Any
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from django_stubs_ext.db.models import TypedModelMeta
+from trustpoint_core.serializer import CertificateCollectionSerializer
+from util.field import UniqueNameValidator
 
 from .certificate import CertificateModel
 
 __all__ = [
-    'TrustpointTlsServerCredentialModel',
     'ActiveTrustpointTlsServerCredentialModel',
+    'TrustpointTlsServerCredentialModel',
     'TruststoreModel',
     'TruststoreOrderModel',
 ]
@@ -28,11 +30,11 @@ class TrustpointTlsServerCredentialModel(models.Model):
 
     objects: models.Manager[TrustpointTlsServerCredentialModel]
 
-    class Meta(TypedModelMeta):
-        """Meta class configuration."""
-
     private_key_pem = models.CharField(verbose_name=_('Private Key (PEM)'), max_length=65536, editable=False)
     certificate = models.ForeignKey(CertificateModel, on_delete=models.CASCADE)
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     def __str__(self) -> str:
         """Returns a human-readable string representation of the server credential.
@@ -52,10 +54,10 @@ class ActiveTrustpointTlsServerCredentialModel(models.Model):
 
     objects: models.Manager[ActiveTrustpointTlsServerCredentialModel]
 
+    credential = models.ForeignKey(TrustpointTlsServerCredentialModel, on_delete=models.CASCADE, blank=True, null=True)
+
     class Meta(TypedModelMeta):
         """Meta class configuration."""
-
-    credential = models.ForeignKey(TrustpointTlsServerCredentialModel, on_delete=models.CASCADE, blank=True, null=True)
 
     def __str__(self) -> str:
         """Returns a human-readable string representation of the active credential.
@@ -65,18 +67,15 @@ class ActiveTrustpointTlsServerCredentialModel(models.Model):
         """
         return f'Active TLS Credential: {self.credential.id if self.credential else "None"}'
 
-    def save(self, *args: tuple, **kwargs: dict) -> None:
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Ensures the model instance always has an ID of 1 to enforce singleton-like behavior.
-
-        Args:
-            *args (tuple): Positional arguments passed to the parent save method.
-            **kwargs (dict): Keyword arguments passed to the parent save method.
 
         Returns:
             None
         """
         self.id = 1
         super().save(*args, **kwargs)
+
 
 
 class TruststoreModel(models.Model):
@@ -87,9 +86,6 @@ class TruststoreModel(models.Model):
     by a unique name and supports operations like retrieving the number of certificates
     or serializing its content.
     """
-
-    class Meta(TypedModelMeta):
-        """Meta class configuration."""
 
     objects: models.Manager[TruststoreModel]
 
@@ -114,14 +110,18 @@ class TruststoreModel(models.Model):
 
     created_at = models.DateTimeField(verbose_name=_('Created-At'), auto_now_add=True)
 
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
+
+
     def __str__(self) -> str:
         """Returns a human-readable string representation of the TruststoreModel."""
         return self.unique_name
 
-    def save(self, *args: tuple, **kwargs: dict) -> None:
+    def save(self, **kwargs: Any) -> None:
         """Ensures the model is valid before saving."""
         self.full_clean()
-        super().save(*args, **kwargs)
+        super().save(**kwargs)
 
     @property
     def number_of_certificates(self) -> int:
@@ -146,18 +146,18 @@ class TruststoreModel(models.Model):
 class TruststoreOrderModel(models.Model):
     """Represents the order of certificates in a truststore."""
 
+    order = models.PositiveSmallIntegerField(verbose_name=_('Trust Store Certificate Index (Order)'), editable=False)
+    certificate = models.ForeignKey(
+        CertificateModel, on_delete=models.CASCADE, editable=False, related_name='trust_store_components'
+    )
+    trust_store = models.ForeignKey(TruststoreModel, on_delete=models.CASCADE, editable=False)
+
     objects: models.Manager[TruststoreOrderModel]
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""
 
         unique_together = ('order', 'trust_store')
-
-    order = models.PositiveSmallIntegerField(verbose_name=_('Trust Store Certificate Index (Order)'), editable=False)
-    certificate = models.ForeignKey(
-        CertificateModel, on_delete=models.CASCADE, editable=False, related_name='trust_store_components'
-    )
-    trust_store = models.ForeignKey(TruststoreModel, on_delete=models.CASCADE, editable=False)
 
     def __str__(self) -> str:
         """Returns a human-readable string representation of the TruststoreOrderModel."""

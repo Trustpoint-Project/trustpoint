@@ -1,4 +1,6 @@
-"""Something."""
+"""Management command to create some certificates for testing and verifying them using OpenSSL."""
+
+# ruff: noqa: T201  # print is fine in management commands
 
 from __future__ import annotations
 
@@ -7,30 +9,33 @@ import ipaddress
 import shutil
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.serialization import BestAvailableEncryption, pkcs12
 from cryptography.x509.oid import NameOID
-
-from pki.util.keys import KeyAlgorithm, KeyGenerator
-from .base_commands import CertificateCreationCommandMixin
 from django.core.management.base import BaseCommand
+from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
+
+from .base_commands import CertificateCreationCommandMixin
+
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
 
 class Command(CertificateCreationCommandMixin, BaseCommand):
-    """Django management command for adding issuing CA test data."""
+    """Creates a certificate chain and validates it uing OpenSSL."""
 
-    help = 'Removes all migrations, deletes db and runs makemigrations and migrate afterwards.'
+    help = 'Creates a certificate chain and validates it uing OpenSSL.'
 
-    def _create_cert_chain(self, algorithm: KeyAlgorithm, path: Path) -> None:
+    def _create_cert_chain(self, algorithm: PublicKeyInfo, path: Path) -> None:
         pem_root_cert, root_cert, root_private_key = self._create_certificate(
-            common_name=f'{algorithm.value}-root-ca', algorithm=algorithm, path=path
+            common_name=f'{algorithm}-root-ca', algorithm=algorithm, path=path
         )
 
         pem_issuing_cert, issuing_cert, issuing_private = self._create_certificate(
-            common_name=f'{algorithm.value}-issuing-ca',
+            common_name=f'{algorithm}-issuing-ca',
             algorithm=algorithm,
             path=path,
             issuer=root_cert,
@@ -38,7 +43,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
         )
 
         pem_ee_cert, ee_cert, ee_key = self._create_certificate(
-            common_name=f'{algorithm.value}-ee',
+            common_name=f'{algorithm}-ee',
             algorithm=algorithm,
             path=path,
             issuer=issuing_cert,
@@ -53,25 +58,24 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             encryption_algorithm=BestAvailableEncryption(b'password'),
         )
 
-        with open(path / f'{algorithm.value}.p12', 'wb') as f:
+        with Path(path / f'{algorithm}.p12').open('wb') as f:
             f.write(p12)
 
-        with open(path / f'{algorithm.value}-chain.pem', 'wb') as f:
+        with Path(path / f'{algorithm}-chain.pem').open('wb') as f:
             cert_chain = pem_root_cert + pem_issuing_cert + pem_ee_cert
             f.write(cert_chain.encode())
 
     @classmethod
-    def _create_certificate(
+    def _create_certificate(  # noqa: PLR0913
         cls,
         common_name: str,
-        algorithm: KeyAlgorithm,
+        algorithm: PublicKeyInfo,
         path: Path,
         issuer: None | x509.Certificate = None,
         issuer_priv_key: None | rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey = None,
         validity_days: int = 365,
     ) -> tuple[str, x509.Certificate, rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey]:
-        kg = KeyGenerator(algorithm)
-        private_key = kg.generate_key()
+        private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(algorithm)
 
         one_day = datetime.timedelta(1, 0, 0)
         public_key = private_key.public_key()
@@ -93,8 +97,8 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             )
         else:
             builder = builder.issuer_name(issuer.subject)
-        builder = builder.not_valid_before(datetime.datetime.today() - one_day)
-        builder = builder.not_valid_after(datetime.datetime.today() + (one_day * validity_days))
+        builder = builder.not_valid_before(datetime.datetime.now(tz=datetime.UTC) - one_day)
+        builder = builder.not_valid_after(datetime.datetime.now(tz=datetime.UTC) + (one_day * validity_days))
         builder = builder.serial_number(x509.random_serial_number())
         builder = builder.public_key(public_key)
 
@@ -141,7 +145,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
                     x509.UniformResourceIdentifier('https://trustpoint.de'),
                     x509.IPAddress(ipaddress.IPv4Address('127.0.0.1')),
                     x509.IPAddress(ipaddress.IPv6Address('2001:0db8:85a3:0000:0000:8a2e:0370:7334')),
-                    x509.IPAddress(ipaddress.IPv4Network('192.168.127.12/24', False)),
+                    x509.IPAddress(ipaddress.IPv4Network('192.168.127.12/24', strict=False)),
                     x509.IPAddress(ipaddress.IPv6Network('2001:db8:1234::/48')),
                     x509.RegisteredID(x509.ObjectIdentifier('2.5.4.3')),
                     x509.OtherName(type_id=x509.ObjectIdentifier('2.5.4.3'), value=some_arbitrary_der),
@@ -166,7 +170,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
                     x509.UniformResourceIdentifier('https://subject.trustpoint.de'),
                     x509.IPAddress(ipaddress.IPv4Address('127.0.0.1')),
                     x509.IPAddress(ipaddress.IPv6Address('2001:0db8:85a3:0000:0000:8a2e:0370:7334')),
-                    x509.IPAddress(ipaddress.IPv4Network('192.168.127.12/24', False)),
+                    x509.IPAddress(ipaddress.IPv4Network('192.168.127.12/24', strict=False)),
                     x509.IPAddress(ipaddress.IPv6Network('2001:db8:1234::/48')),
                     x509.RegisteredID(x509.ObjectIdentifier('2.5.4.3')),
                     x509.OtherName(type_id=x509.ObjectIdentifier('2.5.4.3'), value=some_arbitrary_der),
@@ -202,41 +206,50 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
 
         pem_cert = certificate.public_bytes(serialization.Encoding.PEM)
 
-        with open(path / f'{common_name}-key.pem', 'wb') as f:
+        with Path(path / f'{common_name}-key.pem').open('wb') as f:
             f.write(pem_priv_key)
 
-        with open(path / f'{common_name}-cert.pem', 'wb') as f:
+        with Path(path / f'{common_name}-cert.pem').open('wb') as f:
             f.write(pem_cert)
 
         return pem_cert.decode(), certificate, private_key
 
     @staticmethod
-    def _create_trust_store(path: Path):
+    def _create_trust_store(algorithms: list[PublicKeyInfo], path: Path) -> None:
         certs = ''
-        for value in [algo.value for algo in KeyAlgorithm]:
-            with open(path / f'{value}-chain.pem', 'r') as f:
+        for value in [str(algo) for algo in algorithms]:
+            with Path(path / f'{value}-chain.pem').open() as f:
                 certs += f.read()
 
-        with open(path / 'trust-store.pem', 'w') as f:
+        with Path(path / 'trust-store.pem').open('w') as f:
             f.write(certs)
 
-    def handle(self, *args, **kwargs) -> None:
+    def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
+        """Executes the command."""
         tests_data_path = Path(__file__).parent.parent.parent.parent.parent / Path('tests/data/certs')
         shutil.rmtree(tests_data_path, ignore_errors=True)
         tests_data_path.mkdir(exist_ok=True)
 
-        self._create_cert_chain(algorithm=KeyAlgorithm.RSA2048, path=tests_data_path)
-        self._create_cert_chain(algorithm=KeyAlgorithm.RSA4096, path=tests_data_path)
-        self._create_cert_chain(algorithm=KeyAlgorithm.SECP256, path=tests_data_path)
-        self._create_cert_chain(algorithm=KeyAlgorithm.SECP521, path=tests_data_path)
+        public_key_algorithms = [
+            PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=4096),
+            PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC, named_curve=NamedCurve.SECP256R1),
+        ]
 
-        self._create_trust_store(path=tests_data_path)
+        for algo in public_key_algorithms:
+            self._create_cert_chain(algorithm=algo, path=tests_data_path)
 
-        for algo in KeyAlgorithm:
+        self._create_trust_store(algorithms=public_key_algorithms, path=tests_data_path)
+
+        for algo in public_key_algorithms:
             cmd = (
-                f'openssl verify -CAfile {tests_data_path}/{algo.value}-root-ca-cert.pem -untrusted '
-                f'{tests_data_path}/{algo.value}-issuing-ca-cert.pem {tests_data_path}/{algo.value}-ee-cert.pem'
+                'openssl',
+                'verify',
+                '-CAfile',
+                f'{tests_data_path}/{algo}-root-ca-cert.pem',
+                '-untrusted',
+                f'{tests_data_path}/{algo}-issuing-ca-cert.pem',
+                f'{tests_data_path}/{algo}-ee-cert.pem',
             )
-            print(f'Created certificate chain with {algo.name} and SHA256.')
-            print(f'Verifying certificate chain with {algo.name} and SHA256.')
-            print(subprocess.check_output(cmd, shell=True).decode())
+            print(f'Created certificate chain with {algo} and SHA256.')
+            print(f'Verifying certificate chain with {algo} and SHA256.')
+            print(subprocess.check_output(cmd).decode())  # noqa: S603

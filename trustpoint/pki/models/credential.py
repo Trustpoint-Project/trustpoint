@@ -4,34 +4,37 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
 from django.db.models import QuerySet
-
+from django.utils.translation import gettext_lazy as _
+from trustpoint_core import oid
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
     PrivateKeySerializer,
 )
-from django.core.exceptions import ValidationError
-from django.db import models, transaction
-from django.utils.translation import gettext_lazy as _
+
 from pki.models import CertificateModel
-from trustpoint_core import oid
 
 if TYPE_CHECKING:
-    from typing import Any, ClassVar, Union
+    from typing import Any, ClassVar
+
     from cryptography import x509
-    from cryptography.hazmat.primitives.asymmetric import ec, ed448, ed25519, rsa
+    from django.db.models import QuerySet
+    from trustpoint_core.types import PrivateKey
 
-    PrivateKey = Union[ec.EllipticCurvePrivateKey, rsa.RSAPrivateKey, ed448.Ed448PrivateKey, ed25519.Ed25519PrivateKey]
 
-
-__all__ = ['CredentialAlreadyExistsError', 'CredentialModel', 'CertificateChainOrderModel']
+__all__ = ['CertificateChainOrderModel', 'CredentialAlreadyExistsError', 'CredentialModel']
 
 
 class CredentialAlreadyExistsError(ValidationError):
-    def __init__(self, *args: tuple, **kwargs: dict) -> None:
-        super().__init__(message=_('Credential already exists.'), *args, **kwargs)
+    """The CredentialAlreadyExistsError is raised if a credential already exists in the database."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the CredentialAlreadyExistsError with a default message."""
+        super().__init__(_('Credential already exists.'), *args, **kwargs)
 
 
 class CredentialModel(models.Model):
@@ -57,7 +60,7 @@ class CredentialModel(models.Model):
         ISSUED_CREDENTIAL = 3, _('Issued Credential')
 
     credential_type = models.IntegerField(verbose_name=_('Credential Type'), choices=CredentialTypeChoice)
-    private_key = models.CharField(verbose_name='Private key (PEM)', max_length=65536, null=True, blank=True)
+    private_key = models.CharField(verbose_name='Private key (PEM)', max_length=65536, default='', blank=True)
 
     certificates = models.ManyToManyField(
         CertificateModel, through='PrimaryCredentialCertificate', blank=False, related_name='credential'
@@ -68,7 +71,10 @@ class CredentialModel(models.Model):
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
+    objects: models.Manager[CredentialModel]
+
     def __repr__(self) -> str:
+        """Returns a string representation of this CredentialModel entry."""
         return f'CredentialModel(credential_type={self.credential_type}, certificate=)'
 
     def __str__(self) -> str:
@@ -80,8 +86,10 @@ class CredentialModel(models.Model):
         return self.__repr__()
 
     def clean(self) -> None:
+        """Validates the CredentialModel instance."""
         if self.primarycredentialcertificate_set.filter(is_primary=True).count() > 1:
-            raise ValidationError('A credential can only have one primary certificate.')
+            exc_msg = 'A credential can only have one primary certificate.'
+            raise ValidationError(exc_msg)
 
     @classmethod
     def save_credential_serializer(
@@ -96,17 +104,13 @@ class CredentialModel(models.Model):
         Returns:
             CredentialModel: The stored credential model.
         """
-        # normalized_credential_serializer = CredentialNormalizer(credential_serializer).normalized_credential
-        # import logging
-        # logger = logging.getLogger('tp')
-        # logger.error(normalized_credential_serializer.additional_certificates.as_pem())
-        # logger.error(credential_serializer.additional_certificates.as_pem())
         return cls._save_normalized_credential_serializer(
             normalized_credential_serializer=credential_serializer, credential_type=credential_type
         )
 
     @property
-    def ordered_certificate_chain_queryset(self) -> QuerySet:
+    def ordered_certificate_chain_queryset(self) -> QuerySet[CertificateChainOrderModel]:
+        """Gets the ordered certificate chain queryset."""
         return self.certificatechainordermodel_set.order_by('order')
 
     @classmethod
@@ -120,11 +124,11 @@ class CredentialModel(models.Model):
 
         Args:
             normalized_credential_serializer: The normalized credential serializer to store in the database.
+            credential_type: The credential type to set.
 
         Returns:
             CredentialModel: The stored credential model.
         """
-
         certificate = CertificateModel.save_certificate(normalized_credential_serializer.credential_certificate)
         # TODO(AlexHx8472): Verify that the credential is valid in respect to the credential_type!!!
 
@@ -153,16 +157,17 @@ class CredentialModel(models.Model):
         certificate_chain: list[x509.Certificate],
         credential_type: CredentialModel.CredentialTypeChoice,
     ) -> CredentialModel:
-        certificate = CertificateModel.save_certificate(certificate)
+        """Stores a credential without a private key."""
+        certificate_model = CertificateModel.save_certificate(certificate)
 
         credential_model = cls.objects.create(credential_type=credential_type, private_key=None)
 
         PrimaryCredentialCertificate.objects.create(
-            certificate=certificate, credential=credential_model, is_primary=True
+            certificate=certificate_model, credential=credential_model, is_primary=True
         )
 
-        for order, certificate in enumerate(certificate_chain):
-            certificate_model = CertificateModel.save_certificate(certificate)
+        for order, certificate_in_chain in enumerate(certificate_chain):
+            certificate_model = CertificateModel.save_certificate(certificate_in_chain)
             CertificateChainOrderModel.objects.create(
                 certificate=certificate_model, credential=credential_model, order=order
             )
@@ -201,7 +206,7 @@ class CredentialModel(models.Model):
 
     @property
     def certificate(self) -> CertificateModel:
-        """Gets the primary certificate model using the through model
+        """Gets the primary certificate model using the through model.
 
         Returns:
             The primary certificate model.
@@ -247,18 +252,21 @@ class CredentialModel(models.Model):
         )
 
     def get_root_ca_certificate(self) -> None | x509.Certificate:
+        """Gets the root CA certificate of the credential certificate chain."""
         root_ca_certificate_serializer = self.get_root_ca_certificate_serializer()
         if root_ca_certificate_serializer:
             return root_ca_certificate_serializer.as_crypto()
         return None
 
     def get_root_ca_certificate_serializer(self) -> None | CertificateSerializer:
+        """Gets the root CA certificate serializer."""
         last_certificate_in_chain = self.certificatechainordermodel_set.order_by('order').last()
         if last_certificate_in_chain.certificate.is_root_ca:
             return last_certificate_in_chain.certificate.get_certificate_serializer()
         return None
 
     def get_credential_serializer(self) -> CredentialSerializer:
+        """Gets the serializer for this credential."""
         return CredentialSerializer(
             (
                 self.get_private_key_serializer(),
@@ -269,17 +277,38 @@ class CredentialModel(models.Model):
 
     @property
     def signature_suite(self) -> oid.SignatureSuite:
+        """Returns the signature suite used by the current credential primary certificate."""
         return oid.SignatureSuite.from_certificate(self.get_certificate_serializer().as_crypto())
 
     @property
     def public_key_info(self) -> oid.PublicKeyInfo:
+        """Returns the PublicKeyInfo the current credential primary certificate."""
         return self.signature_suite.public_key_info
 
 
 class PrimaryCredentialCertificate(models.Model):
+    """Model to store which certificate is the primary certificate of a credential.
+
+    Used as through model for the many-to-many relationship between CredentialModel and CertificateModel.
+    """
+
     credential = models.ForeignKey(CredentialModel, on_delete=models.CASCADE)
     certificate = models.OneToOneField(CertificateModel, on_delete=models.CASCADE)
     is_primary = models.BooleanField(default=False)
+
+    objects: models.Manager[PrimaryCredentialCertificate]
+
+    def __repr__(self) -> str:
+        """Returns a string representation of this PrimaryCredentialCertificate entry."""
+        return (
+            f'PrimaryCredentialCertificate(credential={self.credential}, '
+            f'certificate={self.certificate}, '
+            f'is_primary={self.is_primary})'
+        )
+
+    def __str__(self) -> str:
+        """Returns a human-readable string that represents this PrimaryCredentialCertificate entry."""
+        return self.__repr__()
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """If a new certificate is added to a credential, it is set to primary and all others to non-primary."""
@@ -290,12 +319,15 @@ class PrimaryCredentialCertificate(models.Model):
         super().save(*args, **kwargs)
 
 
+
 class CertificateChainOrderModel(models.Model):
     """This Model is used to preserve the order of certificates in credential certificate chains."""
 
     certificate = models.ForeignKey(CertificateModel, on_delete=models.PROTECT, null=False, blank=False, editable=False)
     credential = models.ForeignKey(CredentialModel, on_delete=models.PROTECT, null=False, blank=False, editable=False)
     order = models.PositiveIntegerField(null=False, blank=False, editable=False)
+
+    objects: models.Manager[CertificateChainOrderModel]
 
     class Meta:
         """This Meta class add some configuration to the CertificateChainOrderModel.
@@ -308,6 +340,7 @@ class CertificateChainOrderModel(models.Model):
         constraints: ClassVar = [models.UniqueConstraint(fields=['credential', 'order'], name='unique_group_order')]
 
     def __repr__(self) -> str:
+        """Returns a string representation of this CertificateChainOrderModel entry."""
         return (
             f'CertificateChainOrderModel(credential={self.credential}, '
             f'certificate={self.certificate}, '
@@ -323,7 +356,7 @@ class CertificateChainOrderModel(models.Model):
         return self.__repr__()
 
     # TODO(AlexHx8472): Validate certificate chain!
-    def save(self, *args: tuple[Any], **kwargs: dict[str, Any]) -> None:
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Stores a CertificateChainOrderModel in the database.
 
         This is only possible if the order takes the next available value. That is, e.g. if the corresponding
@@ -348,7 +381,7 @@ class CertificateChainOrderModel(models.Model):
             raise ValidationError(err_msg)
         super().save(*args, **kwargs)
 
-    def delete(self, *args: tuple[Any], **kwargs: dict[str, Any]) -> None:
+    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
         """Tries to delete the CertificateChainOrderModel entry.
 
         A CertificateChainOrderModel entry can only be deleted if it has the highest order in the
@@ -359,7 +392,7 @@ class CertificateChainOrderModel(models.Model):
             **kwargs: Keyword arguments, passed to super().delete()
 
         Returns:
-            None
+            tuple[int, dict[str, int]] (returned by parent)
 
         Raises:
             ValueError:
@@ -375,7 +408,7 @@ class CertificateChainOrderModel(models.Model):
             )
             raise ValidationError(err_msg)
 
-        super().delete(*args, **kwargs)
+        return super().delete(*args, **kwargs)
 
     def _get_max_order(self) -> int:
         """Gets highest order of a certificate of a credential certificate chain.
