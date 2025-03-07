@@ -456,6 +456,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
                 .annotate(cert_count=Count('id'))
             )
 
+
             # Convert the queryset to a list
             cert_counts_by_domain = list(cert_counts_domain_qr)
         except Exception:

@@ -10,7 +10,7 @@ from django.utils import timezone
 from home.models import NotificationModel
 
 
-class NotificationFilter(django_filters.FilterSet): # type: ignore[misc]
+class NotificationFilter(django_filters.FilterSet):
     """Filters notifications based on various criteria such as date range and status."""
 
     notification_type = django_filters.CharFilter(method='filter_by_multiple_types', label='Notification Type')

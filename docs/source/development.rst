@@ -191,7 +191,7 @@ For active formatting everything in the current directory use:
 
    uv run ruff format .
 
-For type checking, we use mypy:
+For type checking, we use :term:`mypy`:
 
 .. code:: shell
 

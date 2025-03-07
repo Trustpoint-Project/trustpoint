@@ -236,7 +236,7 @@ class SetupWizardGenerateTlsServerCredentialView(FormView):
 
             _ = CredentialModel.save_credential_serializer(
                 credential_serializer=tls_server_credential,
-                credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
+                credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
             )
 
             execute_shell_script(SCRIPT_WIZARD_INITIAL)
@@ -252,7 +252,9 @@ class SetupWizardGenerateTlsServerCredentialView(FormView):
             messages.add_message(self.request, messages.ERROR, f'Transition script not found: {SCRIPT_WIZARD_INITIAL}.')
             return redirect('setup_wizard:initial', permanent=False)
         except Exception as e:  # noqa: BLE001
-            messages.add_message(self.request, messages.ERROR, f'Error generating TLS Server Credential: {e} {traceback.format_exc()}')
+            messages.add_message(
+                self.request, messages.ERROR, f'Error generating TLS Server Credential: {e} {traceback.format_exc()}'
+            )
             return redirect('setup_wizard:initial', permanent=False)
 
     def _get_error_message_from_return_code(self, return_code: int) -> str:
@@ -439,7 +441,7 @@ class SetupWizardTlsServerCredentialApplyView(FormView):
             messages.add_message(
                 self.request,
                 messages.ERROR,
-                f"Invalid file format requested: {file_format}. Supported formats: {', '.join(valid_formats)}.",
+                f'Invalid file format requested: {file_format}. Supported formats: {", ".join(valid_formats)}.',
             )
             return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
 
