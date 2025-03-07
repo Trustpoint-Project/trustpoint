@@ -1,6 +1,6 @@
 """Defines URL patterns for the Home application, mapping views to URLs."""
 
-from django.urls import path  # type: ignore[import-untyped]
+from django.urls import path
 
 from . import views
 

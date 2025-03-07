@@ -3,7 +3,7 @@
 from datetime import timedelta
 from typing import ClassVar
 
-import django_filters
+import django_filters  # type: ignore[import-untyped]
 from django.db.models import QuerySet
 from django.utils import timezone
 
@@ -21,23 +21,29 @@ class NotificationFilter(django_filters.FilterSet):
         """Configures the filter set's model and fields for filtering."""
 
         model = NotificationModel
-        fields: ClassVar[list] = ['notification_type', 'notification_source']
+        fields: ClassVar[list[str]] = ['notification_type', 'notification_source']
 
-    def filter_by_multiple_types(self, queryset: QuerySet, _: str, value: str) -> QuerySet:
+    def filter_by_multiple_types(
+        self, queryset: QuerySet[NotificationModel], _: str, value: str
+    ) -> QuerySet[NotificationModel]:
         """Split the comma-separated values into a list for types"""
         if value:
             types = value.split(',')
             return queryset.filter(notification_type__in=types)
         return queryset
 
-    def filter_by_multiple_sources(self, queryset: QuerySet, _: str, value: str) -> QuerySet:
+    def filter_by_multiple_sources(
+        self, queryset: QuerySet[NotificationModel], _: str, value: str
+    ) -> QuerySet[NotificationModel]:
         """Split the comma-separated values into a list for sources"""
         if value:
             sources = value.split(',')
             return queryset.filter(notification_source__in=sources)
         return queryset
 
-    def filter_by_date_range(self, queryset: QuerySet, _: str, value: str) -> QuerySet:
+    def filter_by_date_range(
+        self, queryset: QuerySet[NotificationModel], _: str, value: str
+    ) -> QuerySet[NotificationModel]:
         """Filter the given QuerySet by date range"""
         now = timezone.now()
         if value == 'today':

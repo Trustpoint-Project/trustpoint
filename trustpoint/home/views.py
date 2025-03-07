@@ -23,7 +23,7 @@ from django.views.generic.list import ListView
 from pki.models import CertificateModel, IssuingCaModel
 
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import SortableTableMixin, TpLoginRequiredMixin
+from trustpoint.views.base import SortableTableMixin, LoggerMixin
 
 from .filters import NotificationFilter
 from .models import NotificationModel, NotificationStatus
@@ -35,14 +35,14 @@ SUCCESS = 25
 ERROR = 40
 
 
-class IndexView(TpLoginRequiredMixin, RedirectView):
+class IndexView(RedirectView):
     """Redirects authenticated users to the dashboard page."""
 
     permanent = False
     pattern_name = 'home:dashboard'
 
 
-class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView):
+class DashboardView(SortableTableMixin, ListView[NotificationModel]):
     """Renders the dashboard page for authenticated users. Uses the 'home/dashboard.html' template."""
 
     template_name = 'home/dashboard.html'
@@ -51,7 +51,7 @@ class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView):
     default_sort_param = '-created_at'
     paginate_by = UIConfig.notifications_paginate_by
 
-    def __init__(self, *args: tuple, **kwargs: dict) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the parent class with the given arguments and keyword arguments."""
         super().__init__(*args, **kwargs)
         self.last_week_dates = self.generate_last_week_dates()
@@ -61,20 +61,21 @@ class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView):
         return NotificationModel.objects.all()
 
     def generate_last_week_dates(self) -> list[str]:
-        """Generates date strings for last one week"""
+        """Generates date strings for last one week."""
         end_date = timezone.now()
         start_date = end_date - timedelta(days=6)
         return [(start_date + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
 
-    def get_queryset(self) -> QuerySet[NotificationModel]:
+    def get_queryset(self) -> Any:
+        """Returns a queryset of NotificationModel instances."""
         all_notifications = NotificationModel.objects.all()
 
         notification_filter = NotificationFilter(self.request.GET, queryset=all_notifications)
         self.queryset = notification_filter.qs
         return super().get_queryset()
 
-    def get_context_data(self, **kwargs: dict) -> dict[str, Any]:
-        """Fetch context data"""
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Fetch context data."""
         context = super().get_context_data(**kwargs)
 
         for notification in context['notifications']:
@@ -114,7 +115,7 @@ class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView):
 
 @login_required
 def notification_details_view(request: HttpRequest, pk: int | str) -> HttpResponse:
-    """Rends notification details view"""
+    """Rends notification details view."""
     notification = get_object_or_404(NotificationModel, pk=pk)
 
     notification_statuses = notification.statuses.values_list('status', flat=True)
@@ -159,45 +160,44 @@ def mark_as_solved(request: HttpRequest, pk: int | str) -> HttpResponse:
     return render(request, 'home/notification_details.html', context)
 
 
-class AddDomainsAndDevicesView(TpLoginRequiredMixin, TemplateView):
+class AddDomainsAndDevicesView(TemplateView):
     """View to execute the add_domains_and_devices management command and pass status to the template."""
 
     _logger = logging.getLogger(__name__)
 
-    def get(self, request: HttpRequest, *args: tuple, **kwargs: dict) -> HttpResponse:  # noqa: ARG002
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handles GET requests and redirects to the dashboard."""
         try:
             call_command('add_domains_and_devices')
-
             messages.add_message(request, SUCCESS, 'Successfully added test data.')
         except Exception:
-            # TODO(AlexHx8472): Catch the correct and proper error messages.
             messages.add_message(request, ERROR, 'Test data already available in the Database.')
 
         return redirect('home:dashboard')
 
 
-class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
+class DashboardChartsAndCountsView(TemplateView):
     """View to mark the notification as Solved."""
 
     _logger = logging.getLogger(__name__)
 
-    def get(self, request: HttpRequest, *args: tuple, **kwargs: dict) -> HttpResponse:  # noqa: ARG002
-        """Get dashboard data for panels, tables and charts"""
-        start_date: str = request.GET.get('start_date', None)
-        start_date_object = None
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Get dashboard data for panels, tables and charts."""
+        start_date: str | None = request.GET.get('start_date', None)
+
+        del args
+        del kwargs
+
+        start_date_object: datetime = timezone.now()
         # Parse the date string into a datetime.date object
         if start_date:
-            start_date_object = dateparse.parse_datetime(start_date)  # Returns a datetime object
-            if not start_date_object:
+            parsed_date = dateparse.parse_datetime(start_date)  # Returns a datetime object
+            if not parsed_date:
                 return JsonResponse({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=400)
-        else:
-            tz = timezone.get_current_timezone()
-            start_date_object = datetime.now(tz).date()
-
+            start_date_object = parsed_date
         dashboard_data: dict[str, Any] = {}
 
-        start_date_object = timezone.make_aware(datetime.combine(start_date_object, datetime.min.time()))
+        start_date_object = timezone.make_aware(datetime.combine(start_date_object.date(), datetime.min.time()))
         device_counts = self.get_device_count_by_onboarding_status(start_date_object)
         dashboard_data['device_counts'] = device_counts
         self._logger.debug('device counts %s', device_counts)
@@ -217,7 +217,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
         return JsonResponse(dashboard_data)
 
     def get_device_charts_data(self, dashboard_data: dict[str, Any], start_date_object: datetime) -> None:
-        """Fetch data from database for device charts"""
+        """Fetch data from database for device charts."""
         device_counts_by_os = self.get_device_count_by_onboarding_status(start_date_object)
         if device_counts_by_os:
             dashboard_data['device_counts_by_os'] = device_counts_by_os
@@ -231,7 +231,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
             dashboard_data['device_counts_by_domain'] = device_counts_by_domain
 
     def get_cert_charts_data(self, dashboard_data: dict[str, Any], start_date_object: datetime) -> None:
-        """Fetch data from database for certificate charts"""
+        """Fetch data from database for certificate charts."""
         cert_counts_by_status = self.get_cert_counts_by_status(start_date_object)
         if cert_counts_by_status:
             dashboard_data['cert_counts_by_status'] = cert_counts_by_status
@@ -245,7 +245,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
             dashboard_data['cert_counts_by_template'] = cert_counts_by_template
 
     def get_ca_charts_data(self, dashboard_data: dict[str, Any], start_date_object: datetime) -> None:
-        """Fetch data from database for issuing ca charts"""
+        """Fetch data from database for issuing ca charts."""
         cert_counts_by_issuing_ca = self.get_cert_counts_by_issuing_ca(start_date_object)
         if cert_counts_by_issuing_ca:
             dashboard_data['cert_counts_by_issuing_ca'] = cert_counts_by_issuing_ca
@@ -259,7 +259,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
             dashboard_data['ca_counts_by_type'] = issuing_ca_counts_by_type
 
     def get_device_count_by_onboarding_status(self, start_date: datetime) -> dict[str, Any]:
-        """Get device count by onboarding status from database"""
+        """Get device count by onboarding status from database."""
         device_os_counts = {str(status): 0 for _, status in DeviceModel.OnboardingStatus.choices}
         try:
             device_os_qr = (
@@ -280,7 +280,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
         return device_os_counts
 
     def get_cert_counts(self) -> dict[str, Any]:
-        """Get certificate counts from database"""
+        """Get certificate counts from database."""
         cert_counts = {}
         # Get the current date and the dates for 7 days and 1 day ahead
         now = timezone.now()
@@ -324,7 +324,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
         return cert_counts_by_status
 
     def get_cert_counts_by_status(self, start_date: datetime) -> dict[str, Any]:
-        """Get certs count by onboarding status from database"""
+        """Get certs count by onboarding status from database."""
         cert_status_counts = {str(status): 0 for _, status in CertificateModel.CertificateStatus.choices}
         try:
             cert_status_qr = CertificateModel.objects.filter(created_at__gt=start_date)
@@ -337,7 +337,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
         return cert_status_counts
 
     def get_issuing_ca_counts(self) -> dict[str, Any]:
-        """Get issuing CA counts from database"""
+        """Get issuing CA counts from database."""
         # Current date
         today = timezone.make_aware(datetime.combine(timezone.now().date(), datetime.min.time()))
         issuing_ca_counts = {}
@@ -364,7 +364,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
         return issuing_ca_counts
 
     def get_device_counts_by_date_and_status(self) -> list[dict[str, Any]]:
-        """Get device count by date and onboarding status from database"""
+        """Get device count by date and onboarding status from database."""
         device_counts_by_date_and_os = []
         try:
             device_date_os_qr = (
@@ -380,7 +380,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
         return device_counts_by_date_and_os
 
     def get_device_count_by_onboarding_protocol(self, start_date: datetime) -> dict[str, Any]:
-        """Get device count by onboarding protocol from database"""
+        """Get device count by onboarding protocol from database."""
         device_op_counts = {str(status): 0 for _, status in DeviceModel.OnboardingProtocol.choices}
         try:
             device_op_qr = (
@@ -414,7 +414,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
             return []
 
     def get_cert_counts_by_issuing_ca(self, start_date: datetime) -> list[dict[str, Any]]:
-        """Get certificate count by issuing ca from database"""
+        """Get certificate count by issuing ca from database."""
         cert_counts_by_issuing_ca = []
         try:
             cert_issuing_ca_qr = (
@@ -431,7 +431,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
         return cert_counts_by_issuing_ca
 
     def get_cert_counts_by_issuing_ca_and_date(self, start_date: datetime) -> list[dict[str, Any]]:
-        """Get certificate count by issuing ca from database"""
+        """Get certificate count by issuing ca from database."""
         cert_counts_by_issuing_ca_and_date = []
         try:
             cert_issuing_ca_and_date_qr = (
@@ -449,7 +449,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
         return cert_counts_by_issuing_ca_and_date
 
     def get_cert_counts_by_domain(self, start_date: datetime) -> list[dict[str, Any]]:
-        """Get certificate count by domain from database"""
+        """Get certificate count by domain from database."""
         cert_counts_by_domain = []
         try:
             cert_counts_domain_qr = (
@@ -458,23 +458,14 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
                 .annotate(cert_count=Count('id'))
             )
 
-            # cert_domain_counts = (
-            #     IssuedDomainCredentialModel.objects.filter(created_at__gt=start_date)
-            #     .values(domain_name=F('domain__unique_name'))
-            #     .annotate(cert_count=Count('id'))
-            # )
-
-            # Use a union query to combine results
-            # cert_domain_qr = cert_app_counts.union(cert_domain_counts)
-
-            #   # Convert the queryset to a list
+            # Convert the queryset to a list
             cert_counts_by_domain = list(cert_counts_domain_qr)
         except Exception:
             self._logger.exception('Error occurred in certificate count by issuing ca query')
         return cert_counts_by_domain
 
     def get_cert_counts_by_template(self, start_date: datetime) -> dict[str, Any]:
-        """Get certificate count by template from database"""
+        """Get certificate count by template from database."""
         cert_counts_by_template = {
             str(status): 0 for _, status in IssuedCredentialModel.IssuedCredentialPurpose.choices
         }
@@ -492,7 +483,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
         return cert_counts_by_template
 
     def get_issuing_ca_counts_by_type(self, start_date: datetime) -> dict[str, Any]:
-        """Get issuing ca counts by type from database"""
+        """Get issuing ca counts by type from database."""
         issuing_ca_type_counts = {str(cert_type): 0 for _, cert_type in IssuingCaModel.IssuingCaTypeChoice.choices}
         try:
             ca_type_qr = (
