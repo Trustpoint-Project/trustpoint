@@ -15,7 +15,7 @@ class Command(RunServerPlusCommand):
         """Fetch or create the TLS certificate and key from the database."""
 
         if not os.path.exists(cert_file_path) or not os.path.exists(key_file_path):
-            print(f"❌ Certificate or key file not found: {cert_file_path}, {key_file_path}")
+            print(f"Certificate or key file not found: {cert_file_path}, {key_file_path}")
 
         active_credential = ActiveTrustpointTlsServerCredentialModel.objects.first()
 

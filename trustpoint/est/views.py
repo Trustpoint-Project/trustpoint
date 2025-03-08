@@ -2,6 +2,7 @@
 
 import base64
 import ipaddress
+import traceback
 from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol, cast
 
@@ -41,10 +42,10 @@ class UsernamePasswordAuthenticationError(Exception):
 
 THRESHOLD_LOGGER: int = 400
 
-class LoggedHttpResponse(LoggerMixin, HttpResponseBase):
+class LoggedHttpResponse(HttpResponse, LoggerMixin):
     """Custom HttpResponse that logs and prints error messages automatically."""
 
-    def __init__(self, content: Any, status: int | None = None, **kwargs: Any) -> None:
+    def __init__(self, content: str | bytes = b'', status: int | None = None, *args: Any, **kwargs: Any) -> None:
         """Initialize the LoggedHttpResponse instance.
 
         Args:
@@ -55,7 +56,7 @@ class LoggedHttpResponse(LoggerMixin, HttpResponseBase):
         if status and status >= THRESHOLD_LOGGER:
             error_message = f'EST Error - {status} - {content}'
             self.logger.error(error_message)
-        super().__init__(content, status=status, **kwargs)
+        super().__init__(content=content or "", status=status, *args,  **kwargs)
 
 class Dispatchable(Protocol):
     """Protocol defining a dispatch method for handling HTTP requests."""
@@ -215,7 +216,7 @@ class EstAuthenticationMixin:
         return None, None
 
 
-class EstHttpMixin(LoggedHttpResponse):
+class EstHttpMixin:
     """Mixin for processing HTTP requests for EST endpoints.
 
     This mixin reads the raw message from the request, verifies that the payload:
@@ -247,21 +248,21 @@ class EstHttpMixin(LoggedHttpResponse):
         self.raw_message = request.read()
         if len(self.raw_message) > self.max_payload_size:
             error_message = 'Message is too large.'
-            return LoggedHttpResponse(error_message, status=413)
+            return LoggedHttpResponse(content=error_message, status=413)
 
         content_type = request.headers.get('Content-Type')
         if content_type != self.expected_content_type:
             error_message = ('Message is missing the content type.'
                        if content_type is None
                        else f'Message does not have the expected content type: {self.expected_content_type}.')
-            return LoggedHttpResponse(error_message, status=415)
+            return LoggedHttpResponse(content=error_message, status=415)
 
         if request.headers.get('Content-Transfer-Encoding', '').lower() == 'base64':
             try:
                 self.raw_message = base64.b64decode(self.raw_message)
             except Exception:  # noqa: BLE001
                 error_message = 'Invalid base64 encoding in message.'
-                return LoggedHttpResponse(error_message, status=400)
+                return LoggedHttpResponse(content=error_message, status=400)
 
         parent = cast('Dispatchable', super())
         return parent.dispatch(request, *args, **kwargs)
@@ -420,20 +421,17 @@ class EstPkiMessageSerializerMixin:
         try:
             csr = x509.load_der_x509_csr(data, default_backend())
         except Exception:  # noqa: BLE001
-            error_message = 'Failed to deserialize PKCS#10 certificate signing request'
-            return None, LoggedHttpResponse(error_message, status=500)
+            return None, LoggedHttpResponse('Failed to deserialize PKCS#10 certificate signing request', status=500)
 
         try:
             self.verify_csr_signature(csr)
         except Exception:  # noqa: BLE001
-            error_message = 'Failed to verify PKCS#10 certificate signing request'
-            return None, LoggedHttpResponse(error_message, status=500)
+            return None, LoggedHttpResponse('Failed to verify PKCS#10 certificate signing request', status=500)
 
         try:
             cert_details = self.extract_details_from_csr(csr)
         except Exception as e: # noqa: BLE001
-            error_message = f'Failed to extract information from CSR: {e}'
-            return None, LoggedHttpResponse(error_message, status=500)
+            return None, LoggedHttpResponse(f'Failed to extract information from CSR: {e}', status=500)
 
         return cert_details, None
 
@@ -497,20 +495,18 @@ class DeviceHandlerMixin:
             return device, None
 
         if not domain.auto_create_new_device:
-            error_message = 'Creating a new device for this domain is permitted'
-            return None, LoggedHttpResponse(error_message, status=400)
+            return None, LoggedHttpResponse('Creating a new device for this domain is permitted', status=400)
 
         if cert_template == 'domaincredential':
             if domain.allow_username_password_registration:
                 onboarding_protocol = DeviceModel.OnboardingProtocol.EST_PASSWORD
                 onboarding_status = DeviceModel.OnboardingStatus.PENDING
             elif domain.allow_idevid_registration:
-                error_message = 'IDevID registration is not supported implemented'
-                return None, LoggedHttpResponse(error_message, status=400)
+                return None, LoggedHttpResponse('IDevID registration is not supported implemented', status=400)
             else:
                 error_message = ('For registering a new device activate '
                                  'Username:Password registration or IDevid registration')
-                return None, LoggedHttpResponse(error_message, status=400)
+                return None, LoggedHttpResponse(content=error_message, status=400)
 
         else:
             onboarding_protocol = DeviceModel.OnboardingProtocol.NO_ONBOARDING
@@ -610,14 +606,15 @@ class CredentialIssuanceMixin:
             )
         except ValueError as e:
             error_message = f'Error while issuing credential ({type(e).__name__}): {e!s}'
-            return LoggedHttpResponse(error_message, status=400)
+            return LoggedHttpResponse(content=error_message, status=400)
         except Exception as e: # noqa: BLE001
+            tb_str = traceback.format_exc()
+            print(tb_str)
             error_message = f'Error while issuing credential ({type(e).__name__}): {e!s}'
-            return LoggedHttpResponse(error_message, status=400)
+            return LoggedHttpResponse(content=error_message, status=400)
 
         if issued_credential is None:
-            error_message = 'Credential cannot be found'
-            return LoggedHttpResponse(error_message, 400)
+            return LoggedHttpResponse('Credential cannot be found', 400)
 
         encoded_cert = issued_credential.credential.get_certificate().public_bytes(encoding=Encoding.DER)
 
@@ -625,7 +622,7 @@ class CredentialIssuanceMixin:
             device.onboarding_status = DeviceModel.OnboardingStatus.ONBOARDED
             device.save()
 
-        return LoggedHttpResponse(encoded_cert, status=200, content_type='application/pkix-cert')
+        return LoggedHttpResponse(content=encoded_cert, status=200, content_type='application/pkix-cert')
 
     def _issue_based_on_template(self,
                                  cert_template_str: str,
@@ -640,6 +637,10 @@ class CredentialIssuanceMixin:
             )
 
         if cert_template_str == 'tlsclient':
+
+            print(credential_request)
+            print(device)
+            print(domain)
             tls_client_credential = LocalTlsClientCredentialIssuer(device=device, domain=domain)
 
             return tls_client_credential.issue_tls_client_certificate(

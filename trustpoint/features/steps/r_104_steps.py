@@ -1,6 +1,5 @@
 """Python steps file for R_104."""  # noqa: INP001
 
-
 from behave import given, runner, then, when
 
 

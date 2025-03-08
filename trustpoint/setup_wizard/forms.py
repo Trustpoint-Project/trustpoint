@@ -11,19 +11,11 @@ class EmptyForm(forms.Form):
 
 class StartupWizardTlsCertificateForm(forms.Form):
     ipv4_addresses = forms.CharField(
-        label=_('IPv4-Addresses (comma-separated list)'),
-        initial='127.0.0.1, ',
-        required=False
+        label=_('IPv4-Addresses (comma-separated list)'), initial='127.0.0.1, ', required=False
     )
-    ipv6_addresses = forms.CharField(
-        label=_('IPv6-Addresses (comma-separated list)'),
-        initial='::1, ',
-        required=False
-    )
+    ipv6_addresses = forms.CharField(label=_('IPv6-Addresses (comma-separated list)'), initial='::1, ', required=False)
     domain_names = forms.CharField(
-        label=_('Domain-Names (comma-separated list)'),
-        initial='localhost, ',
-        required=False
+        label=_('Domain-Names (comma-separated list)'), initial='localhost, ', required=False
     )
 
     def clean_ipv4_addresses(self):
@@ -56,7 +48,6 @@ class StartupWizardTlsCertificateForm(forms.Form):
         domain_names = data.split(',')
         # TODO(AlexHx8472): Check for valid domains.
         return [domain_name.strip() for domain_name in domain_names if domain_name.strip() != '']
-
 
     def clean(self):
         cleaned_data = super().clean()

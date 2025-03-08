@@ -1,4 +1,5 @@
 """Django Views"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -20,7 +21,6 @@ from trustpoint.views.base import (
 
 if TYPE_CHECKING:
     from typing import Any
-
 
 
 class SecurityView(TpLoginRequiredMixin, SecurityLevelMixin, FormView):

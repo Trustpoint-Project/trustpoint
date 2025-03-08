@@ -40,6 +40,7 @@ DATABASE_NAME = 'trustpoint_db'
 DATABASE_USER = 'admin'
 DATABASE_PASSWORD = 'testing321'  # noqa: S105
 
+
 def is_postgre_available() -> bool:
     """Checks whether PostgreSQL is available and issues differentiated error messages.
 
@@ -86,6 +87,7 @@ def is_postgre_available() -> bool:
         return False
 
     return True
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
@@ -186,9 +188,7 @@ else:
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
-            'OPTIONS': {
-                'timeout': 20
-            }
+            'OPTIONS': {'timeout': 20},
         },
     }
 
@@ -221,7 +221,6 @@ LANGUAGES = [
     ('de', _('German')),
     ('en', _('English')),
 ]
-
 
 
 USE_I18N = True
@@ -267,9 +266,12 @@ LOG_FILE_PATH = LOG_DIR_PATH / Path('trustpoint.log')
 
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
+
 class UTCFormatter(logging.Formatter):
     """Custom logging formatter to use UTC time."""
+
     converter = time.gmtime
+
 
 LOGGING = {
     'version': 1,  # Indicates the version of the logging configuration
@@ -305,8 +307,10 @@ LOGGING = {
     },
 }
 
+
 # User interface config defaults
 class UIConfig:
     """User interface configuration defaults."""
+
     paginate_by: ClassVar[int] = 50
     notifications_paginate_by: ClassVar[int] = 5

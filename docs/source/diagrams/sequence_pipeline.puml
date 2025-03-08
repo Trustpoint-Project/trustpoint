@@ -1,0 +1,58 @@
+@startuml
+    actor Developer
+    database "GitHub\n Repo" as Repo
+    collections "GitHub\n Actions" as GA
+    control Behave
+    control Codecov
+    control MyPy
+    control Pytest
+    control Ruff
+    collections "GitHub\n Readme" as Readme
+    entity "Codecov\n Service" as CodecovService
+
+    Developer -> Repo: Pull Request
+    activate Repo
+    Repo -> GA: Trigger workflows
+    activate GA
+
+    alt#Yellow #LightGreen All Tests Successful
+        GA -> Behave: Run behave tests
+        activate Behave
+        Behave --> GA: Upload behave results
+        Behave --> Readme: update Badges
+        destroy Behave
+        activate Readme
+
+        GA -> Codecov: Run pytests \n with coverage report
+        activate Codecov
+        Codecov --> CodecovService: Upload coverage report
+        destroy Codecov
+        activate CodecovService
+        CodecovService --> Readme: update Badge
+        destroy CodecovService
+
+        GA -> MyPy: Run mypy checks
+        activate MyPy
+        MyPy --> GA: Upload type-check results
+        MyPy --> Readme: update Badge
+        destroy MyPy
+
+        GA -> Pytest: Run pytests
+        activate Pytest
+        Pytest --> GA: Upload test results
+        Pytest --> Readme: update Badge
+        destroy Pytest
+
+        GA -> Ruff: Run ruff checks
+        activate Ruff
+        Ruff --> GA: Upload linting results
+        Ruff --> Readme: update Badge
+        destroy Ruff
+        deactivate Readme
+    else #Red Some Tests Not Successful
+        GA --> Developer: Report Failing Tests
+    end
+    GA --> Repo: Pull-Request allowed
+    deactivate GA
+    deactivate Repo
+@enduml
