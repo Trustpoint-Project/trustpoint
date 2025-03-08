@@ -70,6 +70,11 @@ urlpatterns = [
         views.OnboardingEstUsernamePasswordHelpView.as_view(),
         name='help-onboarding_est-username-password'
     ),
+    path(
+        'help/onboarding/ldevid/<int:pk>/',
+        views.OnboardingEstLDevIdHelpView.as_view(),
+        name='help-onboarding_est-ldevid'
+    ),
     # Certificate Lifecycle Management - Downloads
     path('download/<int:pk>/', views.DownloadPageDispatcherView.as_view(), name='download'),
     path('certificate/download/<int:pk>/', views.CertificateDownloadView.as_view(), name='certificate-download'),

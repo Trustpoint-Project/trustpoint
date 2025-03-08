@@ -2,7 +2,6 @@
 
 import base64
 import ipaddress
-import traceback
 from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol, cast
 
@@ -11,8 +10,6 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives._serialization import Encoding
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
-from pyasn1_modules.rfc2459 import common_name
-
 from devices.issuer import LocalDomainCredentialIssuer, LocalTlsClientCredentialIssuer, LocalTlsServerCredentialIssuer
 from devices.models import DeviceModel, IssuedCredentialModel
 from django.http import HttpRequest, HttpResponse, HttpResponseBase
@@ -51,12 +48,16 @@ class LoggedHttpResponse(HttpResponse, LoggerMixin):
         Args:
             content (Any): The content of the response.
             status (Optional[int], optional): The HTTP status code of the response. Defaults to None.
+            *args (Any): Additional positional arguments passed to HttpResponse.
             **kwargs (Any): Additional keyword arguments passed to HttpResponse.
         """
         if status and status >= THRESHOLD_LOGGER:
+            if isinstance(content, bytes):
+                content = content.decode("utf-8")
             error_message = f'EST Error - {status} - {content}'
             self.logger.error(error_message)
-        super().__init__(content=content or "", status=status, *args,  **kwargs)
+
+        super().__init__(content, *args, status=status, **kwargs)
 
 class Dispatchable(Protocol):
     """Protocol defining a dispatch method for handling HTTP requests."""
@@ -331,12 +332,12 @@ class EstRequestedCertTemplateExtractorMixin(LoggedHttpResponse):
 
 
 class EstPkiMessageSerializerMixin:
-    """Mixin to handle serialization and deserialization of PKCS#10 certificate signing requests"""
+    """Mixin to handle serialization and deserialization of PKCS#10 certificate signing requests."""
 
     def extract_details_from_csr(self,
                                  csr: x509.CertificateSigningRequest
                                  ) -> CredentialRequest:
-        """Loads the CSR (x509.CertificateSigningRequest) and extracts subject and SAN"""
+        """Loads the CSR (x509.CertificateSigningRequest) and extracts subject and SAN."""
         subject_attributes = list(csr.subject)
         common_name = self._extract_common_name(subject_attributes)
         serial_number = self._extract_serial_number(subject_attributes)
@@ -344,7 +345,8 @@ class EstPkiMessageSerializerMixin:
         public_key = csr.public_key()
 
         if not isinstance(public_key, rsa.RSAPublicKey | ec.EllipticCurvePublicKey):
-            raise AssertionError('Public key must be an RSA or ECC public key.')
+            error_message = 'Public key must be an RSA or ECC public key.'
+            raise TypeError(error_message)
 
         return CredentialRequest(
             common_name=common_name,
@@ -411,7 +413,7 @@ class EstPkiMessageSerializerMixin:
         return dns_names, ipv4_addresses, ipv6_addresses
 
     def deserialize_pki_message(self, data: bytes) -> tuple[CredentialRequest | None, LoggedHttpResponse | None]:
-        """Deserializes a DER-encoded PKCS#10 certificate signing request
+        """Deserializes a DER-encoded PKCS#10 certificate signing request.
 
         :param data: DER-encoded PKCS#10 request bytes.
         :param requested_cert_template: Certificate template string.
@@ -608,8 +610,6 @@ class CredentialIssuanceMixin:
             error_message = f'Error while issuing credential ({type(e).__name__}): {e!s}'
             return LoggedHttpResponse(content=error_message, status=400)
         except Exception as e: # noqa: BLE001
-            tb_str = traceback.format_exc()
-            print(tb_str)
             error_message = f'Error while issuing credential ({type(e).__name__}): {e!s}'
             return LoggedHttpResponse(content=error_message, status=400)
 
@@ -637,10 +637,6 @@ class CredentialIssuanceMixin:
             )
 
         if cert_template_str == 'tlsclient':
-
-            print(credential_request)
-            print(device)
-            print(domain)
             tls_client_credential = LocalTlsClientCredentialIssuer(device=device, domain=domain)
 
             return tls_client_credential.issue_tls_client_certificate(
