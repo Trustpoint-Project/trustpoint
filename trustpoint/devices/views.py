@@ -27,6 +27,7 @@ from django.views.generic.list import ListView
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.devid_registration import DevIdRegistration
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from trustpoint_core import oid  # type: ignore[import-untyped]
 from trustpoint_core.file_builder.enum import ArchiveFormat  # type: ignore[import-untyped]
 from trustpoint_core.serializer import CredentialSerializer  # type: ignore[import-untyped]
@@ -552,11 +553,20 @@ class HelpDispatchView(DeviceContextMixin, SingleObjectMixin[DeviceModel], Redir
         ):
             return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
 
+        if (
+            not device.domain_credential_onboarding
+            and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value
+        ):
+            return f'{reverse("devices:help-no-onboarding_est-username-password", kwargs={"pk": device.id})}'
+
         if device.onboarding_protocol == device.OnboardingProtocol.CMP_SHARED_SECRET.value:
             return f'{reverse("devices:help-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
 
         if device.onboarding_protocol == device.OnboardingProtocol.CMP_IDEVID.value:
             return f'{reverse("devices:help-onboarding_cmp-idevid", kwargs={"pk": device.id})}'
+
+        if device.onboarding_protocol == device.OnboardingProtocol.EST_PASSWORD.value:
+            return f'{reverse("devices:help-onboarding_est-username-password", kwargs={"pk": device.id})}'
 
         return f'{reverse("devices:devices")}'
 
@@ -628,6 +638,105 @@ class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceMo
 
         return context
 
+class NoOnboardingEstUsernamePasswordHelpView(DeviceContextMixin, DetailView[DeviceModel]):
+    """View to provide help information for EST username/password authentication with no onboarding."""
+
+    model = DeviceModel
+    template_name = 'devices/help/no_onboarding/est_username_password.html'
+    context_object_name = 'device'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Generate and return context data for the help view."""
+        del kwargs
+        context = super().get_context_data()
+        device: DeviceModel = self.object
+
+        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
+            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
+        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
+            key_gen_command = (
+                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
+                f'-genkey -noout -out key.pem')
+        else:
+            error_message = 'Unsupported public key algorithm'
+            raise ValueError(error_message)
+        context['host'] = '{}:{}'.format(self.request.META.get('REMOTE_ADDR', 'unknown'),
+                                         self.request.META.get('SERVER_PORT', '443'))
+        context['key_gen_command'] = key_gen_command
+
+        tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
+        if tls_cert:
+            context['trustpoint_server_certificate'] = (
+                tls_cert.credential.certificate.get_certificate_serializer().as_pem().decode('utf-8'))
+
+        number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
+        context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
+        context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
+        return context
+
+class OnboardingEstUsernamePasswordHelpView(DeviceContextMixin, DetailView[DeviceModel]):
+    """View to provide help information for EST username/password authentication for onboarding."""
+
+    model = DeviceModel
+    template_name = 'devices/help/onboarding/est_username_password.html'
+    context_object_name = 'device'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Generate and return context data for the help view."""
+        del kwargs
+        context = super().get_context_data()
+        device: DeviceModel = self.object
+
+        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
+            key_gen_command = f'openssl genrsa -out domain_credential_key.pem {device.public_key_info.key_size}'
+        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
+            key_gen_command = (
+                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
+                f'-genkey -noout -out domain_credential_key.pem')
+        else:
+            error_message = 'Unsupported public key algorithm'
+            raise ValueError(error_message)
+        context['host'] = '{}:{}'.format(self.request.META.get('REMOTE_ADDR', 'unknown'),
+                                         self.request.META.get('SERVER_PORT', '443'))
+        context['key_gen_command'] = key_gen_command
+        tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
+        if tls_cert:
+            context['trustpoint_server_certificate'] = tls_cert.credential.certificate.public_key_pem
+        context['domain_credential_cn'] = 'Trustpoint Domain Credential'
+        return context
+
+class OnboardingEstLDevIdHelpView(DeviceContextMixin, DetailView[DeviceModel]):
+    """View to provide help information for EST domain credential authentication."""
+
+    model = DeviceModel
+    template_name = 'devices/help/onboarding/est_ldevid.html'
+    context_object_name = 'device'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Generate and return context data for the help view."""
+        del kwargs
+        context = super().get_context_data()
+        device: DeviceModel = self.object
+
+        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
+            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
+        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
+            key_gen_command = (
+                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
+                f'-genkey -noout -out key.pem')
+        else:
+            error_message = 'Unsupported public key algorithm'
+            raise ValueError(error_message)
+        context['host'] = '{}:{}'.format(self.request.META.get('REMOTE_ADDR', 'unknown'),
+                                         self.request.META.get('SERVER_PORT', '443'))
+        context['key_gen_command'] = key_gen_command
+        tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
+        if tls_cert:
+            context['trustpoint_server_certificate'] = tls_cert.credential.certificate.public_key_pem
+        number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
+        context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
+        context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
+        return context
 
 class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, DetailView[DeviceModel]):
     """Help view for the case of no onboarding using CMP shared-secret."""
