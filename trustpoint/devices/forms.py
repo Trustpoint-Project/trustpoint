@@ -335,11 +335,6 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
         Returns:
             The cleaned form data.
         """
-        print('FORM VALIDATION STARTS')
-        if not self.is_valid():
-            print(self.errors)
-        else:
-            print('FORM IS VALID')
         cleaned_data = super().clean()
         instance: DeviceModel = super().save(commit=False)
         domain_credential_onboarding = cleaned_data.get('domain_credential_onboarding')
