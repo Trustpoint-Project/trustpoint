@@ -38,34 +38,6 @@
                             </div>
                         </li>
                         <li>
-                            <div>{% trans 'TLS-Client Certificate Request URL' %}</div>
-                            <div class="copy-container" style="position: relative;">
-                                <code class="command-text language-bash">
-                                    https://{{ host }}/.well-known/cmp/certification/{{ domain }}/tls-client/
-                                </code>
-
-                                <button type="button" class="copy-button" data-tooltip="Copy to clipboard" aria-label="Copy to clipboard">
-                                    <svg class="icon icon-copy" width="40" height="40" fill="currentColor">
-                                        <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
-                                    </svg>
-                                </button>
-                            </div>
-                        </li>
-                        <li>
-                            <div>{% trans 'TLS-Server Certificate Request URL' %}</div>
-                            <div class="copy-container" style="position: relative;">
-                                <code class="command-text language-bash">
-                                    https://{{ host }}/.well-known/cmp/certification/{{ domain }}/tls-server/
-                                </code>
-
-                                <button type="button" class="copy-button" data-tooltip="Copy to clipboard" aria-label="Copy to clipboard">
-                                    <svg class="icon icon-copy" width="40" height="40" fill="currentColor">
-                                        <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
-                                    </svg>
-                                </button>
-                            </div>
-                        </li>
-                        <li>
                             <div>{% trans 'Required Public Key Type' %}</div>
                             <div>{{ public_key_info }}</div>
                         </li>

@@ -1,0 +1,37 @@
+{% load i18n %}
+{% load static %}
+
+{% block head %}
+    <script src="{% static 'js/copy_clipboard.js' %}"></script>
+{% endblock head %}
+
+{% block cmp_issuing_ca_block %}
+    <ul class="tp-kvp-list">
+        <li>
+            <div>{% trans 'Download Issuing CA Certificate' %}</div>
+            <div>
+                <a class="btn btn-primary min-width-15 mb-3"
+                   href="{% url 'pki:certificate-issuing-ca-download' pk=device.domain.issuing_ca.credential.certificate.id %}">Download
+                    Issuing CA</a>
+            </div>
+        </li>
+        <li>
+            <div>
+                {% trans 'Issuing CA in PEM format. You can copy this and paste it into a new file named issuing_ca_cert.pem' %}
+            </div>
+            <div class="copy-container" style="position: relative;">
+                <code class="command-text language-bash">
+                    {{ issuing_ca_pem|linebreaksbr }}
+                </code>
+
+                <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
+                        aria-label="Copy to clipboard">
+                    <svg class="icon icon-copy" width="40" height="40" fill="currentColor">
+                        <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
+                    </svg>
+                </button>
+            </div>
+            <hr>
+        </li>
+    </ul>
+{% endblock cmp_issuing_ca_block %}
