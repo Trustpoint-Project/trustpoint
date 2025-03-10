@@ -160,7 +160,7 @@ class CredentialModel(models.Model):
         """Stores a credential without a private key."""
         certificate_model = CertificateModel.save_certificate(certificate)
 
-        credential_model = cls.objects.create(credential_type=credential_type, private_key=None)
+        credential_model = cls.objects.create(credential_type=credential_type, private_key='')
 
         PrimaryCredentialCertificate.objects.create(
             certificate=certificate_model, credential=credential_model, is_primary=True
