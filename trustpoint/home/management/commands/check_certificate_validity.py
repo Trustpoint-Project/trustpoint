@@ -9,11 +9,11 @@ already exist for the given certificate and event.
 
 from __future__ import annotations
 
-from typing import Any, cast
 from datetime import timedelta
+from typing import Any, cast
 
-from django.core.management.base import BaseCommand  # type: ignore[import-untyped]
-from django.utils import timezone  # type: ignore[import-untyped]
+from django.core.management.base import BaseCommand
+from django.utils import timezone
 from home.models import NotificationModel, NotificationStatus
 from pki.models import CertificateModel
 

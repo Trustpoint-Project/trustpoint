@@ -3,20 +3,24 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from devices.models import DeviceModel
 from django.db import models
+from django.utils.encoding import force_str
 from django.utils.translation import gettext_lazy as _
+from django_stubs_ext import StrOrPromise
 from pki.models.certificate import CertificateModel
-
-from pki.models.issuing_ca import IssuingCaModel
 from pki.models.domain import DomainModel
+from pki.models.issuing_ca import IssuingCaModel
 
 log = logging.getLogger('tp.home')
 
 
 class NotificationStatus(models.Model):
     """Model representing a status a notification can have."""
+
+    objects: models.Manager[NotificationStatus]
 
     class StatusChoices(models.TextChoices):
         """Status Types"""
@@ -40,7 +44,7 @@ class NotificationStatus(models.Model):
 
     def __str__(self) -> str:
         """Returns a human-readable string."""
-        return self.get_status_display()
+        return str(self.get_status_display())
 
 
 class NotificationMessageModel(models.Model):
@@ -60,10 +64,10 @@ class NotificationMessage:
     short_description: str
     long_description: str = 'No description provided'
 
-    def __init__(self, short_description: str, long_description: str = 'No description provided') -> None:
-        """Initializes a NotificationMessageModel instance."""
-        self.short_description = short_description
-        self.long_description = long_description
+    def __init__(self, short_description: StrOrPromise, long_description: StrOrPromise = 'No description provided') -> None:
+        """Initializes a NotificationMessage instance."""
+        self.short_description = force_str(short_description)
+        self.long_description = force_str(long_description)
 
     def __str__(self) -> str:
         """Returns a human-readable string."""
@@ -83,11 +87,12 @@ class NotificationMessage:
 class NotificationModel(models.Model):
     """Notifications Model."""
 
+    objects: models.Manager[NotificationModel]
+
     class NotificationTypes(models.TextChoices):
         """Supported Notification Types."""
 
         SETUP = 'SET', _('SETUP')
-        # DEBUG = 'DEB', _('DEBUG')
         INFO = 'INF', _('INFO')
         WARNING = 'WAR', _('WARNING')
         CRITICAL = 'CRI', _('CRITICAL')
@@ -130,7 +135,7 @@ class NotificationModel(models.Model):
         INSUFFICIENT_KEY_LENGTH = 'INSUFF_KEY_LEN'
         WEAK_ECC_CURVE = 'WEAK_ECC_CURVE'
 
-        def get_message(self) -> str:
+        def get_message(self) -> NotificationMessage:
             """Returns the message for the given type."""
             message_dict = {
                 self.CUSTOM: NotificationMessage(_('Custom Message')),
@@ -281,18 +286,18 @@ class NotificationModel(models.Model):
         return f'{self.get_notification_type_display()} - {self.message.short_description[:20]}'
 
     @property
-    def short_translated(self) -> str:
+    def short_translated(self) -> Any:
         """Returns the translated short description."""
         if self.message_type == NotificationModel.NotificationMessageType.CUSTOM:
             return self.message.short_description
         try:
             message_string = NotificationModel.NotificationMessageType(self.message_type).get_message()
         except ValueError:
-            return _('Unknown Notification message type.')
+            return force_str(_('Unknown Notification message type.'))
         return message_string.short.format(**self.message_data)
 
     @property
-    def long_translated(self) -> str:
+    def long_translated(self) -> Any:
         """Returns the translated long description."""
         if self.message_type == NotificationModel.NotificationMessageType.CUSTOM:
             return self.message.long_description
