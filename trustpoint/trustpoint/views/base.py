@@ -12,13 +12,10 @@ import traceback
 from typing import TYPE_CHECKING, Any
 
 from django import forms as dj_forms
-from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Model, QuerySet
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
-from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import RedirectView
 from django.views.generic.edit import FormMixin
 from django.views.generic.list import BaseListView, ListView, MultipleObjectTemplateResponseMixin
@@ -104,7 +101,7 @@ class SortableTableMixin:
         exc_msg = f'Unknown queryset type: {type}'
         raise TypeError(exc_msg)
 
-    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str,Any]:
+    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(*args, **kwargs)
 
         # Get current sorting column
@@ -113,17 +110,6 @@ class SortableTableMixin:
         # Pass sorting details to the template
         context['current_sort'] = sort_param
         return context
-
-
-class TpLoginRequiredMixin(LoginRequiredMixin):
-    """LoginRequiredMixin that adds a warning message if the user is not logged in."""
-
-    request: HttpRequest
-
-    def handle_no_permission(self) -> HttpResponseRedirect:
-        """Redirects to the login page with a warning message if the user is not logged in."""
-        messages.add_message(self.request, messages.WARNING, message=_('Login required!'))
-        return super().handle_no_permission()
 
 
 class ContextDataMixin:
@@ -166,7 +152,7 @@ class BulkDeletionMixin:
     success_url = None
     object_list = list
 
-    def delete(self, *_args : tuple, **_kwargs: dict[str, Any]) -> HttpResponse:
+    def delete(self, *_args: tuple, **_kwargs: dict[str, Any]) -> HttpResponse:
         self.queryset = self.get_queryset()
         success_url = self.get_success_url()
         self.queryset.delete()

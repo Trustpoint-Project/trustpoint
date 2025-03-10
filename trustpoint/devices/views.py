@@ -9,12 +9,14 @@ from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
 from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
+from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.forms import BaseModelForm
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
+from django.utils.decorators import method_decorator
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
@@ -941,6 +943,7 @@ class DeviceBrowserOnboardingOTPView(DeviceContextMixin, DetailView[IssuedCreden
         return context
 
 
+@method_decorator(login_not_required, name='dispatch')
 class DeviceOnboardingBrowserLoginView(FormView[BrowserLoginForm]):
     """View to handle certificate download requests."""
 
@@ -1022,6 +1025,7 @@ class DownloadTokenRequiredAuthenticationMixin(_DispatchableType):
         return super().dispatch(request, *args, **kwargs)
 
 
+@method_decorator(login_not_required, name='dispatch')
 class DeviceBrowserCredentialDownloadView(DownloadTokenRequiredAuthenticationMixin, DeviceBaseCredentialDownloadView):
     """View to download a password protected domain or app credential in the desired format from a remote client."""
 
