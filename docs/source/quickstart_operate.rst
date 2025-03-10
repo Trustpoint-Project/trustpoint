@@ -20,21 +20,24 @@ An Issuing Certificate Authority (CA) is central to managing certificates for yo
    - Click on **Import From PKCS#12 File** or **Import From Separate Key and Certificate Files**
 
 3. **Configure Issuing CA Details**
-   #. When you click on **Import From PKCS#12 File**
-     - Fill in the required fields:
+
+   * When you click on **Import From PKCS#12 File**
+
+     * Fill in the required fields:
 
        - **Unique Name**: Provide a unique name for your Issuing CA (e.g., `MyIssuingCA`).
        - **PKCS#12 File (.p12, .pfx)**: Select and upload a file
        - **[Optional] PKCS#12 password**: If your PKCS#12 is password protected type your password to import.
-   #.  When you click on **Import From Separate Key and Certificate Files**
-      - Fill in the required fields:
+
+   * When you click on **Import From Separate Key and Certificate Files**
+
+     * Fill in the required fields:
 
        - **Unique Name**: Provide a unique name for your Issuing CA (e.g., `MyIssuingCA`).
        - **Private Key File (.key, .pem)**: Select and upload a file
        - **[Optional] Private Key password**: If your PKCS#12 is password protected type your password to import.
        - **Issuing  CA Certificate (.cer, .der, .pem, .p7b, .p7c)**: Select and upload a file
        - **[Optional] Certificate Chain (.pem, .p7b, .p7c)**: If you have certificate chain.
-
 
    Click **Add New Issuing CA** to create the Issuing CA.
 

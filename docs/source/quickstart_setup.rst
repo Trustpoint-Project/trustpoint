@@ -20,30 +20,36 @@ Step-by-Step Setup (Load from Dockerhub) ⬇️
 
 1. **Pull the Trustpoint Docker Image**
 
-   First, pull the Trustpoint Docker image from Docker Hub. This command will download the pre-built container image directly:
+   First, pull the Trustpoint and Postgres docker images from Docker Hub. This command will download the pre-built container images directly:
 
    .. code-block:: bash
 
         docker pull trustpointproject/trustpoint:latest
-        docker pull postgres:17
+        docker pull trustpointproject/postgres:latest
 
-   This command pulls the latest versions of the Trustpoint and Postgres images from Docker Hub.
+   These commands pull the latest versions of the Trustpoint and Postgres images.
 
-2. **Run the Trustpoint Container with a Custom Name and Port Mappings** 🚀
+2. **Run the Trustpoint and Postgres Containers with a Custom Name and Port Mappings** 🚀
 
-   Once the image is pulled, you can start a new container with a custom name and port mappings:
+   Once the images are downloaded, you can start containers with custom names and ports mappings:
 
    .. code-block:: bash
 
-       docker run -d --name trustpoint-container -p 80:80 -p 443:443 trustpointproject/trustpoint:latest
-       docker run -d --name postgres -p 5432:5432 postgres:17
+       docker run -d --name postgres -v postgres_data:/var/lib/postgresql/data -p 5432:5432 trustpointproject/postgres:latest
+       docker run -d --name trustpoint -p 80:80 -p 443:443 trustpointproject/trustpoint:latest
+
 
    - **-d**: Runs the container in detached mode.
-   - **--name trustpoint-container**: Names the Trustpoint container `trustpoint-container`.
-   - **--name postgres**: Names the postgres container `postgres`.
+   - **--name trustpoint**: Names the Trustpoint container `trustpoint`.
+   - **--name postgres**: Names the Postgres container `postgres`.
    - **-p 80:80**: Maps the Trustpoint container's HTTP port to your local machine's port 80.
-   - **-p 443:443**: Maps the Trustpoint container's HTTPS port to your local machine's port 443.
-   - **-p 5432:5432**: Maps the postgres container's TCP port to your local machine's port 5432.
+   - **-p 443:443**: Maps the Trustpoint container's HTTPs port to your local machine's port 443.
+   - **-p 5432:5432**: Maps the Postgres container's TCP port to your local machine's port 5432.
+   - **-v postgres_data:/var/lib/postgresql/data**: Creates a volume for Postgres to persist data.
+
+   .. note::
+
+      If the specified ports are already in use on your system, modify the port mapping in the command accordingly.
 
 Step-by-Step Setup (Build container) 🔧
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -59,7 +65,7 @@ Step-by-Step Setup (Build container) 🔧
 
    This command downloads the Trustpoint source code to your local machine and navigates into the project directory.
 
-2. **Build the Trustpoint Docker Image**
+2. **Build the Trustpoint and Postgres Docker Images**
 
    Use Docker to build the Trustpoint and Postgres images from the source:
 
@@ -78,15 +84,17 @@ Step-by-Step Setup (Build container) 🔧
 
    .. code-block:: bash
 
-       docker run -d --name trustpoint-container -p 80:80 -p 443:443 trustpoint
-       docker run -d --name postgres -p 5432:5432 postgres
+       docker run -d --name postgres -v postgres_data:/var/lib/postgresql/data -p 5432:5432 postgres
+       docker run -d --name trustpoint -p 80:80 -p 443:443 trustpoint
+
 
    - **-d**: Runs the container in detached mode.
-   - **--name trustpoint-container**: Names the Trustpoint container `trustpoint-container`.
+   - **--name trustpoint**: Names the Trustpoint container `trustpoint`.
    - **--name postgres**: Names the postgres container `postgres`.
    - **-p 80:80**: Maps the Trustpoint container's HTTP port to your local machine's port 80.
-   - **-p 443:443**: Maps the Trustpoint container's HTTPS port to your local machine's port 443.
+   - **-p 443:443**: Maps the Trustpoint container's HTTPs port to your local machine's port 443.
    - **-p 5432:5432**: Maps the postgres container's TCP port to your local machine's port 5432.
+   - **-v postgres_data:/var/lib/postgresql/data**: Creates a volume for Postgres to persist data.
 
 Getting Started with Docker Compose 🐙
 --------------------------------------
@@ -100,8 +108,9 @@ Make sure you have the following installed:
 
 Step-by-Step Setup (Load from Dockerhub) ⬇️
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1. **Download** `docker-compose.yml <https://raw.githubusercontent.com/Trustpoint-Project/trustpoint/refs/heads/main/docker-compose.yml>`_
 
-1. **Pull the Trustpoint and Postres Docker Images**
+2. **Pull the Trustpoint and Postgres Docker Images**
 
    You can pull the pre-built docker images from Docker Hub with the following command:
 
@@ -109,15 +118,19 @@ Step-by-Step Setup (Load from Dockerhub) ⬇️
 
        docker compose pull
 
-2. **Run the Trustpoint and Postgres Containers** 🚀
+3. **Run the Trustpoint and Postgres Containers** 🚀
 
-   Once the images are pulled, you can start trustpoint and prostgres containers with following command:
+   Once the images are pulled, you can start Trustpoint and Postgres containers with following command:
 
    .. code-block:: bash
 
        docker compose up -d
 
   - **-d**: Runs the container in detached mode.
+
+  .. note::
+
+   If the specified ports are already in use on your system, modify the port mapping in the `docker-compose.yml` file accordingly.
 
 Step-by-Step Setup (Build container) 🔧
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -145,7 +158,7 @@ Step-by-Step Setup (Build container) 🔧
 
        docker compose build
 
-3. **Run the Trustpoint and Prostgres Containers** 🚀
+3. **Run the Trustpoint and Postgres Containers** 🚀
 
    Start the Trustpoint and Postgres containers using the images you just built:
 
@@ -155,6 +168,10 @@ Step-by-Step Setup (Build container) 🔧
 
    - **-d**: Runs the container in detached mode.
 
+   .. note::
+
+      If the specified ports are already in use on your system, modify the port mapping in the `docker-compose.yml` file accordingly.
+
 
 Verify the Setup 🔍
 -------------------
@@ -162,7 +179,7 @@ Verify the Setup 🔍
 Once the containers are running, you can verify the setup:
 
 - **Web Interface**: Open `http://localhost` in your browser to access the Trustpoint setup wizard.
-- **TLS Connection**: As the first step of the wizard, a TLS server certificate is generated. After this, only HTTPS connections will be accepted.
+- **TLS Connection**: As the first step of the wizard, a TLS server certificate is generated. After this, only HTTPs connections will be accepted.
 
 .. note::
    You may need to accept a self-signed certificate in your browser to proceed.
@@ -193,7 +210,7 @@ Tips and Troubleshooting 🧰
 
   .. code-block:: bash
 
-      docker logs -f trustpoint-container
+      docker logs -f trustpoint
       docker logs -f postgres
       docker compose logs trustpoint -f
       docker compose logs postgres -f
