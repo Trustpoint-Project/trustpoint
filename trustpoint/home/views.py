@@ -23,7 +23,7 @@ from django.views.generic.list import ListView
 from pki.models import CertificateModel, IssuingCaModel
 
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import SortableTableMixin, LoggerMixin
+from trustpoint.views.base import SortableTableMixin
 
 from .filters import NotificationFilter
 from .models import NotificationModel, NotificationStatus
@@ -167,6 +167,9 @@ class AddDomainsAndDevicesView(TemplateView):
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handles GET requests and redirects to the dashboard."""
+        del args
+        del kwargs
+
         try:
             call_command('add_domains_and_devices')
             messages.add_message(request, SUCCESS, 'Successfully added test data.')
