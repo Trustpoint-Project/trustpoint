@@ -772,10 +772,8 @@ class EstCACertsView(EstAuthenticationMixin, EstRequestedDomainExtractorMixin, V
             certificate_chain = [ca_cert, *ca_credential.get_certificate_chain()]
             pkcs7_certs = CertificateCollectionSerializer(certificate_chain).as_pkcs7_der()
 
-            pkcs7_certs_b64 = base64.b64encode(pkcs7_certs)
-
             return LoggedHttpResponse(
-                pkcs7_certs_b64,
+                pkcs7_certs,
                 status=200,
                 content_type='application/pkcs7-mime',
                 headers={'Content-Transfer-Encoding': 'base64'}
