@@ -1,19 +1,13 @@
-"""Something."""
-
+"""Command to create a test Issuing CA and some example end-entity certificates."""
 
 from __future__ import annotations
 
 import random
-from typing import Union
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, ed448, ed25519, rsa
-
-from .base_commands import CertificateCreationCommandMixin
 from django.core.management.base import BaseCommand
 
-PublicKey = Union[rsa.RSAPublicKey, ec.EllipticCurvePublicKey, ed448.Ed448PublicKey, ed25519.Ed25519PublicKey]
-PrivateKey = Union[rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey, ed448.Ed448PrivateKey, ed25519.Ed25519PrivateKey]
+from .base_commands import CertificateCreationCommandMixin
 
 
 class Command(CertificateCreationCommandMixin, BaseCommand):
@@ -21,7 +15,8 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
 
     help = 'Removes all migrations, deletes db and runs makemigrations and migrate afterwards.'
 
-    def handle(self, *args, **kwargs) -> None:
+    def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
+        """Executes the command."""
         key_usage_extension = x509.KeyUsage(
             digital_signature=True,
             content_commitment=False,
@@ -31,27 +26,27 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             key_cert_sign=False,
             crl_sign=False,
             decipher_only=False,
-            encipher_only=False
+            encipher_only=False,
         )
 
         root_1, root_1_key = self.create_root_ca('root_ca')
         issuing_1, issuing_1_key = self.create_issuing_ca(root_1_key, 'root_ca', 'issuing_ca', validity_days=50)
 
         self.store_issuing_ca(issuing_1, [root_1], issuing_1_key, 'issuing_ca.p12')
-        self.save_issuing_ca(issuing_1, issuing_1_key, 'issuing_ca')
+        self.save_issuing_ca(issuing_1, [root_1], issuing_1_key, 'issuing_ca')
 
         ee_certs = {}
         ee_keys = {}
-        for i in range(0, 100):
-            random_integer = random.randint(20, 80)
-            sign = random.choice([1, -1])
+        for i in range(10):
+            random_integer = random.randint(20, 80)  # noqa: S311
+            sign = random.choice([1, -1])  # noqa: S311
             validity_days = random_integer * sign
             ee, key = self.create_ee(
                 issuer_private_key=issuing_1_key,
                 issuer_cn='issuing_ca',
                 subject_cn=f'EE {i}',
                 key_usage_extension=key_usage_extension,
-                validity_days=validity_days
+                validity_days=validity_days,
             )
             ee_certs[f'ee{i}'] = ee
             ee_keys[f'key{i}'] = key

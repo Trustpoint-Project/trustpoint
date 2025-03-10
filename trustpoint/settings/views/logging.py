@@ -1,4 +1,5 @@
 """Logging setting specific views."""
+
 from __future__ import annotations
 
 import datetime
@@ -18,7 +19,7 @@ from django.views.generic.base import RedirectView
 from django.views.generic.list import ListView
 
 from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH, UIConfig
-from trustpoint.views.base import LoggerMixin, SortableTableMixin, TpLoginRequiredMixin
+from trustpoint.views.base import LoggerMixin, SortableTableMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
 
 class IndexView(RedirectView):
     """Index view"""
+
     permanent = True
     pattern_name = 'settings:language'
 
@@ -40,21 +42,20 @@ def language(request: HttpRequest) -> HttpResponse:
     context = {'page_category': 'settings', 'page_name': 'language'}
     return render(request, 'settings/language.html', context=context)
 
+
 # ------------------------------------------------------- Logging ------------------------------------------------------
 
 
 class LoggingContextMixin:
     """Mixin which adds extra menu context for the Logging Views."""
 
-    extra_context : ClassVar[dict] = {
-        'page_category': 'settings',
-        'page_name': 'logging'
-    }
+    extra_context: ClassVar[dict] = {'page_category': 'settings', 'page_name': 'logging'}
 
 
-class LoggingFilesTableView(LoggerMixin, TpLoginRequiredMixin, LoggingContextMixin, SortableTableMixin, ListView):
+class LoggingFilesTableView(LoggerMixin, LoggingContextMixin, SortableTableMixin, ListView):
     """View to display all log files in the log directory in a table."""
-    http_method_names = ('get', )
+
+    http_method_names = ('get',)
 
     template_name = 'settings/logging/logging_files.html'
     context_object_name = 'log_files'
@@ -64,7 +65,7 @@ class LoggingFilesTableView(LoggerMixin, TpLoginRequiredMixin, LoggingContextMix
     @staticmethod
     @LoggerMixin.log_exceptions
     def _get_first_and_last_entry_date(
-            log_file_path: Path
+        log_file_path: Path,
     ) -> tuple[None | datetime.datetime, None | datetime.datetime]:
         log_file = log_file_path.read_text(encoding='utf-8', errors='backslashreplace')
 
@@ -97,12 +98,7 @@ class LoggingFilesTableView(LoggerMixin, TpLoginRequiredMixin, LoggingContextMix
         else:
             updated_at = _('None')
 
-
-        return {
-            'filename': log_filename,
-            'created_at': created_at,
-            'updated_at': updated_at
-        }
+        return {'filename': log_filename, 'created_at': created_at, 'updated_at': updated_at}
 
     @LoggerMixin.log_exceptions
     def get_queryset(self) -> list[dict[str, str]]:
@@ -113,9 +109,11 @@ class LoggingFilesTableView(LoggerMixin, TpLoginRequiredMixin, LoggingContextMix
         self.queryset = [self._get_log_file_data(log_file_name) for log_file_name in valid_log_files]
         return super().get_queryset()
 
-class LoggingFilesDetailsView(LoggerMixin, LoggingContextMixin, TpLoginRequiredMixin, TemplateView):
+
+class LoggingFilesDetailsView(LoggerMixin, LoggingContextMixin, TemplateView):
     """Log file detail view, allows to view the content of a single log file without download."""
-    http_method_names = ('get', )
+
+    http_method_names = ('get',)
 
     template_name = 'settings/logging/logging_files_details.html'
     log_directory = LOG_DIR_PATH
@@ -136,9 +134,10 @@ class LoggingFilesDetailsView(LoggerMixin, LoggingContextMixin, TpLoginRequiredM
         return context
 
 
-class LoggingFilesDownloadView(LoggerMixin, LoggingContextMixin, TpLoginRequiredMixin, TemplateView):
+class LoggingFilesDownloadView(LoggerMixin, LoggingContextMixin, TemplateView):
     """View to download a single log file"""
-    http_method_names = ('get', )
+
+    http_method_names = ('get',)
 
     @LoggerMixin.log_exceptions
     def get(self, *_args: Any, **kwargs: Any) -> HttpResponse:
@@ -150,14 +149,17 @@ class LoggingFilesDownloadView(LoggerMixin, LoggingContextMixin, TpLoginRequired
             exc_msg = 'Log file not found.'
             raise Http404(exc_msg)
 
-        response = HttpResponse(log_file_path.read_text(encoding='utf-8', errors='backslashreplace'), content_type='text/plain')
+        response = HttpResponse(
+            log_file_path.read_text(encoding='utf-8', errors='backslashreplace'), content_type='text/plain'
+        )
         response['Content-Disposition'] = f'attachment; filename={filename}'
         return response
 
 
-class LoggingFilesDownloadMultipleView(LoggerMixin, LoggingContextMixin, TpLoginRequiredMixin, View):
+class LoggingFilesDownloadMultipleView(LoggerMixin, LoggingContextMixin, View):
     """View to download multiple log files as a single archive."""
-    http_method_names = ('get', )
+
+    http_method_names = ('get',)
 
     @classmethod
     @LoggerMixin.log_exceptions
@@ -177,10 +179,7 @@ class LoggingFilesDownloadMultipleView(LoggerMixin, LoggingContextMixin, TpLogin
 
         filenames = [filename for filename in filenames.split('/') if filename]
 
-        file_collection = [
-            (filename, (LOG_DIR_PATH / Path(filename)).read_bytes())
-            for filename in filenames
-        ]
+        file_collection = [(filename, (LOG_DIR_PATH / Path(filename)).read_bytes()) for filename in filenames]
 
         if archive_format.lower() == 'zip':
             bytes_io = io.BytesIO()

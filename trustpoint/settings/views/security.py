@@ -1,10 +1,10 @@
 """Django Views"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from django.contrib import messages
-from django.core.exceptions import ObjectDoesNotExist
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic.edit import FormView
@@ -14,16 +14,13 @@ from settings.forms import SecurityConfigForm
 from settings.models import SecurityConfig
 from settings.security.features import AutoGenPkiFeature
 from settings.security.mixins import SecurityLevelMixin
-from trustpoint.views.base import (
-    TpLoginRequiredMixin,
-)
+
 
 if TYPE_CHECKING:
     from typing import Any
 
 
-
-class SecurityView(TpLoginRequiredMixin, SecurityLevelMixin, FormView):
+class SecurityView(SecurityLevelMixin, FormView):
     template_name = 'settings/security.html'
     form_class = SecurityConfigForm
     success_url = reverse_lazy('settings:security')

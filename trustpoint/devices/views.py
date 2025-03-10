@@ -4,98 +4,94 @@ from __future__ import annotations
 
 import datetime
 import io
-from typing import TYPE_CHECKING, cast
+from abc import abstractmethod
+from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
 from cryptography.hazmat.primitives import serialization
-
-from trustpoint_core.file_builder.enum import ArchiveFormat
-from trustpoint_core.serializer import CredentialSerializer
-from util.field import UniqueNameValidator
 from django.contrib import messages
+from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.forms import BaseModelForm
-from django.http import FileResponse, Http404, HttpResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase
+from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
+from django.utils.decorators import method_decorator
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
-from django.views.generic.base import RedirectView
+from django.views.generic.base import RedirectView, View
 from django.views.generic.detail import DetailView, SingleObjectMixin
 from django.views.generic.edit import CreateView, FormMixin, FormView
 from django.views.generic.list import ListView
-from trustpoint_core import oid
-from pki.models import CertificateModel, CredentialModel, DevIdRegistration
+from pki.models.certificate import CertificateModel
+from pki.models.credential import CredentialModel
+from pki.models.devid_registration import DevIdRegistration
+from trustpoint_core import oid  # type: ignore[import-untyped]
+from trustpoint_core.file_builder.enum import ArchiveFormat  # type: ignore[import-untyped]
+from trustpoint_core.serializer import CredentialSerializer  # type: ignore[import-untyped]
 
 from devices.forms import (
     BrowserLoginForm,
+    CreateDeviceForm,
     CredentialDownloadForm,
     CredentialRevocationForm,
+    IssueOpcUaClientCredentialForm,
+    IssueOpcUaServerCredentialForm,
     IssueTlsClientCredentialForm,
     IssueTlsServerCredentialForm,
-    CreateDeviceForm
 )
-from devices.issuer import LocalTlsClientCredentialIssuer, LocalTlsServerCredentialIssuer
-from devices.models import (
-    DeviceModel,
-    IssuedCredentialModel,
-    RemoteDeviceCredentialDownloadModel)
+from devices.issuer import (
+    LocalTlsClientCredentialIssuer,
+    LocalTlsServerCredentialIssuer,
+    OpcUaClientCredentialIssuer,
+    OpcUaServerCredentialIssuer,
+)
+from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
 from devices.revocation import DeviceCredentialRevocation
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import ListInDetailView, SortableTableMixin, TpLoginRequiredMixin
+from trustpoint.views.base import ListInDetailView, SortableTableMixin
 
 if TYPE_CHECKING:
+    import ipaddress
     from typing import Any, ClassVar
 
     from django.http.request import HttpRequest
     from django.utils.safestring import SafeString
 
+    # noinspection PyUnresolvedReferences
+    from devices.forms import BaseCredentialForm
 
-class Detail404RedirectView(DetailView):
-    """A detail view that redirects to self.redirection_view on 404 and adds a message."""
+    # noinspection PyUnresolvedReferences
+    from devices.issuer import BaseTlsCredentialIssuer
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Overrides the get method to add a message and redirect to self.redirection_view on 404."""
-        try:
-            return super().get(request, *args, **kwargs)
-        except Http404:
-            redirection_view = 'devices:devices'
-            messages.error(
-                self.request, f'{self.model.__name__} with ID {kwargs[self.pk_url_kwarg]} not found.'
-            )
-            return redirect(redirection_view)
+    _DispatchableType = View
+
+else:
+    _DispatchableType = object
+
+CredentialFormClass = TypeVar('CredentialFormClass', bound='BaseCredentialForm')
+TlsCredentialIssuerClass = TypeVar('TlsCredentialIssuerClass', bound='BaseTlsCredentialIssuer')
+
+# TODO(AlexHx8472): Derived CBVs must only derive from one Django view which must be the last one.  # noqa: FIX002
+
+
+# --------------------------------------------------- Device Mixins ----------------------------------------------------
 
 
 class DeviceContextMixin:
-    """Mixin which adds context_data for the Devices -> Devices pages."""
+    """Mixin which adds data to the context for the devices application."""
 
     extra_context: ClassVar = {'page_category': 'devices', 'page_name': 'devices'}
 
 
-class DownloadTokenRequiredMixin:
-    """Mixin which checks the token included in the URL for browser download views."""
-
-    credential_download: RemoteDeviceCredentialDownloadModel
-
-    def dispatch(self, request: HttpRequest, *args: tuple, **kwargs: dict) -> HttpResponse:
-        """Checks the validity of the token included in the URL for browser download views."""
-        token = request.GET.get('token')
-        try:
-            self.credential_download = RemoteDeviceCredentialDownloadModel.objects.get(
-                issued_credential_model=kwargs.get('pk')
-            )
-        except RemoteDeviceCredentialDownloadModel.DoesNotExist:
-            messages.warning(request, 'Invalid download token.')
-            return redirect('devices:browser_login')
-        if not token or not self.credential_download.check_token(token):
-            messages.warning(request, 'Invalid download token.')
-            return redirect('devices:browser_login')
-        return super().dispatch(request, *args, **kwargs)
+# ----------------------------------------------------- Main Pages -----------------------------------------------------
 
 
-class DeviceTableView(DeviceContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView):
+class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceModel]):
     """Device Table View."""
+
+    http_method_names = ('get',)
 
     model = DeviceModel
     template_name = 'devices/devices.html'
@@ -103,245 +99,82 @@ class DeviceTableView(DeviceContextMixin, TpLoginRequiredMixin, SortableTableMix
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'unique_name'
 
-    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
-        """Add the context data for the view and render additional table fields."""
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the clm and revoke buttons to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the devices page.
+        """
         context = super().get_context_data(**kwargs)
 
-        for device in context['page_obj']:
-            device.onboarding_button = self._render_onboarding_button(device)
-            device.clm_button = self._render_clm(device)
-            device.revoke_button = self._render_revoke(device)
+        for device in context['devices']:
+            device.clm_button = self._get_clm_button_html(device)
+            device.revoke_button = self._get_revoke_button_html(device)
 
         return context
 
     @staticmethod
-    def _render_onboarding_button(record: any) -> SafeString | str:
-        """Creates the html hyperlink for the onboarding-view.
+    def _get_clm_button_html(record: DeviceModel) -> SafeString:
+        """Gets the HTML for the CLM button in the devices table.
 
         Args:
-            record (Device): The current record of the Device model.
+            record: The corresponding DeviceModel.
 
         Returns:
-            SafeString: The html hyperlink for the details-view.
+            The HTML of the hyperlink for the CLM button.
         """
-        if not record.domain:
-            return format_html(
-                '<span>{}</span>', _('No Domain configured.'))
-        if not record.domain.issuing_ca:
-            return format_html(
-                '<span>{}</span>', _('No Issuing CA configured.')
-            )
-        return 'Hello'
-
-    @staticmethod
-    def _render_clm(record: DeviceModel) -> SafeString | str:
+        # noinspection PyDeprecation
         return format_html(
-            f'<a href="certificate-lifecycle-management/{record.pk}/" class="btn btn-primary tp-table-btn w-100">Manage</a>',
+            '<a href="certificate-lifecycle-management/{}/" class="btn btn-primary tp-table-btn w-100">Manage</a>',
+            record.pk,
         )
 
     @staticmethod
-    def _render_revoke(record: DeviceModel) -> SafeString | str:
-        # TODO(Air): This cursed query may be slow for a large number of devices.
-        if IssuedCredentialModel.objects.filter(device=record,
-                                                credential__primarycredentialcertificate__is_primary=True).exists():
-            return format_html('<a href="revoke/{}/" class="btn btn-danger tp-table-btn w-100">{}</a>',
-                               record.pk, _('Revoke'))
+    def _get_revoke_button_html(record: DeviceModel) -> SafeString:
+        """Gets the HTML for the revoke button in the devices table.
 
+        Args:
+            record: The corresponding DeviceModel.
+
+        Returns:
+            the HTML of the hyperlink for the revoke button.
+        """
+        qs = IssuedCredentialModel.objects.filter(device=record)
+        for credential in qs:
+            if credential.credential.certificate.certificate_status == CertificateModel.CertificateStatus.OK:
+                # noinspection PyDeprecation
+                return format_html(
+                    '<a href="revoke/{}/" class="btn btn-danger tp-table-btn w-100">{}</a>', record.pk, _('Revoke')
+                )
+        # noinspection PyDeprecation
         return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', _('Revoke'))
 
 
-class CreateDeviceView(DeviceContextMixin, TpLoginRequiredMixin, CreateView):
+class CreateDeviceView(DeviceContextMixin, CreateView[DeviceModel, BaseModelForm[DeviceModel]]):
     """Device Create View."""
 
     http_method_names = ('get', 'post')
+
     model = DeviceModel
     form_class = CreateDeviceForm
     template_name = 'devices/add.html'
 
     def get_success_url(self) -> str:
-        return reverse('devices:help_dispatch', kwargs={'pk': self.object.id})
-
-    @staticmethod
-    def clean_device_name(device_name: str) -> str:
-        """Validates the device name, i.e. checks if it is unique.
-
-        Args:
-            device_name: The desired name of the new device.
+        """Gets the success url to redirect to after successful processing of the POST data following a form submit.
 
         Returns:
-            The device name if it passed the checks.
+            The success url to redirect to after successful processing of the POST data following a form submit.
         """
-        UniqueNameValidator(device_name)
-        return device_name
-
-    def form_valid(self, form: BaseModelForm[DeviceModel]) -> HttpResponse:
-        """Processing the valid form data.
-
-        This will use the contained form data to issue a new TLS server credential.
-
-        Args:
-            form: The valid form including the cleaned data.
-
-        Returns:
-            If successful, this will start the file download. Otherwise, a Http404 will be raised and displayed.
-        """
-
-        return super().form_valid(form)
+        if self.object is None:
+            err_msg = 'Unexpected error occurred. The object was likely not created and saved.'
+            raise Http404(err_msg)
+        return str(reverse_lazy('devices:help_dispatch', kwargs={'pk': self.object.id}))
 
 
-class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView[DeviceModel]):
-    model = DeviceModel
-    template_name = 'devices/help/no_onboarding/cmp_shared_secret.html'
-    context_object_name = 'device'
-
-    def get_context_data(self, **kwargs) -> dict[str, Any]:
-        context = super().get_context_data()
-        device: DeviceModel = self.object
-
-        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
-            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
-        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
-            key_gen_command = (
-                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out key.pem')
-        else:
-            raise ValueError('Unsupported public key algorithm')
-        context['host'] = self.request.META.get('REMOTE_ADDR') + ':' + self.request.META.get('SERVER_PORT')
-        context['key_gen_command'] = key_gen_command
-        number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
-        context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
-        context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
-        return context
-
-
-class OnboardingCmpSharedSecretDomainHelpView(DeviceContextMixin, TpLoginRequiredMixin,
-                                              Detail404RedirectView[DeviceModel]):
-    model = DeviceModel
-    template_name = 'devices/help/onboarding/cmp_shared_secret_domain_credentials.html'
-    context_object_name = 'device'
-
-    def get_context_data(self, **kwargs) -> dict[str, Any]:
-        context = super().get_context_data()
-        device: DeviceModel = self.object
-
-        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
-            domain_credential_key_gen_command = f'openssl genrsa -out domain_credential_key.pem {device.public_key_info.key_size}'
-            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
-        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
-            domain_credential_key_gen_command = (
-                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out domain_credential_key.pem')
-            key_gen_command = (
-                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out key.pem')
-        else:
-            raise ValueError('Unsupported public key algorithm')
-        context['host'] = self.request.META.get('REMOTE_ADDR') + ':' + self.request.META.get('SERVER_PORT')
-        context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
-        context['key_gen_command'] = key_gen_command
-        context['issuing_ca_pem'] = device.domain.issuing_ca.credential.get_certificate().public_bytes(
-            encoding=serialization.Encoding.PEM).decode()
-        number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
-
-        return context
-
-
-class OnboardingCmpIdevidDomainHelpView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView[DeviceModel]):
-    model = DeviceModel
-    template_name = 'devices/help/onboarding/cmp_idevid_domain_credentials.html'
-    context_object_name = 'device'
-
-    def get_context_data(self, **kwargs) -> dict[str, Any]:
-        context = super().get_context_data()
-        device: DeviceModel = self.object
-
-        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
-            domain_credential_key_gen_command = f'openssl genrsa -out domain_credential_key.pem {device.public_key_info.key_size}'
-            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
-        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
-            domain_credential_key_gen_command = (
-                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out domain_credential_key.pem')
-            key_gen_command = (
-                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out key.pem')
-        else:
-            raise ValueError('Unsupported public key algorithm')
-        context['host'] = self.request.META.get('REMOTE_ADDR') + ':' + self.request.META.get('SERVER_PORT')
-        context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
-        context['key_gen_command'] = key_gen_command
-        context['issuing_ca_pem'] = device.domain.issuing_ca.credential.get_certificate().public_bytes(
-            encoding=serialization.Encoding.PEM).decode()
-        number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
-
-        return context
-
-
-class OnboardingCmpSharedSecretApplicationHelpView(DeviceContextMixin, TpLoginRequiredMixin,
-                                                   Detail404RedirectView[DeviceModel]):
-    model = DeviceModel
-    template_name = 'devices/help/onboarding/cmp_shared_secret_application_credentials.html'
-    context_object_name = 'device'
-
-    def get_context_data(self, **kwargs) -> dict[str, Any]:
-        context = super().get_context_data()
-        device: DeviceModel = self.object
-
-        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
-            domain_credential_key_gen_command = f'openssl genrsa -out domain_credential_key.pem {device.public_key_info.key_size}'
-            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
-        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
-            domain_credential_key_gen_command = (
-                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out domain_credential_key.pem')
-            key_gen_command = (
-                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out key.pem')
-        else:
-            raise ValueError('Unsupported public key algorithm')
-        context['host'] = self.request.META.get('REMOTE_ADDR') + ':' + self.request.META.get('SERVER_PORT')
-
-        context['key_gen_command'] = key_gen_command
-
-        number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
-        context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
-        context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
-        return context
-
-
-class OnboardingCmpIdevidApplicationHelpView(DeviceContextMixin, TpLoginRequiredMixin,
-                                             Detail404RedirectView[DeviceModel]):
-    model = DeviceModel
-    template_name = 'devices/help/onboarding/cmp_idevid_application_credentials.html'
-    context_object_name = 'device'
-
-    def get_context_data(self, **kwargs) -> dict[str, Any]:
-        context = super().get_context_data()
-        device: DeviceModel = self.object
-
-        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
-            domain_credential_key_gen_command = f'openssl genrsa -out domain_credential_key.pem {device.public_key_info.key_size}'
-            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
-        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
-            domain_credential_key_gen_command = (
-                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out domain_credential_key.pem')
-            key_gen_command = (
-                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out key.pem')
-        else:
-            raise ValueError('Unsupported public key algorithm')
-        context['host'] = self.request.META.get('REMOTE_ADDR') + ':' + self.request.META.get('SERVER_PORT')
-
-        context['key_gen_command'] = key_gen_command
-       
-        number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
-        context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
-        context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
-        return context
-
-
-class DeviceDetailsView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView[DeviceModel]):
+class DeviceDetailsView(DeviceContextMixin, DetailView[DeviceModel]):
     """Device Details View."""
 
     http_method_names = ('get',)
@@ -352,24 +185,641 @@ class DeviceDetailsView(DeviceContextMixin, TpLoginRequiredMixin, Detail404Redir
     context_object_name = 'device'
 
 
-class DeviceConfigureView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView[DeviceModel]):
-    """Device Configuration View."""
+# ------------------------------------------ Certificate Lifecycle Management ------------------------------------------
+
+
+class DeviceCertificateLifecycleManagementSummaryView(DeviceContextMixin, SortableTableMixin, ListInDetailView):
+    """This is the CLM summary view in the devices section."""
+
+    http_method_names = ('get',)
+
+    detail_model = DeviceModel
+    template_name = 'devices/credentials/certificate_lifecycle_management.html'
+    detail_context_object_name = 'device'
+    model = IssuedCredentialModel
+    context_object_name = 'issued_credentials'
+    default_sort_param = 'common_name'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the paginator and credential details to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the clm summary page.
+        """
+        context = super().get_context_data(**kwargs)
+
+        device = self.get_object()
+        qs = super().get_queryset()  # inherited from SortableTableMixin, sorted query
+
+        domain_credentials = qs.filter(
+            Q(device=device)
+            & Q(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL.value)
+        )
+
+        application_credentials = qs.filter(
+            Q(device=device)
+            & Q(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL.value)
+        )
+
+        context['domain_credentials'] = domain_credentials
+        context['application_credentials'] = application_credentials
+
+        paginator_domain = Paginator(domain_credentials, UIConfig.paginate_by)
+        page_number_domain = self.request.GET.get('page', 1)
+        context['domain_credentials'] = paginator_domain.get_page(page_number_domain)
+        context['is_paginated'] = paginator_domain.num_pages > 1
+
+        paginator_application = Paginator(application_credentials, UIConfig.paginate_by)
+        page_number_application = self.request.GET.get('page-a', 1)
+        context['application_credentials'] = paginator_application.get_page(page_number_application)
+        context['is_paginated_a'] = paginator_application.num_pages > 1
+
+        for cred in context['domain_credentials']:
+            cred.expires_in = self._get_expires_in(cred)
+            cred.expiration_date = cast(datetime.datetime, cred.credential.certificate.not_valid_after)
+            cred.revoke = self._get_revoke_button_html(cred)
+
+        for cred in context['application_credentials']:
+            cred.expires_in = self._get_expires_in(cred)
+            cred.expiration_date = cast(datetime.datetime, cred.credential.certificate.not_valid_after)
+            cred.revoke = self._get_revoke_button_html(cred)
+
+        return context
+
+    @staticmethod
+    def _get_expires_in(record: IssuedCredentialModel) -> str:
+        """Gets the remaining time until the credential expires as human-readable string.
+
+        Args:
+            record: The corresponding IssuedCredentialModel.
+
+        Returns:
+            The remaining time until the credential expires as human-readable string.
+        """
+        if record.credential.certificate.certificate_status != CertificateModel.CertificateStatus.OK:
+            return str(record.credential.certificate.certificate_status.label)
+        now = datetime.datetime.now(datetime.UTC)
+        expire_timedelta = record.credential.certificate.not_valid_after - now
+        days = expire_timedelta.days
+        hours, remainder = divmod(expire_timedelta.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f'{days} days, {hours}:{minutes:02d}:{seconds:02d}'
+
+    @staticmethod
+    def _get_revoke_button_html(record: IssuedCredentialModel) -> str:
+        """Gets the HTML for the revoke button in the devices table.
+
+        Args:
+            record: The corresponding DeviceModel.
+
+        Returns:
+            the HTML of the hyperlink for the revoke button.
+        """
+        if record.credential.certificate.certificate_status == CertificateModel.CertificateStatus.REVOKED:
+            # noinspection PyDeprecation
+            return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', _('Revoked'))
+        # noinspection PyDeprecation
+        return format_html(
+            '<a href="revoke/{}/" class="btn btn-danger tp-table-btn w-100">{}</a>', record.pk, _('Revoke')
+        )
+
+
+#  ------------------------------ Certificate Lifecycle Management - Credential Issuance -------------------------------
+
+
+class DeviceIssueCredentialView(
+    DeviceContextMixin,
+    SingleObjectMixin[DeviceModel],
+    FormView[CredentialFormClass],
+    Generic[CredentialFormClass, TlsCredentialIssuerClass],
+):
+    """Base view to issue device credentials."""
+
+    http_method_names = ('get', 'post')
+
+    model = DeviceModel
+    context_object_name = 'device'
+    template_name = 'devices/credentials/issue_application_credential.html'
+    form_class: type[CredentialFormClass]
+    issuer_class: type[TlsCredentialIssuerClass]
+    friendly_name: str
+    object: DeviceModel
+
+    def get_initial(self) -> dict[str, Any]:
+        """Gets the initial data for the corresponding form.
+
+        Returns:
+            The initial data for the corresponding form.
+        """
+        initial = super().get_initial()
+        if self.issuer_class:
+            initial.update(self.issuer_class.get_fixed_values(device=self.object, domain=self.object.domain))
+        return initial
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """This method ads the concerning device model to the form kwargs and returns them.
+
+        Returns:
+            The form kwargs including the concerning device model.
+        """
+        form_kwargs = super().get_form_kwargs()
+        form_kwargs.update({'device': self.object})
+        return form_kwargs
+
+    def get_success_url(self) -> str:
+        """Gets the success url to redirect to after successful processing of the POST data following a form submit.
+
+        Returns:
+            The success url to redirect to after successful processing of the POST data following a form submit.
+        """
+        return cast(str, reverse_lazy('devices:certificate_lifecycle_management', kwargs={'pk': self.get_object().id}))
+
+    def form_valid(self, form: CredentialFormClass) -> HttpResponse:
+        """This method is executed if the form submit data was valid.
+
+        Args:
+            form: The form that was used to validate the data.
+
+        Returns:
+            The HTTP Response object after successful validation of the form data.
+        """
+        credential = self.issue_credential(device=self.object, cleaned_data=form.cleaned_data)
+        messages.success(
+            self.request, f'Successfully issued {self.friendly_name} for device {credential.device.unique_name}'
+        )
+        return super().form_valid(form)
+
+    @abstractmethod
+    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
+        """Abstract method to issue a credential.
+
+        Args:
+            device: The device to be associated with the new credential.
+            cleaned_data: The validated form data.
+
+        Returns:
+            The IssuedCredentialModel object that was created and saved.
+        """
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Adds the object model to the instance and forwards to super().post().
+
+        Args:
+            request: The Django request object.
+            *args: Positional arguments passed to super().post().
+            **kwargs: Keyword arguments passed to super().post().
+
+        Returns:
+            The HttpResponseBase object returned by super().post().
+        """
+        self.object = self.get_object()
+        return super().post(request, *args, **kwargs)
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Adds the object model to the instance and forwards to super().get().
+
+        Args:
+            request: The Django request object.
+            *args: Positional arguments passed to super().get().
+            **kwargs: Keyword arguments passed to super().get().
+
+        Returns:
+            The HttpResponseBase object returned by super().get().
+        """
+        self.object = self.get_object()
+        return super().get(request, *args, **kwargs)
+
+
+class DeviceIssueTlsClientCredential(
+    DeviceIssueCredentialView[IssueTlsClientCredentialForm, LocalTlsClientCredentialIssuer]
+):
+    """View to issue a new TLS client credential."""
+
+    form_class = IssueTlsClientCredentialForm
+    issuer_class = LocalTlsClientCredentialIssuer
+    friendly_name = 'TLS client credential'
+
+    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
+        """Issues an TLS client credential.
+
+        Args:
+            device: The device to be associated with the new credential.
+            cleaned_data: The validated form data.
+
+        Returns:
+            The IssuedCredentialModel object that was created and saved.
+        """
+        common_name = cast(str, cleaned_data.get('common_name'))
+        validity = cast(int, cleaned_data.get('validity'))
+        issuer = self.issuer_class(device=device, domain=device.domain)
+
+        return issuer.issue_tls_client_credential(common_name=common_name, validity_days=validity)
+
+
+class DeviceIssueTlsServerCredential(
+    DeviceIssueCredentialView[IssueTlsServerCredentialForm, LocalTlsServerCredentialIssuer]
+):
+    """View to issue a new TLS server credential."""
+
+    form_class = IssueTlsServerCredentialForm
+    issuer_class = LocalTlsServerCredentialIssuer
+    friendly_name = 'TLS server credential'
+
+    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
+        """Issues an TLS server credential.
+
+        Args:
+            device: The device to be associated with the new credential.
+            cleaned_data: The validated form data.
+
+        Returns:
+            The IssuedCredentialModel object that was created and saved.
+        """
+        common_name = cast(str, cleaned_data.get('common_name'))
+        if not common_name:
+            raise Http404
+        issuer = self.issuer_class(device=device, domain=device.domain)
+        return issuer.issue_tls_server_credential(
+            common_name=common_name,
+            ipv4_addresses=cast('list[ipaddress.IPv4Address]', cleaned_data.get('ipv4_addresses')),
+            ipv6_addresses=cast('list[ipaddress.IPv6Address]', cleaned_data.get('ipv6_addresses')),
+            domain_names=cast(list[str], cleaned_data.get('domain_names')),
+            san_critical=False,
+            validity_days=cast(int, cleaned_data.get('validity')),
+        )
+
+
+class DeviceIssueOpcUaClientCredential(
+    DeviceIssueCredentialView[IssueOpcUaClientCredentialForm, OpcUaClientCredentialIssuer]
+):
+    """View to issue a new OPC UA client credential."""
+
+    form_class = IssueOpcUaClientCredentialForm
+    issuer_class = OpcUaClientCredentialIssuer
+    friendly_name = 'OPC UA client credential'
+
+    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
+        """Issues an OPC UA client credential.
+
+        Args:
+            device: The device to be associated with the new credential.
+            cleaned_data: The validated form data.
+
+        Returns:
+            The IssuedCredentialModel object that was created and saved.
+        """
+        issuer = self.issuer_class(device=device, domain=device.domain)
+        return issuer.issue_opcua_client_credential(
+            common_name=cast(str, cleaned_data.get('common_name')),
+            application_uri=cast(str, cleaned_data.get('application_uri')),
+            validity_days=cast(int, cleaned_data.get('validity')),
+        )
+
+
+class DeviceIssueOpcUaServerCredential(
+    DeviceIssueCredentialView[IssueOpcUaServerCredentialForm, OpcUaServerCredentialIssuer]
+):
+    """View to issue a new OPC UA server credential."""
+
+    form_class = IssueOpcUaServerCredentialForm
+    issuer_class = OpcUaServerCredentialIssuer
+    friendly_name = 'OPC UA server credential'
+
+    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
+        """Issues an OPC UA server credential.
+
+        Args:
+            device: The device to be associated with the new credential.
+            cleaned_data: The validated form data.
+
+        Returns:
+            The IssuedCredentialModel object that was created and saved.
+        """
+        common_name = cast(str, cleaned_data.get('common_name'))
+        if not common_name:
+            raise Http404
+        issuer = self.issuer_class(device=device, domain=device.domain)
+
+        ipv4_addresses: list[ipaddress.IPv4Address] = cleaned_data.get('ipv4_addresses', [])
+        ipv6_addresses: list[ipaddress.IPv6Address] = cleaned_data.get('ipv6_addresses', [])
+        domain_names: list[str] = cleaned_data.get('domain_names', [])
+        validity_days: int = cleaned_data.get('validity', 0)
+
+        return issuer.issue_opcua_server_credential(
+            common_name=common_name,
+            application_uri=cast(str, cleaned_data.get('application_uri')),
+            ipv4_addresses=ipv4_addresses,
+            ipv6_addresses=ipv6_addresses,
+            domain_names=domain_names,
+            validity_days=validity_days,
+        )
+
+
+#  ----------------------------------- Certificate Lifecycle Management - Help Pages -----------------------------------
+
+class HelpDispatchDomainCredentialView(DeviceContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
+    """Redirects to the required help pages depending on the onboarding protocol.
+
+    If no help page could be determined, it will redirect to the devices page.
+    """
+
+    http_method_names = ('get',)
+
+    model: type[DeviceModel] = DeviceModel
+    permanent = False
+
+    def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
+        """Gets the redirection URL (Domain Credentials) for the required help page.
+
+        Args:
+            *args: Positional arguments are discarded.
+            **kwargs: Keyword arguments are discarded.
+
+        Returns:
+            The redirection URL.
+        """
+        del args
+        del kwargs
+
+        device: DeviceModel = self.get_object()
+
+        if device.onboarding_protocol == device.OnboardingProtocol.CMP_SHARED_SECRET.value:
+            return f'{reverse("devices:help-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
+
+        if device.onboarding_protocol == device.OnboardingProtocol.CMP_IDEVID.value:
+            return f'{reverse("devices:help-onboarding_cmp-idevid", kwargs={"pk": device.id})}'
+
+        return f'{reverse("devices:devices")}'
+
+class HelpDispatchApplicationCredentialView(DeviceContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
+    """Redirects to the required help pages depending on PKI protocol.
+
+    If no help page could be determined, it will redirect to the devices page.
+    """
+
+    http_method_names = ('get',)
+
+    model: type[DeviceModel] = DeviceModel
+    permanent = False
+
+    def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
+        """Gets the redirection URL (Application Credentials) for the required help page.
+
+        Args:
+            *args: Positional arguments are discarded.
+            **kwargs: Keyword arguments are discarded.
+
+        Returns:
+            The redirection URL.
+        """
+        del args
+        del kwargs
+
+        device: DeviceModel = self.get_object()
+
+        if (
+                not device.domain_credential_onboarding
+                and device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value
+        ):
+            return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
+
+        if device.onboarding_protocol in {
+            device.OnboardingProtocol.CMP_SHARED_SECRET.value,
+            device.OnboardingProtocol.CMP_IDEVID.value
+        }:
+            return f'{reverse("devices:help-onboarding_cmp-application-credentials", kwargs={"pk": device.id})}'
+
+        return f"{reverse('devices:devices')}"
+
+
+class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceModel]):
+    """Base view for CMP help views concerning the domain credential, not intended to be used directly."""
 
     http_method_names = ('get',)
 
     model = DeviceModel
-    success_url = reverse_lazy('devices:devices')
-    template_name = 'devices/configure.html'
     context_object_name = 'device'
 
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds information about the required OpenSSL commands to the context.
 
-class DeviceBaseCredentialDownloadView(DeviceContextMixin,
-                                       Detail404RedirectView[IssuedCredentialModel],
-                                       FormView[CredentialDownloadForm]
-                                       ):
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to render the page.
+        """
+        context = super().get_context_data(**kwargs)
+        device: DeviceModel = self.object
+        context['host'] = (f'{self.request.META.get('REMOTE_ADDR', '127.0.0.1')}:'
+                           f'{self.request.META.get('SERVER_PORT', '443')}')
+        context.update(self._get_domain_credential_cmp_context(device=device))
+        return context
+
+    @staticmethod
+    def _get_domain_credential_cmp_context(device: DeviceModel) -> dict[str, Any]:
+        """Provides the context for cmp commands using client based authentication.
+
+        Args:
+            device: The corresponding device model.
+
+        Returns:
+            The required context.
+        """
+        context = {}
+        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
+            domain_credential_key_gen_command = (
+                f'openssl genrsa -out domain_credential_key.pem {device.public_key_info.key_size}'
+            )
+            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
+        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
+            domain_credential_key_gen_command = (
+                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
+                f'-genkey -noout -out domain_credential_key.pem'
+            )
+            key_gen_command = (
+                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
+                f'-genkey -noout -out key.pem'
+            )
+        else:
+            err_msg = _('Unsupported public key algorithm')
+            raise ValueError(err_msg)
+
+        context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
+        context['key_gen_command'] = key_gen_command
+        context['issuing_ca_pem'] = (
+            device.domain.issuing_ca.credential.get_certificate()
+            .public_bytes(encoding=serialization.Encoding.PEM)
+            .decode()
+        )
+        number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
+        context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
+        context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
+
+        return context
+
+
+class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, DetailView[DeviceModel]):
+    """Help view for the case of no onboarding using CMP shared-secret."""
+
+    http_method_names = ('get',)
+
+    model = DeviceModel
+    template_name = 'devices/help/no_onboarding/cmp_shared_secret.html'
+    context_object_name = 'device'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds information about the required OpenSSL commands to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to render the page.
+        """
+        context = super().get_context_data(**kwargs)
+        device: DeviceModel = self.object
+
+        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
+            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
+        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
+            key_gen_command = (
+                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
+                f'-genkey -noout -out key.pem'
+            )
+        else:
+            err_msg = _('Unsupported public key algorithm')
+            raise ValueError(err_msg)
+
+        context['host'] = (f'{self.request.META.get('REMOTE_ADDR', '127.0.0.1')}:'
+                           f'{self.request.META.get('SERVER_PORT', '443')}')
+        context['key_gen_command'] = key_gen_command
+        number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
+        context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
+        context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
+        return context
+
+
+class OnboardingCmpSharedSecretHelpView(HelpDomainCredentialCmpContextView):
+    """Help view for the onboarding cmp-shared secret case."""
+
+    template_name = 'devices/help/onboarding/cmp_shared_secret.html'
+
+
+class OnboardingCmpIdevidHelpView(HelpDomainCredentialCmpContextView):
+    """Help view for the onboarding IDeviD case."""
+
+    template_name = 'devices/help/onboarding/cmp_idevid.html'
+
+class OnboardingCmpApplicationCredentialsHelpView(HelpDomainCredentialCmpContextView):
+    """Help view for enrolling application credentials via CMP."""
+
+    template_name = 'devices/help/onboarding/cmp_application_credentials.html'
+
+class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdRegistration]):
+    """Help view for the IDevID Registration, which displays the required OpenSSL commands."""
+
+    http_method_names = ('get',)
+
+    model = DevIdRegistration
+    template_name = 'devices/help/onboarding/cmp_idevid_registration.html'
+    context_object_name = 'devid_registration'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds information about the required OpenSSL commands to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to render the page.
+        """
+        context = super().get_context_data(**kwargs)
+        devid_registration: DevIdRegistration = self.object
+
+        if devid_registration.domain.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
+            domain_credential_key_gen_command = (
+                f'openssl genrsa -out domain_credential_key.pem {devid_registration.domain.public_key_info.key_size}'
+            )
+            key_gen_command = f'openssl genrsa -out key.pem {devid_registration.domain.public_key_info.key_size}'
+        elif devid_registration.domain.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
+            domain_credential_key_gen_command = (
+                f'openssl ecparam -name {devid_registration.domain.public_key_info.named_curve.ossl_curve_name} '
+                f'-genkey -noout -out domain_credential_key.pem'
+            )
+            key_gen_command = (
+                f'openssl ecparam -name {devid_registration.domain.public_key_info.named_curve.ossl_curve_name} '
+                f'-genkey -noout -out key.pem'
+            )
+        else:
+            err_msg = 'Unsupported public key algorithm'
+            raise ValueError(err_msg)
+        context['host'] = (f'{self.request.META.get('REMOTE_ADDR', '127.0.0.1')}:'
+                           f'{self.request.META.get('SERVER_PORT', '443')}')
+        context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
+        context['key_gen_command'] = key_gen_command
+        context['issuing_ca_pem'] = (
+            devid_registration.domain.issuing_ca.credential.get_certificate()
+            .public_bytes(encoding=serialization.Encoding.PEM)
+            .decode()
+        )
+        number_of_issued_device_certificates = 0
+        context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
+        context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
+        context['public_key_info'] = devid_registration.domain.public_key_info
+        context['domain'] = devid_registration.domain
+        return context
+
+
+#  ----------------------------------- Certificate Lifecycle Management - Downloads ------------------------------------
+
+
+class DownloadPageDispatcherView(DeviceContextMixin, SingleObjectMixin[IssuedCredentialModel], RedirectView):
+    """Redirects depending on the type of credential, that is if a private key is available or not."""
+
+    http_method_names = ('get',)
+
+    model: type[IssuedCredentialModel] = IssuedCredentialModel
+    permanent = False
+
+    def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
+        """Gets the redirection URL depending on the type credential, that is if a private key is available or not.
+
+        Args:
+            *args: Positional arguments are discarded.
+            **kwargs: Keyword arguments are discarded.
+
+        Returns:
+            The redirect URL.
+        """
+        del args
+        del kwargs
+
+        issued_credential: IssuedCredentialModel = self.get_object()
+        if issued_credential.credential.private_key:
+            return f'{reverse("devices:credential-download", kwargs={"pk": issued_credential.id})}'
+        return f'{reverse("devices:certificate-download", kwargs={"pk": issued_credential.id})}'
+
+
+class CertificateDownloadView(DeviceContextMixin, DetailView[IssuedCredentialModel]):
+    """View for downloading certificates."""
+
+    http_method_names = ('get',)
+
+    model: type[IssuedCredentialModel] = IssuedCredentialModel
+    template_name = 'devices/credentials/certificate_download.html'
+    context_object_name = 'issued_credential'
+
+
+class DeviceBaseCredentialDownloadView(
+    DeviceContextMixin, DetailView[IssuedCredentialModel], FormView[CredentialDownloadForm]
+):
     """View to download a password protected application credential in the desired format.
 
-    Inherited by the domain and application credential download views.
+    Inherited by the domain and application credential download views. It is not intended for direct use.
     """
 
     http_method_names = ('get', 'post')
@@ -381,7 +831,7 @@ class DeviceBaseCredentialDownloadView(DeviceContextMixin,
     is_browser_download = False
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Gets the context data depending on the credential.
+        """Adds information about the credential to the context.
 
         Args:
             **kwargs: Keyword arguments are passed to super().get_context_data(**kwargs).
@@ -390,7 +840,7 @@ class DeviceBaseCredentialDownloadView(DeviceContextMixin,
             The context data for the view.
         """
         context = super().get_context_data(**kwargs)
-        issued_credential = self.get_object()
+        issued_credential = self.object
         credential = issued_credential.credential
 
         if credential.credential_type != CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL:  # sanity check
@@ -420,20 +870,8 @@ class DeviceBaseCredentialDownloadView(DeviceContextMixin,
         context['issued_credential'] = issued_credential
         return context
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Processing of all POST requests, i.e. the expected form data.
-
-        Args:
-            request: The POST request to process.
-            *args: Any positional arguments are passed to super().get().
-            **kwargs: Any keyword arguments are passed to super().get().
-
-        Returns:
-            The HttpResponse to display the view.
-        """
-        self.object = self.get_object()
-        return FormView.post(self, request, *args, **kwargs)
-
+    # TODO(AlexHx8472): This needs to return a success url redirect and then download the file. # noqa: FIX002
+    # TODO(AlexHx8472): The FileResponse must then be returned from a get or post method.       # noqa: FIX002
     def form_valid(self, form: CredentialDownloadForm) -> HttpResponse:
         """Processing the valid form data.
 
@@ -445,20 +883,19 @@ class DeviceBaseCredentialDownloadView(DeviceContextMixin,
         Returns:
             If successful, this will start the file download. Otherwise, a Http404 will be raised and displayed.
         """
-        self.object = self.get_object()
-
+        issued_credential_model = self.get_object()
         password = form.cleaned_data['password'].encode()
 
         try:
             file_format = CredentialSerializer.FileFormat(self.request.POST.get('file_format'))
-        except ValueError:
+        except ValueError as exception:
             err_msg = _('Unknown file format.')
-            raise Http404(err_msg) from ValueError
+            raise Http404(err_msg) from exception
 
-        credential_model = self.get_object().credential
+        credential_model = issued_credential_model.credential
         credential_serializer = credential_model.get_credential_serializer()
         credential_purpose = IssuedCredentialModel.IssuedCredentialPurpose(
-            self.get_object().issued_credential_purpose
+            issued_credential_model.issued_credential_purpose
         ).label
         credential_type_name = credential_purpose.replace(' ', '-').lower().replace('-credential', '')
 
@@ -467,14 +904,15 @@ class DeviceBaseCredentialDownloadView(DeviceContextMixin,
                 io.BytesIO(credential_serializer.as_pkcs12(password=password)),
                 content_type='application/pkcs12',
                 as_attachment=True,
-                filename=f'trustpoint-{credential_type_name}-credential.p12')
+                filename=f'trustpoint-{credential_type_name}-credential.p12',
+            )
 
         elif file_format == CredentialSerializer.FileFormat.PEM_ZIP:
             response = FileResponse(
                 io.BytesIO(credential_serializer.as_pem_zip(password=password)),
                 content_type=ArchiveFormat.ZIP.mime_type,
                 as_attachment=True,
-                filename=f'trustpoint-{credential_type_name}-credential{ArchiveFormat.ZIP.file_extension}'
+                filename=f'trustpoint-{credential_type_name}-credential{ArchiveFormat.ZIP.file_extension}',
             )
 
         elif file_format == CredentialSerializer.FileFormat.PEM_TAR_GZ:
@@ -482,7 +920,8 @@ class DeviceBaseCredentialDownloadView(DeviceContextMixin,
                 io.BytesIO(credential_serializer.as_pem_tar_gz(password=password)),
                 content_type=ArchiveFormat.TAR_GZ.mime_type,
                 as_attachment=True,
-                filename=f'trustpoint-{credential_type_name}-credential{ArchiveFormat.TAR_GZ.file_extension}')
+                filename=f'trustpoint-{credential_type_name}-credential{ArchiveFormat.TAR_GZ.file_extension}',
+            )
 
         else:
             err_msg = _('Unknown file format.')
@@ -491,278 +930,196 @@ class DeviceBaseCredentialDownloadView(DeviceContextMixin,
         return cast('HttpResponse', response)
 
 
-class DeviceManualCredentialDownloadView(TpLoginRequiredMixin, DeviceBaseCredentialDownloadView):
-    """View to download a password protected domain or application credential in the desired format.
-
-    This CBV does intentionally not require the authentication mixin.
-    """
+class DeviceManualCredentialDownloadView(DeviceBaseCredentialDownloadView):
+    """View to download a password protected domain or application credential in the desired format."""
 
 
-class DeviceBrowserCredentialDownloadView(DownloadTokenRequiredMixin, DeviceBaseCredentialDownloadView):
-    """View to download a password protected domain or app credential in the desired format from a remote client.
+class DeviceBrowserOnboardingOTPView(DeviceContextMixin, DetailView[IssuedCredentialModel]):
+    """View to display the OTP for remote credential download (aka. browser onboarding)."""
 
-    This CBV does intentionally not require the authentication mixin.
-    """
+    http_method_names = ('get',)
+
+    model = IssuedCredentialModel
+    template_name = 'devices/credentials/onboarding/browser/otp_view.html'
+    redirection_view = 'devices:devices'
+    context_object_name = 'credential'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds information about the credential and otp for the browser download process.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to render the page.
+        """
+        credential = self.get_object()
+        device = credential.device
+        context = super().get_context_data(**kwargs)
+
+        try:
+            cdm = RemoteDeviceCredentialDownloadModel.objects.get(issued_credential_model=credential, device=device)
+            cdm.delete()
+        except RemoteDeviceCredentialDownloadModel.DoesNotExist:
+            pass
+
+        cdm = RemoteDeviceCredentialDownloadModel(issued_credential_model=credential, device=device)
+        cdm.save()
+
+        context.update(
+            {
+                'device_name': device.unique_name,
+                'device_id': device.id,
+                'credential_id': credential.id,
+                'otp': cdm.get_otp_display(),
+                'download_url': self.request.build_absolute_uri(reverse('devices:browser_login')),
+            }
+        )
+        return context
+
+
+@method_decorator(login_not_required, name='dispatch')
+class DeviceOnboardingBrowserLoginView(FormView[BrowserLoginForm]):
+    """View to handle certificate download requests."""
+
+    http_method_names = ('get', 'post')
+
+    template_name = 'devices/credentials/onboarding/browser/login.html'
+    form_class = BrowserLoginForm
+
+    cleaned_data: dict[str, Any]
+
+    def get_success_url(self) -> str:
+        """Gets the success url to redirect to after successful processing of the POST data following a form submit.
+
+        Returns:
+            The success url to redirect to after successful processing of the POST data following a form submit.
+        """
+        credential_id = cast(int, self.cleaned_data.get('credential_id'))
+        credential_download = cast(RemoteDeviceCredentialDownloadModel, self.cleaned_data.get('credential_download'))
+        token: str = credential_download.download_token
+        return (
+            f'{reverse_lazy("devices:browser_domain_credential_download", kwargs={"pk": credential_id})}?token={token}'
+        )
+
+    def form_invalid(self, form: BrowserLoginForm) -> HttpResponse:
+        """Adds an error message in the case of an invalid OTP.
+
+        Args:
+            form: The corresponding form object.
+
+        Returns:
+            The Django HttpResponse object.
+        """
+        messages.error(self.request, _('The provided password is not valid.'))
+        return super().form_invalid(form)
+
+    def form_valid(self, form: BrowserLoginForm) -> HttpResponse:
+        """Performed if the form was validated successfully and adds the cleaned data to the instance.
+
+        Args:
+            form: The corresponding form object.
+
+        Returns:
+            The Django HttpResponse object.
+        """
+        self.cleaned_data = form.cleaned_data
+        return super().form_valid(form)
+
+
+class DownloadTokenRequiredAuthenticationMixin(_DispatchableType):
+    """Mixin which checks the token included in the URL for browser download views."""
+
+    http_method_names = ('get', 'post')
+    credential_download: RemoteDeviceCredentialDownloadModel
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Checks the validity of the token included in the URL for browser download views and redirects if invalid.
+
+        Args:
+            request: The django request object.
+            *args: Positional arguments passed to super().dispatch().
+            **kwargs: Keyword arguments passed to super().dispatch().
+
+        Returns:
+            A Django HttpResponseBase object.
+        """
+        token = request.GET.get('token')
+        try:
+            self.credential_download = RemoteDeviceCredentialDownloadModel.objects.get(
+                issued_credential_model=kwargs.get('pk')
+            )
+        except RemoteDeviceCredentialDownloadModel.DoesNotExist:
+            messages.warning(request, 'Invalid download token.')
+            return redirect('devices:browser_login')
+
+        if not token or not self.credential_download.check_token(token):
+            messages.warning(request, 'Invalid download token.')
+            return redirect('devices:browser_login')
+
+        return super().dispatch(request, *args, **kwargs)
+
+
+@method_decorator(login_not_required, name='dispatch')
+class DeviceBrowserCredentialDownloadView(DownloadTokenRequiredAuthenticationMixin, DeviceBaseCredentialDownloadView):
+    """View to download a password protected domain or app credential in the desired format from a remote client."""
 
     is_browser_download = True
 
 
-class DeviceIssueTlsClientCredential(
-    DeviceContextMixin, TpLoginRequiredMixin, DetailView[DeviceModel], FormView[IssueTlsClientCredentialForm]
-):
-    """View to issue a new TLS client credential."""
-
-    http_method_names = ('get', 'post')
-
-    model = DeviceModel
-    context_object_name = 'device'
-    template_name = 'devices/credentials/issue_application_credential.html'
-    form_class = IssueTlsClientCredentialForm
-
-    def get_initial(self) -> dict[str, Any]:
-        """Gets the initial data for the form.
-
-        Returns:
-            Dictionary containing the initial form data.
-        """
-        initial = super().get_initial()
-        device = self.get_object()
-        initial.update(LocalTlsClientCredentialIssuer.get_fixed_values(device=device, domain=device.domain))
-        return initial
-
-    def get_form_kwargs(self) -> dict[str, Any]:
-        form_kwargs = super().get_form_kwargs()
-        form_kwargs.update({'device': self.get_object()})
-        return form_kwargs
-
-    def get_success_url(self) -> str:
-        """Returns the URL to redirect to if the form is valid and was successfully processed."""
-        kwargs = {'pk': self.get_object().id}
-        return cast('str', reverse_lazy('devices:certificate_lifecycle_management', kwargs=kwargs))
-
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Processing of all POST requests, i.e. the expected form data.
-
-        Args:
-            request: The POST request to process.
-            *args: Any positional arguments are passed to super().get().
-            **kwargs: Any keyword arguments are passed to super().get().
-
-        Returns:
-            The HttpResponse to display the view.
-        """
-        self.object = self.get_object()
-        return FormView.post(self, request, *args, **kwargs)
-
-    def form_valid(self, form: IssueTlsClientCredentialForm) -> HttpResponse:
-        """Processing the valid form data.
-
-        This will use the contained form data to issue a new TLS client credential.
-
-        Args:
-            form: The valid form including the cleaned data.
-
-        Returns:
-            The HttpResponse that will display the CLM summary view.
-        """
-        device = self.get_object()
-        common_name = cast('str', form.cleaned_data.get('common_name'))
-        validity = cast('int', form.cleaned_data.get('validity'))
-
-        tls_client_issuer = LocalTlsClientCredentialIssuer(device=device, domain=device.domain)
-        _ = tls_client_issuer.issue_tls_client_credential(common_name=common_name, validity_days=validity)
-        messages.success(
-            self.request, 'Successfully issued TLS Client credential device ' f'{tls_client_issuer.device.unique_name}'
-        )
-        return super().form_valid(form)
-
-
-class DeviceIssueTlsServerCredential(
-    DeviceContextMixin, TpLoginRequiredMixin, DetailView[DeviceModel], FormView[IssueTlsServerCredentialForm]
-):
-    """View to issue a new TLS server credential."""
-
-    http_method_names = ('get', 'post')
-
-    model = DeviceModel
-    context_object_name = 'device'
-    template_name = 'devices/credentials/issue_application_credential.html'
-    form_class = IssueTlsServerCredentialForm
-
-    def get_initial(self) -> dict[str, Any]:
-        """Gets the initial data for the form.
-
-        Returns:
-            Dictionary containing the initial form data.
-        """
-        initial = super().get_initial()
-        device = self.get_object()
-        initial.update(LocalTlsServerCredentialIssuer.get_fixed_values(device=device, domain=device.domain))
-        return initial
-
-    def get_form_kwargs(self) -> dict[str, Any]:
-        form_kwargs = super().get_form_kwargs()
-        form_kwargs.update({'device': self.get_object()})
-        return form_kwargs
-
-    def get_success_url(self) -> str:
-        """Returns the URL to redirect to if the form is valid and was successfully processed."""
-        kwargs = {'pk': self.get_object().id}
-        return cast('str', reverse_lazy('devices:certificate_lifecycle_management', kwargs=kwargs))
-
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Processing of all POST requests, i.e. the expected form data.
-
-        Args:
-            request: The POST request to process.
-            *args: Any positional arguments are passed to super().get().
-            **kwargs: Any keyword arguments are passed to super().get().
-
-        Returns:
-            The HttpResponse to display the view.
-        """
-        self.object = self.get_object()
-        return FormView.post(self, request, *args, **kwargs)
-
-    def form_valid(self, form: IssueTlsServerCredentialForm) -> HttpResponse:
-        """Processing the valid form data.
-
-        This will use the contained form data to issue a new TLS server credential.
-
-        Args:
-            form: The valid form including the cleaned data.
-
-        Returns:
-            The HttpResponse that will display the CLM summary view.
-        """
-        device = self.get_object()
-
-        common_name = cast('str', form.cleaned_data.get('common_name'))
-        ipv4_addresses = cast('list[ipaddress.IPv4Address]', form.cleaned_data.get('ipv4_addresses'))
-        ipv6_addresses = cast('list[ipaddress.IPv6Address]', form.cleaned_data.get('ipv6_addresses'))
-        domain_names = cast('list[str]', form.cleaned_data.get('domain_names'))
-        validity = cast('int', form.cleaned_data.get('validity'))
-
-        if not common_name:
-            raise Http404
-
-        tls_server_credential_issuer = LocalTlsServerCredentialIssuer(device=device, domain=device.domain)
-        _ = tls_server_credential_issuer.issue_tls_server_credential(
-            common_name=common_name,
-            ipv4_addresses=ipv4_addresses,
-            ipv6_addresses=ipv6_addresses,
-            domain_names=domain_names,
-            validity_days=validity,
-        )
-        messages.success(
-            self.request,
-            'Successfully issued TLS Server credential device ' f'{tls_server_credential_issuer.device.unique_name}',
-        )
-
-        return super().form_valid(form)
-
-
-class DeviceCertificateLifecycleManagementSummaryView(
-    DeviceContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListInDetailView[DeviceModel]
-):
-    """This is the CLM summary view in the devices section."""
+class DeviceBrowserOnboardingCancelView(DeviceContextMixin, SingleObjectMixin[IssuedCredentialModel], RedirectView):
+    """View to cancel the browser onboarding process and delete the associated RemoteDeviceCredentialDownloadModel."""
 
     http_method_names = ('get',)
 
-    detail_model = DeviceModel
-    template_name = 'devices/credentials/certificate_lifecycle_management.html'
-    detail_context_object_name = 'device'
     model = IssuedCredentialModel
-    context_object_name = 'issued_credentials'
-    default_sort_param = 'common_name'
+    context_object_name = 'credential'
+    object: IssuedCredentialModel
+    permanent = False
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-
-        device = self.get_object()
-        qs = super().get_queryset()  # inherited from SortableTableMixin, sorted query
-
-        domain_credentials = qs.filter(
-            Q(device=device) &
-            Q(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL.value)
-        )
-
-        application_credentials = qs.filter(
-            Q(device=device) &
-            Q(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL.value)
-        )
-
-        context['domain_credentials'] = domain_credentials
-        context['application_credentials'] = application_credentials
-
-        paginator_domain = Paginator(domain_credentials, UIConfig.paginate_by)
-        page_number_domain = self.request.GET.get('page', 1)
-        context['domain_credentials'] = paginator_domain.get_page(page_number_domain)
-        context['is_paginated'] = paginator_domain.num_pages > 1
-
-        paginator_application = Paginator(application_credentials, UIConfig.paginate_by)
-        page_number_application = self.request.GET.get('page-a', 1)
-        context['application_credentials'] = paginator_application.get_page(page_number_application)
-        context['is_paginated_a'] = paginator_application.num_pages > 1
-
-        for cred in context['domain_credentials']:
-            cred.expires_in = self._render_expires_in(cred)
-            cred.expiration_date = self._render_expiration_date(cred)
-            cred.revoke = self._render_revoke(cred)
-
-        for cred in context['application_credentials']:
-            cred.expires_in = self._render_expires_in(cred)
-            cred.expiration_date = self._render_expiration_date(cred)
-            cred.revoke = self._render_revoke(cred)
-
-        return context
-
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Processing of all GET requests.
+    def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
+        """Gets the redirection URL.
 
         Args:
-            request: The GET request to process.
-            *args: Any positional arguments are passed to super().get().
-            **kwargs: Any keyword arguments are passed to super().get().
+            *args: Positional arguments are discarded.
+            **kwargs: Keyword arguments are discarded.
 
         Returns:
-            The HttpResponse to display the view.
+            The redirect URL.
         """
+        del args
+        del kwargs
+
+        return str(reverse_lazy('devices:credential-download', kwargs={'pk': self.object.id}))
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Cancels the browser onboarding process and deletes the associated RemoteDeviceCredentialDownloadModel.
+
+        Args:
+            request: The Django request object.
+            *args: Positional arguments passed to super().get().
+            **kwargs: Keyword arguments passed to super().get().
+
+        Returns:
+            The HttpResponseBase object with the desired redirection URL.
+        """
+        self.object = self.get_object()
+        try:
+            cdm = RemoteDeviceCredentialDownloadModel.objects.get(
+                issued_credential_model=self.object, device=self.object.device
+            )
+            cdm.delete()
+            messages.info(request, 'The browser onboarding process was canceled.')
+        except RemoteDeviceCredentialDownloadModel.DoesNotExist:
+            pass
+
         return super().get(request, *args, **kwargs)
 
-    @staticmethod
-    def _render_expiration_date(record: IssuedCredentialModel) -> datetime.datetime:
-        return record.credential.certificate.not_valid_after
 
-    @staticmethod
-    def _render_expires_in(record: IssuedCredentialModel) -> str | SafeString:
-        if record.credential.certificate.certificate_status != CertificateModel.CertificateStatus.OK:
-            return record.credential.certificate.certificate_status.label
-        now = datetime.datetime.now(datetime.timezone.utc)
-        expire_timedelta = record.credential.certificate.not_valid_after - now
-        days = expire_timedelta.days
-        hours, remainder = divmod(expire_timedelta.seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return format_html(f'{days} days, {hours}:{minutes:02d}:{seconds:02d}')
-
-    @staticmethod
-    def _render_revoke(record: IssuedCredentialModel) -> SafeString:
-        """Creates the html hyperlink for the revoke-view.
-
-        Args:
-            record: The current record of the Device model.
-
-        Returns:
-            SafeString: The html hyperlink for the revoke-view.
-        """
-        if record.credential.certificate.certificate_status == CertificateModel.CertificateStatus.REVOKED:
-            return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', _('Revoked'))
-
-        return format_html('<a href="revoke/{}/" class="btn btn-danger tp-table-btn w-100">{}</a>',
-                           record.pk, _('Revoke'))
+#  ---------------------------------------- Revocation Views ----------------------------------------
 
 
-class DeviceRevocationView(DeviceContextMixin, TpLoginRequiredMixin, FormMixin, ListView):
+class DeviceRevocationView(DeviceContextMixin, FormMixin[CredentialRevocationForm], ListView[DeviceModel]):
     """Revokes all active credentials for a given device."""
 
     http_method_names = ('get', 'post')
@@ -774,28 +1131,20 @@ class DeviceRevocationView(DeviceContextMixin, TpLoginRequiredMixin, FormMixin, 
     success_url = reverse_lazy('devices:devices')
     device: DeviceModel
 
-    def get_queryset(self):
-        self.device = get_object_or_404(DeviceModel, id=self.kwargs['pk'])
-        # TODO(Air): This query is cursed but works
-        return IssuedCredentialModel.objects.filter(device=self.device,
-                                                    credential__primarycredentialcertificate__is_primary=True)
+    def form_valid(self, form: CredentialRevocationForm) -> HttpResponse:
+        """Performed if the form was validated successfully and revokes the credentials.
 
-    def post(self, request, *args, **kwargs):
-        form = self.get_form()
-        if form.is_valid():
-            return self.form_valid(form)
+        Args:
+            form: The corresponding form object.
 
-        return self.form_invalid(form)
-
-    def form_valid(self, form) -> HttpResponse:
-        """Handles revocation upon a POST request containing a valid form."""
-        # Revoke all active credentials for the device
+        Returns:
+            The Django HttpResponse object.
+        """
         n_revoked = 0
         credentials = self.get_queryset()
         for credential in credentials:
             revoked_successfully, _msg = DeviceCredentialRevocation.revoke_certificate(
-                credential.id,
-                form.cleaned_data['revocation_reason']
+                credential.id, form.cleaned_data['revocation_reason']
             )
             if revoked_successfully:
                 n_revoked += 1
@@ -814,7 +1163,11 @@ class DeviceRevocationView(DeviceContextMixin, TpLoginRequiredMixin, FormMixin, 
         return super().form_valid(form)
 
 
-class DeviceCredentialRevocationView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView, FormView):
+class DeviceCredentialRevocationView(
+    DeviceContextMixin,
+    DetailView[IssuedCredentialModel],
+    FormView[CredentialRevocationForm],
+):
     """Revokes a specific issued credential."""
 
     http_method_names = ('get', 'post')
@@ -825,21 +1178,38 @@ class DeviceCredentialRevocationView(DeviceContextMixin, TpLoginRequiredMixin, D
     pk_url_kwarg = 'credential_pk'
     form_class = CredentialRevocationForm
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the credential information to be revoked to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to render the page.
+        """
         context = super().get_context_data(**kwargs)
         context['credentials'] = [context['credential']]
         return context
 
     def get_success_url(self) -> str:
-        """Returns the URL to redirect to if the form is valid and was successfully processed."""
-        kwargs = {'pk': self.get_object().device.id}
-        return cast('str', reverse_lazy('devices:certificate_lifecycle_management', kwargs=kwargs))
+        """Gets the success url to redirect to after successful processing of the POST data following a form submit.
 
-    def form_valid(self, form) -> HttpResponse:
-        """Handles revocation upon a POST request containing a valid form."""
+        Returns:
+            The success url to redirect to after successful processing of the POST data following a form submit.
+        """
+        return str(reverse_lazy('devices:certificate_lifecycle_management', {'pk': self.get_object().device.id}))
+
+    def form_valid(self, form: CredentialRevocationForm) -> HttpResponse:
+        """Performed if the form was validated successfully and revokes the credential.
+
+        Args:
+            form: The corresponding form object.
+
+        Returns:
+            The Django HttpResponse object.
+        """
         revoked_successfully, revocation_msg = DeviceCredentialRevocation.revoke_certificate(
-            self.get_object().id,
-            form.cleaned_data['revocation_reason']
+            self.get_object().id, form.cleaned_data['revocation_reason']
         )
 
         if revoked_successfully:
@@ -848,186 +1218,3 @@ class DeviceCredentialRevocationView(DeviceContextMixin, TpLoginRequiredMixin, D
             messages.error(self.request, revocation_msg)
 
         return super().form_valid(form)
-
-
-class DeviceBrowserOnboardingOTPView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView, RedirectView):
-    """View to display the OTP for remote credential download (aka. browser onboarding)."""
-
-    model = IssuedCredentialModel
-    template_name = 'devices/credentials/onboarding/browser/otp_view.html'
-    redirection_view = 'devices:devices'
-    context_object_name = 'credential'
-
-    def get(self, request: HttpRequest, *args: dict, **kwargs: dict) -> HttpResponse:  # noqa: ARG002
-        """Renders a template view for displaying the OTP."""
-        credential = self.get_object()
-        device = credential.device
-        try:  # remove a potential previous download model for this credential
-            cdm = RemoteDeviceCredentialDownloadModel.objects.get(issued_credential_model=credential, device=device)
-            cdm.delete()
-        except RemoteDeviceCredentialDownloadModel.DoesNotExist:
-            pass
-        cdm = RemoteDeviceCredentialDownloadModel(issued_credential_model=credential, device=device)
-        cdm.save()
-
-        context = {
-            'device_name': device.unique_name,
-            'device_id': device.id,
-            'credential_id': credential.id,
-            'otp': cdm.get_otp_display(),
-            'download_url': request.build_absolute_uri(reverse('devices:browser_login')),
-        }
-
-        return render(request, self.template_name, context)
-
-
-class DeviceBrowserOnboardingCancelView(DeviceContextMixin, TpLoginRequiredMixin, Detail404RedirectView, RedirectView):
-    """View to cancel the browser onboarding process and delete the associated RemoteDeviceCredentialDownloadModel."""
-
-    model = IssuedCredentialModel
-    redirection_view = 'devices:credential-download'
-    context_object_name = 'credential'
-
-    def get_redirect_url(self, *args: tuple, **kwargs: dict) -> str:  # noqa: ARG002
-        """Returns the URL to redirect to after the browser onboarding process was canceled."""
-        pk = self.kwargs.get('pk')
-        return reverse(self.redirection_view, kwargs={'pk': pk})
-
-    def get(self, request: HttpRequest, *args: tuple, **kwargs: dict) -> HttpResponse:  # noqa: ARG002
-        """Cancels the browser onboarding process and deletes the associated RemoteDeviceCredentialDownloadModel."""
-        credential = self.get_object()
-        device = credential.device
-        try:
-            cdm = RemoteDeviceCredentialDownloadModel.objects.get(issued_credential_model=credential, device=device)
-            cdm.delete()
-            messages.info(request, 'The browser onboarding process was canceled.')
-        except RemoteDeviceCredentialDownloadModel.DoesNotExist:
-            messages.error(request, 'The browser onboarding process was not found.')
-
-        return redirect(self.get_redirect_url())
-
-
-class DeviceOnboardingBrowserLoginView(FormView):
-    """View to handle certificate download requests."""
-
-    template_name = 'devices/credentials/onboarding/browser/login.html'
-    form_class = BrowserLoginForm
-
-    def fail_redirect(self) -> HttpResponse:
-        """On login failure, redirect back to the login page with an error message."""
-        messages.error(self.request, _('The provided password is not valid.'))
-        return redirect(self.request.path)
-
-    def post(self, request: HttpRequest, *args: tuple, **kwargs: dict) -> HttpResponse:  # noqa: ARG002
-        """Handles POST request for browser login form submission."""
-        form = BrowserLoginForm(request.POST)
-        if not form.is_valid():
-            return self.fail_redirect()
-
-        cred_id = form.cleaned_data['cred_id']
-        otp = form.cleaned_data['otp']
-        try:
-            credential_download = RemoteDeviceCredentialDownloadModel.objects.get(issued_credential_model=cred_id)
-        except RemoteDeviceCredentialDownloadModel.DoesNotExist:
-            return self.fail_redirect()
-
-        if not credential_download.check_otp(otp):
-            return self.fail_redirect()
-
-        token = credential_download.download_token
-        url = f"{reverse('devices:browser_domain_credential_download', kwargs={'pk': cred_id})}?token={token}"
-        return redirect(url)
-
-
-class HelpDispatchDomainView(DeviceContextMixin, TpLoginRequiredMixin, SingleObjectMixin, RedirectView):
-    model: type[DeviceModel] = DeviceModel
-    permanent = False
-
-    def get_redirect_url(self, *args: tuple, **kwargs: dict) -> str:
-
-        device: DeviceModel = self.get_object()
-        if not device.domain_credential_onboarding:
-            if device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value:
-                return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
-
-        if device.onboarding_protocol == device.OnboardingProtocol.CMP_SHARED_SECRET.value:
-            return f'{reverse("devices:help-onboarding_cmp-shared-secret-domain", kwargs={"pk": device.id})}'
-
-        if device.onboarding_protocol == device.OnboardingProtocol.CMP_IDEVID.value:
-            return f'{reverse("devices:help-onboarding_cmp-idevid-domain", kwargs={"pk": device.id})}'
-
-        return f"{reverse('devices:devices')}"
-
-
-class HelpDispatchApplicationView(DeviceContextMixin, TpLoginRequiredMixin, SingleObjectMixin, RedirectView):
-    model: type[DeviceModel] = DeviceModel
-    permanent = False
-
-    def get_redirect_url(self, *args: tuple, **kwargs: dict) -> str:
-
-        device: DeviceModel = self.get_object()
-        if not device.domain_credential_onboarding:
-            if device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value:
-                return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
-
-        if device.onboarding_protocol == device.OnboardingProtocol.CMP_SHARED_SECRET.value:
-            return f'{reverse("devices:help-onboarding_cmp-shared-secret-application", kwargs={"pk": device.id})}'
-
-        if device.onboarding_protocol == device.OnboardingProtocol.CMP_IDEVID.value:
-            return f'{reverse("devices:help-onboarding_cmp-idevid-application", kwargs={"pk": device.id})}'
-
-        return f"{reverse('devices:devices')}"
-
-
-class DownloadPageDispatcherView(DeviceContextMixin, TpLoginRequiredMixin, SingleObjectMixin, RedirectView):
-    model: type[IssuedCredentialModel] = IssuedCredentialModel
-    permanent = False
-
-    def get_redirect_url(self, *args: tuple, **kwargs: dict) -> str:
-        issued_credential: IssuedCredentialModel = self.get_object()
-        if issued_credential.credential.private_key:
-            return f'{reverse("devices:credential-download", kwargs={"pk": issued_credential.id})}'
-        return f'{reverse("devices:certificate-download", kwargs={"pk": issued_credential.id})}'
-
-
-class CertificateDownloadView(DeviceContextMixin, TpLoginRequiredMixin, DetailView):
-    http_method_names = ('get',)
-
-    model: type[IssuedCredentialModel] = IssuedCredentialModel
-    template_name = 'devices/credentials/certificate_download.html'
-    context_object_name = 'issued_credential'
-
-
-class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, TpLoginRequiredMixin,
-                                           Detail404RedirectView[DevIdRegistration]):
-    model = DevIdRegistration
-    template_name = 'devices/help/onboarding/cmp_idevid_registration.html'
-    context_object_name = 'devid_registration'
-
-    def get_context_data(self, **kwargs) -> dict[str, Any]:
-        context = super().get_context_data()
-        devid_registration: DevIdRegistration = self.object
-
-        if devid_registration.domain.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
-            domain_credential_key_gen_command = f'openssl genrsa -out domain_credential_key.pem {devid_registration.domain.public_key_info.key_size}'
-            key_gen_command = f'openssl genrsa -out key.pem {devid_registration.domain.public_key_info.key_size}'
-        elif devid_registration.domain.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
-            domain_credential_key_gen_command = (
-                f'openssl ecparam -name {devid_registration.domain.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out domain_credential_key.pem')
-            key_gen_command = (
-                f'openssl ecparam -name {devid_registration.domain.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out key.pem')
-        else:
-            raise ValueError('Unsupported public key algorithm')
-        context['host'] = self.request.META.get('REMOTE_ADDR') + ':' + self.request.META.get('SERVER_PORT')
-        context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
-        context['key_gen_command'] = key_gen_command
-        context['issuing_ca_pem'] = devid_registration.domain.issuing_ca.credential.get_certificate().public_bytes(
-            encoding=serialization.Encoding.PEM).decode()
-        number_of_issued_device_certificates = 0
-        context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
-        context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
-        context['public_key_info'] = devid_registration.domain.public_key_info
-        context['domain'] = devid_registration.domain
-        return context

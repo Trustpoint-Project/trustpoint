@@ -23,7 +23,7 @@ from django.views.generic.list import ListView
 from pki.models import CertificateModel, IssuingCaModel
 
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import SortableTableMixin, TpLoginRequiredMixin
+from trustpoint.views.base import SortableTableMixin
 
 from .filters import NotificationFilter
 from .models import NotificationModel, NotificationStatus
@@ -35,14 +35,14 @@ SUCCESS = 25
 ERROR = 40
 
 
-class IndexView(TpLoginRequiredMixin, RedirectView):
+class IndexView(RedirectView):
     """Redirects authenticated users to the dashboard page."""
 
     permanent = False
     pattern_name = 'home:dashboard'
 
 
-class DashboardView(TpLoginRequiredMixin, SortableTableMixin, ListView):
+class DashboardView(SortableTableMixin, ListView):
     """Renders the dashboard page for authenticated users. Uses the 'home/dashboard.html' template."""
 
     template_name = 'home/dashboard.html'
@@ -159,7 +159,7 @@ def mark_as_solved(request: HttpRequest, pk: int | str) -> HttpResponse:
     return render(request, 'home/notification_details.html', context)
 
 
-class AddDomainsAndDevicesView(TpLoginRequiredMixin, TemplateView):
+class AddDomainsAndDevicesView(TemplateView):
     """View to execute the add_domains_and_devices management command and pass status to the template."""
 
     _logger = logging.getLogger(__name__)
@@ -177,7 +177,7 @@ class AddDomainsAndDevicesView(TpLoginRequiredMixin, TemplateView):
         return redirect('home:dashboard')
 
 
-class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
+class DashboardChartsAndCountsView(TemplateView):
     """View to mark the notification as Solved."""
 
     _logger = logging.getLogger(__name__)
@@ -303,9 +303,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
         cert_counts_by_status = []
         try:
             cert_status_qr = (
-                CertificateModel.objects.annotate(
-                    issue_date=TruncDate('not_valid_before')
-                )
+                CertificateModel.objects.annotate(issue_date=TruncDate('not_valid_before'))
                 .values('issue_date', 'certificate_status')
                 .annotate(cert_count=Count('id'))
                 .order_by('issue_date', 'certificate_status')
@@ -467,7 +465,7 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
             # )
 
             # Use a union query to combine results
-            #cert_domain_qr = cert_app_counts.union(cert_domain_counts)
+            # cert_domain_qr = cert_app_counts.union(cert_domain_counts)
 
             #   # Convert the queryset to a list
             cert_counts_by_domain = list(cert_counts_domain_qr)
@@ -482,16 +480,12 @@ class DashboardChartsAndCountsView(TpLoginRequiredMixin, TemplateView):
         }
         try:
             cert_template_qr = (
-                IssuedCredentialModel.objects.filter(
-                    credential__certificates__created_at__gt=start_date
-                )
+                IssuedCredentialModel.objects.filter(credential__certificates__created_at__gt=start_date)
                 .values(cert_type=F('issued_credential_purpose'))
                 .annotate(count=Count('credential__certificates'))
             )
             # Mapping from short code to human-readable name
-            template_mapping = {
-                key: str(value) for key, value in IssuedCredentialModel.IssuedCredentialPurpose.choices
-            }
+            template_mapping = {key: str(value) for key, value in IssuedCredentialModel.IssuedCredentialPurpose.choices}
             cert_counts_by_template = {template_mapping[item['cert_type']]: item['count'] for item in cert_template_qr}
         except Exception:
             self._logger.exception('Error occurred in certificate count by template query')

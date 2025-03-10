@@ -122,9 +122,9 @@ def step_then_they_will_receive_page_to_select_the_format(context: runner.Contex
     Args:
         context (runner.Context): Behave context.
     """
-    assert 'value="PEM_ZIP"' in context.otp_post_view_response.decode(), \
+    assert 'value="PEM_ZIP"' in context.otp_post_view_response.decode(), (
         'Page does not contain "Download as ZIP (PEM)" button'
-
+    )
 
 
 @given('an incorrect one-time password')
@@ -144,8 +144,9 @@ def step_then_they_will_receive_a_warning(context: runner.Context) -> None:
     Args:
         context (runner.Context): Behave context.
     """
-    assert 'The provided password is not valid.' in context.otp_post_view_response.decode(), \
+    assert 'The provided password is not valid.' in context.otp_post_view_response.decode(), (
         'Page does not contain OTP error message'
+    )
 
 
 @given('the user is on the credential download page')
@@ -176,11 +177,13 @@ def step_given_the_download_is_not_yet_expired(context: runner.Context) -> None:
         context (runner.Context): Behave context.
     """
     assert context.download_token is not None, 'Download token not in context'
-    assert not RemoteDeviceCredentialDownloadModel.objects.get(id=context.download_id).check_token('dummy_token'), \
+    assert not RemoteDeviceCredentialDownloadModel.objects.get(id=context.download_id).check_token('dummy_token'), (
         'Dummy token should not be valid'
+    )
 
-    assert RemoteDeviceCredentialDownloadModel.objects.get(id=context.download_id).check_token(context.download_token),\
-        'Actual token from URL should be valid'
+    assert RemoteDeviceCredentialDownloadModel.objects.get(id=context.download_id).check_token(
+        context.download_token
+    ), 'Actual token from URL should be valid'
 
 
 @when('the user enters a password to encrypt the credential private key')
@@ -201,11 +204,7 @@ def step_when_user_selects_a_file(context: runner.Context) -> None:
         context (runner.Context): Behave context.
     """
     url = f'/devices/browser/credential-download/{context.download_id}/?token={context.download_token}'
-    post_data = {
-        'password': context.test_password,
-        'confirm_password': context.test_password,
-        'file_format': 'PEM_ZIP'
-    }
+    post_data = {'password': context.test_password, 'confirm_password': context.test_password, 'file_format': 'PEM_ZIP'}
     download_response = context.unauthenticated_user_client.post(url, post_data)
     assert download_response.status_code == HTTP_OK, 'Non-OK response code'
     context.download_response = download_response

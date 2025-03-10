@@ -24,7 +24,7 @@ Step-by-Step Setup (Load from Dockerhub) ⬇️
 
    .. code-block:: bash
 
-        docker pull trustpoint2023/trustpoint:latest
+        docker pull trustpointproject/trustpoint:latest
         docker pull postgres:17
 
    This command pulls the latest versions of the Trustpoint and Postgres images from Docker Hub.
@@ -35,7 +35,7 @@ Step-by-Step Setup (Load from Dockerhub) ⬇️
 
    .. code-block:: bash
 
-       docker run -d --name trustpoint-container -p 80:80 -p 443:443 trustpoint2023/trustpoint:latest
+       docker run -d --name trustpoint-container -p 80:80 -p 443:443 trustpointproject/trustpoint:latest
        docker run -d --name postgres -p 5432:5432 postgres:17
 
    - **-d**: Runs the container in detached mode.

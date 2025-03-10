@@ -181,3 +181,4 @@ docs/build/
 collected_static
 
 _*.sh
+/md-report.md
