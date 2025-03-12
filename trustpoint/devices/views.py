@@ -520,8 +520,7 @@ class DeviceIssueOpcUaServerCredential(
 
 #  ----------------------------------- Certificate Lifecycle Management - Help Pages -----------------------------------
 
-
-class HelpDispatchView(DeviceContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
+class HelpDispatchDomainCredentialView(DeviceContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
     """Redirects to the required help pages depending on the onboarding protocol.
 
     If no help page could be determined, it will redirect to the devices page.
@@ -533,7 +532,7 @@ class HelpDispatchView(DeviceContextMixin, SingleObjectMixin[DeviceModel], Redir
     permanent = False
 
     def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
-        """Gets the redirection URL for the required help page.
+        """Gets the redirection URL (Domain Credentials) for the required help page.
 
         Args:
             *args: Positional arguments are discarded.
@@ -546,11 +545,6 @@ class HelpDispatchView(DeviceContextMixin, SingleObjectMixin[DeviceModel], Redir
         del kwargs
 
         device: DeviceModel = self.get_object()
-        if (
-            not device.domain_credential_onboarding
-            and device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value
-        ):
-            return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
 
         if device.onboarding_protocol == device.OnboardingProtocol.CMP_SHARED_SECRET.value:
             return f'{reverse("devices:help-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
@@ -559,6 +553,46 @@ class HelpDispatchView(DeviceContextMixin, SingleObjectMixin[DeviceModel], Redir
             return f'{reverse("devices:help-onboarding_cmp-idevid", kwargs={"pk": device.id})}'
 
         return f'{reverse("devices:devices")}'
+
+class HelpDispatchApplicationCredentialView(DeviceContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
+    """Redirects to the required help pages depending on PKI protocol.
+
+    If no help page could be determined, it will redirect to the devices page.
+    """
+
+    http_method_names = ('get',)
+
+    model: type[DeviceModel] = DeviceModel
+    permanent = False
+
+    def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
+        """Gets the redirection URL (Application Credentials) for the required help page.
+
+        Args:
+            *args: Positional arguments are discarded.
+            **kwargs: Keyword arguments are discarded.
+
+        Returns:
+            The redirection URL.
+        """
+        del args
+        del kwargs
+
+        device: DeviceModel = self.get_object()
+
+        if (
+                not device.domain_credential_onboarding
+                and device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value
+        ):
+            return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
+
+        if device.onboarding_protocol in {
+            device.OnboardingProtocol.CMP_SHARED_SECRET.value,
+            device.OnboardingProtocol.CMP_IDEVID.value
+        }:
+            return f'{reverse("devices:help-onboarding_cmp-application-credentials", kwargs={"pk": device.id})}'
+
+        return f"{reverse('devices:devices')}"
 
 
 class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceModel]):
@@ -580,9 +614,8 @@ class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceMo
         """
         context = super().get_context_data(**kwargs)
         device: DeviceModel = self.object
-        context['host'] = (
-            self.request.META.get('REMOTE_ADDR', '127.0.0.1') + ':' + self.request.META.get('SERVER_PORT', '443')
-        )
+        context['host'] = (f'{self.request.META.get('REMOTE_ADDR', '127.0.0.1')}:'
+                           f'{self.request.META.get('SERVER_PORT', '443')}')
         context.update(self._get_domain_credential_cmp_context(device=device))
         return context
 
@@ -660,10 +693,9 @@ class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, DetailView[DeviceM
         else:
             err_msg = _('Unsupported public key algorithm')
             raise ValueError(err_msg)
-        context['host'] = (
-            self.request.META.get('REMOTE_ADDR', '127.0.0.1') + ':' + self.request.META.get('SERVER_PORT'),
-            '443',
-        )
+
+        context['host'] = (f'{self.request.META.get('REMOTE_ADDR', '127.0.0.1')}:'
+                           f'{self.request.META.get('SERVER_PORT', '443')}')
         context['key_gen_command'] = key_gen_command
         number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
         context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
@@ -682,6 +714,10 @@ class OnboardingCmpIdevidHelpView(HelpDomainCredentialCmpContextView):
 
     template_name = 'devices/help/onboarding/cmp_idevid.html'
 
+class OnboardingCmpApplicationCredentialsHelpView(HelpDomainCredentialCmpContextView):
+    """Help view for enrolling application credentials via CMP."""
+
+    template_name = 'devices/help/onboarding/cmp_application_credentials.html'
 
 class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdRegistration]):
     """Help view for the IDevID Registration, which displays the required OpenSSL commands."""
@@ -721,9 +757,8 @@ class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdR
         else:
             err_msg = 'Unsupported public key algorithm'
             raise ValueError(err_msg)
-        context['host'] = (
-            self.request.META.get('REMOTE_ADDR', '127.0.0.1') + ':' + self.request.META.get('SERVER_PORT', '443')
-        )
+        context['host'] = (f'{self.request.META.get('REMOTE_ADDR', '127.0.0.1')}:'
+                           f'{self.request.META.get('SERVER_PORT', '443')}')
         context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
         context['key_gen_command'] = key_gen_command
         context['issuing_ca_pem'] = (

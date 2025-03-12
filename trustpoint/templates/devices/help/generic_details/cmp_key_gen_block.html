@@ -1,0 +1,29 @@
+{% load i18n %}
+{% load static %}
+
+{% block head %}
+    <script src="{% static 'js/copy_clipboard.js' %}"></script>
+{% endblock head %}
+
+{% block cmp_key_gen_block %}
+    <ul class="tp-kvp-list">
+
+        <li>
+            <div>{% trans 'Generate a Keypair' %}</div>
+            <div class="copy-container" style="position: relative;">
+                <code class="command-text language-bash">
+                    {{ key_gen_command }}
+                </code>
+
+                <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
+                        aria-label="Copy to clipboard">
+                    <svg class="icon icon-copy" width="40" height="40" fill="currentColor">
+                        <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
+                    </svg>
+                </button>
+            </div>
+            <hr>
+        </li>
+    </ul>
+
+{% endblock cmp_key_gen_block %}

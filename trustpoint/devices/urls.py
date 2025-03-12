@@ -39,7 +39,16 @@ urlpatterns = [
         name='certificate_lifecycle_management-issue_opcua_server_credential',
     ),
     # Certificate Lifecycle Management - Help Pages
-    path('help/dispatch/<int:pk>/', views.HelpDispatchView.as_view(), name='help_dispatch'),
+    path(
+        'help/dispatchDomain/<int:pk>/',
+        views.HelpDispatchDomainCredentialView.as_view(),
+        name='help_dispatch_domain'
+    ),
+    path(
+        'help/dispatchApplication/<int:pk>/',
+        views.HelpDispatchApplicationCredentialView.as_view(),
+        name='help_dispatch_application'
+    ),
     path(
         'help/no-onboarding/cmp-shared-secret/<int:pk>/',
         views.NoOnboardingCmpSharedSecretHelpView.as_view(),
@@ -59,6 +68,11 @@ urlpatterns = [
         'help/onboarding/cmp-idevid-registration/<int:pk>/',
         views.OnboardingIdevidRegistrationHelpView.as_view(),
         name='help-onboarding_cmp-idevid-registration',
+    ),
+    path(
+        'help/onboarding/cmp-application-credentials/<int:pk>/',
+        views.OnboardingCmpApplicationCredentialsHelpView.as_view(),
+        name='help-onboarding_cmp-application-credentials',
     ),
     # Certificate Lifecycle Management - Downloads
     path('download/<int:pk>/', views.DownloadPageDispatcherView.as_view(), name='download'),
