@@ -18,7 +18,12 @@ class Command(BaseCommand):
     help = 'Set up initial Trustpoint notifications.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         self._trustpoint_setup_notifications()
         self.stdout.write(self.style.SUCCESS('Successfully set up Trustpoint notifications.'))
 

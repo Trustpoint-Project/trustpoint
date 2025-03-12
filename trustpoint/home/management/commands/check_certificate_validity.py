@@ -27,7 +27,12 @@ class Command(BaseCommand):
     help = 'Check for expiring or expired certificates.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.Args.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         self._check_certificate_validity()
         self.stdout.write(self.style.SUCCESS('Certificate validity check completed.'))
 

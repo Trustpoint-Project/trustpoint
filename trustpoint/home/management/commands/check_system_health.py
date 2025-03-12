@@ -21,7 +21,12 @@ class Command(BaseCommand):
     help = 'Check system health and create notifications if issues are found.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         self._check_system_health()
         self.stdout.write(self.style.SUCCESS('System health check completed.'))
 

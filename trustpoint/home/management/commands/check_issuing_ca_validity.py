@@ -22,7 +22,12 @@ class Command(BaseCommand):
     help = 'Check for expiring or expired issuing CAs.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         self._check_issuing_ca_validity()
         self.stdout.write(self.style.SUCCESS('Issuing CA validity check completed.'))
 

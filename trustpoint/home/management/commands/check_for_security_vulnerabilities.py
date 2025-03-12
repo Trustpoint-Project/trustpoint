@@ -19,7 +19,12 @@ class Command(BaseCommand):
     help = 'Check for known security vulnerabilities.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         self._check_for_security_vulnerabilities()
         self.stdout.write(self.style.SUCCESS('Security vulnerabilities check completed.'))
 

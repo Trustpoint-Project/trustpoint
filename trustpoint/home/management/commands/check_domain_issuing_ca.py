@@ -16,7 +16,12 @@ class Command(BaseCommand):
     help = 'Check domains without issuing CA assignments.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         self._check_domain_issuing_ca()
         self.stdout.write(self.style.SUCCESS('Domain Issuing CA check completed.'))
 

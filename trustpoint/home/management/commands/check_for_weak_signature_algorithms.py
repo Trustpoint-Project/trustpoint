@@ -16,7 +16,12 @@ class Command(BaseCommand):
     help = 'Check certificates with weak or deprecated signature algorithms.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         self._check_for_weak_signature_algorithms()
         self.stdout.write(self.style.SUCCESS('Weak signature algorithms check completed.'))
 

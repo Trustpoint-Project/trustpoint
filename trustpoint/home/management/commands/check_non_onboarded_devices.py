@@ -23,7 +23,12 @@ class Command(BaseCommand):
     help = 'Check for devices not onboarded.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         self._check_non_onboarded_devices()
         self.stdout.write(self.style.SUCCESS('Non-onboarded devices check completed.'))
 

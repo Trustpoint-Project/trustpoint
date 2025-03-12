@@ -18,7 +18,11 @@ class Command(BaseCommand):
     help = 'Deletes all existing notifications'
 
     def handle(self, **options: Any) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.
+
+        Args:
+            **options: A variable-length argument.
+        """
         if DOCKER_CONTAINER:
             self.delete_notifications()
             return
