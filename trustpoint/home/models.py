@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from devices.models import DeviceModel
 from django.db import models
 from django.utils.encoding import force_str
 from django.utils.translation import gettext_lazy as _
-from django_stubs_ext import StrOrPromise
 from pki.models.certificate import CertificateModel
 from pki.models.domain import DomainModel
 from pki.models.issuing_ca import IssuingCaModel
+
+if TYPE_CHECKING:
+    from django_stubs_ext import StrOrPromise
 
 log = logging.getLogger('tp.home')
 
@@ -23,7 +25,7 @@ class NotificationStatus(models.Model):
     objects: models.Manager[NotificationStatus]
 
     class StatusChoices(models.TextChoices):
-        """Status Types"""
+        """Status Types."""
 
         NEW = 'NEW', _('New')
         CONFIRMED = 'CONF', _('Confirmed')
@@ -64,7 +66,11 @@ class NotificationMessage:
     short_description: str
     long_description: str = 'No description provided'
 
-    def __init__(self, short_description: StrOrPromise, long_description: StrOrPromise = 'No description provided') -> None:
+    def __init__(
+            self,
+            short_description: StrOrPromise,
+            long_description: StrOrPromise = 'No description provided'
+    ) -> None:
         """Initializes a NotificationMessage instance."""
         self.short_description = force_str(short_description)
         self.long_description = force_str(long_description)
@@ -174,20 +180,23 @@ class NotificationModel(models.Model):
                 self.WELCOME_MESSAGE: NotificationMessage(
                     _('Welcome to Trustpoint!'),
                     _(
-                        'Thank you for setting up Trustpoint. This system will help you manage your certificates and secure your environment.'
+                        'Thank you for setting up Trustpoint. '
+                        'This system will help you manage your certificates and secure your environment.'
                     ),
                 ),
                 # Periodic task notifications
                 self.SYSTEM_NOT_HEALTHY: NotificationMessage(
                     _('System health check failed'),
                     _(
-                        'The system health check detected an issue with one or more services. Please investigate immediately.'
+                        'The system health check detected an issue with one or more services. '
+                        'Please investigate immediately.'
                     ),
                 ),
                 self.VULNERABILITY: NotificationMessage(
                     _('Security vulnerability detected'),
                     _(
-                        'A security vulnerability affecting system components has been detected. Immediate attention required.'
+                        'A security vulnerability affecting system components has been detected. '
+                        'Immediate attention required.'
                     ),
                 ),
                 self.CERT_EXPIRING: NotificationMessage(
@@ -228,13 +237,15 @@ class NotificationModel(models.Model):
                 self.INSUFFICIENT_KEY_LENGTH: NotificationMessage(
                     _('Certificate {common_name} uses insufficient key length'),
                     _(
-                        'The certificate {common_name} uses an RSA key size of {spki_key_size} bits, which is less than the recommended 2048 bits.'
+                        'The certificate {common_name} uses an RSA key size of {spki_key_size} bits, '
+                        'which is less than the recommended 2048 bits.'
                     ),
                 ),
                 self.WEAK_ECC_CURVE: NotificationMessage(
                     _('Certificate {common_name} uses a weak ECC curve'),
                     _(
-                        'The certificate {common_name} is using the {spki_ec_curve} ECC curve, which is no longer recommended.'
+                        'The certificate {common_name} is using the {spki_ec_curve} ECC curve, '
+                        'which is no longer recommended.'
                     ),
                 ),
             }
@@ -271,7 +282,7 @@ class NotificationModel(models.Model):
         IssuingCaModel, on_delete=models.SET_NULL, blank=True, null=True, related_name='notifications'
     )
 
-    event = models.CharField(max_length=255, blank=True, null=True)
+    event = models.CharField(max_length=255, blank=True, default='')
 
     message = models.ForeignKey(  # only for custom messages
         NotificationMessageModel, on_delete=models.CASCADE, null=True, related_name='notifications'

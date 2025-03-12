@@ -26,7 +26,7 @@ class NotificationFilter(django_filters.FilterSet): # type: ignore[misc]
     def filter_by_multiple_types(
         self, queryset: QuerySet[NotificationModel], _: str, value: str
     ) -> QuerySet[NotificationModel]:
-        """Split the comma-separated values into a list for types"""
+        """Split the comma-separated values into a list for types."""
         if value:
             types = value.split(',')
             return queryset.filter(notification_type__in=types)
@@ -35,7 +35,7 @@ class NotificationFilter(django_filters.FilterSet): # type: ignore[misc]
     def filter_by_multiple_sources(
         self, queryset: QuerySet[NotificationModel], _: str, value: str
     ) -> QuerySet[NotificationModel]:
-        """Split the comma-separated values into a list for sources"""
+        """Split the comma-separated values into a list for sources."""
         if value:
             sources = value.split(',')
             return queryset.filter(notification_source__in=sources)
@@ -44,7 +44,7 @@ class NotificationFilter(django_filters.FilterSet): # type: ignore[misc]
     def filter_by_date_range(
         self, queryset: QuerySet[NotificationModel], _: str, value: str
     ) -> QuerySet[NotificationModel]:
-        """Filter the given QuerySet by date range"""
+        """Filter the given QuerySet by date range."""
         now = timezone.now()
         if value == 'today':
             return queryset.filter(created_at__date=now.date())

@@ -11,6 +11,7 @@ from devices.models import DeviceModel, IssuedCredentialModel
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db.models import Case, Count, F, IntegerField, Q, QuerySet, Value, When
 from django.db.models.functions import TruncDate
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -173,7 +174,7 @@ class AddDomainsAndDevicesView(TemplateView):
         try:
             call_command('add_domains_and_devices')
             messages.add_message(request, SUCCESS, 'Successfully added test data.')
-        except Exception:
+        except CommandError:
             messages.add_message(request, ERROR, 'Test data already available in the Database.')
 
         return redirect('home:dashboard')
