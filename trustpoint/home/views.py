@@ -297,69 +297,69 @@ class DashboardChartsAndCountsView(TemplateView):
 
         return JsonResponse(dashboard_data)
 
-    def get_device_charts_data(self, dashboard_data: dict[str, Any], start_date_object: datetime) -> None:
+    def get_device_charts_data(self, dashboard_data: dict[str, Any], start_date: datetime) -> None:
         """Fetch data from database for device charts and add to dashboard data object.
 
         Args:
             dashboard_data: The dashboard data object.
-            start_date_object: The start date for fetching device data.
+            start_date: The start date for fetching device data.
 
         Returns:
             It returns nothing. It adds the device related data in dashboard_data object.
         """
-        device_counts_by_os = self.get_device_count_by_onboarding_status(start_date_object)
+        device_counts_by_os = self.get_device_count_by_onboarding_status(start_date)
         if device_counts_by_os:
             dashboard_data['device_counts_by_os'] = device_counts_by_os
 
-        device_counts_by_op = self.get_device_count_by_onboarding_protocol(start_date_object)
+        device_counts_by_op = self.get_device_count_by_onboarding_protocol(start_date)
         if device_counts_by_op:
             dashboard_data['device_counts_by_op'] = device_counts_by_op
 
-        device_counts_by_domain = self.get_device_count_by_domain(start_date_object)
+        device_counts_by_domain = self.get_device_count_by_domain(start_date)
         if device_counts_by_domain:
             dashboard_data['device_counts_by_domain'] = device_counts_by_domain
 
-    def get_cert_charts_data(self, dashboard_data: dict[str, Any], start_date_object: datetime) -> None:
+    def get_cert_charts_data(self, dashboard_data: dict[str, Any], start_date: datetime) -> None:
         """Fetch data from database for certificate charts and add to dashboard data object.
 
         Args:
             dashboard_data: The dashboard data object.
-            start_date_object: The start date for fetching certificate data.
+            start_date: The start date for fetching certificate data.
 
         Returns:
             It returns nothing. It adds the certificate related data in dashboard_data object.
         """
-        cert_counts_by_status = self.get_cert_counts_by_status(start_date_object)
+        cert_counts_by_status = self.get_cert_counts_by_status(start_date)
         if cert_counts_by_status:
             dashboard_data['cert_counts_by_status'] = cert_counts_by_status
 
-        cert_counts_by_domain = self.get_cert_counts_by_domain(start_date_object)
+        cert_counts_by_domain = self.get_cert_counts_by_domain(start_date)
         if cert_counts_by_domain:
             dashboard_data['cert_counts_by_domain'] = cert_counts_by_domain
 
-        cert_counts_by_template = self.get_cert_counts_by_template(start_date_object)
+        cert_counts_by_template = self.get_cert_counts_by_template(start_date)
         if cert_counts_by_template:
             dashboard_data['cert_counts_by_template'] = cert_counts_by_template
 
-    def get_ca_charts_data(self, dashboard_data: dict[str, Any], start_date_object: datetime) -> None:
+    def get_ca_charts_data(self, dashboard_data: dict[str, Any], start_date: datetime) -> None:
         """Fetch data from database for issuing ca charts and add to dashboard data object.
 
         Args:
             dashboard_data: The dashboard data object.
-            start_date_object: The start date for fetching issuing ca data.
+            start_date: The start date for fetching issuing ca data.
 
         Returns:
             It returns nothing. It adds the issuing ca related data in dashboard_data object.
         """
-        cert_counts_by_issuing_ca = self.get_cert_counts_by_issuing_ca(start_date_object)
+        cert_counts_by_issuing_ca = self.get_cert_counts_by_issuing_ca(start_date)
         if cert_counts_by_issuing_ca:
             dashboard_data['cert_counts_by_issuing_ca'] = cert_counts_by_issuing_ca
 
-        cert_counts_by_issuing_ca_and_date = self.get_cert_counts_by_issuing_ca_and_date(start_date_object)
+        cert_counts_by_issuing_ca_and_date = self.get_cert_counts_by_issuing_ca_and_date(start_date)
         if cert_counts_by_issuing_ca_and_date:
             dashboard_data['cert_counts_by_issuing_ca_and_date'] = cert_counts_by_issuing_ca_and_date
 
-        issuing_ca_counts_by_type = self.get_issuing_ca_counts_by_type(start_date_object)
+        issuing_ca_counts_by_type = self.get_issuing_ca_counts_by_type(start_date)
         if issuing_ca_counts_by_type:
             dashboard_data['ca_counts_by_type'] = issuing_ca_counts_by_type
 
