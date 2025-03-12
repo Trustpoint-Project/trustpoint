@@ -44,7 +44,7 @@ class NotificationStatus(models.Model):
 
     def __str__(self) -> str:
         """Returns a human-readable string."""
-        return str(self.get_status_display())
+        return str(self.get_status_display())  # type: ignore[attr-defined]
 
 
 class NotificationMessageModel(models.Model):
@@ -283,7 +283,7 @@ class NotificationModel(models.Model):
 
     def __str__(self) -> str:
         """Returns a human-readable string."""
-        return f'{self.get_notification_type_display()} - {self.message.short_description[:20]}'
+        return f'{self.get_notification_type_display()} - {self.message.short_description[:20]}' # type: ignore[attr-defined]
 
     @property
     def short_translated(self) -> Any:

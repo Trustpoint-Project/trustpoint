@@ -86,7 +86,7 @@ class Command(BaseCommand):
         if not NotificationModel.objects.filter(event=event, issuing_ca=issuing_ca).exists():
             message_data = {
                 'unique_name': issuing_ca.unique_name,
-                'not_valid_after': issuing_ca.issuing_ca_certificate.not_valid_after,
+                'not_valid_after': issuing_ca.credential.get_certificate().not_valid_after,
             }
             notification = NotificationModel.objects.create(
                 issuing_ca=issuing_ca,

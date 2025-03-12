@@ -99,7 +99,7 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
     @staticmethod
     def _render_notification_type(record: NotificationModel) -> SafeString:
         """Render the notification type with a badge according to the type."""
-        type_display = record.get_notification_type_display()
+        type_display = record.get_notification_type_display() # type: ignore[attr-defined]
 
         if record.notification_type == NotificationModel.NotificationTypes.CRITICAL:
             badge_class = 'bg-danger'
