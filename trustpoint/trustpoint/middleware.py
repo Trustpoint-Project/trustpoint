@@ -18,8 +18,9 @@ class TrustpointLoginRequiredMiddleware(LoginRequiredMiddleware):  # type: ignor
         view_args,  # noqa: ANN001
         view_kwargs,  # noqa: ANN001
     ):
-        """TODO(AlexHx8472): Add proper docstring."""
-        if any(request.path.startswith(path) for path in settings.PUBLIC_PATHS) and not request.user.is_authenticated:
+        """Allow unauthenticated access to public paths, else redirect to login page."""
+        if (not request.user.is_authenticated
+            and any(request.path.startswith(path) for path in settings.PUBLIC_PATHS)):
             return None
 
         return super().process_view(request, view_func, view_args, view_kwargs)
