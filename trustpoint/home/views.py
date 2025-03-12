@@ -14,7 +14,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db.models import Case, Count, F, IntegerField, Q, QuerySet, Value, When
 from django.db.models.functions import TruncDate
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import dateparse, timezone
 from django.utils.html import format_html
@@ -53,22 +53,44 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
     paginate_by = UIConfig.notifications_paginate_by
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initializes the parent class with the given arguments and keyword arguments."""
+        """Initializes the parent class with the given arguments and keyword arguments.
+
+        It initialize the last_week_dates objects with list of string of last week dates.
+
+        Args:
+            *args: Positional arguments passed to super().__init__.
+            **kwargs: Keyword arguments passed to super().__init__.
+
+        Returns:
+            It returns nothing.
+        """
         super().__init__(*args, **kwargs)
         self.last_week_dates = self.generate_last_week_dates()
 
     def get_notifications(self) -> QuerySet[NotificationModel]:
-        """Fetch notification data for the table."""
+        """Fetch notification data for the table.
+
+        Returns:
+            A `QuerySet` containing all notifications.
+        """
         return NotificationModel.objects.all()
 
     def generate_last_week_dates(self) -> list[str]:
-        """Generates date strings for last one week."""
+        """Generates date strings for last one week.
+
+        Returns:
+            A list of date strings from last one week.
+        """
         end_date = timezone.now()
         start_date = end_date - timedelta(days=6)
         return [(start_date + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
 
     def get_queryset(self) -> Any:
-        """Returns a queryset of NotificationModel instances."""
+        """Returns a queryset of NotificationModel instances.
+
+        Returns:
+            A `QuerySet` containing filtered notifications.
+        """
         all_notifications = NotificationModel.objects.all()
 
         notification_filter = NotificationFilter(self.request.GET, queryset=all_notifications)
@@ -76,7 +98,14 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
         return super().get_queryset()
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Fetch context data."""
+        """Fetch context data.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to render the page.
+        """
         context = super().get_context_data(**kwargs)
 
         for notification in context['notifications']:
@@ -89,7 +118,14 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
 
     @staticmethod
     def _render_created_at(record: NotificationModel) -> SafeString:
-        """Render the created_at field with a badge if the status is 'New'."""
+        """Render the created_at field with a badge if the status is 'New'.
+
+        Args:
+            record: The corresponding NotificationModel.
+
+        Returns:
+            The HTML of the created at display span.
+        """
         created_at_display = record.created_at.strftime('%Y-%m-%d %H:%M:%S')
 
         if record.statuses.filter(status=NotificationStatus.StatusChoices.NEW).exists():
@@ -99,7 +135,14 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
 
     @staticmethod
     def _render_notification_type(record: NotificationModel) -> SafeString:
-        """Render the notification type with a badge according to the type."""
+        """Render the notification type with a badge according to the type.
+
+        Args:
+            record: The corresponding NotificationModel.
+
+        Returns:
+            The HTML of the span with class badge to display notification type.
+        """
         type_display = record.get_notification_type_display() # type: ignore[attr-defined]
 
         if record.notification_type == NotificationModel.NotificationTypes.CRITICAL:
@@ -116,7 +159,15 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
 
 @login_required
 def notification_details_view(request: HttpRequest, pk: int | str) -> HttpResponse:
-    """Rends notification details view."""
+    """Renders notification details view.
+
+    Args:
+        request: The Django request object.
+        pk: The primary key.
+
+    Returns:
+        A redirect to the notification details page.
+    """
     notification = get_object_or_404(NotificationModel, pk=pk)
 
     notification_statuses = notification.statuses.values_list('status', flat=True)
@@ -140,7 +191,15 @@ def notification_details_view(request: HttpRequest, pk: int | str) -> HttpRespon
 
 @login_required
 def mark_as_solved(request: HttpRequest, pk: int | str) -> HttpResponse:
-    """View to mark the notification as Solved."""
+    """View to mark the notification as Solved.
+
+    Args:
+        request: The Django request object.
+        pk: The primary key.
+
+    Returns:
+        A redirect to the notification details page.
+    """
     notification = get_object_or_404(NotificationModel, pk=pk)
 
     solved_status, created = NotificationStatus.objects.get_or_create(status='SOLVED')
@@ -166,8 +225,17 @@ class AddDomainsAndDevicesView(TemplateView):
 
     _logger = logging.getLogger(__name__)
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handles GET requests and redirects to the dashboard."""
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
+        """Handles GET requests and redirects to the dashboard.
+
+        Args:
+            request: The HTTP request object.
+            *args: Additional positional arguments.
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The response that redirects the user to home:dashboard.
+        """
         del args
         del kwargs
 
@@ -185,8 +253,17 @@ class DashboardChartsAndCountsView(TemplateView):
 
     _logger = logging.getLogger(__name__)
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Get dashboard data for panels, tables and charts."""
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        """Get dashboard data for panels, tables and charts.
+
+        Args:
+            request: The HTTP request object.
+            *args: Additional positional arguments.
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The JSON response containing dashboard data.
+        """
         start_date: str | None = request.GET.get('start_date', None)
 
         del args
@@ -221,7 +298,15 @@ class DashboardChartsAndCountsView(TemplateView):
         return JsonResponse(dashboard_data)
 
     def get_device_charts_data(self, dashboard_data: dict[str, Any], start_date_object: datetime) -> None:
-        """Fetch data from database for device charts."""
+        """Fetch data from database for device charts and add to dashboard data object.
+
+        Args:
+            dashboard_data: The dashboard data object.
+            start_date_object: The start date for fetching device data.
+
+        Returns:
+            It returns nothing. It adds the device related data in dashboard_data object.
+        """
         device_counts_by_os = self.get_device_count_by_onboarding_status(start_date_object)
         if device_counts_by_os:
             dashboard_data['device_counts_by_os'] = device_counts_by_os
@@ -235,7 +320,15 @@ class DashboardChartsAndCountsView(TemplateView):
             dashboard_data['device_counts_by_domain'] = device_counts_by_domain
 
     def get_cert_charts_data(self, dashboard_data: dict[str, Any], start_date_object: datetime) -> None:
-        """Fetch data from database for certificate charts."""
+        """Fetch data from database for certificate charts and add to dashboard data object.
+
+        Args:
+            dashboard_data: The dashboard data object.
+            start_date_object: The start date for fetching certificate data.
+
+        Returns:
+            It returns nothing. It adds the certificate related data in dashboard_data object.
+        """
         cert_counts_by_status = self.get_cert_counts_by_status(start_date_object)
         if cert_counts_by_status:
             dashboard_data['cert_counts_by_status'] = cert_counts_by_status
@@ -249,7 +342,15 @@ class DashboardChartsAndCountsView(TemplateView):
             dashboard_data['cert_counts_by_template'] = cert_counts_by_template
 
     def get_ca_charts_data(self, dashboard_data: dict[str, Any], start_date_object: datetime) -> None:
-        """Fetch data from database for issuing ca charts."""
+        """Fetch data from database for issuing ca charts and add to dashboard data object.
+
+        Args:
+            dashboard_data: The dashboard data object.
+            start_date_object: The start date for fetching issuing ca data.
+
+        Returns:
+            It returns nothing. It adds the issuing ca related data in dashboard_data object.
+        """
         cert_counts_by_issuing_ca = self.get_cert_counts_by_issuing_ca(start_date_object)
         if cert_counts_by_issuing_ca:
             dashboard_data['cert_counts_by_issuing_ca'] = cert_counts_by_issuing_ca
@@ -263,7 +364,14 @@ class DashboardChartsAndCountsView(TemplateView):
             dashboard_data['ca_counts_by_type'] = issuing_ca_counts_by_type
 
     def get_device_count_by_onboarding_status(self, start_date: datetime) -> dict[str, Any]:
-        """Get device count by onboarding status from database."""
+        """Fetch device count by onboarding status from database.
+
+        Args:
+            start_date: The start date for fetching data.
+
+        Returns:
+            It returns device counts grouped by device onboarding status.
+        """
         device_os_counts = {str(status): 0 for _, status in DeviceModel.OnboardingStatus.choices}
         try:
             device_os_qr = (
@@ -284,7 +392,11 @@ class DashboardChartsAndCountsView(TemplateView):
         return device_os_counts
 
     def get_cert_counts(self) -> dict[str, Any]:
-        """Get certificate counts from database."""
+        """Fetch certificate count from database.
+
+        Returns:
+            It returns certificate counts.
+        """
         cert_counts = {}
         # Get the current date and the dates for 7 days and 1 day ahead
         now = timezone.now()
@@ -303,7 +415,11 @@ class DashboardChartsAndCountsView(TemplateView):
         return cert_counts
 
     def get_cert_counts_by_status_and_date(self) -> list[dict[str, Any]]:
-        """Get certificate counts grouped by issue date and certificate status."""
+        """Fetch certificate counts grouped by issue date and certificate status from database.
+
+        Returns:
+            It returns certificate counts grouped by issue date and certificate status.
+        """
         cert_counts_by_status = []
         try:
             cert_status_qr = (
@@ -328,7 +444,14 @@ class DashboardChartsAndCountsView(TemplateView):
         return cert_counts_by_status
 
     def get_cert_counts_by_status(self, start_date: datetime) -> dict[str, Any]:
-        """Get certs count by onboarding status from database."""
+        """Fetch certs count by onboarding status from database.
+
+        Args:
+            start_date: The start date for fetching data.
+
+        Returns:
+            It returns device counts grouped by device onboarding status.
+        """
         cert_status_counts = {str(status): 0 for _, status in CertificateModel.CertificateStatus.choices}
         try:
             cert_status_qr = CertificateModel.objects.filter(created_at__gt=start_date)
@@ -341,7 +464,11 @@ class DashboardChartsAndCountsView(TemplateView):
         return cert_status_counts
 
     def get_issuing_ca_counts(self) -> dict[str, Any]:
-        """Get issuing CA counts from database."""
+        """Fetch issuing CA count from database.
+
+        Returns:
+            It returns total, active and expired issuing CA counts.
+        """
         # Current date
         today = timezone.make_aware(datetime.combine(timezone.now().date(), datetime.min.time()))
         issuing_ca_counts = {}
@@ -368,7 +495,11 @@ class DashboardChartsAndCountsView(TemplateView):
         return issuing_ca_counts
 
     def get_device_counts_by_date_and_status(self) -> list[dict[str, Any]]:
-        """Get device count by date and onboarding status from database."""
+        """Fetch device count by date and onboarding status from database.
+
+        Returns:
+            It returns device count grouped by date and onboarding status.
+        """
         device_counts_by_date_and_os = []
         try:
             device_date_os_qr = (
@@ -384,7 +515,14 @@ class DashboardChartsAndCountsView(TemplateView):
         return device_counts_by_date_and_os
 
     def get_device_count_by_onboarding_protocol(self, start_date: datetime) -> dict[str, Any]:
-        """Get device count by onboarding protocol from database."""
+        """Fetch device count by onboarding protocol from database.
+
+        Args:
+            start_date: The start date for fetching data.
+
+        Returns:
+            It returns device count by onboarding protocol.
+        """
         device_op_counts = {str(status): 0 for _, status in DeviceModel.OnboardingProtocol.choices}
         try:
             device_op_qr = (
@@ -401,7 +539,14 @@ class DashboardChartsAndCountsView(TemplateView):
         return device_op_counts
 
     def get_device_count_by_domain(self, start_date: datetime) -> list[dict[str, Any]]:
-        """Get count of onboarded devices by domain from the database."""
+        """Fetch onboarded devices count grouped by domain from database.
+
+        Args:
+            start_date: The start date for fetching data.
+
+        Returns:
+            It returns onboarded devices count grouped by domain.
+        """
         try:
             device_domain_qr = (
                 DeviceModel.objects.filter(
@@ -418,7 +563,14 @@ class DashboardChartsAndCountsView(TemplateView):
             return []
 
     def get_cert_counts_by_issuing_ca(self, start_date: datetime) -> list[dict[str, Any]]:
-        """Get certificate count by issuing ca from database."""
+        """Fetch certificate count grouped by issuing ca from database.
+
+        Args:
+            start_date: The start date for fetching data.
+
+        Returns:
+            It returns certificate count grouped by issuing ca.
+        """
         cert_counts_by_issuing_ca = []
         try:
             cert_issuing_ca_qr = (
@@ -435,7 +587,14 @@ class DashboardChartsAndCountsView(TemplateView):
         return cert_counts_by_issuing_ca
 
     def get_cert_counts_by_issuing_ca_and_date(self, start_date: datetime) -> list[dict[str, Any]]:
-        """Get certificate count by issuing ca from database."""
+        """Fetch certificate count grouped by issuing ca and date from database.
+
+        Args:
+            start_date: The start date for fetching data.
+
+        Returns:
+            It returns certificate count grouped by issuing ca and date.
+        """
         cert_counts_by_issuing_ca_and_date = []
         try:
             cert_issuing_ca_and_date_qr = (
@@ -453,7 +612,14 @@ class DashboardChartsAndCountsView(TemplateView):
         return cert_counts_by_issuing_ca_and_date
 
     def get_cert_counts_by_domain(self, start_date: datetime) -> list[dict[str, Any]]:
-        """Get certificate count by domain from database."""
+        """Fetch certificate count grouped by domain from database.
+
+        Args:
+            start_date: The start date for fetching data.
+
+        Returns:
+            It returns certificate count grouped by domain.
+        """
         cert_counts_by_domain = []
         try:
             cert_counts_domain_qr = (
@@ -469,7 +635,14 @@ class DashboardChartsAndCountsView(TemplateView):
         return cert_counts_by_domain
 
     def get_cert_counts_by_template(self, start_date: datetime) -> dict[str, Any]:
-        """Get certificate count by template from database."""
+        """Fetch certificate count grouped by template from database.
+
+        Args:
+            start_date: The start date for fetching data.
+
+        Returns:
+            It returns certificate count grouped by template.
+        """
         cert_counts_by_template = {
             str(status): 0 for _, status in IssuedCredentialModel.IssuedCredentialPurpose.choices
         }
@@ -488,6 +661,14 @@ class DashboardChartsAndCountsView(TemplateView):
 
     def get_issuing_ca_counts_by_type(self, start_date: datetime) -> dict[str, Any]:
         """Get issuing ca counts by type from database."""
+        """Fetch issuing ca counts grouped by type from database.
+
+        Args:
+            start_date: The start date for fetching data.
+
+        Returns:
+            It returns issuing ca counts grouped by type.
+        """
         issuing_ca_type_counts = {str(cert_type): 0 for _, cert_type in IssuingCaModel.IssuingCaTypeChoice.choices}
         try:
             ca_type_qr = (
