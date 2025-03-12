@@ -62,6 +62,10 @@ class CredentialModel(models.Model):
     credential_type = models.IntegerField(verbose_name=_('Credential Type'), choices=CredentialTypeChoice)
     private_key = models.CharField(verbose_name='Private key (PEM)', max_length=65536, default='', blank=True)
 
+    certificate = models.ForeignKey(
+        CertificateModel, on_delete=models.PROTECT, related_name='credential_set', blank=False
+    )
+
     certificates = models.ManyToManyField(
         CertificateModel, through='PrimaryCredentialCertificate', blank=False, related_name='credential'
     )
@@ -87,8 +91,15 @@ class CredentialModel(models.Model):
 
     def clean(self) -> None:
         """Validates the CredentialModel instance."""
-        if self.primarycredentialcertificate_set.filter(is_primary=True).count() > 1:
+        qs = self.primarycredentialcertificate_set.filter(is_primary=True)
+        if qs.count() > 1:
             exc_msg = 'A credential can only have one primary certificate.'
+            raise ValidationError(exc_msg)
+
+        if qs.get().certificate != self.certificate:
+            exc_msg = ('The ForeignKey certificate must be identical to the one '
+                       'marked primary in the primarycredentialcertificate_set.')
+
             raise ValidationError(exc_msg)
 
     @classmethod
