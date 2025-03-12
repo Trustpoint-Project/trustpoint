@@ -11,10 +11,10 @@ from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from django.forms import BaseModelForm
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.decorators import method_decorator
 from django.utils.html import format_html
@@ -1119,17 +1119,26 @@ class DeviceBrowserOnboardingCancelView(DeviceContextMixin, SingleObjectMixin[Is
 #  ---------------------------------------- Revocation Views ----------------------------------------
 
 
-class DeviceRevocationView(DeviceContextMixin, FormMixin[CredentialRevocationForm], ListView[DeviceModel]):
+class DeviceRevocationView(DeviceContextMixin, FormMixin[CredentialRevocationForm], ListView[IssuedCredentialModel]):
     """Revokes all active credentials for a given device."""
 
     http_method_names = ('get', 'post')
 
-    model = DeviceModel
+    model = IssuedCredentialModel
     template_name = 'devices/revoke.html'
     context_object_name = 'credentials'
     form_class = CredentialRevocationForm
     success_url = reverse_lazy('devices:devices')
     device: DeviceModel
+
+    def get_queryset(self) -> QuerySet[IssuedCredentialModel]:
+        """Gets the queryset of all active credentials for the device."""
+        self.device = get_object_or_404(DeviceModel, id=self.kwargs['pk'])
+        qs = IssuedCredentialModel.objects.filter(device=self.device)
+        for credential in qs:
+            if credential.credential.certificate.certificate_status != CertificateModel.CertificateStatus.OK:
+                qs = qs.exclude(pk=credential.pk)
+        return qs
 
     def form_valid(self, form: CredentialRevocationForm) -> HttpResponse:
         """Performed if the form was validated successfully and revokes the credentials.
@@ -1197,7 +1206,7 @@ class DeviceCredentialRevocationView(
         Returns:
             The success url to redirect to after successful processing of the POST data following a form submit.
         """
-        return str(reverse_lazy('devices:certificate_lifecycle_management', {'pk': self.get_object().device.id}))
+        return str(reverse_lazy('devices:certificate_lifecycle_management', kwargs={'pk': self.get_object().device.id}))
 
     def form_valid(self, form: CredentialRevocationForm) -> HttpResponse:
         """Performed if the form was validated successfully and revokes the credential.
