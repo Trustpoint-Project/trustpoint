@@ -23,6 +23,7 @@ from trustpoint_core.oid import (
     SignatureSuite,
 )
 from trustpoint_core.serializer import CertificateSerializer, PublicKeySerializer
+from util.db import AutoDeleteRelatedForeignKey
 
 from pki.models.extension import (
     AttributeTypeAndValue,
@@ -204,14 +205,14 @@ class CertificateModel(LoggerMixin, models.Model):
         on_delete=models.PROTECT,
     )
 
-    basic_constraints_extension = models.ForeignKey(
+    basic_constraints_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.BASIC_CONSTRAINTS.verbose_name,
         to=BasicConstraintsExtension,
         related_name='certificates',
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
     )
 
     authority_key_identifier_extension = models.ForeignKey(

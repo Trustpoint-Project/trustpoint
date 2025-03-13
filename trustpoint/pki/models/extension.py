@@ -26,6 +26,7 @@ __all__ = [
     'GeneralNamesModel',
     'IssuerAlternativeNameExtension',
     'KeyUsageExtension',
+    'PolicyConstraintsExtension',
     'SubjectAlternativeNameExtension',
 ]
 
@@ -642,7 +643,7 @@ class SubjectAlternativeNameExtension(CertificateExtension, models.Model):
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        verbose_name=_('Issuer Alternative Name Issuer'),
+        verbose_name=_('Subject Alternative Name Subject'),
     )
 
     def __str__(self) -> str:
@@ -1552,6 +1553,14 @@ class InhibitAnyPolicyExtension(CertificateExtension, models.Model):
 
         if not isinstance(extension.value.skip_certs, int):
             raise TypeError(extension.value.skip_certs)
+        existing_entry = InhibitAnyPolicyExtension.objects.filter(
+            critical=extension.critical,
+            inhibit_any_policy=extension.value.skip_certs,
+        ).first()
+
+        if existing_entry:
+            return existing_entry
+
         iap_ext = cls(critical=extension.critical, inhibit_any_policy=extension.value.skip_certs)
         iap_ext.save()
 
@@ -1677,6 +1686,14 @@ class PolicyConstraintsExtension(CertificateExtension, models.Model):
             raise TypeError(msg)
 
         try:
+            existing_entry = PolicyConstraintsExtension.objects.filter(
+                critical=extension.critical,
+                require_explicit_policy=extension.value.require_explicit_policy,
+                inhibit_policy_mapping=extension.value.inhibit_policy_mapping,
+            ).first()
+            if existing_entry:
+                return existing_entry
+
             policy_constraint_ext = cls(
                 critical=extension.critical,
                 require_explicit_policy=extension.value.require_explicit_policy,
