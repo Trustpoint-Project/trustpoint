@@ -33,7 +33,7 @@ class Command(BaseCommand):
     def _check_system_health(self) -> None:
         """Task to perform a system health check."""
         system_healthy = True
-        # TODO (FHKatCSW): Implement logic for system health check
+        # TODO (FHKatCSW): Implement logic for system health check  # noqa: FIX002
 
         if not system_healthy:
             NotificationModel.objects.create(
