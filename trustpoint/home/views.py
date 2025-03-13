@@ -65,7 +65,8 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
         super().__init__(*args, **kwargs)
         self.last_week_dates = self.generate_last_week_dates()
 
-    def get_notifications(self) -> QuerySet[NotificationModel]:
+    @staticmethod
+    def get_notifications() -> QuerySet[NotificationModel]:
         """Fetch notification data for the table.
 
         Returns:
@@ -73,7 +74,8 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
         """
         return NotificationModel.objects.all()
 
-    def generate_last_week_dates(self) -> list[str]:
+    @staticmethod
+    def generate_last_week_dates() -> list[str]:
         """Generates date strings for last one week.
 
         Returns:
