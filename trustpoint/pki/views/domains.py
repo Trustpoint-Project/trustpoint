@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import DeleteView
+from django.views.generic.detail import SingleObjectMixin
 from django.views.generic.edit import CreateView, FormView, UpdateView
 from django.views.generic.list import ListView
 
@@ -38,7 +39,7 @@ class DomainContextMixin(ContextDataMixin):
     context_page_name = 'domains'
 
 
-class DomainTableView(DomainContextMixin, SortableTableMixin, ListView[DomainModel]):
+class DomainTableView(DomainContextMixin, SortableTableMixin[DomainModel]):
     """Domain Table View."""
 
     model = DomainModel
@@ -82,7 +83,7 @@ class DomainUpdateView(DomainContextMixin, UpdateView[DomainModel]):
     ignore_url = reverse_lazy('pki:domains')
 
 
-class DomainDevIdRegistrationTableMixin(SortableTableMixin, ListInDetailView):
+class DomainDevIdRegistrationTableMixin(ListInDetailView[DevIdRegistration]):
     """Mixin to add a table of DevID Registrations to the domain config view."""
 
     model = DevIdRegistration
@@ -96,7 +97,7 @@ class DomainDevIdRegistrationTableMixin(SortableTableMixin, ListInDetailView):
         return super().get_queryset()
 
 
-class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, ListInDetailView):
+class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin):
     """View to configure a domain, allows adding DevID registration patterns."""
 
     detail_model = DomainModel
@@ -116,7 +117,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         return HttpResponseRedirect(self.success_url)
 
 
-class DomainDetailView(DomainContextMixin, DomainDevIdRegistrationTableMixin, ListInDetailView):
+class DomainDetailView(DomainContextMixin, DomainDevIdRegistrationTableMixin):
     """View to display domain details."""
 
     detail_model = DomainModel

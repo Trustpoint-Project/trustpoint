@@ -40,7 +40,7 @@ class IssuingCaContextMixin(ContextDataMixin):
     context_page_name = 'issuing_cas'
 
 
-class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin, ListView[IssuingCaModel]):
+class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin[IssuingCaModel]):
     """Issuing CA Table View."""
 
     model = IssuingCaModel

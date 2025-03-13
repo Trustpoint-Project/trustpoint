@@ -16,7 +16,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Model, QuerySet
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
-from django.views.generic.base import ContextMixin, RedirectView
+from django.views.generic.base import RedirectView
 from django.views.generic.edit import FormMixin
 from django.views.generic.list import BaseListView, ListView, MultipleObjectTemplateResponseMixin
 
@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from django import forms as dj_forms
 
 F = TypeVar('F', bound=Callable[..., Any])
+T = TypeVar('T', bound=Model)
 
 class IndexView(RedirectView):
     """View that redirects to the index home page."""
@@ -33,49 +34,13 @@ class IndexView(RedirectView):
     pattern_name: str = 'home:dashboard'
 
 
-class ListInDetailView(ListView[Model]):
-    """Helper view that combines a DetailView and a ListView.
-
-    This is useful for displaying a list within a DetailView.
-    Note that 'model' and 'context_object_name' refer to the ListView.
-    Use 'detail_model' and 'detail_context_object_name' for the DetailView.
-    """
-
-    detail_context_object_name = 'object'
-    object: Model
-
-    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handles GET requests by retrieving the object."""
-        self.object = self.get_object()
-        return super().get(*args, **kwargs)
-
-    def get_queryset_for_object(self) -> QuerySet[Any]:
-        """Returns the queryset for the detail object."""
-        return self.detail_model.objects.all() # type: ignore[no-any-return, attr-defined]
-
-    def get_object(self) -> Any:
-        """Retrieves the object based on the primary key in the URL."""
-        queryset = self.get_queryset_for_object()
-        pk = self.kwargs.get('pk')
-        if pk is None:
-            exc_msg = 'detail object pk expected in url'
-            raise AttributeError(exc_msg)
-        return get_object_or_404(queryset, pk=pk)
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds the detail object to the context."""
-        context = super().get_context_data(**kwargs)
-        context[self.detail_context_object_name] = self.object
-        return context
-
-
-class SortableTableMixin(ContextMixin):
+class SortableTableMixin(ListView[T]):
     """Adds utility for sorting a ListView query by URL parameters.
 
     default_sort_param must be set in the view to specify default sorting order.
     """
-    model: type[Model]
-    queryset: QuerySet[Any]
+    model: type[T]
+    queryset: QuerySet[Any] | None = None
     request: HttpRequest
     default_sort_param: str
 
@@ -125,6 +90,42 @@ class SortableTableMixin(ContextMixin):
         # Pass sorting details to the template
         context['current_sort'] = sort_param
         return context
+
+class ListInDetailView(SortableTableMixin[T]):
+    """Helper view that combines a DetailView and a ListView.
+
+    This is useful for displaying a list within a DetailView.
+    Note that 'model' and 'context_object_name' refer to the ListView.
+    Use 'detail_model' and 'detail_context_object_name' for the DetailView.
+    """
+
+    detail_context_object_name = 'object'
+    object: Model
+
+    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handles GET requests by retrieving the object."""
+        self.object = self.get_object()
+        return super().get(*args, **kwargs)
+
+    def get_queryset_for_object(self) -> QuerySet[Any]:
+        """Returns the queryset for the detail object."""
+        return self.detail_model.objects.all() # type: ignore[no-any-return, attr-defined]
+
+    def get_object(self) -> Any:
+        """Retrieves the object based on the primary key in the URL."""
+        queryset = self.get_queryset_for_object()
+        pk = self.kwargs.get('pk')
+        if pk is None:
+            exc_msg = 'detail object pk expected in url'
+            raise AttributeError(exc_msg)
+        return get_object_or_404(queryset, pk=pk)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the detail object to the context."""
+        context = super().get_context_data(**kwargs)
+        context[self.detail_context_object_name] = self.object
+        return context
+
 
 
 class ContextDataMixin:
