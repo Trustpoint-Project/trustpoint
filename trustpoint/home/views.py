@@ -129,8 +129,10 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
         created_at_display = record.created_at.strftime('%Y-%m-%d %H:%M:%S')
 
         if record.statuses.filter(status=NotificationStatus.StatusChoices.NEW).exists():
+            # noinspection PyDeprecation
             return format_html('{} <span class="badge bg-secondary">{}</span>', created_at_display, _('New'))
 
+        # noinspection PyDeprecation
         return format_html('{}', created_at_display)
 
     @staticmethod
@@ -154,6 +156,7 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
         else:  # Setup or other types default to secondary
             badge_class = 'bg-secondary'
 
+        # noinspection PyDeprecation
         return format_html('<span class="badge {}">{}</span>', badge_class, type_display)
 
 
