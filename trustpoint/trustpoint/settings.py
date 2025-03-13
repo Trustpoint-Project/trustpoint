@@ -16,7 +16,7 @@ import os
 import socket
 import time
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import django_stubs_ext
 import psycopg
@@ -39,6 +39,8 @@ DATABASE_PORT = '5432'
 DATABASE_NAME = 'trustpoint_db'
 DATABASE_USER = 'admin'
 DATABASE_PASSWORD = 'testing321'  # noqa: S105
+
+DATABASES: dict[str, Any]
 
 
 def is_postgre_available() -> bool:
@@ -101,7 +103,7 @@ DEVELOPMENT_ENV = True
 if DEBUG:
     SECRET_KEY = 'DEV-ENVIRON-SECRET-KEY-lh2rw0b0z$s9e=!4see)@_8ta_up&ad&m01$i+g5z@nz5u$0wi'  # noqa: S105
 else:
-    # TODO(AlexHx8472): Use proper docker secrets handling.
+    # TODO(AlexHx8472): Use proper docker secrets handling.  # noqa: FIX002
     SECRET_KEY = Path('/etc/trustpoint/secrets/django_secret_key.env').read_text()
 
 ALLOWED_HOSTS = ['*']
@@ -187,8 +189,10 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-            'OPTIONS': {'timeout': 20},
+            'NAME': str(BASE_DIR / 'db.sqlite3'),
+            'OPTIONS': {
+                'timeout': 20
+            },
         },
     }
 

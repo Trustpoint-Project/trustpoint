@@ -33,7 +33,9 @@ last_modified_date = timezone.now()
 
 
 if settings.DEBUG:
-    urlpatterns = [path('admin/', admin.site.urls)] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns = [
+        path('admin/', admin.site.urls), *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    ]
 else:
     urlpatterns = []
 
@@ -41,7 +43,7 @@ urlpatterns += [
     path('users/', include('users.urls')),
     path('setup-wizard/', include('setup_wizard.urls')),
     path('pki/', include('pki.urls')),
-    # TODO(Air): Move CRL to REST API endpoint
+    # TODO(Air): Move CRL to REST API endpoint  # noqa: FIX002
     path('crl/<int:pk>/', CrlDownloadView.as_view(), name='crl-download'),
     path('.well-known/cmp/', include('cmp.urls')),
     path('home/', include('home.urls')),
@@ -50,7 +52,7 @@ urlpatterns += [
     path('i18n/', include('django.conf.urls.i18n')),
     path(
         'jsi18n/',
-        vary_on_cookie(last_modified(lambda req, **kw: last_modified_date)(JavaScriptCatalog.as_view())),
+        vary_on_cookie(last_modified(lambda _req, **_kw: last_modified_date)(JavaScriptCatalog.as_view())),
         name='javascript-catalog',
     ),
     path('', base.IndexView.as_view()),
