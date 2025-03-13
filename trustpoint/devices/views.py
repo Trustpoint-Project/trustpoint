@@ -11,10 +11,10 @@ from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from django.forms import BaseModelForm
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.decorators import method_decorator
 from django.utils.html import format_html
@@ -520,8 +520,7 @@ class DeviceIssueOpcUaServerCredential(
 
 #  ----------------------------------- Certificate Lifecycle Management - Help Pages -----------------------------------
 
-
-class HelpDispatchView(DeviceContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
+class HelpDispatchDomainCredentialView(DeviceContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
     """Redirects to the required help pages depending on the onboarding protocol.
 
     If no help page could be determined, it will redirect to the devices page.
@@ -533,7 +532,7 @@ class HelpDispatchView(DeviceContextMixin, SingleObjectMixin[DeviceModel], Redir
     permanent = False
 
     def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
-        """Gets the redirection URL for the required help page.
+        """Gets the redirection URL (Domain Credentials) for the required help page.
 
         Args:
             *args: Positional arguments are discarded.
@@ -546,11 +545,6 @@ class HelpDispatchView(DeviceContextMixin, SingleObjectMixin[DeviceModel], Redir
         del kwargs
 
         device: DeviceModel = self.get_object()
-        if (
-            not device.domain_credential_onboarding
-            and device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value
-        ):
-            return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
 
         if device.onboarding_protocol == device.OnboardingProtocol.CMP_SHARED_SECRET.value:
             return f'{reverse("devices:help-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
@@ -559,6 +553,46 @@ class HelpDispatchView(DeviceContextMixin, SingleObjectMixin[DeviceModel], Redir
             return f'{reverse("devices:help-onboarding_cmp-idevid", kwargs={"pk": device.id})}'
 
         return f'{reverse("devices:devices")}'
+
+class HelpDispatchApplicationCredentialView(DeviceContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
+    """Redirects to the required help pages depending on PKI protocol.
+
+    If no help page could be determined, it will redirect to the devices page.
+    """
+
+    http_method_names = ('get',)
+
+    model: type[DeviceModel] = DeviceModel
+    permanent = False
+
+    def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
+        """Gets the redirection URL (Application Credentials) for the required help page.
+
+        Args:
+            *args: Positional arguments are discarded.
+            **kwargs: Keyword arguments are discarded.
+
+        Returns:
+            The redirection URL.
+        """
+        del args
+        del kwargs
+
+        device: DeviceModel = self.get_object()
+
+        if (
+                not device.domain_credential_onboarding
+                and device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value
+        ):
+            return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
+
+        if device.onboarding_protocol in {
+            device.OnboardingProtocol.CMP_SHARED_SECRET.value,
+            device.OnboardingProtocol.CMP_IDEVID.value
+        }:
+            return f'{reverse("devices:help-onboarding_cmp-application-credentials", kwargs={"pk": device.id})}'
+
+        return f"{reverse('devices:devices')}"
 
 
 class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceModel]):
@@ -580,9 +614,8 @@ class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceMo
         """
         context = super().get_context_data(**kwargs)
         device: DeviceModel = self.object
-        context['host'] = (
-            self.request.META.get('REMOTE_ADDR', '127.0.0.1') + ':' + self.request.META.get('SERVER_PORT', '443')
-        )
+        context['host'] = (f'{self.request.META.get('REMOTE_ADDR', '127.0.0.1')}:'
+                           f'{self.request.META.get('SERVER_PORT', '443')}')
         context.update(self._get_domain_credential_cmp_context(device=device))
         return context
 
@@ -660,10 +693,9 @@ class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, DetailView[DeviceM
         else:
             err_msg = _('Unsupported public key algorithm')
             raise ValueError(err_msg)
-        context['host'] = (
-            self.request.META.get('REMOTE_ADDR', '127.0.0.1') + ':' + self.request.META.get('SERVER_PORT'),
-            '443',
-        )
+
+        context['host'] = (f'{self.request.META.get('REMOTE_ADDR', '127.0.0.1')}:'
+                           f'{self.request.META.get('SERVER_PORT', '443')}')
         context['key_gen_command'] = key_gen_command
         number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
         context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
@@ -682,6 +714,10 @@ class OnboardingCmpIdevidHelpView(HelpDomainCredentialCmpContextView):
 
     template_name = 'devices/help/onboarding/cmp_idevid.html'
 
+class OnboardingCmpApplicationCredentialsHelpView(HelpDomainCredentialCmpContextView):
+    """Help view for enrolling application credentials via CMP."""
+
+    template_name = 'devices/help/onboarding/cmp_application_credentials.html'
 
 class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdRegistration]):
     """Help view for the IDevID Registration, which displays the required OpenSSL commands."""
@@ -721,9 +757,8 @@ class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdR
         else:
             err_msg = 'Unsupported public key algorithm'
             raise ValueError(err_msg)
-        context['host'] = (
-            self.request.META.get('REMOTE_ADDR', '127.0.0.1') + ':' + self.request.META.get('SERVER_PORT', '443')
-        )
+        context['host'] = (f'{self.request.META.get('REMOTE_ADDR', '127.0.0.1')}:'
+                           f'{self.request.META.get('SERVER_PORT', '443')}')
         context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
         context['key_gen_command'] = key_gen_command
         context['issuing_ca_pem'] = (
@@ -1084,17 +1119,26 @@ class DeviceBrowserOnboardingCancelView(DeviceContextMixin, SingleObjectMixin[Is
 #  ---------------------------------------- Revocation Views ----------------------------------------
 
 
-class DeviceRevocationView(DeviceContextMixin, FormMixin[CredentialRevocationForm], ListView[DeviceModel]):
+class DeviceRevocationView(DeviceContextMixin, FormMixin[CredentialRevocationForm], ListView[IssuedCredentialModel]):
     """Revokes all active credentials for a given device."""
 
     http_method_names = ('get', 'post')
 
-    model = DeviceModel
+    model = IssuedCredentialModel
     template_name = 'devices/revoke.html'
     context_object_name = 'credentials'
     form_class = CredentialRevocationForm
     success_url = reverse_lazy('devices:devices')
     device: DeviceModel
+
+    def get_queryset(self) -> QuerySet[IssuedCredentialModel]:
+        """Gets the queryset of all active credentials for the device."""
+        self.device = get_object_or_404(DeviceModel, id=self.kwargs['pk'])
+        qs = IssuedCredentialModel.objects.filter(device=self.device)
+        for credential in qs:
+            if credential.credential.certificate.certificate_status != CertificateModel.CertificateStatus.OK:
+                qs = qs.exclude(pk=credential.pk)
+        return qs
 
     def form_valid(self, form: CredentialRevocationForm) -> HttpResponse:
         """Performed if the form was validated successfully and revokes the credentials.
@@ -1162,7 +1206,7 @@ class DeviceCredentialRevocationView(
         Returns:
             The success url to redirect to after successful processing of the POST data following a form submit.
         """
-        return str(reverse_lazy('devices:certificate_lifecycle_management', {'pk': self.get_object().device.id}))
+        return str(reverse_lazy('devices:certificate_lifecycle_management', kwargs={'pk': self.get_object().device.id}))
 
     def form_valid(self, form: CredentialRevocationForm) -> HttpResponse:
         """Performed if the form was validated successfully and revokes the credential.
