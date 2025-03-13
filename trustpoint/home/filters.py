@@ -23,8 +23,11 @@ class NotificationFilter(django_filters.FilterSet): # type: ignore[misc]
         model = NotificationModel
         fields: ClassVar[list[str]] = ['notification_type', 'notification_source']
 
+    @staticmethod
     def filter_by_multiple_types(
-        self, queryset: QuerySet[NotificationModel], _: str, value: str
+            queryset: QuerySet[NotificationModel],
+            _: str,
+            value: str
     ) -> QuerySet[NotificationModel]:
         """Split the comma-separated values into a list for types.
 
@@ -41,8 +44,11 @@ class NotificationFilter(django_filters.FilterSet): # type: ignore[misc]
             return queryset.filter(notification_type__in=types)
         return queryset
 
+    @staticmethod
     def filter_by_multiple_sources(
-        self, queryset: QuerySet[NotificationModel], _: str, value: str
+        queryset: QuerySet[NotificationModel],
+            _: str,
+            value: str
     ) -> QuerySet[NotificationModel]:
         """Split the comma-separated values into a list for sources.
 
@@ -59,8 +65,11 @@ class NotificationFilter(django_filters.FilterSet): # type: ignore[misc]
             return queryset.filter(notification_source__in=sources)
         return queryset
 
+    @staticmethod
     def filter_by_date_range(
-        self, queryset: QuerySet[NotificationModel], _: str, value: str
+            queryset: QuerySet[NotificationModel],
+            _: str,
+            value: str
     ) -> QuerySet[NotificationModel]:
         """Filter the given QuerySet by date range.
 

@@ -30,7 +30,8 @@ class Command(BaseCommand):
         self._check_system_health()
         self.stdout.write(self.style.SUCCESS('System health check completed.'))
 
-    def _check_system_health(self) -> None:
+    @staticmethod
+    def _check_system_health() -> None:
         """Task to perform a system health check."""
         system_healthy = True
         # TODO (FHKatCSW): Implement logic for system health check  # noqa: FIX002
