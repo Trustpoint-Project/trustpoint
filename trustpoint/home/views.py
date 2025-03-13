@@ -24,7 +24,7 @@ from django.views.generic.list import ListView
 from pki.models import CertificateModel, IssuingCaModel
 
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import SortableTableMixin
+from trustpoint.views.base import LoggerMixin, SortableTableMixin
 
 from .filters import NotificationFilter
 from .models import NotificationModel, NotificationStatus
@@ -220,10 +220,8 @@ def mark_as_solved(request: HttpRequest, pk: int | str) -> HttpResponse:
     return render(request, 'home/notification_details.html', context)
 
 
-class AddDomainsAndDevicesView(TemplateView):
+class AddDomainsAndDevicesView(LoggerMixin, TemplateView):
     """View to execute the add_domains_and_devices management command and pass status to the template."""
-
-    _logger = logging.getLogger(__name__)
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
         """Handles GET requests and redirects to the dashboard.
@@ -248,10 +246,8 @@ class AddDomainsAndDevicesView(TemplateView):
         return redirect('home:dashboard')
 
 
-class DashboardChartsAndCountsView(TemplateView):
+class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
     """View to mark the notification as Solved."""
-
-    _logger = logging.getLogger(__name__)
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
         """Get dashboard data for panels, tables and charts.
@@ -281,7 +277,7 @@ class DashboardChartsAndCountsView(TemplateView):
         start_date_object = timezone.make_aware(datetime.combine(start_date_object.date(), datetime.min.time()))
         device_counts = self.get_device_count_by_onboarding_status(start_date_object)
         dashboard_data['device_counts'] = device_counts
-        self._logger.debug('device counts %s', device_counts)
+        self.logger.debug('device counts %s', device_counts)
 
         cert_counts = self.get_cert_counts()
         if cert_counts:
@@ -387,7 +383,7 @@ class DashboardChartsAndCountsView(TemplateView):
                 device_os_counts.setdefault(protocol, 0)
             device_os_counts['total'] = sum(device_os_counts.values())
         except Exception:
-            self._logger.exception('Error occurred in device count by onboarding protocol query')
+            self.logger.exception('Error occurred in device count by onboarding protocol query')
 
         return device_os_counts
 
@@ -411,7 +407,7 @@ class DashboardChartsAndCountsView(TemplateView):
                 expiring_in_1_day=Count('id', filter=Q(not_valid_after__gt=now, not_valid_after__lte=next_1_day)),
             )
         except Exception:
-            self._logger.exception('Error occurred in certificate count query')
+            self.logger.exception('Error occurred in certificate count query')
         return cert_counts
 
     def get_cert_counts_by_status_and_date(self) -> list[dict[str, Any]]:
@@ -440,7 +436,7 @@ class DashboardChartsAndCountsView(TemplateView):
                 for item in cert_status_qr
             ]
         except Exception:
-            self._logger.exception('Error occurred in certificate count by status query')
+            self.logger.exception('Error occurred in certificate count by status query')
         return cert_counts_by_status
 
     def get_cert_counts_by_status(self, start_date: datetime) -> dict[str, Any]:
@@ -460,7 +456,7 @@ class DashboardChartsAndCountsView(TemplateView):
             status_mapping = {key: str(value) for key, value in CertificateModel.CertificateStatus.choices}
             cert_status_counts = {status_mapping[key]: value for key, value in status_counts.items()}
         except Exception:
-            self._logger.exception('Error occurred in cert counts by status query')
+            self.logger.exception('Error occurred in cert counts by status query')
         return cert_status_counts
 
     def get_issuing_ca_counts(self) -> dict[str, Any]:
@@ -490,7 +486,7 @@ class DashboardChartsAndCountsView(TemplateView):
                 ),
             )
         except Exception:
-            self._logger.exception('Error occurred in issuing ca count query')
+            self.logger.exception('Error occurred in issuing ca count query')
 
         return issuing_ca_counts
 
@@ -511,7 +507,7 @@ class DashboardChartsAndCountsView(TemplateView):
             # Convert the queryset to a list
             device_counts_by_date_and_os = list(device_date_os_qr)
         except Exception:
-            self._logger.exception('Error occurred in device count by date and onboarding status')
+            self.logger.exception('Error occurred in device count by date and onboarding status')
         return device_counts_by_date_and_os
 
     def get_device_count_by_onboarding_protocol(self, start_date: datetime) -> dict[str, Any]:
@@ -535,7 +531,7 @@ class DashboardChartsAndCountsView(TemplateView):
             device_op_counts = {protocol_mapping[item['onboarding_protocol']]: item['count'] for item in device_op_qr}
 
         except Exception:
-            self._logger.exception('Error occurred in device count by onboarding protocol query')
+            self.logger.exception('Error occurred in device count by onboarding protocol query')
         return device_op_counts
 
     def get_device_count_by_domain(self, start_date: datetime) -> list[dict[str, Any]]:
@@ -559,7 +555,7 @@ class DashboardChartsAndCountsView(TemplateView):
             # Convert the queryset to a list
             return list(device_domain_qr)
         except Exception:
-            self._logger.exception('Error occurred in device count by domain query')
+            self.logger.exception('Error occurred in device count by domain query')
             return []
 
     def get_cert_counts_by_issuing_ca(self, start_date: datetime) -> list[dict[str, Any]]:
@@ -582,7 +578,7 @@ class DashboardChartsAndCountsView(TemplateView):
             # Convert the queryset to a list
             cert_counts_by_issuing_ca = list(cert_issuing_ca_qr)
         except Exception:
-            self._logger.exception('Error occurred in certificate count by issuing ca query')
+            self.logger.exception('Error occurred in certificate count by issuing ca query')
 
         return cert_counts_by_issuing_ca
 
@@ -608,7 +604,7 @@ class DashboardChartsAndCountsView(TemplateView):
             # Convert the queryset to a list
             cert_counts_by_issuing_ca_and_date = list(cert_issuing_ca_and_date_qr)
         except Exception:
-            self._logger.exception('Error occurred in certificate count by issuing ca query')
+            self.logger.exception('Error occurred in certificate count by issuing ca query')
         return cert_counts_by_issuing_ca_and_date
 
     def get_cert_counts_by_domain(self, start_date: datetime) -> list[dict[str, Any]]:
@@ -631,7 +627,7 @@ class DashboardChartsAndCountsView(TemplateView):
             # Convert the queryset to a list
             cert_counts_by_domain = list(cert_counts_domain_qr)
         except Exception:
-            self._logger.exception('Error occurred in certificate count by issuing ca query')
+            self.logger.exception('Error occurred in certificate count by issuing ca query')
         return cert_counts_by_domain
 
     def get_cert_counts_by_template(self, start_date: datetime) -> dict[str, Any]:
@@ -656,7 +652,7 @@ class DashboardChartsAndCountsView(TemplateView):
             template_mapping = {key: str(value) for key, value in IssuedCredentialModel.IssuedCredentialPurpose.choices}
             cert_counts_by_template = {template_mapping[item['cert_type']]: item['count'] for item in cert_template_qr}
         except Exception:
-            self._logger.exception('Error occurred in certificate count by template query')
+            self.logger.exception('Error occurred in certificate count by template query')
         return cert_counts_by_template
 
     def get_issuing_ca_counts_by_type(self, start_date: datetime) -> dict[str, Any]:
@@ -681,5 +677,5 @@ class DashboardChartsAndCountsView(TemplateView):
             issuing_ca_type_counts = {protocol_mapping[item['issuing_ca_type']]: item['count'] for item in ca_type_qr}
 
         except Exception:
-            self._logger.exception('Error occurred in ca counts by type query')
+            self.logger.exception('Error occurred in ca counts by type query')
         return issuing_ca_type_counts
