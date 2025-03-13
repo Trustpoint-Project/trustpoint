@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from settings.models import SecurityConfig
 from settings.security import LEVEL_FEATURE_MAP
@@ -60,7 +60,7 @@ class SecurityManager(LoggerMixin):
         """Returns the model holding the security settings."""
         return SecurityConfig.objects.first()
 
-    def enable_feature(self, feature: SecurityFeature, *args: dict) -> None:
+    def enable_feature(self, feature: type[SecurityFeature], *args: Any) -> None:
         """Enables a feature if it is allowed at the current security level."""
         if self.is_feature_allowed(feature):
             feature.enable(*args)

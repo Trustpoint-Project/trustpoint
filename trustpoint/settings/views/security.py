@@ -1,4 +1,4 @@
-"""Django Views"""
+"""Django Views for security settings management."""
 
 from __future__ import annotations
 
@@ -15,17 +15,20 @@ from settings.models import SecurityConfig
 from settings.security.features import AutoGenPkiFeature
 from settings.security.mixins import SecurityLevelMixin
 
-
 if TYPE_CHECKING:
     from typing import Any
 
+    from django.http import HttpResponse
 
-class SecurityView(SecurityLevelMixin, FormView):
+
+class SecurityView(SecurityLevelMixin, FormView[SecurityConfigForm]):
+    """View for handling security settings configuration."""
     template_name = 'settings/security.html'
     form_class = SecurityConfigForm
     success_url = reverse_lazy('settings:security')
 
-    def get_form_kwargs(self):
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Retrieve form keyword arguments including existing security configuration."""
         kwargs = super().get_form_kwargs()
         try:
             security_config = SecurityConfig.objects.get(id=1)
@@ -34,7 +37,8 @@ class SecurityView(SecurityLevelMixin, FormView):
         kwargs['instance'] = security_config
         return kwargs
 
-    def form_valid(self, form: SecurityConfigForm):
+    def form_valid(self, form: SecurityConfigForm) -> HttpResponse:
+        """Handles valid form submission by saving configuration and applying necessary updates."""
         old_conf = SecurityConfig.objects.get(pk=form.instance.pk) if form.instance.pk else None
         form.save()
 
@@ -55,7 +59,7 @@ class SecurityView(SecurityLevelMixin, FormView):
 
             if old_auto != new_auto and new_auto:
                 # autogen PKI got enabled
-                key_alg = AutoGenPkiKeyAlgorithm(form.cleaned_data.get('auto_gen_pki_key_algorithm'))
+                key_alg = AutoGenPkiKeyAlgorithm(form.cleaned_data.get('auto_gen_pki_key_algorithm', ''))
                 self.sec.enable_feature(AutoGenPkiFeature, key_alg)
 
             elif old_auto != new_auto and not new_auto:
@@ -65,11 +69,13 @@ class SecurityView(SecurityLevelMixin, FormView):
         messages.success(self.request, _('Your changes were saved successfully.'))
         return super().form_valid(form)
 
-    def form_invalid(self, form: SecurityConfigForm):
+    def form_invalid(self, form: SecurityConfigForm) -> HttpResponse:
+        """Handles invalid form submissions by displaying an error message."""
         messages.error(self.request, _('Error saving the configuration'))
         return self.render_to_response(self.get_context_data(form=form))
 
-    def get_context_data(self, **kwargs: dict) -> dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds additional context data to the template."""
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'settings'
         context['page_name'] = 'security'
