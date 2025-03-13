@@ -8,15 +8,16 @@ from devices.models import DeviceModel
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from pki.models.certificate import CertificateModel
-
-from pki.models.issuing_ca import IssuingCaModel
 from pki.models.domain import DomainModel
+from pki.models.issuing_ca import IssuingCaModel
 
 log = logging.getLogger('tp.home')
 
 
 class NotificationStatus(models.Model):
     """Model representing a status a notification can have."""
+
+    objects: models.Manager[NotificationStatus]
 
     class StatusChoices(models.TextChoices):
         """Status Types"""
@@ -82,6 +83,8 @@ class NotificationMessage:
 
 class NotificationModel(models.Model):
     """Notifications Model."""
+
+    objects: models.Manager[NotificationModel]
 
     class NotificationTypes(models.TextChoices):
         """Supported Notification Types."""
