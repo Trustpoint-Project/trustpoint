@@ -1,13 +1,14 @@
+"""Initialization module for the TrustPoint setup wizard."""
 from __future__ import annotations
 
-from pathlib import Path
 import enum
-
+from pathlib import Path
 
 WIZARD_STATE_PATH = Path('/etc/trustpoint/wizard/state')
 
 
 class SetupWizardState(enum.Enum):
+    """Enumeration representing the different states of the Setup Wizard."""
     WIZARD_INITIAL = WIZARD_STATE_PATH / Path('WIZARD_INITIAL')
     WIZARD_TLS_SERVER_CREDENTIAL_APPLY = WIZARD_STATE_PATH / Path('WIZARD_TLS_SERVER_CREDENTIAL_APPLY')
     WIZARD_DEMO_DATA = WIZARD_STATE_PATH / Path('WIZARD_DEMO_DATA')
@@ -16,7 +17,9 @@ class SetupWizardState(enum.Enum):
 
     @classmethod
     def get_current_state(cls) -> SetupWizardState:
+        """Determines the current state of the Setup Wizard."""
         for member in cls:
             if member.value.is_file():
                 return member
-        raise ValueError('Failed to determine wizard state.')
+        msg = 'Failed to determine wizard state.'
+        raise ValueError(msg)
