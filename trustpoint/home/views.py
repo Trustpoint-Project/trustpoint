@@ -42,7 +42,7 @@ class IndexView(RedirectView):
     pattern_name = 'home:dashboard'
 
 
-class DashboardView(SortableTableMixin, ListView):
+class DashboardView(SortableTableMixin[NotificationModel]):
     """Renders the dashboard page for authenticated users. Uses the 'home/dashboard.html' template."""
 
     template_name = 'home/dashboard.html'
@@ -51,7 +51,7 @@ class DashboardView(SortableTableMixin, ListView):
     default_sort_param = '-created_at'
     paginate_by = UIConfig.notifications_paginate_by
 
-    def __init__(self, *args: tuple, **kwargs: dict) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the parent class with the given arguments and keyword arguments."""
         super().__init__(*args, **kwargs)
         self.last_week_dates = self.generate_last_week_dates()
@@ -73,7 +73,7 @@ class DashboardView(SortableTableMixin, ListView):
         self.queryset = notification_filter.qs
         return super().get_queryset()
 
-    def get_context_data(self, **kwargs: dict) -> dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Fetch context data"""
         context = super().get_context_data(**kwargs)
 
@@ -98,7 +98,7 @@ class DashboardView(SortableTableMixin, ListView):
     @staticmethod
     def _render_notification_type(record: NotificationModel) -> SafeString:
         """Render the notification type with a badge according to the type."""
-        type_display = record.get_notification_type_display()
+        type_display = record.get_notification_type_display() # type:ignore[attr-defined]
 
         if record.notification_type == NotificationModel.NotificationTypes.CRITICAL:
             badge_class = 'bg-danger'
