@@ -141,7 +141,7 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
         Returns:
             The HTML of the span with class badge to display notification type.
         """
-        type_display = record.get_notification_type_display() # type: ignore[attr-defined]
+        type_display = record.get_notification_type_display()  # type: ignore[attr-defined]
 
         if record.notification_type == NotificationModel.NotificationTypes.CRITICAL:
             badge_class = 'bg-danger'
@@ -191,6 +191,7 @@ class NotificationDetailsView(View):
 
         return render(request, 'home/notification_details.html', context)
 
+
 class NotificationMarkSolvedView(View):
     """Mark notification as solved when viewed in the notification details page."""
 
@@ -198,33 +199,33 @@ class NotificationMarkSolvedView(View):
     model = NotificationModel
 
     def get(self, request: HttpRequest, pk: int | str) -> HttpResponse:
-      """View to mark the notification as Solved.
+        """View to mark the notification as Solved.
 
-      Args:
-          request: The Django request object.
-          pk: The primary key.
+        Args:
+            request: The Django request object.
+            pk: The primary key.
 
-      Returns:
-          A redirect to the notification details page.
-      """
-      notification = get_object_or_404(NotificationModel, pk=pk)
+        Returns:
+            A redirect to the notification details page.
+        """
+        notification = get_object_or_404(NotificationModel, pk=pk)
 
-      solved_status, created = NotificationStatus.objects.get_or_create(status='SOLVED')
-      is_solved = solved_status in notification.statuses.all()
+        solved_status, created = NotificationStatus.objects.get_or_create(status='SOLVED')
+        is_solved = solved_status in notification.statuses.all()
 
-      if solved_status:
-          notification.statuses.add(solved_status)
+        if solved_status:
+            notification.statuses.add(solved_status)
 
-      notification_statuses = notification.statuses.values_list('status', flat=True)
+        notification_statuses = notification.statuses.values_list('status', flat=True)
 
-      context = {
-          'notification': notification,
-          'NotificationStatus': NotificationStatus,
-          'notification_statuses': notification_statuses,
-          'is_solved': is_solved,
-      }
+        context = {
+            'notification': notification,
+            'NotificationStatus': NotificationStatus,
+            'notification_statuses': notification_statuses,
+            'is_solved': is_solved,
+        }
 
-      return render(request, 'home/notification_details.html', context)
+        return render(request, 'home/notification_details.html', context)
 
 
 class AddDomainsAndDevicesView(LoggerMixin, TemplateView):
