@@ -53,7 +53,7 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the parent class with the given arguments and keyword arguments.
 
-        It initialize the last_week_dates objects with list of string of last week dates.
+        It initializes the last_week_dates objects with list of string of last week dates.
 
         Args:
             *args: Positional arguments passed to super().__init__.
