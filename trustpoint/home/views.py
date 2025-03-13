@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 
 from devices.models import DeviceModel, IssuedCredentialModel
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db.models import Case, Count, F, IntegerField, Q, QuerySet, Value, When
@@ -18,7 +17,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import dateparse, timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
-from django.views.generic.base import RedirectView, TemplateView
+from django.views.generic.base import RedirectView, TemplateView, View
 from django.views.generic.list import ListView
 from pki.models import CertificateModel, IssuingCaModel
 
@@ -156,67 +155,76 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
         return format_html('<span class="badge {}">{}</span>', badge_class, type_display)
 
 
-@login_required
-def notification_details_view(request: HttpRequest, pk: int | str) -> HttpResponse:
-    """Renders notification details view.
+class NotificationDetailsView(View):
+    """Renders the notification details page for authenticated users."""
 
-    Args:
-        request: The Django request object.
-        pk: The primary key.
+    template_name = 'home/notification_details.html'
+    model = NotificationModel
 
-    Returns:
-        A redirect to the notification details page.
-    """
-    notification = get_object_or_404(NotificationModel, pk=pk)
+    def get(self, request: HttpRequest, pk: int | str) -> HttpResponse:
+        """Renders notification details view.
 
-    notification_statuses = notification.statuses.values_list('status', flat=True)
+        Args:
+            request: The Django request object.
+            pk: The primary key.
 
-    new_status, created = NotificationStatus.objects.get_or_create(status='NEW')
-    solved_status, created = NotificationStatus.objects.get_or_create(status='SOLVED')
-    is_solved = solved_status in notification.statuses.all()
+        Returns:
+            A redirect to the notification details page.
+        """
+        notification = get_object_or_404(NotificationModel, pk=pk)
 
-    if new_status and new_status in notification.statuses.all():
-        notification.statuses.remove(new_status)
+        notification_statuses = notification.statuses.values_list('status', flat=True)
 
-    context = {
-        'notification': notification,
-        'NotificationStatus': NotificationStatus,
-        'notification_statuses': notification_statuses,
-        'is_solved': is_solved,
-    }
+        new_status, created = NotificationStatus.objects.get_or_create(status='NEW')
+        solved_status, created = NotificationStatus.objects.get_or_create(status='SOLVED')
+        is_solved = solved_status in notification.statuses.all()
 
-    return render(request, 'home/notification_details.html', context)
+        if new_status and new_status in notification.statuses.all():
+            notification.statuses.remove(new_status)
 
+        context = {
+            'notification': notification,
+            'NotificationStatus': NotificationStatus,
+            'notification_statuses': notification_statuses,
+            'is_solved': is_solved,
+        }
 
-@login_required
-def mark_as_solved(request: HttpRequest, pk: int | str) -> HttpResponse:
-    """View to mark the notification as Solved.
+        return render(request, 'home/notification_details.html', context)
 
-    Args:
-        request: The Django request object.
-        pk: The primary key.
+class NotificationMarkSolvedView(View):
+    """Mark notification as solved when viewed in the notification details page."""
 
-    Returns:
-        A redirect to the notification details page.
-    """
-    notification = get_object_or_404(NotificationModel, pk=pk)
+    template_name = 'home/notification_details.html'
+    model = NotificationModel
 
-    solved_status, created = NotificationStatus.objects.get_or_create(status='SOLVED')
-    is_solved = solved_status in notification.statuses.all()
+    def get(self, request: HttpRequest, pk: int | str) -> HttpResponse:
+      """View to mark the notification as Solved.
 
-    if solved_status:
-        notification.statuses.add(solved_status)
+      Args:
+          request: The Django request object.
+          pk: The primary key.
 
-    notification_statuses = notification.statuses.values_list('status', flat=True)
+      Returns:
+          A redirect to the notification details page.
+      """
+      notification = get_object_or_404(NotificationModel, pk=pk)
 
-    context = {
-        'notification': notification,
-        'NotificationStatus': NotificationStatus,
-        'notification_statuses': notification_statuses,
-        'is_solved': is_solved,
-    }
+      solved_status, created = NotificationStatus.objects.get_or_create(status='SOLVED')
+      is_solved = solved_status in notification.statuses.all()
 
-    return render(request, 'home/notification_details.html', context)
+      if solved_status:
+          notification.statuses.add(solved_status)
+
+      notification_statuses = notification.statuses.values_list('status', flat=True)
+
+      context = {
+          'notification': notification,
+          'NotificationStatus': NotificationStatus,
+          'notification_statuses': notification_statuses,
+          'is_solved': is_solved,
+      }
+
+      return render(request, 'home/notification_details.html', context)
 
 
 class AddDomainsAndDevicesView(LoggerMixin, TemplateView):
