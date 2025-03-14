@@ -372,8 +372,9 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             for protocol in protocol_mapping.values():
                 device_os_counts.setdefault(protocol, 0)
             device_os_counts['total'] = sum(device_os_counts.values())
-        except Exception:
-            self.logger.exception('Error occurred in device count by onboarding protocol query')
+        except Exception as exception:
+            err_msg = f'Error occurred in device count by onboarding protocol query: {exception}'
+            self.logger.exception(err_msg)
 
         return device_os_counts
 
@@ -396,8 +397,10 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                 expiring_in_7_days=Count('id', filter=Q(not_valid_after__gt=now, not_valid_after__lte=next_7_days)),
                 expiring_in_1_day=Count('id', filter=Q(not_valid_after__gt=now, not_valid_after__lte=next_1_day)),
             )
-        except Exception:
-            self.logger.exception('Error occurred in certificate count query')
+        except Exception as exception:
+            err_msg = f'Error occurred in certificate count query: {exception}'
+            self.logger.exception(err_msg)
+
         return cert_counts
 
     def get_cert_counts_by_status_and_date(self) -> list[dict[str, Any]]:
@@ -425,8 +428,9 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                 }
                 for item in cert_status_qr
             ]
-        except Exception:
-            self.logger.exception('Error occurred in certificate count by status query')
+        except Exception as exception:
+            err_msg = f'Error occurred in certificate count by status query: {exception}'
+            self.logger.exception(err_msg)
         return cert_counts_by_status
 
     def get_cert_counts_by_status(self, start_date: datetime) -> dict[str, Any]:
@@ -445,8 +449,9 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
             status_mapping = {key: str(value) for key, value in CertificateModel.CertificateStatus.choices}
             cert_status_counts = {status_mapping[key]: value for key, value in status_counts.items()}
-        except Exception:
-            self.logger.exception('Error occurred in cert counts by status query')
+        except Exception as exception:
+            err_msg = f'Error occurred in cert counts by status query: {exception}'
+            self.logger.exception(err_msg)
         return cert_status_counts
 
     def get_issuing_ca_counts(self) -> dict[str, Any]:
@@ -458,7 +463,6 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         today = timezone.make_aware(datetime.combine(timezone.now().date(), datetime.min.time()))
         issuing_ca_counts = {}
         try:
-
             issuing_ca_counts = IssuingCaModel.objects.aggregate(
                 total=Count('id'),
                 active=Count(
@@ -474,8 +478,9 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                     )
                 ),
             )
-        except Exception:
-            self.logger.exception('Error occurred in issuing ca count query')
+        except Exception as exception:
+            err_msg = f'Error occurred in issuing ca count query: {exception}'
+            self.logger.exception(err_msg)
 
         return issuing_ca_counts
 
@@ -495,8 +500,9 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             )
 
             device_counts_by_date_and_os = list(device_date_os_qr)
-        except Exception:
-            self.logger.exception('Error occurred in device count by date and onboarding status')
+        except Exception as exception:
+            err_msg = f'Error occurred in device count by date and onboarding status: {exception}'
+            self.logger.exception(err_msg)
         return device_counts_by_date_and_os
 
     def get_device_count_by_onboarding_protocol(self, start_date: datetime) -> dict[str, Any]:
@@ -519,8 +525,10 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             protocol_mapping = {key: str(value) for key, value in DeviceModel.OnboardingProtocol.choices}
             device_op_counts = {protocol_mapping[item['onboarding_protocol']]: item['count'] for item in device_op_qr}
 
-        except Exception:
-            self.logger.exception('Error occurred in device count by onboarding protocol query')
+        except Exception as exception:
+            err_msg = f'Error occurred in device count by onboarding protocol query: {exception}'
+            self.logger.exception(err_msg)
+
         return device_op_counts
 
     def get_device_count_by_domain(self, start_date: datetime) -> list[dict[str, Any]]:
@@ -541,10 +549,12 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                 .annotate(onboarded_device_count=Count('id'))
             )
 
-            return list(device_domain_qr)
-        except Exception:
-            self.logger.exception('Error occurred in device count by domain query')
+        except Exception as exception:
+            err_msg = f'Error occurred in device count by domain query: {exception}'
+            self.logger.exception(err_msg)
             return []
+
+        return list(device_domain_qr)
 
     def get_cert_counts_by_issuing_ca(self, start_date: datetime) -> list[dict[str, Any]]:
         """Fetch certificate count grouped by issuing ca from database.
@@ -565,8 +575,9 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             )
 
             cert_counts_by_issuing_ca = list(cert_issuing_ca_qr)
-        except Exception:
-            self.logger.exception('Error occurred in certificate count by issuing ca query')
+        except Exception as exception:
+            err_msg = f'Error occurred in certificate count by issuing ca query: {exception}'
+            self.logger.exception(err_msg)
 
         return cert_counts_by_issuing_ca
 
@@ -591,8 +602,10 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             )
 
             cert_counts_by_issuing_ca_and_date = list(cert_issuing_ca_and_date_qr)
-        except Exception:
-            self.logger.exception('Error occurred in certificate count by issuing ca query')
+        except Exception as exception:
+            err_msg = f'Error occurred in certificate count by issuing ca query: {exception}'
+            self.logger.exception(err_msg)
+
         return cert_counts_by_issuing_ca_and_date
 
     def get_cert_counts_by_domain(self, start_date: datetime) -> list[dict[str, Any]]:
@@ -613,8 +626,10 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             )
 
             cert_counts_by_domain = list(cert_counts_domain_qr)
-        except Exception:
-            self.logger.exception('Error occurred in certificate count by issuing ca query')
+        except Exception as exception:
+            err_msg = f'Error occurred in certificate count by issuing ca query: {exception}'
+            self.logger.exception(err_msg)
+
         return cert_counts_by_domain
 
     def get_cert_counts_by_template(self, start_date: datetime) -> dict[str, Any]:
@@ -638,8 +653,10 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
             template_mapping = {key: str(value) for key, value in IssuedCredentialModel.IssuedCredentialPurpose.choices}
             cert_counts_by_template = {template_mapping[item['cert_type']]: item['count'] for item in cert_template_qr}
-        except Exception:
-            self.logger.exception('Error occurred in certificate count by template query')
+        except Exception as exception:
+            err_msg = f'Error occurred in certificate count by template query: {exception}'
+            self.logger.exception(err_msg)
+
         return cert_counts_by_template
 
     def get_issuing_ca_counts_by_type(self, start_date: datetime) -> dict[str, Any]:
@@ -663,6 +680,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             protocol_mapping = {key: str(value) for key, value in IssuingCaModel.IssuingCaTypeChoice.choices}
             issuing_ca_type_counts = {protocol_mapping[item['issuing_ca_type']]: item['count'] for item in ca_type_qr}
 
-        except Exception:
-            self.logger.exception('Error occurred in ca counts by type query')
+        except Exception as exception:
+            err_msg = f'Error occurred in ca counts by type query: {exception}'
+            self.logger.exception(err_msg)
         return issuing_ca_type_counts

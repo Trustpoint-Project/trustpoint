@@ -9,8 +9,8 @@ from devices.models import DeviceModel
 from django.db import models
 from django.utils.encoding import force_str
 from django.utils.translation import gettext_lazy as _
-from pki.models.certificate import CertificateModel
 from django_stubs_ext.db.models import TypedModelMeta
+from pki.models.certificate import CertificateModel
 from pki.models.domain import DomainModel
 from pki.models.issuing_ca import IssuingCaModel
 
@@ -45,6 +45,15 @@ class NotificationStatus(models.Model):
 
     status = models.CharField(max_length=20, choices=StatusChoices, unique=True)
 
+    if TYPE_CHECKING:
+
+        def get_status_display(self) -> str:
+            """Gets the status as human-readable string for displaying in the front-end.
+
+            Returns:
+                Human-readable string for displaying in the front-end.
+            """
+
     class Meta(TypedModelMeta):
         """Meta class configuration."""
 
@@ -54,7 +63,7 @@ class NotificationStatus(models.Model):
         Returns:
             The status.
         """
-        return str(self.get_status_display())  # type: ignore[attr-defined]
+        return str(self.get_status_display())
 
 
 class NotificationMessageModel(models.Model):
@@ -84,9 +93,7 @@ class NotificationMessage:
     long_description: str = 'No description provided'
 
     def __init__(
-            self,
-            short_description: StrOrPromise,
-            long_description: StrOrPromise = 'No description provided'
+        self, short_description: StrOrPromise, long_description: StrOrPromise = 'No description provided'
     ) -> None:
         """Initializes a NotificationMessage instance.
 
@@ -329,6 +336,29 @@ class NotificationModel(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Created at'))
 
+    if TYPE_CHECKING:
+
+        def get_notification_type_display(self) -> str:
+            """Gets the notification type as human-readable string for displaying in the front-end.
+
+            Returns:
+                Human-readable string for displaying in the front-end.
+            """
+
+        def get_notification_source_display(self) -> str:
+            """Gets the notification source as human-readable string for displaying in the front-end.
+
+            Returns:
+                Human-readable string for displaying in the front-end.
+            """
+
+        def get_message_type_display(self) -> str:
+            """Gets the message type as human-readable string for displaying in the front-end.
+
+            Returns:
+                Human-readable string for displaying in the front-end.
+            """
+
     class Meta(TypedModelMeta):
         """Meta class configuration."""
 
@@ -338,7 +368,7 @@ class NotificationModel(models.Model):
         Returns:
             The notification type to display.
         """
-        return f'{self.get_notification_type_display()} - {self.message.short_description[:20]}' # type: ignore[attr-defined]
+        return f'{self.get_notification_type_display()} - {self.message.short_description[:20]}'
 
     @property
     def short_translated(self) -> Any:

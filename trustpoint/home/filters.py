@@ -10,7 +10,7 @@ from django.utils import timezone
 from home.models import NotificationModel
 
 
-class NotificationFilter(django_filters.FilterSet): # type: ignore[misc]
+class NotificationFilter(django_filters.FilterSet):  # type: ignore[misc]
     """Filters notifications based on various criteria such as date range and status."""
 
     notification_type = django_filters.CharFilter(method='filter_by_multiple_types', label='Notification Type')
@@ -25,9 +25,7 @@ class NotificationFilter(django_filters.FilterSet): # type: ignore[misc]
 
     @staticmethod
     def filter_by_multiple_types(
-            queryset: QuerySet[NotificationModel],
-            _: str,
-            value: str
+        queryset: QuerySet[NotificationModel], _: str, value: str
     ) -> QuerySet[NotificationModel]:
         """Split the comma-separated values into a list for types.
 
@@ -46,9 +44,7 @@ class NotificationFilter(django_filters.FilterSet): # type: ignore[misc]
 
     @staticmethod
     def filter_by_multiple_sources(
-        queryset: QuerySet[NotificationModel],
-            _: str,
-            value: str
+        queryset: QuerySet[NotificationModel], _: str, value: str
     ) -> QuerySet[NotificationModel]:
         """Split the comma-separated values into a list for sources.
 
@@ -66,11 +62,7 @@ class NotificationFilter(django_filters.FilterSet): # type: ignore[misc]
         return queryset
 
     @staticmethod
-    def filter_by_date_range(
-            queryset: QuerySet[NotificationModel],
-            _: str,
-            value: str
-    ) -> QuerySet[NotificationModel]:
+    def filter_by_date_range(queryset: QuerySet[NotificationModel], _: str, value: str) -> QuerySet[NotificationModel]:
         """Filter the given QuerySet by date range.
 
         Args:
