@@ -175,7 +175,7 @@ class CertificateModel(LoggerMixin, models.Model):
     # --------------------------------------------------- Extensions ---------------------------------------------------
     # order of extensions follows RFC5280
 
-    key_usage_extension = models.ForeignKey(
+    key_usage_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.KEY_USAGE.verbose_name,
         to=KeyUsageExtension,
         related_name='certificates',
@@ -185,7 +185,7 @@ class CertificateModel(LoggerMixin, models.Model):
         on_delete=models.PROTECT,
     )
 
-    subject_alternative_name_extension = models.ForeignKey(
+    subject_alternative_name_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.SUBJECT_ALTERNATIVE_NAME.verbose_name,
         to=SubjectAlternativeNameExtension,
         related_name='certificates',
@@ -195,7 +195,7 @@ class CertificateModel(LoggerMixin, models.Model):
         on_delete=models.PROTECT,
     )
 
-    issuer_alternative_name_extension = models.ForeignKey(
+    issuer_alternative_name_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.ISSUER_ALTERNATIVE_NAME.verbose_name,
         to=IssuerAlternativeNameExtension,
         related_name='certificates',
@@ -215,7 +215,7 @@ class CertificateModel(LoggerMixin, models.Model):
         on_delete=models.PROTECT,
     )
 
-    authority_key_identifier_extension = models.ForeignKey(
+    authority_key_identifier_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.AUTHORITY_KEY_IDENTIFIER.verbose_name,
         to=AuthorityKeyIdentifierExtension,
         related_name='certificates',
@@ -225,7 +225,7 @@ class CertificateModel(LoggerMixin, models.Model):
         on_delete=models.CASCADE,
     )
 
-    subject_key_identifier_extension = models.ForeignKey(
+    subject_key_identifier_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.SUBJECT_KEY_IDENTIFIER.verbose_name,
         to=SubjectKeyIdentifierExtension,
         related_name='certificates',
@@ -235,7 +235,7 @@ class CertificateModel(LoggerMixin, models.Model):
         on_delete=models.CASCADE,
     )
 
-    certificate_policies_extension = models.ForeignKey(
+    certificate_policies_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.CERTIFICATE_POLICIES.verbose_name,
         to=CertificatePoliciesExtension,
         related_name='certificates',
@@ -245,7 +245,7 @@ class CertificateModel(LoggerMixin, models.Model):
         on_delete=models.CASCADE,
     )
 
-    extended_key_usage_extension = models.ForeignKey(
+    extended_key_usage_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.EXTENDED_KEY_USAGE.verbose_name,
         to=ExtendedKeyUsageExtension,
         related_name='certificates',
@@ -255,7 +255,7 @@ class CertificateModel(LoggerMixin, models.Model):
         on_delete=models.CASCADE,
     )
 
-    name_constraints_extension = models.ForeignKey(
+    name_constraints_extension = AutoDeleteRelatedForeignKey(
         NameConstraintsExtension,
         related_name='certificates',
         editable=False,
@@ -264,7 +264,7 @@ class CertificateModel(LoggerMixin, models.Model):
         on_delete=models.CASCADE,
     )
 
-    crl_distribution_points_extension = models.ForeignKey(
+    crl_distribution_points_extension = AutoDeleteRelatedForeignKey(
         CrlDistributionPointsExtension,
         related_name='certificates',
         editable=False,
@@ -273,27 +273,27 @@ class CertificateModel(LoggerMixin, models.Model):
         on_delete=models.CASCADE,
     )
 
-    authority_information_access_extension = models.ForeignKey(
+    authority_information_access_extension = AutoDeleteRelatedForeignKey(
         AuthorityInformationAccessExtension, null=True, blank=True, on_delete=models.CASCADE
     )
 
-    subject_information_access_extension = models.ForeignKey(
+    subject_information_access_extension = AutoDeleteRelatedForeignKey(
         SubjectInformationAccessExtension, null=True, blank=True, on_delete=models.CASCADE
     )
 
-    inhibit_any_policy_extension = models.ForeignKey(
+    inhibit_any_policy_extension = AutoDeleteRelatedForeignKey(
         InhibitAnyPolicyExtension, null=True, blank=True, on_delete=models.CASCADE
     )
 
-    policy_constraints_extension = models.ForeignKey(
+    policy_constraints_extension = AutoDeleteRelatedForeignKey(
         PolicyConstraintsExtension, null=True, blank=True, on_delete=models.CASCADE
     )
 
-    subject_directory_attributes_extension = models.ForeignKey(
+    subject_directory_attributes_extension = AutoDeleteRelatedForeignKey(
         SubjectDirectoryAttributesExtension, null=True, blank=True, on_delete=models.CASCADE
     )
 
-    freshest_crl_extension = models.ForeignKey(FreshestCrlExtension, null=True, blank=True, on_delete=models.CASCADE)
+    freshest_crl_extension = AutoDeleteRelatedForeignKey(FreshestCrlExtension, null=True, blank=True, on_delete=models.CASCADE)
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""
@@ -623,7 +623,7 @@ class RevokedCertificateModel(models.Model):
         verbose_name=_('Revocation Reason'), choices=ReasonCode, default=ReasonCode.UNSPECIFIED
     )
 
-    ca = models.ForeignKey(
+    ca = AutoDeleteRelatedForeignKey(
         'IssuingCaModel',
         verbose_name=_('Issuing CA'),
         related_name='revoked_certificates',

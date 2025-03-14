@@ -10,7 +10,9 @@ from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from django_stubs_ext.db.models import TypedModelMeta
 from trustpoint_core.oid import CertificateExtensionOid, NameOid
+from util.db import AutoDeleteRelatedForeignKey
 
 __all__ = [
     'AttributeTypeAndValue',
@@ -585,9 +587,9 @@ class IssuerAlternativeNameExtension(CertificateExtension, models.Model):
     objects: models.Manager[IssuerAlternativeNameExtension]
 
     critical = models.BooleanField(verbose_name=_('Critical'), editable=False)
-    issuer_alt_name = models.ForeignKey(
+    issuer_alt_name = AutoDeleteRelatedForeignKey(
         GeneralNamesModel,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         verbose_name=_('Issuer Alternative Name Issuer'),
@@ -638,9 +640,9 @@ class SubjectAlternativeNameExtension(CertificateExtension, models.Model):
     objects: models.Manager[SubjectAlternativeNameExtension]
 
     critical = models.BooleanField(verbose_name=_('Critical'), editable=False)
-    subject_alt_name = models.ForeignKey(
+    subject_alt_name = AutoDeleteRelatedForeignKey(
         GeneralNamesModel,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         verbose_name=_('Subject Alternative Name Subject'),
@@ -696,9 +698,9 @@ class AuthorityKeyIdentifierExtension(CertificateExtension, models.Model):
         max_length=256, editable=False, null=True, blank=True, verbose_name='Authority Cert Serial Number'
     )
     critical = models.BooleanField(verbose_name=_('Critical'), editable=False)
-    authority_cert_issuer = models.ForeignKey(
+    authority_cert_issuer = AutoDeleteRelatedForeignKey(
         GeneralNamesModel,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         verbose_name=_('Issuer Alternative Name Issuer'),
@@ -819,7 +821,7 @@ class NoticeReference(models.Model):
 class UserNotice(models.Model):
     """Represents a UserNotice as per RFC5280."""
 
-    notice_ref = models.ForeignKey(NoticeReference, null=True, blank=True, on_delete=models.CASCADE)
+    notice_ref = AutoDeleteRelatedForeignKey(NoticeReference, null=True, blank=True, on_delete=models.PROTECT)
     explicit_text = models.CharField(  # noqa: DJ001
         max_length=200, editable=False, verbose_name='Explicit Text', null=True, blank=True
     )
@@ -846,9 +848,11 @@ class CPSUriModel(models.Model):
 class QualifierModel(models.Model):
     """Generic model to represent either a CPS URI or a User Notice."""
 
-    cps_uri = models.ForeignKey(CPSUriModel, null=True, blank=True, on_delete=models.CASCADE, related_name='qualifiers')
-    user_notice = models.ForeignKey(
-        UserNotice, null=True, blank=True, on_delete=models.CASCADE, related_name='qualifiers'
+    cps_uri = AutoDeleteRelatedForeignKey(
+        CPSUriModel, null=True, blank=True, on_delete=models.PROTECT, related_name='qualifiers'
+    )
+    user_notice = AutoDeleteRelatedForeignKey(
+        UserNotice, null=True, blank=True, on_delete=models.PROTECT, related_name='qualifiers'
     )
 
     objects = models.Manager['QualifierModel']
@@ -872,7 +876,7 @@ class PolicyQualifierInfo(models.Model):
     """Represents a PolicyQualifierInfo as per RFC5280."""
 
     policy_qualifier_id = models.CharField(max_length=256, editable=False, verbose_name='Policy Qualifier ID')
-    qualifier = models.ForeignKey(QualifierModel, null=True, blank=True, on_delete=models.CASCADE)
+    qualifier = AutoDeleteRelatedForeignKey(QualifierModel, null=True, blank=True, on_delete=models.PROTECT)
 
     objects = models.Manager['PolicyQualifierInfo']
 
@@ -1051,13 +1055,13 @@ class ExtendedKeyUsageExtension(models.Model):
 
 
 class GeneralNameModel(models.Model):
-    rfc822_name = models.ForeignKey(GeneralNameRFC822Name, null=True, blank=True, on_delete=models.CASCADE)
-    dns_name = models.ForeignKey(GeneralNameDNSName, null=True, blank=True, on_delete=models.CASCADE)
-    directory_name = models.ForeignKey(GeneralNameDirectoryName, null=True, blank=True, on_delete=models.CASCADE)
-    uri = models.ForeignKey(GeneralNameUniformResourceIdentifier, null=True, blank=True, on_delete=models.CASCADE)
-    ip_address = models.ForeignKey(GeneralNameIpAddress, null=True, blank=True, on_delete=models.CASCADE)
-    registered_id = models.ForeignKey(GeneralNameRegisteredId, null=True, blank=True, on_delete=models.CASCADE)
-    other_name = models.ForeignKey(GeneralNameOtherName, null=True, blank=True, on_delete=models.CASCADE)
+    rfc822_name = AutoDeleteRelatedForeignKey(GeneralNameRFC822Name, null=True, blank=True, on_delete=models.PROTECT)
+    dns_name = AutoDeleteRelatedForeignKey(GeneralNameDNSName, null=True, blank=True, on_delete=models.PROTECT)
+    directory_name = AutoDeleteRelatedForeignKey(GeneralNameDirectoryName, null=True, blank=True, on_delete=models.PROTECT)
+    uri = AutoDeleteRelatedForeignKey(GeneralNameUniformResourceIdentifier, null=True, blank=True, on_delete=models.PROTECT)
+    ip_address = AutoDeleteRelatedForeignKey(GeneralNameIpAddress, null=True, blank=True, on_delete=models.PROTECT)
+    registered_id = AutoDeleteRelatedForeignKey(GeneralNameRegisteredId, null=True, blank=True, on_delete=models.PROTECT)
+    other_name = AutoDeleteRelatedForeignKey(GeneralNameOtherName, null=True, blank=True, on_delete=models.PROTECT)
 
     objects = models.Manager['GeneralNameModel']
 
@@ -1156,12 +1160,15 @@ class GeneralSubtree(models.Model):
     minimum defaults to 0 and maximum is optional.
     """
 
-    base = models.ForeignKey(GeneralNameModel, on_delete=models.CASCADE)
+    base = AutoDeleteRelatedForeignKey(GeneralNameModel, on_delete=models.PROTECT)
 
     minimum = models.PositiveIntegerField(default=0, editable=False)
     maximum = models.PositiveIntegerField(null=True, blank=True, editable=False, default=None)
 
     objects = models.Manager['GeneralSubtree']
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     def __str__(self) -> str:
         """Returns a string representation of the GeneralSubtree."""
@@ -1174,6 +1181,9 @@ class NameConstraintsExtension(CertificateExtension, models.Model):
     excluded_subtrees = models.ManyToManyField(GeneralSubtree, related_name='excluded_subtrees_set', editable=False)
 
     objects = models.Manager['NameConstraintsExtension']
+
+    class Meta(TypedModelMeta):
+        """Meta class configuration."""
 
     def __str__(self) -> str:
         """Returns a string representation of the NameConstraintsExtension."""
@@ -1209,8 +1219,7 @@ class NameConstraintsExtension(CertificateExtension, models.Model):
 
             def save_general_subtree(general_name: x509.GeneralName) -> GeneralSubtree:
                 gn_model = GeneralNameModel.from_x509_general_name(general_name)
-                subtree = GeneralSubtree(base=gn_model, minimum=0, maximum=None)
-                subtree.save()
+                subtree, _ = GeneralSubtree.objects.get_or_create(base=gn_model, minimum=0, maximum=None)
                 return subtree
 
             if extension.value.permitted_subtrees is not None:
@@ -1230,7 +1239,7 @@ class NameConstraintsExtension(CertificateExtension, models.Model):
 
 
 class DistributionPointName(models.Model):
-    full_name = models.ForeignKey(GeneralNamesModel, on_delete=models.CASCADE, null=True, blank=True)
+    full_name = AutoDeleteRelatedForeignKey(GeneralNamesModel, on_delete=models.PROTECT, null=True, blank=True)
 
     name_relative_to_crl_issuer = models.ManyToManyField(
         AttributeTypeAndValue,
@@ -1257,12 +1266,12 @@ class DistributionPointName(models.Model):
 
 
 class DistributionPointModel(CertificateExtension, models.Model):
-    distribution_point_name = models.ForeignKey(
-        DistributionPointName, verbose_name='Distribution Point Name', blank=True, on_delete=models.CASCADE
+    distribution_point_name = AutoDeleteRelatedForeignKey(
+        DistributionPointName, verbose_name='Distribution Point Name', blank=True, on_delete=models.PROTECT
     )
     reasons = models.CharField(max_length=16, blank=True, null=True, verbose_name=_('Reasons'))  # noqa: DJ001
-    crl_issuer = models.ForeignKey(
-        GeneralNamesModel, on_delete=models.CASCADE, null=True, blank=True, verbose_name=_('CRL Issuer')
+    crl_issuer = AutoDeleteRelatedForeignKey(
+        GeneralNamesModel, on_delete=models.PROTECT, null=True, blank=True, verbose_name=_('CRL Issuer')
     )
 
     objects = models.Manager['DistributionPointModel']
@@ -1423,7 +1432,7 @@ class CrlDistributionPointsExtension(CertificateExtension, models.Model):
 
 class AccessDescriptionModel(models.Model):
     access_method = models.CharField(max_length=256, editable=False, verbose_name='Access Method OID')
-    access_location = models.ForeignKey(GeneralNameModel, verbose_name='Access Location', on_delete=models.CASCADE)
+    access_location = AutoDeleteRelatedForeignKey(GeneralNameModel, verbose_name='Access Location', on_delete=models.PROTECT)
 
     objects = models.Manager['AccessDescriptionModel']
 

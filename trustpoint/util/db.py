@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.db import models
-from django.db.models.signals import post_delete
+from django.db.models import ProtectedError
+from django.db.models.signals import post_delete, pre_delete
+
+if TYPE_CHECKING:
+    from django.db.models.fields.related import RelatedField
+    _Base = RelatedField
+else:
+    _Base = object
 
 
-class AutoDeleteRelatedForeignKey(models.ForeignKey):
-    """A ForeignKey that deletes the object referenced by the FK when the parent object is deleted.
+class AutoDeleteRelatedMixin(_Base):
+    """Utility for deleting the object referenced by a relation when the parent object is deleted.
 
     This is useful for cases when a parent object is deleted, related objects should be deleted as well.
     """
-
     def contribute_to_class(self, cls: type[models.Model], name: str, *args: Any) -> None:
         """Register the signal when the model class is fully prepared."""
         super().contribute_to_class(cls, name, *args)
@@ -44,7 +50,9 @@ class AutoDeleteRelatedForeignKey(models.ForeignKey):
         ]
 
         for link in links:
-            references_exist = getattr(related_object, link.name).exists()
+            print('Checking references for ' + link.name)
+            print(link.get_accessor_name())
+            references_exist = getattr(related_object, link.get_accessor_name()).exists()
             if references_exist:
                 print(f'References exist for {link.name}')
                 return
@@ -55,3 +63,32 @@ class AutoDeleteRelatedForeignKey(models.ForeignKey):
         print('No references found. Deleting related object ' + str(related_object))
         #if related_object.pk:
         related_object.delete()
+
+class AutoDeleteRelatedForeignKey(AutoDeleteRelatedMixin, models.ForeignKey):
+    """A ForeignKey that deletes the object referenced by the FK when the parent object is deleted.
+
+    This is useful for cases when a parent object is deleted, related objects should be deleted as well.
+    """
+
+class SelfProtectForeignKey(models.ForeignKey):
+    """A ForeignKey that protects the parent object from being deleted if another object is referenced.
+
+    This makes the model instance only deleteable via e.g. on_delete=models.CASCADE.
+    """
+    def contribute_to_class(self, cls: type[models.Model], name: str, *args: Any) -> None:
+        """Register the signal when the model class is fully prepared."""
+        super().contribute_to_class(cls, name, *args)
+        pre_delete.connect(self._check_reference, sender=cls)
+
+    def _check_reference(self, sender: models.Model, instance: models.Model, **kwargs: Any) -> None:
+        del kwargs
+        del sender
+        if not self.name:
+            return
+        related_object = getattr(instance, self.name, None)
+
+        if not related_object:
+            return
+
+        exc_msg = f'Cannot delete {instance} because it still references {related_object}.'
+        raise ProtectedError(exc_msg)
