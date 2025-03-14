@@ -10,14 +10,15 @@ from devices.models import DeviceModel, IssuedCredentialModel
 from django.contrib import messages
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.db.models import Case, Count, F, IntegerField, Q, QuerySet, Value, When
+from django.db.models import Case, Count, F, IntegerField, Q, Value, When
 from django.db.models.functions import TruncDate
-from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import HttpRequest, HttpResponseRedirect, JsonResponse
+from django.shortcuts import redirect
 from django.utils import dateparse, timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
-from django.views.generic.base import RedirectView, TemplateView, View
+from django.views.generic.base import RedirectView, TemplateView
+from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
 from pki.models import CertificateModel, IssuingCaModel
 
@@ -144,84 +145,69 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
             badge_class = 'bg-warning'
         elif record.notification_type == NotificationModel.NotificationTypes.INFO:
             badge_class = 'bg-info'
-        else:  # Setup or other types default to secondary
+        else:
             badge_class = 'bg-secondary'
 
         # noinspection PyDeprecation
         return format_html('<span class="badge {}">{}</span>', badge_class, type_display)
 
 
-class NotificationDetailsView(View):
+class NotificationDetailsView(DetailView[NotificationModel]):
     """Renders the notification details page for authenticated users."""
 
     template_name = 'home/notification_details.html'
     model = NotificationModel
+    context_object_name = 'notification'
 
-    def get(self, request: HttpRequest, pk: int | str) -> HttpResponse:
-        """Renders notification details view.
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds information about the statuses of the Notification.
 
         Args:
-            request: The Django request object.
-            pk: The primary key.
+            **kwargs: Keyword arguments passed to super().get_context_data.
 
         Returns:
-            A redirect to the notification details page.
+            The context to render the page.
         """
-        notification = get_object_or_404(NotificationModel, pk=pk)
+        context = super().get_context_data(**kwargs)
 
-        notification_statuses = notification.statuses.values_list('status', flat=True)
-
+        # TODO(AlexHx8472): This should be generated automatically by utilizing a migration # noqa: FIX002
         new_status, created = NotificationStatus.objects.get_or_create(status='NEW')
         solved_status, created = NotificationStatus.objects.get_or_create(status='SOLVED')
-        is_solved = solved_status in notification.statuses.all()
 
-        if new_status and new_status in notification.statuses.all():
-            notification.statuses.remove(new_status)
+        if new_status and new_status in self.object.statuses.all():
+            self.object.statuses.remove(new_status)
 
-        context = {
-            'notification': notification,
-            'NotificationStatus': NotificationStatus,
-            'notification_statuses': notification_statuses,
-            'is_solved': is_solved,
-        }
-
-        return render(request, 'home/notification_details.html', context)
+        context['is_solved'] = solved_status in self.object.statuses.all()
+        context['notification_statuses'] = self.object.statuses.values_list('status', flat=True)
+        return context
 
 
-class NotificationMarkSolvedView(DetailView):
+class NotificationMarkSolvedView(DetailView[NotificationModel]):
     """Mark notification as solved when viewed in the notification details page."""
 
     template_name = 'home/notification_details.html'
     model = NotificationModel
+    context_object_name = 'notification'
 
-    def get(self, request: HttpRequest, pk: int | str) -> HttpResponse:
-        """View to mark the notification as Solved.
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds information about the solved status of the notification.
 
         Args:
-            request: The Django request object.
-            pk: The primary key.
+            **kwargs: Keyword arguments passed to super().get_context_data.
 
         Returns:
-            A redirect to the notification details page.
+            The context to render the page.
         """
-        notification = get_object_or_404(NotificationModel, pk=pk)
+        context = super().get_context_data(**kwargs)
 
-        solved_status, created = NotificationStatus.objects.get_or_create(status='SOLVED')
-        is_solved = solved_status in notification.statuses.all()
+        # TODO(AlexHx8472): This should be generated automatically by utilizing a migration # noqa: FIX002
+        solved_status, _ = NotificationStatus.objects.get_or_create(status='SOLVED')
 
         if solved_status:
-            notification.statuses.add(solved_status)
+            self.object.statuses.add(solved_status)
 
-        notification_statuses = notification.statuses.values_list('status', flat=True)
-
-        context = {
-            'notification': notification,
-            'NotificationStatus': NotificationStatus,
-            'notification_statuses': notification_statuses,
-            'is_solved': is_solved,
-        }
-
-        return render(request, 'home/notification_details.html', context)
+        context['is_solved'] = solved_status in self.object.statuses.all()
+        return context
 
 
 class AddDomainsAndDevicesView(LoggerMixin, TemplateView):
