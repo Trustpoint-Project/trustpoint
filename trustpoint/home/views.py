@@ -660,7 +660,6 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         return cert_counts_by_template
 
     def get_issuing_ca_counts_by_type(self, start_date: datetime) -> dict[str, Any]:
-        """Get issuing ca counts by type from database."""
         """Fetch issuing ca counts grouped by type from database.
 
         Args:
