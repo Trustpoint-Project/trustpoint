@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
 from datetime import timedelta
+from typing import Any, cast
 
-from django.core.management.base import BaseCommand  # type: ignore[import-untyped]
-from django.utils import timezone  # type: ignore[import-untyped]
+from django.core.management.base import BaseCommand
+from django.utils import timezone
 from home.models import NotificationModel, NotificationStatus
 from pki.models import IssuingCaModel
 
@@ -22,7 +22,12 @@ class Command(BaseCommand):
     help = 'Check for expiring or expired issuing CAs.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         self._check_issuing_ca_validity()
         self.stdout.write(self.style.SUCCESS('Issuing CA validity check completed.'))
 
@@ -86,7 +91,7 @@ class Command(BaseCommand):
         if not NotificationModel.objects.filter(event=event, issuing_ca=issuing_ca).exists():
             message_data = {
                 'unique_name': issuing_ca.unique_name,
-                'not_valid_after': issuing_ca.issuing_ca_certificate.not_valid_after,
+                'not_valid_after': issuing_ca.credential.get_certificate().not_valid_after,
             }
             notification = NotificationModel.objects.create(
                 issuing_ca=issuing_ca,

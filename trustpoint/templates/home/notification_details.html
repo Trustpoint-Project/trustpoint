@@ -101,20 +101,6 @@
                     {% endif %}
                 </div>
 
-{#                <div class="mb-3">#}
-{#                    <strong>{% trans "Statuses:" %}</strong>#}
-{#                    <ul>#}
-{#                        {% for key, label in NotificationStatus.STATUS_CHOICES %}#}
-{#                            <li>#}
-{#                <span#}
-{#                        {% if key in notification_statuses %}class="fw-bold text-primary"{% endif %}>#}
-{#                    {{ label }}#}
-{#                </span>#}
-{#                            </li>#}
-{#                        {% endfor %}#}
-{#                    </ul>#}
-{#                </div>#}
-
                 <div class="mb-3">
                     <strong>{% trans "Created At:" %}</strong>
                     <span>{{ notification.created_at|date:"SHORT_DATETIME_FORMAT" }}</span>
