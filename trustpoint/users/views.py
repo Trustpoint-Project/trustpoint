@@ -2,18 +2,25 @@
 
 from __future__ import annotations
 
-from django.contrib.auth.views import LoginView
-from django.contrib import messages
+from typing import TYPE_CHECKING, Any
 
+from django.contrib import messages
+from django.contrib.auth.views import LoginView
 from setup_wizard import SetupWizardState
 from setup_wizard.views import StartupWizardRedirect
+
 from trustpoint.settings import DOCKER_CONTAINER
+
+if TYPE_CHECKING:
+    from django.http import HttpResponse
 
 
 class TrustpointLoginView(LoginView):
-    http_method_names = ['get', 'post']
+    """View to handle the user Login."""
+    http_method_names = ('get', 'post')
 
-    def get(self, *args, **kwargs):
+    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
+        """The HTTP GET method for the view."""
         # clears all messages
         for _ in messages.get_messages(self.request):
             pass
@@ -27,7 +34,8 @@ class TrustpointLoginView(LoginView):
 
         return StartupWizardRedirect.redirect_by_state(wizard_state)
 
-    def post(self, *args, **kwargs):
+    def post(self, *args: Any, **kwargs: Any) -> HttpResponse:
+        """The HTTP POST method for the view."""
         # clears all messages
         for _ in messages.get_messages(self.request):
             pass

@@ -17,7 +17,9 @@ else:
 
 
 class CleanedDataNotNoneMixin(_TypingForm):
+    """Mixin to ensure that `cleaned_data` is never `None` after form validation."""
     def clean(self) -> dict[str, Any]:
+        """Cleans and validates form data, ensuring `cleaned_data` is not `None`."""
         cleaned_data = super().clean()
         if cleaned_data is None:
             err_msg = 'Failed to get cleaned form data.'

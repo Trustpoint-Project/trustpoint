@@ -118,7 +118,7 @@ plugins = ["mypy_django_plugin.main"]
 exclude = "^(tests/|.*/tests/|migrations/|.*/migrations/)"
 
 [[tool.mypy.overrides]]
-module = ["crispy_bootstrap5.*", "crispy_forms.*"]
+module = ["crispy_bootstrap5.*", "crispy_forms.*", "trustpoint_core.*"]
 ignore_missing_imports = true
 
 [tool.django-stubs]

@@ -34,7 +34,7 @@ class CertificatesContextMixin:
 
 
 class CertificateTableView(
-    CertificatesContextMixin, SortableTableMixin, ListView[CertificateModel]
+    CertificatesContextMixin, SortableTableMixin[CertificateModel]
 ):
     """Certificate Table View."""
 

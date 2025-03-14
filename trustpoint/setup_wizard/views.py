@@ -5,13 +5,13 @@ from __future__ import annotations
 import subprocess
 import traceback
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.core.management import call_command
-from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, HttpResponseBase
+from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import FormView, TemplateView, View
@@ -163,7 +163,7 @@ class SetupWizardInitialView(TemplateView):
         return super().get(*args, **kwargs)
 
 
-class SetupWizardGenerateTlsServerCredentialView(FormView):
+class SetupWizardGenerateTlsServerCredentialView(FormView[StartupWizardTlsCertificateForm]):
     """View for generating TLS Server Credentials in the setup wizard.
 
     This view handles the generation of TLS Server Credentials as part of the
@@ -208,7 +208,7 @@ class SetupWizardGenerateTlsServerCredentialView(FormView):
 
         return super().dispatch(request, *args, **kwargs)
 
-    def form_valid(self, form: UserCreationForm) -> HttpResponse:
+    def form_valid(self, form: StartupWizardTlsCertificateForm) -> HttpResponse:
         """Handle a valid form submission for TLS Server Credential generation.
 
         Args:
@@ -294,7 +294,7 @@ class SetupWizardImportTlsServerCredentialView(View):
         return redirect('setup_wizard:initial', permanent=False)
 
 
-class SetupWizardTlsServerCredentialApplyView(FormView):
+class SetupWizardTlsServerCredentialApplyView(FormView[EmptyForm]):
     """View for handling the application of TLS Server Credentials in the setup wizard.
 
     Attributes:
@@ -352,11 +352,11 @@ class SetupWizardTlsServerCredentialApplyView(FormView):
 
         return super().post(*args, **kwargs)
 
-    def form_valid(self, form: UserCreationForm) -> HttpResponse:
+    def form_valid(self, form: EmptyForm) -> HttpResponse:
         """Process a valid form submission during the TLS Server Credential application.
 
         Args:
-            form (UserCreationForm): The form instance containing the submitted data.
+            form (EmptyForm): The form instance containing the submitted data.
 
         Returns:
             HttpResponseRedirect: Redirect to the next step or an error page based on the outcome.
@@ -419,6 +419,12 @@ class SetupWizardTlsServerCredentialApplyView(FormView):
         }
         return error_messages.get(return_code, 'An unknown error occurred.')
 
+    def _raise_invalid_file_format(self, file_format: str) -> None:
+        """Raise a ValueError for an unknown file format."""
+        err_msg = f'Unknown file_format requested: {file_format}'
+        raise ValueError(err_msg)
+
+
     def _generate_trust_store_response(self, file_format: str) -> HttpResponse:
         """Generate a response containing the trust store in the requested format.
 
@@ -457,8 +463,7 @@ class SetupWizardTlsServerCredentialApplyView(FormView):
                 trust_store = serializer.as_pkcs7_pem().decode()
                 content_type = 'application/x-pem-file'
             else:
-                err_msg = f'Unknown file_format requested: {file_format}'
-                raise ValueError(err_msg)
+                self._raise_invalid_file_format(file_format)
         except Exception as e:  # noqa: BLE001
             messages.add_message(self.request, messages.ERROR, f'Error generating {file_format} trust store: {e}')
             return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
@@ -553,7 +558,7 @@ class SetupWizardTlsServerCredentialApplyCancelView(View):
         return error_messages.get(return_code, 'An unknown error occurred during the cancel operation.')
 
 
-class SetupWizardDemoDataView(FormView):
+class SetupWizardDemoDataView(FormView[EmptyForm]):
     """View for handling the demo data setup during the setup wizard.
 
     This view allows the user to either add demo data to the database or proceed without
@@ -577,7 +582,7 @@ class SetupWizardDemoDataView(FormView):
 
         return super().dispatch(request, *args, **kwargs)
 
-    def form_valid(self, form: UserCreationForm) -> HttpResponse:
+    def form_valid(self, form: EmptyForm) -> HttpResponse:
         """Handle form submission for demo data setup."""
         try:
             if 'without-demo-data' in self.request.POST:
@@ -650,7 +655,7 @@ class SetupWizardDemoDataView(FormView):
         return error_messages.get(return_code, 'An unknown error occurred while executing the demo data script.')
 
 
-class SetupWizardCreateSuperUserView(FormView):
+class SetupWizardCreateSuperUserView(FormView[UserCreationForm[User]]):
     """View for handling the creation of a superuser during the setup wizard.
 
     This view is part of the setup wizard process. It allows an admin to create a
@@ -675,7 +680,7 @@ class SetupWizardCreateSuperUserView(FormView):
 
         return super().dispatch(request, *args, **kwargs)
 
-    def form_valid(self, form: UserCreationForm) -> HttpResponse:
+    def form_valid(self, form: UserCreationForm[User]) -> HttpResponse:
         """Handle form submission for creating a superuser.
 
         Args:
