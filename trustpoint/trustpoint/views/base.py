@@ -170,7 +170,7 @@ class BulkDeletionMixin:
     success_url: str | None = None
 
     def delete(self, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Override delete method to redirect after succesfull delete."""
+        """Override delete method to redirect after successful delete."""
         self.queryset = self.get_queryset()
         success_url = self.get_success_url()
         self.queryset.delete()
