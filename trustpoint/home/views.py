@@ -137,7 +137,7 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
         Returns:
             The HTML of the span with class badge to display notification type.
         """
-        type_display = record.get_notification_type_display()  # type: ignore[attr-defined]
+        type_display = record.get_notification_type_display()
 
         if record.notification_type == NotificationModel.NotificationTypes.CRITICAL:
             badge_class = 'bg-danger'
@@ -256,9 +256,9 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         del kwargs
 
         start_date_object: datetime = timezone.now()
-        # Parse the date string into a datetime.date object
+
         if start_date:
-            parsed_date = dateparse.parse_datetime(start_date)  # Returns a datetime object
+            parsed_date = dateparse.parse_datetime(start_date)
             if not parsed_date:
                 return JsonResponse({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=400)
             start_date_object = parsed_date
@@ -365,7 +365,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                 .values('onboarding_status')
                 .annotate(count=Count('onboarding_status'))
             )
-            # Mapping from short code to human-readable name
+
             protocol_mapping = {key: str(value) for key, value in DeviceModel.OnboardingStatus.choices}
             device_os_counts = {protocol_mapping[item['onboarding_status']]: item['count'] for item in device_os_qr}
 
@@ -384,7 +384,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             It returns certificate counts.
         """
         cert_counts = {}
-        # Get the current date and the dates for 7 days and 1 day ahead
+
         now = timezone.now()
         next_7_days = now + timedelta(days=7)
         next_1_day = now + timedelta(days=1)
@@ -414,9 +414,9 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                 .annotate(cert_count=Count('id'))
                 .order_by('issue_date', 'certificate_status')
             )
-            # Mapping von Status-Code zu lesbarem Namen
+
             status_mapping = dict(CertificateModel.CertificateStatus.choices)
-            # Konvertiere das QuerySet in eine Liste und formatiere die Werte
+
             cert_counts_by_status = [
                 {
                     'issue_date': item['issue_date'].strftime('%Y-%m-%d'),
@@ -442,7 +442,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         try:
             cert_status_qr = CertificateModel.objects.filter(created_at__gt=start_date)
             status_counts = Counter(str(cert.certificate_status.value) for cert in cert_status_qr)
-            # Mapping from short code to human-readable name
+
             status_mapping = {key: str(value) for key, value in CertificateModel.CertificateStatus.choices}
             cert_status_counts = {status_mapping[key]: value for key, value in status_counts.items()}
         except Exception:
@@ -455,11 +455,10 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         Returns:
             It returns total, active and expired issuing CA counts.
         """
-        # Current date
         today = timezone.make_aware(datetime.combine(timezone.now().date(), datetime.min.time()))
         issuing_ca_counts = {}
         try:
-            # Query to get total, active, and expired Issuing CAs
+
             issuing_ca_counts = IssuingCaModel.objects.aggregate(
                 total=Count('id'),
                 active=Count(
@@ -494,7 +493,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                 .annotate(device_count=Count('id'))
                 .order_by('issue_date', 'onboarding_status')
             )
-            # Convert the queryset to a list
+
             device_counts_by_date_and_os = list(device_date_os_qr)
         except Exception:
             self.logger.exception('Error occurred in device count by date and onboarding status')
@@ -516,7 +515,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                 .values('onboarding_protocol')
                 .annotate(count=Count('onboarding_protocol'))
             )
-            # Mapping from short code to human-readable name
+
             protocol_mapping = {key: str(value) for key, value in DeviceModel.OnboardingProtocol.choices}
             device_op_counts = {protocol_mapping[item['onboarding_protocol']]: item['count'] for item in device_op_qr}
 
@@ -542,7 +541,6 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                 .annotate(onboarded_device_count=Count('id'))
             )
 
-            # Convert the queryset to a list
             return list(device_domain_qr)
         except Exception:
             self.logger.exception('Error occurred in device count by domain query')
@@ -565,7 +563,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                 .values(ca_name=F('issuer__value'))
                 .annotate(cert_count=Count('id'))
             )
-            # Convert the queryset to a list
+
             cert_counts_by_issuing_ca = list(cert_issuing_ca_qr)
         except Exception:
             self.logger.exception('Error occurred in certificate count by issuing ca query')
@@ -591,7 +589,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                 .annotate(cert_count=Count('id'))
                 .order_by('issue_date', 'name')
             )
-            # Convert the queryset to a list
+
             cert_counts_by_issuing_ca_and_date = list(cert_issuing_ca_and_date_qr)
         except Exception:
             self.logger.exception('Error occurred in certificate count by issuing ca query')
@@ -614,7 +612,6 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                 .annotate(cert_count=Count('id'))
             )
 
-            # Convert the queryset to a list
             cert_counts_by_domain = list(cert_counts_domain_qr)
         except Exception:
             self.logger.exception('Error occurred in certificate count by issuing ca query')
@@ -638,7 +635,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                 .values(cert_type=F('issued_credential_purpose'))
                 .annotate(count=Count('credential__certificates'))
             )
-            # Mapping from short code to human-readable name
+
             template_mapping = {key: str(value) for key, value in IssuedCredentialModel.IssuedCredentialPurpose.choices}
             cert_counts_by_template = {template_mapping[item['cert_type']]: item['count'] for item in cert_template_qr}
         except Exception:
@@ -662,7 +659,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                 .values('issuing_ca_type')
                 .annotate(count=Count('issuing_ca_type'))
             )
-            # Mapping from short code to human-readable name
+
             protocol_mapping = {key: str(value) for key, value in IssuingCaModel.IssuingCaTypeChoice.choices}
             issuing_ca_type_counts = {protocol_mapping[item['issuing_ca_type']]: item['count'] for item in ca_type_qr}
 
