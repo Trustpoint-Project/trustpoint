@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.core.management import CommandError, call_command  # type: ignore[import-untyped]
-from django.core.management.base import BaseCommand  # type: ignore[import-untyped]
+from django.core.management import CommandError, call_command
+from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
@@ -14,7 +14,12 @@ class Command(BaseCommand):
     help = 'Run all task-related commands sequentially.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         commands_to_run = [
             'trustpoint_setup_notifications',
             'check_system_health',
