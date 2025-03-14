@@ -1,5 +1,4 @@
 """Django Views for security settings management."""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -61,10 +60,6 @@ class SecurityView(SecurityLevelMixin, FormView[SecurityConfigForm]):
                 # autogen PKI got enabled
                 key_alg = AutoGenPkiKeyAlgorithm(form.cleaned_data.get('auto_gen_pki_key_algorithm', ''))
                 self.sec.enable_feature(AutoGenPkiFeature, key_alg)
-
-            elif old_auto != new_auto and not new_auto:
-                # autogen PKI got disabled
-                AutoGenPkiFeature.disable()
 
         messages.success(self.request, _('Your changes were saved successfully.'))
         return super().form_valid(form)

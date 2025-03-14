@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any, cast
 
 from settings.models import SecurityConfig
 from settings.security import LEVEL_FEATURE_MAP
+from settings.security.features import SecurityFeature
 from trustpoint.views.base import LoggerMixin
-
-if TYPE_CHECKING:
-    from settings.security.features import SecurityFeature
 
 
 class SecurityManager(LoggerMixin):
     """Manages the security level setting of the Trustpoint."""
 
-    def is_feature_allowed(self, feature: SecurityFeature, target_level: None | str = None) -> bool:
+    def is_feature_allowed(self, feature: type[SecurityFeature], target_level: None | str = None) -> bool:
         """Checks if the specified feature is allowed under the given security level.
 
         If 'target_level' is None, the current security level is used.
@@ -31,18 +29,18 @@ class SecurityManager(LoggerMixin):
 
         # If the level is defined in the dictionary, check membership
         allowed_features = LEVEL_FEATURE_MAP.get(level_choice, set())
-        return feature in allowed_features
+        return feature in cast(set[type[SecurityFeature]], allowed_features)
 
     def get_security_level(self) -> str:
         """Returns the string representation of the security_mode, e.g. '0', '1', etc."""
         return self.get_security_config_model().security_mode
 
     @classmethod
-    def get_features_to_disable(cls, sec_level: str) -> list[SecurityFeature]:
+    def get_features_to_disable(cls, sec_level: str) -> list[type[SecurityFeature]]:
         """Returns a list of features that must be disabled at the given security level."""
-        dev_features = LEVEL_FEATURE_MAP[SecurityConfig.SecurityModeChoices.DEV]
+        dev_features = cast(set[type[SecurityFeature]], LEVEL_FEATURE_MAP[SecurityConfig.SecurityModeChoices.DEV])
         level_choice = SecurityConfig.SecurityModeChoices(sec_level)
-        valid_features = LEVEL_FEATURE_MAP.get(level_choice, set())
+        valid_features = cast(set[type[SecurityFeature]], LEVEL_FEATURE_MAP.get(level_choice, set()))
 
         # The difference is the set of features that are NOT allowed at this level.
         must_disable = dev_features - valid_features
@@ -52,13 +50,18 @@ class SecurityManager(LoggerMixin):
         """Disables any feature that is not allowed by the new security mode."""
         features_to_disable = self.get_features_to_disable(new_sec_mode)
         for feature in features_to_disable:
-            log_msg = f'Disabling Feature: {feature}'
-            self.logger.info(log_msg)
-            feature.disable()
+            if feature.is_enabled():
+                log_msg = f'Disabling Feature: {feature}'
+                self.logger.info(log_msg)
+                feature.disable()
 
     def get_security_config_model(self) -> SecurityConfig:
         """Returns the model holding the security settings."""
-        return SecurityConfig.objects.first()
+        conf = SecurityConfig.objects.first()
+        if conf:
+            return conf
+        msg = 'Failed to disable AutoGenPki: SecurityConfig instance not found.'
+        raise RuntimeError(msg)
 
     def enable_feature(self, feature: type[SecurityFeature], *args: Any) -> None:
         """Enables a feature if it is allowed at the current security level."""
