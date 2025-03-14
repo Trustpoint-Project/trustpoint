@@ -66,15 +66,6 @@ class DashboardView(SortableTableMixin, ListView[NotificationModel]):
         self.last_week_dates = self.generate_last_week_dates()
 
     @staticmethod
-    def get_notifications() -> QuerySet[NotificationModel]:
-        """Fetch notification data for the table.
-
-        Returns:
-            A `QuerySet` containing all notifications.
-        """
-        return NotificationModel.objects.all()
-
-    @staticmethod
     def generate_last_week_dates() -> list[str]:
         """Generates date strings for last one week.
 
@@ -197,7 +188,7 @@ class NotificationDetailsView(View):
         return render(request, 'home/notification_details.html', context)
 
 
-class NotificationMarkSolvedView(View):
+class NotificationMarkSolvedView(DetailView):
     """Mark notification as solved when viewed in the notification details page."""
 
     template_name = 'home/notification_details.html'
