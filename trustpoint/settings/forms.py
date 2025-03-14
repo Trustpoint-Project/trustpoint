@@ -1,8 +1,8 @@
-"""Forms definition"""
+"""Forms definition."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Fieldset, Layout
@@ -18,14 +18,15 @@ if TYPE_CHECKING:
     from typing import ClassVar
 
 
-class SecurityConfigForm(forms.ModelForm):
-    """Security configuration model form"""
+class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
+    """Security configuration model form."""
 
-    FEATURE_TO_FIELDS: dict[type[SecurityFeature], list[str]] = {
+    FEATURE_TO_FIELDS: ClassVar[dict[type[SecurityFeature], list[str]]] = {
         AutoGenPkiFeature: ['auto_gen_pki', 'auto_gen_pki_key_algorithm'],
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs:Any) -> None:
+        """Initializes the form and disables fields based on the security level."""
         super().__init__(*args, **kwargs)
 
         # Determine the 'current_mode' from form data or instance
@@ -85,12 +86,13 @@ class SecurityConfigForm(forms.ModelForm):
     )
 
     class Meta:
+        """Metadata options for the SecurityConfigForm."""
         model = SecurityConfig
         fields: ClassVar[list[str]] = ['security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm']
 
-    def clean_auto_gen_pki_key_algorithm(self) -> AutoGenPkiKeyAlgorithm:
+    def clean_auto_gen_pki_key_algorithm(self) -> str:
         """Keep the current value of `auto_gen_pki_key_algorithm` from the instance if the field was disabled."""
-        form_value = self.cleaned_data.get('auto_gen_pki_key_algorithm')
-        if form_value is None:
-            return self.instance.auto_gen_pki_key_algorithm if self.instance else AutoGenPkiKeyAlgorithm.RSA2048
+        form_value = cast(str, self.cleaned_data.get('auto_gen_pki_key_algorithm', ''))
+        if not form_value:
+            return self.instance.auto_gen_pki_key_algorithm if self.instance else AutoGenPkiKeyAlgorithm.RSA2048.value
         return form_value
