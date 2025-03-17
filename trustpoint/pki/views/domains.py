@@ -110,7 +110,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         domain = self.get_object()
 
         context['registration_options'] = {
-            'auto_create_new_device': domain.auto_create_new_devic,
+            'auto_create_new_device': domain.auto_create_new_device,
             'allow_username_password_registration': domain.allow_username_password_registration,
             'allow_idevid_registration': domain.allow_idevid_registration,
             'domain_credential_auth': domain.domain_credential_auth,

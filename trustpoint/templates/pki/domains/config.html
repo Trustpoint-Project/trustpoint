@@ -102,8 +102,7 @@
                                     </div>
 
                                     <h2>{% trans "Domain Options" %}</h2>
-                                    <hr class="hr-m">
-
+                                    <hr>
                                     <h3 class="mt-5">{% trans 'Registration' %}</h3>
 
                                     <div class="form-check">
@@ -147,20 +146,21 @@
                                         </small>
                                     </div>
 
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="allow_idevid_registration"
-                                               id="allow_idevid_registration"
-                                               {% if registration_options.allow_idevid_registration %}checked{% endif %}>
-                                        <label class="form-check-label" for="allow_idevid_registration">
-                                            {{ registration_verbose_name.allow_idevid_registration }}
-                                        </label>
-                                        <br>
-                                        <small class="form-text text-muted">
-                                            {{ registration_help_texts.allow_idevid_registration }}
-                                        </small>
-                                    </div>
+{#                                    <div class="form-check">#}
+{#                                        <input class="form-check-input" type="checkbox" name="allow_idevid_registration"#}
+{#                                               id="allow_idevid_registration"#}
+{#                                               {% if registration_options.allow_idevid_registration %}checked{% endif %}>#}
+{#                                        <label class="form-check-label" for="allow_idevid_registration">#}
+{#                                            {{ registration_verbose_name.allow_idevid_registration }}#}
+{#                                        </label>#}
+{#                                        <br>#}
+{#                                        <small class="form-text text-muted">#}
+{#                                            {{ registration_help_texts.allow_idevid_registration }}#}
+{#                                        </small>#}
+{#                                    </div>#}
 
                                     <h3 class="mt-5">{% trans 'Authentication' %}</h3>
+                                    <br>
 
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" name="domain_credential_auth"
