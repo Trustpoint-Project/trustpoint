@@ -1,5 +1,7 @@
 """pytest configuration for the tests in the devices app."""
 
+from typing import Any
+
 import pytest
 from pki.models import DomainModel, IssuingCaModel
 from pki.util.x509 import CertificateGenerator
@@ -14,12 +16,12 @@ def enable_db_access_for_all_tests(db: None) -> None:
 
 
 @pytest.fixture
-def mock_models() -> dict:
+def mock_models() -> dict[str, Any]:
     """Creates mock models."""
     return create_mock_models()
 
 
-def create_mock_models() -> dict:
+def create_mock_models() -> dict[str, Any]:
     """Fixture to create mock CA, domain, device, and credential models for testing."""
     root_1, root_1_key = CertificateGenerator.create_root_ca('Test Root CA')
     issuing_1, issuing_1_key = CertificateGenerator.create_issuing_ca(root_1_key, 'Root CA', 'Issuing CA A')
