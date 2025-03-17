@@ -64,7 +64,7 @@ def is_postgre_available() -> bool:
         print(f'Trying to connect to {host}:{port}...')
         with socket.create_connection((host, port), timeout=5):
             print(f'Connection to {host}:{port} successful.')
-    except OSError as e:
+    except OSError:
         msg = f'PostgreSQL host {host} on port {port} is unreachable. \n'
         msg += 'Switching to SQLite Database'
         print(msg)
@@ -143,6 +143,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -314,3 +315,11 @@ class UIConfig:
 
     paginate_by: ClassVar[int] = 50
     notifications_paginate_by: ClassVar[int] = 5
+
+
+PUBLIC_PATHS = [
+    '/setup-wizard',
+    '/.well-known/cmp',
+    '/.well-known/est',
+    '/crl',
+]

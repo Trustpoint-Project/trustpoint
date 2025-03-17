@@ -256,7 +256,7 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
         }
 
     domain_queryset: QuerySet[DomainModel] = DomainModel.objects.filter(is_active=True)
-    domain = forms.ModelChoiceField(queryset=domain_queryset, empty_label=None)
+    domain = forms.ModelChoiceField(queryset=domain_queryset, empty_label=None, required=True)
 
     onboarding_and_pki_configuration = forms.ChoiceField(
         choices=[
@@ -321,6 +321,9 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             Div(Field('pki_configuration'), css_class='d-none', id='id_pki_configuration_wrapper'),
             HTML('<div class="mb-4"></div>'),
         )
+        self.fields['domain'].widget.attrs.update({
+            'required': 'True'
+        })
 
     @staticmethod
     def clean_device_name(device_name: str) -> str:

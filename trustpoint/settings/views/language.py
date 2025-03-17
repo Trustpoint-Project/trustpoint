@@ -6,12 +6,8 @@ from typing import TYPE_CHECKING
 
 from django.http import HttpResponse
 from django.shortcuts import render
-from django.utils.translation import gettext as _
-from django.views.generic.base import RedirectView
 
 if TYPE_CHECKING:
-    from typing import Any
-
     from django.http import HttpRequest, HttpResponse
 
 

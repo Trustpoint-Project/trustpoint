@@ -39,7 +39,16 @@ urlpatterns = [
         name='certificate_lifecycle_management-issue_opcua_server_credential',
     ),
     # Certificate Lifecycle Management - Help Pages
-    path('help/dispatch/<int:pk>/', views.HelpDispatchView.as_view(), name='help_dispatch'),
+    path(
+        'help/dispatchDomain/<int:pk>/',
+        views.HelpDispatchDomainCredentialView.as_view(),
+        name='help_dispatch_domain'
+    ),
+    path(
+        'help/dispatchApplication/<int:pk>/',
+        views.HelpDispatchApplicationCredentialView.as_view(),
+        name='help_dispatch_application'
+    ),
     path(
         'help/no-onboarding/cmp-shared-secret/<int:pk>/',
         views.NoOnboardingCmpSharedSecretHelpView.as_view(),
@@ -61,6 +70,11 @@ urlpatterns = [
         name='help-onboarding_cmp-idevid-registration',
     ),
     path(
+        'help/onboarding/cmp-application-credentials/<int:pk>/',
+        views.OnboardingCmpApplicationCredentialsHelpView.as_view(),
+        name='help-onboarding_cmp-application-credentials',
+    ),
+    path(
         'help/no-onboarding/est-username-password/<int:pk>/',
         views.NoOnboardingEstUsernamePasswordHelpView.as_view(),
         name='help-no-onboarding_est-username-password'
@@ -71,8 +85,13 @@ urlpatterns = [
         name='help-onboarding_est-username-password'
     ),
     path(
+        'help/onboarding/est-application-credentials/<int:pk>/',
+        views.OnboardingEstApplicationCredentialsHelpView.as_view(),
+        name='help-onboarding_est-application-credentials',
+    ),
+    path(
         'help/onboarding/ldevid/<int:pk>/',
-        views.OnboardingEstLDevIdHelpView.as_view(),
+        views.OnboardingEstApplicationCredentialsHelpView.as_view(),
         name='help-onboarding_est-ldevid'
     ),
     # Certificate Lifecycle Management - Downloads

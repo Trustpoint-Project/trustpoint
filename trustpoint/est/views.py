@@ -53,7 +53,7 @@ class LoggedHttpResponse(HttpResponse, LoggerMixin):
         """
         if status and status >= THRESHOLD_LOGGER:
             if isinstance(content, bytes):
-                content = content.decode("utf-8")
+                content = content.decode('utf-8')
             error_message = f'EST Error - {status} - {content}'
             self.logger.error(error_message)
 

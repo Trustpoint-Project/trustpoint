@@ -23,7 +23,6 @@ from trustpoint.views.base import (
     ContextDataMixin,
     ListInDetailView,
     SortableTableMixin,
-    TpLoginRequiredMixin,
 )
 
 if TYPE_CHECKING:
@@ -39,7 +38,7 @@ class DomainContextMixin(ContextDataMixin):
     context_page_name = 'domains'
 
 
-class DomainTableView(DomainContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView[DomainModel]):
+class DomainTableView(DomainContextMixin, SortableTableMixin, ListView[DomainModel]):
     """Domain Table View."""
 
     model = DomainModel
@@ -49,7 +48,7 @@ class DomainTableView(DomainContextMixin, TpLoginRequiredMixin, SortableTableMix
     default_sort_param = 'unique_name'
 
 
-class DomainCreateView(DomainContextMixin, TpLoginRequiredMixin, CreateView[DomainModel]):
+class DomainCreateView(DomainContextMixin, CreateView[DomainModel]):
     """View to create a new domain."""
 
     model = DomainModel
@@ -70,7 +69,7 @@ class DomainCreateView(DomainContextMixin, TpLoginRequiredMixin, CreateView[Doma
         return form
 
 
-class DomainUpdateView(DomainContextMixin, TpLoginRequiredMixin, UpdateView[DomainModel]):
+class DomainUpdateView(DomainContextMixin, UpdateView[DomainModel]):
     """View to edit a domain."""
 
     # TODO(Air): This view is currently UNUSED.
@@ -97,7 +96,7 @@ class DomainDevIdRegistrationTableMixin(SortableTableMixin, ListInDetailView):
         return super().get_queryset()
 
 
-class DomainConfigView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegistrationTableMixin, ListInDetailView):
+class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, ListInDetailView):
     """View to configure a domain, allows adding DevID registration patterns."""
 
     detail_model = DomainModel
@@ -111,11 +110,11 @@ class DomainConfigView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegi
         domain = self.get_object()
 
         context['registration_options'] = {
-            'auto_create_new_device': domain.auto_create_new_device,
+            'auto_create_new_device': domain.auto_create_new_devic,
             'allow_username_password_registration': domain.allow_username_password_registration,
             'allow_idevid_registration': domain.allow_idevid_registration,
             'domain_credential_auth': domain.domain_credential_auth,
-            'username_password_auth': domain._meta.get_field('username_password_auth').help_text,
+            'username_password_auth': domain._meta.get_field('username_password_auth'),
             'allow_app_certs_without_domain': domain._meta.get_field('allow_app_certs_without_domain').help_text,
         }
 
@@ -157,7 +156,7 @@ class DomainConfigView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegi
         return HttpResponseRedirect(self.success_url)
 
 
-class DomainDetailView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegistrationTableMixin, ListInDetailView):
+class DomainDetailView(DomainContextMixin, DomainDevIdRegistrationTableMixin, ListInDetailView):
     """View to display domain details."""
 
     detail_model = DomainModel
@@ -165,7 +164,7 @@ class DomainDetailView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegi
     detail_context_object_name = 'domain'
 
 
-class DomainCaBulkDeleteConfirmView(DomainContextMixin, TpLoginRequiredMixin, BulkDeleteView):
+class DomainCaBulkDeleteConfirmView(DomainContextMixin, BulkDeleteView):
     """View to confirm the deletion of multiple Domains."""
 
     model = DomainModel
@@ -192,7 +191,7 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, TpLoginRequiredMixin, Bu
         return response
 
 
-class DevIdRegistrationCreateView(DomainContextMixin, TpLoginRequiredMixin, FormView[DevIdRegistrationForm]):
+class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistrationForm]):
     """View to create a new DevID Registration."""
 
     http_method_names = ('get', 'post')
@@ -262,7 +261,7 @@ class DevIdRegistrationCreateView(DomainContextMixin, TpLoginRequiredMixin, Form
         return cast('str', reverse_lazy('pki:domains-config', kwargs={'pk': domain.id}))
 
 
-class DevIdRegistrationDeleteView(DomainContextMixin, TpLoginRequiredMixin, DeleteView):
+class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView):
     """View to delete a DevID Registration."""
 
     model = DevIdRegistration
@@ -276,7 +275,7 @@ class DevIdRegistrationDeleteView(DomainContextMixin, TpLoginRequiredMixin, Dele
         return response
 
 
-class DevIdMethodSelectView(DomainContextMixin, TpLoginRequiredMixin, FormView[DevIdAddMethodSelectForm]):
+class DevIdMethodSelectView(DomainContextMixin, FormView[DevIdAddMethodSelectForm]):
     """View to select the method to add a DevID Registration pattern."""
 
     template_name = 'pki/devid_registration/method_select.html'
