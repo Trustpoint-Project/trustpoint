@@ -11,9 +11,9 @@ from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
-from django.db.models import Q, QuerySet
+from django.db.models import ProtectedError, Q, QuerySet
 from django.forms import BaseModelForm
-from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.decorators import method_decorator
@@ -50,7 +50,7 @@ from devices.issuer import (
 from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
 from devices.revocation import DeviceCredentialRevocation
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import ListInDetailView, SortableTableMixin
+from trustpoint.views.base import BulkDeleteView, ListInDetailView, SortableTableMixin
 
 if TYPE_CHECKING:
     import ipaddress
@@ -1227,3 +1227,29 @@ class DeviceCredentialRevocationView(
             messages.error(self.request, revocation_msg)
 
         return super().form_valid(form)
+
+class DeviceBulkDeleteView(DeviceContextMixin, BulkDeleteView):
+    """View to confirm the deletion of multiple Domains."""
+
+    model = DeviceModel
+    success_url = reverse_lazy('devices:devices')
+    ignore_url = reverse_lazy('devices:devices')
+    template_name = 'devices/confirm_delete.html'
+    context_object_name = 'devices'
+
+    def form_valid(self, form: Form) -> HttpResponse:
+        """Attempt to delete devices if the form is valid."""
+        queryset = self.get_queryset()
+        deleted_count = queryset.count()
+
+        try:
+            response = super().form_valid(form)
+        except ProtectedError:
+            messages.error(
+                self.request, _('Cannot delete the selected devices(s) because they are referenced by other objects.')
+            )
+            return HttpResponseRedirect(self.success_url)
+
+        messages.success(self.request, _('Successfully deleted {count} devices.').format(count=deleted_count))
+
+        return response
