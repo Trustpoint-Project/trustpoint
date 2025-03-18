@@ -35,6 +35,20 @@ class DeviceModel(models.Model):
 
     objects: models.Manager[DeviceModel]
 
+    class DeviceType(models.IntegerChoices):
+        """..."""
+
+        GENERIC = 0, _('Generic')
+        OPC_UA_GDS = 1, _('OPC-UA GDS')
+
+    device_type = models.IntegerField(
+        choices=DeviceType,
+        verbose_name=_('Device Type'),
+        default=DeviceType.GENERIC,
+        null=False,
+        editable=False
+    )
+
     id = models.AutoField(primary_key=True)
     unique_name = models.CharField(
         _('Device'), max_length=100, unique=True, default='New-Device', validators=[UniqueNameValidator()]
@@ -141,6 +155,7 @@ class IssuedCredentialModel(models.Model):
 
         DOMAIN_CREDENTIAL = 0, _('Domain Credential')
         APPLICATION_CREDENTIAL = 1, _('Application Credential')
+        OPC_UA_APPLICATION_CREDENTIAL = 2, _('OPC_UA Application Credential')
 
     class IssuedCredentialPurpose(models.IntegerChoices):
         """The purpose of the issued credential."""
@@ -151,6 +166,8 @@ class IssuedCredentialModel(models.Model):
         TLS_SERVER = 3, _('TLS-Server')
         OPCUA_CLIENT = 4, _('OpcUa-Client')
         OPCUA_SERVER = 5, _('OpcUa-Server')
+
+    uri = models.CharField(_('unique '), max_length=100, unique=True, blank=True, null=True)
 
     id = models.AutoField(primary_key=True)
 

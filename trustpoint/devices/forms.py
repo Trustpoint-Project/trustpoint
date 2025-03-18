@@ -382,3 +382,162 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
                     raise forms.ValidationError(err_msg)
 
         return cleaned_data
+
+
+class CreateGdsForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
+    """The CreateDeviceForm class."""
+
+    class Meta:
+        """Meta class configuration."""
+
+        model = DeviceModel
+        fields: typing.ClassVar = [
+            'unique_name',
+            'serial_number',
+            'domain',
+            'domain_credential_onboarding',
+            'onboarding_and_pki_configuration',
+            'idevid_trust_store',
+            'pki_configuration',
+        ]
+        labels: typing.ClassVar = {
+            'domain_credential_onboarding': _('Domain Credential Onboarding'),
+        }
+
+    domain_queryset: QuerySet[DomainModel] = DomainModel.objects.filter(is_active=True)
+    domain = forms.ModelChoiceField(queryset=domain_queryset, empty_label=None, required=True)
+
+    onboarding_and_pki_configuration = forms.ChoiceField(
+        choices=[
+            ('cmp_shared_secret', _('CMP with shared secret onboarding')),
+            ('cmp_idevid', _('CMP with IDEVID onboarding')),
+            ('aoki_cmp', _('CMP with AOKI onboarding')),
+            ('brski_cmp', _('CMP with BRSKI onboarding')),
+            ('est_username_password', _('EST with username and password onboarding')),
+            ('est_idevid', _('EST with IDEVID onboarding')),
+            ('aoki_est', _('EST with AOKI onboarding')),
+            ('brski_est', _('EST with BRSKI onboarding')),
+        ],
+        widget=DisableSelectOptionsWidget(
+            disabled_values=['aoki_est', 'brski_est', 'aoki_cmp', 'brski_cmp', 'est_username_password', 'est_idevid']
+        ),
+        initial='cmp_idevid',
+    )
+
+    pki_configuration = forms.ChoiceField(
+        choices=[
+            ('manual_download', _('Manual Download')),
+            ('cmp_shared_secret', _('CMP with shared secret authentication')),
+            ('est_username_password', _('EST with username and password authentication')),
+        ],
+        widget=DisableSelectOptionsWidget(disabled_values=['est_username_password']),
+        initial='cmp_shared_secret',
+    )
+
+    def save(self, commit: bool=True) -> DeviceModel:  # noqa: FBT001, FBT002
+        """Automatically sets device_type to OPC_UA_GDS."""
+        instance = super().save(commit=False)
+
+        instance.device_type = DeviceModel.DeviceType.OPC_UA_GDS
+
+        if commit:
+            instance.save()
+        return instance
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the CreateDeviceForm."""
+        super().__init__(*args, **kwargs)
+
+        idevid_trust_store_field = cast(models.ModelChoiceField[TruststoreModel], self.fields['idevid_trust_store'])
+        idevid_trust_store_field.queryset = TruststoreModel.objects.filter(
+            intended_usage=TruststoreModel.IntendedUsage.IDEVID
+        )
+
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.layout = Layout(
+            HTML('<h2>General</h2><hr>'),
+            Field('unique_name'),
+            Field('serial_number'),
+            Field('domain'),
+            HTML('<h2 class="mt-5">Onboarding Configuration</h2><hr>'),
+            Field('domain_credential_onboarding'),
+            HTML('<h2 class="mt-5">PKI Configuration</h2><hr>'),
+            Div(
+                Field('onboarding_and_pki_configuration'),
+                Div(Field('idevid_trust_store'), id='id_idevid_trust_store_select_wrapper'),
+                id='id_onboarding_and_pki_configuration_wrapper',
+            ),
+            Div(Field('pki_configuration'), css_class='d-none', id='id_pki_configuration_wrapper'),
+            HTML('<div class="mb-4"></div>'),
+        )
+        self.fields['domain'].widget.attrs.update({
+            'required': 'True'
+        })
+
+    @staticmethod
+    def clean_device_name(device_name: str) -> str:
+        """Validates the device name, i.e. checks if it is unique.
+
+        Args:
+            device_name: The desired name of the new device.
+
+        Returns:
+            The device name if it passed the checks.
+        """
+        UniqueNameValidator(device_name)
+        return device_name
+
+    def clean(self) -> dict[str, Any]:
+        """Cleans the form data.
+
+        Returns:
+            The cleaned form data.
+        """
+        cleaned_data = super().clean()
+        instance: DeviceModel = super().save(commit=False)
+        domain_credential_onboarding = cleaned_data.get('domain_credential_onboarding')
+        if domain_credential_onboarding:
+            instance.onboarding_status = DeviceModel.OnboardingStatus.PENDING
+            onboarding_and_pki_configuration = cleaned_data.get('onboarding_and_pki_configuration')
+
+            # TODO(AlexHx8472): Integrate EST   # noqa: FIX002
+            match onboarding_and_pki_configuration:
+                case 'cmp_shared_secret':
+                    instance.onboarding_protocol = DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET
+                    instance.pki_protocol = DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE
+                    instance.idevid_trust_store = None
+                    # 16 * 8 = 128 random bits
+                    instance.cmp_shared_secret = secrets.token_urlsafe(16)
+                case 'cmp_idevid':
+                    idevid_trust_store = cleaned_data.get('idevid_trust_store')
+                    if not idevid_trust_store:
+                        err_msg = 'Must specify an IDevID Trust-Store for IDevID onboarding.'
+                        raise forms.ValidationError(err_msg)
+                    if idevid_trust_store.intended_usage != TruststoreModel.IntendedUsage.IDEVID.value:
+                        err_msg = 'The Trust-Store must have the intended usage IDevID.'
+                        raise forms.ValidationError(err_msg)
+                    instance.onboarding_protocol = DeviceModel.OnboardingProtocol.CMP_IDEVID
+                    instance.pki_protocol = DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE
+                case _:
+                    err_msg = 'Unknown Onboarding and PKI configuration value found.'
+                    raise forms.ValidationError(err_msg)
+        else:
+            instance.onboarding_status = DeviceModel.OnboardingStatus.NO_ONBOARDING
+            instance.onboarding_protocol = DeviceModel.OnboardingProtocol.NO_ONBOARDING
+            instance.idevid_trust_store = None
+            pki_configuration = cleaned_data.get('pki_configuration')
+
+            # TODO(AlexHx8472): Integrate EST   # noqa: FIX002
+            match pki_configuration:
+                case 'manual_download':
+                    instance.pki_protocol = DeviceModel.PkiProtocol.MANUAL
+                case 'cmp_shared_secret':
+                    instance.pki_protocol = DeviceModel.PkiProtocol.CMP_SHARED_SECRET
+                    # 16 * 8 = 128 random bits
+                    instance.cmp_shared_secret = secrets.token_urlsafe(16)
+                case _:
+                    err_msg = 'Unknown PKI configuration value found.'
+                    raise forms.ValidationError(err_msg)
+
+        return cleaned_data

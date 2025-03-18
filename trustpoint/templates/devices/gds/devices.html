@@ -1,0 +1,103 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block content %}
+
+    <div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header">
+        <h1>{% trans 'GDS' %}</h1>
+    </div>
+
+    <div class="card-body text-start" style="overflow: auto; flex-grow: 1; max-height: 90%;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th id="checkbox-column"><input type="checkbox"/></th>
+            <th>
+              <a href="?sort={% if current_sort == 'unique_name' %}-{% endif %}unique_name">
+                GDS
+              </a>
+            </th>
+            <th>
+              <a href="?sort={% if current_sort == 'domain' %}-{% endif %}domain">
+                Domain
+              </a>
+            </th>
+            <th>
+              <a href="?sort={% if current_sort == 'serial_number' %}-{% endif %}serial_number">
+                Serial-Number
+              </a>
+            </th>
+            <th>
+              <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
+                Created
+              </a>
+            </th>
+            <th>
+              <a href="?sort={% if current_sort == 'onboarding_status' %}-{% endif %}onboarding_status">
+                Onboarding Status
+              </a>
+            </th>
+          <th>
+              <a href="?sort={% if current_sort == 'onboarding_protocol' %}-{% endif %}onboarding_protocol">
+                Onboarding Protocol
+              </a>
+            </th>
+            <th>
+              <a href="?sort={% if current_sort == 'pki_protocol' %}-{% endif %}pki_protocol">
+                PKI Protocol
+              </a>
+            </th>
+            <th>Certificate Management</th>
+            <th>Details</th>
+{#            <th>Configure</th>#}
+          </tr>
+        </thead>
+        <tbody>
+          {% for device in page_obj %}
+          <tr>
+            <td class="row_checkbox">
+              <input type="checkbox" name="row_checkbox" value="{{ device.id }}" />
+            </td>
+            <td>{{ device.unique_name }}</td>
+            <td>{{ device.domain }}</td>
+            <td>{{ device.serial_number }}</td>
+            <td>{{ device.created_at }}</td>
+            <td>
+                {% if device.get_onboarding_status_display != 'No Onboarding' %}
+                    {{ device.get_onboarding_status_display }}
+                {% endif %}
+            </td>
+            <td>
+                {% if device.get_onboarding_protocol_display != 'No Onboarding' %}
+                    {{ device.get_onboarding_protocol_display }}
+                {% endif %}
+            </td>
+            <td>{{ device.get_pki_protocol_display }}</td>
+            <td>{{ device.clm_button| safe}}</td>
+            <td><a href="details/{{device.id}}/" class="btn btn-primary tp-table-btn w-100">Details</a></td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="12" class="middle">{% trans 'No GDS have been added yet.' %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {% include 'trustpoint/pagination.html' %}
+    </div>
+      <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+          <div class="m-1">
+          </div>
+          <div class="m-1">
+            <a class="btn btn-primary" href="{% url 'devices:gds_add' %}">
+              {% trans "Add new GDS" %}
+            </a>
+          </div>
+        </div>
+    </div>
+
+
+{% endblock content %}

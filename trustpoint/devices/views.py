@@ -34,6 +34,7 @@ from trustpoint_core.serializer import CredentialSerializer  # type: ignore[impo
 from devices.forms import (
     BrowserLoginForm,
     CreateDeviceForm,
+    CreateGdsForm,
     CredentialDownloadForm,
     CredentialRevocationForm,
     IssueOpcUaClientCredentialForm,
@@ -85,6 +86,11 @@ class DeviceContextMixin:
     extra_context: ClassVar = {'page_category': 'devices', 'page_name': 'devices'}
 
 
+class GdsContextMixin:
+    """Mixin which adds data to the context for the devices application."""
+
+    extra_context: ClassVar = {'page_category': 'devices', 'page_name': 'gds'}
+
 # ----------------------------------------------------- Main Pages -----------------------------------------------------
 
 
@@ -98,6 +104,14 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
     context_object_name = 'devices'
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'unique_name'
+
+    def get_queryset(self) -> QuerySet[DeviceModel]:
+        """Filters the queryset to exclude OPC_UA_GDS devices.
+
+        Returns:
+            Queryset of devices excluding OPC_UA_GDS type.
+        """
+        return super().get_queryset().exclude(device_type=DeviceModel.DeviceType.OPC_UA_GDS)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the clm and revoke buttons to the context.
@@ -171,7 +185,7 @@ class CreateDeviceView(DeviceContextMixin, CreateView[DeviceModel, BaseModelForm
         if self.object is None:
             err_msg = 'Unexpected error occurred. The object was likely not created and saved.'
             raise Http404(err_msg)
-        return str(reverse_lazy('devices:help_dispatch', kwargs={'pk': self.object.id}))
+        return str(reverse_lazy('devices:help_dispatch_domain', kwargs={'pk': self.object.id}))
 
 
 class DeviceDetailsView(DeviceContextMixin, DetailView[DeviceModel]):
@@ -183,6 +197,100 @@ class DeviceDetailsView(DeviceContextMixin, DetailView[DeviceModel]):
     success_url = reverse_lazy('devices:devices')
     template_name = 'devices/details.html'
     context_object_name = 'device'
+
+
+class GdsTableView(GdsContextMixin, SortableTableMixin, ListView[DeviceModel]):
+    """Device Table View."""
+
+    http_method_names = ('get',)
+
+    model = DeviceModel
+    template_name = 'devices/gds/devices.html'
+    context_object_name = 'devices'
+    paginate_by = UIConfig.paginate_by
+    default_sort_param = 'unique_name'
+
+    def get_queryset(self) -> QuerySet[DeviceModel]:
+        """Filters the queryset to exclude OPC_UA_GDS devices.
+
+        Returns:
+            Queryset of devices excluding OPC_UA_GDS type.
+        """
+        return super().get_queryset().exclude(device_type=DeviceModel.DeviceType.GENERIC)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the clm and revoke buttons to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the devices page.
+        """
+        context = super().get_context_data(**kwargs)
+
+        for device in context['devices']:
+            device.clm_button = self._get_clm_button_html(device)
+            device.revoke_button = self._get_revoke_button_html(device)
+
+        return context
+
+    @staticmethod
+    def _get_clm_button_html(record: DeviceModel) -> SafeString:
+        """Gets the HTML for the CLM button in the devices table.
+
+        Args:
+            record: The corresponding DeviceModel.
+
+        Returns:
+            The HTML of the hyperlink for the CLM button.
+        """
+        # noinspection PyDeprecation
+        return format_html(
+            '<a href="certificate-lifecycle-management/{}/" class="btn btn-primary tp-table-btn w-100">Manage</a>',
+            record.pk,
+        )
+
+    @staticmethod
+    def _get_revoke_button_html(record: DeviceModel) -> SafeString:
+        """Gets the HTML for the revoke button in the devices table.
+
+        Args:
+            record: The corresponding DeviceModel.
+
+        Returns:
+            the HTML of the hyperlink for the revoke button.
+        """
+        qs = IssuedCredentialModel.objects.filter(device=record)
+        for credential in qs:
+            if credential.credential.certificate.certificate_status == CertificateModel.CertificateStatus.OK:
+                # noinspection PyDeprecation
+                return format_html(
+                    '<a href="revoke/{}/" class="btn btn-danger tp-table-btn w-100">{}</a>', record.pk, _('Revoke')
+                )
+        # noinspection PyDeprecation
+        return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', _('Revoke'))
+    
+
+class CreateGDSView(GdsContextMixin, CreateView[DeviceModel, BaseModelForm[DeviceModel]]):
+    """Device Create View."""
+
+    http_method_names = ('get', 'post')
+
+    model = DeviceModel
+    form_class = CreateGdsForm
+    template_name = 'devices/gds/add.html'
+
+    def get_success_url(self) -> str:
+        """Gets the success url to redirect to after successful processing of the POST data following a form submit.
+
+        Returns:
+            The success url to redirect to after successful processing of the POST data following a form submit.
+        """
+        if self.object is None:
+            err_msg = 'Unexpected error occurred. The object was likely not created and saved.'
+            raise Http404(err_msg)
+        return str(reverse_lazy('devices:gds'))
 
 
 # ------------------------------------------ Certificate Lifecycle Management ------------------------------------------

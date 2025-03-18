@@ -102,4 +102,6 @@ urlpatterns = [
         name='credential_revocation',
     ),
     path('revoke/<int:pk>/', views.DeviceRevocationView.as_view(), name='device_revocation'),
+    path('gds', views.GdsTableView.as_view(), name='gds'),
+    path('gds/add/', views.CreateGDSView.as_view(), name='gds_add'),
 ]
