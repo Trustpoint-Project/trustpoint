@@ -8,11 +8,15 @@ from django.db import models
 from django.db.models import ProtectedError
 from django.db.models.signals import post_delete, pre_delete
 
+from trustpoint.views.base import LoggerMixin
+
 if TYPE_CHECKING:
     from django.db.models.fields.related import RelatedField
     _Base = RelatedField
+    _ModelBase = models.Model
 else:
     _Base = object
+    _ModelBase = object
 
 
 class AutoDeleteRelatedMixin(_Base):
@@ -31,8 +35,7 @@ class AutoDeleteRelatedMixin(_Base):
         Automagically checks if the referenced model is still referenced by other objects
         (even in other models) and only deletes it if it is not.
         """
-        del kwargs
-        del sender
+        del sender, kwargs
         if not self.name:
             return
         related_object = getattr(instance, self.name, None)
@@ -70,8 +73,8 @@ class AutoDeleteRelatedForeignKey(AutoDeleteRelatedMixin, models.ForeignKey):
     This is useful for cases when a parent object is deleted, related objects should be deleted as well.
     """
 
-class SelfProtectForeignKey(models.ForeignKey):
-    """A ForeignKey that protects the parent object from being deleted if another object is referenced.
+class SelfProtectMixin(LoggerMixin, _Base):
+    """A mixin that protects the parent object from being deleted if another object is referenced.
 
     This makes the model instance only deleteable via e.g. on_delete=models.CASCADE.
     """
@@ -81,8 +84,7 @@ class SelfProtectForeignKey(models.ForeignKey):
         pre_delete.connect(self._check_reference, sender=cls)
 
     def _check_reference(self, sender: models.Model, instance: models.Model, **kwargs: Any) -> None:
-        del kwargs
-        del sender
+        del sender, kwargs
         if not self.name:
             return
         related_object = getattr(instance, self.name, None)
@@ -91,4 +93,57 @@ class SelfProtectForeignKey(models.ForeignKey):
             return
 
         exc_msg = f'Cannot delete {instance} because it still references {related_object}.'
-        raise ProtectedError(exc_msg)
+        self.logger.error(exc_msg)
+        raise ProtectedError(exc_msg, {instance})
+
+
+class SelfProtectForeignKey(SelfProtectMixin, models.ForeignKey):
+    """A ForeignKey that protects the parent object from being deleted if another object is referenced.
+
+    This makes the model instance only deleteable via e.g. on_delete=models.CASCADE.
+    """
+
+
+class SelfProtectOneToOneField(SelfProtectMixin, models.OneToOneField):
+    """A OneToOneField that protects the parent object from being deleted if another object is referenced.
+
+    This makes the model instance only deleteable via e.g. on_delete=models.CASCADE.
+    """
+
+
+class IndividualDeleteQuerySet(models.QuerySet):
+    """Overrides a model's queryset to use individual delete instead of bulk delete.
+
+    This ensures the model instance delete() method is always called, even when deleting a queryset.
+    """
+    def delete(self) -> tuple[int, dict[str, int]]:
+        """Delete each object individually."""
+        count: int = 0
+        for obj in self:
+            obj.delete()
+            count += 1
+        # using _meta to return model name to keep API from superclass
+        if count == 0:
+            return 0, {}
+        return count, {obj._meta.label: count}  # noqa: SLF001
+
+class IndividualDeleteManager(models.Manager):
+    """Overrides a model's manager to use individual delete instead of bulk delete.
+
+    This ensures the model instance delete() method is always
+    called, even when deleting a queryset.
+    """
+    def get_queryset(self) -> IndividualDeleteQuerySet:
+        """Return the queryset with individual delete."""
+        return IndividualDeleteQuerySet(self.model, using=self._db)
+
+class IndividualDeleteMixin(_ModelBase):
+    """Mixin to override a model's queryset to use individual delete instead of bulk delete.
+
+    This ensures the model instance delete() method is always called, even when deleting a queryset.
+    """
+    objects = IndividualDeleteManager()
+
+    class Meta:
+        """Meta options."""
+        abstract = True

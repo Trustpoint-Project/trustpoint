@@ -51,6 +51,7 @@ coverage.xml
 .pytest_cache/
 cover/
 behave-report.html
+*/md-report.md
 
 # Translations
 *.mo

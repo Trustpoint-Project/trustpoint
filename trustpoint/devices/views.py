@@ -50,7 +50,7 @@ from devices.issuer import (
 from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
 from devices.revocation import DeviceCredentialRevocation
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import BulkDeleteView, ListInDetailView, SortableTableMixin
+from trustpoint.views.base import BulkDeleteView, ListInDetailView, LoggerMixin, SortableTableMixin
 
 if TYPE_CHECKING:
     import ipaddress
@@ -1228,7 +1228,7 @@ class DeviceCredentialRevocationView(
 
         return super().form_valid(form)
 
-class DeviceBulkDeleteView(DeviceContextMixin, BulkDeleteView):
+class DeviceBulkDeleteView(LoggerMixin, DeviceContextMixin, BulkDeleteView):
     """View to confirm the deletion of multiple Domains."""
 
     model = DeviceModel
@@ -1244,9 +1244,10 @@ class DeviceBulkDeleteView(DeviceContextMixin, BulkDeleteView):
 
         try:
             response = super().form_valid(form)
-        except ProtectedError:
+        except ProtectedError as e:
+            self.logger.exception('References prevent deletion:', exc_info=e)
             messages.error(
-                self.request, _('Cannot delete the selected devices(s) because they are referenced by other objects.')
+                self.request, _('Cannot delete the selected device(s) because they are referenced by other objects.')
             )
             return HttpResponseRedirect(self.success_url)
 

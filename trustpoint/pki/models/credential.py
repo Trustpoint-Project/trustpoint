@@ -15,8 +15,10 @@ from trustpoint_core.serializer import (
     CredentialSerializer,
     PrivateKeySerializer,
 )
+from util.db import IndividualDeleteManager
 
 from pki.models import CertificateModel
+from trustpoint.views.base import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -37,7 +39,7 @@ class CredentialAlreadyExistsError(ValidationError):
         super().__init__(_('Credential already exists.'), *args, **kwargs)
 
 
-class CredentialModel(models.Model):
+class CredentialModel(LoggerMixin, models.Model):
     """The CredentialModel that holds all local credentials used by the Trustpoint.
 
     This model holds both local unprotected credentials, for which the keys and certificates are stored
@@ -75,7 +77,8 @@ class CredentialModel(models.Model):
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
-    objects: models.Manager[CredentialModel]
+    objects: IndividualDeleteManager[CredentialModel]
+    objects = IndividualDeleteManager()
 
     def __repr__(self) -> str:
         """Returns a string representation of this CredentialModel entry."""
@@ -144,6 +147,7 @@ class CredentialModel(models.Model):
         # TODO(AlexHx8472): Verify that the credential is valid in respect to the credential_type!!!
 
         credential_model = cls.objects.create(
+            certificate=certificate,
             credential_type=credential_type,
             private_key=normalized_credential_serializer.credential_private_key.as_pkcs8_pem().decode(),
         )
@@ -171,7 +175,9 @@ class CredentialModel(models.Model):
         """Stores a credential without a private key."""
         certificate_model = CertificateModel.save_certificate(certificate)
 
-        credential_model = cls.objects.create(credential_type=credential_type, private_key='')
+        credential_model = cls.objects.create(
+            certificate=certificate_model, credential_type=credential_type, private_key=''
+        )
 
         PrimaryCredentialCertificate.objects.create(
             certificate=certificate_model, credential=credential_model, is_primary=True
@@ -185,8 +191,23 @@ class CredentialModel(models.Model):
 
         return credential_model
 
-    # TODO(AlexHx8472): Implement the delete method,
-    # TODO(AlexHx8472): so that the corresponding CertificateChainOrderModels are removed as well
+    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
+        """Deletes related models, only allow deletion if there are no more active certificates."""
+        # only allow deletion if all certificates are either expired or revoked
+        qs = self.certificates.all()
+        if self.certificate not in qs:
+            exc_msg = 'Primary certificate not in certificate list of credential.'
+            raise ValidationError(exc_msg)
+        for cert in qs:
+            if (cert.certificate_status in
+                [CertificateModel.CertificateStatus.OK, CertificateModel.CertificateStatus.NOT_YET_VALID]):
+                exc_msg = 'Cannot delete credential because it still has active certificates.'
+                self.logger.error(exc_msg)
+                raise ValidationError(exc_msg)
+        self.certificates.clear()
+        self.certificate = None
+        # CertificateChainOrderModel is deleted via CASCADE
+        return super().delete(*args, **kwargs)
 
     def get_private_key(self) -> PrivateKey:
         """Gets an abstraction of the credential private key.
@@ -214,15 +235,6 @@ class CredentialModel(models.Model):
 
         err_msg = 'Failed to get private key information.'
         raise RuntimeError(err_msg)
-
-    @property
-    def certificate(self) -> CertificateModel:
-        """Gets the primary certificate model using the through model.
-
-        Returns:
-            The primary certificate model.
-        """
-        return self.primarycredentialcertificate_set.filter(is_primary=True).first().certificate
 
     def get_certificate(self) -> x509.Certificate:
         """Gets the credential certificate as x509.Certificate instance.
@@ -335,7 +347,7 @@ class CertificateChainOrderModel(models.Model):
     """This Model is used to preserve the order of certificates in credential certificate chains."""
 
     certificate = models.ForeignKey(CertificateModel, on_delete=models.PROTECT, null=False, blank=False, editable=False)
-    credential = models.ForeignKey(CredentialModel, on_delete=models.PROTECT, null=False, blank=False, editable=False)
+    credential = models.ForeignKey(CredentialModel, on_delete=models.CASCADE, null=False, blank=False, editable=False)
     order = models.PositiveIntegerField(null=False, blank=False, editable=False)
 
     objects: models.Manager[CertificateChainOrderModel]
