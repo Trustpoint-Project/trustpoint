@@ -164,7 +164,8 @@ class EstAuthenticationMixin:
             device, http_response = self._authenticate_application_certificate_request(request, domain)
 
         if device is None and http_response is None:
-            return None, LoggedHttpResponse('Authentication failed: No valid authentication method used', status=400)
+            return None, LoggedHttpResponse('Authentication failed: No valid authentication method used',
+                                            status=400)
 
         return device, http_response
 
@@ -178,7 +179,7 @@ class EstAuthenticationMixin:
         if domain.allow_username_password_registration:
             try:
                 device = self.authenticate_username_password(request)
-            except UsernamePasswordAuthenticationError as e:
+            except UsernamePasswordAuthenticationError:
                 pass
             else:
                 return device, None
