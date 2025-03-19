@@ -109,7 +109,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         context = super().get_context_data(**kwargs)
         domain = self.get_object()
 
-        context['registration_options'] = {
+        context['domain_options'] = {
             'auto_create_new_device': domain.auto_create_new_device,
             'allow_username_password_registration': domain.allow_username_password_registration,
             'allow_idevid_registration': domain.allow_idevid_registration,
@@ -118,7 +118,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             'allow_app_certs_without_domain': domain.allow_app_certs_without_domain,
         }
 
-        context['registration_help_texts'] = {
+        context['domain_help_texts'] = {
             'auto_create_new_device': domain._meta.get_field('auto_create_new_device').help_text,
             'allow_username_password_registration': domain._meta.get_field('allow_username_password_registration').help_text,
             'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').help_text,
@@ -127,7 +127,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             'allow_app_certs_without_domain': domain._meta.get_field('allow_app_certs_without_domain').help_text,
         }
 
-        context['registration_verbose_name'] = {
+        context['domain_verbose_name'] = {
             'auto_create_new_device': domain._meta.get_field('auto_create_new_device').verbose_name,
             'allow_username_password_registration': domain._meta.get_field('allow_username_password_registration').verbose_name,
             'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').verbose_name,

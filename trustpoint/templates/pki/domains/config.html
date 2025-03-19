@@ -103,32 +103,32 @@
 
                                     <h2>{% trans "Domain Options" %}</h2>
                                     <hr>
-                                    <h3 class="mt-5">{% trans 'Registration' %}</h3>
+                                    <h3 class="mt-5">{% trans 'Enrollment' %}</h3>
 
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox"
                                                name="allow_app_certs_without_domain"
                                                id="allow_app_certs_without_domain"
-                                               {% if registration_options.allow_app_certs_without_domain %}checked{% endif %}>
+                                               {% if domain_options.allow_app_certs_without_domain %}checked{% endif %}>
                                         <label class="form-check-label" for="username_password_auth">
-                                            {{ registration_verbose_name.allow_app_certs_without_domain }}
+                                            {{ domain_verbose_name.allow_app_certs_without_domain }}
                                         </label>
                                         <br>
                                         <small class="form-text text-muted">
-                                            {{ registration_help_texts.allow_app_certs_without_domain }}
+                                            {{ domain_help_texts.allow_app_certs_without_domain }}
                                         </small>
                                     </div>
 
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" name="auto_create_new_device"
                                                id="auto_create_new_device"
-                                               {% if registration_options.auto_create_new_device %}checked{% endif %}>
+                                               {% if domain_options.auto_create_new_device %}checked{% endif %}>
                                         <label class="form-check-label" for="auto_create_new_device">
-                                            {{ registration_verbose_name.auto_create_new_device }}
+                                            {{ domain_verbose_name.auto_create_new_device }}
                                         </label>
                                         <br>
                                         <small class="form-text text-muted">
-                                            {{ registration_help_texts.auto_create_new_device }}
+                                            {{ domain_help_texts.auto_create_new_device }}
                                         </small>
                                     </div>
 
@@ -136,26 +136,26 @@
                                         <input class="form-check-input" type="checkbox"
                                                name="allow_username_password_registration"
                                                id="allow_username_password_registration"
-                                               {% if registration_options.allow_username_password_registration %}checked{% endif %}>
+                                               {% if domain_options.allow_username_password_registration %}checked{% endif %}>
                                         <label class="form-check-label" for="allow_username_password_registration">
-                                            {{ registration_verbose_name.allow_username_password_registration }}
+                                            {{ domain_verbose_name.allow_username_password_registration }}
                                         </label>
                                         <br>
                                         <small class="form-text text-muted">
-                                            {{ registration_help_texts.allow_username_password_registration }}
+                                            {{ domain_help_texts.allow_username_password_registration }}
                                         </small>
                                     </div>
 
 {#                                    <div class="form-check">#}
 {#                                        <input class="form-check-input" type="checkbox" name="allow_idevid_registration"#}
 {#                                               id="allow_idevid_registration"#}
-{#                                               {% if registration_options.allow_idevid_registration %}checked{% endif %}>#}
+{#                                               {% if domain_options.allow_idevid_registration %}checked{% endif %}>#}
 {#                                        <label class="form-check-label" for="allow_idevid_registration">#}
-{#                                            {{ registration_verbose_name.allow_idevid_registration }}#}
+{#                                            {{ domain_verbose_name.allow_idevid_registration }}#}
 {#                                        </label>#}
 {#                                        <br>#}
 {#                                        <small class="form-text text-muted">#}
-{#                                            {{ registration_help_texts.allow_idevid_registration }}#}
+{#                                            {{ domain_help_texts.allow_idevid_registration }}#}
 {#                                        </small>#}
 {#                                    </div>#}
 
@@ -165,26 +165,26 @@
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" name="domain_credential_auth"
                                                id="domain_credential_auth"
-                                               {% if registration_options.domain_credential_auth %}checked{% endif %}>
+                                               {% if domain_options.domain_credential_auth %}checked{% endif %}>
                                         <label class="form-check-label" for="domain_credential_auth">
-                                            {{ registration_verbose_name.domain_credential_auth }}
+                                            {{ domain_verbose_name.domain_credential_auth }}
                                         </label>
                                         <br>
                                         <small class="form-text text-muted">
-                                            {{ registration_help_texts.domain_credential_auth }}
+                                            {{ domain_help_texts.domain_credential_auth }}
                                         </small>
                                     </div>
 
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" name="username_password_auth"
                                                id="username_password_auth"
-                                               {% if registration_options.username_password_auth %}checked{% endif %}>
+                                               {% if domain_options.username_password_auth %}checked{% endif %}>
                                         <label class="form-check-label" for="username_password_auth">
-                                            {{ registration_verbose_name.username_password_auth }}
+                                            {{ domain_verbose_name.username_password_auth }}
                                         </label>
                                         <br>
                                         <small class="form-text text-muted">
-                                            {{ registration_help_texts.username_password_auth }}
+                                            {{ domain_help_texts.username_password_auth }}
                                         </small>
                                     </div>
 
