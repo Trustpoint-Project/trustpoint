@@ -172,8 +172,16 @@ class EstAuthenticationMixin:
         DeviceModel | None, LoggedHttpResponse | None]:
         """Authenticate requests for 'domaincredential' certificates and return the associated DeviceModel."""
         if not (domain.allow_idevid_registration or domain.allow_username_password_registration):
-            return None, LoggedHttpResponse('Both IDevID registration and username:password registration are disabled',
-                                            status=400)
+            return None, LoggedHttpResponse(
+                'Both IDevID registration and username:password registration are disabled', status=400)
+
+        if domain.allow_username_password_registration:
+            try:
+                device = self.authenticate_username_password(request)
+            except UsernamePasswordAuthenticationError as e:
+                pass
+            else:
+                return device, None
 
         if domain.allow_idevid_registration:
             try:
@@ -181,22 +189,23 @@ class EstAuthenticationMixin:
             except IDevIDAuthenticationError as e:
                 return None, LoggedHttpResponse(f'Error validating the IDevID: {e!s}', status=400)
 
-        if domain.allow_username_password_registration:
-            try:
-                device = self.authenticate_username_password(request)
-            except UsernamePasswordAuthenticationError as e:
-                return None, LoggedHttpResponse(f'Error validating the credentials: {e!s}', status=400)
-            else:
-                return device, None
-
-        return None, None
+        return None, LoggedHttpResponse('No valid authentication method provided', status=400)
 
     def _authenticate_application_certificate_request(self, request: HttpRequest, domain: DomainModel) -> tuple[
         DeviceModel | None, LoggedHttpResponse | None]:
         """Authenticate requests for application certificate templates and return the associated DeviceModel."""
-        if not (domain.domain_credential_auth or domain.username_password_auth):
-            return None, LoggedHttpResponse('Domain credential and username:password authentication are disabled',
+        if not (domain.username_password_auth or domain.domain_credential_auth):
+            return None, LoggedHttpResponse('Both username:password and domain credential '
+                                            'authentication are disabled',
                                             status=400)
+
+        if domain.username_password_auth:
+            try:
+                device = self.authenticate_username_password(request)
+            except UsernamePasswordAuthenticationError:
+                pass
+            else:
+                return device, None
 
         if domain.domain_credential_auth:
             try:
@@ -206,15 +215,7 @@ class EstAuthenticationMixin:
             else:
                 return device, None
 
-        if domain.username_password_auth:
-            try:
-                device = self.authenticate_username_password(request)
-            except UsernamePasswordAuthenticationError as e:
-                return None, LoggedHttpResponse(f'Error validating the credentials: {e!s}', status=400)
-            else:
-                return device, None
-
-        return None, None
+        return None, LoggedHttpResponse('No valid authentication method provided', status=400)
 
 
 class EstHttpMixin:
