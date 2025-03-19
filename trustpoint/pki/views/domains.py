@@ -114,8 +114,8 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             'allow_username_password_registration': domain.allow_username_password_registration,
             'allow_idevid_registration': domain.allow_idevid_registration,
             'domain_credential_auth': domain.domain_credential_auth,
-            'username_password_auth': domain._meta.get_field('username_password_auth'),
-            'allow_app_certs_without_domain': domain._meta.get_field('allow_app_certs_without_domain').help_text,
+            'username_password_auth': domain.username_password_auth,
+            'allow_app_certs_without_domain': domain.allow_app_certs_without_domain,
         }
 
         context['registration_help_texts'] = {

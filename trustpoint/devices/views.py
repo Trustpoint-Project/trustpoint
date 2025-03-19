@@ -745,6 +745,15 @@ class HelpDomainCredentialEstContextView(DeviceContextMixin, DetailView[DeviceMo
         if tls_cert:
             context['trustpoint_server_certificate'] = (
                 tls_cert.credential.certificate.get_certificate_serializer().as_pem().decode('utf-8'))
+
+        domain = device.domain
+        context.update({
+            'allow_app_certs_without_domain': domain.allow_app_certs_without_domain,
+            'allow_username_password_registration': domain.allow_username_password_registration,
+            'username_password_auth': domain.username_password_auth,
+            'domain_credential_auth': domain.domain_credential_auth,
+        })
+
         number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
         context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
         context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
