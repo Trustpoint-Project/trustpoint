@@ -50,7 +50,7 @@ class DomainModel(models.Model):
     allow_username_password_registration = models.BooleanField(
         _('Allow username:password Enrollment'),
         default=True,
-        help_text=_("New devices can be added with a username and password.")
+        help_text=_("New devices can be enrolled with a username and password.")
     )
 
     allow_idevid_registration = models.BooleanField(
