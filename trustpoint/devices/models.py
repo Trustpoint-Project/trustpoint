@@ -104,6 +104,17 @@ class DeviceModel(models.Model):
         on_delete=models.DO_NOTHING,
     )
 
+    class DeviceType(models.IntegerChoices):
+        """Enum for device type."""
+        GENERIC_DEVICE = 0, _('Generic Device')
+        OPC_UA_GDS = 1, _('OPC UA GDS')
+
+    device_type = models.IntegerField(
+        choices=DeviceType.choices,
+        verbose_name=_('Device Type'),
+        default=DeviceType.GENERIC_DEVICE,
+    )
+
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
     class Meta(TypedModelMeta):
@@ -182,7 +193,6 @@ class IssuedCredentialModel(models.Model):
     def __str__(self) -> str:
         """Returns a human-readable string representation."""
         return f'IssuedCredentialModel(common_name={common_name})'
-
 
 class RemoteDeviceCredentialDownloadModel(models.Model):
     """Model to associate a credential model with an OTP and token for unauthenticated remoted download."""

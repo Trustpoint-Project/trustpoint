@@ -589,16 +589,28 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
         err_msg = 'Unsupported key type for OPC UA Server Certificate'
         raise ValueError(err_msg)
 
+    def _validate_application_uri(self, application_uri: str | list[str]) -> None:
+        """Validates the Uniform resource identifier according to OPC UA specification"""
+
+        if isinstance(application_uri, list) and len(application_uri) == 0:
+            raise ValueError('Application URI cannot be empty')
+
+        if isinstance(application_uri, list) and len(application_uri) > 1:
+            raise ValueError('Application URI cannot be longer than 1 item')
+
     def issue_opcua_server_credential(  # noqa: PLR0913
         self,
         common_name: str,
-        application_uri: str,
+        application_uri: str | list[str],
         ipv4_addresses: list[ipaddress.IPv4Address],
         ipv6_addresses: list[ipaddress.IPv6Address],
         domain_names: list[str],
         validity_days: int = 365,
     ) -> IssuedCredentialModel:
         """Issues an OPC UA server credential (certificate + private key) following OPC UA security standards."""
+
+        self._validate_application_uri(application_uri)
+
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
         public_key = private_key.public_key_serializer.as_crypto()
         san_extension = self._build_san_extension(application_uri, ipv4_addresses, ipv6_addresses, domain_names)
@@ -642,7 +654,7 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
     def issue_opcua_server_certificate(  # noqa: PLR0913
         self,
         common_name: str,
-        application_uri: str,
+        application_uri: str | list[str],
         ipv4_addresses: list[ipaddress.IPv4Address],
         ipv6_addresses: list[ipaddress.IPv6Address],
         domain_names: list[str],
@@ -650,6 +662,10 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
         public_key: oid.PublicKey,
     ) -> IssuedCredentialModel:
         """Issues an OPC UA server certificate (no private key) following OPC UA security standards."""
+        self._validate_application_uri(application_uri)
+        if isinstance(application_uri, list):
+            application_uri = application_uri[0]
+
         san_extension = self._build_san_extension(application_uri, ipv4_addresses, ipv6_addresses, domain_names)
         key_usage = self._get_key_usage(public_key)
 
@@ -720,10 +736,24 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
         err_msg = 'Unsupported key type for OPC UA Client Certificate'
         raise ValueError(err_msg)
 
+    def _validate_application_uri(self, application_uri: str | list[str]) -> None:
+        """Validates the Uniform resource identifier according to OPC UA specification"""
+
+        if isinstance(application_uri, list) and len(application_uri) == 0:
+            raise ValueError('Application URI cannot be empty')
+
+        if isinstance(application_uri, list) and len(application_uri) > 1:
+            raise ValueError('Application URI cannot be longer than 1 item')
+
     def issue_opcua_client_credential(
-        self, common_name: str, application_uri: str, validity_days: int = 365
+        self, common_name: str, application_uri: str | list[str], validity_days: int = 365
     ) -> IssuedCredentialModel:
         """Issues an OPC UA client credential (certificate + private key) following OPC UA security standards."""
+
+        self._validate_application_uri(application_uri)
+        if isinstance(application_uri, list):
+            application_uri = application_uri[0]
+
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
         public_key = private_key.public_key_serializer.as_crypto()
         san_extension = self._build_san_extension(application_uri)
@@ -760,9 +790,14 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
         )
 
     def issue_opcua_client_certificate(
-        self, common_name: str, application_uri: str, validity_days: int, public_key: oid.PublicKey
+        self, common_name: str, application_uri: str | list[str], validity_days: int, public_key: oid.PublicKey
     ) -> IssuedCredentialModel:
         """Issues an OPC UA client certificate (no private key) following OPC UA security standards."""
+
+        self._validate_application_uri(application_uri)
+        if isinstance(application_uri, list):
+            application_uri = application_uri[0]
+
         san_extension = self._build_san_extension(application_uri)
         key_usage = self._get_key_usage(public_key)
 
