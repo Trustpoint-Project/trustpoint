@@ -19,7 +19,7 @@ else:
     _ModelBase = object
 
 
-class AutoDeleteRelatedMixin(_Base):
+class AutoDeleteRelatedMixin(LoggerMixin, _Base):
     """Utility for deleting the object referenced by a relation when the parent object is deleted.
 
     This is useful for cases when a parent object is deleted, related objects should be deleted as well.
@@ -44,26 +44,23 @@ class AutoDeleteRelatedMixin(_Base):
             return
         # get ReferencedManager of the related object and check if there are still references somewhere else
         # works for ForeignKey as well as ManyToManyField
-        # TODO: check OneToOneField
+        # TODO(Air): check OneToOneField  # noqa: FIX002
         related_model_cls = self.related_model
         links = [
-            f for f in related_model_cls._meta.get_fields()
+            f for f in related_model_cls._meta.get_fields()  # noqa: SLF001
             if (f.one_to_many or f.one_to_one)
             and f.auto_created and not f.concrete
         ]
 
         for link in links:
-            print('Checking references for ' + link.name)
+            self.logger.debug('Checking references for ' + link.name)  # noqa: G003
             print(link.get_accessor_name())
             references_exist = getattr(related_object, link.get_accessor_name()).exists()
             if references_exist:
-                print(f'References exist for {link.name}')
+                self.logger.debug(f'References exist for {link.name}')  # noqa: G004
                 return
-            """print('Name: ' + link.name)
-            for object in objects:
-                print(object)"""
 
-        print('No references found. Deleting related object ' + str(related_object))
+        self.logger.debug('No refs found. Deleting related obj ' + str(related_object))  # noqa: G003
         #if related_object.pk:
         related_object.delete()
 

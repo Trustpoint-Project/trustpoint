@@ -1,6 +1,7 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
 {% load crispy_forms_filters %}
+{% load static %}
 
 {% block content %}
     <form method="POST" autocomplete="off">
@@ -13,6 +14,11 @@
                 </div>
             </div>
             <div class="card-body">
+                <div class="alert alert-warning d-flex" role="alert">  
+                    <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="State: "><use xlink:href="{% static 'img/icons.svg' %}#icon-warning"/></svg>
+                    <div>{% trans "Deletion will revoke any active credentials issued to devices with reason code 'Cessation of Operation'" %}</div>
+                </div>
+
                 <div class="tp-card-centered-content">
                     {% for device in devices %}
                         <h2>({{ forloop.counter }}) {% trans 'device' %}: {{ device.unique_name }}</h2>
@@ -31,6 +37,10 @@
                                     </a>
                                 </div>
                                 {% endif %}
+                            </div>
+                            <div>
+                                <div>{% trans 'Issued Credentials' %}</div>
+                                <div>{{ device.issued_credentials.count }}</div>
                             </div>
                         </div>
                         {% if not forloop.last %}

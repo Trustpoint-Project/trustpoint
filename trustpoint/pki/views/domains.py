@@ -142,7 +142,7 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, BulkDeleteView):
             response = super().form_valid(form)
         except ProtectedError:
             messages.error(
-                self.request, _('Cannot delete the selected Domains(s) because they are referenced by other objects.')
+                self.request, _('Cannot delete the selected Domain(s) because they are referenced by other objects.')
             )
             return HttpResponseRedirect(self.success_url)
 

@@ -15,7 +15,7 @@ __all__ = ['delete_related_credential_certificate_chain_order_records', 'delete_
 
 @receiver(pre_delete, sender=IssuingCaModel)
 def delete_related_credential_certificate_chain_order_records(
-    _sender: type[IssuingCaModel],
+    sender: type[IssuingCaModel],
     instance: IssuingCaModel,
     **_kwargs: dict[str, Any],
 ) -> None:
@@ -31,12 +31,13 @@ def delete_related_credential_certificate_chain_order_records(
     Returns:
         None
     """
+    del sender
     CertificateChainOrderModel.objects.filter(credential=instance.credential).delete()
 
 
 @receiver(post_delete, sender=IssuingCaModel)
 def delete_related_credential_record(
-    _sender: type[IssuingCaModel],
+    sender: type[IssuingCaModel],
     instance: IssuingCaModel,
     **_kwargs: dict[str, Any],
 ) -> None:
@@ -50,4 +51,5 @@ def delete_related_credential_record(
     Returns:
         None
     """
+    del sender
     instance.credential.delete()

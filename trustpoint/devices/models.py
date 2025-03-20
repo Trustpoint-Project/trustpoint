@@ -7,7 +7,7 @@ import logging
 import secrets
 from typing import TYPE_CHECKING
 
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
@@ -172,7 +172,10 @@ class IssuedCredentialModel(models.Model):
     issued_credential_purpose = models.IntegerField(
         choices=IssuedCredentialPurpose, verbose_name=_('Credential Purpose')
     )
-    credential = SelfProtectOneToOneField(
+    # should be SelfProtectOneToOneField,
+    # but would need custom deletion logic that changes cascade behavior
+    # and would require FKs to be set to null temporarily
+    credential = models.OneToOneField(
         CredentialModel,
         verbose_name=_('Credential'),
         on_delete=models.CASCADE,
@@ -224,8 +227,9 @@ class IssuedCredentialModel(models.Model):
                 ca=ca
             )
 
+    @transaction.atomic
     def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
-        """Delete the credential and the issued credential."""
+        """Revoke all active certificates, delete the credential and the issued credential itself."""
         self.revoke()
         self.credential.delete()  # this will also delete the IssuedCredentialModel via cascade
         return super().delete(*args, **kwargs)

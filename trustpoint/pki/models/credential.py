@@ -191,12 +191,13 @@ class CredentialModel(LoggerMixin, models.Model):
 
         return credential_model
 
+    @transaction.atomic
     def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
         """Deletes related models, only allow deletion if there are no more active certificates."""
         # only allow deletion if all certificates are either expired or revoked
         qs = self.certificates.all()
         if self.certificate not in qs:
-            exc_msg = 'Primary certificate not in certificate list of credential.'
+            exc_msg = f'Primary certificate not in certificate list of credential {self.pk}.'
             raise ValidationError(exc_msg)
         for cert in qs:
             if (cert.certificate_status in

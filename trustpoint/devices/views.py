@@ -1140,6 +1140,14 @@ class DeviceRevocationView(DeviceContextMixin, FormMixin[CredentialRevocationFor
                 qs = qs.exclude(pk=credential.pk)
         return qs
 
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle POST request on form submission."""
+        del args, kwargs, request
+        form = self.get_form()
+        if form.is_valid():
+            return self.form_valid(form)
+        return self.form_invalid(form)
+
     def form_valid(self, form: CredentialRevocationForm) -> HttpResponse:
         """Performed if the form was validated successfully and revokes the credentials.
 
