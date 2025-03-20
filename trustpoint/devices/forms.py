@@ -270,7 +270,13 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             ('brski_est', _('EST with BRSKI onboarding')),
         ],
         widget=DisableSelectOptionsWidget(
-            disabled_values=['aoki_est', 'brski_est', 'aoki_cmp', 'brski_cmp', 'est_username_password', 'est_idevid']
+            disabled_values=[
+                'aoki_est',
+                'brski_est',
+                'aoki_cmp',
+                'brski_cmp',
+                'est_idevid'
+            ]
         ),
         initial='cmp_idevid',
     )
@@ -281,8 +287,11 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             ('cmp_shared_secret', _('CMP with shared secret authentication')),
             ('est_username_password', _('EST with username and password authentication')),
         ],
-        widget=DisableSelectOptionsWidget(disabled_values=['est_username_password']),
-        initial='cmp_shared_secret',
+        widget=DisableSelectOptionsWidget(
+            disabled_values=[
+            ]
+        ),
+        initial='cmp_shared_secret'
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -360,6 +369,11 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
                         raise forms.ValidationError(err_msg)
                     instance.onboarding_protocol = DeviceModel.OnboardingProtocol.CMP_IDEVID
                     instance.pki_protocol = DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE
+                case 'est_username_password':
+                    instance.onboarding_protocol = DeviceModel.OnboardingProtocol.EST_PASSWORD
+                    instance.pki_protocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE
+                    instance.idevid_trust_store = None
+                    instance.est_password = secrets.token_urlsafe(16)
                 case _:
                     err_msg = 'Unknown Onboarding and PKI configuration value found.'
                     raise forms.ValidationError(err_msg)
@@ -377,6 +391,9 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
                     instance.pki_protocol = DeviceModel.PkiProtocol.CMP_SHARED_SECRET
                     # 16 * 8 = 128 random bits
                     instance.cmp_shared_secret = secrets.token_urlsafe(16)
+                case 'est_username_password':
+                    instance.pki_protocol = DeviceModel.PkiProtocol.EST_PASSWORD
+                    instance.est_password = secrets.token_urlsafe(16)
                 case _:
                     err_msg = 'Unknown PKI configuration value found.'
                     raise forms.ValidationError(err_msg)

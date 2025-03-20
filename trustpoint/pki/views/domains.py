@@ -104,15 +104,55 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
     detail_context_object_name = 'domain'
     success_url = reverse_lazy('pki:domains')
 
-    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    def get_context_data(self, **kwargs):
         """Adds (no) additional context data."""
-        context = super().get_context_data(*args, **kwargs)
+        context = super().get_context_data(**kwargs)
+        domain = self.get_object()
+
+        context['domain_options'] = {
+            'auto_create_new_device': domain.auto_create_new_device,
+            'allow_username_password_registration': domain.allow_username_password_registration,
+            'allow_idevid_registration': domain.allow_idevid_registration,
+            'domain_credential_auth': domain.domain_credential_auth,
+            'username_password_auth': domain.username_password_auth,
+            'allow_app_certs_without_domain': domain.allow_app_certs_without_domain,
+        }
+
+        context['domain_help_texts'] = {
+            'auto_create_new_device': domain._meta.get_field('auto_create_new_device').help_text,
+            'allow_username_password_registration': domain._meta.get_field('allow_username_password_registration').help_text,
+            'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').help_text,
+            'domain_credential_auth': domain._meta.get_field('domain_credential_auth').help_text,
+            'username_password_auth': domain._meta.get_field('username_password_auth').help_text,
+            'allow_app_certs_without_domain': domain._meta.get_field('allow_app_certs_without_domain').help_text,
+        }
+
+        context['domain_verbose_name'] = {
+            'auto_create_new_device': domain._meta.get_field('auto_create_new_device').verbose_name,
+            'allow_username_password_registration': domain._meta.get_field('allow_username_password_registration').verbose_name,
+            'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').verbose_name,
+            'domain_credential_auth': domain._meta.get_field('domain_credential_auth').verbose_name,
+            'username_password_auth': domain._meta.get_field('username_password_auth').verbose_name,
+            'allow_app_certs_without_domain': domain._meta.get_field('allow_app_certs_without_domain').verbose_name,
+        }
 
         return context  # noqa: RET504
 
-    def post(self, request: HttpRequest, *_args: tuple[Any], **_kwargs: dict[str, Any]) -> HttpResponse:
+    def post(self, request, *args, **kwargs):
         """Handle config form submission."""
-        messages.success(request, _('Settings updated successfully.'))
+        domain = self.get_object()
+
+
+        domain.auto_create_new_device = 'auto_create_new_device' in request.POST
+        domain.allow_username_password_registration = 'allow_username_password_registration' in request.POST
+        domain.allow_idevid_registration = 'allow_idevid_registration' in request.POST
+        domain.domain_credential_auth = 'domain_credential_auth' in request.POST
+        domain.username_password_auth = 'username_password_auth' in request.POST
+        domain.allow_app_certs_without_domain = 'allow_app_certs_without_domain' in request.POST
+
+        domain.save()
+
+        messages.success(request, _("Settings updated successfully."))
         return HttpResponseRedirect(self.success_url)
 
 

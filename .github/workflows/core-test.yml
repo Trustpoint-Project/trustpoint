@@ -1,0 +1,48 @@
+name: Core Tests
+
+on:
+  push:
+    paths:
+      - trustpoint/core/**
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: 3.12
+
+      - name: Run unit tests for the file builder module
+        run: |
+          uv run pytest --html=file_builder_report.html \
+          --self-contained-html \
+          --junitxml=file_builder_pytest.xml \
+          --cov=trustpoint trustpoint/core/tests/file_builder/ | tee file_builder_pytest-coverage.txt
+
+      - name: Run unit tests for the serializer module
+        run: |
+          uv run pytest --html=serializer_report.html \
+          --self-contained-html \
+          --junitxml=serializer_pytest.xml \
+          --cov=trustpoint trustpoint/core/tests/serializer/ | tee serializer_pytest-coverage.txt
+
+      - name: Pytest coverage comment
+        uses: MishaKav/pytest-coverage-comment@main
+        with:
+          multiple-files: |
+            Core Serializer Test, serializer_pytest-coverage.txt, serializer_pytest.xml
+            Core File Builder Test, file_builder_pytest-coverage.txt, file_builder_pytest.xml
+
+      - name: Upload html reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: html-reports
+          path: |
+            file_builder_report.html
+            serializer_report.html

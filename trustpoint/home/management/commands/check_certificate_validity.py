@@ -9,11 +9,11 @@ already exist for the given certificate and event.
 
 from __future__ import annotations
 
-from typing import Any, cast
 from datetime import timedelta
+from typing import Any, cast
 
-from django.core.management.base import BaseCommand  # type: ignore[import-untyped]
-from django.utils import timezone  # type: ignore[import-untyped]
+from django.core.management.base import BaseCommand
+from django.utils import timezone
 from home.models import NotificationModel, NotificationStatus
 from pki.models import CertificateModel
 
@@ -27,7 +27,12 @@ class Command(BaseCommand):
     help = 'Check for expiring or expired certificates.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.Args.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         self._check_certificate_validity()
         self.stdout.write(self.style.SUCCESS('Certificate validity check completed.'))
 

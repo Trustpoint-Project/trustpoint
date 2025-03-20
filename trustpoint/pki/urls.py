@@ -129,4 +129,9 @@ urlpatterns = [
     path(
         'devid-registration/delete/<int:pk>/', DevIdRegistrationDeleteView.as_view(), name='devid_registration_delete'
     ),
+    path(
+        'trustpoint/download/tls-server/',
+        certificates.TlsServerCertificateDownloadView.as_view(),
+        name='trustpoint-tls-server-download',
+    ),
 ]
