@@ -1,4 +1,5 @@
 """Defines security features and their management within TrustPoint."""
+
 from __future__ import annotations
 
 import threading

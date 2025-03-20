@@ -1,4 +1,5 @@
 """Security decorator for enforcing security level restrictions."""
+
 from collections.abc import Callable
 from functools import wraps
 from typing import Any, TypeVar, cast
@@ -9,6 +10,7 @@ from settings.security.features import SecurityFeature
 from settings.security.manager import SecurityManager
 
 F = TypeVar('F', bound=Callable[..., Any])
+
 
 def security_level(feature_name: type[SecurityFeature]) -> Callable[[F], F]:
     """Checks if a security feature is allowed based on the current security level.

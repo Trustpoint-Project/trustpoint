@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 class TrustpointLoginView(LoginView):
     """View to handle the user Login."""
+
     http_method_names = ('get', 'post')
 
     def get(self, *args: Any, **kwargs: Any) -> HttpResponse:

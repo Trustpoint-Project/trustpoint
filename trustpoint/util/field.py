@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 class UniqueNameValidator(RegexValidator):
     """Validator to ensure unique names follow specific formatting rules."""
+
     form_label = _('(Must start with a letter. Can only contain letters, digits, underscores and hyphens)')
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:  # noqa: ARG002

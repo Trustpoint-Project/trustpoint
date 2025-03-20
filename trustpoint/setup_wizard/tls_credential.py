@@ -1,4 +1,5 @@
 """Module for generating cryptographic credentials for TLS certificate issuance."""
+
 from __future__ import annotations
 
 import datetime
@@ -18,6 +19,7 @@ ONE_DAY = datetime.timedelta(days=1)
 
 class Generator:
     """Generates cryptographic credentials for TLS certificate issuance."""
+
     def __init__(
         self,
         ipv4_addresses: list[ipaddress.IPv4Address],
@@ -202,9 +204,11 @@ class Generator:
         builder = builder.add_extension(
             x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False
         )
-        san = [x509.IPAddress(ip) for ip in self._ipv4_addresses] + \
-              [x509.IPAddress(ip) for ip in self._ipv6_addresses] + \
-              [x509.DNSName(domain) for domain in self._domain_names]
+        san = (
+            [x509.IPAddress(ip) for ip in self._ipv4_addresses]
+            + [x509.IPAddress(ip) for ip in self._ipv6_addresses]
+            + [x509.DNSName(domain) for domain in self._domain_names]
+        )
         builder = builder.add_extension(x509.SubjectAlternativeName(san), critical=True)
 
         certificate = builder.sign(

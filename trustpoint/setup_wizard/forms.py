@@ -1,4 +1,5 @@
 """Forms for the TrustPoint setup wizard."""
+
 from __future__ import annotations
 
 import ipaddress
@@ -14,6 +15,7 @@ class EmptyForm(forms.Form):
 
 class StartupWizardTlsCertificateForm(forms.Form):
     """Form for collecting TLS server certificate details."""
+
     ipv4_addresses = forms.CharField(
         label=_('IPv4-Addresses (comma-separated list)'), initial='127.0.0.1, ', required=False
     )

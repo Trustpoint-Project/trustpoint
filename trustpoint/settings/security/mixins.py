@@ -1,4 +1,5 @@
 """Mixin for enforcing security feature checks in Django views."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any

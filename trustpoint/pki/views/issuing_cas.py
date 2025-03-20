@@ -12,7 +12,6 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
-from django.views.generic.list import ListView
 
 from pki.forms import (
     IssuingCaAddFileImportPkcs12Form,
@@ -68,9 +67,7 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, FormView[IssuingCaAddM
         return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-method_select'))
 
 
-class IssuingCaAddFileImportPkcs12View(
-    IssuingCaContextMixin, FormView[IssuingCaAddFileImportPkcs12Form]
-):
+class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, FormView[IssuingCaAddFileImportPkcs12Form]):
     """View to import an Issuing CA from a PKCS12 file."""
 
     template_name = 'pki/issuing_cas/add/file_import.html'
@@ -78,9 +75,7 @@ class IssuingCaAddFileImportPkcs12View(
     success_url = reverse_lazy('pki:issuing_cas')
 
 
-class IssuingCaAddFileImportSeparateFilesView(
-    IssuingCaContextMixin, FormView[IssuingCaAddFileImportSeparateFilesForm]
-):
+class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, FormView[IssuingCaAddFileImportSeparateFilesForm]):
     """View to import an Issuing CA from separate PEM files."""
 
     template_name = 'pki/issuing_cas/add/file_import.html'

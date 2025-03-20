@@ -21,11 +21,11 @@ from django.views.generic.edit import FormMixin
 from django.views.generic.list import BaseListView, ListView, MultipleObjectTemplateResponseMixin
 
 if TYPE_CHECKING:
-
     from django import forms as dj_forms
 
 F = TypeVar('F', bound=Callable[..., Any])
 T = TypeVar('T', bound=Model)
+
 
 class IndexView(RedirectView):
     """View that redirects to the index home page."""
@@ -39,6 +39,7 @@ class SortableTableMixin(ListView[T]):
 
     default_sort_param must be set in the view to specify default sorting order.
     """
+
     model: type[T]
     queryset: QuerySet[Any] | None = None
     request: HttpRequest
@@ -62,7 +63,7 @@ class SortableTableMixin(ListView[T]):
         if hasattr(self, 'queryset') and self.queryset is not None:
             queryset = self.queryset
         else:
-            queryset = self.model.objects.all() # type:ignore[attr-defined]
+            queryset = self.model.objects.all()  # type:ignore[attr-defined]
 
         # Get sort parameter (e.g., "name" or "-name")
         sort_param = self.request.GET.get('sort', self.default_sort_param)
@@ -91,6 +92,7 @@ class SortableTableMixin(ListView[T]):
         context['current_sort'] = sort_param
         return context
 
+
 class ListInDetailView(SortableTableMixin[T]):
     """Helper view that combines a DetailView and a ListView.
 
@@ -109,7 +111,7 @@ class ListInDetailView(SortableTableMixin[T]):
 
     def get_queryset_for_object(self) -> QuerySet[Any]:
         """Returns the queryset for the detail object."""
-        return self.detail_model.objects.all() # type: ignore[no-any-return, attr-defined]
+        return self.detail_model.objects.all()  # type: ignore[no-any-return, attr-defined]
 
     def get_object(self) -> Any:
         """Retrieves the object based on the primary key in the URL."""
@@ -127,9 +129,9 @@ class ListInDetailView(SortableTableMixin[T]):
         return context
 
 
-
 class ContextDataMixin:
     """Mixin for context data."""
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds attributes prefixed with context_ to the context_data if it does not exist.
 
@@ -165,6 +167,7 @@ class ContextDataMixin:
 
 class BulkDeletionMixin:
     """Mixin for bulk deletion."""
+
     queryset: Any
     get_queryset: Callable[..., Any]
     success_url: str | None = None
@@ -187,7 +190,6 @@ class BulkDeletionMixin:
 
         exc_msg = 'No URL to redirect to. Provide a success_url.'
         raise ImproperlyConfigured(exc_msg)
-
 
 
 class BaseBulkDeleteView(BulkDeletionMixin, FormMixin[Any], BaseListView[Any]):
@@ -232,14 +234,18 @@ class PrimaryKeyListFromPrimaryKeyString:
 
 class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
     """Mixin to filter a queryset based on primary keys extracted from the URL."""
+
     queryset: QuerySet[Any] | None = None
     model: type[Model] | None = None
 
     def get_pks_path(self) -> str:
         """Retrieves the primary key path from URL parameters."""
         if not hasattr(self, 'kwargs') or not isinstance(self.kwargs, dict):
-            msg = 'self.kwargs not found' if not hasattr(self, 'kwargs') \
+            msg = (
+                'self.kwargs not found'
+                if not hasattr(self, 'kwargs')
                 else f'self.kwargs is not of type dict {type(self.kwargs)}'
+            )
             raise TypeError(msg)
         return cast(str, self.kwargs.get('pks', ''))
 
@@ -254,11 +260,11 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
 
         pks = self.get_pks_as_list(self.get_pks_path())
         if not pks:
-            return cast(QuerySet[Any], self.model.objects.all()) # type: ignore[attr-defined]
-        queryset = cast(QuerySet[Any], self.model.objects.filter(pk__in=pks)) # type: ignore[attr-defined]
+            return cast(QuerySet[Any], self.model.objects.all())  # type: ignore[attr-defined]
+        queryset = cast(QuerySet[Any], self.model.objects.filter(pk__in=pks))  # type: ignore[attr-defined]
 
         if len(pks) != len(queryset):
-            queryset = self.model.objects.none() # type: ignore[attr-defined]
+            queryset = self.model.objects.none()  # type: ignore[attr-defined]
 
         self.queryset = queryset
         return queryset

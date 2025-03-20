@@ -25,7 +25,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         AutoGenPkiFeature: ['auto_gen_pki', 'auto_gen_pki_key_algorithm'],
     }
 
-    def __init__(self, *args: Any, **kwargs:Any) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the form and disables fields based on the security level."""
         super().__init__(*args, **kwargs)
 
@@ -87,6 +87,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
 
     class Meta:
         """Metadata options for the SecurityConfigForm."""
+
         model = SecurityConfig
         fields: ClassVar[list[str]] = ['security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm']
 

@@ -11,9 +11,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import DeleteView
-from django.views.generic.detail import SingleObjectMixin
 from django.views.generic.edit import CreateView, FormView, UpdateView
-from django.views.generic.list import ListView
 
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from pki.models import DevIdRegistration, DomainModel, IssuingCaModel
@@ -121,7 +119,9 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin):
 
         context['domain_help_texts'] = {
             'auto_create_new_device': domain._meta.get_field('auto_create_new_device').help_text,
-            'allow_username_password_registration': domain._meta.get_field('allow_username_password_registration').help_text,
+            'allow_username_password_registration': domain._meta.get_field(
+                'allow_username_password_registration'
+            ).help_text,
             'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').help_text,
             'domain_credential_auth': domain._meta.get_field('domain_credential_auth').help_text,
             'username_password_auth': domain._meta.get_field('username_password_auth').help_text,
@@ -130,19 +130,20 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin):
 
         context['domain_verbose_name'] = {
             'auto_create_new_device': domain._meta.get_field('auto_create_new_device').verbose_name,
-            'allow_username_password_registration': domain._meta.get_field('allow_username_password_registration').verbose_name,
+            'allow_username_password_registration': domain._meta.get_field(
+                'allow_username_password_registration'
+            ).verbose_name,
             'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').verbose_name,
             'domain_credential_auth': domain._meta.get_field('domain_credential_auth').verbose_name,
             'username_password_auth': domain._meta.get_field('username_password_auth').verbose_name,
             'allow_app_certs_without_domain': domain._meta.get_field('allow_app_certs_without_domain').verbose_name,
         }
 
-        return context  # noqa: RET504
+        return context
 
     def post(self, request, *args, **kwargs):
         """Handle config form submission."""
         domain = self.get_object()
-
 
         domain.auto_create_new_device = 'auto_create_new_device' in request.POST
         domain.allow_username_password_registration = 'allow_username_password_registration' in request.POST
@@ -153,7 +154,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin):
 
         domain.save()
 
-        messages.success(request, _("Settings updated successfully."))
+        messages.success(request, _('Settings updated successfully.'))
         return HttpResponseRedirect(self.success_url)
 
 

@@ -16,7 +16,7 @@ from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import FormView, TemplateView, View
 from pki.models import CertificateModel, CredentialModel
-from pki.models.truststore import TrustpointTlsServerCredentialModel, ActiveTrustpointTlsServerCredentialModel
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TrustpointTlsServerCredentialModel
 
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import EmptyForm, StartupWizardTlsCertificateForm
@@ -239,10 +239,9 @@ class SetupWizardGenerateTlsServerCredentialView(FormView[StartupWizardTlsCertif
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
             )
 
-
             trustpoint_tls_server_credential, _ = TrustpointTlsServerCredentialModel.objects.get_or_create(
                 certificate=tls_server_credential.certificate,
-                defaults={"private_key_pem": tls_server_credential.get_private_key_serializer().as_pkcs8_pem()}
+                defaults={'private_key_pem': tls_server_credential.get_private_key_serializer().as_pkcs8_pem()},
             )
 
             active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
@@ -433,7 +432,6 @@ class SetupWizardTlsServerCredentialApplyView(FormView[EmptyForm]):
         """Raise a ValueError for an unknown file format."""
         err_msg = f'Unknown file_format requested: {file_format}'
         raise ValueError(err_msg)
-
 
     def _generate_trust_store_response(self, file_format: str) -> HttpResponse:
         """Generate a response containing the trust store in the requested format.

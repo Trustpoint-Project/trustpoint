@@ -1,4 +1,5 @@
 """Security configuration mappings for different security levels."""
+
 from settings.models import SecurityConfig
 from settings.security.features import AutoGenPkiFeature
 

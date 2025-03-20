@@ -1,4 +1,5 @@
 """Django Views for security settings management."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
 
 class SecurityView(SecurityLevelMixin, FormView[SecurityConfigForm]):
     """View for handling security settings configuration."""
+
     template_name = 'settings/security.html'
     form_class = SecurityConfigForm
     success_url = reverse_lazy('settings:security')
