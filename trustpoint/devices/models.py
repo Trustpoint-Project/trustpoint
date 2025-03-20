@@ -106,6 +106,11 @@ class DeviceModel(models.Model):
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
+    opc_ua_gds = models.BooleanField(
+        verbose_name=_('OPC UA GDS'),
+        default=False
+    )
+
     class Meta(TypedModelMeta):
         """Meta class configuration."""
 
@@ -182,7 +187,6 @@ class IssuedCredentialModel(models.Model):
     def __str__(self) -> str:
         """Returns a human-readable string representation."""
         return f'IssuedCredentialModel(common_name={common_name})'
-
 
 class RemoteDeviceCredentialDownloadModel(models.Model):
     """Model to associate a credential model with an OTP and token for unauthenticated remoted download."""

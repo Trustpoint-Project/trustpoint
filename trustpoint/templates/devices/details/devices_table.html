@@ -1,0 +1,81 @@
+{% load i18n %}
+{% block devices_table %}
+    <table class="table">
+        <thead>
+        <tr>
+            <th id="checkbox-column"><input type="checkbox"/></th>
+            <th>
+                <a href="?sort={% if current_sort == 'unique_name' %}-{% endif %}unique_name">
+                    Device
+                </a>
+            </th>
+            <th>
+                <a href="?sort={% if current_sort == 'domain' %}-{% endif %}domain">
+                    Domain
+                </a>
+            </th>
+            <th>
+                <a href="?sort={% if current_sort == 'serial_number' %}-{% endif %}serial_number">
+                    Serial-Number
+                </a>
+            </th>
+            <th>
+                <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
+                    Created
+                </a>
+            </th>
+            <th>
+                <a href="?sort={% if current_sort == 'onboarding_status' %}-{% endif %}onboarding_status">
+                    Onboarding Status
+                </a>
+            </th>
+            <th>
+                <a href="?sort={% if current_sort == 'onboarding_protocol' %}-{% endif %}onboarding_protocol">
+                    Onboarding Protocol
+                </a>
+            </th>
+            <th>
+                <a href="?sort={% if current_sort == 'pki_protocol' %}-{% endif %}pki_protocol">
+                    PKI Protocol
+                </a>
+            </th>
+            <th>Certificate Management</th>
+            <th>Details</th>
+            {#            <th>Configure</th>#}
+            <th>Revoke</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for device in page_obj %}
+            <tr>
+                <td class="row_checkbox">
+                    <input type="checkbox" name="row_checkbox" value="{{ device.id }}"/>
+                </td>
+                <td>{{ device.unique_name }}</td>
+                <td>{{ device.domain }}</td>
+                <td>{{ device.serial_number }}</td>
+                <td>{{ device.created_at }}</td>
+                <td>
+                    {% if device.get_onboarding_status_display != 'No Onboarding' %}
+                        {{ device.get_onboarding_status_display }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if device.get_onboarding_protocol_display != 'No Onboarding' %}
+                        {{ device.get_onboarding_protocol_display }}
+                    {% endif %}
+                </td>
+                <td>{{ device.get_pki_protocol_display }}</td>
+                <td>{{ device.clm_button| safe }}</td>
+                <td><a href="details/{{ device.id }}/" class="btn btn-primary tp-table-btn w-100">Details</a></td>
+                <td>{{ device.revoke_button| safe }}</td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="12" class="middle">{% trans 'No devices have been added yet.' %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+{% endblock devices_table %}

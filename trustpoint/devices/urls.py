@@ -17,6 +17,17 @@ urlpatterns = [
         views.DeviceCertificateLifecycleManagementSummaryView.as_view(),
         name='certificate_lifecycle_management',
     ),
+    # OPC UA GDS
+    path(
+        'opc-ua-gds/',
+        views.OpcUaGdsTableView.as_view(),
+        name='opc_ua_gds',
+    ),
+    path(
+        'opc-ua-gds/add/',
+        views.CreateOpcUaGdsView.as_view(),
+        name='opc_ua_gds-add',
+    ),
     # Certificate Lifecycle Management - Credential Issuance
     path(
         'certificate-lifecycle-management/<int:pk>/issue-tls-client-credential/',

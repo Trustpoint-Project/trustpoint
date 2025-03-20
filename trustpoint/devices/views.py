@@ -40,7 +40,7 @@ from devices.forms import (
     IssueOpcUaClientCredentialForm,
     IssueOpcUaServerCredentialForm,
     IssueTlsClientCredentialForm,
-    IssueTlsServerCredentialForm,
+    IssueTlsServerCredentialForm, CreateOpcUaGdsForm,
 )
 from devices.issuer import (
     LocalTlsClientCredentialIssuer,
@@ -100,6 +100,10 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'unique_name'
 
+    def get_queryset(self):
+        """Filter queryset to only include devices where opc_ua_gds is False."""
+        return super().get_queryset().filter(opc_ua_gds=False)
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the clm and revoke buttons to the context.
 
@@ -153,6 +157,18 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
         # noinspection PyDeprecation
         return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', _('Revoke'))
 
+class OpcUaGdsTableView(DeviceTableView):
+    """Table View for devices where opc_ua_gds is True."""
+
+    template_name = 'devices/opc_ua_gds.html'
+    extra_context: ClassVar = {'page_category': 'devices', 'page_name': 'opc_ua_gds'}
+
+    def get_queryset(self):
+        """Filter queryset to only include devices where opc_ua_gds is True."""
+        devices = super().get_queryset().filter(opc_ua_gds=True)
+        print(devices)
+        return devices
+
 
 class CreateDeviceView(DeviceContextMixin, CreateView[DeviceModel, BaseModelForm[DeviceModel]]):
     """Device Create View."""
@@ -177,6 +193,21 @@ class CreateDeviceView(DeviceContextMixin, CreateView[DeviceModel, BaseModelForm
 
         return str(reverse_lazy('devices:help_dispatch_application', kwargs={'pk': self.object.id}))
 
+class CreateOpcUaGdsView(CreateDeviceView):
+    """OPC UA GDS Create View."""
+
+    http_method_names = ('get', 'post')
+
+    model = DeviceModel
+    form_class = CreateOpcUaGdsForm
+    template_name = 'devices/add.html'
+
+    def form_valid(self, form):
+        """Set opc_ua_gds to True before saving the device."""
+        device = form.save(commit=False)
+        device.opc_ua_gds = True
+        device.save()
+        return super().form_valid(form)
 
 class DeviceDetailsView(DeviceContextMixin, DetailView[DeviceModel]):
     """Device Details View."""
