@@ -1,6 +1,8 @@
 """This module defines a Django management command to delete all existing notifications."""
 
-from django.core.management.base import BaseCommand  # type: ignore[import-untyped]
+from typing import Any
+
+from django.core.management.base import BaseCommand
 from home.models import NotificationModel
 
 from trustpoint.settings import DOCKER_CONTAINER
@@ -15,9 +17,12 @@ class Command(BaseCommand):
 
     help = 'Deletes all existing notifications'
 
-    def handle(self, **options) -> None:
-        """Entrypoint for the command."""
-        verbosity = options.get('verbosity', 1)
+    def handle(self, **options: Any) -> None:  # noqa: ARG002
+        """Entrypoint for the command.
+
+        Args:
+            **options: A variable-length argument.
+        """
         if DOCKER_CONTAINER:
             self.delete_notifications()
             return

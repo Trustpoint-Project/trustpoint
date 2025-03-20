@@ -1,4 +1,4 @@
-The following consolidated deliverable will be provided at the conclusion of the TrustPoint testing process:
+The following consolidated deliverable will be provided at the conclusion of the Trustpoint testing process:
 
 *Comprehensive Test Report:*
 
@@ -9,7 +9,7 @@ This single document will include the following components:
     - Logs and outputs from automated tests executed through GitHub pipelines.
 
 #. Integration Test Results:
-    - Results from behavior-driven integration tests using the Python Cucumber framework (behave).
+    - Results from :term:`BDD` tests using the :term:`behave` framework.
     - Detailed logs of test scenarios, their outcomes, and any identified issues.
 
 #. Defect and Incident Reports:

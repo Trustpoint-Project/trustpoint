@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.core.management.base import BaseCommand  # type: ignore[import-untyped]
-from django.utils import timezone  # type: ignore[import-untyped]
+from django.core.management.base import BaseCommand
+from django.utils import timezone
 from home.models import NotificationModel, NotificationStatus
 
 
@@ -19,7 +19,12 @@ class Command(BaseCommand):
     help = 'Check for known security vulnerabilities.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         self._check_for_security_vulnerabilities()
         self.stdout.write(self.style.SUCCESS('Security vulnerabilities check completed.'))
 
@@ -27,7 +32,7 @@ class Command(BaseCommand):
         """Task to check for known security vulnerabilities in system components."""
         vulnerabilities_detected = False
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
-        # TODO (FHKatCSW): Implement logic for vulnerability check
+        # TODO (FHKatCSW): Implement logic for vulnerability check  # noqa: FIX002
 
         if vulnerabilities_detected:
             NotificationModel.objects.create(

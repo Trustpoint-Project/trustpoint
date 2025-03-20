@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.core.management.base import BaseCommand  # type: ignore[import-untyped]
-from django.utils import timezone  # type: ignore[import-untyped]
+from django.core.management.base import BaseCommand
+from django.utils import timezone
 from home.models import NotificationModel, NotificationStatus
 
 new_status, created = NotificationStatus.objects.get_or_create(status='NEW')
@@ -21,14 +21,20 @@ class Command(BaseCommand):
     help = 'Check system health and create notifications if issues are found.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         self._check_system_health()
         self.stdout.write(self.style.SUCCESS('System health check completed.'))
 
-    def _check_system_health(self) -> None:
+    @staticmethod
+    def _check_system_health() -> None:
         """Task to perform a system health check."""
         system_healthy = True
-        # TODO (FHKatCSW): Implement logic for system health check
+        # TODO (FHKatCSW): Implement logic for system health check  # noqa: FIX002
 
         if not system_healthy:
             NotificationModel.objects.create(

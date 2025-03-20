@@ -1,60 +1,54 @@
 name: Pytest
 
+# Trigger this workflow on pull requests to ensure tests are executed before merging.
 on: [pull_request]
 
 jobs:
   pytest:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # Use the latest Ubuntu runner for compatibility and performance.
+
+    permissions:
+      contents: read  # Grants read access to repository contents.
+      pull-requests: write  # Allows posting test reports as comments on pull requests.
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4  # Ensures the repository code is available.
 
-      - name: Install the latest version of uv
-        uses: astral-sh/setup-uv@v5
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.
         with:
-          python-version: 3.12
+          run_migrations: true  # Enable database migrations.
 
-      - name: Run database migrations
-        run: |
-          echo "y" | uv run trustpoint/manage.py reset_db
-
-      - name: Run Pytest with Coverage
+      - name: Run Pytest and create reports
         run: |
           mkdir -p reports
           uv run pytest \
-          --cov=trustpoint \
-          --cov-report=xml \
-          --cov-report=html \
+          --md-report-flavor gfm \
           --html=reports/pytest-report.html \
-          --self-contained-html \
-          --junitxml=reports/pytest-report.xml \
-          trustpoint/ | tee reports/pytest-output.log
-          mv coverage.xml reports/coverage.xml
+          --junitxml=reports/junit-report.xml \
+          trustpoint/ 
 
-      - name: Upload Test Reports
-        uses: actions/upload-artifact@v4
+      - name: Display Summary in GitHub Actions even if tests fail
+        if: always()  # Ensures this step runs even if pytest fails.
+        run: |
+          echo "<details><summary>Pytest Report</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat "md-report.md" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "</details>" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Test Reports even if tests fail
+        uses: actions/upload-artifact@v4  # Uploads reports for review.
+        if: always()  # Ensures this step runs even if pytest fails.
         with:
           name: pytest-reports
           path: reports/
 
-      - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v5
+      - name: Render the report to the PR when tests fail
+        uses: marocchino/sticky-pull-request-comment@v2  # Posts test results as a comment on PRs.
+        if: failure()  # Only runs if tests fail.
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: reports/coverage.xml
-        continue-on-error: true
-
-      - name: Display Summary in GitHub Actions
-        run: |
-          echo "## Pytest Results :white_check_mark:" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          cat reports/pytest-output.log >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-
-      - name: Fail Job if Tests Failed
-        run: |
-          if grep -q "[1-9] warnings, [1-9] errors" reports/pytest-output.log; then
-            echo "❌ Pytest failed! Failing job."
-            exit 1
-          fi
+          header: test-report
+          recreate: true  # Replaces previous test reports to keep PR comments clean.
+          path: md-report.md  # Posts the markdown test report in the PR.

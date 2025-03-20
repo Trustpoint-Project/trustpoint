@@ -7,11 +7,11 @@
 [![Landing Page](https://img.shields.io/badge/Landing_Page-014BAD)](https://trustpoint.campus-schwarzwald.de/en/)
 [![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-014BAD)](https://github.com/orgs/TrustPoint-Project/discussions)
 [![Read the Docs](https://img.shields.io/readthedocs/trustpoint)](https://trustpoint.readthedocs.io)
-[![Docker Automated](https://img.shields.io/docker/automated/trustpoint2023/trustpoint)](https://hub.docker.com/r/trustpoint2023/trustpoint)
+[![Docker Automated](https://img.shields.io/docker/automated/trustpointproject/trustpoint)](https://hub.docker.com/r/trustpointproject/trustpoint)
 ![Status](https://img.shields.io/badge/Status-Beta-red)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Pytest Status](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/pytest.yml/badge.svg)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/pytest.yml)
-![Coverage](https://codecov.io/gh/TrustPoint-Project/trustpoint/branch/main/graph/badge.svg)
+[![codecov](https://codecov.io/gh/Trustpoint-Project/trustpoint/graph/badge.svg?token=0N31L1QWPE)](https://codecov.io/gh/Trustpoint-Project/trustpoint)
 [![MyPy Status](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/mypy.yml/badge.svg)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/mypy.yml)
 [![Ruff Status](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/ruff.yml/badge.svg)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/ruff.yml)
 
@@ -99,7 +99,7 @@ our [Quickstart Setup Guide](https://trustpoint.readthedocs.io/en/latest/quickst
 ### Docker Hub
 
 We are also providing the Trustpoint as a docker-container. Please see
-[Trustpoint on Docker Hub](https://hub.docker.com/r/trustpoint2023/trustpoint) or follow the
+[Trustpoint on Docker Hub](https://hub.docker.com/r/trustpointproject/trustpoint) or follow the
 instructions in our [Trustpoint Documentation](https://trustpoint.readthedocs.io/en/latest/) to build the
 container yourself.
 

@@ -47,8 +47,9 @@ class AutoGenPki:
 
             # Re-use any existing root CA for the auto-generated PKI and current key type
             try:
-                root_ca = IssuingCaModel.objects.get(unique_name=root_ca_name,
-                                                     issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT)
+                root_ca = IssuingCaModel.objects.get(
+                    unique_name=root_ca_name, issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
+                )
                 root_cert = root_ca.credential.get_certificate()
                 root_1_key = root_ca.credential.get_private_key()
             except IssuingCaModel.DoesNotExist:
@@ -61,7 +62,7 @@ class AutoGenPki:
                     private_key=root_1_key,
                     chain=[],
                     unique_name=root_ca_name,
-                    ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
+                    ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT,
                 )
 
             # Create new issuing CA
@@ -79,7 +80,7 @@ class AutoGenPki:
                 private_key=issuing_1_key,
                 chain=[root_cert],
                 unique_name=UNIQUE_NAME,
-                ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN
+                ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN,
             )
 
             # Link to domain
@@ -100,8 +101,7 @@ class AutoGenPki:
             issuing_ca = cls.get_auto_gen_pki()
             if not issuing_ca:
                 log.error(
-                    'Issuing CA for auto-generated PKI does not exist - '
-                    'auto-generated PKI possibly not fully disabled'
+                    'Issuing CA for auto-generated PKI does not exist - auto-generated PKI possibly not fully disabled'
                 )
                 return
 
@@ -127,12 +127,12 @@ class AutoGenPki:
             try:
                 root_ca = IssuingCaModel.objects.get(
                     credential__primarycredentialcertificate__certificate__subject_public_bytes=subject_public_bytes,
-                    issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
+                    issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT,
                 )
                 root_ca.revoke_all_issued_certificates(reason=RevokedCertificateModel.ReasonCode.CESSATION)
             except IssuingCaModel.DoesNotExist:
                 exc_msg = 'Root CA for auto-generated PKI Issuing CA not found - cannot revoke the CA certificate'
-                log.error(exc_msg) # noqa: TRY400
+                log.error(exc_msg)  # noqa: TRY400
                 return
 
             # Hide the AutoGenPKI domain from the UI

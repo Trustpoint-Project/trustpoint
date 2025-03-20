@@ -84,6 +84,9 @@ target/
 profile_default/
 ipython_config.py
 
+# MacOS
+.DS_Store
+
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is
 #   intended to run in multiple environments; otherwise, check them in:
@@ -181,3 +184,4 @@ docs/build/
 collected_static
 
 _*.sh
+/md-report.md

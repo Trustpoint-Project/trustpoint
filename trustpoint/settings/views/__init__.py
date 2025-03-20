@@ -8,5 +8,6 @@ from django.views.generic.base import RedirectView
 
 class IndexView(RedirectView):
     """Index view"""
+
     permanent = True
     pattern_name = 'settings:language'

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from devices.models import IssuedCredentialModel
 from pki.models.certificate import RevokedCertificateModel
+
+from devices.models import IssuedCredentialModel
 
 
 class DeviceCredentialRevocation:
@@ -11,7 +12,7 @@ class DeviceCredentialRevocation:
 
     @staticmethod
     def revoke_certificate(issued_credential_id: int, reason: str) -> tuple[bool, str]:
-        """Revokes a certificate given an ID of an IssuedCredentialModel instance"""
+        """Revokes a certificate given an ID of an IssuedCredentialModel instance."""
         try:
             issued_credential = IssuedCredentialModel.objects.get(id=issued_credential_id)
         except IssuedCredentialModel.DoesNotExist:
@@ -26,8 +27,6 @@ class DeviceCredentialRevocation:
             return False, 'The certificate is already revoked.'
 
         RevokedCertificateModel.objects.create(
-            certificate=primary_cert,
-            revocation_reason=reason,
-            ca = issued_credential.domain.issuing_ca
+            certificate=primary_cert, revocation_reason=reason, ca=issued_credential.domain.issuing_ca
         )
         return True, 'Certificate successfully revoked.'

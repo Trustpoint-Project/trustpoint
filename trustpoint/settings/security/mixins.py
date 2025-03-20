@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 class SecurityLevelMixin:
     """A mixin that provides security feature checks for Django views."""
 
-    def __init__(self, security_feature: SecurityFeature=None, *args, **kwargs) -> None:
+    def __init__(self, security_feature: SecurityFeature = None, *args, **kwargs) -> None:
         """Initializes the SecurityLevelMixin with the specified security feature and redirect URL.
 
         Parameters:
@@ -40,6 +40,7 @@ class SecurityLevelMixin:
             The security mode of the current security level instance.
         """
         return self.sec.get_security_level()
+
 
 class SecurityLevelMixinRedirect(SecurityLevelMixin):
     """A mixin that provides security feature checks for Django views with redirect feature."""
@@ -75,7 +76,10 @@ class SecurityLevelMixinRedirect(SecurityLevelMixin):
             The HTTP response object, either continuing to the requested view or redirecting.
         """
         if not self.sec.is_feature_allowed(self.security_feature):
-            msg = _('Your security setting %s does not allow the feature: %s' % (self.get_security_level(), self.security_feature.value))
+            msg = _(
+                'Your security setting %s does not allow the feature: %s'
+                % (self.get_security_level(), self.security_feature.value)
+            )
             messages.error(request, msg)
             return redirect(self.disabled_by_security_level_url)
         return super().dispatch(request, *args, **kwargs)

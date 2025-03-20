@@ -1,16 +1,17 @@
 """Module that contains the IssuingCaModel."""
+
 from __future__ import annotations
 
 import datetime
 from typing import TYPE_CHECKING
 
-from core.validator.field import UniqueNameValidator
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from core import oid
+from trustpoint_core import oid
+from util.field import UniqueNameValidator
 
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
@@ -18,7 +19,8 @@ from pki.util.keys import CryptographyUtils
 from trustpoint.views.base import LoggerMixin
 
 if TYPE_CHECKING:
-    from core.serializer import CredentialSerializer
+    from trustpoint_core.serializer import CredentialSerializer
+
 
 class IssuingCaModel(LoggerMixin, models.Model):
     """Issuing CA Model.
@@ -32,6 +34,7 @@ class IssuingCaModel(LoggerMixin, models.Model):
         Depending on the type other fields may be set, e.g. a credential will only be available for local
         Issuing CAs.
         """
+
         AUTOGEN_ROOT = 0, _('Auto-Generated Root')
         AUTOGEN = 1, _('Auto-Generated')
         LOCAL_UNPROTECTED = 2, _('Local-Unprotected')
@@ -40,16 +43,12 @@ class IssuingCaModel(LoggerMixin, models.Model):
         REMOTE_CMP = 5, _('Remote-CMP')
 
     unique_name = models.CharField(
-        verbose_name=_('Issuing CA Name'),
-        max_length=100,
-        validators=[UniqueNameValidator()],
-        unique=True)
+        verbose_name=_('Issuing CA Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
+    )
     credential = models.OneToOneField(CredentialModel, related_name='issuing_cas', on_delete=models.PROTECT)
 
     issuing_ca_type = models.IntegerField(
-        verbose_name=_('Issuing CA Type'),
-        choices=IssuingCaTypeChoice,
-        null=False, blank=False
+        verbose_name=_('Issuing CA Type'), choices=IssuingCaTypeChoice, null=False, blank=False
     )
 
     is_active = models.BooleanField(
@@ -63,6 +62,8 @@ class IssuingCaModel(LoggerMixin, models.Model):
 
     crl_pem = models.TextField(editable=False, default='', verbose_name=_('CRL in PEM format'))
 
+    objects: models.Manager[IssuingCaModel]
+
     def __str__(self) -> str:
         """Returns a human-readable string that represents this IssuingCaModel entry.
 
@@ -72,20 +73,22 @@ class IssuingCaModel(LoggerMixin, models.Model):
         return self.unique_name
 
     def __repr__(self) -> str:
+        """Returns a string representation of the IssuingCaModel instance."""
         return f'IssuingCaModel(unique_name={self.unique_name})'
 
     @property
     def common_name(self) -> str:
-        """Returns common name"""
+        """Returns common name."""
         return self.credential.certificate.common_name
 
     @classmethod
     @LoggerMixin.log_exceptions
     def create_new_issuing_ca(
-            cls,
-            unique_name: str,
-            credential_serializer: CredentialSerializer,
-            issuing_ca_type: IssuingCaModel.IssuingCaTypeChoice) -> IssuingCaModel:
+        cls,
+        unique_name: str,
+        credential_serializer: CredentialSerializer,
+        issuing_ca_type: IssuingCaModel.IssuingCaTypeChoice,
+    ) -> IssuingCaModel:
         """Creates a new Issuing CA model and returns it.
 
         Args:
@@ -102,7 +105,7 @@ class IssuingCaModel(LoggerMixin, models.Model):
             cls.IssuingCaTypeChoice.AUTOGEN_ROOT,
             cls.IssuingCaTypeChoice.AUTOGEN,
             cls.IssuingCaTypeChoice.LOCAL_UNPROTECTED,
-            cls.IssuingCaTypeChoice.LOCAL_PKCS11
+            cls.IssuingCaTypeChoice.LOCAL_PKCS11,
         )
         if issuing_ca_type in issuing_ca_types:
             credential_type = CredentialModel.CredentialTypeChoice.ISSUING_CA
@@ -111,8 +114,7 @@ class IssuingCaModel(LoggerMixin, models.Model):
             raise ValueError(exc_msg)
 
         credential_model = CredentialModel.save_credential_serializer(
-            credential_serializer=credential_serializer,
-            credential_type=credential_type
+            credential_serializer=credential_serializer, credential_type=credential_type
         )
 
         issuing_ca = cls(
@@ -136,17 +138,17 @@ class IssuingCaModel(LoggerMixin, models.Model):
             crl_builder = x509.CertificateRevocationListBuilder(
                 issuer_name=ca_subject,
                 last_update=crl_issued_at,
-                next_update=crl_issued_at + datetime.timedelta(hours=24) #(minutes=self.next_crl_generation_time)
+                next_update=crl_issued_at + datetime.timedelta(hours=24),  # (minutes=self.next_crl_generation_time)
             )
 
             crl_certificates = self.revoked_certificates.all()
 
             for cert in crl_certificates:
-                revoked_cert = (x509.RevokedCertificateBuilder()
+                revoked_cert = (
+                    x509.RevokedCertificateBuilder()
                     .serial_number(int(cert.certificate.serial_number, 16))
                     .revocation_date(cert.revoked_at)
-                    .add_extension(x509.CRLReason(
-                        x509.ReasonFlags(cert.revocation_reason)), critical=False)
+                    .add_extension(x509.CRLReason(x509.ReasonFlags(cert.revocation_reason)), critical=False)
                     .build()
                 )
                 crl_builder = crl_builder.add_revoked_certificate(revoked_cert)
@@ -155,10 +157,7 @@ class IssuingCaModel(LoggerMixin, models.Model):
 
             priv_k = self.credential.get_private_key_serializer().as_crypto()
 
-            crl = crl_builder.sign(
-                private_key=priv_k,
-                algorithm=hash_algorithm
-            )
+            crl = crl_builder.sign(private_key=priv_k, algorithm=hash_algorithm)
 
             self.crl_pem = crl.public_bytes(encoding=serialization.Encoding.PEM).decode()
             self.save()
@@ -172,28 +171,31 @@ class IssuingCaModel(LoggerMixin, models.Model):
 
     @property
     def signature_suite(self) -> oid.SignatureSuite:
+        """The signature suite for the CA public key certificate."""
         return oid.SignatureSuite.from_certificate(self.credential.get_certificate_serializer().as_crypto())
 
     @property
     def public_key_info(self) -> oid.PublicKeyInfo:
+        """The public key info for the CA certificate's public key."""
         return self.signature_suite.public_key_info
 
     def revoke_all_issued_certificates(self, reason: str = RevokedCertificateModel.ReasonCode.UNSPECIFIED) -> None:
         """Revokes all certificates issued by this CA."""
-        # Note: This goes through all active certificates and checks issuance by this CA based on cert.issuer_public_bytes == ca.subject_public_bytes
-        # WARNING: This means that it may inadvertently revoke certificates that were issued by a different CA with the same subject name
+        # Note: This goes through all active certificates and checks issuance by this CA
+        # based on cert.issuer_public_bytes == ca.subject_public_bytes
+        # WARNING: This means that it may inadvertently revoke certificates
+        # that were issued by a different CA with the same subject name
         ca_subject_public_bytes = self.credential.certificate.subject_public_bytes
-        qs = CertificateModel.objects.filter(issuer_public_bytes=ca_subject_public_bytes) \
-                                     .exclude(subject_public_bytes=ca_subject_public_bytes) # do not self-revoke self-signed CA certificate
+
+        # do not self-revoke self-signed CA certificate
+        qs = CertificateModel.objects.filter(issuer_public_bytes=ca_subject_public_bytes).exclude(
+            subject_public_bytes=ca_subject_public_bytes
+        )
 
         for cert in qs:
             if cert.certificate_status != CertificateModel.CertificateStatus.OK:
                 continue
-            RevokedCertificateModel.objects.create(
-                certificate=cert,
-                revocation_reason=reason,
-                ca=self
-            )
+            RevokedCertificateModel.objects.create(certificate=cert, revocation_reason=reason, ca=self)
 
         self.logger.info('All %i certificates issued by CA %s have been revoked.', qs.count(), self.unique_name)
         self.issue_crl()

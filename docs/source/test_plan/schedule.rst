@@ -12,4 +12,4 @@ in collaboration with development and test leads.
    "Review System Design Document", "Test Team, Dev", "3 Days", "Enhance understanding of the system structure and refine test objectives."
    "Conduct Unit Tests", "Dev", "Ongoing until code completion", "Verify individual methods/functions as they are completed; results reviewed by the development lead."
    "System/Integration Testing", "Test Team, Dev", "2 Weeks", "Validate module interactions, data flow, and PKI processes in a staging environment."
-   "Acceptance Testing", "Test Team, End Users, PM", "2 Weeks", "Perform final user-driven testing to ensure TrustPoint meets functional and usability expectations."
+   "Acceptance Testing", "Test Team, End Users, PM", "2 Weeks", "Perform final user-driven testing to ensure Trustpoint meets functional and usability expectations."
