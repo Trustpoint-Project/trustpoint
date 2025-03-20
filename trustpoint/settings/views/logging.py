@@ -16,7 +16,6 @@ from django.shortcuts import render
 from django.utils.translation import gettext as _
 from django.views.generic import TemplateView, View
 from django.views.generic.base import RedirectView
-from django.views.generic.list import ListView
 
 from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH, UIConfig
 from trustpoint.views.base import LoggerMixin, SortableTableMixin
@@ -28,14 +27,14 @@ if TYPE_CHECKING:
 
 
 class IndexView(RedirectView):
-    """Index view"""
+    """Index view."""
 
     permanent = True
     pattern_name = 'settings:language'
 
 
 def language(request: HttpRequest) -> HttpResponse:
-    """Handle language Configuration
+    """Handle language Configuration.
 
     Returns: HTTPResponse
     """
@@ -49,10 +48,10 @@ def language(request: HttpRequest) -> HttpResponse:
 class LoggingContextMixin:
     """Mixin which adds extra menu context for the Logging Views."""
 
-    extra_context: ClassVar[dict] = {'page_category': 'settings', 'page_name': 'logging'}
+    extra_context: ClassVar = {'page_category': 'settings', 'page_name': 'logging'}
 
 
-class LoggingFilesTableView(LoggerMixin, LoggingContextMixin, SortableTableMixin, ListView):
+class LoggingFilesTableView(LoggerMixin, LoggingContextMixin, SortableTableMixin):
     """View to display all log files in the log directory in a table."""
 
     http_method_names = ('get',)
@@ -72,8 +71,8 @@ class LoggingFilesTableView(LoggerMixin, LoggingContextMixin, SortableTableMixin
         date_regex = re.compile(r'\b\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\b')
         matches = re.findall(date_regex, log_file)
         if matches:
-            first_date = datetime.datetime.strptime(matches[0], DATE_FORMAT).replace(tzinfo=datetime.timezone.utc)
-            last_date = datetime.datetime.strptime(matches[-1], DATE_FORMAT).replace(tzinfo=datetime.timezone.utc)
+            first_date = datetime.datetime.strptime(matches[0], DATE_FORMAT).replace(tzinfo=datetime.UTC)
+            last_date = datetime.datetime.strptime(matches[-1], DATE_FORMAT).replace(tzinfo=datetime.UTC)
         else:
             first_date = None
             last_date = None
@@ -135,14 +134,14 @@ class LoggingFilesDetailsView(LoggerMixin, LoggingContextMixin, TemplateView):
 
 
 class LoggingFilesDownloadView(LoggerMixin, LoggingContextMixin, TemplateView):
-    """View to download a single log file"""
+    """View to download a single log file."""
 
     http_method_names = ('get',)
 
     @LoggerMixin.log_exceptions
     def get(self, *_args: Any, **kwargs: Any) -> HttpResponse:
         """The HTTP GET method for the view."""
-        filename = kwargs.get('filename')
+        filename = kwargs.get('filename', '')
         log_file_path = LOG_DIR_PATH / Path(filename)
 
         if not log_file_path.exists() or not log_file_path.is_file():

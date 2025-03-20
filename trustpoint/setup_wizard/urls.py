@@ -3,13 +3,13 @@
 from django.urls import path
 
 from setup_wizard.views import (
-    SetupWizardInitialView,
+    SetupWizardCreateSuperUserView,
+    SetupWizardDemoDataView,
     SetupWizardGenerateTlsServerCredentialView,
     SetupWizardImportTlsServerCredentialView,
-    SetupWizardTlsServerCredentialApplyView,
+    SetupWizardInitialView,
     SetupWizardTlsServerCredentialApplyCancelView,
-    SetupWizardDemoDataView,
-    SetupWizardCreateSuperUserView,
+    SetupWizardTlsServerCredentialApplyView,
 )
 
 app_name = 'setup_wizard'

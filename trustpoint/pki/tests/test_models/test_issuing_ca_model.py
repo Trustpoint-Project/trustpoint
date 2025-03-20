@@ -13,7 +13,7 @@ from pki.models.issuing_ca import IssuingCaModel
 from pki.util.x509 import CertificateGenerator
 
 COMMON_NAME = 'Root CA'
-UNIQUE_NAME = COMMON_NAME.replace(' ','_').lower()
+UNIQUE_NAME = COMMON_NAME.replace(' ', '_').lower()
 CA_TYPE = IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED
 
 
@@ -21,17 +21,9 @@ CA_TYPE = IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED
 def issuing_ca_instance() -> dict[str, Any]:
     cert, priv_key = CertificateGenerator.create_root_ca(cn=COMMON_NAME)
     issuing_ca = CertificateGenerator.save_issuing_ca(
-        issuing_ca_cert=cert,
-        private_key=priv_key,
-        chain=[],
-        unique_name=UNIQUE_NAME,
-        ca_type= CA_TYPE
+        issuing_ca_cert=cert, private_key=priv_key, chain=[], unique_name=UNIQUE_NAME, ca_type=CA_TYPE
     )
-    return {
-        'issuing_ca': issuing_ca,
-        'cert': cert,
-        'priv_key': priv_key
-    }
+    return {'issuing_ca': issuing_ca, 'cert': cert, 'priv_key': priv_key}
 
 
 def test_attributes_and_properties(issuing_ca_instance: dict[str, Any]) -> None:
@@ -41,7 +33,11 @@ def test_attributes_and_properties(issuing_ca_instance: dict[str, Any]) -> None:
     issuing_ca = issuing_ca_instance.get('issuing_ca')
     priv_key = issuing_ca_instance.get('priv_key')
     cert = issuing_ca_instance.get('cert')
-    if not isinstance(issuing_ca, IssuingCaModel) or not isinstance(cert, x509.Certificate) or not isinstance(priv_key, RSAPrivateKey):
+    if (
+        not isinstance(issuing_ca, IssuingCaModel)
+        or not isinstance(cert, x509.Certificate)
+        or not isinstance(priv_key, RSAPrivateKey)
+    ):
         msg = 'Issuig CA not created properly'
         raise TypeError(msg)
     assert issuing_ca.unique_name == UNIQUE_NAME
@@ -83,21 +79,21 @@ def test_revoke_all_issued_certificates_and_crl(issuing_ca_instance: dict[str, A
     issuing_ca = issuing_ca_instance.get('issuing_ca')
     priv_key = issuing_ca_instance.get('priv_key')
     cert = issuing_ca_instance.get('cert')
-    if not isinstance(issuing_ca, IssuingCaModel) or not isinstance(cert, x509.Certificate) or not isinstance(priv_key, RSAPrivateKey):
+    if (
+        not isinstance(issuing_ca, IssuingCaModel)
+        or not isinstance(cert, x509.Certificate)
+        or not isinstance(priv_key, RSAPrivateKey)
+    ):
         msg = 'Issuig CA not created properly'
         raise TypeError(msg)
 
     ee_cert, _ = CertificateGenerator.create_ee(
-        issuer_private_key=priv_key,
-        issuer_cn=COMMON_NAME,
-        subject_cn='subject_cn'
+        issuer_private_key=priv_key, issuer_cn=COMMON_NAME, subject_cn='subject_cn'
     )
     CertificateModel.save_certificate(ee_cert)
 
     ee_cert2, _ = CertificateGenerator.create_ee(
-        issuer_private_key=priv_key,
-        issuer_cn=COMMON_NAME,
-        subject_cn='subject_cn2'
+        issuer_private_key=priv_key, issuer_cn=COMMON_NAME, subject_cn='subject_cn2'
     )
     CertificateModel.save_certificate(ee_cert2)
 
@@ -106,7 +102,6 @@ def test_revoke_all_issued_certificates_and_crl(issuing_ca_instance: dict[str, A
 
     assert revoked.exists()
     assert {qs.certificate.common_name for qs in revoked} == {'subject_cn', 'subject_cn2'}
-
 
     assert issuing_ca.issue_crl()
 

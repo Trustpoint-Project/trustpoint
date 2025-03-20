@@ -133,8 +133,6 @@ class NotificationMessage:
 class NotificationModel(models.Model):
     """Notifications Model."""
 
-    objects: models.Manager[NotificationModel]
-
     class NotificationTypes(models.TextChoices):
         """Supported Notification Types."""
 

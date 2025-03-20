@@ -1,19 +1,14 @@
+import base64
+from unittest.mock import MagicMock, patch
+
 import pytest
 from django.test import RequestFactory
-from unittest.mock import patch, MagicMock
-import base64
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes
-from devices.models import DeviceModel, IssuedCredentialModel
-from pki.models.credential import CredentialModel
-from pki.models.domain import DomainModel
+
 from est.views import (
-    EstSimpleEnrollmentView,
     EstCACertsView,
-    ClientCertificateAuthenticationError,
+    EstSimpleEnrollmentView,
+    LoggedHttpResponse,
     UsernamePasswordAuthenticationError,
-    IDevIDAuthenticationError,
-    LoggedHttpResponse
 )
 
 
@@ -80,8 +75,9 @@ def test_authenticate_username_password_missing_header(request_factory, est_simp
 @patch('est.views.EstSimpleEnrollmentView.authenticate_request')
 @patch('est.views.EstSimpleEnrollmentView.deserialize_pki_message')
 @patch('est.views.EstSimpleEnrollmentView.get_or_create_device_from_csr')
-def test_post_authentication_failure(mock_get_device, mock_deserialize, mock_auth, request_factory,
-                                     est_simple_enrollment_view):
+def test_post_authentication_failure(
+    mock_get_device, mock_deserialize, mock_auth, request_factory, est_simple_enrollment_view
+):
     request = request_factory.post('/')
     mock_auth.return_value = (None, LoggedHttpResponse('Authentication failed', status=400))
     response = est_simple_enrollment_view.post(request)
@@ -91,10 +87,9 @@ def test_post_authentication_failure(mock_get_device, mock_deserialize, mock_aut
 
 @patch('est.views.EstSimpleEnrollmentView.issue_credential')
 def test_issue_credential_invalid_template(mock_issue, est_simple_enrollment_view):
-    mock_issue.side_effect = ValueError("Unknown template")
+    mock_issue.side_effect = ValueError('Unknown template')
 
     with pytest.raises(ValueError):
-        est_simple_enrollment_view.issue_credential('invalid_template', MagicMock(),
-                                                    est_simple_enrollment_view.requested_domain, MagicMock())
-
-
+        est_simple_enrollment_view.issue_credential(
+            'invalid_template', MagicMock(), est_simple_enrollment_view.requested_domain, MagicMock()
+        )

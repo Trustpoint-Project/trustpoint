@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from util.field import UniqueNameValidator
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from django_stubs_ext.db.models import TypedModelMeta
 from trustpoint_core import oid
 from util.field import UniqueNameValidator
 
@@ -43,38 +41,38 @@ class DomainModel(models.Model):
         _('Auto-create New Device'),
         default=False,
         help_text=_(
-            "Automatically create a new device if no device with the same serial number exists in the database."
-        )
+            'Automatically create a new device if no device with the same serial number exists in the database.'
+        ),
     )
 
     allow_username_password_registration = models.BooleanField(
         _('Allow username:password Enrollment'),
         default=True,
-        help_text=_("New devices can be enrolled with a username and password.")
+        help_text=_('New devices can be enrolled with a username and password.'),
     )
 
     allow_idevid_registration = models.BooleanField(
         _('Allow IDevID Enrollment'),
         default=False,
-        help_text=_("Allow registration of a new device using the IDevID of the Device.")
+        help_text=_('Allow registration of a new device using the IDevID of the Device.'),
     )
 
     domain_credential_auth = models.BooleanField(
         _('Require a Domain Credential for Authentication'),
         default=True,
-        help_text=_("The EST server requires a domain credential issued by the domain Issuing CA for authenitcation.")
+        help_text=_('The EST server requires a domain credential issued by the domain Issuing CA for authenitcation.'),
     )
 
     username_password_auth = models.BooleanField(
         _('Require username:password for Authentication'),
         default=False,
-        help_text=_("The EST server requires username and password for authentication.")
+        help_text=_('The EST server requires username and password for authentication.'),
     )
 
     allow_app_certs_without_domain = models.BooleanField(
         _('Allow Application Certificates without Domain Credential'),
         default=False,
-        help_text=_("Allow issuance of application certificates without a domain credential.")
+        help_text=_('Allow issuance of application certificates without a domain credential.'),
     )
 
     def __repr(self) -> str:

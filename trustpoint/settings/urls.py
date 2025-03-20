@@ -1,8 +1,8 @@
-"""Routing configuration"""
+"""Routing configuration."""
 
 from django.urls import path, re_path
 
-from .views import language, logging, IndexView, security
+from .views import IndexView, language, logging, security
 
 app_name = 'settings'
 urlpatterns = [

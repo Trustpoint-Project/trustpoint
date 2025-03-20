@@ -1,5 +1,7 @@
 """Model for the DevID Registration."""
 
+from __future__ import annotations
+
 from typing import Any
 
 from django.db import models
@@ -14,6 +16,8 @@ __all__ = ['DevIdRegistration']
 
 class DevIdRegistration(models.Model):
     """Represents a DevID Registration, linking a Truststore, Domain, unique name, and a serial number regex pattern."""
+
+    objects: models.Manager[DevIdRegistration]
 
     unique_name = models.CharField(
         verbose_name=_('Unique Name'), max_length=100, unique=True, validators=[UniqueNameValidator()]

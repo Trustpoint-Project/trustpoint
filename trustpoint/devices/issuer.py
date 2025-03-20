@@ -9,8 +9,8 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from pki.models.credential import CredentialModel
 from pki.util.keys import KeyGenerator
-from trustpoint_core import oid  # type: ignore[import-untyped]
-from trustpoint_core.serializer import CredentialSerializer  # type: ignore[import-untyped]
+from trustpoint_core import oid
+from trustpoint_core.serializer import CredentialSerializer
 
 from devices.models import DeviceModel, IssuedCredentialModel
 

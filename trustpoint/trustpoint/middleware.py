@@ -19,8 +19,7 @@ class TrustpointLoginRequiredMiddleware(LoginRequiredMiddleware):  # type: ignor
         view_kwargs,  # noqa: ANN001
     ):
         """Allow unauthenticated access to public paths, else redirect to login page."""
-        if (not request.user.is_authenticated
-            and any(request.path.startswith(path) for path in settings.PUBLIC_PATHS)):
+        if not request.user.is_authenticated and any(request.path.startswith(path) for path in settings.PUBLIC_PATHS):
             return None
 
         return super().process_view(request, view_func, view_args, view_kwargs)

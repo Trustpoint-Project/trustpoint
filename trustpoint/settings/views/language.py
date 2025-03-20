@@ -1,4 +1,4 @@
-"""Django Views"""
+"""Django language view."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 def language(request: HttpRequest) -> HttpResponse:
-    """Handle language Configuration
+    """Handle language Configuration.
 
     Returns: HTTPResponse
     """
