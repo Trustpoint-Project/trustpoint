@@ -231,7 +231,7 @@ class IssuedCredentialModel(models.Model):
     def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
         """Revoke all active certificates, delete the credential and the issued credential itself."""
         self.revoke()
-        self.credential.delete()  # this will also delete the IssuedCredentialModel via cascade
+        self.credential.delete(protect_active_certs=True)  # this will also delete the IssuedCredentialModel via cascade
         return super().delete(*args, **kwargs)
 
 

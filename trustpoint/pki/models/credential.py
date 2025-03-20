@@ -199,12 +199,14 @@ class CredentialModel(LoggerMixin, models.Model):
         if self.certificate not in qs:
             exc_msg = f'Primary certificate not in certificate list of credential {self.pk}.'
             raise ValidationError(exc_msg)
-        for cert in qs:
-            if (cert.certificate_status in
-                [CertificateModel.CertificateStatus.OK, CertificateModel.CertificateStatus.NOT_YET_VALID]):
-                exc_msg = 'Cannot delete credential because it still has active certificates.'
-                self.logger.error(exc_msg)
-                raise ValidationError(exc_msg)
+        # Issued credentials must be revoked before deletion, not a requirement for CA credentials
+        if kwargs.pop('protect_active_certs', True):
+            for cert in qs:
+                if (cert.certificate_status in
+                    [CertificateModel.CertificateStatus.OK, CertificateModel.CertificateStatus.NOT_YET_VALID]):
+                    exc_msg = f'Cannot delete credential {self} because it still has active certificates.'
+                    self.logger.error(exc_msg)
+                    raise ValidationError(exc_msg)
         self.certificates.clear()
         self.certificate = None
         # CertificateChainOrderModel is deleted via CASCADE

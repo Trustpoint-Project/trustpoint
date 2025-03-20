@@ -24,7 +24,7 @@ class DomainModel(models.Model):
 
     issuing_ca = models.ForeignKey(
         IssuingCaModel,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         blank=False,
         null=True,
         verbose_name=_('Issuing CA'),

@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core import oid
+from util.db import IndividualDeleteManager
 from util.field import UniqueNameValidator
 
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
@@ -19,6 +21,7 @@ from pki.util.keys import CryptographyUtils
 from trustpoint.views.base import LoggerMixin
 
 if TYPE_CHECKING:
+    from django.db.models.query import QuerySet
     from trustpoint_core.serializer import CredentialSerializer
 
 
@@ -62,7 +65,8 @@ class IssuingCaModel(LoggerMixin, models.Model):
 
     crl_pem = models.TextField(editable=False, default='', verbose_name=_('CRL in PEM format'))
 
-    objects: models.Manager[IssuingCaModel]
+    objects: IndividualDeleteManager[IssuingCaModel]
+    objects = IndividualDeleteManager()
 
     def __str__(self) -> str:
         """Returns a human-readable string that represents this IssuingCaModel entry.
@@ -179,23 +183,44 @@ class IssuingCaModel(LoggerMixin, models.Model):
         """The public key info for the CA certificate's public key."""
         return self.signature_suite.public_key_info
 
-    def revoke_all_issued_certificates(self, reason: str = RevokedCertificateModel.ReasonCode.UNSPECIFIED) -> None:
-        """Revokes all certificates issued by this CA."""
-        # Note: This goes through all active certificates and checks issuance by this CA
-        # based on cert.issuer_public_bytes == ca.subject_public_bytes
-        # WARNING: This means that it may inadvertently revoke certificates
-        # that were issued by a different CA with the same subject name
+    def get_issued_certificates(self) -> QuerySet[CertificateModel, CertificateModel]:
+        """Returns certificates issued by this CA, except its own in case of a self-signed CA.
+
+        This goes through all active certificates and checks issuance by this CA
+        based on cert.issuer_public_bytes == ca.subject_public_bytes
+        WARNING: This means that it may inadvertently return certificates
+        that were issued by a different CA with the same subject name
+        """
         ca_subject_public_bytes = self.credential.certificate.subject_public_bytes
 
-        # do not self-revoke self-signed CA certificate
-        qs = CertificateModel.objects.filter(issuer_public_bytes=ca_subject_public_bytes).exclude(
+        # do not return self-signed CA certificate
+        return CertificateModel.objects.filter(issuer_public_bytes=ca_subject_public_bytes).exclude(
             subject_public_bytes=ca_subject_public_bytes
         )
 
+    def revoke_all_issued_certificates(self, reason: str = RevokedCertificateModel.ReasonCode.UNSPECIFIED) -> None:
+        """Revokes all certificates issued by this CA."""
+        qs = self.get_issued_certificates()
+
         for cert in qs:
-            if cert.certificate_status != CertificateModel.CertificateStatus.OK:
+            if (cert.certificate_status
+                not in [CertificateModel.CertificateStatus.OK, CertificateModel.CertificateStatus.NOT_YET_VALID]):
                 continue
             RevokedCertificateModel.objects.create(certificate=cert, revocation_reason=reason, ca=self)
 
         self.logger.info('All %i certificates issued by CA %s have been revoked.', qs.count(), self.unique_name)
         self.issue_crl()
+
+    @transaction.atomic
+    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
+        """Delete the Issuing CA after checking for unexpired certificates issued by it."""
+        qs = self.get_issued_certificates()
+
+        for cert in qs:
+            if cert.certificate_status != CertificateModel.CertificateStatus.EXPIRED:
+                exc_msg = f'Cannot delete the Issuing CA {self} because it has issued unexpired certificate {cert}.'
+                raise ValidationError(exc_msg)
+        ret = super().delete(*args, **kwargs)
+        self.credential.delete(protect_active_certs=False)
+
+        return ret
