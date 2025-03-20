@@ -285,6 +285,31 @@ class CredentialModel(models.Model):
         """Returns the PublicKeyInfo the current credential primary certificate."""
         return self.signature_suite.public_key_info
 
+    def is_valid_domain_credential(self) -> tuple[bool, str]:
+        """Determines if this credential is valid for domain usage.
+
+        This method performs the following checks:
+          1. The credential must be of type ISSUED_CREDENTIAL.
+          2. A primary certificate must exist.
+          3. The certificate's status must be 'OK'.
+
+        Returns:
+            tuple[bool, str]: A tuple where:
+                          - The first value is True if the credential meets all criteria, False otherwise.
+                          - The second value is a reason string explaining why the credential is invalid.
+        """
+        if self.credential_type != CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL:
+            return False, "Invalid credential type: Must be ISSUED_CREDENTIAL."
+
+        primary_cert = self.certificate
+        if primary_cert is None:
+            return False, "Missing primary certificate."
+
+        if primary_cert.certificate_status != primary_cert.CertificateStatus.OK:
+            return False, f"Invalid certificate status: {primary_cert.certificate_status} (Must be OK)."
+
+        return True, "Valid domain credential."
+
 
 class PrimaryCredentialCertificate(models.Model):
     """Model to store which certificate is the primary certificate of a credential.

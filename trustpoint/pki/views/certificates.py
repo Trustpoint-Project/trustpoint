@@ -13,6 +13,7 @@ from trustpoint_core.file_builder.certificate import CertificateArchiveFileBuild
 from trustpoint_core.file_builder.enum import ArchiveFormat, CertificateFileFormat
 
 from pki.models import CertificateModel
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTableMixin
 
@@ -243,3 +244,28 @@ class CertificateMultipleDownloadView(
         response['Content-Disposition'] = f'attachment; filename="certificates{archive_format_enum.file_extension}"'
 
         return response
+
+class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[CertificateModel]):
+    """View for downloading the TLS server certificate of trustpoint."""
+
+    model = CertificateModel
+    context_object_name = 'certificate'
+
+    def get(
+        self, _request: HttpRequest, pk: str | None = None, *_args: Any, **_kwargs: Any
+    ) -> HttpResponse:
+        """Download the active Trustpoint TLS server certificate"""
+
+        tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
+        if not tls_cert:
+            raise Http404("No TLS server certificate available. Are you on the development server?")
+
+        tls_server_certificate = tls_cert.credential.certificate.get_certificate_serializer()
+
+        file_bytes = CertificateFileBuilder.build(tls_server_certificate, file_format=CertificateFileFormat.PEM)
+
+        response = HttpResponse(file_bytes, content_type=CertificateFileFormat.PEM.mime_type)
+        response['Content-Disposition'] = 'attachment; filename="server_cert.pem"'
+
+        return response
+
