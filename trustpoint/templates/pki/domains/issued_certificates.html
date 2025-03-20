@@ -1,0 +1,49 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+    <div class="card tp-card-centered">
+        <div class="card-header">
+            <h2>{% trans 'Issued Certificates for' %} {{ domain.unique_name }}</h2>
+        </div>
+
+        <div class="card-body">
+            {% if certificates %}
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th>{% trans 'Common Name' %}</th>
+                        <th>{% trans 'Serial Number' %}</th>
+                        <th>{% trans 'Not Before' %}</th>
+                        <th>{% trans 'Not After' %}</th>
+                        <th>{% trans 'Details' %}</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for cert in certificates %}
+                        <tr>
+                            <td>{{ cert.common_name }}</td>
+                            <td>{{ cert.serial_number }}</td>
+                            <td>{{ cert.not_valid_before }}</td>
+                            <td>{{ cert.not_valid_after }}</td>
+                            <td>
+                                <a href="{% url 'pki:certificate-detail' pk=cert.id %}" class="btn btn-primary btn-sm">
+                                    {% trans 'View' %}
+                                </a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>{% trans 'No certificates issued for this domain.' %}</p>
+            {% endif %}
+        </div>
+
+        <div class="card-footer">
+            <a href="{% url 'pki:domains-config' pk=domain.pk %}" class="btn btn-secondary">
+                {% trans 'Back to Domain' %}
+            </a>
+        </div>
+    </div>
+{% endblock content %}

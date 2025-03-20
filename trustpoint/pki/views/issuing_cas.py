@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from django.contrib import messages
 from django.db.models import ProtectedError
 from django.http import HttpResponse, HttpResponseRedirect
-from django.shortcuts import redirect
+from django.shortcuts import redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
@@ -19,7 +19,7 @@ from pki.forms import (
     IssuingCaAddFileImportSeparateFilesForm,
     IssuingCaAddMethodSelectForm,
 )
-from pki.models import IssuingCaModel
+from pki.models import IssuingCaModel, CertificateModel
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
@@ -40,7 +40,7 @@ class IssuingCaContextMixin(ContextDataMixin):
     context_page_name = 'issuing_cas'
 
 
-class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin, ListView[IssuingCaModel]):
+class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin, ListView):
     """Issuing CA Table View."""
 
     model = IssuingCaModel
@@ -68,9 +68,7 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, FormView[IssuingCaAddM
         return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-method_select'))
 
 
-class IssuingCaAddFileImportPkcs12View(
-    IssuingCaContextMixin, FormView[IssuingCaAddFileImportPkcs12Form]
-):
+class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, FormView):
     """View to import an Issuing CA from a PKCS12 file."""
 
     template_name = 'pki/issuing_cas/add/file_import.html'
@@ -78,9 +76,7 @@ class IssuingCaAddFileImportPkcs12View(
     success_url = reverse_lazy('pki:issuing_cas')
 
 
-class IssuingCaAddFileImportSeparateFilesView(
-    IssuingCaContextMixin, FormView[IssuingCaAddFileImportSeparateFilesForm]
-):
+class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, FormView):
     """View to import an Issuing CA from separate PEM files."""
 
     template_name = 'pki/issuing_cas/add/file_import.html'
@@ -88,7 +84,7 @@ class IssuingCaAddFileImportSeparateFilesView(
     success_url = reverse_lazy('pki:issuing_cas')
 
 
-class IssuingCaDetailView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
+class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView):
     """View to display the details of an Issuing CA."""
 
     http_method_names = ('get',)
@@ -96,17 +92,48 @@ class IssuingCaDetailView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
     model = IssuingCaModel
     success_url = reverse_lazy('pki:issuing_cas')
     ignore_url = reverse_lazy('pki:issuing_cas')
-    template_name = 'pki/issuing_cas/details.html'
+    template_name = 'pki/issuing_cas/config.html'
     context_object_name = 'issuing_ca'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        issuing_ca = self.get_object()
 
-class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[IssuingCaModel]):
-    """View to configure an Issuing CA."""
+        # Get issued certificates queryset
+        issued_certificates = CertificateModel.objects.filter(
+            issuer_public_bytes=issuing_ca.credential.certificate.subject_public_bytes
+        )
+
+        context['issued_certificates'] = issued_certificates
+        return context
+
+
+class IssuedCertificatesListView(ListView):
+    """View to display all certificates issued by a specific Issuing CA."""
+
+    model = CertificateModel
+    template_name = 'pki/issuing_cas/issued_certificates.html'
+    context_object_name = 'certificates'
+
+    def get_queryset(self):
+        issuing_ca = get_object_or_404(IssuingCaModel, pk=self.kwargs['pk'])
+        return CertificateModel.objects.filter(
+            issuer_public_bytes=issuing_ca.credential.certificate.subject_public_bytes
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['issuing_ca'] = get_object_or_404(IssuingCaModel, pk=self.kwargs['pk'])
+        return context
+
+
+class IssuingCaDetailView(IssuingCaContextMixin, DetailView):
+    """Detail view for an Issuing CA."""
 
     model = IssuingCaModel
     success_url = reverse_lazy('pki:issuing_cas')
     ignore_url = reverse_lazy('pki:issuing_cas')
-    template_name = 'pki/issuing_cas/config.html'
+    template_name = 'pki/issuing_cas/details.html'
     context_object_name = 'issuing_ca'
 
 

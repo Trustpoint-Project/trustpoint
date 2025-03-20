@@ -13,9 +13,11 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic import DeleteView
 from django.views.generic.edit import CreateView, FormView, UpdateView
 from django.views.generic.list import ListView
+from psycopg.types import enum
 
+from devices.models import IssuedCredentialModel
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
-from pki.models import DevIdRegistration, DomainModel, IssuingCaModel
+from pki.models import DevIdRegistration, DomainModel, IssuingCaModel, CertificateModel
 from pki.models.truststore import TruststoreModel
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -24,6 +26,15 @@ from trustpoint.views.base import (
     ListInDetailView,
     SortableTableMixin,
 )
+
+
+class PkiProtocol(enum.Enum):
+    EST = 'est'
+    CMP = 'cmp'
+    REST = 'rest'
+    SCEP = 'scep'
+    ACME = 'acme'
+
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -109,6 +120,19 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         context = super().get_context_data(**kwargs)
         domain = self.get_object()
 
+        issued_credentials = domain.issued_credentials.all()
+
+        certificates = CertificateModel.objects.filter(
+            credential__in=[issued_credential.credential for issued_credential in issued_credentials])
+
+        context['certificates'] = certificates
+        context['protocols'] = {
+            'cmp': domain.cmp_protocol if hasattr(domain, 'cmp_protocol') else None,
+            'est': domain.est_protocol if hasattr(domain, 'est_protocol') else None,
+            'acme': domain.acme_protocol if hasattr(domain, 'acme_protocol') else None,
+            'scep': domain.scep_protocol if hasattr(domain, 'scep_protocol') else None,
+            'rest': domain.rest_protocol if hasattr(domain, 'rest_protocol') else None
+        }
         context['domain_options'] = {
             'auto_create_new_device': domain.auto_create_new_device,
             'allow_username_password_registration': domain.allow_username_password_registration,
@@ -116,11 +140,13 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             'domain_credential_auth': domain.domain_credential_auth,
             'username_password_auth': domain.username_password_auth,
             'allow_app_certs_without_domain': domain.allow_app_certs_without_domain,
+
         }
 
         context['domain_help_texts'] = {
             'auto_create_new_device': domain._meta.get_field('auto_create_new_device').help_text,
-            'allow_username_password_registration': domain._meta.get_field('allow_username_password_registration').help_text,
+            'allow_username_password_registration': domain._meta.get_field(
+                'allow_username_password_registration').help_text,
             'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').help_text,
             'domain_credential_auth': domain._meta.get_field('domain_credential_auth').help_text,
             'username_password_auth': domain._meta.get_field('username_password_auth').help_text,
@@ -129,7 +155,8 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
 
         context['domain_verbose_name'] = {
             'auto_create_new_device': domain._meta.get_field('auto_create_new_device').verbose_name,
-            'allow_username_password_registration': domain._meta.get_field('allow_username_password_registration').verbose_name,
+            'allow_username_password_registration': domain._meta.get_field(
+                'allow_username_password_registration').verbose_name,
             'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').verbose_name,
             'domain_credential_auth': domain._meta.get_field('domain_credential_auth').verbose_name,
             'username_password_auth': domain._meta.get_field('username_password_auth').verbose_name,
@@ -141,7 +168,6 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
     def post(self, request, *args, **kwargs):
         """Handle config form submission."""
         domain = self.get_object()
-
 
         domain.auto_create_new_device = 'auto_create_new_device' in request.POST
         domain.allow_username_password_registration = 'allow_username_password_registration' in request.POST
@@ -275,7 +301,7 @@ class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView):
         return response
 
 
-class DevIdMethodSelectView(DomainContextMixin, FormView[DevIdAddMethodSelectForm]):
+class DevIdMethodSelectView(DomainContextMixin, FormView):
     """View to select the method to add a DevID Registration pattern."""
 
     template_name = 'pki/devid_registration/method_select.html'
@@ -302,3 +328,32 @@ class DevIdMethodSelectView(DomainContextMixin, FormView[DevIdAddMethodSelectFor
 
         # Try again if none or invalid method was selected
         return HttpResponseRedirect(reverse('pki:devid_registration-method_select', kwargs={'pk': domain_pk}))
+
+
+class IssuedCertificatesView(ListView):
+    """View to list certificates issued by a specific Issuing CA for a Domain."""
+
+    model = CertificateModel
+    template_name = 'pki/domains/issued_certificates.html'
+    context_object_name = 'certificates'
+
+    def get_queryset(self):
+        """Return only certificates associated with the domain's issued credentials."""
+        domain = self.get_domain()  # Get the domain
+        issued_credentials = IssuedCredentialModel.objects.filter(
+            domain=domain)
+        certificates = CertificateModel.objects.filter(
+            credential__in=[issued_credential.credential for issued_credential in issued_credentials])
+        return certificates
+
+    def get_domain(self):
+        """Get the domain object based on the URL parameter."""
+        domain_id = self.kwargs.get('pk')
+        return DomainModel.objects.get(pk=domain_id)
+
+    def get_context_data(self, **kwargs):
+        """Pass additional context data to the template."""
+        context = super().get_context_data(**kwargs)
+        domain = self.get_domain()
+        context['domain'] = domain
+        return context
