@@ -13,6 +13,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic import DeleteView
 from django.views.generic.edit import CreateView, FormView, UpdateView
 from django.views.generic.list import ListView
+from psycopg.types import enum
 
 from devices.models import IssuedCredentialModel
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
@@ -34,11 +35,11 @@ class PkiProtocol(enum.Enum):
     SCEP = 'scep'
     ACME = 'acme'
 
+
 if TYPE_CHECKING:
     from django.db.models import QuerySet
     from django.forms import Form
     from django.http import HttpRequest
-
 
 
 class DomainContextMixin(ContextDataMixin):
@@ -93,9 +94,7 @@ class DomainUpdateView(DomainContextMixin, UpdateView[DomainModel]):
 
 
 class DomainDevIdRegistrationTableMixin(SortableTableMixin, ListInDetailView):
-
     """Mixin to add a table of DevID Registrations to the domain config view."""
-
 
     model = DevIdRegistration
     paginate_by = UIConfig.paginate_by
@@ -121,7 +120,6 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         context = super().get_context_data(**kwargs)
         domain = self.get_object()
 
-
         issued_credentials = domain.issued_credentials.all()
 
         certificates = CertificateModel.objects.filter(
@@ -134,7 +132,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             'acme': domain.acme_protocol if hasattr(domain, 'acme_protocol') else None,
             'scep': domain.scep_protocol if hasattr(domain, 'scep_protocol') else None,
             'rest': domain.rest_protocol if hasattr(domain, 'rest_protocol') else None
-
+        }
         context['domain_options'] = {
             'auto_create_new_device': domain.auto_create_new_device,
             'allow_username_password_registration': domain.allow_username_password_registration,
@@ -147,7 +145,8 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
 
         context['domain_help_texts'] = {
             'auto_create_new_device': domain._meta.get_field('auto_create_new_device').help_text,
-            'allow_username_password_registration': domain._meta.get_field('allow_username_password_registration').help_text,
+            'allow_username_password_registration': domain._meta.get_field(
+                'allow_username_password_registration').help_text,
             'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').help_text,
             'domain_credential_auth': domain._meta.get_field('domain_credential_auth').help_text,
             'username_password_auth': domain._meta.get_field('username_password_auth').help_text,
@@ -156,7 +155,8 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
 
         context['domain_verbose_name'] = {
             'auto_create_new_device': domain._meta.get_field('auto_create_new_device').verbose_name,
-            'allow_username_password_registration': domain._meta.get_field('allow_username_password_registration').verbose_name,
+            'allow_username_password_registration': domain._meta.get_field(
+                'allow_username_password_registration').verbose_name,
             'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').verbose_name,
             'domain_credential_auth': domain._meta.get_field('domain_credential_auth').verbose_name,
             'username_password_auth': domain._meta.get_field('username_password_auth').verbose_name,
@@ -168,7 +168,6 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
     def post(self, request, *args, **kwargs):
         """Handle config form submission."""
         domain = self.get_object()
-
 
         domain.auto_create_new_device = 'auto_create_new_device' in request.POST
         domain.allow_username_password_registration = 'allow_username_password_registration' in request.POST
@@ -183,11 +182,8 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         return HttpResponseRedirect(self.success_url)
 
 
-
-class DomainDetailView(DomainContextMixin, TpLoginRequiredMixin, DomainDevIdRegistrationTableMixin, ListInDetailView):
-
+class DomainDetailView(DomainContextMixin, DomainDevIdRegistrationTableMixin, ListInDetailView):
     """View to display domain details."""
-
 
     detail_model = DomainModel
     template_name = 'pki/domains/details.html'
@@ -291,9 +287,7 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
         return cast('str', reverse_lazy('pki:domains-config', kwargs={'pk': domain.id}))
 
 
-
-class DevIdRegistrationDeleteView(DomainContextMixin, TpLoginRequiredMixin, DeleteView):
-
+class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView):
     """View to delete a DevID Registration."""
 
     model = DevIdRegistration
@@ -307,11 +301,8 @@ class DevIdRegistrationDeleteView(DomainContextMixin, TpLoginRequiredMixin, Dele
         return response
 
 
-
-class DevIdMethodSelectView(DomainContextMixin, TpLoginRequiredMixin, FormView):
-
+class DevIdMethodSelectView(DomainContextMixin, FormView):
     """View to select the method to add a DevID Registration pattern."""
-
 
     template_name = 'pki/devid_registration/method_select.html'
     form_class = DevIdAddMethodSelectForm
