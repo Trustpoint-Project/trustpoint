@@ -247,7 +247,7 @@ class GdsTableView(GdsContextMixin, SortableTableMixin, ListView[DeviceModel]):
         """
         # noinspection PyDeprecation
         return format_html(
-            '<a href="certificate-lifecycle-management/{}/" class="btn btn-primary tp-table-btn w-100">Manage</a>',
+            '<a href="gds/certificate-lifecycle-management/{}/" class="btn btn-primary tp-table-btn w-100">Manage</a>',
             record.pk,
         )
 
@@ -270,7 +270,7 @@ class GdsTableView(GdsContextMixin, SortableTableMixin, ListView[DeviceModel]):
                 )
         # noinspection PyDeprecation
         return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', _('Revoke'))
-    
+
 
 class CreateGDSView(GdsContextMixin, CreateView[DeviceModel, BaseModelForm[DeviceModel]]):
     """Device Create View."""
@@ -303,6 +303,105 @@ class DeviceCertificateLifecycleManagementSummaryView(DeviceContextMixin, Sortab
 
     detail_model = DeviceModel
     template_name = 'devices/credentials/certificate_lifecycle_management.html'
+    detail_context_object_name = 'device'
+    model = IssuedCredentialModel
+    context_object_name = 'issued_credentials'
+    default_sort_param = 'common_name'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the paginator and credential details to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the clm summary page.
+        """
+        context = super().get_context_data(**kwargs)
+
+        device = self.get_object()
+        qs = super().get_queryset()  # inherited from SortableTableMixin, sorted query
+
+        domain_credentials = qs.filter(
+            Q(device=device)
+            & Q(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL.value)
+        )
+
+        application_credentials = qs.filter(
+            Q(device=device)
+            & Q(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL.value)
+        )
+
+        context['domain_credentials'] = domain_credentials
+        context['application_credentials'] = application_credentials
+
+        paginator_domain = Paginator(domain_credentials, UIConfig.paginate_by)
+        page_number_domain = self.request.GET.get('page', 1)
+        context['domain_credentials'] = paginator_domain.get_page(page_number_domain)
+        context['is_paginated'] = paginator_domain.num_pages > 1
+
+        paginator_application = Paginator(application_credentials, UIConfig.paginate_by)
+        page_number_application = self.request.GET.get('page-a', 1)
+        context['application_credentials'] = paginator_application.get_page(page_number_application)
+        context['is_paginated_a'] = paginator_application.num_pages > 1
+
+        for cred in context['domain_credentials']:
+            cred.expires_in = self._get_expires_in(cred)
+            cred.expiration_date = cast(datetime.datetime, cred.credential.certificate.not_valid_after)
+            cred.revoke = self._get_revoke_button_html(cred)
+
+        for cred in context['application_credentials']:
+            cred.expires_in = self._get_expires_in(cred)
+            cred.expiration_date = cast(datetime.datetime, cred.credential.certificate.not_valid_after)
+            cred.revoke = self._get_revoke_button_html(cred)
+
+        return context
+
+    @staticmethod
+    def _get_expires_in(record: IssuedCredentialModel) -> str:
+        """Gets the remaining time until the credential expires as human-readable string.
+
+        Args:
+            record: The corresponding IssuedCredentialModel.
+
+        Returns:
+            The remaining time until the credential expires as human-readable string.
+        """
+        if record.credential.certificate.certificate_status != CertificateModel.CertificateStatus.OK:
+            return str(record.credential.certificate.certificate_status.label)
+        now = datetime.datetime.now(datetime.UTC)
+        expire_timedelta = record.credential.certificate.not_valid_after - now
+        days = expire_timedelta.days
+        hours, remainder = divmod(expire_timedelta.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f'{days} days, {hours}:{minutes:02d}:{seconds:02d}'
+
+    @staticmethod
+    def _get_revoke_button_html(record: IssuedCredentialModel) -> str:
+        """Gets the HTML for the revoke button in the devices table.
+
+        Args:
+            record: The corresponding DeviceModel.
+
+        Returns:
+            the HTML of the hyperlink for the revoke button.
+        """
+        if record.credential.certificate.certificate_status == CertificateModel.CertificateStatus.REVOKED:
+            # noinspection PyDeprecation
+            return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', _('Revoked'))
+        # noinspection PyDeprecation
+        return format_html(
+            '<a href="revoke/{}/" class="btn btn-danger tp-table-btn w-100">{}</a>', record.pk, _('Revoke')
+        )
+
+
+class GdsCertificateLifecycleManagementSummaryView(GdsContextMixin, SortableTableMixin, ListInDetailView):
+    """This is the CLM summary view in the devices section."""
+
+    http_method_names = ('get',)
+
+    detail_model = DeviceModel
+    template_name = 'devices/gds/certificate_lifecycle_management.html'
     detail_context_object_name = 'device'
     model = IssuedCredentialModel
     context_object_name = 'issued_credentials'
