@@ -28,9 +28,9 @@ from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.devid_registration import DevIdRegistration
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from trustpoint_core import oid  # type: ignore[import-untyped]
-from trustpoint_core.file_builder.enum import ArchiveFormat  # type: ignore[import-untyped]
-from trustpoint_core.serializer import CredentialSerializer  # type: ignore[import-untyped]
+from trustpoint_core import oid
+from trustpoint_core.file_builder.enum import ArchiveFormat
+from trustpoint_core.serializer import CredentialSerializer
 
 from devices.forms import (
     BrowserLoginForm,

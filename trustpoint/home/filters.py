@@ -3,7 +3,7 @@
 from datetime import timedelta
 from typing import ClassVar
 
-import django_filters  # type: ignore[import-untyped]
+import django_filters
 from django.db.models import QuerySet
 from django.utils import timezone
 

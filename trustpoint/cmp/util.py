@@ -7,9 +7,8 @@ from typing import TYPE_CHECKING
 
 from cryptography import x509
 from cryptography.x509.name import _ASN1Type as X509_Asn1Type
-from pyasn1.codec.der import decoder  # type: ignore[import-untyped]
-from pyasn1.type.char import (  # type: ignore[import-untyped]
-    BMPString,
+from pyasn1.codec.der import decoder
+from pyasn1.type.char import (
     IA5String,
     NumericString,
     PrintableString,
@@ -18,11 +17,11 @@ from pyasn1.type.char import (  # type: ignore[import-untyped]
     UTF8String,
     VisibleString,
 )
-from pyasn1.type.univ import BitString, OctetString  # type: ignore[import-untyped]
-from pyasn1.type.useful import GeneralizedTime, UTCTime  # type: ignore[import-untyped]
+from pyasn1.type.univ import BitString, OctetString
+from pyasn1.type.useful import GeneralizedTime, UTCTime
 
 if TYPE_CHECKING:
-    from pyasn1_modules import rfc2459  # type: ignore[import-untyped]
+    from pyasn1_modules import rfc2459
 
 
 class PkiMessageType(enum.Enum):

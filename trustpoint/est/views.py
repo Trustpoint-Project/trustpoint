@@ -18,9 +18,9 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
-from pyasn1.type.univ import ObjectIdentifier  # type: ignore[import-untyped]
-from trustpoint_core.oid import SignatureSuite  # type: ignore[import-untyped]
-from trustpoint_core.serializer import CertificateCollectionSerializer  # type: ignore[import-untyped]
+from pyasn1.type.univ import ObjectIdentifier
+from trustpoint_core.oid import SignatureSuite
+from trustpoint_core.serializer import CertificateCollectionSerializer
 
 from trustpoint.views.base import LoggerMixin
 

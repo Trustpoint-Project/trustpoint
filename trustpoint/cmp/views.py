@@ -30,9 +30,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.generic.base import View
 from pki.models.devid_registration import DevIdRegistration
 from pki.models.domain import DomainModel
-from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
-from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
-from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
+from pyasn1.codec.der import decoder, encoder
+from pyasn1.type import tag, univ, useful
+from pyasn1_modules import rfc2459, rfc2511, rfc4210
 from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
 
 from cmp.util import NameParser
