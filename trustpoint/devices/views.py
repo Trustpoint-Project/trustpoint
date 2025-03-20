@@ -102,7 +102,7 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
 
     def get_queryset(self):
         """Filter queryset to only include devices where opc_ua_gds is False."""
-        return super().get_queryset().filter(opc_ua_gds=False)
+        return super().get_queryset().filter(device_type=DeviceModel.DeviceType.GENERIC_DEVICE.value)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the clm and revoke buttons to the context.
@@ -118,6 +118,7 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
         for device in context['devices']:
             device.clm_button = self._get_clm_button_html(device)
             device.revoke_button = self._get_revoke_button_html(device)
+            device.detail_button = self._get_details_button_html(device)
 
         return context
 
@@ -131,10 +132,12 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
         Returns:
             The HTML of the hyperlink for the CLM button.
         """
+        clm_url = reverse('devices:certificate_lifecycle_management', kwargs={'pk': record.pk})
+
         # noinspection PyDeprecation
         return format_html(
-            '<a href="certificate-lifecycle-management/{}/" class="btn btn-primary tp-table-btn w-100">Manage</a>',
-            record.pk,
+            '<a href="{}" class="btn btn-primary tp-table-btn w-100">Manage</a>',
+            clm_url
         )
 
     @staticmethod
@@ -150,12 +153,28 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
         qs = IssuedCredentialModel.objects.filter(device=record)
         for credential in qs:
             if credential.credential.certificate.certificate_status == CertificateModel.CertificateStatus.OK:
+                revoke_url = reverse('devices:device_revocation', kwargs={'pk': record.pk})
                 # noinspection PyDeprecation
                 return format_html(
-                    '<a href="revoke/{}/" class="btn btn-danger tp-table-btn w-100">{}</a>', record.pk, _('Revoke')
+                    '<a href="{}" class="btn btn-danger tp-table-btn w-100">{}</a>', revoke_url, _('Revoke')
                 )
         # noinspection PyDeprecation
         return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', _('Revoke'))
+
+    @staticmethod
+    def _get_details_button_html(record: DeviceModel) -> SafeString:
+        """Gets the HTML for the Details button in the devices table."""
+        """Gets the HTML for the Details button in the devices table.
+
+        Args:
+            record: The corresponding DeviceModel.
+
+        Returns:
+            the HTML of the hyperlink for the detail button.
+        """
+        details_url = reverse('devices:details', kwargs={'pk': record.pk})
+        # noinspection PyDeprecation
+        return format_html('<a href="{}" class="btn btn-primary tp-table-btn w-100">{}</a>', details_url, _('Details'))
 
 class OpcUaGdsTableView(DeviceTableView):
     """Table View for devices where opc_ua_gds is True."""
@@ -165,8 +184,8 @@ class OpcUaGdsTableView(DeviceTableView):
 
     def get_queryset(self):
         """Filter queryset to only include devices where opc_ua_gds is True."""
-        devices = super().get_queryset().filter(opc_ua_gds=True)
-        return devices
+        return DeviceModel.objects.filter(device_type=DeviceModel.DeviceType.OPC_UA_GDS.value)
+
 
 
 class CreateDeviceView(DeviceContextMixin, CreateView[DeviceModel, BaseModelForm[DeviceModel]]):
@@ -204,7 +223,7 @@ class CreateOpcUaGdsView(CreateDeviceView):
     def form_valid(self, form):
         """Set opc_ua_gds to True before saving the device."""
         device = form.save(commit=False)
-        device.opc_ua_gds = True
+        device.device_type = DeviceModel.DeviceType.OPC_UA_GDS.value
         device.save()
         return super().form_valid(form)
 
@@ -635,9 +654,18 @@ class HelpDispatchApplicationCredentialView(DeviceContextMixin, SingleObjectMixi
         }:
             return f'{reverse("devices:help-onboarding_cmp-application-credentials", kwargs={"pk": device.id})}'
 
+
         if (
                 not device.domain_credential_onboarding
                 and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value
+                and device.device_type == DeviceModel.DeviceType.OPC_UA_GDS.value
+        ):
+            return f'{reverse("devices:help-no-onboarding_est-opcua-gds-username-password", kwargs={"pk": device.id})}'
+
+        if (
+                not device.domain_credential_onboarding
+                and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value
+                and device.device_type == DeviceModel.DeviceType.GENERIC_DEVICE.value
         ):
             return f'{reverse("devices:help-no-onboarding_est-username-password", kwargs={"pk": device.id})}'
 
@@ -796,6 +824,11 @@ class NoOnboardingEstUsernamePasswordHelpView(HelpDomainCredentialEstContextView
 
     template_name = 'devices/help/no_onboarding/est_username_password.html'
 
+class NoOnboardingEstOpcUaGdsUsernamePasswordHelpView(HelpDomainCredentialEstContextView):
+    """View to provide help information for EST username/password authentication with no onboarding and OPC UA GDS."""
+
+    template_name = 'devices/help/no_onboarding/est_gds_username_password.html'
+
 
 class OnboardingEstUsernamePasswordHelpView(HelpDomainCredentialEstContextView):
     """View to provide help information for EST username/password authentication for onboarding."""
@@ -807,6 +840,7 @@ class OnboardingEstApplicationCredentialsHelpView(HelpDomainCredentialEstContext
     """View to provide help information for EST domain credential authentication."""
 
     template_name = 'devices/help/onboarding/est_application_credentials.html'
+
 
 class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, DetailView[DeviceModel]):
     """Help view for the case of no onboarding using CMP shared-secret."""

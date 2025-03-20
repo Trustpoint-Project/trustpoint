@@ -104,12 +104,18 @@ class DeviceModel(models.Model):
         on_delete=models.DO_NOTHING,
     )
 
-    created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
+    class DeviceType(models.IntegerChoices):
+        """Enum for device type."""
+        GENERIC_DEVICE = 0, _('Generic Device')
+        OPC_UA_GDS = 1, _('OPC UA GDS')
 
-    opc_ua_gds = models.BooleanField(
-        verbose_name=_('OPC UA GDS'),
-        default=False
+    device_type = models.IntegerField(
+        choices=DeviceType.choices,
+        verbose_name=_('Device Type'),
+        default=DeviceType.GENERIC_DEVICE,
     )
+
+    created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""

@@ -67,7 +67,7 @@
                 </td>
                 <td>{{ device.get_pki_protocol_display }}</td>
                 <td>{{ device.clm_button| safe }}</td>
-                <td><a href="details/{{ device.id }}/" class="btn btn-primary tp-table-btn w-100">Details</a></td>
+                <td>{{ device.detail_button| safe }}</td>
                 <td>{{ device.revoke_button| safe }}</td>
             </tr>
         {% empty %}

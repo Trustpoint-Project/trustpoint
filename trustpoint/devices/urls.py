@@ -105,6 +105,11 @@ urlpatterns = [
         views.OnboardingEstApplicationCredentialsHelpView.as_view(),
         name='help-onboarding_est-ldevid'
     ),
+    path(
+        'help/no-onboarding/opc-ua-gds/est-username-password/<int:pk>/',
+        views.NoOnboardingEstOpcUaGdsUsernamePasswordHelpView.as_view(),
+        name='help-no-onboarding_est-opcua-gds-username-password'
+    ),
     # Certificate Lifecycle Management - Downloads
     path('download/<int:pk>/', views.DownloadPageDispatcherView.as_view(), name='download'),
     path('certificate/download/<int:pk>/', views.CertificateDownloadView.as_view(), name='certificate-download'),

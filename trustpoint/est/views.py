@@ -4,13 +4,15 @@ import base64
 import ipaddress
 from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol, cast
+from wsgiref.util import application_uri
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives._serialization import Encoding
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
-from devices.issuer import LocalDomainCredentialIssuer, LocalTlsClientCredentialIssuer, LocalTlsServerCredentialIssuer
+from devices.issuer import LocalDomainCredentialIssuer, LocalTlsClientCredentialIssuer, LocalTlsServerCredentialIssuer, \
+    OpcUaClientCredentialIssuer, OpcUaServerCredentialIssuer
 from devices.models import DeviceModel, IssuedCredentialModel
 from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.utils.decorators import method_decorator
@@ -72,6 +74,7 @@ class CredentialRequest:
     """Encapsulates the details extracted from a CSR."""
     common_name: str
     serial_number: str | None
+    uniform_resource_identifiers: list[str]
     ipv4_addresses: list[ipaddress.IPv4Address]
     ipv6_addresses: list[ipaddress.IPv6Address]
     dns_names: list[str]
@@ -309,11 +312,17 @@ class EstRequestedDomainExtractorMixin:
 class EstRequestedCertTemplateExtractorMixin(LoggedHttpResponse):
     """Mixin to extract and validate the certificate template from request parameters."""
     requested_cert_template_str: str
-    allowed_cert_templates: ClassVar[list[str]] = ['tlsserver', 'tlsclient', 'domaincredential']
+    allowed_cert_templates: ClassVar[list[str]] = ['tlsserver',
+                                                   'tlsclient',
+                                                   'opcua-client',
+                                                   'opcua-server',
+                                                   'domaincredential']
 
     cert_template_classes: ClassVar[dict[str, type[object]]] = {
         'tlsserver': LocalTlsServerCredentialIssuer,
         'tlsclient': LocalTlsClientCredentialIssuer,
+        'opcua-server': LocalTlsServerCredentialIssuer,
+        'opcua-client': LocalTlsClientCredentialIssuer,
         'domaincredential': LocalDomainCredentialIssuer,
     }
 
@@ -343,7 +352,7 @@ class EstPkiMessageSerializerMixin:
         subject_attributes = list(csr.subject)
         common_name = self._extract_common_name(subject_attributes)
         serial_number = self._extract_serial_number(subject_attributes)
-        dns_names, ipv4_addresses, ipv6_addresses = self._extract_san(csr)
+        dns_names, ipv4_addresses, ipv6_addresses, uniform_resource_identifiers = self._extract_san(csr)
         public_key = csr.public_key()
 
         if not isinstance(public_key, rsa.RSAPublicKey | ec.EllipticCurvePublicKey):
@@ -356,6 +365,7 @@ class EstPkiMessageSerializerMixin:
             ipv4_addresses=ipv4_addresses,
             ipv6_addresses=ipv6_addresses,
             dns_names=dns_names,
+            uniform_resource_identifiers=uniform_resource_identifiers,
             public_key=public_key
         )
 
@@ -397,13 +407,14 @@ class EstPkiMessageSerializerMixin:
                      ) -> tuple[
         list[str],
         list[ipaddress.IPv4Address],
-        list[ipaddress.IPv6Address]
+        list[ipaddress.IPv6Address],
+        list[str]
     ]:
         """Extract SAN (Subject Alternative Name) extension values."""
         try:
             san_extension = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName)
         except x509.ExtensionNotFound:
-            return [], [], []
+            return [], [], [], []
 
         san = san_extension.value
 
@@ -411,8 +422,9 @@ class EstPkiMessageSerializerMixin:
         ip_addresses = san.get_values_for_type(x509.IPAddress)
         ipv4_addresses = [ip for ip in ip_addresses if isinstance(ip, ipaddress.IPv4Address)]
         ipv6_addresses = [ip for ip in ip_addresses if isinstance(ip, ipaddress.IPv6Address)]
+        uniform_resource_identifiers = san.get_values_for_type(x509.UniformResourceIdentifier)
 
-        return dns_names, ipv4_addresses, ipv6_addresses
+        return dns_names, ipv4_addresses, ipv6_addresses, uniform_resource_identifiers
 
     def deserialize_pki_message(self, data: bytes) -> tuple[CredentialRequest | None, LoggedHttpResponse | None]:
         """Deserializes a DER-encoded PKCS#10 certificate signing request.
@@ -547,6 +559,8 @@ class CredentialIssuanceMixin:
     cert_template_classes: ClassVar[dict[str, type]] = {
         'tlsserver': LocalTlsServerCredentialIssuer,
         'tlsclient': LocalTlsClientCredentialIssuer,
+        'opcua-server': OpcUaServerCredentialIssuer,
+        'opcua-client': OpcUaClientCredentialIssuer,
         'domaincredential': LocalDomainCredentialIssuer,
     }
 
@@ -656,6 +670,26 @@ class CredentialIssuanceMixin:
                 san_critical=False,
                 public_key=credential_request.public_key,
                 validity_days=365
+            )
+        if cert_template_str == 'opcua-client':
+            opcua_client_credential = OpcUaClientCredentialIssuer(device=device, domain=domain)
+
+            return opcua_client_credential.issue_opcua_client_certificate(
+                common_name=credential_request.common_name,
+                public_key=credential_request.public_key,
+                validity_days=365,
+                application_uri=credential_request.uniform_resource_identifiers
+            )
+        if cert_template_str == 'opcua-server':
+            opcua_server_credential = OpcUaServerCredentialIssuer(device=device, domain=domain)
+            return opcua_server_credential.issue_opcua_server_certificate(
+                common_name=credential_request.common_name,
+                ipv4_addresses=credential_request.ipv4_addresses,
+                ipv6_addresses=credential_request.ipv6_addresses,
+                domain_names=credential_request.dns_names,
+                public_key=credential_request.public_key,
+                validity_days=365,
+                application_uri=credential_request.uniform_resource_identifiers
             )
         return None
 
