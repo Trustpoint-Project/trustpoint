@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar, cast
 from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db.models import ProtectedError, Q, QuerySet
 from django.forms import BaseModelForm
@@ -1373,6 +1374,9 @@ class DeviceBulkDeleteView(LoggerMixin, DeviceContextMixin, BulkDeleteView):
             messages.error(
                 self.request, _('Cannot delete the selected device(s) because they are referenced by other objects.')
             )
+            return HttpResponseRedirect(self.success_url)
+        except ValidationError as exc:
+            messages.error(self.request, exc.message)
             return HttpResponseRedirect(self.success_url)
 
         messages.success(self.request, _('Successfully deleted {count} devices.').format(count=deleted_count))

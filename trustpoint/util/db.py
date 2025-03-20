@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from django.db import models
 from django.db.models import ProtectedError
@@ -18,6 +18,7 @@ else:
     _Base = object
     _ModelBase = object
 
+T = TypeVar('T', bound=models.Model)
 
 class AutoDeleteRelatedMixin(LoggerMixin, _Base):
     """Utility for deleting the object referenced by a relation when the parent object is deleted.
@@ -54,7 +55,6 @@ class AutoDeleteRelatedMixin(LoggerMixin, _Base):
 
         for link in links:
             self.logger.debug('Checking references for ' + link.name)  # noqa: G003
-            print(link.get_accessor_name())
             references_exist = getattr(related_object, link.get_accessor_name()).exists()
             if references_exist:
                 self.logger.debug(f'References exist for {link.name}')  # noqa: G004
@@ -101,14 +101,14 @@ class SelfProtectForeignKey(SelfProtectMixin, models.ForeignKey):
     """
 
 
-class SelfProtectOneToOneField(SelfProtectMixin, models.OneToOneField):
+class SelfProtectOneToOneField(SelfProtectMixin, models.OneToOneField[T]):
     """A OneToOneField that protects the parent object from being deleted if another object is referenced.
 
     This makes the model instance only deleteable via e.g. on_delete=models.CASCADE.
     """
 
 
-class IndividualDeleteQuerySet(models.QuerySet):
+class IndividualDeleteQuerySet(models.QuerySet[T]):
     """Overrides a model's queryset to use individual delete instead of bulk delete.
 
     This ensures the model instance delete() method is always called, even when deleting a queryset.
@@ -124,13 +124,13 @@ class IndividualDeleteQuerySet(models.QuerySet):
             return 0, {}
         return count, {obj._meta.label: count}  # noqa: SLF001
 
-class IndividualDeleteManager(models.Manager):
+class IndividualDeleteManager(models.Manager[T]):
     """Overrides a model's manager to use individual delete instead of bulk delete.
 
     This ensures the model instance delete() method is always
     called, even when deleting a queryset.
     """
-    def get_queryset(self) -> IndividualDeleteQuerySet:
+    def get_queryset(self) -> IndividualDeleteQuerySet[T]:
         """Return the queryset with individual delete."""
         return IndividualDeleteQuerySet(self.model, using=self._db)
 
