@@ -46,6 +46,7 @@ urlpatterns += [
     # TODO(Air): Move CRL to REST API endpoint  # noqa: FIX002
     path('crl/<int:pk>/', CrlDownloadView.as_view(), name='crl-download'),
     path('.well-known/cmp/', include('cmp.urls')),
+    path('.well-known/est/', include('est.urls')),
     path('home/', include('home.urls')),
     path('devices/', include('devices.urls')),
     path('settings/', include('settings.urls')),

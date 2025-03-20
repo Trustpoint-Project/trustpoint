@@ -16,7 +16,7 @@ from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import FormView, TemplateView, View
 from pki.models import CertificateModel, CredentialModel
-from pki.models.truststore import TrustpointTlsServerCredentialModel
+from pki.models.truststore import TrustpointTlsServerCredentialModel, ActiveTrustpointTlsServerCredentialModel
 
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import EmptyForm, StartupWizardTlsCertificateForm
@@ -234,10 +234,20 @@ class SetupWizardGenerateTlsServerCredentialView(FormView[StartupWizardTlsCertif
             )
             tls_server_credential = generator.generate_tls_credential()
 
-            _ = CredentialModel.save_credential_serializer(
+            tls_server_credential = CredentialModel.save_credential_serializer(
                 credential_serializer=tls_server_credential,
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
             )
+
+
+            trustpoint_tls_server_credential, _ = TrustpointTlsServerCredentialModel.objects.get_or_create(
+                certificate=tls_server_credential.certificate,
+                defaults={"private_key_pem": tls_server_credential.get_private_key_serializer().as_pkcs8_pem()}
+            )
+
+            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+            active_tls.credential = trustpoint_tls_server_credential
+            active_tls.save()
 
             execute_shell_script(SCRIPT_WIZARD_INITIAL)
 

@@ -9,25 +9,53 @@
         <div class="card-header">
             <h1>{{ domain.unique_name }} {% trans "Configuration" %}</h1>
         </div>
-
-        <div class="card">
+        <form method="post">
             <div class="card-body">
                 <div class="tp-card-centered-content">
-                    <h2>General</h2>
+                        {% csrf_token %}
+                    <h2>{% trans "General" %}</h2>
                     <hr class="hr-m">
-                    <div class="tp-kvp-list mb-5">
+                    <div class="tp-kvp-list">
                         <div>
                             <div>{% trans 'Unique Name' %}</div>
-                            <div> {{ domain.unique_name }} </div>
+                            <div>{{ domain.unique_name }}</div>
                         </div>
-
-
                         <div>
-                            <div>{% trans '# Devices' %}</div>
-                            <div>{{ domain.devices.count }}</div>
+                            <div>{% trans 'URL Path Segment' %}</div>
+                            <div>{{ domain.unique_name.lower }}</div>
                         </div>
+                    </div>
+                    <h5 class="mb-2 ms-2">{% trans 'Devices in Domain' %}</h5>
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>{% trans 'Total devices' %}</div>
+                            <div>{{ domain.devices.count|default:0 }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Pending devices' %}</div>
+                            <div>{{ devices_count.P|default:0 }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Running devices' %}</div>
+                            <div>{{ devices_count.R|default:0 }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Onboarded devices' %}</div>
+                            <div>{{ devices_count.O|default:0 }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Failed devices' %}</div>
+                            <div>{{ devices_count.F|default:0 }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Revoked devices' %}</div>
+                            <div>{{ devices_count.D|default:0 }}</div>
+                        </div>
+                    </div>
 
-
+                    <h2>{% trans "Issuing CA" %}</h2>
+                    <hr class="hr-m">
+                    <div class="tp-kvp-list">
                         <div>
                             <div>{% trans 'Issuing CA' %}</div>
                             <div>
@@ -36,38 +64,122 @@
                                 </a>
                             </div>
                         </div>
-
                         <div>
                             <div>{% trans 'Expiry Date' %}</div>
-                            <div> {{ domain.issuing_ca.credential.certificate.not_valid_after }} </div>
+                            <div>{{ domain.issuing_ca.credential.certificate.not_valid_after }}</div>
                         </div>
-
+                        <div>
+                            <div>{% trans 'Certificates Issued:' %}</div>
+                            <div></div>
+                        </div>
                     </div>
 
-                    <h2>{% trans 'Add New DevID Registration Pattern' %}</h2>
-                    <hr>
-                    <a href="{% url 'pki:devid_registration-method_select' pk=domain.id %}"
-                           class="btn btn-primary tp-table-btn min-width-20">
-                            {% trans 'Create new DevID Registration Pattern' %}
-                    </a>
+                    <h2>{% trans "Domain Options" %}</h2>
+                    <hr class="hr-m">
+                    <h3 class="mt-4 mb-2">{% trans 'Enrollment' %}</h3>
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox"
+                                name="allow_app_certs_without_domain"
+                                id="allow_app_certs_without_domain"
+                                {% if domain_options.allow_app_certs_without_domain %}checked{% endif %}>
+                        <label class="form-check-label" for="allow_app_certs_without_domain">
+                            {{ domain_verbose_name.allow_app_certs_without_domain }}
+                        </label>
+                        <br>
+                        <small class="form-text text-muted">
+                            {{ domain_help_texts.allow_app_certs_without_domain }}
+                        </small>
+                    </div>
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="auto_create_new_device"
+                                id="auto_create_new_device"
+                                {% if domain_options.auto_create_new_device %}checked{% endif %}>
+                        <label class="form-check-label" for="auto_create_new_device">
+                            {{ domain_verbose_name.auto_create_new_device }}
+                        </label>
+                        <br>
+                        <small class="form-text text-muted">
+                            {{ domain_help_texts.auto_create_new_device }}
+                        </small>
+                    </div>
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox"
+                                name="allow_username_password_registration"
+                                id="allow_username_password_registration"
+                                {% if domain_options.allow_username_password_registration %}checked{% endif %}>
+                        <label class="form-check-label" for="allow_username_password_registration">
+                            {{ domain_verbose_name.allow_username_password_registration }}
+                        </label>
+                        <br>
+                        <small class="form-text text-muted">
+                            {{ domain_help_texts.allow_username_password_registration }}
+                        </small>
+                    </div>
+
+{#                  <div class="form-check">#}
+{#                      <input class="form-check-input" type="checkbox" name="allow_idevid_registration"#}
+{#                              id="allow_idevid_registration"#}
+{#                              {% if domain_options.allow_idevid_registration %}checked{% endif %}>#}
+{#                      <label class="form-check-label" for="allow_idevid_registration">#}
+{#                          {{ domain_verbose_name.allow_idevid_registration }}#}
+{#                      </label>#}
+{#                      <br>#}
+{#                      <small class="form-text text-muted">#}
+{#                          {{ domain_help_texts.allow_idevid_registration }}#}
+{#                      </small>#}
+{#                  </div>#}
+
+                    <h3 class="mt-4 mb-2">{% trans 'Authentication' %}</h3>
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="domain_credential_auth"
+                                id="domain_credential_auth"
+                                {% if domain_options.domain_credential_auth %}checked{% endif %}>
+                        <label class="form-check-label" for="domain_credential_auth">
+                            {{ domain_verbose_name.domain_credential_auth }}
+                        </label>
+                        <br>
+                        <small class="form-text text-muted">
+                            {{ domain_help_texts.domain_credential_auth }}
+                        </small>
+                    </div>
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="username_password_auth"
+                                id="username_password_auth"
+                                {% if domain_options.username_password_auth %}checked{% endif %}>
+                        <label class="form-check-label" for="username_password_auth">
+                            {{ domain_verbose_name.username_password_auth }}
+                        </label>
+                        <br>
+                        <small class="form-text text-muted">
+                            {{ domain_help_texts.username_password_auth }}
+                        </small>
+                    </div>
 
                     <h2 class="mt-5">{% trans 'DevID Registration Patterns' %}</h2>
-                    <hr>
+                    <hr class="hr-m">
+                    <a href="{% url 'pki:devid_registration-method_select' pk=domain.id %}"
+                        class="btn btn-primary tp-table-btn min-width-20">
+                        {% trans 'Create new DevID Registration Pattern' %}
+                    </a>
 
                     {% include 'pki/devid_registration/table.html' %}
-
-
-
                 </div>
             </div>
             <div class="card-footer d-flex justify-content-between align-items-center">
                 <div class="tp-card-btn-footer m-1">
-                    <button type="button" value="Back" class="btn btn-secondary btn-half" onClick="history.back()">{% trans 'Back' %}</button>
-                    <a href="{% url 'pki:domains' %}" class="btn btn-secondary btn-half">{% trans "Cancel" %}</a>
-                    <button type="submit" class="btn btn-primary disabled">{% trans "Save" %}</button>
+                    <button type="button" value="Back" class="btn btn-secondary btn-half"
+                            onClick="history.back()">{% trans 'Back' %}</button>
+                    <a href="{% url 'pki:domains' %}"
+                        class="btn btn-secondary btn-half">{% trans "Cancel" %}</a>
+                    <button type="submit"
+                            class="btn btn-primary">{% trans "Save" %}</button>
                 </div>
             </div>
-        </div>
+        </form>
     </div>
-
 {% endblock content %}

@@ -5,14 +5,22 @@
     <script src="{% static 'js/copy_clipboard.js' %}"></script>
 {% endblock head %}
 
-{% block cmp_key_gen_block %}
+{% block download_tls_server_certificate_block %}
     <ul class="tp-kvp-list">
-
         <li>
-            <div>{% trans 'Generate a Keypair' %}</div>
+            <div>{% trans 'Download TLS Server Certificate' %}</div>
+            <div>
+                <a class="btn btn-primary min-width-15 mb-3"
+                   href="{% url 'pki:trustpoint-tls-server-download' %}">Download Server Certificate</a>
+            </div>
+        </li>
+        <li>
+            <div>
+                {% trans 'TLS Server Certificate in PEM format. You can copy this and paste it into a new file named server_cert.pem' %}
+            </div>
             <div class="copy-container" style="position: relative;">
                 <code class="command-text language-bash">
-                    {{ domain_credential_key_gen_command }}
+                    {{ trustpoint_server_certificate|linebreaksbr }}
                 </code>
 
                 <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
@@ -22,8 +30,7 @@
                     </svg>
                 </button>
             </div>
-            <hr>
         </li>
     </ul>
 
-{% endblock cmp_key_gen_block %}
+{% endblock download_tls_server_certificate_block %}
