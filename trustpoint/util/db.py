@@ -12,6 +12,7 @@ from trustpoint.views.base import LoggerMixin
 
 if TYPE_CHECKING:
     from django.db.models.fields.related import RelatedField
+
     _Base = RelatedField
     _ModelBase = models.Model
 else:
@@ -20,11 +21,13 @@ else:
 
 T = TypeVar('T', bound=models.Model)
 
+
 class AutoDeleteRelatedMixin(LoggerMixin, _Base):
     """Utility for deleting the object referenced by a relation when the parent object is deleted.
 
     This is useful for cases when a parent object is deleted, related objects should be deleted as well.
     """
+
     def contribute_to_class(self, cls: type[models.Model], name: str, *args: Any) -> None:
         """Register the signal when the model class is fully prepared."""
         super().contribute_to_class(cls, name, *args)
@@ -48,9 +51,9 @@ class AutoDeleteRelatedMixin(LoggerMixin, _Base):
         # TODO(Air): check OneToOneField  # noqa: FIX002
         related_model_cls = self.related_model
         links = [
-            f for f in related_model_cls._meta.get_fields()  # noqa: SLF001
-            if (f.one_to_many or f.one_to_one)
-            and f.auto_created and not f.concrete
+            f
+            for f in related_model_cls._meta.get_fields()  # noqa: SLF001
+            if (f.one_to_many or f.one_to_one) and f.auto_created and not f.concrete
         ]
 
         for link in links:
@@ -61,8 +64,9 @@ class AutoDeleteRelatedMixin(LoggerMixin, _Base):
                 return
 
         self.logger.debug('No refs found. Deleting related obj ' + str(related_object))  # noqa: G003
-        #if related_object.pk:
+        # if related_object.pk:
         related_object.delete()
+
 
 class AutoDeleteRelatedForeignKey(AutoDeleteRelatedMixin, models.ForeignKey):
     """A ForeignKey that deletes the object referenced by the FK when the parent object is deleted.
@@ -70,11 +74,13 @@ class AutoDeleteRelatedForeignKey(AutoDeleteRelatedMixin, models.ForeignKey):
     This is useful for cases when a parent object is deleted, related objects should be deleted as well.
     """
 
+
 class SelfProtectMixin(LoggerMixin, _Base):
     """A mixin that protects the parent object from being deleted if another object is referenced.
 
     This makes the model instance only deleteable via e.g. on_delete=models.CASCADE.
     """
+
     def contribute_to_class(self, cls: type[models.Model], name: str, *args: Any) -> None:
         """Register the signal when the model class is fully prepared."""
         super().contribute_to_class(cls, name, *args)
@@ -113,6 +119,7 @@ class IndividualDeleteQuerySet(models.QuerySet[T]):
 
     This ensures the model instance delete() method is always called, even when deleting a queryset.
     """
+
     def delete(self) -> tuple[int, dict[str, int]]:
         """Delete each object individually."""
         count: int = 0
@@ -124,23 +131,28 @@ class IndividualDeleteQuerySet(models.QuerySet[T]):
             return 0, {}
         return count, {obj._meta.label: count}  # noqa: SLF001
 
+
 class IndividualDeleteManager(models.Manager[T]):
     """Overrides a model's manager to use individual delete instead of bulk delete.
 
     This ensures the model instance delete() method is always
     called, even when deleting a queryset.
     """
+
     def get_queryset(self) -> IndividualDeleteQuerySet[T]:
         """Return the queryset with individual delete."""
         return IndividualDeleteQuerySet(self.model, using=self._db)
+
 
 class IndividualDeleteMixin(_ModelBase):
     """Mixin to override a model's queryset to use individual delete instead of bulk delete.
 
     This ensures the model instance delete() method is always called, even when deleting a queryset.
     """
+
     objects = IndividualDeleteManager()
 
     class Meta:
         """Meta options."""
+
         abstract = True
