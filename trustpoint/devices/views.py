@@ -166,7 +166,6 @@ class OpcUaGdsTableView(DeviceTableView):
     def get_queryset(self):
         """Filter queryset to only include devices where opc_ua_gds is True."""
         devices = super().get_queryset().filter(opc_ua_gds=True)
-        print(devices)
         return devices
 
 
