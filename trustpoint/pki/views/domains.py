@@ -115,7 +115,8 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         issued_credentials = domain.issued_credentials.all()
 
         certificates = CertificateModel.objects.filter(
-            credential__in=[issued_credential.credential for issued_credential in issued_credentials])
+            credential__in=[issued_credential.credential for issued_credential in issued_credentials]
+        )
 
         context['certificates'] = certificates
         context['protocols'] = {
@@ -123,7 +124,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             'est': domain.est_protocol if hasattr(domain, 'est_protocol') else None,
             'acme': domain.acme_protocol if hasattr(domain, 'acme_protocol') else None,
             'scep': domain.scep_protocol if hasattr(domain, 'scep_protocol') else None,
-            'rest': domain.rest_protocol if hasattr(domain, 'rest_protocol') else None
+            'rest': domain.rest_protocol if hasattr(domain, 'rest_protocol') else None,
         }
         context['domain_options'] = {
             'auto_create_new_device': domain.auto_create_new_device,
@@ -132,13 +133,13 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             'domain_credential_auth': domain.domain_credential_auth,
             'username_password_auth': domain.username_password_auth,
             'allow_app_certs_without_domain': domain.allow_app_certs_without_domain,
-
         }
 
         context['domain_help_texts'] = {
             'auto_create_new_device': domain._meta.get_field('auto_create_new_device').help_text,
             'allow_username_password_registration': domain._meta.get_field(
-                'allow_username_password_registration').help_text,
+                'allow_username_password_registration'
+            ).help_text,
             'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').help_text,
             'domain_credential_auth': domain._meta.get_field('domain_credential_auth').help_text,
             'username_password_auth': domain._meta.get_field('username_password_auth').help_text,
@@ -148,7 +149,8 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         context['domain_verbose_name'] = {
             'auto_create_new_device': domain._meta.get_field('auto_create_new_device').verbose_name,
             'allow_username_password_registration': domain._meta.get_field(
-                'allow_username_password_registration').verbose_name,
+                'allow_username_password_registration'
+            ).verbose_name,
             'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').verbose_name,
             'domain_credential_auth': domain._meta.get_field('domain_credential_auth').verbose_name,
             'username_password_auth': domain._meta.get_field('username_password_auth').verbose_name,
@@ -170,7 +172,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
 
         domain.save()
 
-        messages.success(request, _("Settings updated successfully."))
+        messages.success(request, _('Settings updated successfully.'))
         return HttpResponseRedirect(self.success_url)
 
 
@@ -332,10 +334,10 @@ class IssuedCertificatesView(ListView,DomainContextMixin):
     def get_queryset(self):
         """Return only certificates associated with the domain's issued credentials."""
         domain = self.get_domain()  # Get the domain
-        issued_credentials = IssuedCredentialModel.objects.filter(
-            domain=domain)
+        issued_credentials = IssuedCredentialModel.objects.filter(domain=domain)
         certificates = CertificateModel.objects.filter(
-            credential__in=[issued_credential.credential for issued_credential in issued_credentials])
+            credential__in=[issued_credential.credential for issued_credential in issued_credentials]
+        )
         return certificates
 
     def get_domain(self):

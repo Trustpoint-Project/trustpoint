@@ -239,10 +239,9 @@ class SetupWizardGenerateTlsServerCredentialView(FormView):
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
             )
 
-
             trustpoint_tls_server_credential, _ = TrustpointTlsServerCredentialModel.objects.get_or_create(
                 certificate=tls_server_credential.certificate,
-                defaults={"private_key_pem": tls_server_credential.get_private_key_serializer().as_pkcs8_pem()}
+                defaults={'private_key_pem': tls_server_credential.get_private_key_serializer().as_pkcs8_pem()},
             )
 
             active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)

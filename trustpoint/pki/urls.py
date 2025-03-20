@@ -105,7 +105,6 @@ urlpatterns = [
         IssuedCertificatesListView.as_view(),
         name='issuing_ca-issued_certificates',
     ),
-
     re_path(
         r'^issuing-cas/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
         issuing_cas.IssuingCaBulkDeleteConfirmView.as_view(),

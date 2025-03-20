@@ -24,7 +24,8 @@ def request_certificate(csr_: bytes):
     response = requests.post(
         'http://localhost:8000/.well-known/est/my-issuing-ca/simpleenroll/',
         data=csr_,
-        headers={'Content-Type': 'application/pkcs10', 'content-transfer-encoding': 'base64'})
+        headers={'Content-Type': 'application/pkcs10', 'content-transfer-encoding': 'base64'},
+    )
     return response
 
 
@@ -39,4 +40,3 @@ if __name__ == '__main__':
         cert = pkcs7.load_der_pkcs7_certificates(pkcs7_resp)
         if cert:
             print(f'{resp.status_code} OK : {cert}')
-

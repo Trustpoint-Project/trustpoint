@@ -34,9 +34,7 @@ class CertificatesContextMixin:
     extra_context: ClassVar = {'page_category': 'pki', 'page_name': 'certificates'}
 
 
-class CertificateTableView(
-    CertificatesContextMixin, SortableTableMixin, ListView[CertificateModel]
-):
+class CertificateTableView(CertificatesContextMixin, SortableTableMixin, ListView[CertificateModel]):
     """Certificate Table View."""
 
     model = CertificateModel
@@ -62,9 +60,7 @@ class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, DetailView[C
     model = CertificateModel
     context_object_name = 'certificate'
 
-    def get(
-        self, _request: HttpRequest, pk: str | None = None, *_args: Any, **_kwargs: Any
-    ) -> HttpResponse:
+    def get(self, _request: HttpRequest, pk: str | None = None, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """HTTP GET Method.
 
         If only the certificate primary key are passed in the url, the download summary will be displayed.
@@ -245,20 +241,19 @@ class CertificateMultipleDownloadView(
 
         return response
 
+
 class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[CertificateModel]):
     """View for downloading the TLS server certificate of trustpoint."""
 
     model = CertificateModel
     context_object_name = 'certificate'
 
-    def get(
-        self, _request: HttpRequest, pk: str | None = None, *_args: Any, **_kwargs: Any
-    ) -> HttpResponse:
+    def get(self, _request: HttpRequest, pk: str | None = None, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Download the active Trustpoint TLS server certificate"""
 
         tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
         if not tls_cert:
-            raise Http404("No TLS server certificate available. Are you on the development server?")
+            raise Http404('No TLS server certificate available. Are you on the development server?')
 
         tls_server_certificate = tls_cert.credential.certificate.get_certificate_serializer()
 
@@ -268,4 +263,3 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
         response['Content-Disposition'] = 'attachment; filename="server_cert.pem"'
 
         return response
-
