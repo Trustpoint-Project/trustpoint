@@ -93,7 +93,10 @@ class IndividualDeleteQuerySet(models.QuerySet[type[T]]):
         super().__init__(*args, **kwargs)
 
     def delete(self) -> tuple[int, dict[str, int]]:
-        """Delete each object individually."""
+        """Delete each object individually.
+
+        # TODO(Air): Please add return types and elaborate what this method does exactly.
+        """
         count: int = 0
         for obj in self:
             obj.delete()
