@@ -23,6 +23,7 @@ from trustpoint_core.oid import (
     SignatureSuite,
 )
 from trustpoint_core.serializer import CertificateSerializer, PublicKeySerializer
+from util.db import AutoDeleteRelatedForeignKey
 
 from pki.models.extension import (
     AttributeTypeAndValue,
@@ -174,7 +175,7 @@ class CertificateModel(LoggerMixin, models.Model):
     # --------------------------------------------------- Extensions ---------------------------------------------------
     # order of extensions follows RFC5280
 
-    key_usage_extension = models.ForeignKey(
+    key_usage_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.KEY_USAGE.verbose_name,
         to=KeyUsageExtension,
         related_name='certificates',
@@ -182,9 +183,10 @@ class CertificateModel(LoggerMixin, models.Model):
         null=True,
         blank=True,
         on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
-    subject_alternative_name_extension = models.ForeignKey(
+    subject_alternative_name_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.SUBJECT_ALTERNATIVE_NAME.verbose_name,
         to=SubjectAlternativeNameExtension,
         related_name='certificates',
@@ -192,9 +194,10 @@ class CertificateModel(LoggerMixin, models.Model):
         null=True,
         blank=True,
         on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
-    issuer_alternative_name_extension = models.ForeignKey(
+    issuer_alternative_name_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.ISSUER_ALTERNATIVE_NAME.verbose_name,
         to=IssuerAlternativeNameExtension,
         related_name='certificates',
@@ -202,97 +205,107 @@ class CertificateModel(LoggerMixin, models.Model):
         null=True,
         blank=True,
         on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
-    basic_constraints_extension = models.ForeignKey(
+    basic_constraints_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.BASIC_CONSTRAINTS.verbose_name,
         to=BasicConstraintsExtension,
         related_name='certificates',
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
-    authority_key_identifier_extension = models.ForeignKey(
+    authority_key_identifier_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.AUTHORITY_KEY_IDENTIFIER.verbose_name,
         to=AuthorityKeyIdentifierExtension,
         related_name='certificates',
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
-    subject_key_identifier_extension = models.ForeignKey(
+    subject_key_identifier_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.SUBJECT_KEY_IDENTIFIER.verbose_name,
         to=SubjectKeyIdentifierExtension,
         related_name='certificates',
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
-    certificate_policies_extension = models.ForeignKey(
+    certificate_policies_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.CERTIFICATE_POLICIES.verbose_name,
         to=CertificatePoliciesExtension,
         related_name='certificates',
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
-    extended_key_usage_extension = models.ForeignKey(
+    extended_key_usage_extension = AutoDeleteRelatedForeignKey(
         verbose_name=CertificateExtensionOid.EXTENDED_KEY_USAGE.verbose_name,
         to=ExtendedKeyUsageExtension,
         related_name='certificates',
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
-    name_constraints_extension = models.ForeignKey(
+    name_constraints_extension = AutoDeleteRelatedForeignKey(
         NameConstraintsExtension,
         related_name='certificates',
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
-    crl_distribution_points_extension = models.ForeignKey(
+    crl_distribution_points_extension = AutoDeleteRelatedForeignKey(
         CrlDistributionPointsExtension,
         related_name='certificates',
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
-    authority_information_access_extension = models.ForeignKey(
-        AuthorityInformationAccessExtension, null=True, blank=True, on_delete=models.CASCADE
+    authority_information_access_extension = AutoDeleteRelatedForeignKey(
+        AuthorityInformationAccessExtension, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False,
     )
 
-    subject_information_access_extension = models.ForeignKey(
-        SubjectInformationAccessExtension, null=True, blank=True, on_delete=models.CASCADE
+    subject_information_access_extension = AutoDeleteRelatedForeignKey(
+        SubjectInformationAccessExtension, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False,
     )
 
-    inhibit_any_policy_extension = models.ForeignKey(
-        InhibitAnyPolicyExtension, null=True, blank=True, on_delete=models.CASCADE
+    inhibit_any_policy_extension = AutoDeleteRelatedForeignKey(
+        InhibitAnyPolicyExtension, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False,
     )
 
-    policy_constraints_extension = models.ForeignKey(
-        PolicyConstraintsExtension, null=True, blank=True, on_delete=models.CASCADE
+    policy_constraints_extension = AutoDeleteRelatedForeignKey(
+        PolicyConstraintsExtension, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False,
     )
 
-    subject_directory_attributes_extension = models.ForeignKey(
-        SubjectDirectoryAttributesExtension, null=True, blank=True, on_delete=models.CASCADE
+    subject_directory_attributes_extension = AutoDeleteRelatedForeignKey(
+        SubjectDirectoryAttributesExtension, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False,
     )
 
-    freshest_crl_extension = models.ForeignKey(FreshestCrlExtension, null=True, blank=True, on_delete=models.CASCADE)
+    freshest_crl_extension = AutoDeleteRelatedForeignKey(
+        FreshestCrlExtension, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False,
+    )
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""
@@ -622,7 +635,7 @@ class RevokedCertificateModel(models.Model):
         verbose_name=_('Revocation Reason'), choices=ReasonCode, default=ReasonCode.UNSPECIFIED
     )
 
-    ca = models.ForeignKey(
+    ca = AutoDeleteRelatedForeignKey(
         'IssuingCaModel',
         verbose_name=_('Issuing CA'),
         related_name='revoked_certificates',

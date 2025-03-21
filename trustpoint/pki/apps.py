@@ -10,8 +10,4 @@ class PkiConfig(AppConfig):
     name = 'pki'
 
     def ready(self) -> None:
-        """Import signals for the PKI app."""
-        from pki.signals.issuing_ca import (
-            delete_related_credential_certificate_chain_order_records,  # noqa: F401
-            delete_related_credential_record,  # noqa: F401
-        )
+        """PKI app initialization."""

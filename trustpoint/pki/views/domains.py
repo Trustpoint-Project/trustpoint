@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
@@ -182,8 +183,11 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, BulkDeleteView):
             response = super().form_valid(form)
         except ProtectedError:
             messages.error(
-                self.request, _('Cannot delete the selected Domains(s) because they are referenced by other objects.')
+                self.request, _('Cannot delete the selected Domain(s) because they are referenced by other objects.')
             )
+            return HttpResponseRedirect(self.success_url)
+        except ValidationError as exc:
+            messages.error(self.request, exc.message)
             return HttpResponseRedirect(self.success_url)
 
         messages.success(self.request, _('Successfully deleted {count} Domains.').format(count=deleted_count))

@@ -17,6 +17,7 @@ from pyasn1.type import char  # type: ignore  # noqa: PGH003
 from pki.models.certificate import CertificateModel
 from pki.models.extension import (
     AccessDescriptionModel,
+    BasicConstraintsExtension,
     GeneralNameDirectoryName,
     GeneralNameOtherName,
     GeneralNamesModel,
@@ -36,7 +37,7 @@ from pki.tests import (
     RFC822_EMAIL,
     URI_VALUE,
 )
-from pki.tests.fixtures import self_signed_cert_with_ext  # noqa: F401
+from pki.tests.fixtures import self_signed_cert_basic, self_signed_cert_with_ext  # noqa: F401
 
 
 @pytest.mark.django_db
@@ -379,3 +380,38 @@ def test_policy_constraints(self_signed_cert_with_ext: Certificate) -> None:
 @pytest.mark.django_db
 def test_freshest_crl(self_signed_cert_with_ext: Certificate) -> None:
     """Test that the freshest crl extension is parsed and stored correctly in the database."""
+
+
+@pytest.mark.django_db
+def test_extension_deletion(self_signed_cert_with_ext: Certificate,
+                            self_signed_cert_basic: tuple[CertificateModel, Certificate]) -> None:
+    """Test that all extensions are deleted when the certificate is deleted."""
+
+    assert self_signed_cert_basic is not None # ensure that the basic certificate is saved to DB
+    cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
+    cert_model.delete()
+    #assert BasicConstraintsExtension.objects.filter(pk=cert_model.basic_constraints_extension.pk).exists()
+    #cert_model.basic_constraints_extension.delete()
+    assert not BasicConstraintsExtension.objects.filter(pk=cert_model.basic_constraints_extension.pk).exists()
+
+@pytest.mark.django_db
+def test_extension_deletion(self_signed_cert_with_ext: Certificate) -> None:
+    """Test that all extensions are deleted when the certificate is deleted."""
+    assert self_signed_cert_basic is not None # ensure that the basic certificate is saved to DB
+    cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
+    cert_model.delete()
+
+    assert not BasicConstraintsExtension.objects.filter(pk=cert_model.basic_constraints_extension.pk).exists()
+
+@pytest.mark.django_db
+def test_multi_extension_deletion(self_signed_cert_with_ext: Certificate,
+                                  self_signed_cert_basic: tuple[CertificateModel, Certificate]) -> None:
+    """Test that extensions that are shared are not deleted.
+
+    (if there is another certificate with those exact extension values)
+    """
+    assert self_signed_cert_basic is not None # ensure that the basic certificate is saved to DB
+    cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
+    cert_model.delete()
+
+    assert BasicConstraintsExtension.objects.filter(pk=cert_model.basic_constraints_extension.pk).exists()
