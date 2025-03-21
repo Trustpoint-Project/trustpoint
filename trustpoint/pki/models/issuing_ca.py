@@ -12,7 +12,7 @@ from django.db import models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core import oid
-from util.db import IndividualDeleteManager
+from util.db import CustomDeleteActionModel
 from util.field import UniqueNameValidator
 
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from trustpoint_core.serializer import CredentialSerializer
 
 
-class IssuingCaModel(LoggerMixin, models.Model):
+class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
     """Issuing CA Model.
 
     This model contains the configurations of all Issuing CAs available within the Trustpoint.
@@ -64,9 +64,6 @@ class IssuingCaModel(LoggerMixin, models.Model):
     last_crl_issued_at = models.DateTimeField(verbose_name=_('Last CRL Issued'), null=True, blank=True)
 
     crl_pem = models.TextField(editable=False, default='', verbose_name=_('CRL in PEM format'))
-
-    objects: IndividualDeleteManager[IssuingCaModel]
-    objects = IndividualDeleteManager()
 
     def __str__(self) -> str:
         """Returns a human-readable string that represents this IssuingCaModel entry.
@@ -211,16 +208,17 @@ class IssuingCaModel(LoggerMixin, models.Model):
         self.logger.info('All %i certificates issued by CA %s have been revoked.', qs.count(), self.unique_name)
         self.issue_crl()
 
-    @transaction.atomic
-    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
-        """Delete the Issuing CA after checking for unexpired certificates issued by it."""
+    def pre_delete(self) -> None:
+        """Check for unexpired certificates issued by this CA before deleting it."""
+        print(f'Pre CA {self} delete')
         qs = self.get_issued_certificates()
 
         for cert in qs:
             if cert.certificate_status != CertificateModel.CertificateStatus.EXPIRED:
                 exc_msg = f'Cannot delete the Issuing CA {self} because it has issued unexpired certificate {cert}.'
                 raise ValidationError(exc_msg)
-        ret = super().delete(*args, **kwargs)
-        self.credential.delete(protect_active_certs=False)
 
-        return ret
+    def post_delete(self) -> None:
+        """Deletes the credential of this CA after deleting it."""
+        print(f'Post CA {self} delete')
+        self.credential.delete()

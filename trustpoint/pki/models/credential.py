@@ -15,7 +15,7 @@ from trustpoint_core.serializer import (
     CredentialSerializer,
     PrivateKeySerializer,
 )
-from util.db import IndividualDeleteManager
+from util.db import CustomDeleteActionModel
 
 from pki.models import CertificateModel
 from trustpoint.views.base import LoggerMixin
@@ -39,7 +39,7 @@ class CredentialAlreadyExistsError(ValidationError):
         super().__init__(_('Credential already exists.'), *args, **kwargs)
 
 
-class CredentialModel(LoggerMixin, models.Model):
+class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     """The CredentialModel that holds all local credentials used by the Trustpoint.
 
     This model holds both local unprotected credentials, for which the keys and certificates are stored
@@ -76,9 +76,6 @@ class CredentialModel(LoggerMixin, models.Model):
     )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
-
-    objects: IndividualDeleteManager[CredentialModel]
-    objects = IndividualDeleteManager()
 
     def __repr__(self) -> str:
         """Returns a string representation of this CredentialModel entry."""
@@ -191,8 +188,7 @@ class CredentialModel(LoggerMixin, models.Model):
 
         return credential_model
 
-    @transaction.atomic
-    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
+    def pre_delete(self) -> None:
         """Deletes related models, only allow deletion if there are no more active certificates."""
         # only allow deletion if all certificates are either expired or revoked
         qs = self.certificates.all()
@@ -200,7 +196,7 @@ class CredentialModel(LoggerMixin, models.Model):
             exc_msg = f'Primary certificate not in certificate list of credential {self.pk}.'
             raise ValidationError(exc_msg)
         # Issued credentials must be revoked before deletion, not a requirement for CA credentials
-        if kwargs.pop('protect_active_certs', True):
+        if self.credential_type == CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL:
             for cert in qs:
                 if (cert.certificate_status in
                     [CertificateModel.CertificateStatus.OK, CertificateModel.CertificateStatus.NOT_YET_VALID]):
@@ -210,7 +206,6 @@ class CredentialModel(LoggerMixin, models.Model):
         self.certificates.clear()
         self.certificate = None
         # CertificateChainOrderModel is deleted via CASCADE
-        return super().delete(*args, **kwargs)
 
     def get_private_key(self) -> PrivateKey:
         """Gets an abstraction of the credential private key.

@@ -18,7 +18,7 @@ from pki.models.issuing_ca import IssuingCaModel
 from pki.models.truststore import TruststoreModel
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 from trustpoint_core import oid  # type: ignore[import-untyped]
-from util.db import IndividualDeleteManager
+from util.db import CustomDeleteActionModel
 from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
@@ -33,10 +33,8 @@ __all__ = [
 ]
 
 
-class DeviceModel(models.Model):
+class DeviceModel(CustomDeleteActionModel):
     """The DeviceModel."""
-
-    objects: IndividualDeleteManager[DeviceModel]
 
     id = models.AutoField(primary_key=True)
     unique_name = models.CharField(
@@ -109,8 +107,6 @@ class DeviceModel(models.Model):
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
-    objects = IndividualDeleteManager()
-
     class Meta(TypedModelMeta):
         """Meta class configuration."""
 
@@ -118,11 +114,10 @@ class DeviceModel(models.Model):
         """Returns a human-readable string representation."""
         return f'DeviceModel(unique_name={self.unique_name})'
 
-    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
+    def pre_delete(self) -> None:
         """Delete all issued credentials for this device before deleting the device itself."""
         logger.info(f'Deleting all issued credentials for device {self.unique_name}') # noqa: G004
         self.issued_credentials.all().delete()
-        return super().delete(*args, **kwargs)
 
     @property
     def est_username(self) -> str:
@@ -142,10 +137,8 @@ class DeviceModel(models.Model):
         return self.signature_suite.public_key_info
 
 
-class IssuedCredentialModel(models.Model):
+class IssuedCredentialModel(CustomDeleteActionModel):
     """Model for all credentials and certificates that have been issued or requested by the Trustpoint."""
-
-    objects: IndividualDeleteManager[IssuedCredentialModel]
 
     class IssuedCredentialType(models.IntegerChoices):
         """The type of the credential."""
@@ -187,8 +180,6 @@ class IssuedCredentialModel(models.Model):
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
-    objects = IndividualDeleteManager()
-
     class Meta(TypedModelMeta):
         """Meta class configuration."""
 
@@ -222,12 +213,10 @@ class IssuedCredentialModel(models.Model):
                 ca=ca
             )
 
-    @transaction.atomic
-    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
-        """Revoke all active certificates, delete the credential and the issued credential itself."""
+    def pre_delete(self) -> None:
+        """Revoke all active certificates and delete the credential."""
         self.revoke()
-        self.credential.delete(protect_active_certs=True)  # this will also delete the IssuedCredentialModel via cascade
-        return super().delete(*args, **kwargs)
+        self.credential.delete()  # this will also delete the IssuedCredentialModel via cascade
 
 
 class RemoteDeviceCredentialDownloadModel(models.Model):

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, final
 
-from django.db import models
+from django.db import models, transaction
 from django.db.models import ProtectedError
 from django.db.models.signals import post_delete
 
@@ -114,6 +114,7 @@ class IndividualDeleteQuerySet(models.QuerySet[type[T]]):
     This ensures the model instance delete() method is always called, even when deleting a queryset.
     """
 
+    @transaction.atomic
     def delete(self) -> tuple[int, dict[str, int]]:
         """Delete each object individually.
 
@@ -144,3 +145,80 @@ class IndividualDeleteManager(models.Manager[T]):
     def get_queryset(self) -> IndividualDeleteQuerySet[T]:
         """Return the queryset with individual delete."""
         return IndividualDeleteQuerySet(self.model, using=self._db)
+
+
+#CDM_T = TypeVar('CDM_T', bound='CustomDeleteActionModel')
+
+class CustomDeleteActionQuerySet(models.QuerySet[type[T]]):
+    """Overrides a model's queryset to invoke pre- and post-delete hooks.
+
+    This ensures the pre_delete() and post_delete() methods are called on each object in the queryset.
+    """
+
+    @transaction.atomic
+    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
+        """Runs pre_delete() on each object, bulk deletes the queryset and runs post_delete() on each object.
+
+        Args:
+            *args: Positional arguments passed to super().delete().
+            **kwargs: Keyword arguments, for reference check, and passed to super().delete().
+
+        Returns:
+            tuple[int, dict[str, int]]: A tuple of:
+                a) the total number of objects deleted and
+                b) a dictionary with the model name and the count.
+        """
+        # Pre-delete actions
+        for obj in self:
+            obj.pre_delete()
+        # Perform the actual deletion
+        count = super().delete(*args, **kwargs)
+        # Post-delete actions
+        for obj in self:
+            obj.post_delete()
+        return count
+
+
+class CustomDeleteActionManager(models.Manager[T]):
+    """Default manager for CustomDeleteActionModel.
+
+    It ensures the CustomDeleteActionQuerySet is the default queryset.
+    """
+
+    def get_queryset(self) -> CustomDeleteActionQuerySet[type[T]]:
+        """Return the queryset with individual delete."""
+        return CustomDeleteActionQuerySet(self.model, using=self._db)
+
+
+class CustomDeleteActionModel(models.Model):
+    """Model that provides the pre_delete() and post_delete() methods to implement custom deletion logic.
+
+    It uses a custom manager to ensure the methods are called both on individual and bulk (queryset) deletes.
+    """
+
+    objects: CustomDeleteActionManager[T] = CustomDeleteActionManager[T]()
+
+    class Meta:
+        """Meta options for the CustomDeleteActionModel."""
+        abstract = True
+
+    def pre_delete(self) -> None:
+        """Pre-delete hook for custom logic before actual deletion.
+
+        This can for example be used to check if deletion prerequisites are met.
+        """
+
+    def post_delete(self) -> None:
+        """Post-delete hook for custom logic after actual deletion.
+
+        This can for example be used to clean up orphaned related objects.
+        """
+
+    @final
+    @transaction.atomic
+    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
+        """Delete the object and run pre_delete() and post_delete() hooks."""
+        self.pre_delete()
+        count = super().delete(*args, **kwargs)
+        self.post_delete()
+        return count
