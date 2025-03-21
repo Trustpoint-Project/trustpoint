@@ -46,7 +46,7 @@ class AutoDeleteRelatedMixin(LoggerMixin, _Base):
             the object is kept in the database if still referenced.
             WARNING: This requires ALL references to the referenced model to use on_delete=models.PROTECT
             as they may not only delete the referenced model despite not being orphaned,
-            but could also cascade delete those other referencing models inadvertedly.
+            but could also cascade delete those other referencing models inadvertently.
         """
         self.do_reference_check = kwargs.pop('do_reference_check', True)
         super().__init__(*args, **kwargs)
