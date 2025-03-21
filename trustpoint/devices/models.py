@@ -201,7 +201,7 @@ class IssuedCredentialModel(models.Model):
         cert: CertificateModel
         for cert in self.credential.certificates.all():
             status = cert.certificate_status
-            if (status in (CertificateModel.CertificateStatus.REVOKED, CertificateModel.CertificateStatus.EXPIRED)):
+            if status in (CertificateModel.CertificateStatus.REVOKED, CertificateModel.CertificateStatus.EXPIRED):
                 continue
             try:
                 ca = IssuingCaModel.objects.get(

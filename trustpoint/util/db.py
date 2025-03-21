@@ -114,15 +114,6 @@ class IndividualDeleteQuerySet(models.QuerySet[type[T]]):
     This ensures the model instance delete() method is always called, even when deleting a queryset.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initializes the IndividualDeleteQuerySet object.
-
-        Args:
-            *args: Positional arguments passed to super().__init__().
-            **kwargs: Keyword arguments passed to super().__init__().
-        """
-        super().__init__(*args, **kwargs)
-
     def delete(self) -> tuple[int, dict[str, int]]:
         """Delete each object individually.
 
