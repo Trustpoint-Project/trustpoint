@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from django.db import models
+from django.db.models import ProtectedError
 from django.db.models.signals import post_delete
 
 from trustpoint.views.base import LoggerMixin
@@ -26,28 +27,40 @@ class AutoDeleteRelatedMixin(LoggerMixin, _Base):
 
     This is useful for cases when a parent object is deleted, related objects should be deleted as well.
     """
+    do_reference_check: bool
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the AutoDeleteRelatedMixin object.
+
+        Args:
+            *args: Positional arguments passed to super().__init__().
+            **kwargs: Keyword arguments, for reference check, and passed to super().__init__().
+
+        With kwarg "do_reference_check=True" (default):
+            Automagically checks if the referenced model is still referenced by other objects
+            (even in other models) and only deletes it if it is not.
+
+        With kwarg "do_reference_check=False":
+            Always deletes the referenced model. Faster as it skips the reference check.
+            If there are other references using on_delete=models.PROTECT,
+            the object is kept in the database if still referenced.
+            WARNING: This requires ALL references to the referenced model to use on_delete=models.PROTECT
+            as they may not only delete the referenced model despite not being orphaned,
+            but could also cascade delete those other referencing models inadvertedly.
+        """
+        self.do_reference_check = kwargs.pop('do_reference_check', True)
+        super().__init__(*args, **kwargs)
 
     def contribute_to_class(self, cls: type[models.Model], name: str, *args: Any) -> None:
         """Register the signal when the model class is fully prepared."""
         super().contribute_to_class(cls, name, *args)
         post_delete.connect(self._delete_referenced_model, sender=cls)
 
-    def _delete_referenced_model(self, sender: models.Model, instance: models.Model, **kwargs: Any) -> None:
-        """Delete the referenced model.
+    def _has_references(self, related_object: _ModelBase) -> bool:
+        """Get ReferencedManager of the related object and check if there are still references somewhere else.
 
-        Automagically checks if the referenced model is still referenced by other objects
-        (even in other models) and only deletes it if it is not.
+        Works for ForeignKey as well as ManyToManyField
         """
-        del sender, kwargs
-        if not self.name:
-            return
-        related_object = getattr(instance, self.name, None)
-
-        if not related_object:
-            return
-        # get ReferencedManager of the related object and check if there are still references somewhere else
-        # works for ForeignKey as well as ManyToManyField
-        # TODO(Air): check OneToOneField  # noqa: FIX002
         related_model_cls = self.related_model
         links = [
             f
@@ -62,13 +75,31 @@ class AutoDeleteRelatedMixin(LoggerMixin, _Base):
             if references_exist:
                 log_msg = f'References exist for {link.name}'
                 self.logger.debug(log_msg)
-                return
+                return True
 
         log_msg = f'No refs found. Deleting related obj {related_object}'
         self.logger.debug(log_msg)
-        # if related_object.pk:
-        related_object.delete()
+        return False
 
+    def _delete_referenced_model(self, sender: models.Model, instance: models.Model, **kwargs: Any) -> None:
+        """Signal receiver that deletes the referenced model."""
+        del sender, kwargs
+        if not self.name:
+            return
+        related_object = getattr(instance, self.name, None)
+
+        if not related_object:
+            return
+
+        if self.do_reference_check and self._has_references(related_object):
+            return
+
+        if related_object.pk:
+            try:
+                related_object.delete()
+            except ProtectedError:
+                # is still referenced by other objects with on_delete=models.PROTECT and kept in the database
+                return
 
 class AutoDeleteRelatedForeignKey(AutoDeleteRelatedMixin, models.ForeignKey):
     """A ForeignKey that deletes the object referenced by the FK when the parent object is deleted.
@@ -95,7 +126,12 @@ class IndividualDeleteQuerySet(models.QuerySet[type[T]]):
     def delete(self) -> tuple[int, dict[str, int]]:
         """Delete each object individually.
 
-        # TODO(Air): Please add return types and elaborate what this method does exactly.
+        Iterates over each object in the queryset and calls delete() on it.
+
+        Returns:
+            tuple[int, dict[str, int]]: A tuple of:
+                a) the total number of objects deleted and
+                b) a dictionary with the model name and the count.
         """
         count: int = 0
         for obj in self:
@@ -104,7 +140,7 @@ class IndividualDeleteQuerySet(models.QuerySet[type[T]]):
         # using _meta to return model name to keep API from superclass
         if count == 0:
             return 0, {}
-        return count, {obj._meta.label: count}  # noqa: SLF001
+        return count, {self[0]._meta.label: count}  # noqa: SLF001
 
 
 class IndividualDeleteManager(models.Manager[T]):

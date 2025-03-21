@@ -590,6 +590,7 @@ class IssuerAlternativeNameExtension(CertificateExtension, models.Model):
     issuer_alt_name = AutoDeleteRelatedForeignKey(
         GeneralNamesModel,
         on_delete=models.PROTECT,
+        do_reference_check=False,
         null=True,
         blank=True,
         verbose_name=_('Issuer Alternative Name Issuer'),
@@ -643,6 +644,7 @@ class SubjectAlternativeNameExtension(CertificateExtension, models.Model):
     subject_alt_name = AutoDeleteRelatedForeignKey(
         GeneralNamesModel,
         on_delete=models.PROTECT,
+        do_reference_check=False,
         null=True,
         blank=True,
         verbose_name=_('Subject Alternative Name Subject'),
@@ -701,6 +703,7 @@ class AuthorityKeyIdentifierExtension(CertificateExtension, models.Model):
     authority_cert_issuer = AutoDeleteRelatedForeignKey(
         GeneralNamesModel,
         on_delete=models.PROTECT,
+        do_reference_check=False,
         null=True,
         blank=True,
         verbose_name=_('Issuer Alternative Name Issuer'),
@@ -821,7 +824,9 @@ class NoticeReference(models.Model):
 class UserNotice(models.Model):
     """Represents a UserNotice as per RFC5280."""
 
-    notice_ref = AutoDeleteRelatedForeignKey(NoticeReference, null=True, blank=True, on_delete=models.PROTECT)
+    notice_ref = AutoDeleteRelatedForeignKey(
+        NoticeReference, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False,
+    )
     explicit_text = models.CharField(  # noqa: DJ001
         max_length=200, editable=False, verbose_name='Explicit Text', null=True, blank=True
     )
@@ -849,10 +854,20 @@ class QualifierModel(models.Model):
     """Generic model to represent either a CPS URI or a User Notice."""
 
     cps_uri = AutoDeleteRelatedForeignKey(
-        CPSUriModel, null=True, blank=True, on_delete=models.PROTECT, related_name='qualifiers'
+        CPSUriModel,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
+        related_name='qualifiers',
     )
     user_notice = AutoDeleteRelatedForeignKey(
-        UserNotice, null=True, blank=True, on_delete=models.PROTECT, related_name='qualifiers'
+        UserNotice,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
+        related_name='qualifiers'
     )
 
     objects = models.Manager['QualifierModel']
@@ -876,7 +891,9 @@ class PolicyQualifierInfo(models.Model):
     """Represents a PolicyQualifierInfo as per RFC5280."""
 
     policy_qualifier_id = models.CharField(max_length=256, editable=False, verbose_name='Policy Qualifier ID')
-    qualifier = AutoDeleteRelatedForeignKey(QualifierModel, null=True, blank=True, on_delete=models.PROTECT)
+    qualifier = AutoDeleteRelatedForeignKey(
+        QualifierModel, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False
+    )
 
     objects = models.Manager['PolicyQualifierInfo']
 
@@ -1055,13 +1072,29 @@ class ExtendedKeyUsageExtension(models.Model):
 
 
 class GeneralNameModel(models.Model):
-    rfc822_name = AutoDeleteRelatedForeignKey(GeneralNameRFC822Name, null=True, blank=True, on_delete=models.PROTECT)
-    dns_name = AutoDeleteRelatedForeignKey(GeneralNameDNSName, null=True, blank=True, on_delete=models.PROTECT)
-    directory_name = AutoDeleteRelatedForeignKey(GeneralNameDirectoryName, null=True, blank=True, on_delete=models.PROTECT)
-    uri = AutoDeleteRelatedForeignKey(GeneralNameUniformResourceIdentifier, null=True, blank=True, on_delete=models.PROTECT)
-    ip_address = AutoDeleteRelatedForeignKey(GeneralNameIpAddress, null=True, blank=True, on_delete=models.PROTECT)
-    registered_id = AutoDeleteRelatedForeignKey(GeneralNameRegisteredId, null=True, blank=True, on_delete=models.PROTECT)
-    other_name = AutoDeleteRelatedForeignKey(GeneralNameOtherName, null=True, blank=True, on_delete=models.PROTECT)
+    # do_reference_check must be True here
+    # as the GeneralNamesModel also has ManyToManyFields to these GeneralName* models.
+    rfc822_name = AutoDeleteRelatedForeignKey(
+        GeneralNameRFC822Name, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=True
+    )
+    dns_name = AutoDeleteRelatedForeignKey(
+        GeneralNameDNSName, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=True
+    )
+    directory_name = AutoDeleteRelatedForeignKey(
+        GeneralNameDirectoryName, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=True
+    )
+    uri = AutoDeleteRelatedForeignKey(
+        GeneralNameUniformResourceIdentifier, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=True
+    )
+    ip_address = AutoDeleteRelatedForeignKey(
+        GeneralNameIpAddress, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=True
+    )
+    registered_id = AutoDeleteRelatedForeignKey(
+        GeneralNameRegisteredId, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=True
+    )
+    other_name = AutoDeleteRelatedForeignKey(
+        GeneralNameOtherName, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=True
+    )
 
     objects = models.Manager['GeneralNameModel']
 
@@ -1160,7 +1193,7 @@ class GeneralSubtree(models.Model):
     minimum defaults to 0 and maximum is optional.
     """
 
-    base = AutoDeleteRelatedForeignKey(GeneralNameModel, on_delete=models.PROTECT)
+    base = AutoDeleteRelatedForeignKey(GeneralNameModel, on_delete=models.PROTECT, do_reference_check=False)
 
     minimum = models.PositiveIntegerField(default=0, editable=False)
     maximum = models.PositiveIntegerField(null=True, blank=True, editable=False, default=None)
@@ -1239,7 +1272,9 @@ class NameConstraintsExtension(CertificateExtension, models.Model):
 
 
 class DistributionPointName(models.Model):
-    full_name = AutoDeleteRelatedForeignKey(GeneralNamesModel, on_delete=models.PROTECT, null=True, blank=True)
+    full_name = AutoDeleteRelatedForeignKey(
+        GeneralNamesModel,on_delete=models.PROTECT, do_reference_check=False, null=True, blank=True
+    )
 
     name_relative_to_crl_issuer = models.ManyToManyField(
         AttributeTypeAndValue,
@@ -1271,7 +1306,12 @@ class DistributionPointModel(CertificateExtension, models.Model):
     )
     reasons = models.CharField(max_length=16, blank=True, null=True, verbose_name=_('Reasons'))  # noqa: DJ001
     crl_issuer = AutoDeleteRelatedForeignKey(
-        GeneralNamesModel, on_delete=models.PROTECT, null=True, blank=True, verbose_name=_('CRL Issuer')
+        GeneralNamesModel,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
+        null=True,
+        blank=True,
+        verbose_name=_('CRL Issuer')
     )
 
     objects = models.Manager['DistributionPointModel']
@@ -1432,7 +1472,12 @@ class CrlDistributionPointsExtension(CertificateExtension, models.Model):
 
 class AccessDescriptionModel(models.Model):
     access_method = models.CharField(max_length=256, editable=False, verbose_name='Access Method OID')
-    access_location = AutoDeleteRelatedForeignKey(GeneralNameModel, verbose_name='Access Location', on_delete=models.PROTECT)
+    access_location = AutoDeleteRelatedForeignKey(
+        GeneralNameModel,
+        verbose_name='Access Location',
+        on_delete=models.PROTECT,
+        do_reference_check=False,
+    )
 
     objects = models.Manager['AccessDescriptionModel']
 

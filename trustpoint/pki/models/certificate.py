@@ -183,6 +183,7 @@ class CertificateModel(LoggerMixin, models.Model):
         null=True,
         blank=True,
         on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
     subject_alternative_name_extension = AutoDeleteRelatedForeignKey(
@@ -193,6 +194,7 @@ class CertificateModel(LoggerMixin, models.Model):
         null=True,
         blank=True,
         on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
     issuer_alternative_name_extension = AutoDeleteRelatedForeignKey(
@@ -203,6 +205,7 @@ class CertificateModel(LoggerMixin, models.Model):
         null=True,
         blank=True,
         on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
     basic_constraints_extension = AutoDeleteRelatedForeignKey(
@@ -213,6 +216,7 @@ class CertificateModel(LoggerMixin, models.Model):
         null=True,
         blank=True,
         on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
     authority_key_identifier_extension = AutoDeleteRelatedForeignKey(
@@ -222,7 +226,8 @@ class CertificateModel(LoggerMixin, models.Model):
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
     subject_key_identifier_extension = AutoDeleteRelatedForeignKey(
@@ -232,7 +237,8 @@ class CertificateModel(LoggerMixin, models.Model):
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
     certificate_policies_extension = AutoDeleteRelatedForeignKey(
@@ -242,7 +248,8 @@ class CertificateModel(LoggerMixin, models.Model):
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
     extended_key_usage_extension = AutoDeleteRelatedForeignKey(
@@ -252,7 +259,8 @@ class CertificateModel(LoggerMixin, models.Model):
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
     name_constraints_extension = AutoDeleteRelatedForeignKey(
@@ -261,7 +269,8 @@ class CertificateModel(LoggerMixin, models.Model):
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
     crl_distribution_points_extension = AutoDeleteRelatedForeignKey(
@@ -270,30 +279,33 @@ class CertificateModel(LoggerMixin, models.Model):
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
+        do_reference_check=False,
     )
 
     authority_information_access_extension = AutoDeleteRelatedForeignKey(
-        AuthorityInformationAccessExtension, null=True, blank=True, on_delete=models.CASCADE
+        AuthorityInformationAccessExtension, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False,
     )
 
     subject_information_access_extension = AutoDeleteRelatedForeignKey(
-        SubjectInformationAccessExtension, null=True, blank=True, on_delete=models.CASCADE
+        SubjectInformationAccessExtension, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False,
     )
 
     inhibit_any_policy_extension = AutoDeleteRelatedForeignKey(
-        InhibitAnyPolicyExtension, null=True, blank=True, on_delete=models.CASCADE
+        InhibitAnyPolicyExtension, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False,
     )
 
     policy_constraints_extension = AutoDeleteRelatedForeignKey(
-        PolicyConstraintsExtension, null=True, blank=True, on_delete=models.CASCADE
+        PolicyConstraintsExtension, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False,
     )
 
     subject_directory_attributes_extension = AutoDeleteRelatedForeignKey(
-        SubjectDirectoryAttributesExtension, null=True, blank=True, on_delete=models.CASCADE
+        SubjectDirectoryAttributesExtension, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False,
     )
 
-    freshest_crl_extension = AutoDeleteRelatedForeignKey(FreshestCrlExtension, null=True, blank=True, on_delete=models.CASCADE)
+    freshest_crl_extension = AutoDeleteRelatedForeignKey(
+        FreshestCrlExtension, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False,
+    )
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""

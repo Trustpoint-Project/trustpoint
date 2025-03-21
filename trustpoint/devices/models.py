@@ -18,13 +18,11 @@ from pki.models.issuing_ca import IssuingCaModel
 from pki.models.truststore import TruststoreModel
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 from trustpoint_core import oid  # type: ignore[import-untyped]
-from util.db import IndividualDeleteManager, SelfProtectOneToOneField
+from util.db import IndividualDeleteManager
 from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
     from typing import Any
-
-    from pki.models.certificate import CertificateModel
 
 logger = logging.getLogger(__name__)
 
@@ -172,13 +170,10 @@ class IssuedCredentialModel(models.Model):
     issued_credential_purpose = models.IntegerField(
         choices=IssuedCredentialPurpose, verbose_name=_('Credential Purpose')
     )
-    # should be SelfProtectOneToOneField,
-    # but would need custom deletion logic that changes cascade behavior
-    # and would require FKs to be set to null temporarily
     credential = models.OneToOneField(
         CredentialModel,
         verbose_name=_('Credential'),
-        on_delete=models.CASCADE,
+        on_delete=models.CASCADE,  # delete() on CredentialModel prevents deletion unless certificates are revoked
         related_name='issued_credential',
         null=False,
         blank=False,
