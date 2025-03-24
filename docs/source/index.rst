@@ -48,3 +48,4 @@ Welcome to Trustpoint's documentation!
    ci_cd
    test_plan/test_plan
    test_report/test_report
+   api
