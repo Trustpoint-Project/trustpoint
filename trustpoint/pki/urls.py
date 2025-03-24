@@ -3,10 +3,8 @@
 from django.urls import path, re_path
 
 from pki.views import certificates, domains, issuing_cas, truststores
-
-from pki.views.domains import DevIdRegistrationCreateView, DevIdRegistrationDeleteView, DevIdMethodSelectView
+from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
 from pki.views.issuing_cas import IssuedCertificatesListView
-
 
 app_name = 'pki'
 

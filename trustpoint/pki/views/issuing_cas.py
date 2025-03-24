@@ -108,7 +108,7 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView):
         return context
 
 
-class IssuedCertificatesListView(ListView,IssuingCaContextMixin):
+class IssuedCertificatesListView(ListView):
     """View to display all certificates issued by a specific Issuing CA."""
 
     model = CertificateModel
