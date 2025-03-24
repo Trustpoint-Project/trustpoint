@@ -9,6 +9,7 @@ from typing import Any, ClassVar, TypeVar
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
 from django.db import models
+from django.db.models import ProtectedError
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 from trustpoint_core.oid import CertificateExtensionOid, NameOid
@@ -243,6 +244,21 @@ class CertificateExtension:
         Returns:
             CertificateExtension: The instance of the saved extension.
         """
+
+    @classmethod
+    def delete_if_orphaned(cls: type[RT], instance: RT | None) -> None:
+        """Removes the Extension instance if no longer referenced.
+
+        Since all extension classes are only referenced by the Certificate model with on_delete=models.PROTECT,
+        we can rely on the database protection to remove the instance if it is no longer referenced.
+        This saves an extra query to check if the 'certificates' reverse relation still exists.
+        """
+        if not instance or not instance.pk:
+            return
+        try:
+            instance.delete()
+        except ProtectedError:
+            return
 
 
 class BasicConstraintsExtension(CertificateExtension, models.Model):
@@ -1018,7 +1034,7 @@ class KeyPurposeIdModel(models.Model):
         return f'KeyPurposeId({self.oid})'
 
 
-class ExtendedKeyUsageExtension(models.Model):
+class ExtendedKeyUsageExtension(CertificateExtension, models.Model):
     """Represents the ExtendedKeyUsage extension in X.509 certificates.
 
     Specifies additional purposes for which the certified public key may be used.
