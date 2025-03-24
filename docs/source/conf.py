@@ -29,14 +29,17 @@ release = '0.2.0'
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.inheritance_diagram',
-    'sphinx.ext.napoleon', # For Google/NumPy docstrings
+    'sphinx.ext.napoleon',  # For Google/NumPy docstrings
+    'sphinx.ext.viewcode',  # Adds links to the source code
     'sphinxcontrib.plantuml',
-    'sphinx.ext.autosummary', # Generate summary tables
     'sphinx_autodoc_typehints',  # Render type hints
+    'autoapi.extension',
 ]
 
+autoapi_dirs = ['../../trustpoint']
+
 templates_path = ['_templates']
-exclude_patterns = []
+exclude_patterns = ['_build', '_templates']
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
