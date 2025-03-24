@@ -107,47 +107,8 @@ class AutoDeleteRelatedForeignKey(AutoDeleteRelatedMixin, models.ForeignKey):
     This is useful for cases when a parent object is deleted, related objects should be deleted as well.
     """
 
-
-class IndividualDeleteQuerySet(models.QuerySet[type[T]]):
-    """Overrides a model's queryset to use individual delete instead of bulk delete.
-
-    This ensures the model instance delete() method is always called, even when deleting a queryset.
-    """
-
-    @transaction.atomic
-    def delete(self) -> tuple[int, dict[str, int]]:
-        """Delete each object individually.
-
-        Iterates over each object in the queryset and calls delete() on it.
-
-        Returns:
-            tuple[int, dict[str, int]]: A tuple of:
-                a) the total number of objects deleted and
-                b) a dictionary with the model name and the count.
-        """
-        count: int = 0
-        for obj in self:
-            obj.delete()
-            count += 1
-        # using _meta to return model name to keep API from superclass
-        if count == 0:
-            return 0, {}
-        return count, {self[0]._meta.label: count}  # noqa: SLF001
-
-
-class IndividualDeleteManager(models.Manager[T]):
-    """Overrides a model's manager to use individual delete instead of bulk delete.
-
-    This ensures the model instance delete() method is always
-    called, even when deleting a queryset.
-    """
-
-    def get_queryset(self) -> IndividualDeleteQuerySet[T]:
-        """Return the queryset with individual delete."""
-        return IndividualDeleteQuerySet(self.model, using=self._db)
-
-
-#CDM_T = TypeVar('CDM_T', bound='CustomDeleteActionModel')
+# TODO(all): defining a type var with a str literal as bound causes mypy to crash (cmp. https://github.com/python/mypy/issues/12858)
+#CDM_T = TypeVar('CDM_T', bound='CustomDeleteActionModel', covariant=True)
 
 class CustomDeleteActionQuerySet(models.QuerySet[type[T]]):
     """Overrides a model's queryset to invoke pre- and post-delete hooks.
@@ -169,12 +130,15 @@ class CustomDeleteActionQuerySet(models.QuerySet[type[T]]):
                 b) a dictionary with the model name and the count.
         """
         # Pre-delete actions
+        # create a copy of the models in the queryset for post-delete actions since it is cleared during the delete
+        obj_set = set()
         for obj in self:
+            obj_set.add(obj)
             obj.pre_delete()
         # Perform the actual deletion
         count = super().delete(*args, **kwargs)
         # Post-delete actions
-        for obj in self:
+        for obj in obj_set:
             obj.post_delete()
         return count
 
@@ -212,6 +176,7 @@ class CustomDeleteActionModel(models.Model):
         """Post-delete hook for custom logic after actual deletion.
 
         This can for example be used to clean up orphaned related objects.
+        Keep in mind the model is no longer in the database at the time this function is called.
         """
 
     @final

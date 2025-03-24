@@ -271,11 +271,11 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
         matches = otp == self.otp
         if not matches:
             self.attempts += 1
-            log_msg = (
-                f'Incorrect OTP attempt {self.attempts} for browser credential download '
-                f'for device {self.device.unique_name} (credential id={self.issued_credential_model.id})'
+            logger.warning(
+                'Incorrect OTP attempt %s for browser credential download '
+                'for device %s (credential id=%i)',
+                self.attempts, self.device.unique_name, self.issued_credential_model.id
             )
-            logger.warning(log_msg)
 
             if self.attempts >= self.BROWSER_MAX_OTP_ATTEMPTS:
                 self.otp = '-'
@@ -285,11 +285,11 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
                 self.save()
             return False
 
-        log_msg = (
-            f'Correct OTP entered for browser credential download for device {self.device.unique_name}'
-            f'(credential id={self.issued_credential_model.id})'
+        logger.info(
+            'Correct OTP entered for browser credential download for device %s'
+            '(credential id=%i)',
+            self.device.unique_name, self.issued_credential_model.id
         )
-        logger.info(log_msg)
         self.otp = '-'
         self.download_token = secrets.token_urlsafe(32)
         self.token_created_at = timezone.now()

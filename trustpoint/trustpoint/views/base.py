@@ -146,31 +146,12 @@ class ContextDataMixin:
         return super_get_context_method(**kwargs)
 
 
-class BulkDeletionMixin:
+class BaseBulkDeleteView(FormMixin, BaseListView):
+    """Base view for bulk deletion of objects."""
+
     queryset: Any
     get_queryset: Callable
     success_url = None
-    object_list = list
-
-    def delete(self, *_args: tuple, **_kwargs: dict[str, Any]) -> HttpResponse:
-        self.queryset = self.get_queryset()
-        success_url = self.get_success_url()
-        self.queryset.delete()
-        return HttpResponseRedirect(success_url)
-
-    def post(self, request: HttpRequest, *args: tuple[Any], **kwargs: dict[str, Any]) -> HttpResponse:
-        return self.delete(request, *args, **kwargs)
-
-    def get_success_url(self):
-        if self.success_url:
-            return self.success_url
-
-        exc_msg = 'No URL to redirect to. Provide a success_url.'
-        raise ImproperlyConfigured(exc_msg)
-
-
-class BaseBulkDeleteView(BulkDeletionMixin, FormMixin, BaseListView):
-    """Base view for bulk deletion of objects."""
 
     form_class = dj_forms.Form
 
@@ -187,6 +168,14 @@ class BaseBulkDeleteView(BulkDeletionMixin, FormMixin, BaseListView):
         success_url = self.get_success_url()
         self.queryset.delete()
         return HttpResponseRedirect(success_url)
+
+    def get_success_url(self) -> str:
+        """Returns the URL to redirect to after a successful deletion."""
+        if self.success_url:
+            return self.success_url
+
+        exc_msg = 'No URL to redirect to. Provide a success_url.'
+        raise ImproperlyConfigured(exc_msg)
 
 
 class PrimaryKeyListFromPrimaryKeyString:

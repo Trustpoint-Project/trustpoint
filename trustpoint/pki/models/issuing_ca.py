@@ -210,7 +210,7 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
 
     def pre_delete(self) -> None:
         """Check for unexpired certificates issued by this CA before deleting it."""
-        print(f'Pre CA {self} delete')
+        self.logger.info('Deleting Issuing CA %s', self)
         qs = self.get_issued_certificates()
 
         for cert in qs:
@@ -220,5 +220,5 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
 
     def post_delete(self) -> None:
         """Deletes the credential of this CA after deleting it."""
-        print(f'Post CA {self} delete')
+        self.logger.debug('Deleting credential of Issuing CA %s', self)
         self.credential.delete()
