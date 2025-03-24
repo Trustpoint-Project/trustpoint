@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.abspath('../../trustpoint'))
 os.environ['DJANGO_SETTINGS_MODULE'] = 'trustpoint.settings'
 django.setup()
 
-PLANTUML_PATH = Path(__file__).parent.absolute() / Path('plantuml-mit-1.2024.6.jar')
+PLANTUML_PATH = Path(__file__).parent.absolute() / Path('plantuml-mit-1.2025.2.jar')
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
