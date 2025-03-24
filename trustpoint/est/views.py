@@ -11,6 +11,9 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives._serialization import Encoding
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+from pyasn1.codec.ber.encoder import encode
+from pyasn1.type import univ, namedtype, char
+
 from devices.issuer import LocalDomainCredentialIssuer, LocalTlsClientCredentialIssuer, LocalTlsServerCredentialIssuer, \
     OpcUaClientCredentialIssuer, OpcUaServerCredentialIssuer
 from devices.models import DeviceModel, IssuedCredentialModel
@@ -56,8 +59,11 @@ class LoggedHttpResponse(HttpResponse, LoggerMixin):
         if status and status >= THRESHOLD_LOGGER:
             if isinstance(content, bytes):
                 content = content.decode('utf-8')
-            error_message = f'EST Error - {status} - {content}'
+            error_message = f'EST - ERROR - {status} - {content}'
             self.logger.error(error_message)
+        else:
+            success_message = f'EST - SUCCESS - {status}'
+            self.logger.info(success_message)
 
         super().__init__(content, *args, status=status, **kwargs)
 
@@ -222,7 +228,7 @@ class EstAuthenticationMixin:
         return None, LoggedHttpResponse('No valid authentication method provided', status=400)
 
 
-class EstHttpMixin:
+class EstHttpMixin(LoggerMixin):
     """Mixin for processing HTTP requests for EST endpoints.
 
     This mixin reads the raw message from the request, verifies that the payload:
@@ -236,7 +242,7 @@ class EstHttpMixin:
     max_payload_size = 131072
     raw_message: bytes
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse | LoggedHttpResponse:
+    def process_http_request(self, request: HttpRequest) -> tuple[bytes | None, LoggedHttpResponse | None]:
         """Process the incoming HTTP request for EST enrollment.
 
         The method performs the following checks in order:
@@ -247,31 +253,42 @@ class EstHttpMixin:
           4. Delegates the remaining request processing to the parent class's dispatch method.
 
         :param request: The incoming HttpRequest.
-        :param args: Additional positional arguments.
-        :param kwargs: Additional keyword arguments.
         :return: An LoggedHttpResponse, either an error response or the result of the parent dispatch.
         """
         self.raw_message = request.read()
+
+        self.logger.info("Request received for: %s", request.path)
+        self.logger.info("Query parameters: %s", request.GET.dict())
+        self.logger.info("Headers: %s", dict(request.headers))
+
+        self.logger.info("Request method: %s", request.method)
+        self.logger.info("Request path: %s", request.path)
+        self.logger.info("Query parameters: %s", request.GET.dict())
+        self.logger.info("Headers: %s", dict(request.headers))
+        self.logger.info("User: %s", request.user if request.user.is_authenticated else "Anonymous")
+        self.logger.info("Cookies: %s", request.COOKIES)
+        self.logger.info("Content-Type: %s", request.content_type)
+
+
         if len(self.raw_message) > self.max_payload_size:
             error_message = 'Message is too large.'
-            return LoggedHttpResponse(content=error_message, status=413)
+            return None, LoggedHttpResponse(content=error_message, status=413)
 
-        content_type = request.headers.get('Content-Type')
-        if content_type != self.expected_content_type:
-            error_message = ('Message is missing the content type.'
-                       if content_type is None
-                       else f'Message does not have the expected content type: {self.expected_content_type}.')
-            return LoggedHttpResponse(content=error_message, status=415)
+        # content_type = request.headers.get('Content-Type')
+        # if content_type != self.expected_content_type:
+        #     error_message = ('Message is missing the content type.'
+        #                if content_type is None
+        #                else f'Message does not have the expected content type: {self.expected_content_type}.')
+        #     return LoggedHttpResponse(content=error_message, status=415)
 
         if request.headers.get('Content-Transfer-Encoding', '').lower() == 'base64':
             try:
                 self.raw_message = base64.b64decode(self.raw_message)
             except Exception:  # noqa: BLE001
                 error_message = 'Invalid base64 encoding in message.'
-                return LoggedHttpResponse(content=error_message, status=400)
+                return None, LoggedHttpResponse(content=error_message, status=400)
 
-        parent = cast('Dispatchable', super())
-        return parent.dispatch(request, *args, **kwargs)
+        return self.raw_message, None
 
 
 class EstRequestedDomainExtractorMixin:
@@ -284,32 +301,21 @@ class EstRequestedDomainExtractorMixin:
     """
 
     requested_domain: DomainModel
-    issuing_ca_certificate: x509.Certificate
-    signature_suite: SignatureSuite
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse | LoggedHttpResponse:
+    def extract_requested_domain(self, domain_name: str)  -> tuple[DomainModel | None, LoggedHttpResponse | None]:
         """Extracts the requested domain and sets the relevant certificate and signature suite.
-
-        :param request: The HTTP request object.
-        :param args: Additional positional arguments.
-        :param kwargs: Additional keyword arguments, specifically the 'domain' parameter.
 
         :return: The response from the parent class's dispatch method.
         """
-        domain_name = cast(str, kwargs.get('domain'))
 
         try:
-            self.requested_domain = DomainModel.objects.get(unique_name=domain_name)
+            requested_domain = DomainModel.objects.get(unique_name=domain_name)
         except DomainModel.DoesNotExist:
-            return LoggedHttpResponse('Domain does not exist.', status=404)
+            return None, LoggedHttpResponse('Domain does not exist.', status=404)
+        else:
+            return requested_domain, None
 
-        self.issuing_ca_certificate = self.requested_domain.issuing_ca.credential.get_certificate()
-        self.signature_suite = SignatureSuite.from_certificate(self.issuing_ca_certificate)
-
-        return cast(Dispatchable, super()).dispatch(request, *args, **kwargs)
-
-
-class EstRequestedCertTemplateExtractorMixin(LoggedHttpResponse):
+class EstRequestedCertTemplateExtractorMixin:
     """Mixin to extract and validate the certificate template from request parameters."""
     requested_cert_template_str: str
     allowed_cert_templates: ClassVar[list[str]] = ['tlsserver',
@@ -326,21 +332,17 @@ class EstRequestedCertTemplateExtractorMixin(LoggedHttpResponse):
         'domaincredential': LocalDomainCredentialIssuer,
     }
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse | LoggedHttpResponse:
+    def extract_cert_template(self, cert_template: str) -> tuple[DomainModel | None, LoggedHttpResponse | None]:
         """Extract and validate the 'certtemplate' parameter, then delegate request processing."""
-        cert_template = kwargs.get('certtemplate')
 
         if cert_template not in self.allowed_cert_templates:
             allowed = ', '.join(self.allowed_cert_templates)
-            return LoggedHttpResponse(
+            return None, LoggedHttpResponse(
                 f'Invalid or missing cert template. Allowed values are: {allowed}.',
                 status=404
             )
 
-        self.requested_cert_template_str = cert_template
-
-        return cast(Dispatchable, super()).dispatch(request, *args, **kwargs)
-
+        return cert_template, None
 
 class EstPkiMessageSerializerMixin:
     """Mixin to handle serialization and deserialization of PKCS#10 certificate signing requests."""
@@ -746,16 +748,50 @@ class EstSimpleEnrollmentView(EstAuthenticationMixin,
     issued_credential: IssuedCredentialModel
     issuing_ca_certificate: x509.Certificate
 
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle GET requests for the /simpleenroll endpoint."""
+        self.logger.info("Request received: method=%s path=%s", request.method, request.path)
+        self.logger.info("Query parameters: %s", request.GET.dict())
+        self.logger.info("Headers: %s", dict(request.headers))
+
+        self.logger.info("Request method: %s", request.method)
+        self.logger.info("Request path: %s", request.path)
+        self.logger.info("Query parameters: %s", request.GET.dict())
+        self.logger.info("Headers: %s", dict(request.headers))
+        self.logger.info("User: %s", request.user if request.user.is_authenticated else "Anonymous")
+        self.logger.info("Cookies: %s", request.COOKIES)
+        self.logger.info("Content-Type: %s", request.content_type)
+        self.logger.info("kwargs: %s", str(kwargs))
+        self.logger.info("args: %s", str(args))
+
+        return LoggedHttpResponse('', status=204)
+
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
         """Handle POST requests for simple enrollment."""
-        del args, kwargs, request
+        self.logger.info("Request received: method=%s path=%s", request.method, request.path)
+        del args
         credential_request = None
+        device = None
 
-        device, http_response = self.authenticate_request(
-            request=self.request,
-            domain=self.requested_domain,
-            cert_template_str=self.requested_cert_template_str,
-        )
+        raw_message, http_response = self.process_http_request(request)
+
+        if not http_response and raw_message:
+            domain_name = cast(str, kwargs.get('domain'))
+            self.requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
+
+        if not http_response and raw_message and self.requested_domain:
+            cert_template = kwargs.get('certtemplate')
+            self.requested_cert_template_str, http_response = self.extract_cert_template(cert_template=cert_template)
+
+        if (not http_response and
+                raw_message and
+                self.requested_domain and
+                self.requested_cert_template_str):
+            device, http_response = self.authenticate_request(
+                request=self.request,
+                domain=self.requested_domain,
+                cert_template_str=self.requested_cert_template_str,
+            )
 
         if not http_response:
             credential_request, http_response = self.deserialize_pki_message(self.raw_message)
@@ -786,7 +822,7 @@ class EstSimpleEnrollmentView(EstAuthenticationMixin,
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class EstCACertsView(EstAuthenticationMixin, EstRequestedDomainExtractorMixin, View):
+class EstCACertsView(EstAuthenticationMixin, EstRequestedDomainExtractorMixin, View, LoggerMixin):
     """View to handle the EST /cacerts endpoint.
 
     Returns the CA certificate chain in a (simplified) PKCS#7 MIME format.
@@ -799,17 +835,28 @@ class EstCACertsView(EstAuthenticationMixin, EstRequestedDomainExtractorMixin, V
 
         This method retrieves the CA certificate chain and returns it in PKCS#7 MIME format.
         """
-        del request, args, kwargs
+        self.logger.info("Request received: method=%s path=%s", request.method, request.path)
+        del request, args
 
         try:
+            domain_name = cast(str, kwargs.get('domain'))
+            self.requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
+
+            if http_response:
+                return http_response
+
             ca_credential = self.requested_domain.issuing_ca.credential
 
             ca_cert = ca_credential.get_certificate()
             certificate_chain = [ca_cert, *ca_credential.get_certificate_chain()]
             pkcs7_certs = CertificateCollectionSerializer(certificate_chain).as_pkcs7_der()
 
+            b64_pkcs7 = base64.b64encode(pkcs7_certs)
+
+            self.logger.info(str(b64_pkcs7))
+
             return LoggedHttpResponse(
-                pkcs7_certs,
+                b64_pkcs7,
                 status=200,
                 content_type='application/pkcs7-mime',
                 headers={'Content-Transfer-Encoding': 'base64'}
@@ -818,3 +865,20 @@ class EstCACertsView(EstAuthenticationMixin, EstRequestedDomainExtractorMixin, V
             return LoggedHttpResponse(
                 f'Error retrieving CA certificates: {e!s}', status=500
             )
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class EstCsrAttrsView(View, LoggerMixin):
+    """View to handle the EST /csrattrs endpoint.
+
+    This endpoint is not supported and returns 204 No Content.
+    """
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle GET requests for the /csrattrs endpoint."""
+        self.logger.info("Request received: method=%s path=%s", request.method, request.path)
+        del request, args, kwargs
+
+        return LoggedHttpResponse(
+            f'csrattrs/ is not supported', status=404
+        )
