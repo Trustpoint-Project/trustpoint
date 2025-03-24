@@ -12,7 +12,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 from trustpoint_core.oid import CertificateExtensionOid, NameOid
-from util.db import AutoDeleteRelatedForeignKey, CustomDeleteActionModel, NoRefCheckOrphanDeletionMixin
+from util.db import CustomDeleteActionModel, OrphanDeletionMixin
 
 __all__ = [
     'AttributeTypeAndValue',
@@ -72,7 +72,7 @@ class AttributeTypeAndValue(models.Model):
         return NameOid(self.oid).verbose_name
 
 
-class GeneralNameRFC822Name(models.Model):
+class GeneralNameRFC822Name(OrphanDeletionMixin, models.Model):
     """GeneralNameRFC822Name Model.
 
     Entries of either SubjectAlternativeNames or IssuerAlternativeNames.
@@ -84,12 +84,14 @@ class GeneralNameRFC822Name(models.Model):
 
     objects: models.Manager[GeneralNameRFC822Name]
 
+    check_references_on_delete = ('general_names_set',)
+
     def __str__(self) -> str:
         """Returns a string representation of the GeneralNameRFC822Name."""
         return f'{self.value}'
 
 
-class GeneralNameDNSName(models.Model):
+class GeneralNameDNSName(OrphanDeletionMixin, models.Model):
     """GeneralNameDNSName Model.
 
     See RFC5280 for more information.
@@ -99,12 +101,14 @@ class GeneralNameDNSName(models.Model):
 
     objects: models.Manager[GeneralNameDNSName]
 
+    check_references_on_delete = ('general_names_set',)
+
     def __str__(self) -> str:
         """Returns a string representation of the GeneralNameDNSName."""
         return f'{self.value}'
 
 
-class GeneralNameDirectoryName(models.Model):
+class GeneralNameDirectoryName(OrphanDeletionMixin, models.Model):
     """GeneralNameDirectoryName Model.
 
     Entries of either SubjectAlternativeNames or IssuerAlternativeNames.
@@ -116,6 +120,8 @@ class GeneralNameDirectoryName(models.Model):
 
     objects: models.Manager[GeneralNameDirectoryName]
 
+    check_references_on_delete = ('general_names_set',)
+
     def __str__(self) -> str:
         """Returns a string representation of the GeneralNameDirectoryName."""
         names = self.names.all()
@@ -126,7 +132,7 @@ class GeneralNameDirectoryName(models.Model):
         return string[:-2]
 
 
-class GeneralNameUniformResourceIdentifier(models.Model):
+class GeneralNameUniformResourceIdentifier(OrphanDeletionMixin, models.Model):
     """GeneralNameUniformResourceIdentifier Model.
 
     Entries of either SubjectAlternativeNames or IssuerAlternativeNames.
@@ -138,12 +144,14 @@ class GeneralNameUniformResourceIdentifier(models.Model):
 
     objects: models.Manager[GeneralNameUniformResourceIdentifier]
 
+    check_references_on_delete = ('general_names_set',)
+
     def __str__(self) -> str:
         """Returns a string representation of the GeneralNameUniformResourceIdentifier."""
         return f'{self.value}'
 
 
-class GeneralNameIpAddress(models.Model):
+class GeneralNameIpAddress(OrphanDeletionMixin, models.Model):
     """GeneralNameIpAddress Model.
 
     Entries of either SubjectAlternativeNames or IssuerAlternativeNames.
@@ -162,6 +170,8 @@ class GeneralNameIpAddress(models.Model):
 
     objects: models.Manager[GeneralNameIpAddress]
 
+    check_references_on_delete = ('general_names_set',)
+
     class Meta:  # noqa: D106
         unique_together = ('ip_type', 'value')
 
@@ -170,7 +180,7 @@ class GeneralNameIpAddress(models.Model):
         return f'{self.IpType(self.ip_type).label}:{self.value}'
 
 
-class GeneralNameRegisteredId(models.Model):
+class GeneralNameRegisteredId(OrphanDeletionMixin, models.Model):
     """GeneralNameRegisteredId Model.
 
     Entries of either SubjectAlternativeNames or IssuerAlternativeNames.
@@ -182,12 +192,14 @@ class GeneralNameRegisteredId(models.Model):
 
     objects: models.Manager[GeneralNameRegisteredId]
 
+    check_references_on_delete = ('general_names_set',)
+
     def __str__(self) -> str:
         """Returns a string representation of the GeneralNameRegisteredId."""
         return f'{self.value}'
 
 
-class GeneralNameOtherName(models.Model):
+class GeneralNameOtherName(OrphanDeletionMixin, models.Model):
     """GeneralNameOtherName Model.
 
     Entries of either SubjectAlternativeNames or IssuerAlternativeNames.
@@ -199,6 +211,8 @@ class GeneralNameOtherName(models.Model):
     value = models.CharField(max_length=16384, editable=False, verbose_name='Value')
 
     objects: models.Manager[GeneralNameOtherName]
+
+    check_references_on_delete = ('general_names_set',)
 
     class Meta:  # noqa: D106
         unique_together = ('type_id', 'value')
@@ -212,7 +226,7 @@ T = TypeVar('T', bound=x509.ExtensionType)
 RT = TypeVar('RT', bound='CertificateExtension')
 
 
-class CertificateExtension(NoRefCheckOrphanDeletionMixin):
+class CertificateExtension(OrphanDeletionMixin):
     """Abstract Base Class of Extension Models.
 
     Due to a Metaclass conflict, this class is not derived from abc.ABC on purpose.
@@ -404,44 +418,42 @@ class KeyUsageExtension(CertificateExtension, models.Model):
         return key_usage_extension
 
 
-class GeneralNamesModel(NoRefCheckOrphanDeletionMixin, models.Model):
+class GeneralNamesModel(OrphanDeletionMixin, CustomDeleteActionModel):
     """Represents a collection of general names as per RFC5280.
 
     Used for both SubjectAlternativeName and IssuerAlternativeName extensions.
     """
 
-    objects: models.Manager[GeneralNamesModel]
-
     _alternative_name_extension_type: str
 
     rfc822_names = models.ManyToManyField(
-        to=GeneralNameRFC822Name, verbose_name=_('RFC822 Names'), related_name='issuer_alternative_names'
+        to=GeneralNameRFC822Name, verbose_name=_('RFC822 Names'), related_name='general_names_set'
     )
 
     dns_names = models.ManyToManyField(
-        GeneralNameDNSName, verbose_name=_('DNS Names'), related_name='issuer_alternative_names'
+        GeneralNameDNSName, verbose_name=_('DNS Names'), related_name='general_names_set'
     )
 
     directory_names = models.ManyToManyField(
-        GeneralNameDirectoryName, verbose_name=_('Directory Names'), related_name='issuer_alternative_names'
+        GeneralNameDirectoryName, verbose_name=_('Directory Names'), related_name='general_names_set'
     )
 
     uniform_resource_identifiers = models.ManyToManyField(
         GeneralNameUniformResourceIdentifier,
         verbose_name=_('Uniform Resource Identifiers'),
-        related_name='issuer_alternative_names',
+        related_name='general_names_set',
     )
 
     ip_addresses = models.ManyToManyField(
-        GeneralNameIpAddress, verbose_name=_('IP Addresses'), related_name='issuer_alternative_names'
+        GeneralNameIpAddress, verbose_name=_('IP Addresses'), related_name='general_names_set'
     )
 
     registered_ids = models.ManyToManyField(
-        GeneralNameRegisteredId, verbose_name=_('Registered IDs'), related_name='issuer_alternative_names'
+        GeneralNameRegisteredId, verbose_name=_('Registered IDs'), related_name='general_names_set'
     )
 
     other_names = models.ManyToManyField(
-        GeneralNameOtherName, verbose_name=_('Other Names'), related_name='issuer_alternative_names'
+        GeneralNameOtherName, verbose_name=_('Other Names'), related_name='general_names_set'
     )
 
     def __str__(self) -> str:
@@ -812,7 +824,7 @@ class SubjectKeyIdentifierExtension(CertificateExtension, models.Model):
         return ski_extension
 
 
-class NoticeReference(NoRefCheckOrphanDeletionMixin, models.Model):
+class NoticeReference(OrphanDeletionMixin, models.Model):
     """Represents a NoticeReference as per RFC5280."""
 
     organization = models.CharField(max_length=200, editable=False, verbose_name='Organization', null=True, blank=True)  # noqa: DJ001
@@ -827,7 +839,7 @@ class NoticeReference(NoRefCheckOrphanDeletionMixin, models.Model):
         return f'{self.organization or "Unknown"}: {self.notice_numbers}'
 
 
-class UserNotice(NoRefCheckOrphanDeletionMixin, CustomDeleteActionModel):
+class UserNotice(OrphanDeletionMixin, CustomDeleteActionModel):
     """Represents a UserNotice as per RFC5280."""
 
     notice_ref = models.ForeignKey(
@@ -849,7 +861,7 @@ class UserNotice(NoRefCheckOrphanDeletionMixin, CustomDeleteActionModel):
         NoticeReference.delete_if_orphaned(self.notice_ref)
 
 
-class CPSUriModel(NoRefCheckOrphanDeletionMixin, models.Model):
+class CPSUriModel(OrphanDeletionMixin, models.Model):
     """Represents a CPS URI as per RFC5280."""
 
     cps_uri = models.CharField(max_length=2048, editable=False, verbose_name='CPS URI')
@@ -861,7 +873,7 @@ class CPSUriModel(NoRefCheckOrphanDeletionMixin, models.Model):
         return f'CPS URI: {self.cps_uri}'
 
 
-class QualifierModel(NoRefCheckOrphanDeletionMixin, CustomDeleteActionModel):
+class QualifierModel(OrphanDeletionMixin, CustomDeleteActionModel):
     """Generic model to represent either a CPS URI or a User Notice."""
 
     cps_uri = models.ForeignKey(
@@ -1075,36 +1087,42 @@ class ExtendedKeyUsageExtension(CertificateExtension, models.Model):
         return eku_extension
 
 
-class GeneralNameModel(NoRefCheckOrphanDeletionMixin, models.Model):
-    # do_reference_check must be True here
-    # as the GeneralNamesModel also has ManyToManyFields to these GeneralName* models.
-    rfc822_name = AutoDeleteRelatedForeignKey(
-        GeneralNameRFC822Name, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=True
+class GeneralNameModel(OrphanDeletionMixin, CustomDeleteActionModel):
+    rfc822_name = models.ForeignKey(
+        GeneralNameRFC822Name, null=True, blank=True, on_delete=models.PROTECT
     )
-    dns_name = AutoDeleteRelatedForeignKey(
-        GeneralNameDNSName, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=True
+    dns_name = models.ForeignKey(
+        GeneralNameDNSName, null=True, blank=True, on_delete=models.PROTECT
     )
-    directory_name = AutoDeleteRelatedForeignKey(
-        GeneralNameDirectoryName, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=True
+    directory_name = models.ForeignKey(
+        GeneralNameDirectoryName, null=True, blank=True, on_delete=models.PROTECT
     )
-    uri = AutoDeleteRelatedForeignKey(
-        GeneralNameUniformResourceIdentifier, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=True
+    uri = models.ForeignKey(
+        GeneralNameUniformResourceIdentifier, null=True, blank=True, on_delete=models.PROTECT
     )
-    ip_address = AutoDeleteRelatedForeignKey(
-        GeneralNameIpAddress, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=True
+    ip_address = models.ForeignKey(
+        GeneralNameIpAddress, null=True, blank=True, on_delete=models.PROTECT
     )
-    registered_id = AutoDeleteRelatedForeignKey(
-        GeneralNameRegisteredId, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=True
+    registered_id = models.ForeignKey(
+        GeneralNameRegisteredId, null=True, blank=True, on_delete=models.PROTECT
     )
-    other_name = AutoDeleteRelatedForeignKey(
-        GeneralNameOtherName, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=True
+    other_name = models.ForeignKey(
+        GeneralNameOtherName, null=True, blank=True, on_delete=models.PROTECT
     )
-
-    objects = models.Manager['GeneralNameModel']
 
     def __str__(self) -> str:
         """Returns a string representation of the GeneralNameModel."""
         return f'GeneralName({self.get_str()})'
+
+    def post_delete(self) -> None:
+        """Clean up related orphaned extension field models."""
+        GeneralNameRFC822Name.delete_if_orphaned(self.rfc822_name)
+        GeneralNameDNSName.delete_if_orphaned(self.dns_name)
+        GeneralNameDirectoryName.delete_if_orphaned(self.directory_name)
+        GeneralNameUniformResourceIdentifier.delete_if_orphaned(self.uri)
+        GeneralNameIpAddress.delete_if_orphaned(self.ip_address)
+        GeneralNameRegisteredId.delete_if_orphaned(self.registered_id)
+        GeneralNameOtherName.delete_if_orphaned(self.other_name)
 
     def get_str(self) -> str:  # noqa: PLR0911
         """Returns a string representation of the GeneralNameModel."""
@@ -1135,7 +1153,6 @@ class GeneralNameModel(NoRefCheckOrphanDeletionMixin, models.Model):
             GeneralNameModel: A newly created or updated GeneralNameModel.
         """
         gn_model = cls()
-        gn_model.save()
 
         if isinstance(gname, x509.RFC822Name):
             rfc822_obj, _ = GeneralNameRFC822Name.objects.get_or_create(value=gname.value)
@@ -1190,7 +1207,7 @@ class GeneralNameModel(NoRefCheckOrphanDeletionMixin, models.Model):
         return gn_model
 
 
-class GeneralSubtree(CustomDeleteActionModel):
+class GeneralSubtree(OrphanDeletionMixin, CustomDeleteActionModel):
     """Represents a single GeneralSubtree as per RFC5280.
 
     Base is a single GeneralName.
@@ -1275,7 +1292,7 @@ class NameConstraintsExtension(CertificateExtension, models.Model):
         return nc_ext
 
 
-class DistributionPointName(NoRefCheckOrphanDeletionMixin, CustomDeleteActionModel):
+class DistributionPointName(OrphanDeletionMixin, CustomDeleteActionModel):
     full_name = models.ForeignKey(GeneralNamesModel, on_delete=models.PROTECT, null=True, blank=True)
 
     name_relative_to_crl_issuer = models.ManyToManyField(

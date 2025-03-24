@@ -23,7 +23,7 @@ from trustpoint_core.oid import (
     SignatureSuite,
 )
 from trustpoint_core.serializer import CertificateSerializer, PublicKeySerializer
-from util.db import AutoDeleteRelatedForeignKey, CustomDeleteActionModel
+from util.db import CustomDeleteActionModel
 
 from pki.models.extension import (
     AttributeTypeAndValue,

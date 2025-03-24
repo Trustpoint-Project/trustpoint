@@ -6,106 +6,14 @@ from typing import TYPE_CHECKING, Any, TypeVar, final
 
 from django.db import models, transaction
 from django.db.models import ProtectedError
-from django.db.models.signals import post_delete
-
-from trustpoint.views.base import LoggerMixin
 
 if TYPE_CHECKING:
-    from django.db.models.fields.related import RelatedField
-
-    _Base = RelatedField
+    from collections.abc import Iterable
     _ModelBase = models.Model
 else:
-    _Base = object
     _ModelBase = object
 
 T = TypeVar('T', bound=models.Model)
-
-
-class AutoDeleteRelatedMixin(LoggerMixin, _Base):
-    """Utility for deleting the object referenced by a relation when the parent object is deleted.
-
-    This is useful for cases when a parent object is deleted, related objects should be deleted as well.
-    """
-    do_reference_check: bool
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initializes the AutoDeleteRelatedMixin object.
-
-        Args:
-            *args: Positional arguments passed to super().__init__().
-            **kwargs: Keyword arguments, for reference check, and passed to super().__init__().
-
-        With kwarg "do_reference_check=True" (default):
-            Automagically checks if the referenced model is still referenced by other objects
-            (even in other models) and only deletes it if it is not.
-
-        With kwarg "do_reference_check=False":
-            Always deletes the referenced model. Faster as it skips the reference check.
-            If there are other references using on_delete=models.PROTECT,
-            the object is kept in the database if still referenced.
-            WARNING: This requires ALL references to the referenced model to use on_delete=models.PROTECT
-            as they may not only delete the referenced model despite not being orphaned,
-            but could also cascade delete those other referencing models inadvertently.
-        """
-        self.do_reference_check = kwargs.pop('do_reference_check', True)
-        super().__init__(*args, **kwargs)
-
-    def contribute_to_class(self, cls: type[models.Model], name: str, *args: Any) -> None:
-        """Register the signal when the model class is fully prepared."""
-        super().contribute_to_class(cls, name, *args)
-        post_delete.connect(self._delete_referenced_model, sender=cls)
-
-    def _has_references(self, related_object: _ModelBase) -> bool:
-        """Get ReferencedManager of the related object and check if there are still references somewhere else.
-
-        Works for ForeignKey as well as ManyToManyField
-        """
-        related_model_cls = self.related_model
-        links = [
-            f
-            for f in related_model_cls._meta.get_fields()   # noqa: SLF001
-            if (f.one_to_many or f.one_to_one) and f.auto_created and not f.concrete
-        ]
-
-        for link in links:
-            log_msg = 'Checking references for ' + link.name
-            self.logger.debug(log_msg)
-            references_exist = getattr(related_object, link.get_accessor_name()).exists()
-            if references_exist:
-                log_msg = f'References exist for {link.name}'
-                self.logger.debug(log_msg)
-                return True
-
-        log_msg = f'No refs found. Deleting related obj {related_object}'
-        self.logger.debug(log_msg)
-        return False
-
-    def _delete_referenced_model(self, sender: models.Model, instance: models.Model, **kwargs: Any) -> None:
-        """Signal receiver that deletes the referenced model."""
-        del sender, kwargs
-        if not self.name:
-            return
-        related_object = getattr(instance, self.name, None)
-
-        if not related_object:
-            return
-
-        if self.do_reference_check and self._has_references(related_object):
-            return
-
-        if related_object.pk:
-            try:
-                related_object.delete()
-            except ProtectedError:
-                # is still referenced by other objects with on_delete=models.PROTECT and kept in the database
-                return
-
-class AutoDeleteRelatedForeignKey(AutoDeleteRelatedMixin, models.ForeignKey):
-    """A ForeignKey that deletes the object referenced by the FK when the parent object is deleted.
-
-    This is useful for cases when a parent object is deleted, related objects should be deleted as well.
-    """
 
 # TODO(all): defining a type var with a str literal as bound causes mypy to crash (cmp. https://github.com/python/mypy/issues/12858)
 #CDM_T = TypeVar('CDM_T', bound='CustomDeleteActionModel', covariant=True)
@@ -189,50 +97,47 @@ class CustomDeleteActionModel(models.Model):
         return count
 
 
-class SafeOrphanDeletionMixin(_ModelBase):
-    """Mixin for referenced models that should be deleted after their referenced object is deleted."""
+class OrphanDeletionMixin(_ModelBase):
+    """Mixin for referenced models that should be deleted after their referenced object is deleted.
+
+    This mixin does not implicitely check for remaining references and always tries to delete the object.
+    Therefore, it shall only be used when ALL references to the object either
+    a) use on_delete=models.PROTECT (which will prevent deletion of the object if it is still referenced) or
+    b) are ok with the reference being deleted even if not strictly orphaned
+        (e.g. any remaining referencing object with on_delete=models.CASCADE will also be deleted).
+    c) the reference is explicitely listed to be checked
+        (by adding it to the "check_references_on_delete" class attribute tuple in the model class).
+    """
+
+    check_references_on_delete: tuple[str, ...] | None = None
 
     @classmethod
     def delete_if_orphaned(cls: type[T], instance: T | None) -> None:
         """Removes the model instance if no longer referenced.
 
         This method checks if the referenced object is still referenced by other objects
-        (even in other models) and only deletes it if it is not.
-        """
-        raise NotImplementedError
-        # if not instance or not instance.pk:
-        #     return
-        # if not cls._has_references(instance):
-        #     try:
-        #         instance.delete()
-        #     except ProtectedError:
-        #         return
+        and only deletes it if it is not.
+        The related fields to check for remaining references can be specified
+        in the class attribute tuple check_references_on_delete.
+        It is only necessary to check fields that are not protected (e.g. ManyToManyField).
 
-
-class NoRefCheckOrphanDeletionMixin(_ModelBase):
-    """Mixin for referenced models that should be deleted after their referenced object is deleted.
-
-    This mixin skips checking for remaining references and always tries to delete the object.
-    Therefore, it shall only be used when ALL references to the object either
-    a) use on_delete=models.PROTECT (which will prevent deletion of the object if it is still referenced) or
-    b) are ok with the reference being deleted even if not strictly orphaned
-    (e.g. any remaining referencing object with on_delete=models.CASCADE will also be deleted).
-    """
-
-    @classmethod
-    def delete_if_orphaned(cls: type[T], instance: T | None) -> None:
-        """Removes the model instance if no longer referenced.
-
-        This method skips checking for remaining references and always tries to delete the object.
-        Therefore, it shall only be used when ALL references to the object either
-        a) use on_delete=models.PROTECT (which will prevent deletion of the object if it is still referenced) or
-        b) are ok with the reference being deleted even if not strictly orphaned
-        (e.g. any remaining referencing object with on_delete=models.CASCADE will also be deleted).
+        Args:
+            instance (T | None): The instance to check and delete if orphaned.
         """
         if not instance or not instance.pk:
             return
+        if instance.check_references_on_delete:
+            for rel in instance.check_references_on_delete:
+                rel_qs = getattr(instance, rel)
+                if rel_qs and rel_qs.exists():
+                    return
         try:
             instance.delete()
         except ProtectedError:
             return
 
+    @classmethod
+    def multi_delete_if_orphaned(cls, instance_pks: Iterable[int] | None) -> None:
+        """Deletes multiple model instances by PK if no longer referenced."""
+        for instance in instance_pks:
+            cls.delete_if_orphaned(cls.objects.filter(pk=instance).first())
