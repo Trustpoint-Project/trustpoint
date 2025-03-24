@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from devices.models import IssuedCredentialModel
 from django.contrib import messages
-from django.db.models import ProtectedError
+from django.db.models import ProtectedError, QuerySet
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
@@ -322,28 +322,28 @@ class DevIdMethodSelectView(DomainContextMixin, FormView):
         return HttpResponseRedirect(reverse('pki:devid_registration-method_select', kwargs={'pk': domain_pk}))
 
 
-class IssuedCertificatesView(ListView, ContextDataMixin):
+class IssuedCertificatesView(ContextDataMixin, ListView):
     """View to list certificates issued by a specific Issuing CA for a Domain."""
 
     model = CertificateModel
     template_name = 'pki/domains/issued_certificates.html'
     context_object_name = 'certificates'
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[CertificateModel]:
         """Return only certificates associated with the domain's issued credentials."""
         domain = self.get_domain()  # Get the domain
         issued_credentials = IssuedCredentialModel.objects.filter(domain=domain)
-        certificates = CertificateModel.objects.filter(
+        self.queryset = CertificateModel.objects.filter(
             credential__in=[issued_credential.credential for issued_credential in issued_credentials]
         )
-        return certificates
+        return super().get_queryset()
 
-    def get_domain(self):
+    def get_domain(self) -> DomainModel:
         """Get the domain object based on the URL parameter."""
         domain_id = self.kwargs.get('pk')
         return DomainModel.objects.get(pk=domain_id)
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
         """Pass additional context data to the template."""
         context = super().get_context_data(**kwargs)
         domain = self.get_domain()
