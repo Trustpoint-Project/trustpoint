@@ -25,6 +25,15 @@ wheels = [
 ]
 
 [[package]]
+name = "astroid"
+version = "3.3.9"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/39/33/536530122a22a7504b159bccaf30a1f76aa19d23028bd8b5009eb9b2efea/astroid-3.3.9.tar.gz", hash = "sha256:622cc8e3048684aa42c820d9d218978021c3c3d174fb03a9f0d615921744f550", size = 398731 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/de/80/c749efbd8eef5ea77c7d6f1956e8fbfb51963b7f93ef79647afd4d9886e3/astroid-3.3.9-py3-none-any.whl", hash = "sha256:d05bfd0acba96a7bd43e222828b7d9bc1e138aaeb0649707908d3702a9831248", size = 275339 },
+]
+
+[[package]]
 name = "asttokens"
 version = "2.4.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1238,15 +1247,18 @@ wheels = [
 ]
 
 [[package]]
-name = "sphinx-autodoc-typehints"
-version = "3.1.0"
+name = "sphinx-autoapi"
+version = "3.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "astroid" },
+    { name = "jinja2" },
+    { name = "pyyaml" },
     { name = "sphinx" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cb/cc/d38e7260b1bd3af0c84ad8285dfd78236584b74544510584e07963e000ec/sphinx_autodoc_typehints-3.1.0.tar.gz", hash = "sha256:a6b7b0b6df0a380783ce5b29150c2d30352746f027a3e294d37183995d3f23ed", size = 36528 }
+sdist = { url = "https://files.pythonhosted.org/packages/7f/a8/22b379a2a75ccb881217d3d4ae56d7d35f2d1bb4c8c0c51d0253676746a1/sphinx_autoapi-3.6.0.tar.gz", hash = "sha256:c685f274e41d0842ae7e199460c322c4bd7fec816ccc2da8d806094b4f64af06", size = 55417 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/14/2f/bc5bed0677ae00b9ca7919968ea675e2f696b6b20f1648262f26a7a6c6b4/sphinx_autodoc_typehints-3.1.0-py3-none-any.whl", hash = "sha256:67bdee7e27ba943976ce92ebc5647a976a7a08f9f689a826c54617b96a423913", size = 20404 },
+    { url = "https://files.pythonhosted.org/packages/58/17/0eda9dc80fcaf257222b506844207e71b5d59567c41bbdcca2a72da119b9/sphinx_autoapi-3.6.0-py3-none-any.whl", hash = "sha256:f3b66714493cab140b0e896d33ce7137654a16ac1edb6563edcbd47bf975f711", size = 35281 },
 ]
 
 [[package]]
@@ -1438,7 +1450,7 @@ dev = [
     { name = "pytest-md-report" },
     { name = "ruff" },
     { name = "sphinx" },
-    { name = "sphinx-autodoc-typehints" },
+    { name = "sphinx-autoapi" },
     { name = "sphinxcontrib-plantuml" },
     { name = "werkzeug" },
 ]
@@ -1466,7 +1478,7 @@ dev = [
     { name = "pytest-md-report" },
     { name = "ruff" },
     { name = "sphinx" },
-    { name = "sphinx-autodoc-typehints" },
+    { name = "sphinx-autoapi" },
     { name = "sphinxcontrib-plantuml" },
     { name = "werkzeug" },
 ]
@@ -1506,7 +1518,7 @@ requires-dist = [
     { name = "pytest-md-report", marker = "extra == 'dev'", specifier = ">=0.6.3" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.7.4" },
     { name = "sphinx", marker = "extra == 'dev'", specifier = ">=8.2.3" },
-    { name = "sphinx-autodoc-typehints", marker = "extra == 'dev'", specifier = ">=3.1.0" },
+    { name = "sphinx-autoapi", marker = "extra == 'dev'", specifier = ">=3.6.0" },
     { name = "sphinxcontrib-plantuml", marker = "extra == 'dev'", specifier = ">=0.30" },
     { name = "trustpoint-core", specifier = ">=0.0.5" },
     { name = "werkzeug", marker = "extra == 'dev'", specifier = ">=3.1.3,<4" },
@@ -1537,7 +1549,7 @@ dev = [
     { name = "pytest-md-report", specifier = ">=0.6.3" },
     { name = "ruff", specifier = ">=0.7.4" },
     { name = "sphinx", specifier = ">=8.2.3" },
-    { name = "sphinx-autodoc-typehints", specifier = ">=3.1.0" },
+    { name = "sphinx-autoapi", specifier = ">=3.6.0" },
     { name = "sphinxcontrib-plantuml", specifier = ">=0.30" },
     { name = "werkzeug", specifier = ">=3.1.3,<4" },
 ]
