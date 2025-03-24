@@ -27,15 +27,6 @@ from trustpoint.views.base import (
     SortableTableMixin,
 )
 
-
-class PkiProtocol(enum.Enum):
-    EST = 'est'
-    CMP = 'cmp'
-    REST = 'rest'
-    SCEP = 'scep'
-    ACME = 'acme'
-
-
 if TYPE_CHECKING:
     from django.db.models import QuerySet
     from django.forms import Form
@@ -332,7 +323,7 @@ class DevIdMethodSelectView(DomainContextMixin, FormView):
         return HttpResponseRedirect(reverse('pki:devid_registration-method_select', kwargs={'pk': domain_pk}))
 
 
-class IssuedCertificatesView(ListView):
+class IssuedCertificatesView(ListView, ContextDataMixin):
     """View to list certificates issued by a specific Issuing CA for a Domain."""
 
     model = CertificateModel
