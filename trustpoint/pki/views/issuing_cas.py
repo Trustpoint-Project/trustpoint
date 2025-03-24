@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict
 
 from django.contrib import messages
-from django.db.models import ProtectedError
+from django.db.models import ProtectedError, QuerySet
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -108,20 +108,21 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView):
         return context
 
 
-class IssuedCertificatesListView(IssuingCaContextMixin, ListView):
+class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateModel]):
     """View to display all certificates issued by a specific Issuing CA."""
 
     model = CertificateModel
     template_name = 'pki/issuing_cas/issued_certificates.html'
     context_object_name = 'certificates'
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[CertificateModel]:
         issuing_ca = get_object_or_404(IssuingCaModel, pk=self.kwargs['pk'])
-        return CertificateModel.objects.filter(
+        self.queryset = CertificateModel.objects.filter(
             issuer_public_bytes=issuing_ca.credential.certificate.subject_public_bytes
         )
+        return super().get_queryset()
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Dict[str, Any]) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         context['issuing_ca'] = get_object_or_404(IssuingCaModel, pk=self.kwargs['pk'])
         return context

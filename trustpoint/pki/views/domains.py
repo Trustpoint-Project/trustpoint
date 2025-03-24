@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, cast, Dict
 
 from devices.models import IssuedCredentialModel
 from django.contrib import messages
@@ -322,7 +322,7 @@ class DevIdMethodSelectView(DomainContextMixin, FormView):
         return HttpResponseRedirect(reverse('pki:devid_registration-method_select', kwargs={'pk': domain_pk}))
 
 
-class IssuedCertificatesView(ContextDataMixin, ListView):
+class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
     """View to list certificates issued by a specific Issuing CA for a Domain."""
 
     model = CertificateModel
