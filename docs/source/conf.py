@@ -29,9 +29,10 @@ release = '0.2.0'
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.inheritance_diagram',
-    'sphinx.ext.napoleon',
+    'sphinx.ext.napoleon', # For Google/NumPy docstrings
     'sphinxcontrib.plantuml',
-    'sphinx.ext.autosummary',
+    'sphinx.ext.autosummary', # Generate summary tables
+    'sphinx_autodoc_typehints',  # Render type hints
 ]
 
 templates_path = ['_templates']
