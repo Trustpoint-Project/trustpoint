@@ -28,14 +28,6 @@ from trustpoint.views.base import (
 )
 
 
-class PkiProtocol(enum.Enum):
-    EST = 'est'
-    CMP = 'cmp'
-    REST = 'rest'
-    SCEP = 'scep'
-    ACME = 'acme'
-
-
 if TYPE_CHECKING:
     from django.db.models import QuerySet
     from django.forms import Form
