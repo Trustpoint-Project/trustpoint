@@ -759,7 +759,7 @@ class HelpDomainCredentialEstContextView(DeviceContextMixin, DetailView[DeviceMo
         number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
         context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
         context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
-        context['domain_credential_cn'] = f'Trustpoint Domain Credential'
+        context['domain_credential_cn'] = 'Trustpoint Domain Credential'
 
         return context
 

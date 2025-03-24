@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import ipaddress
+
 from django import forms
 from django.utils.translation import gettext_lazy as _
-import ipaddress
 
 
 class EmptyForm(forms.Form):

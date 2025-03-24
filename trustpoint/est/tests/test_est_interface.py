@@ -1,19 +1,14 @@
+import base64
+from unittest.mock import MagicMock, patch
+
 import pytest
 from django.test import RequestFactory
-from unittest.mock import patch, MagicMock
-import base64
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes
-from devices.models import DeviceModel, IssuedCredentialModel
-from pki.models.credential import CredentialModel
-from pki.models.domain import DomainModel
+
 from est.views import (
-    EstSimpleEnrollmentView,
     EstCACertsView,
-    ClientCertificateAuthenticationError,
-    UsernamePasswordAuthenticationError,
-    IDevIDAuthenticationError,
+    EstSimpleEnrollmentView,
     LoggedHttpResponse,
+    UsernamePasswordAuthenticationError,
 )
 
 

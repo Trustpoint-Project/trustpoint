@@ -1,11 +1,9 @@
 import datetime
 from typing import Any
-from unittest.mock import MagicMock, patch
 
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
-from django.core.exceptions import ValidationError
 from django.utils import timezone
 from trustpoint_core import oid
 

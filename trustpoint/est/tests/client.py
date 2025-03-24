@@ -1,9 +1,10 @@
 import base64
 import logging
+
 import requests
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization.pkcs7 import load_der_pkcs7_certificates
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -22,8 +23,7 @@ class ESTClient:
         key_path=None,
         ca_cert_path=None,
     ):
-        """
-        Initialize the EST client with the necessary authentication parameters.
+        """Initialize the EST client with the necessary authentication parameters.
 
         :param est_url: Base URL for the EST service
         :param auth_type: Authentication type ('basic', 'mutual_tls', or 'both')

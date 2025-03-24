@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from django.contrib import messages
 from django.db.models import ProtectedError
 from django.http import HttpResponse, HttpResponseRedirect
-from django.shortcuts import redirect, get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
@@ -19,7 +19,7 @@ from pki.forms import (
     IssuingCaAddFileImportSeparateFilesForm,
     IssuingCaAddMethodSelectForm,
 )
-from pki.models import IssuingCaModel, CertificateModel
+from pki.models import CertificateModel, IssuingCaModel
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,

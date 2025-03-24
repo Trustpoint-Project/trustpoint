@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+from devices.models import IssuedCredentialModel
 from django.contrib import messages
 from django.db.models import ProtectedError
 from django.http import Http404, HttpResponse, HttpResponseRedirect
@@ -13,11 +14,9 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic import DeleteView
 from django.views.generic.edit import CreateView, FormView, UpdateView
 from django.views.generic.list import ListView
-from psycopg.types import enum
 
-from devices.models import IssuedCredentialModel
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
-from pki.models import DevIdRegistration, DomainModel, IssuingCaModel, CertificateModel
+from pki.models import CertificateModel, DevIdRegistration, DomainModel, IssuingCaModel
 from pki.models.truststore import TruststoreModel
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -156,7 +155,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             'allow_app_certs_without_domain': domain._meta.get_field('allow_app_certs_without_domain').verbose_name,
         }
 
-        return context  # noqa: RET504
+        return context
 
     def post(self, request, *args, **kwargs):
         """Handle config form submission."""

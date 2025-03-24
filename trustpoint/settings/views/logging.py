@@ -72,8 +72,8 @@ class LoggingFilesTableView(LoggerMixin, LoggingContextMixin, SortableTableMixin
         date_regex = re.compile(r'\b\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\b')
         matches = re.findall(date_regex, log_file)
         if matches:
-            first_date = datetime.datetime.strptime(matches[0], DATE_FORMAT).replace(tzinfo=datetime.timezone.utc)
-            last_date = datetime.datetime.strptime(matches[-1], DATE_FORMAT).replace(tzinfo=datetime.timezone.utc)
+            first_date = datetime.datetime.strptime(matches[0], DATE_FORMAT).replace(tzinfo=datetime.UTC)
+            last_date = datetime.datetime.strptime(matches[-1], DATE_FORMAT).replace(tzinfo=datetime.UTC)
         else:
             first_date = None
             last_date = None

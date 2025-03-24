@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from util.field import UniqueNameValidator
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from django_stubs_ext.db.models import TypedModelMeta
 from trustpoint_core import oid
 from util.field import UniqueNameValidator
 

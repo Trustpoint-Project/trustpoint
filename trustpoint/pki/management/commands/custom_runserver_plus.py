@@ -1,8 +1,6 @@
 import os
 
-from django.core.management import CommandError
 from django_extensions.management.commands.runserver_plus import Command as RunServerPlusCommand
-
 from pki.models import CertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TrustpointTlsServerCredentialModel
 from trustpoint_core.serializer import CertificateSerializer
@@ -13,7 +11,6 @@ class Command(RunServerPlusCommand):
 
     def store_tls_certificate(self, cert_file_path, key_file_path):
         """Fetch or create the TLS certificate and key from the database."""
-
         if not os.path.exists(cert_file_path) or not os.path.exists(key_file_path):
             print(f'Certificate or key file not found: {cert_file_path}, {key_file_path}')
 
@@ -23,10 +20,10 @@ class Command(RunServerPlusCommand):
             print('Active TLS credential already exists in the database.')
             return None, None
 
-        with open(cert_file_path, 'r') as cert_file:
+        with open(cert_file_path) as cert_file:
             cert_pem = cert_file.read()
 
-        with open(key_file_path, 'r') as key_file:
+        with open(key_file_path) as key_file:
             key_pem = key_file.read()
 
         certificate_serializer = CertificateSerializer(cert_pem)
@@ -46,7 +43,6 @@ class Command(RunServerPlusCommand):
 
     def handle(self, *args, **options):
         """Main command execution logic."""
-
         cert_file = options.get('cert_path')
         key_file = options.get('key_file_path')
 
