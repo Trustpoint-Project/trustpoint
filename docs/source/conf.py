@@ -32,11 +32,11 @@ extensions = [
     'sphinx.ext.napoleon',  # For Google/NumPy docstrings
     'sphinx.ext.viewcode',  # Adds links to the source code
     'sphinxcontrib.plantuml',
-    'sphinx_autodoc_typehints',  # Render type hints
     'autoapi.extension',
 ]
 
 autoapi_dirs = ['../../trustpoint']
+autodoc_typehints = 'description'
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', '_templates']
