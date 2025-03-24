@@ -212,22 +212,22 @@ class SafeOrphanDeletionMixin(_ModelBase):
 class NoRefCheckOrphanDeletionMixin(_ModelBase):
     """Mixin for referenced models that should be deleted after their referenced object is deleted.
 
-    This mixin skips checking for remaining references and always deletes the object.
+    This mixin skips checking for remaining references and always tries to delete the object.
     Therefore, it shall only be used when ALL references to the object either
     a) use on_delete=models.PROTECT (which will prevent deletion of the object if it is still referenced) or
     b) are ok with the reference being deleted even if not strictly orphaned
-    (e.g. on_delete=models.CASCADE will also delete all remaining referencing objects).
+    (e.g. any remaining referencing object with on_delete=models.CASCADE will also be deleted).
     """
 
     @classmethod
     def delete_if_orphaned(cls: type[T], instance: T | None) -> None:
         """Removes the model instance if no longer referenced.
 
-        This method skips checking for remaining references and always deletes the object.
+        This method skips checking for remaining references and always tries to delete the object.
         Therefore, it shall only be used when ALL references to the object either
         a) use on_delete=models.PROTECT (which will prevent deletion of the object if it is still referenced) or
         b) are ok with the reference being deleted even if not strictly orphaned
-        (e.g. on_delete=models.CASCADE will also delete all remaining referencing objects).
+        (e.g. any remaining referencing object with on_delete=models.CASCADE will also be deleted).
         """
         if not instance or not instance.pk:
             return

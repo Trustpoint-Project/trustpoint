@@ -12,7 +12,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 from trustpoint_core.oid import CertificateExtensionOid, NameOid
-from util.db import AutoDeleteRelatedForeignKey, NoRefCheckOrphanDeletionMixin
+from util.db import AutoDeleteRelatedForeignKey, CustomDeleteActionModel, NoRefCheckOrphanDeletionMixin
 
 __all__ = [
     'AttributeTypeAndValue',
@@ -210,6 +210,7 @@ class GeneralNameOtherName(models.Model):
 
 T = TypeVar('T', bound=x509.ExtensionType)
 RT = TypeVar('RT', bound='CertificateExtension')
+
 
 class CertificateExtension(NoRefCheckOrphanDeletionMixin):
     """Abstract Base Class of Extension Models.
@@ -588,13 +589,11 @@ class GeneralNamesModel(NoRefCheckOrphanDeletionMixin, models.Model):
         return self
 
 
-class IssuerAlternativeNameExtension(CertificateExtension, models.Model):
+class IssuerAlternativeNameExtension(CertificateExtension, CustomDeleteActionModel):
     """IssuerAlternativeNameExtension Model.
 
     See RFC5280 for more information.
     """
-
-    objects: models.Manager[IssuerAlternativeNameExtension]
 
     critical = models.BooleanField(verbose_name=_('Critical'), editable=False)
     issuer_alt_name = models.ForeignKey(
@@ -616,9 +615,7 @@ class IssuerAlternativeNameExtension(CertificateExtension, models.Model):
         GeneralNamesModel.delete_if_orphaned(self.issuer_alt_name)
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | IssuerAlternativeNameExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | IssuerAlternativeNameExtension:
         """Stores the IssuerAlternativeNameExtension in the database.
 
         Meant to be called within an atomic transaction while storing a certificate.
@@ -645,19 +642,16 @@ class IssuerAlternativeNameExtension(CertificateExtension, models.Model):
         return issuer_alt_name_ext
 
 
-class SubjectAlternativeNameExtension(CertificateExtension, models.Model):
+class SubjectAlternativeNameExtension(CertificateExtension, CustomDeleteActionModel):
     """Represents the SubjectAlternativeName extension in X.509 certificates.
 
     Stores alternative names for the certificate's subject.
     """
 
-    objects: models.Manager[SubjectAlternativeNameExtension]
-
     critical = models.BooleanField(verbose_name=_('Critical'), editable=False)
-    subject_alt_name = AutoDeleteRelatedForeignKey(
+    subject_alt_name = models.ForeignKey(
         GeneralNamesModel,
         on_delete=models.PROTECT,
-        do_reference_check=False,
         null=True,
         blank=True,
         verbose_name=_('Subject Alternative Name Subject'),
@@ -669,10 +663,12 @@ class SubjectAlternativeNameExtension(CertificateExtension, models.Model):
 
     _extension_oid = CertificateExtensionOid.SUBJECT_ALTERNATIVE_NAME.dotted_string
 
+    def post_delete(self) -> None:
+        """Clean up related orphaned extension field models."""
+        GeneralNamesModel.delete_if_orphaned(self.subject_alt_name)
+
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | SubjectAlternativeNameExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | SubjectAlternativeNameExtension:
         """Stores the SubjectAlternativeName extension in the database.
 
         Args:
@@ -696,13 +692,11 @@ class SubjectAlternativeNameExtension(CertificateExtension, models.Model):
         return alt_name_ext
 
 
-class AuthorityKeyIdentifierExtension(CertificateExtension, models.Model):
+class AuthorityKeyIdentifierExtension(CertificateExtension, CustomDeleteActionModel):
     """Represents the AuthorityKeyIdentifier extension in X.509 certificates.
 
     Identifies the public key of the issuing CA.
     """
-
-    objects: models.Manager[AuthorityKeyIdentifierExtension]
 
     _extension_type = 'AuthorityKeyIdentifier'
 
@@ -713,10 +707,9 @@ class AuthorityKeyIdentifierExtension(CertificateExtension, models.Model):
         max_length=256, editable=False, null=True, blank=True, verbose_name='Authority Cert Serial Number'
     )
     critical = models.BooleanField(verbose_name=_('Critical'), editable=False)
-    authority_cert_issuer = AutoDeleteRelatedForeignKey(
+    authority_cert_issuer = models.ForeignKey(
         GeneralNamesModel,
         on_delete=models.PROTECT,
-        do_reference_check=False,
         null=True,
         blank=True,
         verbose_name=_('Issuer Alternative Name Issuer'),
@@ -728,10 +721,12 @@ class AuthorityKeyIdentifierExtension(CertificateExtension, models.Model):
 
     _extension_oid = CertificateExtensionOid.AUTHORITY_KEY_IDENTIFIER.dotted_string
 
+    def post_delete(self) -> None:
+        """Clean up related orphaned extension field models."""
+        GeneralNamesModel.delete_if_orphaned(self.authority_cert_issuer)
+
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | AuthorityKeyIdentifierExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | AuthorityKeyIdentifierExtension:
         """Stores the AuthorityKeyIdentifier extension in the database.
 
         Args:
@@ -788,9 +783,7 @@ class SubjectKeyIdentifierExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.SUBJECT_KEY_IDENTIFIER.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | SubjectKeyIdentifierExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | SubjectKeyIdentifierExtension:
         """Stores the SubjectKeyIdentifierExtension in the database.
 
         Meant to be called within an atomic transaction while storing a certificate.
@@ -819,7 +812,7 @@ class SubjectKeyIdentifierExtension(CertificateExtension, models.Model):
         return ski_extension
 
 
-class NoticeReference(models.Model):
+class NoticeReference(NoRefCheckOrphanDeletionMixin, models.Model):
     """Represents a NoticeReference as per RFC5280."""
 
     organization = models.CharField(max_length=200, editable=False, verbose_name='Organization', null=True, blank=True)  # noqa: DJ001
@@ -834,24 +827,29 @@ class NoticeReference(models.Model):
         return f'{self.organization or "Unknown"}: {self.notice_numbers}'
 
 
-class UserNotice(models.Model):
+class UserNotice(NoRefCheckOrphanDeletionMixin, CustomDeleteActionModel):
     """Represents a UserNotice as per RFC5280."""
 
-    notice_ref = AutoDeleteRelatedForeignKey(
-        NoticeReference, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False,
+    notice_ref = models.ForeignKey(
+        NoticeReference,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
     )
     explicit_text = models.CharField(  # noqa: DJ001
         max_length=200, editable=False, verbose_name='Explicit Text', null=True, blank=True
     )
 
-    objects = models.Manager['UserNotice']
-
     def __str__(self) -> str:
         """Returns a string representation of the UserNotice."""
         return f'UserNotice: {self.explicit_text or "No Explicit Text"}'
 
+    def post_delete(self) -> None:
+        """Clean up related orphaned extension field models."""
+        NoticeReference.delete_if_orphaned(self.notice_ref)
 
-class CPSUriModel(models.Model):
+
+class CPSUriModel(NoRefCheckOrphanDeletionMixin, models.Model):
     """Represents a CPS URI as per RFC5280."""
 
     cps_uri = models.CharField(max_length=2048, editable=False, verbose_name='CPS URI')
@@ -863,27 +861,19 @@ class CPSUriModel(models.Model):
         return f'CPS URI: {self.cps_uri}'
 
 
-class QualifierModel(models.Model):
+class QualifierModel(NoRefCheckOrphanDeletionMixin, CustomDeleteActionModel):
     """Generic model to represent either a CPS URI or a User Notice."""
 
-    cps_uri = AutoDeleteRelatedForeignKey(
+    cps_uri = models.ForeignKey(
         CPSUriModel,
         null=True,
         blank=True,
         on_delete=models.PROTECT,
-        do_reference_check=False,
         related_name='qualifiers',
     )
-    user_notice = AutoDeleteRelatedForeignKey(
-        UserNotice,
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
-        do_reference_check=False,
-        related_name='qualifiers'
+    user_notice = models.ForeignKey(
+        UserNotice, null=True, blank=True, on_delete=models.PROTECT, related_name='qualifiers'
     )
-
-    objects = models.Manager['QualifierModel']
 
     def __str__(self) -> str:
         """Returns a string representation of the QualifierModel."""
@@ -899,20 +889,25 @@ class QualifierModel(models.Model):
             raise ValueError(msg)
         super().save(*args, **kwargs)
 
+    def post_delete(self) -> None:
+        """Clean up related orphaned extension field models."""
+        CPSUriModel.delete_if_orphaned(self.cps_uri)
+        UserNotice.delete_if_orphaned(self.user_notice)
 
-class PolicyQualifierInfo(models.Model):
+
+class PolicyQualifierInfo(CustomDeleteActionModel):
     """Represents a PolicyQualifierInfo as per RFC5280."""
 
     policy_qualifier_id = models.CharField(max_length=256, editable=False, verbose_name='Policy Qualifier ID')
-    qualifier = AutoDeleteRelatedForeignKey(
-        QualifierModel, null=True, blank=True, on_delete=models.PROTECT, do_reference_check=False
-    )
-
-    objects = models.Manager['PolicyQualifierInfo']
+    qualifier = models.ForeignKey(QualifierModel, null=True, blank=True, on_delete=models.PROTECT)
 
     def __str__(self) -> str:
         """Returns a string representation of the PolicyQualifierInfo."""
         return f'PolicyQualifierInfo: {self.policy_qualifier_id}'
+
+    def post_delete(self) -> None:
+        """Clean up related orphaned extension field models."""
+        QualifierModel.delete_if_orphaned(self.qualifier)
 
 
 class PolicyInformation(models.Model):
@@ -951,9 +946,7 @@ class CertificatePoliciesExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.CERTIFICATE_POLICIES.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | CertificatePoliciesExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | CertificatePoliciesExtension:
         """Stores the CertificatePoliciesExtension in the database.
 
         Args:
@@ -1050,9 +1043,7 @@ class ExtendedKeyUsageExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.EXTENDED_KEY_USAGE.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | ExtendedKeyUsageExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | ExtendedKeyUsageExtension:
         """Stores the ExtendedKeyUsage extension in the database.
 
         Args:
@@ -1084,7 +1075,7 @@ class ExtendedKeyUsageExtension(CertificateExtension, models.Model):
         return eku_extension
 
 
-class GeneralNameModel(models.Model):
+class GeneralNameModel(NoRefCheckOrphanDeletionMixin, models.Model):
     # do_reference_check must be True here
     # as the GeneralNamesModel also has ManyToManyFields to these GeneralName* models.
     rfc822_name = AutoDeleteRelatedForeignKey(
@@ -1199,19 +1190,17 @@ class GeneralNameModel(models.Model):
         return gn_model
 
 
-class GeneralSubtree(models.Model):
+class GeneralSubtree(CustomDeleteActionModel):
     """Represents a single GeneralSubtree as per RFC5280.
 
     Base is a single GeneralName.
     minimum defaults to 0 and maximum is optional.
     """
 
-    base = AutoDeleteRelatedForeignKey(GeneralNameModel, on_delete=models.PROTECT, do_reference_check=False)
+    base = models.ForeignKey(GeneralNameModel, on_delete=models.PROTECT)
 
     minimum = models.PositiveIntegerField(default=0, editable=False)
     maximum = models.PositiveIntegerField(null=True, blank=True, editable=False, default=None)
-
-    objects = models.Manager['GeneralSubtree']
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""
@@ -1219,6 +1208,10 @@ class GeneralSubtree(models.Model):
     def __str__(self) -> str:
         """Returns a string representation of the GeneralSubtree."""
         return f'GeneralSubtree(GeneralName={self.base}, min={self.minimum}, max={self.maximum})'
+
+    def post_delete(self) -> None:
+        """Clean up related orphaned extension field models."""
+        GeneralNameModel.delete_if_orphaned(self.base)
 
 
 class NameConstraintsExtension(CertificateExtension, models.Model):
@@ -1244,9 +1237,7 @@ class NameConstraintsExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.NAME_CONSTRAINTS.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | NameConstraintsExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | NameConstraintsExtension:
         """Stores the NameConstraints extension in the database.
 
         Args:
@@ -1284,10 +1275,8 @@ class NameConstraintsExtension(CertificateExtension, models.Model):
         return nc_ext
 
 
-class DistributionPointName(models.Model):
-    full_name = AutoDeleteRelatedForeignKey(
-        GeneralNamesModel,on_delete=models.PROTECT, do_reference_check=False, null=True, blank=True
-    )
+class DistributionPointName(NoRefCheckOrphanDeletionMixin, CustomDeleteActionModel):
+    full_name = models.ForeignKey(GeneralNamesModel, on_delete=models.PROTECT, null=True, blank=True)
 
     name_relative_to_crl_issuer = models.ManyToManyField(
         AttributeTypeAndValue,
@@ -1296,8 +1285,6 @@ class DistributionPointName(models.Model):
         editable=False,
         blank=True,
     )
-
-    objects = models.Manager['DistributionPointName']
 
     def __str__(self) -> str:
         """Returns a string representation of the DistributionPointName."""
@@ -1312,22 +1299,19 @@ class DistributionPointName(models.Model):
             raise ValueError(msg)
         super().save(*args, **kwargs)
 
+    def post_delete(self) -> None:
+        """Clean up related orphaned extension field models."""
+        GeneralNamesModel.delete_if_orphaned(self.full_name)
 
-class DistributionPointModel(CertificateExtension, models.Model):
-    distribution_point_name = AutoDeleteRelatedForeignKey(
+
+class DistributionPointModel(CertificateExtension, CustomDeleteActionModel):
+    distribution_point_name = models.ForeignKey(
         DistributionPointName, verbose_name='Distribution Point Name', blank=True, on_delete=models.PROTECT
     )
     reasons = models.CharField(max_length=16, blank=True, null=True, verbose_name=_('Reasons'))  # noqa: DJ001
-    crl_issuer = AutoDeleteRelatedForeignKey(
-        GeneralNamesModel,
-        on_delete=models.PROTECT,
-        do_reference_check=False,
-        null=True,
-        blank=True,
-        verbose_name=_('CRL Issuer')
+    crl_issuer = models.ForeignKey(
+        GeneralNamesModel, on_delete=models.PROTECT, null=True, blank=True, verbose_name=_('CRL Issuer')
     )
-
-    objects = models.Manager['DistributionPointModel']
 
     mapping: ClassVar[dict[str, int]] = {
         'unused': 0,
@@ -1352,6 +1336,11 @@ class DistributionPointModel(CertificateExtension, models.Model):
             f'DistributionPointModel(distribution_point_name={dp_name}, '
             f'reasons=[{reasons_str}], crl_issuer={crl_issuer_str})'
         )
+
+    def post_delete(self) -> None:
+        """Clean up related orphaned extension field models."""
+        DistributionPointName.delete_if_orphaned(self.distribution_point_name)
+        GeneralNamesModel.delete_if_orphaned(self.crl_issuer)
 
     @classmethod
     def reasons_list_to_bitstring(cls, reasons_list: list[str]) -> str:
@@ -1460,9 +1449,7 @@ class CrlDistributionPointsExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.CRL_DISTRIBUTION_POINTS.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> CrlDistributionPointsExtension | None:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> CrlDistributionPointsExtension | None:
         """Stores the CRLDistributionPoints extension in the database.
 
         Args:
@@ -1483,20 +1470,21 @@ class CrlDistributionPointsExtension(CertificateExtension, models.Model):
         return ext_instance
 
 
-class AccessDescriptionModel(models.Model):
+class AccessDescriptionModel(CustomDeleteActionModel):
     access_method = models.CharField(max_length=256, editable=False, verbose_name='Access Method OID')
-    access_location = AutoDeleteRelatedForeignKey(
+    access_location = models.ForeignKey(
         GeneralNameModel,
         verbose_name='Access Location',
         on_delete=models.PROTECT,
-        do_reference_check=False,
     )
-
-    objects = models.Manager['AccessDescriptionModel']
 
     def __str__(self) -> str:
         """Returns a string representation of the AccessDescriptionModel."""
         return f'AccessDescription(method={self.access_method}, location={self.access_location})'
+
+    def post_delete(self) -> None:
+        """Clean up related orphaned extension field models."""
+        GeneralNameModel.delete_if_orphaned(self.access_location)
 
 
 class AuthorityInformationAccessExtension(CertificateExtension, models.Model):
@@ -1513,9 +1501,7 @@ class AuthorityInformationAccessExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.AUTHORITY_INFORMATION_ACCESS.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> AuthorityInformationAccessExtension | None:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> AuthorityInformationAccessExtension | None:
         """Creates an AuthorityInformationAccessExtension from the cryptography AuthorityInformationAccess object."""
         if not isinstance(extension.value, x509.AuthorityInformationAccess):
             msg = 'Expected an AuthorityInformationAccess extension.'
@@ -1558,9 +1544,7 @@ class SubjectInformationAccessExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.SUBJECT_INFORMATION_ACCESS.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> SubjectInformationAccessExtension | None:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> SubjectInformationAccessExtension | None:
         """Creates a SubjectInformationAccessExtension from the cryptography.x509.SubjectInformationAccess object."""
         if not isinstance(extension.value, x509.SubjectInformationAccess):
             msg = 'Expected a SubjectInformationAccess extension.'
@@ -1610,9 +1594,7 @@ class InhibitAnyPolicyExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.INHIBIT_ANY_POLICY.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> InhibitAnyPolicyExtension | None:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> InhibitAnyPolicyExtension | None:
         """Creates a InhibitAnyPolicyExtension from the cryptography.x509.InhibitAnyPolicy object."""
         if not isinstance(extension.value, x509.InhibitAnyPolicy):
             msg = 'Expected a InhibitAnyPolicy extension.'
@@ -1671,9 +1653,7 @@ class PolicyMappingsExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.POLICY_MAPPINGS.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | PolicyMappingsExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | PolicyMappingsExtension:
         """Stores the PolicyMappingsExtension in the database.
 
         Args:
@@ -1737,9 +1717,7 @@ class PolicyConstraintsExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.POLICY_CONSTRAINTS.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | PolicyConstraintsExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | PolicyConstraintsExtension:
         """Stores the PolicyMappingsExtension in the database.
 
         Args:
