@@ -9,11 +9,10 @@ from typing import Any, ClassVar, TypeVar
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
 from django.db import models
-from django.db.models import ProtectedError
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 from trustpoint_core.oid import CertificateExtensionOid, NameOid
-from util.db import AutoDeleteRelatedForeignKey
+from util.db import AutoDeleteRelatedForeignKey, NoRefCheckOrphanDeletionMixin
 
 __all__ = [
     'AttributeTypeAndValue',
@@ -212,7 +211,7 @@ class GeneralNameOtherName(models.Model):
 T = TypeVar('T', bound=x509.ExtensionType)
 RT = TypeVar('RT', bound='CertificateExtension')
 
-class CertificateExtension:
+class CertificateExtension(NoRefCheckOrphanDeletionMixin):
     """Abstract Base Class of Extension Models.
 
     Due to a Metaclass conflict, this class is not derived from abc.ABC on purpose.
@@ -253,12 +252,7 @@ class CertificateExtension:
         we can rely on the database protection to remove the instance if it is no longer referenced.
         This saves an extra query to check if the 'certificates' reverse relation still exists.
         """
-        if not instance or not instance.pk:
-            return
-        try:
-            instance.delete()
-        except ProtectedError:
-            return
+        super().delete_if_orphaned(instance)
 
 
 class BasicConstraintsExtension(CertificateExtension, models.Model):
@@ -409,7 +403,7 @@ class KeyUsageExtension(CertificateExtension, models.Model):
         return key_usage_extension
 
 
-class GeneralNamesModel(models.Model):
+class GeneralNamesModel(NoRefCheckOrphanDeletionMixin, models.Model):
     """Represents a collection of general names as per RFC5280.
 
     Used for both SubjectAlternativeName and IssuerAlternativeName extensions.
@@ -603,10 +597,9 @@ class IssuerAlternativeNameExtension(CertificateExtension, models.Model):
     objects: models.Manager[IssuerAlternativeNameExtension]
 
     critical = models.BooleanField(verbose_name=_('Critical'), editable=False)
-    issuer_alt_name = AutoDeleteRelatedForeignKey(
+    issuer_alt_name = models.ForeignKey(
         GeneralNamesModel,
         on_delete=models.PROTECT,
-        do_reference_check=False,
         null=True,
         blank=True,
         verbose_name=_('Issuer Alternative Name Issuer'),
@@ -617,6 +610,10 @@ class IssuerAlternativeNameExtension(CertificateExtension, models.Model):
         return f'{self.__class__.__name__}(critical={self.critical}, oid={self.extension_oid})'
 
     _extension_oid = CertificateExtensionOid.ISSUER_ALTERNATIVE_NAME.dotted_string
+
+    def post_delete(self) -> None:
+        """Clean up related orphaned extension field models."""
+        GeneralNamesModel.delete_if_orphaned(self.issuer_alt_name)
 
     @classmethod
     def save_from_crypto_extensions(

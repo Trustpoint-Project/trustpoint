@@ -187,3 +187,52 @@ class CustomDeleteActionModel(models.Model):
         count = super().delete(*args, **kwargs)
         self.post_delete()
         return count
+
+
+class SafeOrphanDeletionMixin(_ModelBase):
+    """Mixin for referenced models that should be deleted after their referenced object is deleted."""
+
+    @classmethod
+    def delete_if_orphaned(cls: type[T], instance: T | None) -> None:
+        """Removes the model instance if no longer referenced.
+
+        This method checks if the referenced object is still referenced by other objects
+        (even in other models) and only deletes it if it is not.
+        """
+        raise NotImplementedError
+        # if not instance or not instance.pk:
+        #     return
+        # if not cls._has_references(instance):
+        #     try:
+        #         instance.delete()
+        #     except ProtectedError:
+        #         return
+
+
+class NoRefCheckOrphanDeletionMixin(_ModelBase):
+    """Mixin for referenced models that should be deleted after their referenced object is deleted.
+
+    This mixin skips checking for remaining references and always deletes the object.
+    Therefore, it shall only be used when ALL references to the object either
+    a) use on_delete=models.PROTECT (which will prevent deletion of the object if it is still referenced) or
+    b) are ok with the reference being deleted even if not strictly orphaned
+    (e.g. on_delete=models.CASCADE will also delete all remaining referencing objects).
+    """
+
+    @classmethod
+    def delete_if_orphaned(cls: type[T], instance: T | None) -> None:
+        """Removes the model instance if no longer referenced.
+
+        This method skips checking for remaining references and always deletes the object.
+        Therefore, it shall only be used when ALL references to the object either
+        a) use on_delete=models.PROTECT (which will prevent deletion of the object if it is still referenced) or
+        b) are ok with the reference being deleted even if not strictly orphaned
+        (e.g. on_delete=models.CASCADE will also delete all remaining referencing objects).
+        """
+        if not instance or not instance.pk:
+            return
+        try:
+            instance.delete()
+        except ProtectedError:
+            return
+
