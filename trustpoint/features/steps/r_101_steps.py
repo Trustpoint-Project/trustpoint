@@ -1,4 +1,4 @@
-"""Python steps file for R_101."""  # noqa: INP001
+"""Python steps file for R_101."""
 
 from enum import Enum
 
