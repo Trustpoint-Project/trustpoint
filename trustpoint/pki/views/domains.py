@@ -322,7 +322,7 @@ class DevIdMethodSelectView(DomainContextMixin, FormView):
         return HttpResponseRedirect(reverse('pki:devid_registration-method_select', kwargs={'pk': domain_pk}))
 
 
-class IssuedCertificatesView(ListView):
+class IssuedCertificatesView(ListView,DomainContextMixin):
     """View to list certificates issued by a specific Issuing CA for a Domain."""
 
     model = CertificateModel
