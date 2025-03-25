@@ -1,8 +1,6 @@
 name: Combined Test Report
 
-#on: workflow_dispatch  # Allows manual triggering of this workflow.
-
-on: [pull_request]
+on: workflow_dispatch  # Allows manual triggering of this workflow.
 
 jobs:
   test-report:
