@@ -110,7 +110,6 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[Issuing
         issued_certificates = CertificateModel.objects.filter(
             issuer_public_bytes=issuing_ca.credential.certificate.subject_public_bytes
         )
-
         context['issued_certificates'] = issued_certificates
         return context
 
