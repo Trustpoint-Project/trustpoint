@@ -247,7 +247,7 @@ class CertificateExtension(OrphanDeletionMixin):
 
     @classmethod
     @abc.abstractmethod
-    def save_from_crypto_extensions(cls: type[RT], extension: x509.Extension[T]) -> None | RT:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> RT | None:
         """Stores the extension in the database.
 
         Meant to be called within an atomic transaction while storing a certificate.
@@ -260,7 +260,7 @@ class CertificateExtension(OrphanDeletionMixin):
         """
 
     @classmethod
-    def delete_if_orphaned(cls: type[RT], instance: RT | None) -> None:
+    def delete_if_orphaned(cls, instance: RT | None) -> None:
         """Removes the Extension instance if no longer referenced.
 
         Since all extension classes are only referenced by the Certificate model with on_delete=models.PROTECT,
