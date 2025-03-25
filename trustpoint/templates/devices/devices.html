@@ -61,7 +61,7 @@
             <td class="row_checkbox">
               <input type="checkbox" name="row_checkbox" value="{{ device.id }}" />
             </td>
-            <td> <a href="certificate-lifecycle-management/{{device.id}}/">{{ device.common_name }}</a></td>
+            <td> <a href="{% url 'devices:certificate_lifecycle_management' pk=device.id %}">{{ device.common_name }}</a></td>
             <td>{{ device.domain }}</td>
             <td>{{ device.serial_number }}</td>
             <td>{{ device.created_at }}</td>
