@@ -119,7 +119,7 @@ class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateMode
 
     model = CertificateModel
     template_name = 'pki/issuing_cas/issued_certificates.html'
-    context_object_name = 'certificates'
+    context_object_name = 'issued_certificates'
 
     def get_queryset(self) -> QuerySet[CertificateModel, CertificateModel]:
         """Gets the required and filtered QuerySet.
