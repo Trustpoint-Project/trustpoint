@@ -77,7 +77,6 @@ class ActiveTrustpointTlsServerCredentialModel(models.Model):
         super().save(*args, **kwargs)
 
 
-
 class TruststoreModel(models.Model):
     """Represents a truststore, which is a collection of certificates used for specific purposes.
 
@@ -112,7 +111,6 @@ class TruststoreModel(models.Model):
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""
-
 
     def __str__(self) -> str:
         """Returns a human-readable string representation of the TruststoreModel."""

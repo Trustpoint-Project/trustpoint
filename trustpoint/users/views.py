@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from django.contrib.auth.views import LoginView
 from django.contrib import messages
-
+from django.contrib.auth.views import LoginView
 from setup_wizard import SetupWizardState
 from setup_wizard.views import StartupWizardRedirect
+
 from trustpoint.settings import DOCKER_CONTAINER
 
 
