@@ -107,25 +107,11 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
     detail_context_object_name = 'domain'
     success_url = reverse_lazy('pki:domains')
 
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+    def get_context_data(self, **kwargs):
         """Adds (no) additional context data."""
         context = super().get_context_data(**kwargs)
         domain = self.get_object()
 
-        issued_credentials = domain.issued_credentials.all()
-
-        certificates = CertificateModel.objects.filter(
-            credential__in=[issued_credential.credential for issued_credential in issued_credentials]
-        )
-
-        context['certificates'] = certificates
-        context['protocols'] = {
-            'cmp': domain.cmp_protocol if hasattr(domain, 'cmp_protocol') else None,
-            'est': domain.est_protocol if hasattr(domain, 'est_protocol') else None,
-            'acme': domain.acme_protocol if hasattr(domain, 'acme_protocol') else None,
-            'scep': domain.scep_protocol if hasattr(domain, 'scep_protocol') else None,
-            'rest': domain.rest_protocol if hasattr(domain, 'rest_protocol') else None,
-        }
         context['domain_options'] = {
             'auto_create_new_device': domain.auto_create_new_device,
             'allow_username_password_registration': domain.allow_username_password_registration,
