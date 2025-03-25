@@ -273,13 +273,7 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             ('brski_est', _('EST with BRSKI onboarding')),
         ],
         widget=DisableSelectOptionsWidget(
-            disabled_values=[
-                'aoki_est',
-                'brski_est',
-                'aoki_cmp',
-                'brski_cmp',
-                'est_idevid'
-            ]
+            disabled_values=['aoki_est', 'brski_est', 'aoki_cmp', 'brski_cmp', 'est_idevid']
         ),
         initial='cmp_idevid',
     )
@@ -290,11 +284,8 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             ('cmp_shared_secret', _('CMP with shared secret authentication')),
             ('est_username_password', _('EST with username and password authentication')),
         ],
-        widget=DisableSelectOptionsWidget(
-            disabled_values=[
-            ]
-        ),
-        initial='cmp_shared_secret'
+        widget=DisableSelectOptionsWidget(disabled_values=[]),
+        initial='cmp_shared_secret',
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -324,9 +315,7 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             Div(Field('pki_configuration'), css_class='d-none', id='id_pki_configuration_wrapper'),
             HTML('<div class="mb-4"></div>'),
         )
-        self.fields['domain'].widget.attrs.update({
-            'required': 'True'
-        })
+        self.fields['domain'].widget.attrs.update({'required': 'True'})
 
     @staticmethod
     def clean_device_name(device_name: str) -> str:

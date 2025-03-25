@@ -208,6 +208,7 @@ class GeneralNameOtherName(models.Model):
 T = TypeVar('T', bound=x509.ExtensionType)
 RT = TypeVar('RT', bound='CertificateExtension')
 
+
 class CertificateExtension:
     """Abstract Base Class of Extension Models.
 
@@ -599,9 +600,7 @@ class IssuerAlternativeNameExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.ISSUER_ALTERNATIVE_NAME.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | IssuerAlternativeNameExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | IssuerAlternativeNameExtension:
         """Stores the IssuerAlternativeNameExtension in the database.
 
         Meant to be called within an atomic transaction while storing a certificate.
@@ -652,9 +651,7 @@ class SubjectAlternativeNameExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.SUBJECT_ALTERNATIVE_NAME.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | SubjectAlternativeNameExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | SubjectAlternativeNameExtension:
         """Stores the SubjectAlternativeName extension in the database.
 
         Args:
@@ -710,9 +707,7 @@ class AuthorityKeyIdentifierExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.AUTHORITY_KEY_IDENTIFIER.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | AuthorityKeyIdentifierExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | AuthorityKeyIdentifierExtension:
         """Stores the AuthorityKeyIdentifier extension in the database.
 
         Args:
@@ -769,9 +764,7 @@ class SubjectKeyIdentifierExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.SUBJECT_KEY_IDENTIFIER.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | SubjectKeyIdentifierExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | SubjectKeyIdentifierExtension:
         """Stores the SubjectKeyIdentifierExtension in the database.
 
         Meant to be called within an atomic transaction while storing a certificate.
@@ -916,9 +909,7 @@ class CertificatePoliciesExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.CERTIFICATE_POLICIES.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | CertificatePoliciesExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | CertificatePoliciesExtension:
         """Stores the CertificatePoliciesExtension in the database.
 
         Args:
@@ -1015,9 +1006,7 @@ class ExtendedKeyUsageExtension(models.Model):
     _extension_oid = CertificateExtensionOid.EXTENDED_KEY_USAGE.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | ExtendedKeyUsageExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | ExtendedKeyUsageExtension:
         """Stores the ExtendedKeyUsage extension in the database.
 
         Args:
@@ -1187,9 +1176,7 @@ class NameConstraintsExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.NAME_CONSTRAINTS.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | NameConstraintsExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | NameConstraintsExtension:
         """Stores the NameConstraints extension in the database.
 
         Args:
@@ -1397,9 +1384,7 @@ class CrlDistributionPointsExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.CRL_DISTRIBUTION_POINTS.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> CrlDistributionPointsExtension | None:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> CrlDistributionPointsExtension | None:
         """Stores the CRLDistributionPoints extension in the database.
 
         Args:
@@ -1445,9 +1430,7 @@ class AuthorityInformationAccessExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.AUTHORITY_INFORMATION_ACCESS.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> AuthorityInformationAccessExtension | None:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> AuthorityInformationAccessExtension | None:
         """Creates an AuthorityInformationAccessExtension from the cryptography AuthorityInformationAccess object."""
         if not isinstance(extension.value, x509.AuthorityInformationAccess):
             msg = 'Expected an AuthorityInformationAccess extension.'
@@ -1490,9 +1473,7 @@ class SubjectInformationAccessExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.SUBJECT_INFORMATION_ACCESS.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> SubjectInformationAccessExtension | None:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> SubjectInformationAccessExtension | None:
         """Creates a SubjectInformationAccessExtension from the cryptography.x509.SubjectInformationAccess object."""
         if not isinstance(extension.value, x509.SubjectInformationAccess):
             msg = 'Expected a SubjectInformationAccess extension.'
@@ -1542,9 +1523,7 @@ class InhibitAnyPolicyExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.INHIBIT_ANY_POLICY.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> InhibitAnyPolicyExtension | None:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> InhibitAnyPolicyExtension | None:
         """Creates a InhibitAnyPolicyExtension from the cryptography.x509.InhibitAnyPolicy object."""
         if not isinstance(extension.value, x509.InhibitAnyPolicy):
             msg = 'Expected a InhibitAnyPolicy extension.'
@@ -1595,9 +1574,7 @@ class PolicyMappingsExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.POLICY_MAPPINGS.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | PolicyMappingsExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | PolicyMappingsExtension:
         """Stores the PolicyMappingsExtension in the database.
 
         Args:
@@ -1661,9 +1638,7 @@ class PolicyConstraintsExtension(CertificateExtension, models.Model):
     _extension_oid = CertificateExtensionOid.POLICY_CONSTRAINTS.dotted_string
 
     @classmethod
-    def save_from_crypto_extensions(
-        cls, extension: x509.Extension[T]
-    ) -> None | PolicyConstraintsExtension:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> None | PolicyConstraintsExtension:
         """Stores the PolicyMappingsExtension in the database.
 
         Args:

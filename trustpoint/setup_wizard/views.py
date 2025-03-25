@@ -5,18 +5,18 @@ from __future__ import annotations
 import subprocess
 import traceback
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.core.management import call_command
-from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, HttpResponseBase
+from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import FormView, TemplateView, View
 from pki.models import CertificateModel, CredentialModel
-from pki.models.truststore import TrustpointTlsServerCredentialModel, ActiveTrustpointTlsServerCredentialModel
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TrustpointTlsServerCredentialModel
 
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import EmptyForm, StartupWizardTlsCertificateForm
@@ -239,10 +239,9 @@ class SetupWizardGenerateTlsServerCredentialView(FormView):
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
             )
 
-
             trustpoint_tls_server_credential, _ = TrustpointTlsServerCredentialModel.objects.get_or_create(
                 certificate=tls_server_credential.certificate,
-                defaults={"private_key_pem": tls_server_credential.get_private_key_serializer().as_pkcs8_pem()}
+                defaults={'private_key_pem': tls_server_credential.get_private_key_serializer().as_pkcs8_pem()},
             )
 
             active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
