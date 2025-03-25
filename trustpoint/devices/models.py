@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import logging
 import secrets
+import typing
 from typing import TYPE_CHECKING
 
 from django.db import models
@@ -36,8 +37,8 @@ class DeviceModel(models.Model):
     objects: models.Manager[DeviceModel]
 
     id = models.AutoField(primary_key=True)
-    unique_name = models.CharField(
-        _('Device'), max_length=100, unique=True, default='New-Device', validators=[UniqueNameValidator()]
+    common_name = models.CharField(
+        _('Device'), max_length=100, default='New-Device'
     )
     serial_number = models.CharField(_('Serial-Number'), max_length=100)
     domain = models.ForeignKey(
@@ -108,15 +109,21 @@ class DeviceModel(models.Model):
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""
+        constraints: typing.ClassVar = [
+            models.UniqueConstraint(
+                fields=['common_name', 'serial_number'],
+                name='unique_common_serial'
+            )
+        ]
 
     def __str__(self) -> str:
         """Returns a human-readable string representation."""
-        return f'DeviceModel(unique_name={self.unique_name})'
+        return f'DeviceModel(common_name={self.common_name})'
 
     @property
     def est_username(self) -> str:
         """Gets the EST username."""
-        return self.unique_name
+        return self.common_name
 
     @property
     def signature_suite(self) -> oid.SignatureSuite:
@@ -238,7 +245,7 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
             self.attempts += 1
             log_msg = (
                 f'Incorrect OTP attempt {self.attempts} for browser credential download '
-                f'for device {self.device.unique_name} (credential id={self.issued_credential_model.id})'
+                f'for device {self.device.common_name} (credential id={self.issued_credential_model.id})'
             )
             logger.warning(log_msg)
 
@@ -251,7 +258,7 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
             return False
 
         log_msg = (
-            f'Correct OTP entered for browser credential download for device {self.device.unique_name}'
+            f'Correct OTP entered for browser credential download for device {self.device.common_name}'
             f'(credential id={self.issued_credential_model.id})'
         )
         logger.info(log_msg)

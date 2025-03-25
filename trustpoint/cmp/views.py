@@ -839,8 +839,22 @@ class CmpInitializationRequestView(
                     err_msg = 'Serial-Number not allowed.'
                     raise ValueError(err_msg)
 
+                common_names = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+                if len(common_names) != 1:
+                    raise ValueError
+
+                common_name = common_names[0]
+
+                if isinstance(common_name.value, str):
+                    common_name_value = common_name.value
+                elif isinstance(common_name.value, bytes):
+                    common_name_value = common_name.value.decode()
+                else:
+                    err_msg = 'Failed to parse common name value'
+                    raise ValueError(err_msg)
+
                 device_model = DeviceModel(
-                    unique_name=f'Auto-Created Device - {uuid.uuid4()}',
+                    common_name=common_name_value,
                     domain=dev_reg_model.domain,
                     serial_number=device_serial_number,
                     domain_credential_onboarding=True,

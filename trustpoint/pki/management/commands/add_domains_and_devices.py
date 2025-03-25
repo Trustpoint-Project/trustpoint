@@ -163,7 +163,7 @@ class Command(BaseCommand):
                 )
 
                 dev = DeviceModel(
-                    unique_name=device_name,
+                    common_name=device_name,
                     serial_number=serial_number,
                     domain=domain,
                     onboarding_protocol=onboarding_protocol,
@@ -177,7 +177,7 @@ class Command(BaseCommand):
                 try:
                     dev.save()
                     if dev.pk:
-                        print(f"Creating device '{dev.unique_name}' (ID {dev.pk}) in domain '{dev.domain}' with:")
+                        print(f"Creating device '{dev.common_name}' (ID {dev.pk}) in domain '{dev.domain}' with:")
                         print(f'  - Serial Number: {dev.serial_number}')
                         print(f'  - Onboarding Protocol: {dev.onboarding_protocol}')
                         print(f'  - PKI Protocol: {dev.pki_protocol}')

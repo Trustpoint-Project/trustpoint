@@ -118,7 +118,7 @@ class EstAuthenticationMixin:
             error_message = 'Malformed authentication credentials'
             raise UsernamePasswordAuthenticationError(error_message) from e
 
-        device = DeviceModel.objects.filter(est_password=password, unique_name=username).first()
+        device = DeviceModel.objects.filter(est_password=password, common_name=username).first()
         if not device:
             error_message = 'Invalid authentication credentials'
             raise UsernamePasswordAuthenticationError(error_message)
@@ -517,10 +517,11 @@ class DeviceHandlerMixin:
             onboarding_status = DeviceModel.OnboardingStatus.NO_ONBOARDING
 
         serial_number = credential_request.serial_number
+        common_name = credential_request.common_name
 
         return DeviceModel.objects.create(
             serial_number=serial_number,
-            unique_name=f'Auto-Create-Device-{serial_number}',
+            common_name=common_name,
             domain=domain,
             onboarding_protocol=onboarding_protocol,
             onboarding_status=onboarding_status,
