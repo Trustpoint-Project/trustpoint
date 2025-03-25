@@ -7,6 +7,7 @@ The current status of the test executions is |pytest| with a code coverage of |c
 
 .. |pytest| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/pytest.yml/badge.svg
     :alt: Pytest
+    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/pytest.yml
 
 .. |codecoverage| image:: https://codecov.io/gh/Trustpoint-Project/trustpoint/graph/badge.svg?token=0N31L1QWPE
     :alt: Coverage
