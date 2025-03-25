@@ -132,6 +132,7 @@ class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateMode
 
         # PyCharm TypeChecker issue - this passes mypy
         # noinspection PyTypeChecker
+        # TODO(AlexHx8472): This is not a good query. Use issued credentials to get the certificates.
         return CertificateModel.objects.filter(
             issuer_public_bytes=issuing_ca.credential.certificate.subject_public_bytes
         )
