@@ -565,7 +565,7 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
         if isinstance(public_key, rsa.RSAPublicKey):
             return x509.KeyUsage(
                 digital_signature=True,
-                content_commitment=False,
+                content_commitment=True,
                 key_encipherment=True,
                 data_encipherment=True,
                 key_agreement=False,
@@ -577,7 +577,7 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
         if isinstance(public_key, ec.EllipticCurvePublicKey):
             return x509.KeyUsage(
                 digital_signature=True,
-                content_commitment=False,
+                content_commitment=True,
                 key_encipherment=False,
                 data_encipherment=False,
                 key_agreement=False,
@@ -712,7 +712,7 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
         if isinstance(public_key, rsa.RSAPublicKey):
             return x509.KeyUsage(
                 digital_signature=True,
-                content_commitment=False,
+                content_commitment=True,
                 key_encipherment=True,
                 data_encipherment=True,
                 key_agreement=False,
@@ -724,7 +724,7 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
         if isinstance(public_key, ec.EllipticCurvePublicKey):
             return x509.KeyUsage(
                 digital_signature=True,
-                content_commitment=False,
+                content_commitment=True,
                 key_encipherment=False,
                 data_encipherment=False,
                 key_agreement=False,

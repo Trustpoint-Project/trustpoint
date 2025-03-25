@@ -6,10 +6,15 @@ from est import views
 app_name = 'est'
 
 urlpatterns = [
-    path(
-        '<str:domain>/<str:certtemplate>/simpleenroll/',
-        views.MyView.as_view(),
+    re_path(
+        r'^(?P<domain>[^/]+)(?:/(?P<certtemplate>[^/]+))?/simpleenroll/?$',
+        views.EstSimpleEnrollmentView.as_view(),
         name='simple-enrollment-post'
+    ),
+    re_path(
+        r'^(?P<domain>[^/]+)(?:/(?P<certtemplate>[^/]+))?/simplereenroll/?$',
+        views.EstSimpleReEnrollmentView.as_view(),
+        name='simple-reenrollment-post'
     ),
     re_path(
         r'^(?P<domain>[^/]+)(?:/(?P<certtemplate>[^/]+))?/cacerts/$',
