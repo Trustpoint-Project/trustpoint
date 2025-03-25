@@ -1,6 +1,6 @@
 """URL configuration for the devices' application."""
 
-from django.urls import path
+from django.urls import path, re_path
 
 from . import views
 
@@ -120,4 +120,9 @@ urlpatterns = [
         name='credential_revocation',
     ),
     path('revoke/<int:pk>/', views.DeviceRevocationView.as_view(), name='device_revocation'),
+    re_path(
+        r'^delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        views.DeviceBulkDeleteView.as_view(),
+        name='device_delete',
+    ),
 ]
