@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast, Dict
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from devices.models import IssuedCredentialModel
 from django.contrib import messages
-from django.db.models import ProtectedError, QuerySet
+from django.db.models import ProtectedError
+from django.forms import BaseModelForm
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
@@ -49,11 +50,11 @@ class DomainTableView(DomainContextMixin, SortableTableMixin, ListView[DomainMod
     default_sort_param = 'unique_name'
 
 
-class DomainCreateView(DomainContextMixin, CreateView[DomainModel]):
+class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm[DomainModel]]):
     """View to create a new domain."""
 
     model = DomainModel
-    fields = '__all__'
+    fields = Literal['__all__']
     template_name = 'pki/domains/add.html'
     success_url = reverse_lazy('pki:domains')
     ignore_url = reverse_lazy('pki:domains')
@@ -73,7 +74,7 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel]):
 class DomainUpdateView(DomainContextMixin, UpdateView[DomainModel]):
     """View to edit a domain."""
 
-    # TODO(Air): This view is currently UNUSED.
+    # TODO(Air): This view is currently UNUSED. # noqa: FIX002
     # If used, a mixin implementing the get_form method from the DomainCreateView should be added.
 
     model = DomainModel
@@ -105,7 +106,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
     detail_context_object_name = 'domain'
     success_url = reverse_lazy('pki:domains')
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds (no) additional context data."""
         context = super().get_context_data(**kwargs)
         domain = self.get_object()
@@ -157,8 +158,11 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
 
         return context
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle config form submission."""
+        del args
+        del kwargs
+
         domain = self.get_object()
 
         domain.auto_create_new_device = 'auto_create_new_device' in request.POST
@@ -286,7 +290,7 @@ class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView):
     template_name = 'pki/devid_registration/confirm_delete.html'
     success_url = reverse_lazy('pki:domains')
 
-    def delete(self, request: HttpRequest, *args: tuple[Any], **kwargs: dict[str, Any]) -> HttpResponse:
+    def delete(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Override delete method to add a success message."""
         response = super().delete(request, *args, **kwargs)
         messages.success(request, _('DevID Registration Pattern deleted successfully.'))
@@ -299,7 +303,7 @@ class DevIdMethodSelectView(DomainContextMixin, FormView):
     template_name = 'pki/devid_registration/method_select.html'
     form_class = DevIdAddMethodSelectForm
 
-    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data."""
         context = super().get_context_data(**kwargs)
         context['domain'] = get_object_or_404(DomainModel, id=self.kwargs.get('pk'))
@@ -343,7 +347,7 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
         domain_id = self.kwargs.get('pk')
         return DomainModel.objects.get(pk=domain_id)
 
-    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Pass additional context data to the template."""
         context = super().get_context_data(**kwargs)
         domain = self.get_domain()
