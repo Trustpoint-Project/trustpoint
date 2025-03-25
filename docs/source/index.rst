@@ -25,13 +25,11 @@ Welcome to Trustpoint's documentation!
    community_support
    faq
 
-
 .. toctree::
    :maxdepth: 2
    :caption: 📟 Devices :
 
    onboarding
-
 
 .. toctree::
    :maxdepth: 2
@@ -42,10 +40,14 @@ Welcome to Trustpoint's documentation!
 
 .. toctree::
    :maxdepth: 2
+   :caption: 🔎 Testing :
+
+   test_plan/test_plan
+   test_report/test_report
+
+.. toctree::
+   :maxdepth: 2
    :caption: 🧑‍💻 Development :
 
    development
    ci_cd
-   test_plan/test_plan
-   test_report/test_report
-   api
