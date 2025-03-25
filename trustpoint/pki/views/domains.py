@@ -110,7 +110,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds (no) additional context data."""
         context = super().get_context_data(**kwargs)
-        domain: DomainModel = self.get_object()
+        domain: DomainModel = cast(DomainModel, self.get_object())
 
         issued_credentials = domain.issued_credentials.all()
 
@@ -332,12 +332,13 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
 
     def get_queryset(self) -> QuerySet[CertificateModel]:
         """Return only certificates associated with the domain's issued credentials."""
-        domain = self.get_domain()  # Get the domain
-        issued_credentials = IssuedCredentialModel.objects.filter(domain=domain)
-        self.queryset = CertificateModel.objects.filter(
-            credential__in=[issued_credential.credential for issued_credential in issued_credentials]
+        domain: DomainModel = self.get_domain()
+        # PyCharm TypeChecker issue - this passes mypy
+        # noinspection PyTypeChecker
+        # TODO(AlexHx8472): This must be limited to the actual domain.
+        return CertificateModel.objects.filter(
+            issuer_public_bytes=domain.issuing_ca.credential.certificate.subject_public_bytes
         )
-        return super().get_queryset()
 
     def get_domain(self) -> DomainModel:
         """Get the domain object based on the URL parameter."""
