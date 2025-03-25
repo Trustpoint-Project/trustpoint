@@ -25,7 +25,8 @@ from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
 from pyasn1.type.univ import ObjectIdentifier  # type: ignore[import-untyped]
 from trustpoint_core.oid import SignatureSuite  # type: ignore[import-untyped]
-from trustpoint_core.serializer import CertificateCollectionSerializer  # type: ignore[import-untyped]
+from trustpoint_core.serializer import CertificateCollectionSerializer, \
+    CertificateSerializer  # type: ignore[import-untyped]
 
 from trustpoint.views.base import LoggerMixin
 
@@ -726,6 +727,32 @@ class OnboardingMixIn(LoggedHttpResponse):
 
 
 @method_decorator(csrf_exempt, name='dispatch')
+class MyView(View):
+
+    #http_method_names = ('post',)
+
+    import logging
+    logger = logging.getLogger('trustpoint.est.view')
+
+    def dispatch(self, request, *args, **kwargs):
+        self.logger.info('Request: %s', request)
+        self.logger.info('Request: %s', dir(request))
+
+        self.logger.info("Request received: method=%s path=%s", request.method, request.path)
+        self.logger.info("Query parameters: %s", request.GET.dict())
+        self.logger.info("Headers: %s", dict(request.headers))
+
+        self.logger.info("Request method: %s", request.method)
+        self.logger.info("Request path: %s", request.path)
+        self.logger.info("Query parameters: %s", request.GET.dict())
+        self.logger.info("Headers: %s", dict(request.headers))
+        self.logger.info("User: %s", request.user if request.user.is_authenticated else "Anonymous")
+        self.logger.info("Cookies: %s", request.COOKIES)
+        self.logger.info("Content-Type: %s", request.content_type)
+        self.logger.info("kwargs: %s", str(kwargs))
+        self.logger.info("args: %s", str(args))
+
+@method_decorator(csrf_exempt, name='dispatch')
 class EstSimpleEnrollmentView(EstAuthenticationMixin,
                               EstHttpMixin,
                               EstRequestedDomainExtractorMixin,
@@ -750,6 +777,9 @@ class EstSimpleEnrollmentView(EstAuthenticationMixin,
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Handle GET requests for the /simpleenroll endpoint."""
+        self.logger.info('Request: %s', request)
+        self.logger.info('Request: %s', dir(request))
+
         self.logger.info("Request received: method=%s path=%s", request.method, request.path)
         self.logger.info("Query parameters: %s", request.GET.dict())
         self.logger.info("Headers: %s", dict(request.headers))
@@ -851,16 +881,25 @@ class EstCACertsView(EstAuthenticationMixin, EstRequestedDomainExtractorMixin, V
             certificate_chain = [ca_cert, *ca_credential.get_certificate_chain()]
             pkcs7_certs = CertificateCollectionSerializer(certificate_chain).as_pkcs7_der()
 
-            b64_pkcs7 = base64.b64encode(pkcs7_certs)
+            b64_pkcs7 = base64.b64encode(pkcs7_certs).decode("utf-8")
 
-            self.logger.info(str(b64_pkcs7))
+            formatted_b64_pkcs7 = "\n".join([b64_pkcs7[i:i + 64] for i in range(0, len(b64_pkcs7), 64)])
 
-            return LoggedHttpResponse(
-                b64_pkcs7,
+            self.logger.info(str(formatted_b64_pkcs7))
+
+            response = LoggedHttpResponse(
+                formatted_b64_pkcs7.encode("utf-8"),
                 status=200,
                 content_type='application/pkcs7-mime',
                 headers={'Content-Transfer-Encoding': 'base64'}
             )
+
+            if "Vary" in response:
+                del response["Vary"]
+            if "Content-Language" in response:
+                del response["Content-Language"]
+
+            return response
         except Exception as e:  # noqa:BLE001
             return LoggedHttpResponse(
                 f'Error retrieving CA certificates: {e!s}', status=500

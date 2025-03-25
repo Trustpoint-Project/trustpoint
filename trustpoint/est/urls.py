@@ -8,7 +8,7 @@ app_name = 'est'
 urlpatterns = [
     path(
         '<str:domain>/<str:certtemplate>/simpleenroll/',
-        views.EstSimpleEnrollmentView.as_view(),
+        views.MyView.as_view(),
         name='simple-enrollment-post'
     ),
     re_path(
