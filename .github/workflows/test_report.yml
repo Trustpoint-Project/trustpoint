@@ -1,0 +1,56 @@
+name: Combined Test Report
+
+on:
+  workflow_dispatch:  # Allows manual triggering of this workflow.
+
+jobs:
+  test-report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action
+        with:
+          run_migrations: true
+
+      # Run Behave tests and save output
+      - name: Run Behave BDD Tests
+        run: |
+          uv run trustpoint/manage.py behave --format plain > behave-report.txt 2>&1
+
+      # Run pytest with coverage and save output
+      - name: Run Pytest with Coverage
+        run: |
+          uv run pytest --junitxml=pytest-report.xml > pytest-report.txt 2>&1
+
+      # Run mypy and save output
+      - name: Run Mypy Checks
+        run: |
+          uv run mypy . > mypy-report.txt 2>&1
+
+      # Run Ruff linting and save output
+      - name: Run Ruff Linting
+        run: |
+          ruff check . > ruff-report.txt 2>&1
+
+      # Combine all reports into one file
+      - name: Concatenate Test Reports
+        run: |
+          echo "=== Behave BDD Tests ===" > combined-report.txt
+          cat behave-report.txt >> combined-report.txt
+          echo -e "\n=== Pytest Output ===" >> combined-report.txt
+          cat pytest-report.txt >> combined-report.txt
+          echo -e "\n=== Mypy Checks ===" >> combined-report.txt
+          cat mypy-report.txt >> combined-report.txt
+          echo -e "\n=== Ruff Linting ===" >> combined-report.txt
+          cat ruff-report.txt >> combined-report.txt
+
+      # Upload the combined report as an artifact
+      - name: Upload Combined Test Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: combined-test-report
+          path: combined-report.txt
