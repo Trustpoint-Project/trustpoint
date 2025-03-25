@@ -15,8 +15,8 @@
                         <div class="card-body">
                             <h3>{% trans "Domains" %}</h3>
                             <hr class="hr-m">
-                            {% if issuing_ca.domain_set.all %} {# TODO #}
-                                {% for domain in issuing_ca.domain_set.all %}
+                            {% if issuing_ca.domains.all %}
+                                {% for domain in issuing_ca.domains.all %}
                                     <li class="tp-card-split">
                                         {{ domain.unique_name }}
                                         <div>
