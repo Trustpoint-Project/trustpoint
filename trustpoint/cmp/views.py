@@ -10,7 +10,6 @@ import secrets
 import uuid
 from typing import TYPE_CHECKING, Protocol, cast
 
-from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, hmac
@@ -21,8 +20,8 @@ from devices.issuer import (
     LocalDomainCredentialIssuer,
     LocalTlsClientCredentialIssuer,
     LocalTlsServerCredentialIssuer,
-    OpcUaServerCredentialIssuer,
     OpcUaClientCredentialIssuer,
+    OpcUaServerCredentialIssuer,
 )
 from devices.models import DeviceModel
 from django.http import HttpResponse
@@ -34,6 +33,7 @@ from pki.models.domain import DomainModel
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
+from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
 
 from cmp.util import NameParser
 

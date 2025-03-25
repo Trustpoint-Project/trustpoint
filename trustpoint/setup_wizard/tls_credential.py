@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import ipaddress
-from cryptography import x509
-from cryptography.x509 import NameOID
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import hashes
-
 import datetime
+import ipaddress
 
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509 import NameOID
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeySerializer
 
 ONE_DAY = datetime.timedelta(days=1)

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import enum
-
+from pathlib import Path
 
 WIZARD_STATE_PATH = Path('/etc/trustpoint/wizard/state')
 

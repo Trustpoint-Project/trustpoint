@@ -320,16 +320,16 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                           - The second value is a reason string explaining why the credential is invalid.
         """
         if self.credential_type != CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL:
-            return False, "Invalid credential type: Must be ISSUED_CREDENTIAL."
+            return False, 'Invalid credential type: Must be ISSUED_CREDENTIAL.'
 
         primary_cert = self.certificate
         if primary_cert is None:
-            return False, "Missing primary certificate."
+            return False, 'Missing primary certificate.'
 
         if primary_cert.certificate_status != primary_cert.CertificateStatus.OK:
-            return False, f"Invalid certificate status: {primary_cert.certificate_status} (Must be OK)."
+            return False, f'Invalid certificate status: {primary_cert.certificate_status} (Must be OK).'
 
-        return True, "Valid domain credential."
+        return True, 'Valid domain credential.'
 
 
 class PrimaryCredentialCertificate(models.Model):
@@ -363,7 +363,6 @@ class PrimaryCredentialCertificate(models.Model):
 
         self.is_primary = True
         super().save(*args, **kwargs)
-
 
 
 class CertificateChainOrderModel(models.Model):

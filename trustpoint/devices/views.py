@@ -525,6 +525,7 @@ class DeviceIssueOpcUaServerCredential(
 
 #  ----------------------------------- Certificate Lifecycle Management - Help Pages -----------------------------------
 
+
 class HelpDispatchDomainCredentialView(DeviceContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
     """Redirects to the required help pages depending on the onboarding protocol.
 
@@ -551,10 +552,7 @@ class HelpDispatchDomainCredentialView(DeviceContextMixin, SingleObjectMixin[Dev
 
         device: DeviceModel = self.get_object()
 
-        if (
-            not device.domain_credential_onboarding
-            and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value
-        ):
+        if not device.domain_credential_onboarding and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value:
             return f'{reverse("devices:help-no-onboarding_est-username-password", kwargs={"pk": device.id})}'
 
         if device.onboarding_protocol == device.OnboardingProtocol.CMP_SHARED_SECRET.value:
@@ -567,6 +565,7 @@ class HelpDispatchDomainCredentialView(DeviceContextMixin, SingleObjectMixin[Dev
             return f'{reverse("devices:help-onboarding_est-username-password", kwargs={"pk": device.id})}'
 
         return f'{reverse("devices:devices")}'
+
 
 class HelpDispatchApplicationCredentialView(DeviceContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
     """Redirects to the required help pages depending on PKI protocol.
@@ -595,21 +594,18 @@ class HelpDispatchApplicationCredentialView(DeviceContextMixin, SingleObjectMixi
         device: DeviceModel = self.get_object()
 
         if (
-                not device.domain_credential_onboarding
-                and device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value
+            not device.domain_credential_onboarding
+            and device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value
         ):
             return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
 
         if device.onboarding_protocol in {
             device.OnboardingProtocol.CMP_SHARED_SECRET.value,
-            device.OnboardingProtocol.CMP_IDEVID.value
+            device.OnboardingProtocol.CMP_IDEVID.value,
         }:
             return f'{reverse("devices:help-onboarding_cmp-application-credentials", kwargs={"pk": device.id})}'
 
-        if (
-                not device.domain_credential_onboarding
-                and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value
-        ):
+        if not device.domain_credential_onboarding and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value:
             return f'{reverse("devices:help-no-onboarding_est-username-password", kwargs={"pk": device.id})}'
 
         if device.onboarding_protocol in {
@@ -617,7 +613,7 @@ class HelpDispatchApplicationCredentialView(DeviceContextMixin, SingleObjectMixi
         }:
             return f'{reverse("devices:help-onboarding_est-application-credentials", kwargs={"pk": device.id})}'
 
-        return f"{reverse('devices:devices')}"
+        return f'{reverse("devices:devices")}'
 
 
 class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceModel]):
@@ -639,8 +635,9 @@ class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceMo
         """
         context = super().get_context_data(**kwargs)
         device: DeviceModel = self.object
-        context['host'] = (f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:'
-                           f'{self.request.META.get("SERVER_PORT", "443")}')
+        context['host'] = (
+            f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:{self.request.META.get("SERVER_PORT", "443")}'
+        )
         context.update(self._get_domain_credential_cmp_context(device=device))
         return context
 
@@ -686,6 +683,7 @@ class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceMo
 
         return context
 
+
 class HelpDomainCredentialEstContextView(DeviceContextMixin, DetailView[DeviceModel]):
     """Base view for CMP help views concerning the domain credential, not intended to be used directly."""
 
@@ -705,8 +703,9 @@ class HelpDomainCredentialEstContextView(DeviceContextMixin, DetailView[DeviceMo
         """
         context = super().get_context_data(**kwargs)
         device: DeviceModel = self.object
-        context['host'] = (f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:'
-                           f'{self.request.META.get("SERVER_PORT", "443")}')
+        context['host'] = (
+            f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:{self.request.META.get("SERVER_PORT", "443")}'
+        )
 
         context.update(self._get_domain_credential_est_context(device=device))
         return context
@@ -745,22 +744,26 @@ class HelpDomainCredentialEstContextView(DeviceContextMixin, DetailView[DeviceMo
         tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
         if tls_cert:
             context['trustpoint_server_certificate'] = (
-                tls_cert.credential.certificate.get_certificate_serializer().as_pem().decode('utf-8'))
+                tls_cert.credential.certificate.get_certificate_serializer().as_pem().decode('utf-8')
+            )
 
         domain = device.domain
-        context.update({
-            'allow_app_certs_without_domain': domain.allow_app_certs_without_domain,
-            'allow_username_password_registration': domain.allow_username_password_registration,
-            'username_password_auth': domain.username_password_auth,
-            'domain_credential_auth': domain.domain_credential_auth,
-        })
+        context.update(
+            {
+                'allow_app_certs_without_domain': domain.allow_app_certs_without_domain,
+                'allow_username_password_registration': domain.allow_username_password_registration,
+                'username_password_auth': domain.username_password_auth,
+                'domain_credential_auth': domain.domain_credential_auth,
+            }
+        )
 
         number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
         context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
         context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
-        context['domain_credential_cn'] = f'Trustpoint Domain Credential'
+        context['domain_credential_cn'] = 'Trustpoint Domain Credential'
 
         return context
+
 
 class NoOnboardingEstUsernamePasswordHelpView(HelpDomainCredentialEstContextView):
     """View to provide help information for EST username/password authentication with no onboarding."""
@@ -778,6 +781,7 @@ class OnboardingEstApplicationCredentialsHelpView(HelpDomainCredentialEstContext
     """View to provide help information for EST domain credential authentication."""
 
     template_name = 'devices/help/onboarding/est_application_credentials.html'
+
 
 class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, DetailView[DeviceModel]):
     """Help view for the case of no onboarding using CMP shared-secret."""
@@ -811,8 +815,9 @@ class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, DetailView[DeviceM
             err_msg = _('Unsupported public key algorithm')
             raise ValueError(err_msg)
 
-        context['host'] = (f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:'
-                           f'{self.request.META.get("SERVER_PORT", "443")}')
+        context['host'] = (
+            f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:{self.request.META.get("SERVER_PORT", "443")}'
+        )
         context['key_gen_command'] = key_gen_command
         number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
         context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
@@ -831,10 +836,12 @@ class OnboardingCmpIdevidHelpView(HelpDomainCredentialCmpContextView):
 
     template_name = 'devices/help/onboarding/cmp_idevid.html'
 
+
 class OnboardingCmpApplicationCredentialsHelpView(HelpDomainCredentialCmpContextView):
     """Help view for enrolling application credentials via CMP."""
 
     template_name = 'devices/help/onboarding/cmp_application_credentials.html'
+
 
 class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdRegistration]):
     """Help view for the IDevID Registration, which displays the required OpenSSL commands."""
@@ -874,8 +881,9 @@ class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdR
         else:
             err_msg = 'Unsupported public key algorithm'
             raise ValueError(err_msg)
-        context['host'] = (f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:'
-                           f'{self.request.META.get("SERVER_PORT", "443")}')
+        context['host'] = (
+            f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:{self.request.META.get("SERVER_PORT", "443")}'
+        )
         context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
         context['key_gen_command'] = key_gen_command
         context['issuing_ca_pem'] = (
