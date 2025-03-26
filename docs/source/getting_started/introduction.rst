@@ -26,7 +26,7 @@ Key Features of Trustpoint
 - User-friendly web-based application
 - Low hardware requirements
 - Availability as a Docker container
-- Built on Python Django framework
+- Built on Python :term:`Django` framework
 
 ---------------------------------
 How to Navigate the Documentation
