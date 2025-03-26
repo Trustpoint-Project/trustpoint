@@ -43,12 +43,12 @@ ________________________
 
 Devices
 ________________________
-- **Onboarding Mechanisms**: An overview of the available device onboarding mechanisms in Trustpoint.
+- :ref:`onboarding-mechanisms`: An overview of the available device onboarding mechanisms in Trustpoint.
 
 Indices and tables
 ________________________
-- **Glossary**: An overview of the key terms related to Trustpoint.
-- **Issued Certificate Defaults**: Details the default attributes and validity periods of issued certificates in Trustpoint.
+- :ref:`glossary`: An overview of the key terms related to Trustpoint.
+- :ref:`issued_cert_defaults`: Details the default attributes and validity periods of issued certificates in Trustpoint.
 
 Development:
 ________________________

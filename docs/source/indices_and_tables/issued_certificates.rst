@@ -1,10 +1,15 @@
+.. _issued_cert_defaults:
+
+===========================
 Issued Certificate Defaults
 ===========================
 
 This section gives details about the contents of specific issued certificates and credentials.
 
+------------------
 Domain Credentials
 ------------------
+
 Domain Credential Certificates will always contain the following subject.
 
 All Domain Credentials are valid for 47 days by default.
@@ -29,7 +34,7 @@ For more critical environments, a shorter duration may be set.
      - 2.5.4.5
      - <serial number of the corresponding device>
 
-
+-----------------------
 Application Credentials
 -----------------------
 
@@ -38,6 +43,7 @@ This value follows from WebPKI rules as sensible default, however this can be ad
 If no automation of the renewal process is possible, this default may be set higher.
 For more critical environments, a shorter duration may be set.
 
+......................
 TLS Client Credentials
 ......................
 
@@ -72,7 +78,7 @@ TLS Client Credentials
 
     The common name: Trustpoint Domain Credential is forbidden.
 
-
+......................
 TLS Server Credentials
 ......................
 
@@ -113,4 +119,3 @@ provided by the request. At least one of the following has to be provided by the
 - IPv4 Address
 - IPv6 Address
 - Domain Name
-

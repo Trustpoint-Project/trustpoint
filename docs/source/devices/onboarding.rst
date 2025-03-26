@@ -1,29 +1,53 @@
 .. _onboarding-mechanisms:
 
+=====================
 Onboarding Mechanisms
 =====================
 
-This document outlines the different mechanisms available to onboard devices to Trustpoint, including user-driven and automated methods. These methods aim to streamline the process of issuing initial certificates (domain credentials) that are used for secure device authentication with Trustpoint.
+This document outlines the different mechanisms available to onboard devices to Trustpoint,
+including user-driven and automated methods.
+These methods aim to streamline the process of issuing initial certificates (domain credentials)
+that are used for secure device authentication with Trustpoint.
 
+--------
 Overview
 --------
-Trustpoint provides multiple ways to onboard a device. Currently, the primary onboarding mechanism is user-driven, with zero-touch onboarding being a future enhancement. The following sections provide detailed information on each of these methods.
 
-Onboarding a device to Trustpoint involves issuing a domain credential, which allows the device to securely authenticate with Trustpoint. There are two categories of onboarding available: user-driven onboarding and zero-touch onboarding.
+Trustpoint provides multiple ways to onboard a device.
+Currently, the primary onboarding mechanism is user-driven,
+with zero-touch onboarding being a future enhancement.
+The following sections provide detailed information on each of these methods.
 
+Onboarding a device to Trustpoint involves issuing a domain credential,
+which allows the device to securely authenticate with Trustpoint.
+There are two categories of onboarding available: user-driven onboarding and zero-touch onboarding.
+
+-------------
 No Onboarding
 -------------
 
-In certain industrial environments, especially those with air-gapped systems, legacy devices, or extremely restrictive policies, onboarding devices to Trustpoint may not always be feasible or necessary.
+In certain industrial environments, especially those with air-gapped systems,
+legacy devices, or extremely restrictive policies,
+onboarding devices to Trustpoint may not always be feasible or necessary.
 
-In these cases, devices may continue to operate without a domain credential managed by Trustpoint. However, this approach is discouraged as it introduces security risks and limits the device’s ability to participate in secure, authenticated communication within the industrial network.
+In these cases, devices may continue to operate without a domain credential managed by Trustpoint.
+However, this approach is discouraged as it introduces security risks
+and limits the device’s ability to participate in secure,
+authenticated communication within the industrial network.
 
-Trustpoint aims to reduce the need for "No Onboarding" scenarios by providing flexible onboarding methods and supporting various industrial standards. However, it acknowledges that in specific edge cases, operating without an onboarding process may still occur.
+Trustpoint aims to reduce the need for "No Onboarding" scenarios by providing flexible onboarding methods
+and supporting various industrial standards.
+However, it acknowledges that in specific edge cases,
+operating without an onboarding process may still occur.
 
+----------------------
 User-Driven Onboarding
 ----------------------
-User-driven onboarding is the primary method available for onboarding devices to Trustpoint. This method offers several options, depending on the user's preferences and available resources.
 
+User-driven onboarding is the primary method available for onboarding devices to Trustpoint.
+This method offers several options, depending on the user's preferences and available resources.
+
+^^^^^^^^^^^^^^
 Authentication
 ^^^^^^^^^^^^^^
 
@@ -33,17 +57,19 @@ To initially secure the client's request for a domain credential, various method
  - **Password**: Onboard a new device with EST protocol using a username and password
  - **One Time Password (OTP)**: Browser onboarding can be carried out using a one-time password
 
+^^^^^^^^^^^^^^^^^^^^
 Using the device CLI
 ^^^^^^^^^^^^^^^^^^^^
+
 Users can also onboard their device manually by executing commands on the device command line interface (CLI).
 
 How It Works:
 
 - A new device with one of the the following options:
-    - **CMP with shared secret onboarding**
-    - **CMP with IDevID onboarding**
-    - **EST with username and password onboarding** (WIP)
-    - **EST with IDevID onbaording** (WIP)
+    - **:ref:`CMP` with shared secret onboarding**
+    - **:ref:`CMP` with IDevID onboarding**
+    - **:ref:`EST` with username and password onboarding** (WIP)
+    - **:ref:`EST` with IDevID onboarding** (WIP)
 - In **Devices** click **Manage** on the new device
 - Click **Help - Issue New Credentials**
 - Copy the provided (OpenSSL) commands to your clipboard and execute it on the device
@@ -55,8 +81,9 @@ Requirements:
 - Necessary permissions.
 - A connection to communicate with Trustpoint services.
 
-Example for CMP with shared secret onboarding
-"""""""""""""""""""""""""""""""""""""""""""""
+""""""""""""""""""""""""""""""""""""""""""""""""""""
+Example for :ref:`CMP` with shared secret onboarding
+""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 This approach allows a device to obtain a domain credential from Trustpoint using the CMP protocol and a shared secret for authentication. It is a commonly used method when no initial identity certificate (IDevID) is available on the device.
 
@@ -99,10 +126,13 @@ Explanation of the Key Parameters:
 - ``-certout cert.pem``: The resulting certificate will be saved to ``cert.pem``.
 - ``-chainout chain.pem``: The certificate chain will be saved to ``chain.pem``.
 
-Upon successful execution, the device will receive its domain credential certificate, enabling secure authentication with Trustpoint.
+Upon successful execution, the device will receive its domain credential certificate,
+enabling secure authentication with Trustpoint.
 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Using the Trustpoint Client (Work in Progress)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 Trustpoint provides a user-friendly client application that simplifies the onboarding process. The Trustpoint client is available at `Trustpoint Client GitHub <https://github.com/TrustPoint-Project/trustpoint-client>`_. This method is recommended for users who prefer a guided approach to onboarding.
 
 How It Works:
@@ -120,8 +150,10 @@ Requirements:
 - Trustpoint-Client installed on the device (via `pip install trustpoint-client`).
 - A connection to communicate with Trustpoint services.
 
+----------------------------------------
 Zero-Touch Onboarding (Work in Progress)
 ----------------------------------------
+
 Trustpoint is actively developing a zero-touch onboarding feature. This mechanism will allow fully automated onboarding without any user intervention, simplifying the process even further. Zero-touch onboarding is designed for use in environments where many devices need to be onboarded without manual effort, providing a scalable solution for large deployments.
 
 How It Works:
@@ -134,15 +166,19 @@ Requirements:
 - Network infrastructure to support automated onboarding.
 
 
-The Trustpoint beta release contains zero touch onboarding functionality for demonstration purposes only, based on the AOKI (Automated Onboarding Key Infrastructure) protocol.
-This is a simple protocol that uses mDNS to discover the Trustpoint server and then uses a simple REST API for mutual trust establishment.
+The Trustpoint beta release contains zero touch onboarding functionality for demonstration purposes only,
+based on the AOKI (Automated Onboarding Key Infrastructure) protocol.
+This is a simple protocol that uses mDNS to discover the Trustpoint server
+and then uses a simple REST API for mutual trust establishment.
 Afterwards, the device is in possession of a OTP it can use for LDevID provisioning via standard CMP.
 Before the device can be onboarded, it must possess a valid IDevID (Initial device identifier per IEEE 802.1AR) certificate.
 The Trustpoint needs to have a valid trust anchor certificate for the device's IDevID certificate added as a Truststore.
-It also needs an ownership certificate, which is issued by the manufacturer and verified by the device to authenticate the Trustpoint.
+It also needs an ownership certificate, which is issued by the manufacturer
+and verified by the device to authenticate the Trustpoint.
 
 This feature is not intended for production use.
 
+^^^^^^
 How to
 ^^^^^^
 
