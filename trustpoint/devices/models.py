@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import logging
 import secrets
+import typing
 from typing import TYPE_CHECKING
 
 from django.db import models, transaction
@@ -37,8 +38,8 @@ class DeviceModel(CustomDeleteActionModel):
     """The DeviceModel."""
 
     id = models.AutoField(primary_key=True)
-    unique_name = models.CharField(
-        _('Device'), max_length=100, unique=True, default='New-Device', validators=[UniqueNameValidator()]
+    common_name = models.CharField(
+        _('Device'), max_length=100, default='New-Device'
     )
     serial_number = models.CharField(_('Serial-Number'), max_length=100)
     domain = models.ForeignKey(
@@ -109,20 +110,26 @@ class DeviceModel(CustomDeleteActionModel):
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""
+        constraints: typing.ClassVar = [
+            models.UniqueConstraint(
+                fields=['common_name', 'serial_number'],
+                name='unique_common_serial'
+            )
+        ]
 
     def __str__(self) -> str:
         """Returns a human-readable string representation."""
-        return f'DeviceModel(unique_name={self.unique_name})'
+        return f'DeviceModel(common_name={self.common_name})'
 
     def pre_delete(self) -> None:
         """Delete all issued credentials for this device before deleting the device itself."""
-        logger.info(f'Deleting all issued credentials for device {self.unique_name}') # noqa: G004
+        logger.info(f'Deleting all issued credentials for device {self.common_name}') # noqa: G004
         self.issued_credentials.all().delete()
 
     @property
     def est_username(self) -> str:
         """Gets the EST username."""
-        return self.unique_name
+        return self.common_name
 
     @property
     def signature_suite(self) -> oid.SignatureSuite:
@@ -274,7 +281,7 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
             logger.warning(
                 'Incorrect OTP attempt %s for browser credential download '
                 'for device %s (credential id=%i)',
-                self.attempts, self.device.unique_name, self.issued_credential_model.id
+                self.attempts, self.device.common_name, self.issued_credential_model.id
             )
 
             if self.attempts >= self.BROWSER_MAX_OTP_ATTEMPTS:
@@ -288,7 +295,7 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
         logger.info(
             'Correct OTP entered for browser credential download for device %s'
             '(credential id=%i)',
-            self.device.unique_name, self.issued_credential_model.id
+            self.device.common_name, self.issued_credential_model.id
         )
         self.otp = '-'
         self.download_token = secrets.token_urlsafe(32)
