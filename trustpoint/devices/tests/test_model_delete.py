@@ -8,6 +8,7 @@ from django.db.models import ProtectedError
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
+from unittest.mock import patch
 
 from devices.models import DeviceModel, IssuedCredentialModel
 
@@ -34,6 +35,29 @@ def test_device_delete_revocation(mock_models: dict[str, Any]) -> None:
         CredentialModel.objects.get(id=cred_id)
 
     # Ensure certificate is revoked
+    cert = CertificateModel.objects.get(id=cert_id)
+    assert cert.certificate_status == CertificateModel.CertificateStatus.REVOKED, (
+        'Certificate should be revoked after delete.'
+    )
+
+def test_multi_device_delete(mock_models: dict[str, Any]) -> None:
+    """Tests that multiple devices can be deleted and pre_delete is called even on a QuerySet of DeviceModels."""
+    mock_domain = mock_models['domain']
+    mock_device1 = mock_models['device']
+    issued_cred = mock_device1.issued_credentials.first()
+    cert_id = issued_cred.credential.certificate.id
+
+    mock_device2 = DeviceModel(
+        common_name='test_device2',
+        serial_number='1234567890_2',
+        domain=mock_domain,
+        onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
+        onboarding_status=DeviceModel.OnboardingStatus.PENDING,
+    )
+    mock_device2.save()
+    DeviceModel.objects.filter(domain=mock_domain).delete()  # queryset delete
+
+    # Ensure certificate of device 1 is also revoked if deleted via queryset
     cert = CertificateModel.objects.get(id=cert_id)
     assert cert.certificate_status == CertificateModel.CertificateStatus.REVOKED, (
         'Certificate should be revoked after delete.'
