@@ -156,25 +156,11 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
 
             hash_algorithm = self.credential.hash_algorithm
 
-            if isinstance(hash_algorithm, hashes.SHA224):
-                hash_algorithm = hashes.SHA224()
-            elif isinstance(hash_algorithm, hashes.SHA256):
-                hash_algorithm = hashes.SHA256()
-            elif isinstance(hash_algorithm, hashes.SHA384):
-                hash_algorithm = hashes.SHA384()
-            elif isinstance(hash_algorithm, hashes.SHA512):
-                hash_algorithm = hashes.SHA512()
-            elif isinstance(hash_algorithm, hashes.SHA3_224):
-                hash_algorithm = hashes.SHA3_224()
-            elif isinstance(hash_algorithm, hashes.SHA3_256):
-                hash_algorithm = hashes.SHA3_256()
-            elif isinstance(hash_algorithm, hashes.SHA3_384):
-                hash_algorithm = hashes.SHA3_384()
-            elif isinstance(hash_algorithm, hashes.SHA3_512):
-                hash_algorithm = hashes.SHA3_512()
-            elif hash_algorithm is None:
-                hash_algorithm = None
-            else:
+            if (hash_algorithm is not None
+                and not isinstance(hash_algorithm, (
+                    hashes.SHA224, hashes.SHA256, hashes.SHA384, hashes.SHA512,
+                    hashes.SHA3_224, hashes.SHA3_256, hashes.SHA3_384, hashes.SHA3_512
+                ))):
                 err_msg = 'Cannot build the domain credential, unknown hash algorithm found.'
                 raise ValueError(err_msg)
 
