@@ -7,10 +7,6 @@ Test Report
 This document is providing a test report for Trustpoint.
 It should be updated with every version bump.
 
-.. note::
-    This report should be generated as part of the automated testing and documentation pipeline to ensure completeness
-    and traceability of the TrustPoint project.
-
 .. warning::
     This is still w.i.p.!
 
