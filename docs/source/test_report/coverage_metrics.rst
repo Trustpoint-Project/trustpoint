@@ -1,4 +1,6 @@
-Here, the following should be provided:
+The coverage metrics and the current coverage can be seen on `Codecov <https://app.codecov.io/>`_.
+As of now, there is a coverage of |codecoverage|.
 
-- Test coverage statistics demonstrating the completeness of testing efforts.
-- Code coverage analysis from automated tests.
+.. |codecoverage| image:: https://codecov.io/gh/Trustpoint-Project/trustpoint/graph/badge.svg?token=0N31L1QWPE
+    :alt: Coverage
+    :target: https://app.codecov.io/gh/Trustpoint-Project/trustpoint
