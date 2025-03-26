@@ -4,25 +4,27 @@
 Trustpoint Development environment setup
 ========================================
 
+------------
 Installation
 ------------
 
-| Trustpoint uses the Python Django framework.
-| We are using `uv <https://docs.astral.sh/uv/>`__ to manage different python versions and
-  dependencies.
+Trustpoint uses the Python Django framework.
+
+We are using `uv <https://docs.astral.sh/uv/>`_ to manage different python versions and dependencies.
 
 Please note that the current version is in **development status** and
 still subject to **major changes**. Our aim is to make an operational
 version of the software available quickly in order to receive as much
 feedback as possible from users.
 
+^^^^^^^^^^
 Install uv
 ^^^^^^^^^^
 
-| You should use uv to create a virtual environment and to manage
-  the dependencies (instead of pip directly).
-| Check out the official documentation for the `installer
-  <https://docs.astral.sh/uv/getting-started/installation>`__
+You should use uv to create a virtual environment
+and to manage the dependencies (instead of pip directly).
+
+Check out the official documentation for the `installer <https://docs.astral.sh/uv/getting-started/installation>`_.
 
 In simple cases, installing uv is as straightforward as:
 
@@ -30,19 +32,20 @@ In simple cases, installing uv is as straightforward as:
 
    pip install uv
 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Install dependencies with uv
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If you have an existing virtual environment, e.g. through using python3
--m venv, exit the virtual environment (that is make sure you are not in
-the environment). You can usually exit it with:
+If you have an existing virtual environment,
+e.g. through using ``python3 -m venv``, exit the virtual environment
+(that is make sure you are not in the environment).
+You can usually exit it with:
 
 .. code:: shell
 
    deactivate
 
-Then, remove any virtual environment you may have set up, e.g. .venv/
-directory.
+Then, remove any virtual environment you may have set up, e.g. ``.venv/ directory``.
 
 Finally, install everything through uv:
 
@@ -51,6 +54,7 @@ Finally, install everything through uv:
    cd /path/to/trustpoint/
    uv sync
 
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Activating the environment
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -62,9 +66,11 @@ However, if you do want to activate the environment manually, you can do so usin
 
    source .venv/bin/activate
 
+-----
 Usage
 -----
 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Setting up the DB and SuperUser
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -88,6 +94,7 @@ Finally, compile the translation strings for non-English language support:
 
    uv run manage.py compilemsg -l de
 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Running the development server
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -111,6 +118,7 @@ server certificate for your current IP addresses:
 
    python manage.py create_tls_certs
 
+^^^^^^^^^^
 Logging in
 ^^^^^^^^^^
 
@@ -120,6 +128,7 @@ page can be accessed directly via /users/login/.
 Use the username and password which you previously provided through the
 **createsuperuser** command.
 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Management commands for testing and development purposes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -150,6 +159,7 @@ must be installed on your system.
 Compiles the translation files (.po) to binary (.mo) files actually used
 by Django.
 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Building auto documentation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -159,6 +169,7 @@ Building auto documentation
    sphinx-apidoc -f -e -o ./source ../trustpoint /*/migrations/*
    make html
 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Adding dependencies to the project
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -176,9 +187,11 @@ add in within the dev section:
 
    uv add <name-of-package> --dev
 
+------------
 Testing & CI
 ------------
 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Using the ruff linter and formatter
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -200,6 +213,7 @@ For type checking, we use :term:`mypy`:
 
    uv run mypy .
 
+^^^^^^^^^^^^^^^^^^^^^^^^^
 Running pytest unit tests
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -210,6 +224,7 @@ or integration tests that do not involve a request-response cycle:
 
    uv run pytest
 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Running BDD tests with behave
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
