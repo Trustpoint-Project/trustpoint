@@ -17,7 +17,7 @@ Welcome to Trustpoint's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: 🚀 Getting Started :
+   :caption: 🚀 Getting Started
 
    getting_started/introduction
    getting_started/quickstart_setup
@@ -29,27 +29,30 @@ Welcome to Trustpoint's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: 📟 Devices :
+   :caption: 📟 Devices
 
    devices/onboarding
 
+
 .. toctree::
    :maxdepth: 2
-   :caption: 📍 Indices and tables :
+   :caption: 📍 Indices and Tables
 
    indices_and_tables/glossary
    indices_and_tables/issued_certificates
 
+
 .. toctree::
    :maxdepth: 2
-   :caption: 🔎 Testing :
+   :caption: 🔎 Testing
 
    testing/test_plan
    testing/ci_cd
    testing/test_report
 
+
 .. toctree::
    :maxdepth: 2
-   :caption: 🧑‍💻 Development :
+   :caption: 🧑‍💻 Development
 
    development/development
