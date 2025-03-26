@@ -30,6 +30,7 @@ from trustpoint_core.serializer import CertificateCollectionSerializer  # type: 
 
 from trustpoint.views.base import LoggerMixin
 
+
 class ClientCertificateAuthenticationError(Exception):
     """Exception raised for client certificate authentication failures."""
 
@@ -85,7 +86,7 @@ class CredentialRequest:
     request_format:str
 
 
-class EstAuthenticationMixin:
+class EstAuthenticationMixin(LoggerMixin):
     """Checks for HTTP Basic Authentication before processing the request."""
 
     def get_credential_for_certificate(self, cert: x509.Certificate) -> tuple[CredentialModel, DeviceModel]:
@@ -416,10 +417,10 @@ class EstPkiMessageSerializerMixin(LoggerMixin):
         """
         try:
             if b'-----BEGIN CERTIFICATE REQUEST-----' in data:
-                request_format = "pem"
+                request_format = 'pem'
                 csr = x509.load_pem_x509_csr(data)
             elif re.match(rb'^[A-Za-z0-9+/=\n]+$', data):
-                request_format = "base64_der"
+                request_format = 'base64_der'
                 der_data = base64.b64decode(data)
                 csr = x509.load_der_x509_csr(der_data)
             elif data.startswith(b'\x30'):  # ASN.1 DER should start with 0x30 (SEQUENCE tag)
