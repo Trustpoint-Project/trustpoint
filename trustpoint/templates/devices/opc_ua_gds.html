@@ -10,11 +10,13 @@
     </div>
 
     <div class="card-body text-start" style="overflow: auto; flex-grow: 1; max-height: 90%;">
-      {% include 'devices/details/devices_table.html' %}
+      {% include 'devices/devices_table.html' %}
       {% include 'trustpoint/pagination.html' %}
     </div>
       <div class="card-footer d-flex justify-content-between tp-sticky-footer">
-          <div class="m-1">
+          <div class="tp-card-btn-footer m-1">
+            <button type="button" class="btn btn-danger tp-table-select-btn me-2"
+                    data-tp-url="/devices/delete">{% trans 'Delete selected' %}</button>
           </div>
           <div class="m-1">
             <a class="btn btn-primary" href="{% url 'devices:opc_ua_gds-add' %}">

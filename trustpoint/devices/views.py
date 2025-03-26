@@ -165,7 +165,6 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
 
     @staticmethod
     def _get_details_button_html(record: DeviceModel) -> SafeString:
-        """Gets the HTML for the Details button in the devices table."""
         """Gets the HTML for the Details button in the devices table.
 
         Args:

@@ -58,11 +58,9 @@ class LoggedHttpResponse(HttpResponse, LoggerMixin):
         if status and status >= THRESHOLD_LOGGER:
             if isinstance(content, bytes):
                 content = content.decode('utf-8')
-            error_message = f'EST - ERROR - {status} - {content}'
-            self.logger.error(error_message)
+            self.logger.error('EST - ERROR - %s - %s', status, content)
         else:
-            success_message = f'EST - SUCCESS - {status}'
-            self.logger.info(success_message)
+            self.logger.info('EST - SUCCESS - %s', status)
 
         super().__init__(content, *args, status=status, **kwargs)
 
@@ -424,7 +422,7 @@ class EstPkiMessageSerializerMixin(LoggerMixin):
         :raises ValueError: If deserialization fails.
         """
         try:
-            if b'-----BEGIN CERTIFICATE REQUEST-----' in data:
+            if b'CERTIFICATE REQUEST-----' in data:
                 request_format = 'pem'
                 csr = x509.load_pem_x509_csr(data)
             elif re.match(rb'^[A-Za-z0-9+/=\n]+$', data):
