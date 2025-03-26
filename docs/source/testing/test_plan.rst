@@ -8,7 +8,7 @@ This document is providing a test plan for Trustpoint using the IEEE 829 standar
 Introduction
 ============
 
-.. include:: introduction.rst
+.. include:: test_plan/introduction.rst
 
 .. _test-items-functions:
 
@@ -16,85 +16,85 @@ Introduction
 Test Items (Functions)
 ======================
 
-.. include:: test_items_functions.rst
+.. include:: test_plan/test_items_functions.rst
 
 ====================
 Software Risk Issues
 ====================
 
-.. include:: software_risk_issues.rst
+.. include:: test_plan/software_risk_issues.rst
 
 =====================
 Features To Be Tested
 =====================
 
-.. include:: features_to_be_tested.rst
+.. include:: test_plan/features_to_be_tested.rst
 
 =========================
 Features Not To Be Tested
 =========================
 
-.. include:: features_not_to_be_tested.rst
+.. include:: test_plan/features_not_to_be_tested.rst
 
 ===================
 Approach (Strategy)
 ===================
 
-.. include:: approach_strategy.rst
+.. include:: test_plan/approach_strategy.rst
 
 =======================
 Item Pass/Fail Criteria
 =======================
 
-.. include:: item_pass_fail_criteria.rst
+.. include:: test_plan/item_pass_fail_criteria.rst
 
 ===============================================
 Suspension Criteria And Resumption Requirements
 ===============================================
 
-.. include:: suspension_criteria_and_resumption_requirements.rst
+.. include:: test_plan/suspension_criteria_and_resumption_requirements.rst
 
 =================
 Test Deliverables
 =================
 
-.. include:: test_deliverables.rst
+.. include:: test_plan/test_deliverables.rst
 
 ====================
 Remaining Test Tasks
 ====================
 
-.. include:: remaining_test_tasks.rst
+.. include:: test_plan/remaining_test_tasks.rst
 
 ===================
 Environmental Needs
 ===================
 
-.. include:: environmental_needs.rst
+.. include:: test_plan/environmental_needs.rst
 
 ===========================
 Staffing And Training Needs
 ===========================
 
-.. include:: staffing_and_training_needs.rst
+.. include:: test_plan/staffing_and_training_needs.rst
 
 ================
 Responsibilities
 ================
 
-.. include:: responsibilities.rst
+.. include:: test_plan/responsibilities.rst
 
 ========
 Schedule
 ========
 
-.. include:: schedule.rst
+.. include:: test_plan/schedule.rst
 
 ================================
 Planning Risks And Contingencies
 ================================
 
-.. include:: planning_risks_and_contingencies.rst
+.. include:: test_plan/planning_risks_and_contingencies.rst
 
 =========
 Approvals
@@ -104,7 +104,7 @@ Approvals
 Test Cases
 ==========
 
-.. include:: test_cases.rst
+.. include:: test_plan/test_cases.rst
 
 ========
 Glossary

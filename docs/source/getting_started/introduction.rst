@@ -1,24 +1,34 @@
+============
 Introduction
 ============
 
-Welcome to the Trustpoint Documentation. This guide provides comprehensive information to help you understand, use, and contribute to the Trustpoint project.
+Welcome to the Trustpoint Documentation.
+This guide provides comprehensive information to help you understand,
+use, and contribute to the Trustpoint project.
 
+-------------------
 What is Trustpoint?
 -------------------
 
-Trustpoint is an open-source platform designed to simplify and enhance public key infrastructure (PKI) management. It aims to deliver secure, efficient, and scalable solutions for managing digital certificates, domains, and security protocols for industrial environments.
+Trustpoint is an open-source platform designed to simplify
+and enhance public key infrastructure (PKI) management.
+It aims to deliver secure, efficient,
+and scalable solutions for managing digital certificates, domains,
+and security protocols for industrial environments.
 
+--------------------------
 Key Features of Trustpoint
 --------------------------
 
 - Comprehensive Certificate Lifecycle Management (CLM)
 - Support for short-lived certificates
-- Standardized interfaces (CMP | EST, REST on roadmap)
+- Standardized interfaces (:term:`CMP` | :term:`EST`, REST on roadmap)
 - User-friendly web-based application
 - Low hardware requirements
 - Availability as a Docker container
 - Built on Python Django framework
 
+---------------------------------
 How to Navigate the Documentation
 ---------------------------------
 
@@ -45,10 +55,12 @@ ________________________
 - **Development**: Developers guide on setting up the Trustpoint development environment, managing dependencies, configuring the database, and running the server.
 - **Test Plan**: Details the TrustPoint Test Plan, covering functionality, security, integration, and usability.
 
+---------------
 Getting Started
 ---------------
 To begin using Trustpoint, we recommend exploring the :ref:`quickstart-setup-guide` section to familiarize yourself with the core features and setup. For detailed information on PKI concepts and best practices, refer to the :ref:`quickstart-operation-guide` and :ref:`usage_guide` section.
 
+-------------------
 Users and Scenarios
 -------------------
 

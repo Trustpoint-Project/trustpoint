@@ -14,40 +14,40 @@ It should be updated with every version bump.
 Unit Test Results
 =================
 
-.. include:: unit_test_results.rst
+.. include:: test_report/unit_test_results.rst
 
 ========================
 Integration Test Results
 ========================
 
-.. include:: integration_test_results.rst
+.. include:: test_report/integration_test_results.rst
 
 ===========================
 Defect and Incident Reports
 ===========================
 
-.. include:: defect_and_incident_reports.rst
+.. include:: test_report/defect_and_incident_reports.rst
 
 ==========================
 Acceptance Testing Summary
 ==========================
 
-.. include:: acceptance_test_summary.rst
+.. include:: test_report/acceptance_test_summary.rst
 
 ================
 Coverage Metrics
 ================
 
-.. include:: coverage_metrics.rst
+.. include:: test_report/coverage_metrics.rst
 
 =========================
 Test Environment Details
 =========================
 
-.. include:: test_environment_details.rst
+.. include:: test_report/test_environment_details.rst
 
 ====================
 Remaining Test Tasks
 ====================
 
-.. include:: remaining_test_tasks.rst
+.. include:: test_report/remaining_test_tasks.rst
