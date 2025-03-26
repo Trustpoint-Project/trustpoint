@@ -182,7 +182,7 @@ class OpcUaGdsTableView(DeviceTableView):
     """Table View for devices where opc_ua_gds is True."""
 
     template_name = 'devices/opc_ua_gds.html'
-    extra_context: ClassVar = {'page_category': 'devices', 'page_name': 'opc_ua_gds'}
+    extra_context = {'page_category': 'devices', 'page_name': 'opc_ua_gds'}
 
     def get_queryset(self):
         """Filter queryset to only include devices where opc_ua_gds is True."""

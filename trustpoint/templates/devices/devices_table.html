@@ -14,11 +14,13 @@
                     Domain
                 </a>
             </th>
+            {% if page_name != 'opc_ua_gds' %}
             <th>
                 <a href="?sort={% if current_sort == 'serial_number' %}-{% endif %}serial_number">
                     Serial-Number
                 </a>
             </th>
+            {% endif %}
             <th>
                 <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
                     Created
@@ -53,7 +55,9 @@
                 </td>
                 <td>{{ device.common_name }}</td>
                 <td>{{ device.domain }}</td>
-                <td>{{ device.serial_number }}</td>
+                {% if page_name != 'opc_ua_gds' %}
+                    <td>{{ device.serial_number }}</td>
+                {% endif %}
                 <td>{{ device.created_at }}</td>
                 <td>
                     {% if device.get_onboarding_status_display != 'No Onboarding' %}
