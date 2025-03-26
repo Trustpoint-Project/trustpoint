@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from django.core.exceptions import ValidationError
-from django.db import models, transaction
+from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core import oid
@@ -17,7 +17,7 @@ from util.field import UniqueNameValidator
 
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
-from pki.util.keys import CryptographyUtils
+from cryptography.hazmat.primitives import hashes
 from trustpoint.views.base import LoggerMixin
 
 if TYPE_CHECKING:
@@ -48,7 +48,7 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
     unique_name = models.CharField(
         verbose_name=_('Issuing CA Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
     )
-    credential = models.OneToOneField(CredentialModel, related_name='issuing_cas', on_delete=models.PROTECT)
+    credential: CredentialModel = models.OneToOneField(CredentialModel, related_name='issuing_cas', on_delete=models.PROTECT)
 
     issuing_ca_type = models.IntegerField(
         verbose_name=_('Issuing CA Type'), choices=IssuingCaTypeChoice, null=False, blank=False
@@ -154,7 +154,29 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
                 )
                 crl_builder = crl_builder.add_revoked_certificate(revoked_cert)
 
-            hash_algorithm = CryptographyUtils.get_hash_algorithm_from_credential(credential=self.credential)
+            hash_algorithm = self.credential.hash_algorithm
+
+            if isinstance(hash_algorithm, hashes.SHA224):
+                hash_algorithm = hashes.SHA224()
+            elif isinstance(hash_algorithm, hashes.SHA256):
+                hash_algorithm = hashes.SHA256()
+            elif isinstance(hash_algorithm, hashes.SHA384):
+                hash_algorithm = hashes.SHA384()
+            elif isinstance(hash_algorithm, hashes.SHA512):
+                hash_algorithm = hashes.SHA512()
+            elif isinstance(hash_algorithm, hashes.SHA3_224):
+                hash_algorithm = hashes.SHA3_224()
+            elif isinstance(hash_algorithm, hashes.SHA3_256):
+                hash_algorithm = hashes.SHA3_256()
+            elif isinstance(hash_algorithm, hashes.SHA3_384):
+                hash_algorithm = hashes.SHA3_384()
+            elif isinstance(hash_algorithm, hashes.SHA3_512):
+                hash_algorithm = hashes.SHA3_512()
+            elif hash_algorithm is None:
+                hash_algorithm = None
+            else:
+                err_msg = 'Cannot build the domain credential, unknown hash algorithm found.'
+                raise ValueError(err_msg)
 
             priv_k = self.credential.get_private_key_serializer().as_crypto()
 
