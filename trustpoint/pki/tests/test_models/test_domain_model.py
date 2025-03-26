@@ -42,7 +42,7 @@ def domain_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
     priv_key = issuing_ca_instance.get('priv_key')
     cert = issuing_ca_instance.get('cert')
     if not isinstance(issuing_ca, IssuingCaModel) or not isinstance(cert, x509.Certificate) or not isinstance(priv_key, RSAPrivateKey):
-        msg = 'Issuig CA not created properly'
+        msg = 'Issuing CA not created properly'
         raise TypeError(msg)
     domain = DomainModel.objects.create(unique_name=DOMAIN_UNIQUE_NAME, issuing_ca=issuing_ca, is_active=True)
     issuing_ca_instance.update({'domain': domain})
@@ -64,3 +64,4 @@ def test_attributes_and_properties(domain_instance: dict[str, Any]) -> None:
     time_difference = (current_time - domain.created_at).total_seconds()
     assert time_difference <= 20
     assert domain.signature_suite == oid.SignatureSuite.from_certificate(cert)
+
