@@ -58,7 +58,7 @@ ________________________
 
 Development:
 ________________________
-- **Development**: Developers guide on setting up the Trustpoint development environment, managing dependencies, configuring the database, and running the server.
+- :ref:`trustpoint_dev_env_setup`: Developers guide on setting up the Trustpoint development environment, managing dependencies, configuring the database, and running the server.
 
 ---------------
 Getting Started
