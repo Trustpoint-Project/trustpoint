@@ -221,6 +221,7 @@ class CreateOpcUaGdsView(CreateDeviceView):
     model = DeviceModel
     form_class = CreateOpcUaGdsForm
     template_name = 'devices/add.html'
+    extra_context = {'page_category': 'devices', 'page_name': 'opc_ua_gds'}
 
     def form_valid(self, form):
         """Set opc_ua_gds to True before saving the device."""

@@ -20,7 +20,6 @@ from pki.models.truststore import TruststoreModel
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 from trustpoint_core import oid  # type: ignore[import-untyped]
 from util.db import CustomDeleteActionModel
-from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
     from typing import Any
@@ -118,15 +117,6 @@ class DeviceModel(CustomDeleteActionModel):
     )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
-
-    class Meta(TypedModelMeta):
-        """Meta class configuration."""
-        constraints: typing.ClassVar = [
-            models.UniqueConstraint(
-                fields=['common_name', 'serial_number'],
-                name='unique_common_serial'
-            )
-        ]
 
     def __str__(self) -> str:
         """Returns a human-readable string representation."""
