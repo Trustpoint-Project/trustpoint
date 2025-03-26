@@ -1,3 +1,5 @@
+"""Tests for the IssuingCaModel class."""
+
 import datetime
 from typing import Any
 
@@ -5,6 +7,7 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+from django.db.models import ProtectedError
 from django.utils import timezone
 from trustpoint_core import oid
 
@@ -15,15 +18,6 @@ from pki.util.x509 import CertificateGenerator
 COMMON_NAME = 'Root CA'
 UNIQUE_NAME = COMMON_NAME.replace(' ', '_').lower()
 CA_TYPE = IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED
-
-
-@pytest.fixture
-def issuing_ca_instance() -> dict[str, Any]:
-    cert, priv_key = CertificateGenerator.create_root_ca(cn=COMMON_NAME)
-    issuing_ca = CertificateGenerator.save_issuing_ca(
-        issuing_ca_cert=cert, private_key=priv_key, chain=[], unique_name=UNIQUE_NAME, ca_type=CA_TYPE
-    )
-    return {'issuing_ca': issuing_ca, 'cert': cert, 'priv_key': priv_key}
 
 
 def test_attributes_and_properties(issuing_ca_instance: dict[str, Any]) -> None:
@@ -84,7 +78,7 @@ def test_revoke_all_issued_certificates_and_crl(issuing_ca_instance: dict[str, A
         or not isinstance(cert, x509.Certificate)
         or not isinstance(priv_key, RSAPrivateKey)
     ):
-        msg = 'Issuig CA not created properly'
+        msg = 'Issuing CA not created properly'
         raise TypeError(msg)
 
     ee_cert, _ = CertificateGenerator.create_ee(
@@ -108,3 +102,16 @@ def test_revoke_all_issued_certificates_and_crl(issuing_ca_instance: dict[str, A
     crl_object = x509.load_pem_x509_crl(str.encode(issuing_ca.crl_pem), default_backend())
     revoked_serials = {r.serial_number for r in crl_object}
     assert revoked_serials == {ee_cert.serial_number, ee_cert2.serial_number}
+
+
+def test_issuing_ca_delete(issuing_ca_instance: dict[str, Any], domain_instance: dict[str, Any]) -> None:
+    """Tests that the issuing CA can be deleted only if it has no associated domains."""
+    issuing_ca = issuing_ca_instance.get('issuing_ca')
+    issuing_ca_id = issuing_ca.id
+    domain = domain_instance.get('domain')
+    with pytest.raises(ProtectedError):
+        issuing_ca.delete()
+    domain.delete()
+    issuing_ca.delete()
+    with pytest.raises(IssuingCaModel.DoesNotExist):
+        IssuingCaModel.objects.get(id=issuing_ca_id)
