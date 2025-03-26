@@ -1,3 +1,6 @@
+.. _trustpoint_dev_env_setup:
+
+========================================
 Trustpoint Development environment setup
 ========================================
 
