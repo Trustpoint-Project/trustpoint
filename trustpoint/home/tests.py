@@ -4,6 +4,8 @@ import pytest
 from django.urls import reverse
 from django.contrib.auth.models import User
 from bs4 import BeautifulSoup
+from django.core.management import call_command
+from .models import NotificationModel
 
 @pytest.fixture
 def dashboard_response(client):
@@ -11,6 +13,30 @@ def dashboard_response(client):
     client.force_login(user)
     response = client.get(reverse("home:dashboard"))
     return response
+
+
+@pytest.fixture
+def setup_notifications():
+    """Fixture to run the setup notification management command before tests."""
+
+    call_command("trustpoint_setup_notifications")
+    return NotificationModel.objects.first()
+
+@pytest.fixture
+def notification_response(client):
+    """Fixture to get notification details for the first notification."""
+
+    user = User.objects.create_user(username="admin", password="testing321")
+    client.force_login(user)
+    response = client.get(reverse("home:notification_details", args=[1]))
+    return response
+
+@pytest.mark.django_db
+def test_notification_details_view(setup_notifications, notification_response):
+
+    """Test that the notification details page is accessible for a logged-in user."""
+    assert setup_notifications is not None, "No notification was created by the command"
+    assert notification_response.status_code == 200
 
 @pytest.mark.django_db
 def test_dashboard_view(dashboard_response):
