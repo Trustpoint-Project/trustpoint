@@ -36,10 +36,10 @@ The documentation is organized into the following main sections:
 
 Getting Started
 ________________________
-- **Quickstart Setup Guide**: Step-by-step guide for setting up Trustpoint using Docker, building from source, running the container, verifying the setup, and securing the installation.
-- **Quickstart Operation Guide**: Guide for operating Trustpoint, including setting up a PKI-hierachy, creating a domain, and onboarding devices.
-- **Trustpoint Usage Guide**: An overview of Trustpoint’s usage, including device onboarding, certificate issuance, Issuing CA configurations, domain management, truststores, and security considerations.
-- **Community & Support**: Provides information on Trustpoint's open-source community, contribution opportunities, communication channels, and support options.
+- :ref:`quickstart-setup-guide`: Step-by-step guide for setting up Trustpoint using Docker, building from source, running the container, verifying the setup, and securing the installation.
+- :ref:`quickstart-operation-guide`: Guide for operating Trustpoint, including setting up a PKI-hierachy, creating a domain, and onboarding devices.
+- :ref:`trustpoint_usage_guide`: An overview of Trustpoint’s usage, including device onboarding, certificate issuance, Issuing CA configurations, domain management, truststores, and security considerations.
+- :ref:`community_support`: Provides information on Trustpoint's open-source community, contribution opportunities, communication channels, and support options.
 
 Devices
 ________________________
