@@ -166,7 +166,7 @@ class IssuedCredentialModel(CustomDeleteActionModel):
     credential = models.OneToOneField(
         CredentialModel,
         verbose_name=_('Credential'),
-        on_delete=models.CASCADE,  # delete() on CredentialModel prevents deletion unless certificates are revoked
+        on_delete=models.CASCADE,
         related_name='issued_credential',
         null=False,
         blank=False,
