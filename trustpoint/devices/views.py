@@ -32,6 +32,7 @@ from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from trustpoint_core import oid  # type: ignore[import-untyped]
 from trustpoint_core.file_builder.enum import ArchiveFormat  # type: ignore[import-untyped]
 from trustpoint_core.serializer import CredentialSerializer  # type: ignore[import-untyped]
+from django import forms
 
 from devices.forms import (
     BrowserLoginForm,
@@ -1436,7 +1437,7 @@ class DeviceBulkDeleteView(LoggerMixin, DeviceContextMixin, BulkDeleteView):
     template_name = 'devices/confirm_delete.html'
     context_object_name = 'devices'
 
-    def form_valid(self, form: Form) -> HttpResponse:
+    def form_valid(self, form: forms.Form) -> HttpResponse:
         """Attempt to delete devices if the form is valid."""
         queryset = self.get_queryset()
         deleted_count = queryset.count()
