@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
@@ -279,6 +280,9 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
                 self.request,
                 _('Cannot delete the selected Truststore(s) because they are referenced by other objects.'),
             )
+            return HttpResponseRedirect(self.success_url)
+        except ValidationError as exc:
+            messages.error(self.request, exc.message)
             return HttpResponseRedirect(self.success_url)
 
         messages.success(self.request, _('Successfully deleted {count} Truststore(s).').format(count=deleted_count))

@@ -10,7 +10,6 @@ import secrets
 import uuid
 from typing import TYPE_CHECKING, Protocol, cast
 
-from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, hmac
@@ -21,8 +20,8 @@ from devices.issuer import (
     LocalDomainCredentialIssuer,
     LocalTlsClientCredentialIssuer,
     LocalTlsServerCredentialIssuer,
-    OpcUaServerCredentialIssuer,
     OpcUaClientCredentialIssuer,
+    OpcUaServerCredentialIssuer,
 )
 from devices.models import DeviceModel
 from django.http import HttpResponse
@@ -34,6 +33,7 @@ from pki.models.domain import DomainModel
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
+from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
 
 from cmp.util import NameParser
 
@@ -839,8 +839,22 @@ class CmpInitializationRequestView(
                     err_msg = 'Serial-Number not allowed.'
                     raise ValueError(err_msg)
 
+                common_names = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+                if len(common_names) != 1:
+                    raise ValueError
+
+                common_name = common_names[0]
+
+                if isinstance(common_name.value, str):
+                    common_name_value = common_name.value
+                elif isinstance(common_name.value, bytes):
+                    common_name_value = common_name.value.decode()
+                else:
+                    err_msg = 'Failed to parse common name value'
+                    raise ValueError(err_msg)
+
                 device_model = DeviceModel(
-                    unique_name=f'Auto-Created Device - {uuid.uuid4()}',
+                    common_name=common_name_value,
                     domain=dev_reg_model.domain,
                     serial_number=device_serial_number,
                     domain_credential_onboarding=True,

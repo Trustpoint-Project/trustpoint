@@ -15,8 +15,10 @@ from trustpoint_core.serializer import (
     CredentialSerializer,
     PrivateKeySerializer,
 )
+from util.db import CustomDeleteActionModel
 
 from pki.models import CertificateModel
+from trustpoint.views.base import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -37,7 +39,7 @@ class CredentialAlreadyExistsError(ValidationError):
         super().__init__(_('Credential already exists.'), *args, **kwargs)
 
 
-class CredentialModel(models.Model):
+class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     """The CredentialModel that holds all local credentials used by the Trustpoint.
 
     This model holds both local unprotected credentials, for which the keys and certificates are stored
@@ -62,6 +64,10 @@ class CredentialModel(models.Model):
     credential_type = models.IntegerField(verbose_name=_('Credential Type'), choices=CredentialTypeChoice)
     private_key = models.CharField(verbose_name='Private key (PEM)', max_length=65536, default='', blank=True)
 
+    certificate = models.ForeignKey(
+        CertificateModel, on_delete=models.PROTECT, related_name='credential_set', blank=False
+    )
+
     certificates = models.ManyToManyField(
         CertificateModel, through='PrimaryCredentialCertificate', blank=False, related_name='credential'
     )
@@ -70,8 +76,6 @@ class CredentialModel(models.Model):
     )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
-
-    objects: models.Manager[CredentialModel]
 
     def __repr__(self) -> str:
         """Returns a string representation of this CredentialModel entry."""
@@ -87,8 +91,15 @@ class CredentialModel(models.Model):
 
     def clean(self) -> None:
         """Validates the CredentialModel instance."""
-        if self.primarycredentialcertificate_set.filter(is_primary=True).count() > 1:
+        qs = self.primarycredentialcertificate_set.filter(is_primary=True)
+        if qs.count() > 1:
             exc_msg = 'A credential can only have one primary certificate.'
+            raise ValidationError(exc_msg)
+
+        if qs.get().certificate != self.certificate:
+            exc_msg = ('The ForeignKey certificate must be identical to the one '
+                       'marked primary in the primarycredentialcertificate_set.')
+
             raise ValidationError(exc_msg)
 
     @classmethod
@@ -133,6 +144,7 @@ class CredentialModel(models.Model):
         # TODO(AlexHx8472): Verify that the credential is valid in respect to the credential_type!!!
 
         credential_model = cls.objects.create(
+            certificate=certificate,
             credential_type=credential_type,
             private_key=normalized_credential_serializer.credential_private_key.as_pkcs8_pem().decode(),
         )
@@ -160,7 +172,9 @@ class CredentialModel(models.Model):
         """Stores a credential without a private key."""
         certificate_model = CertificateModel.save_certificate(certificate)
 
-        credential_model = cls.objects.create(credential_type=credential_type, private_key='')
+        credential_model = cls.objects.create(
+            certificate=certificate_model, credential_type=credential_type, private_key=''
+        )
 
         PrimaryCredentialCertificate.objects.create(
             certificate=certificate_model, credential=credential_model, is_primary=True
@@ -174,8 +188,24 @@ class CredentialModel(models.Model):
 
         return credential_model
 
-    # TODO(AlexHx8472): Implement the delete method,
-    # TODO(AlexHx8472): so that the corresponding CertificateChainOrderModels are removed as well
+    def pre_delete(self) -> None:
+        """Deletes related models, only allow deletion if there are no more active certificates."""
+        # only allow deletion if all certificates are either expired or revoked
+        qs = self.certificates.all()
+        if self.certificate not in qs:
+            exc_msg = f'Primary certificate not in certificate list of credential {self.pk}.'
+            raise ValidationError(exc_msg)
+        # Issued credentials must be revoked before deletion, not a requirement for CA credentials
+        if self.credential_type == CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL:
+            for cert in qs:
+                if (cert.certificate_status in
+                    [CertificateModel.CertificateStatus.OK, CertificateModel.CertificateStatus.NOT_YET_VALID]):
+                    exc_msg = f'Cannot delete credential {self} because it still has active certificates.'
+                    self.logger.error(exc_msg)
+                    raise ValidationError(exc_msg)
+        self.certificates.clear()
+        self.certificate = None
+        # CertificateChainOrderModel is deleted via CASCADE
 
     def get_private_key(self) -> PrivateKey:
         """Gets an abstraction of the credential private key.
@@ -203,15 +233,6 @@ class CredentialModel(models.Model):
 
         err_msg = 'Failed to get private key information.'
         raise RuntimeError(err_msg)
-
-    @property
-    def certificate(self) -> CertificateModel:
-        """Gets the primary certificate model using the through model.
-
-        Returns:
-            The primary certificate model.
-        """
-        return self.primarycredentialcertificate_set.filter(is_primary=True).first().certificate
 
     def get_certificate(self) -> x509.Certificate:
         """Gets the credential certificate as x509.Certificate instance.
@@ -299,16 +320,16 @@ class CredentialModel(models.Model):
                           - The second value is a reason string explaining why the credential is invalid.
         """
         if self.credential_type != CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL:
-            return False, "Invalid credential type: Must be ISSUED_CREDENTIAL."
+            return False, 'Invalid credential type: Must be ISSUED_CREDENTIAL.'
 
         primary_cert = self.certificate
         if primary_cert is None:
-            return False, "Missing primary certificate."
+            return False, 'Missing primary certificate.'
 
         if primary_cert.certificate_status != primary_cert.CertificateStatus.OK:
-            return False, f"Invalid certificate status: {primary_cert.certificate_status} (Must be OK)."
+            return False, f'Invalid certificate status: {primary_cert.certificate_status} (Must be OK).'
 
-        return True, "Valid domain credential."
+        return True, 'Valid domain credential.'
 
 
 class PrimaryCredentialCertificate(models.Model):
@@ -344,12 +365,11 @@ class PrimaryCredentialCertificate(models.Model):
         super().save(*args, **kwargs)
 
 
-
 class CertificateChainOrderModel(models.Model):
     """This Model is used to preserve the order of certificates in credential certificate chains."""
 
     certificate = models.ForeignKey(CertificateModel, on_delete=models.PROTECT, null=False, blank=False, editable=False)
-    credential = models.ForeignKey(CredentialModel, on_delete=models.PROTECT, null=False, blank=False, editable=False)
+    credential = models.ForeignKey(CredentialModel, on_delete=models.CASCADE, null=False, blank=False, editable=False)
     order = models.PositiveIntegerField(null=False, blank=False, editable=False)
 
     objects: models.Manager[CertificateChainOrderModel]

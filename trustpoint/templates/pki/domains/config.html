@@ -12,7 +12,7 @@
         <form method="post">
             <div class="card-body">
                 <div class="tp-card-centered-content">
-                        {% csrf_token %}
+                    {% csrf_token %}
                     <h2>{% trans "General" %}</h2>
                     <hr class="hr-m">
                     <div class="tp-kvp-list">
@@ -70,7 +70,17 @@
                         </div>
                         <div>
                             <div>{% trans 'Certificates Issued:' %}</div>
-                            <div></div>
+                            <div>
+                                {% if certificates %}
+                                    <a href="{% url 'pki:domain-issued_certificates' pk=domain.pk %}"
+                                    >
+                                        {{ certificates|length }}
+                                    </a>
+                                {% else %}
+                                    {{ certificates|length }}
+                                {% endif %}
+                            </div>
+
                         </div>
                     </div>
 
@@ -80,9 +90,9 @@
 
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox"
-                                name="allow_app_certs_without_domain"
-                                id="allow_app_certs_without_domain"
-                                {% if domain_options.allow_app_certs_without_domain %}checked{% endif %}>
+                               name="allow_app_certs_without_domain"
+                               id="allow_app_certs_without_domain"
+                               {% if domain_options.allow_app_certs_without_domain %}checked{% endif %}>
                         <label class="form-check-label" for="allow_app_certs_without_domain">
                             {{ domain_verbose_name.allow_app_certs_without_domain }}
                         </label>
@@ -94,8 +104,8 @@
 
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" name="auto_create_new_device"
-                                id="auto_create_new_device"
-                                {% if domain_options.auto_create_new_device %}checked{% endif %}>
+                               id="auto_create_new_device"
+                               {% if domain_options.auto_create_new_device %}checked{% endif %}>
                         <label class="form-check-label" for="auto_create_new_device">
                             {{ domain_verbose_name.auto_create_new_device }}
                         </label>
@@ -107,9 +117,9 @@
 
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox"
-                                name="allow_username_password_registration"
-                                id="allow_username_password_registration"
-                                {% if domain_options.allow_username_password_registration %}checked{% endif %}>
+                               name="allow_username_password_registration"
+                               id="allow_username_password_registration"
+                               {% if domain_options.allow_username_password_registration %}checked{% endif %}>
                         <label class="form-check-label" for="allow_username_password_registration">
                             {{ domain_verbose_name.allow_username_password_registration }}
                         </label>
@@ -119,25 +129,25 @@
                         </small>
                     </div>
 
-{#                  <div class="form-check">#}
-{#                      <input class="form-check-input" type="checkbox" name="allow_idevid_registration"#}
-{#                              id="allow_idevid_registration"#}
-{#                              {% if domain_options.allow_idevid_registration %}checked{% endif %}>#}
-{#                      <label class="form-check-label" for="allow_idevid_registration">#}
-{#                          {{ domain_verbose_name.allow_idevid_registration }}#}
-{#                      </label>#}
-{#                      <br>#}
-{#                      <small class="form-text text-muted">#}
-{#                          {{ domain_help_texts.allow_idevid_registration }}#}
-{#                      </small>#}
-{#                  </div>#}
+                    {#                  <div class="form-check">#}
+                    {#                      <input class="form-check-input" type="checkbox" name="allow_idevid_registration"#}
+                    {#                              id="allow_idevid_registration"#}
+                    {#                              {% if domain_options.allow_idevid_registration %}checked{% endif %}>#}
+                    {#                      <label class="form-check-label" for="allow_idevid_registration">#}
+                    {#                          {{ domain_verbose_name.allow_idevid_registration }}#}
+                    {#                      </label>#}
+                    {#                      <br>#}
+                    {#                      <small class="form-text text-muted">#}
+                    {#                          {{ domain_help_texts.allow_idevid_registration }}#}
+                    {#                      </small>#}
+                    {#                  </div>#}
 
                     <h3 class="mt-4 mb-2">{% trans 'Authentication' %}</h3>
 
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" name="domain_credential_auth"
-                                id="domain_credential_auth"
-                                {% if domain_options.domain_credential_auth %}checked{% endif %}>
+                               id="domain_credential_auth"
+                               {% if domain_options.domain_credential_auth %}checked{% endif %}>
                         <label class="form-check-label" for="domain_credential_auth">
                             {{ domain_verbose_name.domain_credential_auth }}
                         </label>
@@ -149,8 +159,8 @@
 
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" name="username_password_auth"
-                                id="username_password_auth"
-                                {% if domain_options.username_password_auth %}checked{% endif %}>
+                               id="username_password_auth"
+                               {% if domain_options.username_password_auth %}checked{% endif %}>
                         <label class="form-check-label" for="username_password_auth">
                             {{ domain_verbose_name.username_password_auth }}
                         </label>
@@ -163,7 +173,7 @@
                     <h2 class="mt-5">{% trans 'DevID Registration Patterns' %}</h2>
                     <hr class="hr-m">
                     <a href="{% url 'pki:devid_registration-method_select' pk=domain.id %}"
-                        class="btn btn-primary tp-table-btn min-width-20">
+                       class="btn btn-primary tp-table-btn min-width-20">
                         {% trans 'Create new DevID Registration Pattern' %}
                     </a>
 
@@ -175,7 +185,7 @@
                     <button type="button" value="Back" class="btn btn-secondary btn-half"
                             onClick="history.back()">{% trans 'Back' %}</button>
                     <a href="{% url 'pki:domains' %}"
-                        class="btn btn-secondary btn-half">{% trans "Cancel" %}</a>
+                       class="btn btn-secondary btn-half">{% trans "Cancel" %}</a>
                     <button type="submit"
                             class="btn btn-primary">{% trans "Save" %}</button>
                 </div>

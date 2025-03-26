@@ -77,13 +77,16 @@ class BaseCredentialForm(forms.Form):
         self.device = device
         super().__init__(*args, **kwargs)
 
+        default_cn = device.common_name + '-' + self.__class__.__name__.replace('Form', '').replace('Issue', '')
+        self.fields['common_name'].initial = default_cn
+
     def clean_common_name(self) -> str:
         """Checks the common name."""
         common_name = cast(str, self.cleaned_data['common_name'])
         if IssuedCredentialModel.objects.filter(common_name=common_name, device=self.device).exists():
             err_msg = _('Credential with common name %s already exists for device %s.') % (
                 common_name,
-                self.device.unique_name,
+                self.device.common_name,
             )
             raise forms.ValidationError(err_msg)
         return common_name
@@ -243,7 +246,7 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
 
         model = DeviceModel
         fields: typing.ClassVar = [
-            'unique_name',
+            'common_name',
             'serial_number',
             'domain',
             'domain_credential_onboarding',
@@ -270,13 +273,7 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             ('brski_est', _('EST with BRSKI onboarding')),
         ],
         widget=DisableSelectOptionsWidget(
-            disabled_values=[
-                'aoki_est',
-                'brski_est',
-                'aoki_cmp',
-                'brski_cmp',
-                'est_idevid'
-            ]
+            disabled_values=['aoki_est', 'brski_est', 'aoki_cmp', 'brski_cmp', 'est_idevid']
         ),
         initial='cmp_idevid',
     )
@@ -287,11 +284,8 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             ('cmp_shared_secret', _('CMP with shared secret authentication')),
             ('est_username_password', _('EST with username and password authentication')),
         ],
-        widget=DisableSelectOptionsWidget(
-            disabled_values=[
-            ]
-        ),
-        initial='cmp_shared_secret'
+        widget=DisableSelectOptionsWidget(disabled_values=[]),
+        initial='cmp_shared_secret',
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -307,7 +301,7 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
         self.helper.form_tag = False
         self.helper.layout = Layout(
             HTML('<h2>General</h2><hr>'),
-            Field('unique_name'),
+            Field('common_name'),
             Field('serial_number'),
             Field('domain'),
             HTML('<h2 class="mt-5">Onboarding Configuration</h2><hr>'),
@@ -321,9 +315,7 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             Div(Field('pki_configuration'), css_class='d-none', id='id_pki_configuration_wrapper'),
             HTML('<div class="mb-4"></div>'),
         )
-        self.fields['domain'].widget.attrs.update({
-            'required': 'True'
-        })
+        self.fields['domain'].widget.attrs.update({'required': 'True'})
 
     @staticmethod
     def clean_device_name(device_name: str) -> str:

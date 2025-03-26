@@ -1,6 +1,6 @@
 """URL configuration for the devices' application."""
 
-from django.urls import path
+from django.urls import path, re_path
 
 from . import views
 
@@ -40,14 +40,12 @@ urlpatterns = [
     ),
     # Certificate Lifecycle Management - Help Pages
     path(
-        'help/dispatchDomain/<int:pk>/',
-        views.HelpDispatchDomainCredentialView.as_view(),
-        name='help_dispatch_domain'
+        'help/dispatchDomain/<int:pk>/', views.HelpDispatchDomainCredentialView.as_view(), name='help_dispatch_domain'
     ),
     path(
         'help/dispatchApplication/<int:pk>/',
         views.HelpDispatchApplicationCredentialView.as_view(),
-        name='help_dispatch_application'
+        name='help_dispatch_application',
     ),
     path(
         'help/no-onboarding/cmp-shared-secret/<int:pk>/',
@@ -77,12 +75,12 @@ urlpatterns = [
     path(
         'help/no-onboarding/est-username-password/<int:pk>/',
         views.NoOnboardingEstUsernamePasswordHelpView.as_view(),
-        name='help-no-onboarding_est-username-password'
+        name='help-no-onboarding_est-username-password',
     ),
     path(
         'help/onboarding/est-username-password/<int:pk>/',
         views.OnboardingEstUsernamePasswordHelpView.as_view(),
-        name='help-onboarding_est-username-password'
+        name='help-onboarding_est-username-password',
     ),
     path(
         'help/onboarding/est-application-credentials/<int:pk>/',
@@ -92,7 +90,7 @@ urlpatterns = [
     path(
         'help/onboarding/ldevid/<int:pk>/',
         views.OnboardingEstApplicationCredentialsHelpView.as_view(),
-        name='help-onboarding_est-ldevid'
+        name='help-onboarding_est-ldevid',
     ),
     # Certificate Lifecycle Management - Downloads
     path('download/<int:pk>/', views.DownloadPageDispatcherView.as_view(), name='download'),
@@ -122,4 +120,9 @@ urlpatterns = [
         name='credential_revocation',
     ),
     path('revoke/<int:pk>/', views.DeviceRevocationView.as_view(), name='device_revocation'),
+    re_path(
+        r'^delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        views.DeviceBulkDeleteView.as_view(),
+        name='device_delete',
+    ),
 ]

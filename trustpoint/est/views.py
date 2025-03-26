@@ -39,6 +39,7 @@ class UsernamePasswordAuthenticationError(Exception):
 
 THRESHOLD_LOGGER: int = 400
 
+
 class LoggedHttpResponse(HttpResponse, LoggerMixin):
     """Custom HttpResponse that logs and prints error messages automatically."""
 
@@ -59,6 +60,7 @@ class LoggedHttpResponse(HttpResponse, LoggerMixin):
 
         super().__init__(content, *args, status=status, **kwargs)
 
+
 class Dispatchable(Protocol):
     """Protocol defining a dispatch method for handling HTTP requests."""
 
@@ -70,6 +72,7 @@ class Dispatchable(Protocol):
 @dataclass
 class CredentialRequest:
     """Encapsulates the details extracted from a CSR."""
+
     common_name: str
     serial_number: str | None
     ipv4_addresses: list[ipaddress.IPv4Address]
@@ -118,7 +121,7 @@ class EstAuthenticationMixin:
             error_message = 'Malformed authentication credentials'
             raise UsernamePasswordAuthenticationError(error_message) from e
 
-        device = DeviceModel.objects.filter(est_password=password, unique_name=username).first()
+        device = DeviceModel.objects.filter(est_password=password, common_name=username).first()
         if not device:
             error_message = 'Invalid authentication credentials'
             raise UsernamePasswordAuthenticationError(error_message)
@@ -155,8 +158,9 @@ class EstAuthenticationMixin:
         error_message = 'IDevID authentication not implemented'
         raise IDevIDAuthenticationError(error_message)
 
-    def authenticate_request(self, request: HttpRequest, domain: DomainModel, cert_template_str: str) -> tuple[
-        DeviceModel | None, LoggedHttpResponse | None]:
+    def authenticate_request(
+        self, request: HttpRequest, domain: DomainModel, cert_template_str: str
+    ) -> tuple[DeviceModel | None, LoggedHttpResponse | None]:
         """Authenticate the request and return a DeviceModel if authentication succeeds."""
         if cert_template_str == 'domaincredential':
             device, http_response = self._authenticate_domain_credential_request(request, domain)
@@ -164,17 +168,18 @@ class EstAuthenticationMixin:
             device, http_response = self._authenticate_application_certificate_request(request, domain)
 
         if device is None and http_response is None:
-            return None, LoggedHttpResponse('Authentication failed: No valid authentication method used',
-                                            status=400)
+            return None, LoggedHttpResponse('Authentication failed: No valid authentication method used', status=400)
 
         return device, http_response
 
-    def _authenticate_domain_credential_request(self, request: HttpRequest, domain: DomainModel) -> tuple[
-        DeviceModel | None, LoggedHttpResponse | None]:
+    def _authenticate_domain_credential_request(
+        self, request: HttpRequest, domain: DomainModel
+    ) -> tuple[DeviceModel | None, LoggedHttpResponse | None]:
         """Authenticate requests for 'domaincredential' certificates and return the associated DeviceModel."""
         if not (domain.allow_idevid_registration or domain.allow_username_password_registration):
             return None, LoggedHttpResponse(
-                'Both IDevID registration and username:password registration are disabled', status=400)
+                'Both IDevID registration and username:password registration are disabled', status=400
+            )
 
         if domain.allow_username_password_registration:
             try:
@@ -192,13 +197,14 @@ class EstAuthenticationMixin:
 
         return None, LoggedHttpResponse('No valid authentication method provided', status=400)
 
-    def _authenticate_application_certificate_request(self, request: HttpRequest, domain: DomainModel) -> tuple[
-        DeviceModel | None, LoggedHttpResponse | None]:
+    def _authenticate_application_certificate_request(
+        self, request: HttpRequest, domain: DomainModel
+    ) -> tuple[DeviceModel | None, LoggedHttpResponse | None]:
         """Authenticate requests for application certificate templates and return the associated DeviceModel."""
         if not (domain.username_password_auth or domain.domain_credential_auth):
-            return None, LoggedHttpResponse('Both username:password and domain credential '
-                                            'authentication are disabled',
-                                            status=400)
+            return None, LoggedHttpResponse(
+                'Both username:password and domain credential authentication are disabled', status=400
+            )
 
         if domain.username_password_auth:
             try:
@@ -229,6 +235,7 @@ class EstHttpMixin:
 
     Upon successful validation, the mixin delegates the request handling to the parent dispatch method.
     """
+
     expected_content_type = 'application/pkcs10'
     max_payload_size = 131072
     raw_message: bytes
@@ -255,9 +262,11 @@ class EstHttpMixin:
 
         content_type = request.headers.get('Content-Type')
         if content_type != self.expected_content_type:
-            error_message = ('Message is missing the content type.'
-                       if content_type is None
-                       else f'Message does not have the expected content type: {self.expected_content_type}.')
+            error_message = (
+                'Message is missing the content type.'
+                if content_type is None
+                else f'Message does not have the expected content type: {self.expected_content_type}.'
+            )
             return LoggedHttpResponse(content=error_message, status=415)
 
         if request.headers.get('Content-Transfer-Encoding', '').lower() == 'base64':
@@ -308,6 +317,7 @@ class EstRequestedDomainExtractorMixin:
 
 class EstRequestedCertTemplateExtractorMixin(LoggedHttpResponse):
     """Mixin to extract and validate the certificate template from request parameters."""
+
     requested_cert_template_str: str
     allowed_cert_templates: ClassVar[list[str]] = ['tlsserver', 'tlsclient', 'domaincredential']
 
@@ -323,10 +333,7 @@ class EstRequestedCertTemplateExtractorMixin(LoggedHttpResponse):
 
         if cert_template not in self.allowed_cert_templates:
             allowed = ', '.join(self.allowed_cert_templates)
-            return LoggedHttpResponse(
-                f'Invalid or missing cert template. Allowed values are: {allowed}.',
-                status=404
-            )
+            return LoggedHttpResponse(f'Invalid or missing cert template. Allowed values are: {allowed}.', status=404)
 
         self.requested_cert_template_str = cert_template
 
@@ -336,9 +343,7 @@ class EstRequestedCertTemplateExtractorMixin(LoggedHttpResponse):
 class EstPkiMessageSerializerMixin:
     """Mixin to handle serialization and deserialization of PKCS#10 certificate signing requests."""
 
-    def extract_details_from_csr(self,
-                                 csr: x509.CertificateSigningRequest
-                                 ) -> CredentialRequest:
+    def extract_details_from_csr(self, csr: x509.CertificateSigningRequest) -> CredentialRequest:
         """Loads the CSR (x509.CertificateSigningRequest) and extracts subject and SAN."""
         subject_attributes = list(csr.subject)
         common_name = self._extract_common_name(subject_attributes)
@@ -356,7 +361,7 @@ class EstPkiMessageSerializerMixin:
             ipv4_addresses=ipv4_addresses,
             ipv6_addresses=ipv6_addresses,
             dns_names=dns_names,
-            public_key=public_key
+            public_key=public_key,
         )
 
     def _extract_serial_number(self, subject_attributes: list[x509.NameAttribute]) -> str | None:
@@ -392,13 +397,9 @@ class EstPkiMessageSerializerMixin:
 
         return common_name
 
-    def _extract_san(self,
-                     csr: x509.CertificateSigningRequest
-                     ) -> tuple[
-        list[str],
-        list[ipaddress.IPv4Address],
-        list[ipaddress.IPv6Address]
-    ]:
+    def _extract_san(
+        self, csr: x509.CertificateSigningRequest
+    ) -> tuple[list[str], list[ipaddress.IPv4Address], list[ipaddress.IPv6Address]]:
         """Extract SAN (Subject Alternative Name) extension values."""
         try:
             san_extension = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName)
@@ -434,7 +435,7 @@ class EstPkiMessageSerializerMixin:
 
         try:
             cert_details = self.extract_details_from_csr(csr)
-        except Exception as e: # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             return None, LoggedHttpResponse(f'Failed to extract information from CSR: {e}', status=500)
 
         return cert_details, None
@@ -467,7 +468,7 @@ class EstPkiMessageSerializerMixin:
                 public_key.verify(
                     signature=csr.signature,
                     data=csr.tbs_certrequest_bytes,
-                    signature_algorithm=ec.ECDSA(signature_hash_algorithm)
+                    signature_algorithm=ec.ECDSA(signature_hash_algorithm),
                 )
         except Exception as e:
             error_message = 'CSR signature verification failed.'
@@ -480,11 +481,9 @@ class DeviceHandlerMixin:
     This mixin assumes the CSR is already deserialized into a cryptography.x509.CertificateSigningRequest object.
     """
 
-    def get_or_create_device_from_csr(self,
-                                      credential_request: CredentialRequest,
-                                      domain: DomainModel,
-                                      cert_template: str,
-                                      device: DeviceModel) -> tuple[DeviceModel | None, LoggedHttpResponse | None]:
+    def get_or_create_device_from_csr(
+        self, credential_request: CredentialRequest, domain: DomainModel, cert_template: str, device: DeviceModel
+    ) -> tuple[DeviceModel | None, LoggedHttpResponse | None]:
         """Retrieves a DeviceModel instance using the serial number extracted from the provided CSR.
 
         If a device with that serial number does not exist, a new one is created.
@@ -508,8 +507,9 @@ class DeviceHandlerMixin:
             elif domain.allow_idevid_registration:
                 return None, LoggedHttpResponse('IDevID registration is not supported implemented', status=400)
             else:
-                error_message = ('For registering a new device activate '
-                                 'Username:Password registration or IDevid registration')
+                error_message = (
+                    'For registering a new device activate Username:Password registration or IDevid registration'
+                )
                 return None, LoggedHttpResponse(content=error_message, status=400)
 
         else:
@@ -517,10 +517,11 @@ class DeviceHandlerMixin:
             onboarding_status = DeviceModel.OnboardingStatus.NO_ONBOARDING
 
         serial_number = credential_request.serial_number
+        common_name = credential_request.common_name
 
         return DeviceModel.objects.create(
             serial_number=serial_number,
-            unique_name=f'Auto-Create-Device-{serial_number}',
+            common_name=common_name,
             domain=domain,
             onboarding_protocol=onboarding_protocol,
             onboarding_status=onboarding_status,
@@ -550,9 +551,9 @@ class CredentialIssuanceMixin:
         'domaincredential': LocalDomainCredentialIssuer,
     }
 
-    def _validate_subject_attributes(self,
-                                     subject_attributes: list[x509.NameAttribute],
-                                     allowed_subject_oids: set[ObjectIdentifier]) -> None:
+    def _validate_subject_attributes(
+        self, subject_attributes: list[x509.NameAttribute], allowed_subject_oids: set[ObjectIdentifier]
+    ) -> None:
         """Helper method to validate subject attributes."""
         for attr in subject_attributes:
             if attr.oid not in allowed_subject_oids:
@@ -560,11 +561,9 @@ class CredentialIssuanceMixin:
                 error_message = f'Unsupported subject attribute: {oid_name}'
                 raise ValueError(error_message)
 
-    def issue_credential(self,
-                         cert_template_str: str,
-                         device: DeviceModel,
-                         domain: DomainModel,
-                         credential_request: CredentialRequest) -> IssuedCredentialModel | None:
+    def issue_credential(
+        self, cert_template_str: str, device: DeviceModel, domain: DomainModel, credential_request: CredentialRequest
+    ) -> IssuedCredentialModel | None:
         """Issues a credential based on the specified certificate template and CSR.
 
         This method handles the credential issuance process, which includes extracting
@@ -589,29 +588,29 @@ class CredentialIssuanceMixin:
             error_message = f'Unknown certificate template type: {cert_template_str}'
             raise ValueError(error_message)
 
-        return self._issue_based_on_template(cert_template_str=cert_template_str,
-                                             credential_request=credential_request,
-                                             device=device,
-                                             domain=domain)
+        return self._issue_based_on_template(
+            cert_template_str=cert_template_str, credential_request=credential_request, device=device, domain=domain
+        )
 
-    def _issue_simpleenroll(self,
-                            device: DeviceModel,
-                            domain: DomainModel,
-                            requested_cert_template_str: str,
-                            credential_request: CredentialRequest
-                            ) -> LoggedHttpResponse:
+    def _issue_simpleenroll(
+        self,
+        device: DeviceModel,
+        domain: DomainModel,
+        requested_cert_template_str: str,
+        credential_request: CredentialRequest,
+    ) -> LoggedHttpResponse:
         """Handles the credential issuance and raises an error if issuance fails."""
         try:
             issued_credential: IssuedCredentialModel | None = self.issue_credential(
                 cert_template_str=requested_cert_template_str,
                 device=device,
                 domain=domain,
-                credential_request=credential_request
+                credential_request=credential_request,
             )
         except ValueError as e:
             error_message = f'Error while issuing credential ({type(e).__name__}): {e!s}'
             return LoggedHttpResponse(content=error_message, status=400)
-        except Exception as e: # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             error_message = f'Error while issuing credential ({type(e).__name__}): {e!s}'
             return LoggedHttpResponse(content=error_message, status=400)
 
@@ -626,25 +625,19 @@ class CredentialIssuanceMixin:
 
         return LoggedHttpResponse(content=encoded_cert, status=200, content_type='application/pkix-cert')
 
-    def _issue_based_on_template(self,
-                                 cert_template_str: str,
-                                 credential_request: CredentialRequest,
-                                 device: DeviceModel,
-                                 domain: DomainModel) -> IssuedCredentialModel | None:
+    def _issue_based_on_template(
+        self, cert_template_str: str, credential_request: CredentialRequest, device: DeviceModel, domain: DomainModel
+    ) -> IssuedCredentialModel | None:
         """Issues the credential based on the selected template."""
         if cert_template_str == 'domaincredential':
             domain_credential = LocalDomainCredentialIssuer(device=device, domain=domain)
-            return domain_credential.issue_domain_credential_certificate(
-                public_key=credential_request.public_key
-            )
+            return domain_credential.issue_domain_credential_certificate(public_key=credential_request.public_key)
 
         if cert_template_str == 'tlsclient':
             tls_client_credential = LocalTlsClientCredentialIssuer(device=device, domain=domain)
 
             return tls_client_credential.issue_tls_client_certificate(
-                common_name=credential_request.common_name,
-                public_key=credential_request.public_key,
-                validity_days=365
+                common_name=credential_request.common_name, public_key=credential_request.public_key, validity_days=365
             )
         if cert_template_str == 'tlsserver':
             tls_server_credential = LocalTlsServerCredentialIssuer(device=device, domain=domain)
@@ -655,7 +648,7 @@ class CredentialIssuanceMixin:
                 domain_names=credential_request.dns_names,
                 san_critical=False,
                 public_key=credential_request.public_key,
-                validity_days=365
+                validity_days=365,
             )
         return None
 
@@ -663,49 +656,52 @@ class CredentialIssuanceMixin:
 class OnboardingMixIn(LoggedHttpResponse):
     """A mixin that provides onboarding validation logic for issuing credentials."""
 
-    def _validate_onboarding(self,
-                             device: DeviceModel,
-                             credential_request: CredentialRequest,
-                             requested_cert_template_str: str
+    def _validate_onboarding(
+        self, device: DeviceModel, credential_request: CredentialRequest, requested_cert_template_str: str
     ) -> LoggedHttpResponse | None:
         """Validates if the device's onboarding status is appropriate for credential issuance."""
         try:
-            issued_credential = IssuedCredentialModel.objects.get(device=device,
-                                                                  common_name=credential_request.common_name)
+            issued_credential = IssuedCredentialModel.objects.get(
+                device=device, common_name=credential_request.common_name
+            )
         except IssuedCredentialModel.DoesNotExist:
             issued_credential = None
 
         if issued_credential:
-            return LoggedHttpResponse('A device with the same CN already exists. '
-                                      'Not allowed for method /simpleenroll', status=400)
+            return LoggedHttpResponse(
+                'A device with the same CN already exists. Not allowed for method /simpleenroll', status=400
+            )
 
         if requested_cert_template_str == 'domaincredential':
             if device.onboarding_status == DeviceModel.OnboardingStatus.ONBOARDED:
                 return LoggedHttpResponse('The device is already onboarded.', status=400)
             if device.onboarding_status == DeviceModel.OnboardingStatus.NO_ONBOARDING:
-                return LoggedHttpResponse('Requested domain credential for device which '
-                                          'does not require onboarding.',
-                                          status=400)
+                return LoggedHttpResponse(
+                    'Requested domain credential for device which does not require onboarding.', status=400
+                )
         return None
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class EstSimpleEnrollmentView(EstAuthenticationMixin,
-                              EstHttpMixin,
-                              EstRequestedDomainExtractorMixin,
-                              EstRequestedCertTemplateExtractorMixin,
-                              EstPkiMessageSerializerMixin,
-                              DeviceHandlerMixin,
-                              CredentialIssuanceMixin,
-                              OnboardingMixIn,
-                              LoggerMixin,
-                              View):
+class EstSimpleEnrollmentView(
+    EstAuthenticationMixin,
+    EstHttpMixin,
+    EstRequestedDomainExtractorMixin,
+    EstRequestedCertTemplateExtractorMixin,
+    EstPkiMessageSerializerMixin,
+    DeviceHandlerMixin,
+    CredentialIssuanceMixin,
+    OnboardingMixIn,
+    LoggerMixin,
+    View,
+):
     """Handles simple EST (Enrollment over Secure Transport) enrollment requests.
 
     This view processes certificate signing requests (CSRs), authenticates the client using
     either Mutual TLS or username/password, validates the device, and issues the requested certificate
     based on the certificate template specified in the request.
     """
+
     device: DeviceModel
     requested_domain: DomainModel
     requested_cert_template_str: str
@@ -731,19 +727,23 @@ class EstSimpleEnrollmentView(EstAuthenticationMixin,
                 credential_request=credential_request,
                 domain=self.requested_domain,
                 cert_template=self.requested_cert_template_str,
-                device=device
+                device=device,
             )
 
         if not http_response and credential_request and device:
-            http_response = self._validate_onboarding(device=device,
-                                                      credential_request=credential_request,
-                                                      requested_cert_template_str=self.requested_cert_template_str)
+            http_response = self._validate_onboarding(
+                device=device,
+                credential_request=credential_request,
+                requested_cert_template_str=self.requested_cert_template_str,
+            )
 
         if not http_response and credential_request and device:
-            http_response = self._issue_simpleenroll(device=device,
-                                                     domain=self.requested_domain,
-                                                     credential_request=credential_request,
-                                                     requested_cert_template_str=self.requested_cert_template_str)
+            http_response = self._issue_simpleenroll(
+                device=device,
+                domain=self.requested_domain,
+                credential_request=credential_request,
+                requested_cert_template_str=self.requested_cert_template_str,
+            )
 
         if not http_response:
             http_response = LoggedHttpResponse('Something went wrong.', status=500)
@@ -778,9 +778,7 @@ class EstCACertsView(EstAuthenticationMixin, EstRequestedDomainExtractorMixin, V
                 pkcs7_certs,
                 status=200,
                 content_type='application/pkcs7-mime',
-                headers={'Content-Transfer-Encoding': 'base64'}
+                headers={'Content-Transfer-Encoding': 'base64'},
             )
         except Exception as e:  # noqa:BLE001
-            return LoggedHttpResponse(
-                f'Error retrieving CA certificates: {e!s}', status=500
-            )
+            return LoggedHttpResponse(f'Error retrieving CA certificates: {e!s}', status=500)

@@ -72,7 +72,7 @@ def self_signed_cert_basic(rsa_private_key: rsa.RSAPrivateKey) -> tuple[Certific
     issuer = subject
     now = datetime.now(UTC)
 
-    basic_constraints = BasicConstraints(ca=True, path_length=None)
+    basic_constraints = BasicConstraints(ca=True, path_length=0)
 
     cert = (
         x509.CertificateBuilder()

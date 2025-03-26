@@ -1,0 +1,62 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+{% load static %}
+
+{% block content %}
+    <form method="POST" autocomplete="off">
+        {% csrf_token %}
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h1>{% trans 'Confirm Device Deletion' %}</h1>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning d-flex" role="alert">  
+                    <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="State: "><use xlink:href="{% static 'img/icons.svg' %}#icon-warning"/></svg>
+                    <div>{% trans "Deletion will revoke any active credentials issued to devices with reason code 'Cessation of Operation'" %}</div>
+                </div>
+
+                <div class="tp-card-centered-content">
+                    {% for device in devices %}
+                        <h2>({{ forloop.counter }}) {% trans 'device' %}: {{ device.unique_name }}</h2>
+                        <hr class="hr-m">
+                        <div class="tp-kvp-list">
+                            <div>
+                                <div>{% trans 'Unique Name' %}</div>
+                                <div>{{ device.unique_name }}</div>
+                            </div>
+                            <div>
+                                <div>{% trans 'Domain' %}</div>
+                                <div>
+                                {% if device.domain %}
+                                <a href="{% url 'pki:domains-detail' pk=device.domain.id %}">
+                                        {{ device.domain.unique_name }}
+                                    </a>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <div>{% trans 'Issued Credentials' %}</div>
+                                <div>{{ device.issued_credentials.count }}</div>
+                            </div>
+                        </div>
+                        {% if not forloop.last %}
+
+                        {% endif %}
+                    {% endfor %}
+
+
+                </div>
+            </div>
+            <div class="card-footer d-flex">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'devices:devices' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                    <button type="submit" class="btn btn-danger">{% trans 'Delete selected devices' %}</button>
+                </div>
+            </div>
+        </div>
+    </form>
+{% endblock content %}
