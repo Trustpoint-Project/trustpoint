@@ -328,7 +328,7 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
 
     model = CertificateModel
     template_name = 'pki/domains/issued_certificates.html'
-    context_object_name = 'certificates'
+    context_object_name = 'issued_certificates'
 
     def get_queryset(self) -> QuerySet[CertificateModel]:
         """Return only certificates associated with the domain's issued credentials."""
