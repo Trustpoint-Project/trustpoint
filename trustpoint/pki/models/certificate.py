@@ -23,6 +23,7 @@ from trustpoint_core.oid import (
     SignatureSuite,
 )
 from trustpoint_core.serializer import CertificateSerializer, PublicKeySerializer
+from util.db import CustomDeleteActionModel
 
 from pki.models.extension import (
     AttributeTypeAndValue,
@@ -48,7 +49,7 @@ from trustpoint.views.base import LoggerMixin
 __all__ = ['CertificateModel', 'RevokedCertificateModel']
 
 
-class CertificateModel(LoggerMixin, models.Model):
+class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     """X509 Certificate Model.
 
     See RFC5280 for more information.
@@ -211,7 +212,7 @@ class CertificateModel(LoggerMixin, models.Model):
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
     )
 
     authority_key_identifier_extension = models.ForeignKey(
@@ -221,7 +222,7 @@ class CertificateModel(LoggerMixin, models.Model):
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
     )
 
     subject_key_identifier_extension = models.ForeignKey(
@@ -231,7 +232,7 @@ class CertificateModel(LoggerMixin, models.Model):
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
     )
 
     certificate_policies_extension = models.ForeignKey(
@@ -241,7 +242,7 @@ class CertificateModel(LoggerMixin, models.Model):
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
     )
 
     extended_key_usage_extension = models.ForeignKey(
@@ -251,7 +252,7 @@ class CertificateModel(LoggerMixin, models.Model):
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
     )
 
     name_constraints_extension = models.ForeignKey(
@@ -260,7 +261,7 @@ class CertificateModel(LoggerMixin, models.Model):
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
     )
 
     crl_distribution_points_extension = models.ForeignKey(
@@ -269,30 +270,32 @@ class CertificateModel(LoggerMixin, models.Model):
         editable=False,
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
     )
 
     authority_information_access_extension = models.ForeignKey(
-        AuthorityInformationAccessExtension, null=True, blank=True, on_delete=models.CASCADE
+        AuthorityInformationAccessExtension, null=True, blank=True, on_delete=models.PROTECT,
     )
 
     subject_information_access_extension = models.ForeignKey(
-        SubjectInformationAccessExtension, null=True, blank=True, on_delete=models.CASCADE
+        SubjectInformationAccessExtension, null=True, blank=True, on_delete=models.PROTECT,
     )
 
     inhibit_any_policy_extension = models.ForeignKey(
-        InhibitAnyPolicyExtension, null=True, blank=True, on_delete=models.CASCADE
+        InhibitAnyPolicyExtension, null=True, blank=True, on_delete=models.PROTECT,
     )
 
     policy_constraints_extension = models.ForeignKey(
-        PolicyConstraintsExtension, null=True, blank=True, on_delete=models.CASCADE
+        PolicyConstraintsExtension, null=True, blank=True, on_delete=models.PROTECT,
     )
 
     subject_directory_attributes_extension = models.ForeignKey(
-        SubjectDirectoryAttributesExtension, null=True, blank=True, on_delete=models.CASCADE
+        SubjectDirectoryAttributesExtension, null=True, blank=True, on_delete=models.PROTECT,
     )
 
-    freshest_crl_extension = models.ForeignKey(FreshestCrlExtension, null=True, blank=True, on_delete=models.CASCADE)
+    freshest_crl_extension = models.ForeignKey(
+        FreshestCrlExtension, null=True, blank=True, on_delete=models.PROTECT,
+    )
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""
@@ -591,6 +594,25 @@ class CertificateModel(LoggerMixin, models.Model):
             trustpoint.pki.models.Certificate: The certificate object that has just been saved.
         """
         return cls._save_certificate(certificate=certificate)
+
+    # ---------------------------------------------- Post-deletion cleanup ---------------------------------------------
+    def post_delete(self) -> None:
+        """Clean up related orphaned extension models."""
+        BasicConstraintsExtension.delete_if_orphaned(self.basic_constraints_extension)
+        KeyUsageExtension.delete_if_orphaned(self.key_usage_extension)
+        IssuerAlternativeNameExtension.delete_if_orphaned(self.issuer_alternative_name_extension)
+        SubjectAlternativeNameExtension.delete_if_orphaned(self.subject_alternative_name_extension)
+        AuthorityKeyIdentifierExtension.delete_if_orphaned(self.authority_key_identifier_extension)
+        SubjectKeyIdentifierExtension.delete_if_orphaned(self.subject_key_identifier_extension)
+        CertificatePoliciesExtension.delete_if_orphaned(self.certificate_policies_extension)
+        ExtendedKeyUsageExtension.delete_if_orphaned(self.extended_key_usage_extension)
+        NameConstraintsExtension.delete_if_orphaned(self.name_constraints_extension)
+        CrlDistributionPointsExtension.delete_if_orphaned(self.crl_distribution_points_extension)
+        AuthorityInformationAccessExtension.delete_if_orphaned(self.authority_information_access_extension)
+        SubjectInformationAccessExtension.delete_if_orphaned(self.subject_information_access_extension)
+        InhibitAnyPolicyExtension.delete_if_orphaned(self.inhibit_any_policy_extension)
+        PolicyConstraintsExtension.delete_if_orphaned(self.policy_constraints_extension)
+        FreshestCrlExtension.delete_if_orphaned(self.freshest_crl_extension)
 
 
 class RevokedCertificateModel(models.Model):

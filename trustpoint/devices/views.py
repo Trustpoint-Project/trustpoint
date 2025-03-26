@@ -10,10 +10,11 @@ from typing import TYPE_CHECKING, Generic, TypeVar, cast
 from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.db.models import Q, QuerySet
+from django.db.models import ProtectedError, Q, QuerySet
 from django.forms import BaseModelForm
-from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.decorators import method_decorator
@@ -51,7 +52,7 @@ from devices.issuer import (
 from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
 from devices.revocation import DeviceCredentialRevocation
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import ListInDetailView, SortableTableMixin
+from trustpoint.views.base import BulkDeleteView, ListInDetailView, LoggerMixin, SortableTableMixin
 
 if TYPE_CHECKING:
     import ipaddress
@@ -1264,6 +1265,14 @@ class DeviceRevocationView(DeviceContextMixin, FormMixin[CredentialRevocationFor
                 qs = qs.exclude(pk=credential.pk)
         return qs
 
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle POST request on form submission."""
+        del args, kwargs, request
+        form = self.get_form()
+        if form.is_valid():
+            return self.form_valid(form)
+        return self.form_invalid(form)
+
     def form_valid(self, form: CredentialRevocationForm) -> HttpResponse:
         """Performed if the form was validated successfully and revokes the credentials.
 
@@ -1351,3 +1360,33 @@ class DeviceCredentialRevocationView(
             messages.error(self.request, revocation_msg)
 
         return super().form_valid(form)
+
+class DeviceBulkDeleteView(LoggerMixin, DeviceContextMixin, BulkDeleteView):
+    """View to confirm the deletion of multiple Domains."""
+
+    model = DeviceModel
+    success_url = reverse_lazy('devices:devices')
+    ignore_url = reverse_lazy('devices:devices')
+    template_name = 'devices/confirm_delete.html'
+    context_object_name = 'devices'
+
+    def form_valid(self, form: Form) -> HttpResponse:
+        """Attempt to delete devices if the form is valid."""
+        queryset = self.get_queryset()
+        deleted_count = queryset.count()
+
+        try:
+            response = super().form_valid(form)
+        except ProtectedError as e:
+            self.logger.exception('References prevent deletion:', exc_info=e)
+            messages.error(
+                self.request, _('Cannot delete the selected device(s) because they are referenced by other objects.')
+            )
+            return HttpResponseRedirect(self.success_url)
+        except ValidationError as exc:
+            messages.error(self.request, exc.message)
+            return HttpResponseRedirect(self.success_url)
+
+        messages.success(self.request, _('Successfully deleted {count} devices.').format(count=deleted_count))
+
+        return response
