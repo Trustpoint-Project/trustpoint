@@ -401,7 +401,7 @@ class CreateOpcUaGdsForm(CreateDeviceForm):
 
         model = DeviceModel
         fields: typing.ClassVar = [
-            'unique_name',
+            'common_name',
             'serial_number',
             'domain',
             'domain_credential_onboarding',
@@ -452,7 +452,7 @@ class CreateOpcUaGdsForm(CreateDeviceForm):
         self.helper.form_tag = False
         self.helper.layout = Layout(
             HTML('<h2>General</h2><hr>'),
-            Field('unique_name'),
+            Field('common_name'),
             Field('serial_number'),
             Field('domain'),
             HTML('<h2 class="mt-5">Onboarding Configuration</h2><hr>'),
