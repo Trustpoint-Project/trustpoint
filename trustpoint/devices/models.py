@@ -41,7 +41,7 @@ class DeviceModel(CustomDeleteActionModel):
     common_name = models.CharField(
         _('Device'), max_length=100, default='New-Device'
     )
-    serial_number = models.CharField(_('Serial-Number'), max_length=100)
+    serial_number = models.CharField(_('Serial-Number'), max_length=100, default='', blank=True, null=False)
     domain = models.ForeignKey(
         DomainModel, verbose_name=_('Domain'), related_name='devices', blank=True, null=True, on_delete=models.PROTECT
     )
