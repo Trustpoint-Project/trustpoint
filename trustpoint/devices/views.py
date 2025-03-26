@@ -99,7 +99,7 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
     template_name = 'devices/devices.html'
     context_object_name = 'devices'
     paginate_by = UIConfig.paginate_by
-    default_sort_param = 'unique_name'
+    default_sort_param = 'common_name'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the clm and revoke buttons to the context.
@@ -353,7 +353,7 @@ class DeviceIssueCredentialView(
         """
         credential = self.issue_credential(device=self.object, cleaned_data=form.cleaned_data)
         messages.success(
-            self.request, f'Successfully issued {self.friendly_name} for device {credential.device.unique_name}'
+            self.request, f'Successfully issued {self.friendly_name} for device {credential.device.common_name}'
         )
         return super().form_valid(form)
 
@@ -1093,7 +1093,7 @@ class DeviceBrowserOnboardingOTPView(DeviceContextMixin, DetailView[IssuedCreden
 
         context.update(
             {
-                'device_name': device.unique_name,
+                'device_name': device.common_name,
                 'device_id': device.id,
                 'credential_id': credential.id,
                 'otp': cdm.get_otp_display(),
