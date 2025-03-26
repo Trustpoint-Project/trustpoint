@@ -38,7 +38,7 @@ class Command(BaseCommand):
 
         for device in non_onboarded_devices:
             if not NotificationModel.objects.filter(event='DEVICE_NOT_ONBOARDED', device=device).exists():
-                message_data = {'device': device.unique_name, 'domain': device.domain.unique_name}
+                message_data = {'device': device.common_name, 'domain': device.domain.unique_name}
 
                 notification = NotificationModel.objects.create(
                     device=device,
