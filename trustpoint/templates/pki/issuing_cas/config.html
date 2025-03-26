@@ -15,8 +15,8 @@
                         <div class="card-body">
                             <h3>{% trans "Domains" %}</h3>
                             <hr class="hr-m">
-                            {% if issuing_ca.domain_set.all %} {# TODO #}
-                                {% for domain in issuing_ca.domain_set.all %}
+                            {% if issuing_ca.domains.all %}
+                                {% for domain in issuing_ca.domains.all %}
                                     <li class="tp-card-split">
                                         {{ domain.unique_name }}
                                         <div>
@@ -96,8 +96,18 @@
                                 </div>
                                 <div>
                                     <div>{% trans 'Certificates issued:' %}</div>
-                                    <div></div>
+                                    <div>
+                                        {% if issued_certificates|length > 0 %}
+                                            <a href="{% url 'pki:issuing_ca-issued_certificates' pk=issuing_ca.pk %}">
+                                                {{ issued_certificates|length }}
+                                            </a>
+                                        {% else %}
+                                            {{ issued_certificates|length }}
+                                        {% endif %}
+                                    </div>
                                 </div>
+
+
                             </div>
                         </div>
                     </div>

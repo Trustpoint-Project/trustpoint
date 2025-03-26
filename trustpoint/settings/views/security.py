@@ -15,7 +15,6 @@ from settings.models import SecurityConfig
 from settings.security.features import AutoGenPkiFeature
 from settings.security.mixins import SecurityLevelMixin
 
-
 if TYPE_CHECKING:
     from typing import Any
 

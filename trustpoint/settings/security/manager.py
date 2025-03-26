@@ -52,8 +52,7 @@ class SecurityManager(LoggerMixin):
         """Disables any feature that is not allowed by the new security mode."""
         features_to_disable = self.get_features_to_disable(new_sec_mode)
         for feature in features_to_disable:
-            log_msg = f'Disabling Feature: {feature}'
-            self.logger.info(log_msg)
+            self.logger.info('Disabling Feature: %s', feature)
             feature.disable()
 
     def get_security_config_model(self) -> SecurityConfig:

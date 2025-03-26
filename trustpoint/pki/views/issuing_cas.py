@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
 from django.http import HttpResponse, HttpResponseRedirect
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
@@ -19,7 +20,7 @@ from pki.forms import (
     IssuingCaAddFileImportSeparateFilesForm,
     IssuingCaAddMethodSelectForm,
 )
-from pki.models import IssuingCaModel
+from pki.models import CertificateModel, IssuingCaModel
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
@@ -29,6 +30,7 @@ from trustpoint.views.base import (
 )
 
 if TYPE_CHECKING:
+    from django.db.models import QuerySet
     from django.forms import Form
     from django.http import HttpRequest
 
@@ -68,9 +70,7 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, FormView[IssuingCaAddM
         return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-method_select'))
 
 
-class IssuingCaAddFileImportPkcs12View(
-    IssuingCaContextMixin, FormView[IssuingCaAddFileImportPkcs12Form]
-):
+class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, FormView[IssuingCaAddFileImportPkcs12Form]):
     """View to import an Issuing CA from a PKCS12 file."""
 
     template_name = 'pki/issuing_cas/add/file_import.html'
@@ -78,9 +78,7 @@ class IssuingCaAddFileImportPkcs12View(
     success_url = reverse_lazy('pki:issuing_cas')
 
 
-class IssuingCaAddFileImportSeparateFilesView(
-    IssuingCaContextMixin, FormView[IssuingCaAddFileImportSeparateFilesForm]
-):
+class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, FormView[IssuingCaAddFileImportSeparateFilesForm]):
     """View to import an Issuing CA from separate PEM files."""
 
     template_name = 'pki/issuing_cas/add/file_import.html'
@@ -88,7 +86,7 @@ class IssuingCaAddFileImportSeparateFilesView(
     success_url = reverse_lazy('pki:issuing_cas')
 
 
-class IssuingCaDetailView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
+class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[IssuingCaModel]):
     """View to display the details of an Issuing CA."""
 
     http_method_names = ('get',)
@@ -96,17 +94,69 @@ class IssuingCaDetailView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
     model = IssuingCaModel
     success_url = reverse_lazy('pki:issuing_cas')
     ignore_url = reverse_lazy('pki:issuing_cas')
-    template_name = 'pki/issuing_cas/details.html'
+    template_name = 'pki/issuing_cas/config.html'
     context_object_name = 'issuing_ca'
 
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the issued certificates to the context.
 
-class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[IssuingCaModel]):
-    """View to configure an Issuing CA."""
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data()
+
+        Returns:
+            The context to render the page.
+        """
+        context = super().get_context_data(**kwargs)
+        issuing_ca = self.get_object()
+        issued_certificates = CertificateModel.objects.filter(
+            issuer_public_bytes=issuing_ca.credential.certificate.subject_public_bytes
+        )
+        context['issued_certificates'] = issued_certificates
+        return context
+
+
+class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateModel]):
+    """View to display all certificates issued by a specific Issuing CA."""
+
+    model = CertificateModel
+    template_name = 'pki/issuing_cas/issued_certificates.html'
+    context_object_name = 'issued_certificates'
+
+    def get_queryset(self) -> QuerySet[CertificateModel, CertificateModel]:
+        """Gets the required and filtered QuerySet.
+
+        Returns:
+            The filtered QuerySet.
+        """
+        issuing_ca = get_object_or_404(IssuingCaModel, pk=self.kwargs['pk'])
+
+        # PyCharm TypeChecker issue - this passes mypy
+        # noinspection PyTypeChecker
+        return CertificateModel.objects.filter(
+            issuer_public_bytes=issuing_ca.credential.certificate.subject_public_bytes
+        )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the issuing ca model object to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data()
+
+        Returns:
+            The context to render the page.
+        """
+        context = super().get_context_data(**kwargs)
+        context['issuing_ca'] = get_object_or_404(IssuingCaModel, pk=self.kwargs['pk'])
+        return context
+
+
+class IssuingCaDetailView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
+    """Detail view for an Issuing CA."""
 
     model = IssuingCaModel
     success_url = reverse_lazy('pki:issuing_cas')
     ignore_url = reverse_lazy('pki:issuing_cas')
-    template_name = 'pki/issuing_cas/config.html'
+    template_name = 'pki/issuing_cas/details.html'
     context_object_name = 'issuing_ca'
 
 
@@ -122,7 +172,7 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, BulkDeleteView):
     def form_valid(self, form: Form) -> HttpResponse:
         """Delete the selected Issuing CAs on valid form."""
         queryset = self.get_queryset()
-        deleted_count = queryset.count()
+        deleted_count = queryset.count() if queryset else 0
 
         try:
             response = super().form_valid(form)
@@ -131,6 +181,9 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, BulkDeleteView):
                 self.request,
                 _('Cannot delete the selected Issuing CA(s) because they are referenced by other objects.'),
             )
+            return HttpResponseRedirect(self.success_url)
+        except ValidationError as exc:
+            messages.error(self.request, exc.message)
             return HttpResponseRedirect(self.success_url)
 
         messages.success(self.request, _('Successfully deleted {count} Issuing CA(s).').format(count=deleted_count))
@@ -148,16 +201,19 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[IssuingCaMode
 
     http_method_names = ('get',)
 
-    # TODO(Air): This view should use a POST request as it is an action.
+    # TODO(Air): This view should use a POST request as it is an action.    # noqa: FIX002
     # However, this is not trivial in the config view as that already contains a form.
-    def get(self, request: HttpRequest, *_args: tuple[Any], **_kwargs: dict[str, Any]) -> HttpResponse:
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Generate a CRL for the Issuing CA (should be POST!)."""
+        del args
+        del kwargs
+
         issuing_ca = self.get_object()
         if issuing_ca.issue_crl():
             messages.success(request, _('CRL for Issuing CA %s has been generated.') % issuing_ca.unique_name)
         else:
             messages.error(request, _('Failed to generate CRL for Issuing CA %s.') % issuing_ca.unique_name)
-        return redirect('pki:issuing_cas-config', pk=issuing_ca.id)
+        return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
 
 
 class CrlDownloadView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
@@ -170,8 +226,11 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
     ignore_url = reverse_lazy('pki:issuing_cas')
     context_object_name = 'issuing_ca'
 
-    def get(self, request: HttpRequest, *_args: tuple[Any], **_kwargs: dict[str, Any]) -> HttpResponse:
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Download the CRL of the Issuing CA."""
+        del args
+        del kwargs
+
         issuing_ca = self.get_object()
         crl_pem = issuing_ca.crl_pem
         if not crl_pem:

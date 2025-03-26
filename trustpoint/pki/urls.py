@@ -4,6 +4,7 @@ from django.urls import path, re_path
 
 from pki.views import certificates, domains, issuing_cas, truststores
 from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
+from pki.views.issuing_cas import IssuedCertificatesListView
 
 app_name = 'pki'
 
@@ -97,6 +98,11 @@ urlpatterns = [
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
     path('issuing-cas/crl-gen/<int:pk>/', issuing_cas.IssuingCaCrlGenerationView.as_view(), name='issuing_cas-crl-gen'),
+    path(
+        'issuing-cas/issued-certificates/<int:pk>',
+        IssuedCertificatesListView.as_view(),
+        name='issuing_ca-issued_certificates',
+    ),
     re_path(
         r'^issuing-cas/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
         issuing_cas.IssuingCaBulkDeleteConfirmView.as_view(),
@@ -110,6 +116,11 @@ urlpatterns = [
         r'^domains/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
         domains.DomainCaBulkDeleteConfirmView.as_view(),
         name='domains-delete_confirm',
+    ),
+    path(
+        'domains/issued-certificates/<int:pk>/',
+        domains.IssuedCertificatesView.as_view(),
+        name='domain-issued_certificates',
     ),
     path(
         'devid-registration/method_select/<int:pk>/',

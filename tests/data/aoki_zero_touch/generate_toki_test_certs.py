@@ -1,4 +1,5 @@
 """Test data generator module that creates keys and certificate for testing of TOKI zero-touch onboarding."""
+
 from pathlib import Path
 
 from tests import generate_certificate, generate_key
@@ -28,7 +29,7 @@ if __name__ == '__main__':
     owner_key = generate_key(signature_suite)
     owner_key_bytes = PrivateKeySerializer(owner_key).as_pkcs8_pem()
 
-    #signature_suite_filename_prefix = f'{signature_suite.key_type_name}_'
+    # signature_suite_filename_prefix = f'{signature_suite.key_type_name}_'
     signature_suite_filename_prefix = ''
 
     with Path(DATA_DIR / f'{signature_suite_filename_prefix}idevid_private.key').open('wb') as f:
@@ -64,7 +65,7 @@ if __name__ == '__main__':
         with Path(DATA_DIR / f'{signature_suite_filename_prefix}issuing_ca.pem').open('wb') as f:
             f.write(CertificateSerializer(issuing_ca_certificate).as_pem())
 
-        idevid_serial_number = f"tpidevid-{secrets.token_hex(16)}"
+        idevid_serial_number = f'tpidevid-{secrets.token_hex(16)}'
 
         idevid_certificate = generate_certificate(
             ca=False,
@@ -72,11 +73,13 @@ if __name__ == '__main__':
             private_key=issuing_ca_key,
             subject_cn='',
             issuer_cn=f'{signature_suite.value} Issuing CA',
-            subject_name= x509.Name([
-                x509.NameAttribute(NameOID.COMMON_NAME, "IDevID Testing Certificate"),
-                x509.NameAttribute(NameOID.DOMAIN_COMPONENT, "IDevID"),
-                x509.NameAttribute(NameOID.SERIAL_NUMBER, idevid_serial_number),
-            ]),
+            subject_name=x509.Name(
+                [
+                    x509.NameAttribute(NameOID.COMMON_NAME, 'IDevID Testing Certificate'),
+                    x509.NameAttribute(NameOID.DOMAIN_COMPONENT, 'IDevID'),
+                    x509.NameAttribute(NameOID.SERIAL_NUMBER, idevid_serial_number),
+                ]
+            ),
         )
 
         idevid_fingerprint = idevid_certificate.fingerprint(hashes.SHA256()).hex()
@@ -94,14 +97,16 @@ if __name__ == '__main__':
             private_key=issuing_ca_key,
             subject_cn='',
             issuer_cn=f'{signature_suite.value} Issuing CA',
-            subject_name= x509.Name([
-                # TODO(Air): This seems hacky. Maybe better to add custom extension to reference the IDevID.
-                # or just use a voucher instead of an actual certificate.
-                x509.NameAttribute(NameOID.COMMON_NAME, "Testing Ownership Certificate"),
-                x509.NameAttribute(NameOID.DOMAIN_COMPONENT, "Owner"),
-                x509.NameAttribute(NameOID.DOMAIN_COMPONENT, f"idevid-fingerprint:{idevid_fingerprint}"),
-                x509.NameAttribute(NameOID.SERIAL_NUMBER, idevid_serial_number),
-            ]),
+            subject_name=x509.Name(
+                [
+                    # TODO(Air): This seems hacky. Maybe better to add custom extension to reference the IDevID.
+                    # or just use a voucher instead of an actual certificate.
+                    x509.NameAttribute(NameOID.COMMON_NAME, 'Testing Ownership Certificate'),
+                    x509.NameAttribute(NameOID.DOMAIN_COMPONENT, 'Owner'),
+                    x509.NameAttribute(NameOID.DOMAIN_COMPONENT, f'idevid-fingerprint:{idevid_fingerprint}'),
+                    x509.NameAttribute(NameOID.SERIAL_NUMBER, idevid_serial_number),
+                ]
+            ),
         )
 
         with Path(DATA_DIR / f'{signature_suite_filename_prefix}owner_cert.pem').open('wb') as f:

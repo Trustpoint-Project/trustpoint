@@ -7,15 +7,18 @@ import logging
 import secrets
 from typing import TYPE_CHECKING
 
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
+from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
+from pki.models.issuing_ca import IssuingCaModel
 from pki.models.truststore import TruststoreModel
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 from trustpoint_core import oid  # type: ignore[import-untyped]
+from util.db import CustomDeleteActionModel
 from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
@@ -30,10 +33,8 @@ __all__ = [
 ]
 
 
-class DeviceModel(models.Model):
+class DeviceModel(CustomDeleteActionModel):
     """The DeviceModel."""
-
-    objects: models.Manager[DeviceModel]
 
     id = models.AutoField(primary_key=True)
     unique_name = models.CharField(
@@ -101,7 +102,7 @@ class DeviceModel(models.Model):
         verbose_name=_('IDevID Manufacturer Truststore'),
         null=True,
         blank=True,
-        on_delete=models.DO_NOTHING,
+        on_delete=models.SET_NULL,
     )
 
     class DeviceType(models.IntegerChoices):
@@ -124,6 +125,11 @@ class DeviceModel(models.Model):
         """Returns a human-readable string representation."""
         return f'DeviceModel(unique_name={self.unique_name})'
 
+    def pre_delete(self) -> None:
+        """Delete all issued credentials for this device before deleting the device itself."""
+        logger.info(f'Deleting all issued credentials for device {self.unique_name}') # noqa: G004
+        self.issued_credentials.all().delete()
+
     @property
     def est_username(self) -> str:
         """Gets the EST username."""
@@ -142,10 +148,8 @@ class DeviceModel(models.Model):
         return self.signature_suite.public_key_info
 
 
-class IssuedCredentialModel(models.Model):
+class IssuedCredentialModel(CustomDeleteActionModel):
     """Model for all credentials and certificates that have been issued or requested by the Trustpoint."""
-
-    objects: models.Manager[IssuedCredentialModel]
 
     class IssuedCredentialType(models.IntegerChoices):
         """The type of the credential."""
@@ -173,7 +177,7 @@ class IssuedCredentialModel(models.Model):
     credential = models.OneToOneField(
         CredentialModel,
         verbose_name=_('Credential'),
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,  # delete() on CredentialModel prevents deletion unless certificates are revoked
         related_name='issued_credential',
         null=False,
         blank=False,
@@ -193,6 +197,38 @@ class IssuedCredentialModel(models.Model):
     def __str__(self) -> str:
         """Returns a human-readable string representation."""
         return f'IssuedCredentialModel(common_name={common_name})'
+
+    def revoke(self) -> None:
+        """Revokes all active certificates associated with this credential."""
+        cert: CertificateModel
+        for cert in self.credential.certificates.all():
+            status = cert.certificate_status
+            if status in (CertificateModel.CertificateStatus.REVOKED, CertificateModel.CertificateStatus.EXPIRED):
+                continue
+            try:
+                ca = IssuingCaModel.objects.get(
+                    credential__certificate__subject_public_bytes = cert.issuer_public_bytes
+                )
+            except IssuingCaModel.DoesNotExist:
+                logger.exception(
+                    f'Cannot revoke certificate {cert} because its corresponding Issuing CA was not found.')  # noqa: G004
+                continue
+            except IssuingCaModel.MultipleObjectsReturned:
+                logger.exception(
+                    f'Cannot revoke certificate {cert} because multiple CAs were found with the same subject bytes.')  # noqa: G004
+                continue
+
+            RevokedCertificateModel.objects.create(
+                certificate=cert,
+                revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION,
+                ca=ca
+            )
+
+    def pre_delete(self) -> None:
+        """Revoke all active certificates and delete the credential."""
+        self.revoke()
+        self.credential.delete()  # this will also delete the IssuedCredentialModel via cascade
+
 
 class RemoteDeviceCredentialDownloadModel(models.Model):
     """Model to associate a credential model with an OTP and token for unauthenticated remoted download."""
@@ -246,11 +282,11 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
         matches = otp == self.otp
         if not matches:
             self.attempts += 1
-            log_msg = (
-                f'Incorrect OTP attempt {self.attempts} for browser credential download '
-                f'for device {self.device.unique_name} (credential id={self.issued_credential_model.id})'
+            logger.warning(
+                'Incorrect OTP attempt %s for browser credential download '
+                'for device %s (credential id=%i)',
+                self.attempts, self.device.unique_name, self.issued_credential_model.id
             )
-            logger.warning(log_msg)
 
             if self.attempts >= self.BROWSER_MAX_OTP_ATTEMPTS:
                 self.otp = '-'
@@ -260,11 +296,11 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
                 self.save()
             return False
 
-        log_msg = (
-            f'Correct OTP entered for browser credential download for device {self.device.unique_name}'
-            f'(credential id={self.issued_credential_model.id})'
+        logger.info(
+            'Correct OTP entered for browser credential download for device %s'
+            '(credential id=%i)',
+            self.device.unique_name, self.issued_credential_model.id
         )
-        logger.info(log_msg)
         self.otp = '-'
         self.download_token = secrets.token_urlsafe(32)
         self.token_created_at = timezone.now()
