@@ -34,26 +34,30 @@ How to Navigate the Documentation
 
 The documentation is organized into the following main sections:
 
-Getting Started
+Getting Started:
 ________________________
 - :ref:`quickstart-setup-guide`: Step-by-step guide for setting up Trustpoint using Docker, building from source, running the container, verifying the setup, and securing the installation.
 - :ref:`quickstart-operation-guide`: Guide for operating Trustpoint, including setting up a PKI-hierachy, creating a domain, and onboarding devices.
 - :ref:`trustpoint_usage_guide`: An overview of Trustpoint’s usage, including device onboarding, certificate issuance, Issuing CA configurations, domain management, truststores, and security considerations.
 - :ref:`community_support`: Provides information on Trustpoint's open-source community, contribution opportunities, communication channels, and support options.
 
-Devices
+Devices:
 ________________________
 - :ref:`onboarding-mechanisms`: An overview of the available device onboarding mechanisms in Trustpoint.
 
-Indices and tables
+Indices and tables:
 ________________________
 - :ref:`glossary`: An overview of the key terms related to Trustpoint.
 - :ref:`issued_cert_defaults`: Details the default attributes and validity periods of issued certificates in Trustpoint.
 
+Testing:
+________________________
+- :ref:`test_plan`: Details the TrustPoint Test Plan, covering functionality, security, integration, and usability.
+- :ref:`test_report`: Provides a report of all the tests executed and described inside the test plan.
+
 Development:
 ________________________
 - **Development**: Developers guide on setting up the Trustpoint development environment, managing dependencies, configuring the database, and running the server.
-- **Test Plan**: Details the TrustPoint Test Plan, covering functionality, security, integration, and usability.
 
 ---------------
 Getting Started

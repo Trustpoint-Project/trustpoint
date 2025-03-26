@@ -1,4 +1,4 @@
-.. _test-report:
+.. _test_report:
 
 ***********
 Test Report
