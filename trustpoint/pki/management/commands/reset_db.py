@@ -26,6 +26,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser: CommandParser) -> None:
         """Adds command arguments/options."""
+        parser.add_argument('--add', action='store_true', help='Add demo domains and devices after reset.')
         parser.add_argument('--force', action='store_true', help='Force database reset without prompt.')
         parser.add_argument('--no-user', action='store_true', help='Skip superuser creation.')
 
@@ -73,6 +74,10 @@ class Command(BaseCommand):
 
         self.stdout.write('Database reset complete.')
 
+        # Add demo domains and devices
+        if options.get('add'):
+            call_command('add_domains_and_devices')
+
     def _remove_migration_files(self, base_path: Path) -> None:
         """Removes all Django migration files."""
         for root, _dirs, files in os.walk(base_path):
@@ -91,8 +96,10 @@ class Command(BaseCommand):
             try:
                 Path(db_path).unlink()
                 self.stdout.write('SQLite database file deleted.')
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 self.stderr.write(f'Error deleting SQLite database file: {e}')
+                self.stderr.write('Is it still open in another program?')
+                raise
         else:
             self.stdout.write('No SQLite database file found.')
 
