@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-17 08:20+0000\n"
+"POT-Creation-Date: 2025-03-27 10:52+0100\n"
 "PO-Revision-Date: 2024-10-29 15:21+0100\n"
 "Last-Translator: Christian Schwinne <christian.schwinne  AT hshl.de>\n"
 "Language-Team: \n"
@@ -19,56 +19,56 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: Poedit 3.5\n"
 
-#: settings/forms.py:55
+#: .\settings\forms.py:54
 msgid "Security level presets"
 msgstr "Allgemeines Sicherheitslevel"
 
-#: settings/forms.py:59
+#: .\settings\forms.py:58
 msgid "Advanced security settings"
 msgstr "Erweiterte Sicherheitseinstellungen"
 
-#: settings/forms.py:73
+#: .\settings\forms.py:70
 msgid "Enable local auto-generated PKI"
 msgstr "Lokale automatisch generierte PKI aktivieren"
 
-#: settings/forms.py:85
+#: .\settings\forms.py:82
 msgid "Key Algorithm for auto-generated PKI"
 msgstr "Schlüsselalgorithmus für automatisch generierte PKI"
 
-#: settings/models.py:13
+#: .\settings\models.py:14
 msgid "Testing env"
 msgstr "Testumgebung"
 
-#: settings/models.py:14
+#: .\settings\models.py:15
 msgid "Basic"
 msgstr "Grundlegend"
 
-#: settings/models.py:15
+#: .\settings\models.py:16
 msgid "Medium"
 msgstr "Mittel"
 
-#: settings/models.py:16
+#: .\settings\models.py:17
 msgid "High"
 msgstr "Hoch"
 
-#: settings/models.py:17
+#: .\settings\models.py:18
 msgid "Highest"
 msgstr "Höchstes"
 
-#: settings/security/mixins.py:78
+#: .\settings\security\mixins.py:80
 #, python-format
 msgid "Your security setting %s does not allow the feature: %s"
 msgstr "Ihre Sicherheitseinstellung %s erlaubt die Funktion nicht: %s"
 
-#: settings/views/logging.py:93 settings/views/logging.py:98
+#: .\settings\views\logging.py:94 .\settings\views\logging.py:99
 msgid "None"
 msgstr ""
 
-#: settings/views/security.py:68
+#: .\settings\views\security.py:64
 msgid "Your changes were saved successfully."
 msgstr "Ihre Änderungen wurden erfolgreich gespeichert."
 
-#: settings/views/security.py:72
+#: .\settings\views\security.py:68
 msgid "Error saving the configuration"
 msgstr "Beim Speichern der Einstellungen ist ein Fehler aufgetreten"
 

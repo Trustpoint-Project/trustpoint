@@ -8,14 +8,14 @@
         <div class="card">
             <div class="card-header">
                 <div>
-                    <h1>{% trans 'Add New DevID Onboarding Pattern' %}</h1>
+                    <h1>{% trans 'Add new DevID Onboarding Pattern' %}</h1>
                 </div>
             </div>
             <div class="card-body">
                 <div class="tp-card-centered-content">
-                    <a href="{% url 'pki:devid_registration_create' pk=domain.id %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Use Existing Truststore' %}</a>
+                    <a href="{% url 'pki:devid_registration_create' pk=domain.id %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Use existing Truststore' %}</a>
                     <br>
-                    <a href="{% url 'pki:truststores-add-with-pk' pk=domain.id %}" class="btn btn-primary min-width-30 mb-5">{% trans 'Upload New Truststore' %}</a>
+                    <a href="{% url 'pki:truststores-add-with-pk' pk=domain.id %}" class="btn btn-primary min-width-30 mb-5">{% trans 'Upload new Truststore' %}</a>
                 </div>
             </div>
             <div class="card-footer d-flex tp-sticky-footer">
