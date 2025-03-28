@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, cast
 
-from devices.models import IssuedCredentialModel
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
@@ -55,14 +54,14 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
     """View to create a new domain."""
 
     model = DomainModel
-    fields = Literal['__all__']
+    fields = '__all__'
     template_name = 'pki/domains/add.html'
     success_url = reverse_lazy('pki:domains')
     ignore_url = reverse_lazy('pki:domains')
 
     def get_form(self, form_class: Any = None) -> Any:
         """Override get_form to filter out autogen root CAs."""
-        form = super().get_form(form_class)
+        form = super().get_form()
         # Filter out autogen root CAs
         form.fields['issuing_ca'].queryset = IssuingCaModel.objects.exclude(
             issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
