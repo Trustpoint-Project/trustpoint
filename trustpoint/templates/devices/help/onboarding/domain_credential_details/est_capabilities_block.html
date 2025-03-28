@@ -18,7 +18,7 @@
                     --header "Content-Type: application/pkcs10" \<br>
                     --data-binary "@domain_credential_csr.der" \<br>
                     -o domain_credential_cert.der \<br>
-                    https://{{ host }}/.well-known/est/simpleenroll/{{ device.domain }}/domaincredential/
+                    https://{{ host }}/.well-known/est/{{ device.domain }}/domaincredential/simpleenroll/
                 </code>
 
                 <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
@@ -58,10 +58,10 @@
             <div class="copy-container" style="position: relative;">
                 <code class="command-text language-bash">
                     curl -X GET \<br>
-                    "https://{{ host }}/.well-known/est/cacerts/{{ device.domain }}/" \<br>
+                    "https://{{ host }}/.well-known/est/{{ device.domain }}/cacerts/" \<br>
                     --cacert server_cert.pem \<br>
                     -H "Accept: application/pkcs7-mime" \<br>
-                    -o cacerts.p7b
+                    | base64 --decode > cacerts.p7b
                 </code>
                 <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
                         aria-label="Copy to clipboard">

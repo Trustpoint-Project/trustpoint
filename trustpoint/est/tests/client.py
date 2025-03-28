@@ -93,7 +93,7 @@ class ESTClient:
         csr_der = csr.public_bytes(encoding=serialization.Encoding.DER)
         logging.info(f'CSR (DER; hex dump): {csr_der.hex()}')
 
-        url = f'{self.est_url}/simpleenroll/{self.domain}/{self.cert_template}/'
+        url = f'{self.est_url}/{self.domain}/{self.cert_template}/simpleenroll/'
         headers = {'Content-Type': 'application/pkcs10'}
         auth, cert = self._get_auth()
 
@@ -145,7 +145,7 @@ class ESTClient:
         csr_der = csr.public_bytes(encoding=serialization.Encoding.DER)
         logging.info(f'CSR (DER; hex dump): {csr_der.hex()}')
 
-        url = f'{self.est_url}/simplereenroll/{self.domain}/{self.cert_template}/'
+        url = f'{self.est_url}/{self.domain}/{self.cert_template}/simplereenroll/'
         headers = {'Content-Type': 'application/pkcs10'}
         auth, cert = self._get_auth()
 
@@ -163,7 +163,7 @@ class ESTClient:
 
     def get_ca_certificates(self):
         """Retrieves CA certificates from the EST /cacerts endpoint."""
-        url = f'{self.est_url}/cacerts/{self.domain}/'
+        url = f'{self.est_url}/{self.domain}/cacerts/'
         auth, cert = self._get_auth()
 
         logging.info('Fetching CA certificates from %s', url)

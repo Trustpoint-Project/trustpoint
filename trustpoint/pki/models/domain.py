@@ -58,15 +58,15 @@ class DomainModel(models.Model):
     )
 
     domain_credential_auth = models.BooleanField(
-        _('Require a Domain Credential for Authentication'),
+        _('Allow a Domain Credential for Authentication'),
         default=True,
-        help_text=_('The EST server requires a domain credential issued by the domain Issuing CA for authentication.'),
+        help_text=_('The EST server permits a domain credential issued by the domain Issuing CA for authentication.'),
     )
 
     username_password_auth = models.BooleanField(
-        _('Require username:password for Authentication'),
+        _('Allow username:password for Authentication'),
         default=False,
-        help_text=_('The EST server requires username and password for authentication.'),
+        help_text=_('The EST server permits username and password for authentication.'),
     )
 
     allow_app_certs_without_domain = models.BooleanField(

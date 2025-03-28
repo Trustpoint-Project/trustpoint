@@ -17,6 +17,17 @@ urlpatterns = [
         views.DeviceCertificateLifecycleManagementSummaryView.as_view(),
         name='certificate_lifecycle_management',
     ),
+    # OPC UA GDS
+    path(
+        'opc-ua-gds/',
+        views.OpcUaGdsTableView.as_view(),
+        name='opc_ua_gds',
+    ),
+    path(
+        'opc-ua-gds/add/',
+        views.CreateOpcUaGdsView.as_view(),
+        name='opc_ua_gds-add',
+    ),
     # Certificate Lifecycle Management - Credential Issuance
     path(
         'certificate-lifecycle-management/<int:pk>/issue-tls-client-credential/',
@@ -91,6 +102,11 @@ urlpatterns = [
         'help/onboarding/ldevid/<int:pk>/',
         views.OnboardingEstApplicationCredentialsHelpView.as_view(),
         name='help-onboarding_est-ldevid',
+    ),
+    path(
+        'help/no-onboarding/opc-ua-gds/est-username-password/<int:pk>/',
+        views.NoOnboardingEstOpcUaGdsUsernamePasswordHelpView.as_view(),
+        name='help-no-onboarding_est-opcua-gds-username-password'
     ),
     # Certificate Lifecycle Management - Downloads
     path('download/<int:pk>/', views.DownloadPageDispatcherView.as_view(), name='download'),

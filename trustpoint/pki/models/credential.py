@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from typing import Any, ClassVar
 
     from cryptography import x509
+    from cryptography.hazmat.primitives import hashes
     from django.db.models import QuerySet
     from trustpoint_core.types import PrivateKey
 
@@ -305,6 +306,11 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     def public_key_info(self) -> oid.PublicKeyInfo:
         """Returns the PublicKeyInfo the current credential primary certificate."""
         return self.signature_suite.public_key_info
+
+    @property
+    def hash_algorithm(self) -> hashes.HashAlgorithm  | None:
+        """Returns the hash algorithm used by the current credential."""
+        return self.get_certificate().signature_hash_algorithm
 
     def is_valid_domain_credential(self) -> tuple[bool, str]:
         """Determines if this credential is valid for domain usage.

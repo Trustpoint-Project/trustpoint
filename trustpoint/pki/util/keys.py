@@ -66,36 +66,6 @@ class KeyGenerator:
 class CryptographyUtils:
     """Utilities methods for cryptography corresponding to Trustpoint models."""
 
-    @classmethod
-    def get_hash_algorithm_from_domain(cls, domain: DomainModel) -> hashes.SHA256 | hashes.SHA384:
-        """Gets the hash algorithm for a given domain.
-
-        Args:
-            domain: The domain to consider.
-
-        Returns:
-            The hash algorithm as cryptography object.
-        """
-        return cls.get_hash_algorithm_from_credential(domain.issuing_ca.credential)
-
-    @staticmethod
-    def get_hash_algorithm_from_credential(credential: CredentialModel) -> hashes.SHA256 | hashes.SHA384:
-        """Gets the hash algorithm for a given credential model.
-
-        Args:
-            credential: The credential to consider.
-
-        Returns:
-            The hash algorithm as cryptography object.
-        """
-        hash_algorithm = credential.get_certificate().signature_hash_algorithm
-        if isinstance(hash_algorithm, hashes.SHA256):
-            return hashes.SHA256()
-        if isinstance(hash_algorithm, hashes.SHA384):
-            return hashes.SHA384()
-        err_msg = 'Cannot build the domain credential, unknown hash algorithm found.'
-        raise ValueError(err_msg)
-
     @staticmethod
     def get_hash_algorithm_for_private_key(private_key: PrivateKey) -> hashes.HashAlgorithm:
         """Gets a suitable hash algorithm for a given private key.

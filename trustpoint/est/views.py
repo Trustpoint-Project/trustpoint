@@ -2,6 +2,7 @@
 
 import base64
 import ipaddress
+import re
 from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol, cast
 
@@ -10,7 +11,13 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives._serialization import Encoding
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
-from devices.issuer import LocalDomainCredentialIssuer, LocalTlsClientCredentialIssuer, LocalTlsServerCredentialIssuer
+from devices.issuer import (
+    LocalDomainCredentialIssuer,
+    LocalTlsClientCredentialIssuer,
+    LocalTlsServerCredentialIssuer,
+    OpcUaClientCredentialIssuer,
+    OpcUaServerCredentialIssuer,
+)
 from devices.models import DeviceModel, IssuedCredentialModel
 from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.utils.decorators import method_decorator
@@ -19,7 +26,6 @@ from django.views.decorators.csrf import csrf_exempt
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
 from pyasn1.type.univ import ObjectIdentifier  # type: ignore[import-untyped]
-from trustpoint_core.oid import SignatureSuite  # type: ignore[import-untyped]
 from trustpoint_core.serializer import CertificateCollectionSerializer  # type: ignore[import-untyped]
 
 from trustpoint.views.base import LoggerMixin
@@ -28,14 +34,11 @@ from trustpoint.views.base import LoggerMixin
 class ClientCertificateAuthenticationError(Exception):
     """Exception raised for client certificate authentication failures."""
 
-
 class IDevIDAuthenticationError(Exception):
     """Exception raised for IDevID authentication failures."""
 
-
 class UsernamePasswordAuthenticationError(Exception):
     """Exception raised for username and password authentication failures."""
-
 
 THRESHOLD_LOGGER: int = 400
 
@@ -55,8 +58,9 @@ class LoggedHttpResponse(HttpResponse, LoggerMixin):
         if status and status >= THRESHOLD_LOGGER:
             if isinstance(content, bytes):
                 content = content.decode('utf-8')
-            error_message = f'EST Error - {status} - {content}'
-            self.logger.error(error_message)
+            self.logger.error('EST - ERROR - %s - %s', status, content)
+        else:
+            self.logger.info('EST - SUCCESS - %s', status)
 
         super().__init__(content, *args, status=status, **kwargs)
 
@@ -75,13 +79,15 @@ class CredentialRequest:
 
     common_name: str
     serial_number: str | None
+    uniform_resource_identifiers: list[str]
     ipv4_addresses: list[ipaddress.IPv4Address]
     ipv6_addresses: list[ipaddress.IPv6Address]
     dns_names: list[str]
     public_key: rsa.RSAPublicKey | ec.EllipticCurvePublicKey
+    request_format:str
 
 
-class EstAuthenticationMixin:
+class EstAuthenticationMixin(LoggerMixin):
     """Checks for HTTP Basic Authentication before processing the request."""
 
     def get_credential_for_certificate(self, cert: x509.Certificate) -> tuple[CredentialModel, DeviceModel]:
@@ -240,7 +246,7 @@ class EstHttpMixin:
     max_payload_size = 131072
     raw_message: bytes
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse | LoggedHttpResponse:
+    def process_http_request(self, request: HttpRequest) -> tuple[bytes | None, LoggedHttpResponse | None]:
         """Process the incoming HTTP request for EST enrollment.
 
         The method performs the following checks in order:
@@ -251,33 +257,22 @@ class EstHttpMixin:
           4. Delegates the remaining request processing to the parent class's dispatch method.
 
         :param request: The incoming HttpRequest.
-        :param args: Additional positional arguments.
-        :param kwargs: Additional keyword arguments.
         :return: An LoggedHttpResponse, either an error response or the result of the parent dispatch.
         """
         self.raw_message = request.read()
+
         if len(self.raw_message) > self.max_payload_size:
             error_message = 'Message is too large.'
-            return LoggedHttpResponse(content=error_message, status=413)
-
-        content_type = request.headers.get('Content-Type')
-        if content_type != self.expected_content_type:
-            error_message = (
-                'Message is missing the content type.'
-                if content_type is None
-                else f'Message does not have the expected content type: {self.expected_content_type}.'
-            )
-            return LoggedHttpResponse(content=error_message, status=415)
+            return None, LoggedHttpResponse(content=error_message, status=413)
 
         if request.headers.get('Content-Transfer-Encoding', '').lower() == 'base64':
             try:
                 self.raw_message = base64.b64decode(self.raw_message)
             except Exception:  # noqa: BLE001
                 error_message = 'Invalid base64 encoding in message.'
-                return LoggedHttpResponse(content=error_message, status=400)
+                return None, LoggedHttpResponse(content=error_message, status=400)
 
-        parent = cast('Dispatchable', super())
-        return parent.dispatch(request, *args, **kwargs)
+        return self.raw_message, None
 
 
 class EstRequestedDomainExtractorMixin:
@@ -289,66 +284,61 @@ class EstRequestedDomainExtractorMixin:
       - self.signature_suite: The signature suite derived from the CA certificate.
     """
 
-    requested_domain: DomainModel
-    issuing_ca_certificate: x509.Certificate
-    signature_suite: SignatureSuite
+    requested_domain: DomainModel | None
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse | LoggedHttpResponse:
+    def extract_requested_domain(self, domain_name: str)  -> tuple[DomainModel | None, LoggedHttpResponse | None]:
         """Extracts the requested domain and sets the relevant certificate and signature suite.
-
-        :param request: The HTTP request object.
-        :param args: Additional positional arguments.
-        :param kwargs: Additional keyword arguments, specifically the 'domain' parameter.
 
         :return: The response from the parent class's dispatch method.
         """
-        domain_name = cast(str, kwargs.get('domain'))
-
         try:
-            self.requested_domain = DomainModel.objects.get(unique_name=domain_name)
+            requested_domain = DomainModel.objects.get(unique_name=domain_name)
         except DomainModel.DoesNotExist:
-            return LoggedHttpResponse('Domain does not exist.', status=404)
+            return None, LoggedHttpResponse('Domain does not exist.', status=404)
+        else:
+            return requested_domain, None
 
-        self.issuing_ca_certificate = self.requested_domain.issuing_ca.credential.get_certificate()
-        self.signature_suite = SignatureSuite.from_certificate(self.issuing_ca_certificate)
-
-        return cast(Dispatchable, super()).dispatch(request, *args, **kwargs)
-
-
-class EstRequestedCertTemplateExtractorMixin(LoggedHttpResponse):
+class EstRequestedCertTemplateExtractorMixin:
     """Mixin to extract and validate the certificate template from request parameters."""
 
     requested_cert_template_str: str
-    allowed_cert_templates: ClassVar[list[str]] = ['tlsserver', 'tlsclient', 'domaincredential']
+    allowed_cert_templates: ClassVar[list[str]] = ['tlsserver',
+                                                   'tlsclient',
+                                                   'opcua-client',
+                                                   'opcua-server',
+                                                   'domaincredential']
 
     cert_template_classes: ClassVar[dict[str, type[object]]] = {
         'tlsserver': LocalTlsServerCredentialIssuer,
         'tlsclient': LocalTlsClientCredentialIssuer,
+        'opcua-server': LocalTlsServerCredentialIssuer,
+        'opcua-client': LocalTlsClientCredentialIssuer,
         'domaincredential': LocalDomainCredentialIssuer,
     }
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse | LoggedHttpResponse:
+    def extract_cert_template(self, cert_template: str) -> tuple[str | None, LoggedHttpResponse | None]:
         """Extract and validate the 'certtemplate' parameter, then delegate request processing."""
-        cert_template = kwargs.get('certtemplate')
-
         if cert_template not in self.allowed_cert_templates:
             allowed = ', '.join(self.allowed_cert_templates)
-            return LoggedHttpResponse(f'Invalid or missing cert template. Allowed values are: {allowed}.', status=404)
+            return None, LoggedHttpResponse(
+                f'Invalid or missing cert template. Allowed values are: {allowed}.',
+                status=404
+            )
 
-        self.requested_cert_template_str = cert_template
+        return cert_template, None
 
-        return cast(Dispatchable, super()).dispatch(request, *args, **kwargs)
-
-
-class EstPkiMessageSerializerMixin:
+class EstPkiMessageSerializerMixin(LoggerMixin):
     """Mixin to handle serialization and deserialization of PKCS#10 certificate signing requests."""
 
-    def extract_details_from_csr(self, csr: x509.CertificateSigningRequest) -> CredentialRequest:
+    def extract_details_from_csr(self,
+                                 csr: x509.CertificateSigningRequest,
+                                 request_format: str,
+                                 ) -> CredentialRequest:
         """Loads the CSR (x509.CertificateSigningRequest) and extracts subject and SAN."""
         subject_attributes = list(csr.subject)
         common_name = self._extract_common_name(subject_attributes)
         serial_number = self._extract_serial_number(subject_attributes)
-        dns_names, ipv4_addresses, ipv6_addresses = self._extract_san(csr)
+        dns_names, ipv4_addresses, ipv6_addresses, uniform_resource_identifiers = self._extract_san(csr)
         public_key = csr.public_key()
 
         if not isinstance(public_key, rsa.RSAPublicKey | ec.EllipticCurvePublicKey):
@@ -361,7 +351,9 @@ class EstPkiMessageSerializerMixin:
             ipv4_addresses=ipv4_addresses,
             ipv6_addresses=ipv6_addresses,
             dns_names=dns_names,
+            uniform_resource_identifiers=uniform_resource_identifiers,
             public_key=public_key,
+            request_format=request_format,
         )
 
     def _extract_serial_number(self, subject_attributes: list[x509.NameAttribute]) -> str | None:
@@ -397,14 +389,19 @@ class EstPkiMessageSerializerMixin:
 
         return common_name
 
-    def _extract_san(
-        self, csr: x509.CertificateSigningRequest
-    ) -> tuple[list[str], list[ipaddress.IPv4Address], list[ipaddress.IPv6Address]]:
+    def _extract_san(self,
+                     csr: x509.CertificateSigningRequest
+                     ) -> tuple[
+        list[str],
+        list[ipaddress.IPv4Address],
+        list[ipaddress.IPv6Address],
+        list[str]
+    ]:
         """Extract SAN (Subject Alternative Name) extension values."""
         try:
             san_extension = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName)
         except x509.ExtensionNotFound:
-            return [], [], []
+            return [], [], [], []
 
         san = san_extension.value
 
@@ -412,8 +409,9 @@ class EstPkiMessageSerializerMixin:
         ip_addresses = san.get_values_for_type(x509.IPAddress)
         ipv4_addresses = [ip for ip in ip_addresses if isinstance(ip, ipaddress.IPv4Address)]
         ipv6_addresses = [ip for ip in ip_addresses if isinstance(ip, ipaddress.IPv6Address)]
+        uniform_resource_identifiers = san.get_values_for_type(x509.UniformResourceIdentifier)
 
-        return dns_names, ipv4_addresses, ipv6_addresses
+        return dns_names, ipv4_addresses, ipv6_addresses, uniform_resource_identifiers
 
     def deserialize_pki_message(self, data: bytes) -> tuple[CredentialRequest | None, LoggedHttpResponse | None]:
         """Deserializes a DER-encoded PKCS#10 certificate signing request.
@@ -424,9 +422,22 @@ class EstPkiMessageSerializerMixin:
         :raises ValueError: If deserialization fails.
         """
         try:
-            csr = x509.load_der_x509_csr(data, default_backend())
+            if b'CERTIFICATE REQUEST-----' in data:
+                request_format = 'pem'
+                csr = x509.load_pem_x509_csr(data)
+            elif re.match(rb'^[A-Za-z0-9+/=\n]+$', data):
+                request_format = 'base64_der'
+                der_data = base64.b64decode(data)
+                csr = x509.load_der_x509_csr(der_data)
+            elif data.startswith(b'\x30'):  # ASN.1 DER should start with 0x30 (SEQUENCE tag)
+                request_format = 'der'
+                csr = x509.load_der_x509_csr(data)
+            else:
+                error_message = "Unsupported CSR format. Ensure it's PEM, Base64, or raw DER."
+                return None, LoggedHttpResponse(error_message, status_code=400)
         except Exception:  # noqa: BLE001
-            return None, LoggedHttpResponse('Failed to deserialize PKCS#10 certificate signing request', status=500)
+            return None, LoggedHttpResponse('Failed to deserialize PKCS#10 certificate signing request',
+                                            status=500)
 
         try:
             self.verify_csr_signature(csr)
@@ -434,8 +445,8 @@ class EstPkiMessageSerializerMixin:
             return None, LoggedHttpResponse('Failed to verify PKCS#10 certificate signing request', status=500)
 
         try:
-            cert_details = self.extract_details_from_csr(csr)
-        except Exception as e:  # noqa: BLE001
+            cert_details = self.extract_details_from_csr(csr, request_format)
+        except Exception as e: # noqa: BLE001
             return None, LoggedHttpResponse(f'Failed to extract information from CSR: {e}', status=500)
 
         return cert_details, None
@@ -548,6 +559,8 @@ class CredentialIssuanceMixin:
     cert_template_classes: ClassVar[dict[str, type]] = {
         'tlsserver': LocalTlsServerCredentialIssuer,
         'tlsclient': LocalTlsClientCredentialIssuer,
+        'opcua-server': OpcUaServerCredentialIssuer,
+        'opcua-client': OpcUaClientCredentialIssuer,
         'domaincredential': LocalDomainCredentialIssuer,
     }
 
@@ -617,13 +630,19 @@ class CredentialIssuanceMixin:
         if issued_credential is None:
             return LoggedHttpResponse('Credential cannot be found', 400)
 
-        encoded_cert = issued_credential.credential.get_certificate().public_bytes(encoding=Encoding.DER)
+        cert = issued_credential.credential.get_certificate().public_bytes(
+            encoding=Encoding.DER if credential_request.request_format in {'der', 'base64_der'} else Encoding.PEM
+        )
+
+        if credential_request.request_format == 'base64_der':
+            b64_pkcs7 = base64.b64encode(cert).decode('utf-8')
+            cert = '\n'.join([b64_pkcs7[i:i + 64] for i in range(0, len(b64_pkcs7), 64)])
 
         if requested_cert_template_str == 'domaincredential':
             device.onboarding_status = DeviceModel.OnboardingStatus.ONBOARDED
             device.save()
 
-        return LoggedHttpResponse(content=encoded_cert, status=200, content_type='application/pkix-cert')
+        return LoggedHttpResponse(content=cert, status=200, content_type='application/pkix-cert')
 
     def _issue_based_on_template(
         self, cert_template_str: str, credential_request: CredentialRequest, device: DeviceModel, domain: DomainModel
@@ -649,6 +668,26 @@ class CredentialIssuanceMixin:
                 san_critical=False,
                 public_key=credential_request.public_key,
                 validity_days=365,
+            )
+        if cert_template_str == 'opcua-client':
+            opcua_client_credential = OpcUaClientCredentialIssuer(device=device, domain=domain)
+
+            return opcua_client_credential.issue_opcua_client_certificate(
+                common_name=credential_request.common_name,
+                public_key=credential_request.public_key,
+                validity_days=365,
+                application_uri=credential_request.uniform_resource_identifiers
+            )
+        if cert_template_str == 'opcua-server':
+            opcua_server_credential = OpcUaServerCredentialIssuer(device=device, domain=domain)
+            return opcua_server_credential.issue_opcua_server_certificate(
+                common_name=credential_request.common_name,
+                ipv4_addresses=credential_request.ipv4_addresses,
+                ipv6_addresses=credential_request.ipv6_addresses,
+                domain_names=credential_request.dns_names,
+                public_key=credential_request.public_key,
+                validity_days=365,
+                application_uri=credential_request.uniform_resource_identifiers
             )
         return None
 
@@ -702,48 +741,56 @@ class EstSimpleEnrollmentView(
     based on the certificate template specified in the request.
     """
 
-    device: DeviceModel
-    requested_domain: DomainModel
-    requested_cert_template_str: str
-    issued_credential: IssuedCredentialModel
-    issuing_ca_certificate: x509.Certificate
-
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
         """Handle POST requests for simple enrollment."""
-        del args, kwargs, request
+        self.logger.info('Request received: method=%s path=%s', request.method, request.path)
+        del args
         credential_request = None
+        device: DeviceModel | None = None
+        requested_domain: DomainModel | None = None
+        requested_cert_template_str: str | None = None
 
-        device, http_response = self.authenticate_request(
-            request=self.request,
-            domain=self.requested_domain,
-            cert_template_str=self.requested_cert_template_str,
-        )
+        raw_message, http_response = self.process_http_request(request)
+
+        if not http_response and raw_message:
+            domain_name = cast(str, kwargs.get('domain'))
+            requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
+
+        if not http_response and raw_message and requested_domain:
+            cert_template = cast(str, kwargs.get('certtemplate'))
+            requested_cert_template_str, http_response = self.extract_cert_template(cert_template=cert_template)
+
+        if (not http_response and
+                raw_message and
+                requested_domain and
+                requested_cert_template_str):
+            device, http_response = self.authenticate_request(
+                request=self.request,
+                domain=requested_domain,
+                cert_template_str=requested_cert_template_str,
+            )
 
         if not http_response:
             credential_request, http_response = self.deserialize_pki_message(self.raw_message)
 
-        if not http_response and credential_request and device:
+        if not http_response and credential_request and device and requested_domain and requested_cert_template_str:
             device, http_response = self.get_or_create_device_from_csr(
                 credential_request=credential_request,
-                domain=self.requested_domain,
-                cert_template=self.requested_cert_template_str,
-                device=device,
+                domain=requested_domain,
+                cert_template=requested_cert_template_str,
+                device=device
             )
 
-        if not http_response and credential_request and device:
-            http_response = self._validate_onboarding(
-                device=device,
-                credential_request=credential_request,
-                requested_cert_template_str=self.requested_cert_template_str,
-            )
+        if not http_response and credential_request and device and requested_cert_template_str:
+            http_response = self._validate_onboarding(device=device,
+                                                      credential_request=credential_request,
+                                                      requested_cert_template_str=requested_cert_template_str)
 
-        if not http_response and credential_request and device:
-            http_response = self._issue_simpleenroll(
-                device=device,
-                domain=self.requested_domain,
-                credential_request=credential_request,
-                requested_cert_template_str=self.requested_cert_template_str,
-            )
+        if not http_response and credential_request and device and requested_domain and requested_cert_template_str:
+            http_response = self._issue_simpleenroll(device=device,
+                                                     domain=requested_domain,
+                                                     credential_request=credential_request,
+                                                     requested_cert_template_str=requested_cert_template_str)
 
         if not http_response:
             http_response = LoggedHttpResponse('Something went wrong.', status=500)
@@ -752,7 +799,77 @@ class EstSimpleEnrollmentView(
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class EstCACertsView(EstAuthenticationMixin, EstRequestedDomainExtractorMixin, View):
+class EstSimpleReEnrollmentView(EstAuthenticationMixin,
+                              EstHttpMixin,
+                              EstRequestedDomainExtractorMixin,
+                              EstRequestedCertTemplateExtractorMixin,
+                              EstPkiMessageSerializerMixin,
+                              DeviceHandlerMixin,
+                              CredentialIssuanceMixin,
+                              OnboardingMixIn,
+                              LoggerMixin,
+                              View):
+    """Handles simple EST (Enrollment over Secure Transport) reenrollment requests.
+
+    This view processes certificate signing requests (CSRs), authenticates the client using
+    either Mutual TLS or username/password, validates the device, and issues the requested certificate
+    based on the certificate template specified in the request.
+    """
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
+        """Handle POST requests for simple enrollment."""
+        self.logger.info('Request received: method=%s path=%s', request.method, request.path)
+        del args
+        credential_request = None
+        device: DeviceModel | None = None
+        requested_domain: DomainModel | None = None
+        requested_cert_template_str: str | None = None
+
+        raw_message, http_response = self.process_http_request(request)
+
+        if not http_response and raw_message:
+            domain_name = cast(str, kwargs.get('domain'))
+            requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
+
+        if not http_response and raw_message and requested_domain:
+            cert_template = cast(str, kwargs.get('certtemplate'))
+            requested_cert_template_str, http_response = self.extract_cert_template(cert_template=cert_template)
+
+        if (not http_response and
+                raw_message and
+                requested_domain and
+                requested_cert_template_str):
+            device, http_response = self.authenticate_request(
+                request=self.request,
+                domain=requested_domain,
+                cert_template_str=requested_cert_template_str,
+            )
+
+        if not http_response:
+            credential_request, http_response = self.deserialize_pki_message(self.raw_message)
+
+        if not http_response and credential_request and device and requested_domain and requested_cert_template_str:
+            device, http_response = self.get_or_create_device_from_csr(
+                credential_request=credential_request,
+                domain=requested_domain,
+                cert_template=requested_cert_template_str,
+                device=device
+            )
+
+        if not http_response and credential_request and device and requested_domain and requested_cert_template_str:
+            http_response = self._issue_simpleenroll(device=device,
+                                                     domain=requested_domain,
+                                                     credential_request=credential_request,
+                                                     requested_cert_template_str=requested_cert_template_str)
+
+        if not http_response:
+            http_response = LoggedHttpResponse('Something went wrong.', status=500)
+
+        return http_response
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class EstCACertsView(EstAuthenticationMixin, EstRequestedDomainExtractorMixin, View, LoggerMixin):
     """View to handle the EST /cacerts endpoint.
 
     Returns the CA certificate chain in a (simplified) PKCS#7 MIME format.
@@ -760,25 +877,66 @@ class EstCACertsView(EstAuthenticationMixin, EstRequestedDomainExtractorMixin, V
     URL pattern should supply the 'domain' parameter (e.g., /cacerts/<domain>/)
     """
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
         """Handle GET requests for the /cacerts endpoint.
 
         This method retrieves the CA certificate chain and returns it in PKCS#7 MIME format.
         """
-        del request, args, kwargs
+        self.logger.info('Request received: method=%s path=%s', request.method, request.path)
+        del request, args
+        requested_domain: DomainModel | None
 
         try:
-            ca_credential = self.requested_domain.issuing_ca.credential
+            domain_name = cast(str, kwargs.get('domain'))
+            requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
 
-            ca_cert = ca_credential.get_certificate()
-            certificate_chain = [ca_cert, *ca_credential.get_certificate_chain()]
-            pkcs7_certs = CertificateCollectionSerializer(certificate_chain).as_pkcs7_der()
+            if not http_response and requested_domain:
 
-            return LoggedHttpResponse(
-                pkcs7_certs,
-                status=200,
-                content_type='application/pkcs7-mime',
-                headers={'Content-Transfer-Encoding': 'base64'},
-            )
+                ca_credential = requested_domain.issuing_ca.credential
+
+                ca_cert = ca_credential.get_certificate()
+                certificate_chain = [ca_cert, *ca_credential.get_certificate_chain()]
+                pkcs7_certs = CertificateCollectionSerializer(certificate_chain).as_pkcs7_der()
+
+                b64_pkcs7 = base64.b64encode(pkcs7_certs).decode('utf-8')
+
+                formatted_b64_pkcs7 = '\n'.join([b64_pkcs7[i:i + 64] for i in range(0, len(b64_pkcs7), 64)])
+
+                http_response = LoggedHttpResponse(
+                    formatted_b64_pkcs7.encode('utf-8'),
+                    status=200,
+                    content_type='application/pkcs7-mime',
+                    headers={'Content-Transfer-Encoding': 'base64'}
+                )
+
+                if 'Vary' in http_response:
+                    del http_response['Vary']
+                if 'Content-Language' in http_response:
+                    del http_response['Content-Language']
+
+            if not http_response:
+                http_response = LoggedHttpResponse('Something went wrong.', status=500)
+
         except Exception as e:  # noqa:BLE001
-            return LoggedHttpResponse(f'Error retrieving CA certificates: {e!s}', status=500)
+            return LoggedHttpResponse(
+                f'Error retrieving CA certificates: {e!s}', status=500
+            )
+        else:
+            return http_response
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class EstCsrAttrsView(View, LoggerMixin):
+    """View to handle the EST /csrattrs endpoint.
+
+    This endpoint is not supported and returns 204 No Content.
+    """
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle GET requests for the /csrattrs endpoint."""
+        self.logger.info('Request received: method=%s path=%s', request.method, request.path)
+        del request, args, kwargs
+
+        return LoggedHttpResponse(
+            'csrattrs/ is not supported', status=404
+        )
