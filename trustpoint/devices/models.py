@@ -20,7 +20,6 @@ from pki.models.truststore import TruststoreModel
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 from trustpoint_core import oid  # type: ignore[import-untyped]
 from util.db import CustomDeleteActionModel
-from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
     from typing import Any
@@ -41,7 +40,7 @@ class DeviceModel(CustomDeleteActionModel):
     common_name = models.CharField(
         _('Device'), max_length=100, default='New-Device'
     )
-    serial_number = models.CharField(_('Serial-Number'), max_length=100)
+    serial_number = models.CharField(_('Serial-Number'), max_length=100, default='', blank=True, null=False)
     domain = models.ForeignKey(
         DomainModel, verbose_name=_('Domain'), related_name='devices', blank=True, null=True, on_delete=models.PROTECT
     )
@@ -106,16 +105,18 @@ class DeviceModel(CustomDeleteActionModel):
         on_delete=models.SET_NULL,
     )
 
-    created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
+    class DeviceType(models.IntegerChoices):
+        """Enum for device type."""
+        GENERIC_DEVICE = 0, _('Generic Device')
+        OPC_UA_GDS = 1, _('OPC UA GDS')
 
-    class Meta(TypedModelMeta):
-        """Meta class configuration."""
-        constraints: typing.ClassVar = [
-            models.UniqueConstraint(
-                fields=['common_name', 'serial_number'],
-                name='unique_common_serial'
-            )
-        ]
+    device_type = models.IntegerField(
+        choices=DeviceType.choices,
+        verbose_name=_('Device Type'),
+        default=DeviceType.GENERIC_DEVICE,
+    )
+
+    created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
     def __str__(self) -> str:
         """Returns a human-readable string representation."""

@@ -41,7 +41,7 @@
                     -key key.pem \<br>
                     -outform der \<br>
                     -out application_credential_csr.der \<br>
-                    -subj "CN=/{{ tls_server_cn }}"
+                    -subj "/CN={{ tls_server_cn }}"
                 </code>
 
                 <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
