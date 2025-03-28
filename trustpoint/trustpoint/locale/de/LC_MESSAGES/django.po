@@ -8,8 +8,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-28 10:18+0100\n"
-"PO-Revision-Date: 2025-03-28 10:40+0100\n"
+"POT-Creation-Date: 2025-03-28 15:33+0100\n"
+"PO-Revision-Date: 2025-03-28 15:39+0100\n"
 "Last-Translator: Christian Schwinne <christian.schwinne  AT hshl.de>\n"
 "Language-Team: \n"
 "Language: de\n"
@@ -42,6 +42,7 @@ msgstr "Domain-Komponente"
 #: .\templates\devices\credentials\certificate_download.html:57
 #: .\templates\devices\credentials\credential_download.html:53
 #: .\templates\devices\details\sub_details.html:9
+#: .\templates\devices\devices_table.html:20
 #: .\templates\pki\certificates\components\general.html:11
 #: .\templates\pki\certificates\download.html:41
 #: .\templates\pki\certificates\download_multiple.html:43
@@ -205,6 +206,7 @@ msgstr "EST mit Authentifizierung durch Nutzername und Passwort"
 #: .\templates\devices\credentials\certificate_download.html:26
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:13
 #: .\templates\devices\credentials\credential_download.html:22
+#: .\templates\devices\devices_table.html:9
 #: .\templates\home\notifications-tab.html:61
 msgid "Device"
 msgstr "Gerät"
@@ -221,6 +223,7 @@ msgstr "Seriennummer"
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:176
 #: .\templates\devices\credentials\credential_download.html:26
 #: .\templates\devices\details\sub_details.html:22
+#: .\templates\devices\devices_table.html:14
 #: .\templates\home\notifications-tab.html:55
 #: .\templates\pki\domains\confirm_delete.html:18
 #: .\templates\pki\domains\details.html:16
@@ -239,7 +242,7 @@ msgstr "Wartend"
 msgid "Onboarded"
 msgstr "Eingebunden"
 
-#: .\devices\models.py:61
+#: .\devices\models.py:61 .\templates\devices\devices_table.html:31
 msgid "Onboarding Status"
 msgstr "Onboarding-Status"
 
@@ -268,6 +271,7 @@ msgid "BRSKI"
 msgstr "BRSKI"
 
 #: .\devices\models.py:79 .\templates\devices\details\sub_details.html:39
+#: .\templates\devices\devices_table.html:36
 msgid "Onboarding Protocol"
 msgstr "Onboarding-Protokoll"
 
@@ -311,7 +315,8 @@ msgstr "Gerätetyp"
 
 #: .\devices\models.py:119 .\devices\models.py:189
 #: .\pki\models\credential.py:79 .\pki\models\domain.py:37
-#: .\pki\models\issuing_ca.py:62 .\templates\pki\issuing_cas\config.html:52
+#: .\pki\models\issuing_ca.py:62 .\templates\devices\devices_table.html:26
+#: .\templates\pki\issuing_cas\config.html:52
 msgid "Created"
 msgstr "Erstellt"
 
@@ -373,9 +378,14 @@ msgstr "Download-Token"
 msgid "Token Created"
 msgstr "Token erstellt um"
 
+#: .\devices\views.py:143
+msgid "Manage"
+msgstr "Verwalten"
+
 #: .\devices\views.py:162 .\devices\views.py:165 .\devices\views.py:342
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:114
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:205
+#: .\templates\devices\devices_table.html:47
 msgid "Revoke"
 msgstr "Widerrufen"
 
@@ -383,6 +393,7 @@ msgstr "Widerrufen"
 #: .\templates\devices\credentials\certificate_download.html:22
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:13
 #: .\templates\devices\credentials\credential_download.html:18
+#: .\templates\devices\devices_table.html:45
 #: .\templates\home\notifications-tab.html:120
 #: .\templates\home\notifications-tab.html:134
 msgid "Details"
@@ -1805,6 +1816,7 @@ msgid "Device onboarding status"
 msgstr "Geräte-Onboardingstatus"
 
 #: .\templates\devices\details\sub_details.html:43
+#: .\templates\devices\devices_table.html:41
 msgid "PKI Protocol"
 msgstr "PKI-Protokoll"
 
@@ -1873,6 +1885,10 @@ msgstr "Ausgewählte entfernen"
 #: .\templates\devices\devices.html:25
 msgid "Add new Device"
 msgstr "Neues Gerät hinzufügen"
+
+#: .\templates\devices\devices_table.html:44
+msgid "Certificate Management"
+msgstr "Zertifikatsverwaltung"
 
 #: .\templates\devices\devices_table.html:79
 msgid "No devices have been added yet."
@@ -2918,6 +2934,14 @@ msgstr "Super-User erstellen"
 msgid "Pre-population with Demo Data"
 msgstr "Anlegen von Demodaten"
 
+#: .\templates\setup_wizard\demo_data.html:35
+msgid ""
+"For testing Trustpoint features and capabilities we recommend pre-populating "
+"the database with demo data."
+msgstr ""
+"Zum Testen der von Trustpoint bereitgestellten Funktionen empfehlen wir das "
+"Anlegen von Demodaten in der Datenbank."
+
 #: .\templates\setup_wizard\demo_data.html:40
 msgid "Continue with Demo Data"
 msgstr "Mit Demodaten fortfahren"
@@ -2943,6 +2967,14 @@ msgstr "TLS-Server Credential aus Datei importieren"
 #: .\templates\setup_wizard\tls_server_credential_apply.html:34
 msgid "Download TLS-Server Trust-Store"
 msgstr "TLS-Server-Truststore herunterladen"
+
+#: .\templates\setup_wizard\tls_server_credential_apply.html:36
+msgid ""
+"We recommend importing the TLS Server Trust-Store into your browser or "
+"operating system CA store."
+msgstr ""
+"Wir empfehlen, den TLS-Server Trust-Store in den CA-Speicher Ihres Browsers "
+"oder Betriebssystems zu importieren."
 
 #: .\templates\setup_wizard\tls_server_credential_apply.html:47
 msgid "Apply TLS-Configurations"
