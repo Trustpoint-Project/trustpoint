@@ -9,7 +9,7 @@ msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-03-27 15:26+0100\n"
-"PO-Revision-Date: 2025-03-27 14:42+0100\n"
+"PO-Revision-Date: 2025-03-28 09:23+0100\n"
 "Last-Translator: Christian Schwinne <christian.schwinne  AT hshl.de>\n"
 "Language-Team: \n"
 "Language: de\n"
@@ -56,25 +56,25 @@ msgstr "Seriennummer"
 
 #: .\devices\forms.py:44
 msgid "Password"
-msgstr ""
+msgstr "Passwort"
 
 #: .\devices\forms.py:46
 #, python-format
 msgid "Must be at least %d characters long."
-msgstr ""
+msgstr "Muss mindestens %d Zeichen lang sein."
 
 #: .\devices\forms.py:48
 msgid "Confirm Password"
-msgstr ""
+msgstr "Passwort bestätigen."
 
 #: .\devices\forms.py:58
 msgid "Passwords do not match."
-msgstr ""
+msgstr "Passwörter stimmen nicht überein."
 
 #: .\devices\forms.py:61
 #, python-format
 msgid "Password must be at least %d characters long."
-msgstr ""
+msgstr "Password muss mindestens %d Zeichen lang sein."
 
 #: .\devices\forms.py:70
 #: .\templates\devices\credentials\certificate_download.html:48
@@ -94,10 +94,11 @@ msgstr "Gültigkeit in Tagen"
 #, python-format
 msgid "Credential with common name %s already exists for device %s."
 msgstr ""
+"Ein Credential mit dem Common Name %s existiert bereits für das Gerät %s."
 
 #: .\devices\forms.py:98
 msgid "Validity must be a positive integer."
-msgstr ""
+msgstr "Die Gültigkeitsdauer muss ein positiver Ganzzahlwert sein."
 
 #: .\devices\forms.py:107 .\setup_wizard\forms.py:15
 msgid "IPv4-Addresses (comma-separated list)"
@@ -113,39 +114,41 @@ msgstr "Domain-Namen (durch Kommata trennen)"
 
 #: .\devices\forms.py:124
 msgid "Contains an invalid IPv4-Address."
-msgstr ""
+msgstr "Enthält eine ungültige IPv4-Adresse."
 
 #: .\devices\forms.py:137
 msgid "Contains an invalid IPv6-Address."
-msgstr ""
+msgstr "Enthält eine ungültige IPv6-Adresse."
 
 #: .\devices\forms.py:151
 msgid "At least one SAN entry is required."
-msgstr ""
+msgstr "Es ist mindestens ein SAN-Eintrag erforderlich."
 
 #: .\devices\forms.py:167
 msgid "Application URI"
-msgstr ""
+msgstr "Anwendungs-URI"
 
 #: .\devices\forms.py:178
 msgid "Application URI entry is required."
-msgstr ""
+msgstr "Die Eingabe einer Anwendungs-URI ist erforderlich."
 
 #: .\devices\forms.py:203
 msgid "This field is required."
-msgstr ""
+msgstr "Dieses Feld ist erforderlich."
 
 #: .\devices\forms.py:205
 msgid "The provided OTP is invalid."
-msgstr ""
+msgstr "Das angegebene Einmalpasswort ist ungültig."
 
 #: .\devices\forms.py:220
 msgid "The credential download process is not valid, it may have expired."
 msgstr ""
+"Der Prozess zum Download des Credentials ist nicht gültig, er ist "
+"möglicherweise abgelaufen."
 
 #: .\devices\forms.py:225
 msgid "OTP is invalid."
-msgstr ""
+msgstr "Das Einmalpasswort ist ungültig."
 
 #: .\devices\forms.py:258 .\devices\models.py:50
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:25
@@ -156,47 +159,47 @@ msgstr "Domain-Credential-Onboarding"
 
 #: .\devices\forms.py:266
 msgid "CMP with shared secret onboarding"
-msgstr ""
+msgstr "CMP-Onboarding mit Shared Secret"
 
 #: .\devices\forms.py:267
 msgid "CMP with IDEVID onboarding"
-msgstr ""
+msgstr "CMP-Onboarding mit IDevID"
 
 #: .\devices\forms.py:268
 msgid "CMP with AOKI onboarding"
-msgstr ""
+msgstr "CMP-Onboarding mit AOKI"
 
 #: .\devices\forms.py:269
 msgid "CMP with BRSKI onboarding"
-msgstr ""
+msgstr "CMP-Onboarding mit BRSKI"
 
 #: .\devices\forms.py:270
 msgid "EST with username and password onboarding"
-msgstr ""
+msgstr "EST-Onboarding mit Nutzername und Passwort"
 
 #: .\devices\forms.py:271
 msgid "EST with IDEVID onboarding"
-msgstr ""
+msgstr "EST-Onboarding mit  IDevID"
 
 #: .\devices\forms.py:272
 msgid "EST with AOKI onboarding"
-msgstr ""
+msgstr "EST-Onboarding mit AOKI"
 
 #: .\devices\forms.py:273
 msgid "EST with BRSKI onboarding"
-msgstr ""
+msgstr "EST-Onboarding mit BRSKI"
 
 #: .\devices\forms.py:283 .\devices\models.py:88
 msgid "Manual Download"
-msgstr ""
+msgstr "Manueller Download"
 
 #: .\devices\forms.py:284
 msgid "CMP with shared secret authentication"
-msgstr ""
+msgstr "CMP mit Authentifizierung durch Shared Secret"
 
 #: .\devices\forms.py:285
 msgid "EST with username and password authentication"
-msgstr ""
+msgstr "EST mit Authentifizierung durch Nutzername und Passwort"
 
 #: .\devices\models.py:42 .\devices\models.py:182 .\home\models.py:151
 #: .\templates\devices\credentials\certificate_download.html:26
@@ -208,7 +211,7 @@ msgstr "Gerät"
 
 #: .\devices\models.py:44
 msgid "Serial-Number"
-msgstr ""
+msgstr "Seriennummer"
 
 #: .\devices\models.py:46 .\devices\models.py:185 .\home\models.py:150
 #: .\templates\devices\confirm_delete.html:32
@@ -226,7 +229,7 @@ msgstr "Domain"
 
 #: .\devices\models.py:56 .\devices\models.py:70
 msgid "No Onboarding"
-msgstr ""
+msgstr "Kein Onboarding"
 
 #: .\devices\models.py:57 .\home\models.py:44
 msgid "Pending"
@@ -234,35 +237,35 @@ msgstr "Wartend"
 
 #: .\devices\models.py:58
 msgid "Onboarded"
-msgstr ""
+msgstr "Eingebunden"
 
 #: .\devices\models.py:62
 msgid "Onboarding Status"
-msgstr ""
+msgstr "Onboarding-Status"
 
 #: .\devices\models.py:71 .\devices\models.py:89
 msgid "EST - Username & Password"
-msgstr ""
+msgstr "EST mit Nutzername und Passwort"
 
 #: .\devices\models.py:72
 msgid "EST - IDevID"
-msgstr ""
+msgstr "EST mit IDevID"
 
 #: .\devices\models.py:73 .\devices\models.py:91
 msgid "CMP - Shared Secret"
-msgstr ""
+msgstr "CMP mit Shared Secret"
 
 #: .\devices\models.py:74
 msgid "CMP - IDevID"
-msgstr ""
+msgstr "CMP mit IDevID"
 
 #: .\devices\models.py:75
 msgid "AOKI"
-msgstr ""
+msgstr "AOKI"
 
 #: .\devices\models.py:76
 msgid "BRSKI"
-msgstr ""
+msgstr "BRSKI"
 
 #: .\devices\models.py:80 .\templates\devices\details\sub_details.html:39
 msgid "Onboarding Protocol"
@@ -270,15 +273,15 @@ msgstr "Onboarding-Protokoll"
 
 #: .\devices\models.py:90
 msgid "EST - LDevID"
-msgstr ""
+msgstr "EST - LDevID"
 
 #: .\devices\models.py:92
 msgid "CMP - LDevID"
-msgstr ""
+msgstr "CMP - LDevID"
 
 #: .\devices\models.py:95
 msgid "Pki Protocol"
-msgstr ""
+msgstr "PKI-Protokoll"
 
 #: .\devices\models.py:98
 #: .\templates\devices\help\generic_details\est_username_password_summary_block.html:26
@@ -287,7 +290,7 @@ msgstr "EST-Passwort"
 
 #: .\devices\models.py:99
 msgid "CMP Shared Secret"
-msgstr ""
+msgstr "CMP Shared Secret"
 
 #: .\devices\models.py:103 .\templates\devices\details\sub_details.html:53
 msgid "IDevID Manufacturer Truststore"
@@ -306,7 +309,7 @@ msgstr "Domain-Credential"
 
 #: .\devices\models.py:154
 msgid "Application Credential"
-msgstr ""
+msgstr "Anwendungs-Credential"
 
 #: .\devices\models.py:160 .\pki\models\truststore.py:96
 msgid "Generic"
@@ -314,23 +317,23 @@ msgstr "Generisch"
 
 #: .\devices\models.py:161
 msgid "TLS-Client"
-msgstr ""
+msgstr "TLS-Client"
 
 #: .\devices\models.py:162
 msgid "TLS-Server"
-msgstr ""
+msgstr "TLS-Server"
 
 #: .\devices\models.py:163
 msgid "OpcUa-Client"
-msgstr ""
+msgstr "OpcUa-Client"
 
 #: .\devices\models.py:164
 msgid "OpcUa-Server"
-msgstr ""
+msgstr "OpcUa-Server"
 
 #: .\devices\models.py:169 .\pki\models\credential.py:64
 msgid "Credential Type"
-msgstr ""
+msgstr "Art des Credentials"
 
 #: .\devices\models.py:171
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:186
@@ -339,23 +342,23 @@ msgstr "Zweck des Credentials"
 
 #: .\devices\models.py:175
 msgid "Credential"
-msgstr ""
+msgstr "Credential"
 
 #: .\devices\models.py:238
 msgid "OTP"
-msgstr ""
+msgstr "Einmalpasswort"
 
 #: .\devices\models.py:240
 msgid "Attempts"
-msgstr ""
+msgstr "Versuche"
 
 #: .\devices\models.py:241
 msgid "Download Token"
-msgstr ""
+msgstr "Download-Token"
 
 #: .\devices\models.py:242
 msgid "Token Created"
-msgstr ""
+msgstr "Token erstellt um"
 
 #: .\devices\views.py:152 .\devices\views.py:155 .\devices\views.py:291
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:114
@@ -369,37 +372,39 @@ msgstr "Widerrufen"
 
 #: .\devices\views.py:670 .\devices\views.py:739 .\devices\views.py:815
 msgid "Unsupported public key algorithm"
-msgstr ""
+msgstr "Nicht unterstützter öffentlicher Schlüsselalgorithmus"
 
 #: .\devices\views.py:1017 .\devices\views.py:1052
 msgid "Unknown file format."
-msgstr ""
+msgstr "Unbekanntes Dateiformat."
 
 #: .\devices\views.py:1139
 msgid "The provided password is not valid."
-msgstr ""
+msgstr "Das angegebene Passwort ist ungültig."
 
 #: .\devices\views.py:1296
 #, python-format
 msgid "Successfully revoked one active credential."
 msgid_plural "Successfully revoked %(count)d active credentials."
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "Ein aktives Credential wurde erforlgreich widerrufen."
+msgstr[1] "%(count)d aktive Credentials wurden erforlgreich widerrufen."
 
 #: .\devices\views.py:1303
 msgid "No credentials were revoked."
-msgstr ""
+msgstr "Es wurden keine Credentials widerrufen."
 
 #: .\devices\views.py:1383
 msgid ""
 "Cannot delete the selected device(s) because they are referenced by other "
 "objects."
 msgstr ""
+"Die ausgewählten Gerät(e) können nicht entfernt werden, da sie noch von "
+"anderen Objekten referenziert werden."
 
 #: .\devices\views.py:1390
 #, python-brace-format
 msgid "Successfully deleted {count} devices."
-msgstr ""
+msgstr "{count} Geräte wurden erfolgreich entfernt."
 
 #: .\home\models.py:31 .\home\views.py:125
 msgid "New"
@@ -567,10 +572,10 @@ msgstr "Entdecken Sie das Trustpoint-Forschungsprojekt"
 #: .\home\models.py:218
 #, python-brace-format
 msgid ""
-"Visit the Trustpoint GitHub repository for more information: <a href="
-"\"{url_github}\" target=\"_blank\">Trustpoint GitHub</a><br>Learn more about "
-"industrial security and the Trustpoint project on our <a href="
-"\"{url_homepage}\" target=\"_blank\">homepage</a>"
+"Visit the Trustpoint GitHub repository for more information: <a "
+"href=\"{url_github}\" target=\"_blank\">Trustpoint GitHub</a><br>Learn more "
+"about industrial security and the Trustpoint project on our <a "
+"href=\"{url_homepage}\" target=\"_blank\">homepage</a>"
 msgstr ""
 "Besuchen Sie das Trustpoint GitHub-Repository für weitere Informationen: <a "
 "href=\"{url_github}\" target=\"_blank\">Trustpoint GitHub</a><br>\n"
@@ -764,11 +769,11 @@ msgstr "Methode auswählen"
 
 #: .\pki\forms.py:38
 msgid "Import a new truststore prior to configuring a new pattern"
-msgstr ""
+msgstr "Vor dem Anlegen eines Musters einen neuen Truststore importieren"
 
 #: .\pki\forms.py:39
 msgid "Use an existing truststore to define a new pattern"
-msgstr ""
+msgstr "Vorhandenen Truststore zur Definition eines neuen Musters nutzen"
 
 #: .\pki\forms.py:82 .\pki\forms.py:351 .\pki\forms.py:457
 #: .\pki\models\devid_registration.py:19 .\pki\models\truststore.py:99
@@ -785,7 +790,7 @@ msgstr "Eindeutiger Name"
 
 #: .\pki\forms.py:90 .\pki\models\truststore.py:107
 msgid "Intended Usage"
-msgstr ""
+msgstr "Beabsichtigte Nutzung"
 
 #: .\pki\forms.py:95
 msgid "PEM or PKCS#7 File"
@@ -892,6 +897,8 @@ msgid ""
 "Failed to parse and load the uploaded file. Either wrong password or "
 "corrupted file."
 msgstr ""
+"Die hochgeladene Datei konnte nicht verarbeitet werden. Entweder ist das "
+"Passwort falsch oder die Datei beschädigt."
 
 #: .\pki\forms.py:461
 msgid "Private Key File (.key, .pem)"
@@ -907,17 +914,21 @@ msgstr "Issuing CA-Zertifikat (.cer, .der, .pem, .p7b, .p7c)"
 
 #: .\pki\forms.py:469
 msgid "[Optional] Certificate Chain (.pem, .p7b, .p7c)."
-msgstr ""
+msgstr "[Optional] Zertifikatskette (.pem, .p7b, .p7c)."
 
 #: .\pki\forms.py:518
 msgid ""
 "Failed to parse the private key file. Either wrong password or file "
 "corrupted."
 msgstr ""
+"Die private Schlüsseldatei konnte nicht gelesen werden. Entweder ist das "
+"Passwort falsch oder die Datei beschädigt."
 
 #: .\pki\forms.py:551
 msgid "Failed to parse the Issuing CA certificate. Seems to be corrupted."
 msgstr ""
+"Die CA-Zertifikatsdatei konnte nicht gelesen werden und ist möglicherweise "
+"beschädigt."
 
 #: .\pki\models\certificate.py:63
 msgid "OK"
@@ -925,7 +936,7 @@ msgstr "OK"
 
 #: .\pki\models\certificate.py:66
 msgid "Not Yet Valid"
-msgstr ""
+msgstr "Noch nicht gültig"
 
 #: .\pki\models\certificate.py:74
 msgid "Version 3"
@@ -933,7 +944,7 @@ msgstr "Version 3"
 
 #: .\pki\models\certificate.py:90
 msgid "Self-Signed"
-msgstr ""
+msgstr "Selbstsigniert"
 
 #: .\pki\models\certificate.py:97
 msgid "Fingerprint (SHA256)"
@@ -1007,7 +1018,7 @@ msgstr "Öffentlicher Schlüssel (PEM, SPKI)"
 
 #: .\pki\models\certificate.py:173 .\pki\models\truststore.py:110
 msgid "Created-At"
-msgstr ""
+msgstr "Erstellt um"
 
 #: .\pki\models\certificate.py:334
 msgid "Signature Algorithm"
@@ -1059,7 +1070,7 @@ msgstr "Von CRL entfernen"
 
 #: .\pki\models\certificate.py:641
 msgid "Revocation Date"
-msgstr ""
+msgstr "Widerrufsdatum"
 
 #: .\pki\models\certificate.py:644 .\templates\devices\revoke.html:41
 msgid "Revocation Reason"
@@ -1067,27 +1078,27 @@ msgstr "Widerrufsgrund"
 
 #: .\pki\models\credential.py:39
 msgid "Credential already exists."
-msgstr ""
+msgstr "Das Credential existiert bereits."
 
 #: .\pki\models\credential.py:59
 msgid "Trustpoint TLS Server"
-msgstr ""
+msgstr "Trustpoint TLS-Server"
 
 #: .\pki\models\credential.py:60
 msgid "Root CA"
-msgstr ""
+msgstr "Root CA"
 
 #: .\pki\models\credential.py:62
 msgid "Issued Credential"
-msgstr ""
+msgstr "Ausgestelltes Credential"
 
 #: .\pki\models\devid_registration.py:25
 msgid "Associated Truststore"
-msgstr ""
+msgstr "Zugehöriger Truststore"
 
 #: .\pki\models\devid_registration.py:30
 msgid "Associated Domain"
-msgstr ""
+msgstr "Zugehörige Domain"
 
 #: .\pki\models\devid_registration.py:34
 #: .\templates\devices\details\sub_details.html:81
@@ -1098,6 +1109,7 @@ msgstr "Format der Seriennummer"
 #: .\pki\models\devid_registration.py:36
 msgid "A regex pattern to match valid serial numbers for this registration."
 msgstr ""
+"Ein Regex-Muster, das valide Seriennummern für diese Registrierung angibt."
 
 #: .\pki\models\domain.py:21 .\templates\devices\details\sub_details.html:64
 msgid "Domain Name"
@@ -1115,55 +1127,63 @@ msgstr "Aktualisiert"
 
 #: .\pki\models\domain.py:41
 msgid "Auto-create new device"
-msgstr ""
+msgstr "Automatisch neues Gerät anlegen"
 
 #: .\pki\models\domain.py:44
 msgid ""
 "Automatically create a new device if no device with the same serial number "
 "exists in the database."
 msgstr ""
+"Ein Gerät wird automatisch angelegt, wenn es noch kein Gerät mit der "
+"gleichen Seriennummer in der Datenbank gibt."
 
 #: .\pki\models\domain.py:49
 msgid "Allow username:password Enrollment"
-msgstr ""
+msgstr "Einbinden mit Nutzername & Passwort erlauben"
 
 #: .\pki\models\domain.py:51
 msgid "New devices can be enrolled with a username and password."
 msgstr ""
+"Neue Geräte können mittels eines Nutzernamens & Passwort eingebunden werden."
 
 #: .\pki\models\domain.py:55
 msgid "Allow IDevID Enrollment"
-msgstr ""
+msgstr "Einrichtung mit IDevID erlauben"
 
 #: .\pki\models\domain.py:57
 msgid "Allow registration of a new device using the IDevID of the Device."
-msgstr ""
+msgstr "Registrierung neuer Geräte mit der IDevID des Geräts erlauben."
 
 #: .\pki\models\domain.py:61
 msgid "Require a Domain Credential for Authentication"
-msgstr ""
+msgstr "Ein Domain-Credential zur Authentifizierung erfordern"
 
 #: .\pki\models\domain.py:63
 msgid ""
 "The EST server requires a domain credential issued by the domain Issuing CA "
-"for authenitcation."
+"for authentication."
 msgstr ""
+"Der EST-Server erfordert ein Domain-Credential zur Authentifizierung, dass "
+"von der Issuing CA der Domain ausgestellt wurde."
 
 #: .\pki\models\domain.py:67
 msgid "Require username:password for Authentication"
-msgstr ""
+msgstr "Nutzername:Password zur Authentifizierung erfordern "
 
 #: .\pki\models\domain.py:69
 msgid "The EST server requires username and password for authentication."
 msgstr ""
+"Der EST-Server erfordert Nutzername und Passwort zur Authentifizierung."
 
 #: .\pki\models\domain.py:73
 msgid "Allow Application Certificates without Domain Credential"
-msgstr ""
+msgstr "Anwendungszertifikate ohne ein Domain-Credential erlauben"
 
 #: .\pki\models\domain.py:75
 msgid "Allow issuance of application certificates without a domain credential."
 msgstr ""
+"Die Ausstellung von Anwendungszertifikaten ohne ein Domain-Credential "
+"erlauben"
 
 #: .\pki\models\extension.py:119
 msgid "Name"
@@ -1266,23 +1286,23 @@ msgstr "Weitere Namen"
 
 #: .\pki\models\extension.py:616 .\pki\models\extension.py:727
 msgid "Issuer Alternative Name Issuer"
-msgstr ""
+msgstr "Alternativer Name des Ausstellers"
 
 #: .\pki\models\extension.py:669
 msgid "Subject Alternative Name Subject"
-msgstr ""
+msgstr "Alternativer Name des Subjekts"
 
 #: .\pki\models\extension.py:1300
 msgid "Name relative to crl issuer"
-msgstr ""
+msgstr "Name im Verhältnis zum CRL-Aussteller"
 
 #: .\pki\models\extension.py:1328
 msgid "Reasons"
-msgstr ""
+msgstr "Gründe"
 
 #: .\pki\models\extension.py:1330
 msgid "CRL Issuer"
-msgstr ""
+msgstr "Austeller der CRL"
 
 #: .\pki\models\extension.py:1778
 msgid "Subject Directory Attributes"
@@ -1290,27 +1310,27 @@ msgstr "Subjekt-Verzeichnisattribute"
 
 #: .\pki\models\issuing_ca.py:41
 msgid "Auto-Generated Root"
-msgstr ""
+msgstr "Automatisch generierte Root-CA"
 
 #: .\pki\models\issuing_ca.py:42
 msgid "Auto-Generated"
-msgstr ""
+msgstr "Automatisch generiert"
 
 #: .\pki\models\issuing_ca.py:43
 msgid "Local-Unprotected"
-msgstr ""
+msgstr "Lokal ungeschützt"
 
 #: .\pki\models\issuing_ca.py:44
 msgid "Local-PKCS11"
-msgstr ""
+msgstr "Lokal über PKCS11"
 
 #: .\pki\models\issuing_ca.py:45
 msgid "Remote-EST"
-msgstr ""
+msgstr "Extern mit EST"
 
 #: .\pki\models\issuing_ca.py:46
 msgid "Remote-CMP"
-msgstr ""
+msgstr "Extern mit CMP"
 
 #: .\pki\models\issuing_ca.py:49
 #: .\templates\devices\details\sub_details.html:118
@@ -1324,11 +1344,11 @@ msgstr "Art der Issuing CA"
 
 #: .\pki\models\issuing_ca.py:64
 msgid "Last CRL Issued"
-msgstr ""
+msgstr "Letzte CRL-Ausstellung"
 
 #: .\pki\models\issuing_ca.py:66
 msgid "CRL in PEM format"
-msgstr ""
+msgstr "CRL im PEM-Format"
 
 #: .\pki\models\truststore.py:33
 msgid "Private Key (PEM)"
@@ -1336,15 +1356,15 @@ msgstr "Privater Schlüssel (PEM)"
 
 #: .\pki\models\truststore.py:94
 msgid "IDevID"
-msgstr ""
+msgstr "IDevID"
 
 #: .\pki\models\truststore.py:95
 msgid "TLS"
-msgstr ""
+msgstr "TLS"
 
 #: .\pki\models\truststore.py:103
 msgid "Truststore certificates"
-msgstr ""
+msgstr "Truststore-Zertifikate"
 
 #: .\pki\models\truststore.py:147
 msgid "Trust Store Certificate Index (Order)"
@@ -1359,36 +1379,40 @@ msgid ""
 "Cannot delete the selected Domain(s) because they are referenced by other "
 "objects."
 msgstr ""
+"Die ausgewählten Domain(s) konnten nicht entfernt werden, da sie noch von "
+"anderen Objekten referenziert werden."
 
 #: .\pki\views\domains.py:208
 #, python-brace-format
 msgid "Successfully deleted {count} Domains."
-msgstr ""
+msgstr "{count} Domains wurden erfolgreich entfernt."
 
 #: .\pki\views\domains.py:293
 msgid "DevID Registration Pattern deleted successfully."
-msgstr ""
+msgstr "Das DevID-Registrierungsmuster wurde erfolgreich entfernt."
 
 #: .\pki\views\issuing_cas.py:183
 msgid ""
 "Cannot delete the selected Issuing CA(s) because they are referenced by "
 "other objects."
 msgstr ""
+"Die ausgewählten Issuing CA(s) konnten nicht entfernt werden, da sie noch "
+"von anderen Objekten referenziert werden."
 
 #: .\pki\views\issuing_cas.py:190
 #, python-brace-format
 msgid "Successfully deleted {count} Issuing CA(s)."
-msgstr ""
+msgstr "{count} Issuing CA(s) wurden erfolgreich entfernt."
 
 #: .\pki\views\issuing_cas.py:214
 #, python-format
 msgid "CRL for Issuing CA %s has been generated."
-msgstr ""
+msgstr "Eine Sperrliste für die Issuing CA %s wurde erzeugt."
 
 #: .\pki\views\issuing_cas.py:216
 #, python-format
 msgid "Failed to generate CRL for Issuing CA %s."
-msgstr ""
+msgstr "Die Sperrliste für Issuing CA %s konnte nicht erzeugt werden."
 
 #: .\pki\views\issuing_cas.py:238
 #, python-format
@@ -1400,11 +1424,13 @@ msgid ""
 "Cannot delete the selected Truststore(s) because they are referenced by "
 "other objects."
 msgstr ""
+"Die ausgewählten Truststore(s) konnten nicht entfernt werden, da noch andere "
+"Objekte von ihnen abhängen."
 
 #: .\pki\views\truststores.py:288
 #, python-brace-format
 msgid "Successfully deleted {count} Truststore(s)."
-msgstr ""
+msgstr "{count} Truststore(s) wurden erfolgreich entfernt."
 
 #: .\settings\forms.py:54
 msgid "Security level presets"
@@ -1449,7 +1475,7 @@ msgstr "Ihre Sicherheitseinstellung %s erlaubt die Funktion nicht: %s"
 
 #: .\settings\views\logging.py:94 .\settings\views\logging.py:99
 msgid "None"
-msgstr ""
+msgstr "None"
 
 #: .\settings\views\security.py:64
 msgid "Your changes were saved successfully."
@@ -3890,8 +3916,8 @@ msgstr "Englisch"
 
 #, python-brace-format
 #~ msgid ""
-#~ "Visit the Trustpoint GitHub repository for more information: <a href="
-#~ "\"{url_github}\" target=\"_blank\">Trustpoint GitHub</a>\n"
+#~ "Visit the Trustpoint GitHub repository for more information: <a "
+#~ "href=\"{url_github}\" target=\"_blank\">Trustpoint GitHub</a>\n"
 #~ "Learn more about industrial security and the Trustpoint project on our <a "
 #~ "href=\"{url_homepage}\" target=\"_blank\">homepage</a>"
 #~ msgstr ""
@@ -3911,8 +3937,8 @@ msgstr "Englisch"
 
 #, python-brace-format
 #~ msgid ""
-#~ "Visit the Trustpoint GitHub repository for more information: <a href="
-#~ "\"{url_github}\" target=\"_blank\">Trustpoint GitHub</a>\n"
+#~ "Visit the Trustpoint GitHub repository for more information: <a "
+#~ "href=\"{url_github}\" target=\"_blank\">Trustpoint GitHub</a>\n"
 #~ "Learn more about industrial security and the Trustpoint project on our <a "
 #~ "href=\"{url_homepage}\">homepage</a>"
 #~ msgstr ""

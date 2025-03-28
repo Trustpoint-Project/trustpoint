@@ -60,7 +60,7 @@ class DomainModel(models.Model):
     domain_credential_auth = models.BooleanField(
         _('Require a Domain Credential for Authentication'),
         default=True,
-        help_text=_('The EST server requires a domain credential issued by the domain Issuing CA for authenitcation.'),
+        help_text=_('The EST server requires a domain credential issued by the domain Issuing CA for authentication.'),
     )
 
     username_password_auth = models.BooleanField(
