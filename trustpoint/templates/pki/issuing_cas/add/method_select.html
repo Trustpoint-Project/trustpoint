@@ -8,18 +8,18 @@
         <div class="card">
             <div class="card-header">
                 <div>
-                    <h1>{% trans 'Add New Issuing CA' %}</h1>
+                    <h1>{% trans 'Add new Issuing CA' %}</h1>
                 </div>
             </div>
             <div class="card-body">
                 <div class="tp-card-centered-content">
-                    <h2>{% trans 'Import New Issuing CA From File' %}</h2>
+                    <h2>{% trans 'Import new Issuing CA from file' %}</h2>
                     <hr class="mb-4">
                     <a href="{% url 'pki:issuing_cas-add-file_import-pkcs12' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Import From PKCS#12 File' %}</a>
                     <br>
                     <a href="{% url 'pki:issuing_cas-add-file_import-separate_files' %}" class="btn btn-primary min-width-30 mb-5">{% trans 'Import From Separate Key and Certificate Files' %}</a>
 
-                    <h2>{% trans 'Generate A Key-Pair And Request Issuing CA Certificate' %}</h2>
+                    <h2>{% trans 'Generate a keypair and request an Issuing CA Certificate' %}</h2>
                     <hr class="mb-4">
                     <a href="#" class="btn btn-primary min-width-30 mb-3 disabled" tabindex="-1" aria-disabled="true">{% trans 'Request Issuing CA Certificate Using EST' %}</a>
                     <br>
@@ -27,7 +27,7 @@
                     <br>
                     <a href="#" class="btn btn-primary min-width-30 mb-5 disabled" tabindex="-1" aria-disabled="true">{% trans 'Request Issuing CA Certificate Using SCEP' %}</a>
 
-                    <h2>{% trans 'Configure A Remote Issuing CA' %}</h2>
+                    <h2>{% trans 'Configure a Remote Issuing CA' %}</h2>
                     <hr class="mb-4">
                     <a href="#" class="btn btn-primary min-width-30 mb-3 disabled" tabindex="-1" aria-disabled="true">{% trans 'Configure A Remote Issuing CA Using EST' %}</a>
                     <br>

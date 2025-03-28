@@ -139,8 +139,8 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
 
         # noinspection PyDeprecation
         return format_html(
-            '<a href="{}" class="btn btn-primary tp-table-btn w-100">Manage</a>',
-            clm_url
+            '<a href="{}" class="btn btn-primary tp-table-btn w-100">{}</a>',
+            clm_url, _('Manage')
         )
 
     @staticmethod
