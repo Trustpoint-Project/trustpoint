@@ -8,8 +8,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-27 15:26+0100\n"
-"PO-Revision-Date: 2025-03-28 09:23+0100\n"
+"POT-Creation-Date: 2025-03-28 10:18+0100\n"
+"PO-Revision-Date: 2025-03-28 10:40+0100\n"
 "Last-Translator: Christian Schwinne <christian.schwinne  AT hshl.de>\n"
 "Language-Team: \n"
 "Language: de\n"
@@ -19,7 +19,7 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: Poedit 3.5\n"
 
-#: .\devices\forms.py:35 .\devices\forms.py:69 .\devices\models.py:168
+#: .\devices\forms.py:35 .\devices\forms.py:69 .\devices\models.py:169
 #: .\pki\models\certificate.py:96
 #: .\templates\devices\credentials\certificate_download.html:43
 #: .\templates\devices\credentials\credential_download.html:39
@@ -65,7 +65,7 @@ msgstr "Muss mindestens %d Zeichen lang sein."
 
 #: .\devices\forms.py:48
 msgid "Confirm Password"
-msgstr "Passwort bestätigen."
+msgstr "Passwort bestätigen"
 
 #: .\devices\forms.py:58
 msgid "Passwords do not match."
@@ -150,14 +150,14 @@ msgstr ""
 msgid "OTP is invalid."
 msgstr "Das Einmalpasswort ist ungültig."
 
-#: .\devices\forms.py:258 .\devices\models.py:50
+#: .\devices\forms.py:258 .\devices\forms.py:411 .\devices\models.py:49
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:25
 #: .\templates\devices\details\sub_details.html:47
 #: .\templates\devices\help\onboarding\cmp_idevid_registration.html:151
 msgid "Domain Credential Onboarding"
 msgstr "Domain-Credential-Onboarding"
 
-#: .\devices\forms.py:266
+#: .\devices\forms.py:266 .\devices\forms.py:416
 msgid "CMP with shared secret onboarding"
 msgstr "CMP-Onboarding mit Shared Secret"
 
@@ -173,7 +173,7 @@ msgstr "CMP-Onboarding mit AOKI"
 msgid "CMP with BRSKI onboarding"
 msgstr "CMP-Onboarding mit BRSKI"
 
-#: .\devices\forms.py:270
+#: .\devices\forms.py:270 .\devices\forms.py:417
 msgid "EST with username and password onboarding"
 msgstr "EST-Onboarding mit Nutzername und Passwort"
 
@@ -189,19 +189,19 @@ msgstr "EST-Onboarding mit AOKI"
 msgid "EST with BRSKI onboarding"
 msgstr "EST-Onboarding mit BRSKI"
 
-#: .\devices\forms.py:283 .\devices\models.py:88
+#: .\devices\forms.py:283 .\devices\models.py:87
 msgid "Manual Download"
 msgstr "Manueller Download"
 
-#: .\devices\forms.py:284
+#: .\devices\forms.py:284 .\devices\forms.py:428
 msgid "CMP with shared secret authentication"
 msgstr "CMP mit Authentifizierung durch Shared Secret"
 
-#: .\devices\forms.py:285
+#: .\devices\forms.py:285 .\devices\forms.py:429
 msgid "EST with username and password authentication"
 msgstr "EST mit Authentifizierung durch Nutzername und Passwort"
 
-#: .\devices\models.py:42 .\devices\models.py:182 .\home\models.py:151
+#: .\devices\models.py:41 .\devices\models.py:183 .\home\models.py:151
 #: .\templates\devices\credentials\certificate_download.html:26
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:13
 #: .\templates\devices\credentials\credential_download.html:22
@@ -209,11 +209,11 @@ msgstr "EST mit Authentifizierung durch Nutzername und Passwort"
 msgid "Device"
 msgstr "Gerät"
 
-#: .\devices\models.py:44
+#: .\devices\models.py:43
 msgid "Serial-Number"
 msgstr "Seriennummer"
 
-#: .\devices\models.py:46 .\devices\models.py:185 .\home\models.py:150
+#: .\devices\models.py:45 .\devices\models.py:186 .\home\models.py:150
 #: .\templates\devices\confirm_delete.html:32
 #: .\templates\devices\credentials\certificate_download.html:30
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:37
@@ -227,173 +227,195 @@ msgstr "Seriennummer"
 msgid "Domain"
 msgstr "Domain"
 
-#: .\devices\models.py:56 .\devices\models.py:70
+#: .\devices\models.py:55 .\devices\models.py:69
 msgid "No Onboarding"
 msgstr "Kein Onboarding"
 
-#: .\devices\models.py:57 .\home\models.py:44
+#: .\devices\models.py:56 .\home\models.py:44
 msgid "Pending"
 msgstr "Wartend"
 
-#: .\devices\models.py:58
+#: .\devices\models.py:57
 msgid "Onboarded"
 msgstr "Eingebunden"
 
-#: .\devices\models.py:62
+#: .\devices\models.py:61
 msgid "Onboarding Status"
 msgstr "Onboarding-Status"
 
-#: .\devices\models.py:71 .\devices\models.py:89
+#: .\devices\models.py:70 .\devices\models.py:88
 msgid "EST - Username & Password"
 msgstr "EST mit Nutzername und Passwort"
 
-#: .\devices\models.py:72
+#: .\devices\models.py:71
 msgid "EST - IDevID"
 msgstr "EST mit IDevID"
 
-#: .\devices\models.py:73 .\devices\models.py:91
+#: .\devices\models.py:72 .\devices\models.py:90
 msgid "CMP - Shared Secret"
 msgstr "CMP mit Shared Secret"
 
-#: .\devices\models.py:74
+#: .\devices\models.py:73
 msgid "CMP - IDevID"
 msgstr "CMP mit IDevID"
 
-#: .\devices\models.py:75
+#: .\devices\models.py:74
 msgid "AOKI"
 msgstr "AOKI"
 
-#: .\devices\models.py:76
+#: .\devices\models.py:75
 msgid "BRSKI"
 msgstr "BRSKI"
 
-#: .\devices\models.py:80 .\templates\devices\details\sub_details.html:39
+#: .\devices\models.py:79 .\templates\devices\details\sub_details.html:39
 msgid "Onboarding Protocol"
 msgstr "Onboarding-Protokoll"
 
-#: .\devices\models.py:90
+#: .\devices\models.py:89
 msgid "EST - LDevID"
 msgstr "EST - LDevID"
 
-#: .\devices\models.py:92
+#: .\devices\models.py:91
 msgid "CMP - LDevID"
 msgstr "CMP - LDevID"
 
-#: .\devices\models.py:95
+#: .\devices\models.py:94
 msgid "Pki Protocol"
 msgstr "PKI-Protokoll"
 
-#: .\devices\models.py:98
+#: .\devices\models.py:97
 #: .\templates\devices\help\generic_details\est_username_password_summary_block.html:26
 msgid "EST Password"
 msgstr "EST-Passwort"
 
-#: .\devices\models.py:99
+#: .\devices\models.py:98
 msgid "CMP Shared Secret"
 msgstr "CMP Shared Secret"
 
-#: .\devices\models.py:103 .\templates\devices\details\sub_details.html:53
+#: .\devices\models.py:102 .\templates\devices\details\sub_details.html:53
 msgid "IDevID Manufacturer Truststore"
 msgstr "IDevID Hersteller-Truststore"
 
-#: .\devices\models.py:109 .\devices\models.py:188
-#: .\pki\models\credential.py:78 .\pki\models\domain.py:37
+#: .\devices\models.py:110
+msgid "Generic Device"
+msgstr "Generisches Gerät"
+
+#: .\devices\models.py:111 .\templates\devices\opc_ua_gds.html:9
+#: .\templates\trustpoint\base.html:55
+msgid "OPC UA GDS"
+msgstr "OPC UA-GDS"
+
+#: .\devices\models.py:115
+msgid "Device Type"
+msgstr "Gerätetyp"
+
+#: .\devices\models.py:119 .\devices\models.py:189
+#: .\pki\models\credential.py:79 .\pki\models\domain.py:37
 #: .\pki\models\issuing_ca.py:62 .\templates\pki\issuing_cas\config.html:52
 msgid "Created"
 msgstr "Erstellt"
 
-#: .\devices\models.py:153 .\devices\models.py:159
+#: .\devices\models.py:154 .\devices\models.py:160
 #: .\templates\devices\help\onboarding\domain_credential_details\est_capabilities_block.html:9
 msgid "Domain Credential"
 msgstr "Domain-Credential"
 
-#: .\devices\models.py:154
+#: .\devices\models.py:155
 msgid "Application Credential"
 msgstr "Anwendungs-Credential"
 
-#: .\devices\models.py:160 .\pki\models\truststore.py:96
+#: .\devices\models.py:161 .\pki\models\truststore.py:96
 msgid "Generic"
 msgstr "Generisch"
 
-#: .\devices\models.py:161
+#: .\devices\models.py:162
 msgid "TLS-Client"
 msgstr "TLS-Client"
 
-#: .\devices\models.py:162
+#: .\devices\models.py:163
 msgid "TLS-Server"
 msgstr "TLS-Server"
 
-#: .\devices\models.py:163
+#: .\devices\models.py:164
 msgid "OpcUa-Client"
 msgstr "OpcUa-Client"
 
-#: .\devices\models.py:164
+#: .\devices\models.py:165
 msgid "OpcUa-Server"
 msgstr "OpcUa-Server"
 
-#: .\devices\models.py:169 .\pki\models\credential.py:64
+#: .\devices\models.py:170 .\pki\models\credential.py:65
 msgid "Credential Type"
 msgstr "Art des Credentials"
 
-#: .\devices\models.py:171
+#: .\devices\models.py:172
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:186
 msgid "Credential Purpose"
 msgstr "Zweck des Credentials"
 
-#: .\devices\models.py:175
+#: .\devices\models.py:176
 msgid "Credential"
 msgstr "Credential"
 
-#: .\devices\models.py:238
+#: .\devices\models.py:239
 msgid "OTP"
 msgstr "Einmalpasswort"
 
-#: .\devices\models.py:240
+#: .\devices\models.py:241
 msgid "Attempts"
 msgstr "Versuche"
 
-#: .\devices\models.py:241
+#: .\devices\models.py:242
 msgid "Download Token"
 msgstr "Download-Token"
 
-#: .\devices\models.py:242
+#: .\devices\models.py:243
 msgid "Token Created"
 msgstr "Token erstellt um"
 
-#: .\devices\views.py:152 .\devices\views.py:155 .\devices\views.py:291
+#: .\devices\views.py:162 .\devices\views.py:165 .\devices\views.py:342
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:114
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:205
 msgid "Revoke"
 msgstr "Widerrufen"
 
-#: .\devices\views.py:288 .\pki\models\certificate.py:64
+#: .\devices\views.py:179
+#: .\templates\devices\credentials\certificate_download.html:22
+#: .\templates\devices\credentials\certificate_lifecycle_management.html:13
+#: .\templates\devices\credentials\credential_download.html:18
+#: .\templates\home\notifications-tab.html:120
+#: .\templates\home\notifications-tab.html:134
+msgid "Details"
+msgstr "Details"
+
+#: .\devices\views.py:339 .\pki\models\certificate.py:64
 msgid "Revoked"
 msgstr "Widerrufen"
 
-#: .\devices\views.py:670 .\devices\views.py:739 .\devices\views.py:815
+#: .\devices\views.py:733 .\devices\views.py:802 .\devices\views.py:883
 msgid "Unsupported public key algorithm"
 msgstr "Nicht unterstützter öffentlicher Schlüsselalgorithmus"
 
-#: .\devices\views.py:1017 .\devices\views.py:1052
+#: .\devices\views.py:1085 .\devices\views.py:1120
 msgid "Unknown file format."
 msgstr "Unbekanntes Dateiformat."
 
-#: .\devices\views.py:1139
+#: .\devices\views.py:1207
 msgid "The provided password is not valid."
 msgstr "Das angegebene Passwort ist ungültig."
 
-#: .\devices\views.py:1296
+#: .\devices\views.py:1364
 #, python-format
 msgid "Successfully revoked one active credential."
 msgid_plural "Successfully revoked %(count)d active credentials."
 msgstr[0] "Ein aktives Credential wurde erforlgreich widerrufen."
 msgstr[1] "%(count)d aktive Credentials wurden erforlgreich widerrufen."
 
-#: .\devices\views.py:1303
+#: .\devices\views.py:1371
 msgid "No credentials were revoked."
 msgstr "Es wurden keine Credentials widerrufen."
 
-#: .\devices\views.py:1383
+#: .\devices\views.py:1451
 msgid ""
 "Cannot delete the selected device(s) because they are referenced by other "
 "objects."
@@ -401,7 +423,7 @@ msgstr ""
 "Die ausgewählten Gerät(e) können nicht entfernt werden, da sie noch von "
 "anderen Objekten referenziert werden."
 
-#: .\devices\views.py:1390
+#: .\devices\views.py:1458
 #, python-brace-format
 msgid "Successfully deleted {count} devices."
 msgstr "{count} Geräte wurden erfolgreich entfernt."
@@ -479,7 +501,7 @@ msgid "System"
 msgstr "System"
 
 #: .\home\models.py:152 .\pki\models\certificate.py:649
-#: .\pki\models\credential.py:61 .\pki\models\domain.py:28
+#: .\pki\models\credential.py:62 .\pki\models\domain.py:28
 #: .\templates\devices\credentials\certificate_download.html:34
 #: .\templates\devices\credentials\credential_download.html:30
 #: .\templates\home\notifications-tab.html:67
@@ -1076,19 +1098,19 @@ msgstr "Widerrufsdatum"
 msgid "Revocation Reason"
 msgstr "Widerrufsgrund"
 
-#: .\pki\models\credential.py:39
+#: .\pki\models\credential.py:40
 msgid "Credential already exists."
 msgstr "Das Credential existiert bereits."
 
-#: .\pki\models\credential.py:59
+#: .\pki\models\credential.py:60
 msgid "Trustpoint TLS Server"
 msgstr "Trustpoint TLS-Server"
 
-#: .\pki\models\credential.py:60
+#: .\pki\models\credential.py:61
 msgid "Root CA"
 msgstr "Root CA"
 
-#: .\pki\models\credential.py:62
+#: .\pki\models\credential.py:63
 msgid "Issued Credential"
 msgstr "Ausgestelltes Credential"
 
@@ -1155,25 +1177,25 @@ msgid "Allow registration of a new device using the IDevID of the Device."
 msgstr "Registrierung neuer Geräte mit der IDevID des Geräts erlauben."
 
 #: .\pki\models\domain.py:61
-msgid "Require a Domain Credential for Authentication"
-msgstr "Ein Domain-Credential zur Authentifizierung erfordern"
+msgid "Allow a Domain Credential for Authentication"
+msgstr "Ein Domain-Credential zur Authentifizierung erlauben"
 
 #: .\pki\models\domain.py:63
 msgid ""
-"The EST server requires a domain credential issued by the domain Issuing CA "
+"The EST server permits a domain credential issued by the domain Issuing CA "
 "for authentication."
 msgstr ""
-"Der EST-Server erfordert ein Domain-Credential zur Authentifizierung, dass "
-"von der Issuing CA der Domain ausgestellt wurde."
+"Der EST-Server akzeptiert zur Authentifizierung ein von der Domain-Issuing "
+"CA ausgestelltes Domain-Credential."
 
 #: .\pki\models\domain.py:67
-msgid "Require username:password for Authentication"
-msgstr "Nutzername:Password zur Authentifizierung erfordern "
+msgid "Allow username:password for Authentication"
+msgstr "Nutzername:Passwort zur Authentifizierung erlauben"
 
 #: .\pki\models\domain.py:69
-msgid "The EST server requires username and password for authentication."
+msgid "The EST server permits username and password for authentication."
 msgstr ""
-"Der EST-Server erfordert Nutzername und Passwort zur Authentifizierung."
+"Der EST-Server akzeptiert Nutzername und Passwort zur Authentifizierung"
 
 #: .\pki\models\domain.py:73
 msgid "Allow Application Certificates without Domain Credential"
@@ -1183,7 +1205,7 @@ msgstr "Anwendungszertifikate ohne ein Domain-Credential erlauben"
 msgid "Allow issuance of application certificates without a domain credential."
 msgstr ""
 "Die Ausstellung von Anwendungszertifikaten ohne ein Domain-Credential "
-"erlauben"
+"erlauben."
 
 #: .\pki\models\extension.py:119
 msgid "Name"
@@ -1531,7 +1553,9 @@ msgstr "Gerätekonfiguration"
 #: .\templates\devices\credentials\credential_download.html:76
 #: .\templates\devices\credentials\onboarding\browser\otp_view.html:57
 #: .\templates\devices\details.html:16
+#: .\templates\devices\help\no_onboarding\cmp_gds_shared_secret.html:37
 #: .\templates\devices\help\no_onboarding\cmp_shared_secret.html:37
+#: .\templates\devices\help\no_onboarding\est_gds_username_password.html:40
 #: .\templates\devices\help\no_onboarding\est_username_password.html:50
 #: .\templates\devices\help\onboarding\cmp_application_credentials.html:38
 #: .\templates\devices\help\onboarding\cmp_idevid.html:39
@@ -1599,14 +1623,6 @@ msgstr "Anwendungszertifikat"
 #: .\templates\devices\credentials\certificate_download.html:16
 msgid "Download Issued Domain Certificate"
 msgstr "Ausgestelltes Domain-Zertifikat herunterladen"
-
-#: .\templates\devices\credentials\certificate_download.html:22
-#: .\templates\devices\credentials\certificate_lifecycle_management.html:13
-#: .\templates\devices\credentials\credential_download.html:18
-#: .\templates\home\notifications-tab.html:120
-#: .\templates\home\notifications-tab.html:134
-msgid "Details"
-msgstr "Details"
 
 #: .\templates\devices\credentials\certificate_download.html:63
 msgid "Download Certificate Only"
@@ -1843,22 +1859,24 @@ msgid "Created At"
 msgstr "Erstellt am"
 
 #: .\templates\devices\devices.html:9 .\templates\trustpoint\base.html:48
+#: .\templates\trustpoint\base.html:54
 msgid "Devices"
 msgstr "Geräte"
 
-#: .\templates\devices\devices.html:85
-msgid "No devices have been added yet."
-msgstr "Es sind noch keine Geräte hinzugefügt worden."
-
-#: .\templates\devices\devices.html:96 .\templates\pki\domains\domain.html:67
+#: .\templates\devices\devices.html:21 .\templates\devices\opc_ua_gds.html:19
+#: .\templates\pki\domains\domain.html:67
 #: .\templates\pki\issuing_cas\issuing_cas.html:76
 #: .\templates\pki\truststores\truststores.html:69
 msgid "Delete selected"
 msgstr "Ausgewählte entfernen"
 
-#: .\templates\devices\devices.html:100
+#: .\templates\devices\devices.html:25
 msgid "Add new Device"
 msgstr "Neues Gerät hinzufügen"
+
+#: .\templates\devices\devices_table.html:79
+msgid "No devices have been added yet."
+msgstr "Es sind noch keine Geräte hinzugefügt worden."
 
 #: .\templates\devices\help\generic_details\cmp_application_credential_summary_block.html:12
 #: .\templates\devices\help\generic_details\est_application_credential_summary_block.html:12
@@ -1871,12 +1889,14 @@ msgid "TLS-Server Certificate Request URL"
 msgstr "TLS-Client-Zertifikatsanfrage-URL"
 
 #: .\templates\devices\help\generic_details\cmp_application_credential_summary_block.html:42
+#: .\templates\devices\help\generic_details\est_application_credential_opcua_summary_block.html:42
 #: .\templates\devices\help\generic_details\est_application_credential_summary_block.html:42
 #: .\templates\devices\help\onboarding\domain_credential_details\cmp_domain_credential_summary_block.html:27
 msgid "Key Identifier (KID)"
 msgstr "Key Identifier (KID)"
 
 #: .\templates\devices\help\generic_details\cmp_application_credential_summary_block.html:46
+#: .\templates\devices\help\generic_details\est_application_credential_opcua_summary_block.html:46
 #: .\templates\devices\help\generic_details\est_application_credential_summary_block.html:46
 #: .\templates\devices\help\onboarding\cmp_idevid_registration.html:41
 #: .\templates\devices\help\onboarding\domain_credential_details\cmp_domain_credential_summary_block.html:31
@@ -1898,6 +1918,14 @@ msgid ""
 msgstr ""
 "TLS-Serverzertifikat im PEM-Format. Es kann kopiert und in einer neuen Datei "
 "namens server_cert.pem eingefügt werden."
+
+#: .\templates\devices\help\generic_details\est_application_credential_opcua_summary_block.html:12
+msgid "OPC UA-Client Certificate Request URL"
+msgstr "URL zur Anforderung des OPC UA-Clientzertifikats"
+
+#: .\templates\devices\help\generic_details\est_application_credential_opcua_summary_block.html:27
+msgid "OPC UA-Server Certificate Request URL"
+msgstr "URL zur Anforderung des OPC UA-Serverzertifikats"
 
 #: .\templates\devices\help\generic_details\est_application_csr_block.html:12
 msgid "TLS-Client CSR Generation"
@@ -1950,11 +1978,13 @@ msgstr "EST-Nutzername"
 msgid "Generate a Keypair"
 msgstr "Schlüsselpaar erzeugen"
 
-#: .\templates\devices\help\no_onboarding\cmp_shared_secret.html:18
-msgid "Help - No Onboarding - CMP Shared Secret"
-msgstr "Hilfe - Kein Onboarding - CMP Shared Secret"
+#: .\templates\devices\help\no_onboarding\cmp_gds_shared_secret.html:18
+msgid "Help - No Onboarding - OPC UA GDS - CMP Shared Secret"
+msgstr "Hilfe - Kein Onboarding - OPC UA-GDS - CMP Shared Secret"
 
+#: .\templates\devices\help\no_onboarding\cmp_gds_shared_secret.html:23
 #: .\templates\devices\help\no_onboarding\cmp_shared_secret.html:23
+#: .\templates\devices\help\no_onboarding\est_gds_username_password.html:25
 #: .\templates\devices\help\no_onboarding\est_username_password.html:25
 #: .\templates\devices\help\onboarding\cmp_application_credentials.html:23
 #: .\templates\devices\help\onboarding\cmp_idevid.html:23
@@ -1966,17 +1996,24 @@ msgstr "Hilfe - Kein Onboarding - CMP Shared Secret"
 msgid "Summary"
 msgstr "Übersicht"
 
+#: .\templates\devices\help\no_onboarding\cmp_gds_shared_secret.html:28
 #: .\templates\devices\help\no_onboarding\cmp_shared_secret.html:28
 #: .\templates\devices\help\onboarding\cmp_application_credentials.html:27
 msgid "Enroll Application Credential"
 msgstr "Anwendungs-Credential einbinden"
 
+#: .\templates\devices\help\no_onboarding\cmp_gds_shared_secret.html:38
 #: .\templates\devices\help\no_onboarding\cmp_shared_secret.html:38
+#: .\templates\devices\help\no_onboarding\est_gds_username_password.html:42
 #: .\templates\devices\help\no_onboarding\est_username_password.html:52
 #: .\templates\devices\help\onboarding\est_application_credentials.html:49
 #: .\templates\devices\help\onboarding\est_username_password.html:51
 msgid "Certificate Lifecycle Management Summary"
 msgstr "Übersicht Zertifikatslebenszyklus-Verwaltung"
+
+#: .\templates\devices\help\no_onboarding\cmp_shared_secret.html:18
+msgid "Help - No Onboarding - CMP Shared Secret"
+msgstr "Hilfe - Kein Onboarding - CMP Shared Secret"
 
 #: .\templates\devices\help\no_onboarding\details\cmp_enroll_application_credential_block.html:12
 msgid "TLS-Client Certificate Request"
@@ -2070,6 +2107,17 @@ msgstr "curl-Befehl"
 msgid "Convert PKCS7 to PEM"
 msgstr "Von PKCS7 zu PEM konvertieren"
 
+#: .\templates\devices\help\no_onboarding\est_gds_username_password.html:18
+msgid "Help - No Onboarding - OPC UA GDS - EST Username Password"
+msgstr "Hilfe - Kein Onboarding - OPC UA-GDS - EST Nutzername und Passwort"
+
+#: .\templates\devices\help\no_onboarding\est_gds_username_password.html:31
+#: .\templates\devices\help\no_onboarding\est_username_password.html:36
+#: .\templates\devices\help\onboarding\est_application_credentials.html:35
+#: .\templates\devices\help\onboarding\est_username_password.html:36
+msgid "Download or Copy the Trustpoint TLS Server Certificate"
+msgstr "Das Trustpoint-TLS-Serverzertifikat herunterladen oder kopieren"
+
 #: .\templates\devices\help\no_onboarding\est_username_password.html:18
 msgid "Help - No Onboarding - EST Username Password"
 msgstr "Hilfe - Kein Onboarding - EST mit Nutzername und Passwort"
@@ -2079,12 +2127,6 @@ msgstr "Hilfe - Kein Onboarding - EST mit Nutzername und Passwort"
 #: .\templates\devices\help\onboarding\est_username_password.html:31
 msgid "Create Keypair and Certificate Signing Request (CSR)"
 msgstr "Schlüsselpaar und Zertifikatssignierungsanfrage (CSR) erstellen"
-
-#: .\templates\devices\help\no_onboarding\est_username_password.html:36
-#: .\templates\devices\help\onboarding\est_application_credentials.html:35
-#: .\templates\devices\help\onboarding\est_username_password.html:36
-msgid "Download or Copy the Trustpoint TLS Server Certificate"
-msgstr "Das Trustpoint-TLS-Serverzertifikat herunterladen oder kopieren"
 
 #: .\templates\devices\help\no_onboarding\est_username_password.html:41
 #: .\templates\devices\help\onboarding\est_application_credentials.html:39
@@ -2202,6 +2244,10 @@ msgstr ""
 #: .\templates\devices\help\onboarding\est_username_password.html:18
 msgid "Help - Onboarding - EST Username Password"
 msgstr "Hilfe - Onboarding - EST mit Nutzername & Passwort"
+
+#: .\templates\devices\opc_ua_gds.html:23
+msgid "Add new OPC UA GDS"
+msgstr "Neuen OPC UA-GDS hinzufügen"
 
 #: .\templates\devices\revoke.html:10
 #, python-format
@@ -2359,7 +2405,7 @@ msgid "Certificates issued by the CA: "
 msgstr "Von der CA ausgestellte Zertifikate: "
 
 #: .\templates\pki\certificates\certificates.html:11
-#: .\templates\trustpoint\base.html:64
+#: .\templates\trustpoint\base.html:71
 msgid "Certificates"
 msgstr "Zertifikate"
 
@@ -2569,7 +2615,7 @@ msgstr "Konfiguration"
 
 #: .\templates\pki\domains\domain.html:8
 #: .\templates\pki\issuing_cas\config.html:16
-#: .\templates\trustpoint\base.html:62
+#: .\templates\trustpoint\base.html:69
 msgid "Domains"
 msgstr "Domains"
 
@@ -2717,7 +2763,7 @@ msgid "Back to CA"
 msgstr "Zurück zur CA"
 
 #: .\templates\pki\issuing_cas\issuing_cas.html:8
-#: .\templates\trustpoint\base.html:63
+#: .\templates\trustpoint\base.html:70
 msgid "Issuing CAs"
 msgstr "Issuing CAs"
 
@@ -2774,7 +2820,7 @@ msgid "Download Selected Truststores"
 msgstr "Ausgewählte Truststores herunterladen"
 
 #: .\templates\pki\truststores\truststores.html:8
-#: .\templates\trustpoint\base.html:65
+#: .\templates\trustpoint\base.html:72
 msgid "Truststores"
 msgstr "Truststores"
 
@@ -2787,7 +2833,7 @@ msgid "Language Configuration"
 msgstr "Spracheinstellungen (Language)"
 
 #: .\templates\settings\logging\logging_files.html:8
-#: .\templates\trustpoint\base.html:80
+#: .\templates\trustpoint\base.html:87
 msgid "Logging"
 msgstr "Logging"
 
@@ -2906,31 +2952,31 @@ msgstr "TLS-Konfiguration anwenden"
 msgid "Dashboard"
 msgstr "Übersicht"
 
-#: .\templates\trustpoint\base.html:56
+#: .\templates\trustpoint\base.html:63
 msgid "PKI"
 msgstr "PKI"
 
-#: .\templates\trustpoint\base.html:73
+#: .\templates\trustpoint\base.html:80
 msgid "Settings"
 msgstr "Einstellungen"
 
-#: .\templates\trustpoint\base.html:79
+#: .\templates\trustpoint\base.html:86
 msgid "Language"
 msgstr "Sprache (Language)"
 
-#: .\templates\trustpoint\base.html:83
+#: .\templates\trustpoint\base.html:90
 msgid "Security"
 msgstr "Sicherheit"
 
-#: .\templates\trustpoint\base.html:91
+#: .\templates\trustpoint\base.html:98
 msgid "Light theme"
 msgstr "Helles Theme"
 
-#: .\templates\trustpoint\base.html:94
+#: .\templates\trustpoint\base.html:101
 msgid "Dark theme"
 msgstr "Dunkles Theme"
 
-#: .\templates\trustpoint\base.html:101
+#: .\templates\trustpoint\base.html:108
 msgid "Logout"
 msgstr "Ausloggen"
 
@@ -2974,6 +3020,23 @@ msgstr "Deutsch"
 #: .\trustpoint\settings.py:223
 msgid "English"
 msgstr "Englisch"
+
+#~ msgid "Require a Domain Credential for Authentication"
+#~ msgstr "Ein Domain-Credential zur Authentifizierung erfordern"
+
+#~ msgid ""
+#~ "The EST server requires a domain credential issued by the domain Issuing "
+#~ "CA for authentication."
+#~ msgstr ""
+#~ "Der EST-Server erfordert ein Domain-Credential zur Authentifizierung, "
+#~ "dass von der Issuing CA der Domain ausgestellt wurde."
+
+#~ msgid "Require username:password for Authentication"
+#~ msgstr "Nutzername:Password zur Authentifizierung erfordern "
+
+#~ msgid "The EST server requires username and password for authentication."
+#~ msgstr ""
+#~ "Der EST-Server erfordert Nutzername und Passwort zur Authentifizierung."
 
 #~ msgid "NTP Server Address"
 #~ msgstr "NTP-Serveradresse"
