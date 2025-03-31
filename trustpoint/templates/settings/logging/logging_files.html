@@ -42,10 +42,10 @@
                     <td>{{ logfile.created_at }}</td>
                     <td>{{ logfile.updated_at }}</td>
                     <td><a href="{% url 'settings:logging-files-details' filename=logfile.filename %}"
-                        class="btn btn-primary tp-table-btn">View</a>
+                        class="btn btn-primary tp-table-btn">{% trans 'View' %}</a>
                     </td>
                     <td><a href="{% url 'settings:logging-files-download' filename=logfile.filename %}"
-                        class="btn btn-primary tp-table-btn">Download</a>
+                        class="btn btn-primary tp-table-btn">{% trans 'Download' %}</a>
                     </td>
                   </tr>
                   {% empty %}

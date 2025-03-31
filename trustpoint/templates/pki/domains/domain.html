@@ -15,24 +15,24 @@
                 <th id="checkbox-column"><input type="checkbox"/></th>
                 <th>
                     <a href="?sort={% if current_sort == 'unique_name' %}-{% endif %}unique_name">
-                        Domain Name
+                        {% trans 'Domain Name' %}
                     </a>
                 </th>
                 <th>
                     <a href="?sort={% if current_sort == 'issuing_ca__unique_name' %}-{% endif %}issuing_ca__unique_name" style="font-weight: bold;">
-                        Issuing CA Name
+                        {% trans 'Issuing CA Name' %}
                     </a>
                 </th>
                 <th>{% trans '# Devices' %}</th>
                 <th>{% trans 'Signature Suite' %}</th>
                 <th>
                     <a href="?sort={% if created_at == 'created_at' %}-{% endif %}created_at" style="font-weight: bold;">
-                        Created At
+                        {% trans 'Created at' %}
                     </a>
                 </th>
 
-                <th>Config</th>
-                <th>Delete</th>
+                <th>{% trans 'Config' %}</th>
+                <th>{% trans 'Delete' %}</th>
             </tr>
             </thead>
             <tbody>
@@ -47,8 +47,8 @@
                 <td>{{ domain.signature_suite }}</td>
                 <td>{{ domain.created_at }}</td>
 
-                <td><a href="config/{{ domain.id }}/" class="btn btn-primary tp-table-btn w-100">Config</a></td>
-                <td><a href="delete/{{ domain.id }}/" class="btn btn-danger tp-table-btn w-100">Delete</a></td>
+                <td><a href="config/{{ domain.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Configure' %}</a></td>
+                <td><a href="delete/{{ domain.id }}/" class="btn btn-danger tp-table-btn w-100">{% trans 'Delete' %}</a></td>
             </tr>
             {% empty %}
             <tr>

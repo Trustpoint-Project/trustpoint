@@ -35,7 +35,7 @@
                    class="btn btn-danger tp-table-btn w-100">
                     {% trans 'Delete' %}
             </td>
-            <td><a href="{% url 'devices:help-onboarding_cmp-idevid-registration' pk=devid_registration.id %}" class="btn btn-primary tp-table-btn w-100">Help - Onboard new Device</a></td>
+            <td><a href="{% url 'devices:help-onboarding_cmp-idevid-registration' pk=devid_registration.id %}" class="btn btn-primary tp-table-btn w-100">{% trans 'Help - Onboard new Device' %}</a></td>
         </tr>
         {% empty %}
         <tr>

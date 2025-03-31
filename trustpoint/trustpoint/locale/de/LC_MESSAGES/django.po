@@ -8,8 +8,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-28 15:33+0100\n"
-"PO-Revision-Date: 2025-03-28 15:39+0100\n"
+"POT-Creation-Date: 2025-03-31 13:24+0200\n"
+"PO-Revision-Date: 2025-03-31 13:27+0200\n"
 "Last-Translator: Christian Schwinne <christian.schwinne  AT hshl.de>\n"
 "Language-Team: \n"
 "Language: de\n"
@@ -29,6 +29,8 @@ msgstr ""
 #: .\templates\devices\help\onboarding\application_credential_details\cmp_enroll_application_credential_block.html:88
 #: .\templates\pki\certificates\download.html:27
 #: .\templates\pki\certificates\download_multiple.html:29
+#: .\templates\pki\certificates\table.html:11
+#: .\templates\pki\issuing_cas\issuing_cas.html:22
 msgid "Common Name"
 msgstr "Common Name"
 
@@ -46,8 +48,8 @@ msgstr "Domain-Komponente"
 #: .\templates\pki\certificates\components\general.html:11
 #: .\templates\pki\certificates\download.html:41
 #: .\templates\pki\certificates\download_multiple.html:43
-#: .\templates\pki\issuing_cas\config.html:151
-#: .\templates\pki\issuing_cas\config.html:221
+#: .\templates\pki\issuing_cas\config.html:141
+#: .\templates\pki\issuing_cas\config.html:211
 #: .\templates\pki\issuing_cas\confirm_delete.html:35
 #: .\templates\pki\issuing_cas\details.html:96
 #: .\templates\pki\issuing_cas\details.html:162
@@ -316,7 +318,7 @@ msgstr "Gerätetyp"
 #: .\devices\models.py:119 .\devices\models.py:189
 #: .\pki\models\credential.py:79 .\pki\models\domain.py:37
 #: .\pki\models\issuing_ca.py:62 .\templates\devices\devices_table.html:26
-#: .\templates\pki\issuing_cas\config.html:52
+#: .\templates\pki\issuing_cas\config.html:54
 msgid "Created"
 msgstr "Erstellt"
 
@@ -396,6 +398,9 @@ msgstr "Widerrufen"
 #: .\templates\devices\devices_table.html:45
 #: .\templates\home\notifications-tab.html:120
 #: .\templates\home\notifications-tab.html:134
+#: .\templates\pki\certificates\table.html:50
+#: .\templates\pki\truststores\truststores.html:30
+#: .\templates\pki\truststores\truststores.html:45
 msgid "Details"
 msgstr "Details"
 
@@ -526,7 +531,7 @@ msgstr "Issuing CA"
 #: .\templates\home\notifications-tab.html:73
 #: .\templates\pki\certificates\download.html:21
 #: .\templates\pki\certificates\download_multiple.html:24
-#: .\templates\pki\issuing_cas\config.html:84
+#: .\templates\pki\issuing_cas\config.html:86
 #: .\templates\pki\issuing_cas\details.html:47
 msgid "Certificate"
 msgstr "Zertifikat"
@@ -788,7 +793,12 @@ msgid "Guess we messed up. Type of this notification is %(type)s"
 msgstr ""
 "Da ist etwas schiefgelaufen. Der Typ dieser Benachrichtigung ist %(type)s"
 
-#: .\home\models.py:337 .\templates\home\notifications-tab.html:117
+#: .\home\models.py:337 .\templates\devices\details\sub_details.html:143
+#: .\templates\home\notifications-tab.html:117
+#: .\templates\pki\certificates\table.html:42
+#: .\templates\pki\domains\domain.html:30
+#: .\templates\pki\issuing_cas\issuing_cas.html:40
+#: .\templates\pki\truststores\truststores.html:27
 msgid "Created at"
 msgstr "Erstellt um"
 
@@ -816,12 +826,14 @@ msgstr "Vorhandenen Truststore zur Definition eines neuen Musters nutzen"
 #: .\templates\pki\domains\config.html:20
 #: .\templates\pki\domains\confirm_delete.html:22
 #: .\templates\pki\domains\details.html:20
-#: .\templates\pki\issuing_cas\config.html:57
+#: .\templates\pki\issuing_cas\config.html:59
 #: .\templates\pki\issuing_cas\details.html:20
+#: .\templates\pki\truststores\truststores.html:17
 msgid "Unique Name"
 msgstr "Eindeutiger Name"
 
 #: .\pki\forms.py:90 .\pki\models\truststore.py:107
+#: .\templates\pki\truststores\truststores.html:22
 msgid "Intended Usage"
 msgstr "Beabsichtigte Nutzung"
 
@@ -975,11 +987,12 @@ msgstr "Noch nicht gültig"
 msgid "Version 3"
 msgstr "Version 3"
 
-#: .\pki\models\certificate.py:90
+#: .\pki\models\certificate.py:90 .\templates\pki\certificates\table.html:47
 msgid "Self-Signed"
 msgstr "Selbstsigniert"
 
-#: .\pki\models\certificate.py:97
+#: .\pki\models\certificate.py:97 .\templates\pki\issuing_cas\config.html:145
+#: .\templates\pki\issuing_cas\config.html:215
 msgid "Fingerprint (SHA256)"
 msgstr "Fingerprint (SHA256)"
 
@@ -1021,15 +1034,18 @@ msgstr "Subjekt"
 msgid "Subject Public Bytes"
 msgstr "Subjekt Öffentliche Bytes"
 
-#: .\pki\models\certificate.py:143
+#: .\pki\models\certificate.py:143 .\templates\pki\issuing_cas\config.html:158
+#: .\templates\pki\issuing_cas\config.html:228
 msgid "Public Key Algorithm OID"
 msgstr "OID des Algorithmus für den öffentlichen Schlüssel"
 
-#: .\pki\models\certificate.py:147
+#: .\pki\models\certificate.py:147 .\templates\pki\certificates\table.html:21
+#: .\templates\pki\issuing_cas\config.html:163
+#: .\templates\pki\issuing_cas\config.html:233
 msgid "Public Key Algorithm"
 msgstr "Algorithmus für den öffentlichen Schlüssel"
 
-#: .\pki\models\certificate.py:150
+#: .\pki\models\certificate.py:150 .\templates\pki\certificates\table.html:26
 msgid "Public Key Size"
 msgstr "Länge des öffentlichen Schlüssels"
 
@@ -1037,7 +1053,7 @@ msgstr "Länge des öffentlichen Schlüssels"
 msgid "Public Key Curve OID (ECC)"
 msgstr "OID der ECC-Kurve für den öffentlichen Schlüssel"
 
-#: .\pki\models\certificate.py:163
+#: .\pki\models\certificate.py:163 .\templates\pki\certificates\table.html:31
 msgid "Public Key Curve (ECC)"
 msgstr "ECC-Kurve für den öffentlichen Schlüssel"
 
@@ -1145,6 +1161,7 @@ msgstr ""
 "Ein Regex-Muster, das valide Seriennummern für diese Registrierung angibt."
 
 #: .\pki\models\domain.py:21 .\templates\devices\details\sub_details.html:64
+#: .\templates\pki\domains\domain.html:18
 msgid "Domain Name"
 msgstr "Domain-Name"
 
@@ -1154,7 +1171,8 @@ msgid "Active"
 msgstr "Aktiv"
 
 #: .\pki\models\domain.py:38 .\pki\models\issuing_ca.py:63
-#: .\templates\pki\issuing_cas\config.html:48
+#: .\templates\pki\issuing_cas\config.html:50
+#: .\templates\pki\issuing_cas\issuing_cas.html:35
 msgid "Updated"
 msgstr "Aktualisiert"
 
@@ -1367,6 +1385,8 @@ msgstr "Extern mit CMP"
 
 #: .\pki\models\issuing_ca.py:49
 #: .\templates\devices\details\sub_details.html:118
+#: .\templates\pki\domains\domain.html:23
+#: .\templates\pki\issuing_cas\issuing_cas.html:17
 msgid "Issuing CA Name"
 msgstr "Name der Issuing CA"
 
@@ -1582,7 +1602,7 @@ msgstr "Gerätekonfiguration"
 #: .\templates\pki\devid_registration\method_select.html:23
 #: .\templates\pki\domains\config.html:186
 #: .\templates\pki\domains\details.html:70
-#: .\templates\pki\issuing_cas\config.html:313
+#: .\templates\pki\issuing_cas\config.html:303
 #: .\templates\pki\truststores\add\file_import.html:24
 #: .\templates\pki\truststores\confirm_delete.html:31
 #: .\templates\pki\truststores\details.html:28
@@ -1675,6 +1695,7 @@ msgstr "Dieses Gerät ist nicht Teil einer Domain."
 
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:49
 #: .\templates\pki\domains\domain.html:27
+#: .\templates\pki\issuing_cas\issuing_cas.html:31
 msgid "Signature Suite"
 msgstr "Signatur-Suite"
 
@@ -1737,8 +1758,12 @@ msgstr "Läuft aus in"
 #: .\templates\pki\certificates\details.html:52
 #: .\templates\pki\certificates\download.html:64
 #: .\templates\pki\certificates\download_multiple.html:77
+#: .\templates\pki\certificates\table.html:51
 #: .\templates\pki\truststores\details.html:29
+#: .\templates\pki\truststores\truststores.html:31
+#: .\templates\pki\truststores\truststores.html:48
 #: .\templates\settings\logging\logging_files.html:32
+#: .\templates\settings\logging\logging_files.html:48
 #: .\templates\settings\logging\logging_files_details.html:14
 msgid "Download"
 msgstr "Herunterladen"
@@ -1859,16 +1884,13 @@ msgid "Last CRL Issued At"
 msgstr "Letzte CRL ausgestellt am"
 
 #: .\templates\devices\details\sub_details.html:138
+#: .\templates\pki\certificates\table.html:37
 msgid "Status"
 msgstr "Status"
 
 #: .\templates\devices\details\sub_details.html:140
 msgid "Inactive"
 msgstr "Inaktiv"
-
-#: .\templates\devices\details\sub_details.html:143
-msgid "Created At"
-msgstr "Erstellt am"
 
 #: .\templates\devices\devices.html:9 .\templates\trustpoint\base.html:48
 #: .\templates\trustpoint\base.html:54
@@ -2400,7 +2422,7 @@ msgid "All"
 msgstr "Alle"
 
 #: .\templates\home\notifications-tab.html:106
-#: .\templates\pki\issuing_cas\config.html:44
+#: .\templates\pki\issuing_cas\config.html:46
 msgid "Type"
 msgstr "Art"
 
@@ -2425,12 +2447,7 @@ msgstr "Von der CA ausgestellte Zertifikate: "
 msgid "Certificates"
 msgstr "Zertifikate"
 
-#: .\templates\pki\certificates\certificates.html:83
-msgid "No certificates are available. Add an Issuing CA first."
-msgstr ""
-"Es sind keine Zertifikate verfügbar. Fügen Sie zuerst eine Issuing CA hinzu."
-
-#: .\templates\pki\certificates\certificates.html:94
+#: .\templates\pki\certificates\certificates.html:20
 #: .\templates\pki\truststores\truststores.html:73
 msgid "Download selected"
 msgstr "Ausgewählte herunterladen"
@@ -2444,18 +2461,19 @@ msgid "Validity"
 msgstr "Gültigkeit"
 
 #: .\templates\pki\certificates\components\validity.html:8
-#: .\templates\pki\issuing_cas\config.html:159
-#: .\templates\pki\issuing_cas\config.html:229
+#: .\templates\pki\issuing_cas\config.html:149
+#: .\templates\pki\issuing_cas\config.html:219
 #: .\templates\pki\issuing_cas\details.html:104
 #: .\templates\pki\issuing_cas\details.html:170
 msgid "Not valid before"
 msgstr "Nicht gültig vor"
 
 #: .\templates\pki\certificates\components\validity.html:12
-#: .\templates\pki\issuing_cas\config.html:163
-#: .\templates\pki\issuing_cas\config.html:233
+#: .\templates\pki\issuing_cas\config.html:153
+#: .\templates\pki\issuing_cas\config.html:223
 #: .\templates\pki\issuing_cas\details.html:108
 #: .\templates\pki\issuing_cas\details.html:174
+#: .\templates\pki\issuing_cas\issuing_cas.html:27
 msgid "Not valid after"
 msgstr "Nicht gültig nach"
 
@@ -2480,6 +2498,15 @@ msgstr "Ausgewählte Zertifikate"
 msgid "Download Selected Certificates"
 msgstr "Ausgewählte Zertifikate herunterladen"
 
+#: .\templates\pki\certificates\table.html:16
+msgid "Not valid after (UTC)"
+msgstr "Nicht gültig nach (UTC)"
+
+#: .\templates\pki\certificates\table.html:73
+msgid "No certificates are available. Add an Issuing CA first."
+msgstr ""
+"Es sind keine Zertifikate verfügbar. Fügen Sie zuerst eine Issuing CA hinzu."
+
 #: .\templates\pki\devid_registration\add.html:13
 #: .\templates\pki\domains\details.html:62
 msgid "DevID Registration"
@@ -2495,6 +2522,12 @@ msgstr "Entfernen des DevID-Musters bestätigen"
 
 #: .\templates\pki\devid_registration\confirm_delete.html:26
 #: .\templates\pki\devid_registration\table.html:36
+#: .\templates\pki\domains\domain.html:35
+#: .\templates\pki\domains\domain.html:51
+#: .\templates\pki\issuing_cas\issuing_cas.html:44
+#: .\templates\pki\issuing_cas\issuing_cas.html:61
+#: .\templates\pki\truststores\truststores.html:32
+#: .\templates\pki\truststores\truststores.html:51
 msgid "Delete"
 msgstr "Entfernen"
 
@@ -2509,6 +2542,10 @@ msgstr "Vorhandenen Truststore hinzufügen"
 #: .\templates\pki\devid_registration\method_select.html:18
 msgid "Upload new Truststore"
 msgstr "Neuen Truststore hochladen"
+
+#: .\templates\pki\devid_registration\table.html:38
+msgid "Help - Onboard new Device"
+msgstr "Hilfe - Neue Gerät einbinden"
 
 #: .\templates\pki\domains\add.html:13 .\templates\pki\domains\add.html:27
 #: .\templates\pki\domains\domain.html:71
@@ -2525,7 +2562,7 @@ msgid "Configuration"
 msgstr "Konfiguration"
 
 #: .\templates\pki\domains\config.html:16
-#: .\templates\pki\issuing_cas\config.html:40
+#: .\templates\pki\issuing_cas\config.html:42
 #: .\templates\pki\issuing_cas\details.html:16
 msgid "General"
 msgstr "Allgemein"
@@ -2599,10 +2636,11 @@ msgstr "Eindeutiger Name der Issuing CA"
 #: .\templates\pki\domains\confirm_delete.html:43
 #: .\templates\pki\domains\details.html:39
 #: .\templates\pki\domains\details.html:45
-#: .\templates\pki\issuing_cas\config.html:61
-#: .\templates\pki\issuing_cas\config.html:67
-#: .\templates\pki\issuing_cas\config.html:138
-#: .\templates\pki\issuing_cas\config.html:144
+#: .\templates\pki\issuing_cas\config.html:63
+#: .\templates\pki\issuing_cas\config.html:69
+#: .\templates\pki\issuing_cas\config.html:122
+#: .\templates\pki\issuing_cas\config.html:128
+#: .\templates\pki\issuing_cas\config.html:134
 #: .\templates\pki\issuing_cas\confirm_delete.html:23
 #: .\templates\pki\issuing_cas\confirm_delete.html:29
 #: .\templates\pki\issuing_cas\details.html:24
@@ -2625,7 +2663,9 @@ msgid "No Issuing CA configured"
 msgstr "Keine Issuing CA konfiguriert"
 
 #: .\templates\pki\domains\details.html:72
+#: .\templates\pki\domains\domain.html:34
 #: .\templates\pki\issuing_cas\details.html:215
+#: .\templates\pki\issuing_cas\issuing_cas.html:43
 msgid "Config"
 msgstr "Konfiguration"
 
@@ -2639,6 +2679,11 @@ msgstr "Domains"
 msgid "# Devices"
 msgstr "Anzahl Geräte"
 
+#: .\templates\pki\domains\domain.html:50
+#: .\templates\pki\issuing_cas\issuing_cas.html:60
+msgid "Configure"
+msgstr "Konfigurieren"
+
 #: .\templates\pki\domains\domain.html:55
 msgid "No domains are configured yet."
 msgstr "Es wurden noch keine Domains konfiguriert."
@@ -2648,12 +2693,7 @@ msgstr "Es wurden noch keine Domains konfiguriert."
 msgid "Issued Certificates for"
 msgstr "Ausgestellte Zertifikate für"
 
-#: .\templates\pki\domains\issued_certificates.html:81
-#: .\templates\pki\issuing_cas\issued_certificates.html:81
-msgid "No certificates are available."
-msgstr "Es sind keine Zertifikate vorhanden."
-
-#: .\templates\pki\domains\issued_certificates.html:90
+#: .\templates\pki\domains\issued_certificates.html:16
 msgid "Back to Domain"
 msgstr "Zurück zur Domain"
 
@@ -2713,16 +2753,16 @@ msgstr "Eine externe Issuing CA mittels CMP konfigurieren"
 msgid "Configure A Remote Issuing CA Using SCEP"
 msgstr "Eine externe Issuing CA mittels SCEP konfigurieren"
 
-#: .\templates\pki\issuing_cas\config.html:30
+#: .\templates\pki\issuing_cas\config.html:32
 msgid "No associated domains"
 msgstr "Keine zugehörigen Domains"
 
-#: .\templates\pki\issuing_cas\config.html:73
-#: .\templates\pki\issuing_cas\config.html:79
-#: .\templates\pki\issuing_cas\config.html:90
+#: .\templates\pki\issuing_cas\config.html:75
+#: .\templates\pki\issuing_cas\config.html:81
+#: .\templates\pki\issuing_cas\config.html:92
+#: .\templates\pki\issuing_cas\config.html:195
+#: .\templates\pki\issuing_cas\config.html:199
 #: .\templates\pki\issuing_cas\config.html:205
-#: .\templates\pki\issuing_cas\config.html:209
-#: .\templates\pki\issuing_cas\config.html:215
 #: .\templates\pki\issuing_cas\details.html:36
 #: .\templates\pki\issuing_cas\details.html:42
 #: .\templates\pki\issuing_cas\details.html:53
@@ -2732,37 +2772,61 @@ msgstr "Keine zugehörigen Domains"
 msgid "Root CA Certificate"
 msgstr "Root CA-Zertifikat"
 
-#: .\templates\pki\issuing_cas\config.html:84
+#: .\templates\pki\issuing_cas\config.html:86
 #: .\templates\pki\issuing_cas\details.html:47
 msgid "Intermediate CA"
 msgstr "Zwischen-CA"
 
-#: .\templates\pki\issuing_cas\config.html:98
+#: .\templates\pki\issuing_cas\config.html:100
 msgid "Certificates issued:"
 msgstr "Ausgestellte Zertifikate:"
 
-#: .\templates\pki\issuing_cas\config.html:274
+#: .\templates\pki\issuing_cas\config.html:106
+msgid "Show all issued certificates"
+msgstr "Alle ausgestellten Zertifikate anzeigen"
+
+#: .\templates\pki\issuing_cas\config.html:120
+msgid "Issuing CA Certificate (This is a self-signed Root CA Certificate)"
+msgstr ""
+"Issuing CA-Zertifikat (Dies ist ein selbstsigniertes Root CA-Zertifikat)"
+
+#: .\templates\pki\issuing_cas\config.html:169
+#: .\templates\pki\issuing_cas\config.html:239
+msgid "Public Key Curve OID"
+msgstr "OID der Kurve des öffentlichen Schlüssels"
+
+#: .\templates\pki\issuing_cas\config.html:176
+#: .\templates\pki\issuing_cas\config.html:246
+msgid "Public Key Curve"
+msgstr "ECC-Kurve des öffentlichen Schlüssels"
+
+#: .\templates\pki\issuing_cas\config.html:182
+#: .\templates\pki\issuing_cas\config.html:252
+msgid "Signature Algorithm Key Size"
+msgstr "Schlüssellänge des Signaturalgorithmus"
+
+#: .\templates\pki\issuing_cas\config.html:264
 msgid "CRL"
 msgstr "CRL"
 
-#: .\templates\pki\issuing_cas\config.html:278
+#: .\templates\pki\issuing_cas\config.html:268
 msgid "Revocation list"
 msgstr "Sperrliste"
 
-#: .\templates\pki\issuing_cas\config.html:282
+#: .\templates\pki\issuing_cas\config.html:272
 msgid "Generate CRL"
 msgstr "CRL erstellen"
 
-#: .\templates\pki\issuing_cas\config.html:287
-#: .\templates\pki\issuing_cas\config.html:291
+#: .\templates\pki\issuing_cas\config.html:277
+#: .\templates\pki\issuing_cas\config.html:281
 msgid "Download CRL"
 msgstr "CRL herunterladen"
 
-#: .\templates\pki\issuing_cas\config.html:297
+#: .\templates\pki\issuing_cas\config.html:287
 msgid "Last CRL issued"
 msgstr "CRL zuletzt ausgestellt"
 
-#: .\templates\pki\issuing_cas\config.html:301
+#: .\templates\pki\issuing_cas\config.html:291
 msgid "No CRL has been issued yet."
 msgstr "Es wurde noch keine Zertifikatssperrliste ausgestellt."
 
@@ -2774,7 +2838,7 @@ msgstr "Entfernen der Issuing CA bestätigen"
 msgid "Delete selected Issuing CAs"
 msgstr "Ausgewählte Issuing CA entfernen"
 
-#: .\templates\pki\issuing_cas\issued_certificates.html:90
+#: .\templates\pki\issuing_cas\issued_certificates.html:16
 msgid "Back to CA"
 msgstr "Zurück zur CA"
 
@@ -2782,10 +2846,6 @@ msgstr "Zurück zur CA"
 #: .\templates\trustpoint\base.html:70
 msgid "Issuing CAs"
 msgstr "Issuing CAs"
-
-#: .\templates\pki\issuing_cas\issuing_cas.html:31
-msgid "Signature-Suite"
-msgstr "Signatur-Suite"
 
 #: .\templates\pki\issuing_cas\issuing_cas.html:65
 msgid "No Issuing CA has been added yet."
@@ -2866,6 +2926,7 @@ msgid "Last log entry"
 msgstr "Letzter Logeintrag"
 
 #: .\templates\settings\logging\logging_files.html:31
+#: .\templates\settings\logging\logging_files.html:45
 msgid "View"
 msgstr "Ansehen"
 
@@ -3052,6 +3113,15 @@ msgstr "Deutsch"
 #: .\trustpoint\settings.py:223
 msgid "English"
 msgstr "Englisch"
+
+#~ msgid "Created At"
+#~ msgstr "Erstellt am"
+
+#~ msgid "No certificates are available."
+#~ msgstr "Es sind keine Zertifikate vorhanden."
+
+#~ msgid "Signature-Suite"
+#~ msgstr "Signatur-Suite"
 
 #~ msgid "Require a Domain Credential for Authentication"
 #~ msgstr "Ein Domain-Credential zur Authentifizierung erfordern"

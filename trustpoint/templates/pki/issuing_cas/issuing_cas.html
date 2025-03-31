@@ -14,34 +14,34 @@
                     <th id="checkbox-column"><input type="checkbox"/></th>
                     <th>
                         <a href="?sort={% if current_sort == 'unique_name' %}-{% endif %}unique_name">
-                            Issuing CA Name
+                            {% trans 'Issuing CA Name' %}
                         </a>
                     </th>
                     <th>
                         <a href="?sort={% if current_sort == 'credential__certificates__common_name' %}-{% endif %}credential__certificates__common_name">
-                            Common Name
+                            {% trans 'Common Name' %}
                         </a>
                     </th>
                     <th>
                         <a href="?sort={% if current_sort == 'credential__certificates__not_valid_after' %}-{% endif %}credential__certificates__not_valid_after">
-                            Not Valid After
+                            {% trans 'Not valid after' %}
                         </a>
                     </th>
                     <th>
-                            {% trans 'Signature-Suite' %}
+                            {% trans 'Signature Suite' %}
                     </th>
                     <th>
                         <a href="?sort={% if current_sort == 'updated_at' %}-{% endif %}updated_at">
-                            Updated
+                            {% trans 'Updated' %}
                         </a>
                     </th>
                     <th>
                         <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
-                            Created
+                            {% trans 'Created at' %}
                         </a>
                     </th>
-                    <th>Config</th>
-                    <th>Delete</th>
+                    <th>{% trans 'Config' %}</th>
+                    <th>{% trans 'Delete' %}</th>
                 </tr>
             </thead>
             <tbody>
@@ -57,8 +57,8 @@
                         <td>{{ ca.signature_suite }}</td>
                         <td>{{ ca.updated_at }}</td>
                         <td>{{ ca.created_at }}</td>
-                        <td><a href="config/{{ ca.id }}/" class="btn btn-primary tp-table-btn w-100">Config</a></td>
-                        <td><a href="delete/{{ ca.id }}/" class="btn btn-danger tp-table-btn w-100">Delete</a></td>
+                        <td><a href="config/{{ ca.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Configure' %}</a></td>
+                        <td><a href="delete/{{ ca.id }}/" class="btn btn-danger tp-table-btn w-100">{% trans 'Delete' %}</a></td>
                     </tr>
                 {% empty %}
                     <tr>
