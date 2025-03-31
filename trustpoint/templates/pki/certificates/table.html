@@ -65,8 +65,8 @@
             <td>{{ certificate.certificate_status }}</td>
             <td>{{ certificate.created_at }}</td>
             <td>{% if certificate.is_self_signed == 1 %} ✔ {% else %} ✘ {% endif %}</td>
-            <td><a href="{% url 'pki:certificate-detail' pk=certificate.id %}" class="btn btn-primary tp-table-btn w-100">Details</a></td>
-            <td><a href="{% url 'pki:certificate-download' pk=certificate.id %}" class="btn btn-primary tp-table-btn w-100">Download</a></td>
+            <td><a href="{% url 'pki:certificate-detail' pk=certificate.id %}" class="btn btn-primary tp-table-btn w-100">{% trans 'Details' %}</a></td>
+            <td><a href="{% url 'pki:certificate-download' pk=certificate.id %}" class="btn btn-primary tp-table-btn w-100">{% trans 'Download' %}</a></td>
         </tr>
         {% empty %}
         <tr>

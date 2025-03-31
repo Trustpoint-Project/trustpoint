@@ -8,8 +8,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-31 13:24+0200\n"
-"PO-Revision-Date: 2025-03-31 13:27+0200\n"
+"POT-Creation-Date: 2025-03-31 14:37+0200\n"
+"PO-Revision-Date: 2025-03-31 14:45+0200\n"
 "Last-Translator: Christian Schwinne <christian.schwinne  AT hshl.de>\n"
 "Language-Team: \n"
 "Language: de\n"
@@ -27,6 +27,7 @@ msgstr ""
 #: .\templates\devices\help\no_onboarding\details\cmp_enroll_application_credential_block.html:95
 #: .\templates\devices\help\onboarding\application_credential_details\cmp_enroll_application_credential_block.html:44
 #: .\templates\devices\help\onboarding\application_credential_details\cmp_enroll_application_credential_block.html:88
+#: .\templates\pki\certificates\components\subject_and_names.html:17
 #: .\templates\pki\certificates\download.html:27
 #: .\templates\pki\certificates\download_multiple.html:29
 #: .\templates\pki\certificates\table.html:11
@@ -48,8 +49,8 @@ msgstr "Domain-Komponente"
 #: .\templates\pki\certificates\components\general.html:11
 #: .\templates\pki\certificates\download.html:41
 #: .\templates\pki\certificates\download_multiple.html:43
-#: .\templates\pki\issuing_cas\config.html:141
-#: .\templates\pki\issuing_cas\config.html:211
+#: .\templates\pki\issuing_cas\config.html:130
+#: .\templates\pki\issuing_cas\config.html:198
 #: .\templates\pki\issuing_cas\confirm_delete.html:35
 #: .\templates\pki\issuing_cas\details.html:96
 #: .\templates\pki\issuing_cas\details.html:162
@@ -318,7 +319,7 @@ msgstr "Gerätetyp"
 #: .\devices\models.py:119 .\devices\models.py:189
 #: .\pki\models\credential.py:79 .\pki\models\domain.py:37
 #: .\pki\models\issuing_ca.py:62 .\templates\devices\devices_table.html:26
-#: .\templates\pki\issuing_cas\config.html:54
+#: .\templates\pki\issuing_cas\config.html:47
 msgid "Created"
 msgstr "Erstellt"
 
@@ -399,6 +400,7 @@ msgstr "Widerrufen"
 #: .\templates\home\notifications-tab.html:120
 #: .\templates\home\notifications-tab.html:134
 #: .\templates\pki\certificates\table.html:50
+#: .\templates\pki\certificates\table.html:68
 #: .\templates\pki\truststores\truststores.html:30
 #: .\templates\pki\truststores\truststores.html:45
 msgid "Details"
@@ -531,7 +533,7 @@ msgstr "Issuing CA"
 #: .\templates\home\notifications-tab.html:73
 #: .\templates\pki\certificates\download.html:21
 #: .\templates\pki\certificates\download_multiple.html:24
-#: .\templates\pki\issuing_cas\config.html:86
+#: .\templates\pki\issuing_cas\config.html:79
 #: .\templates\pki\issuing_cas\details.html:47
 msgid "Certificate"
 msgstr "Zertifikat"
@@ -826,7 +828,7 @@ msgstr "Vorhandenen Truststore zur Definition eines neuen Musters nutzen"
 #: .\templates\pki\domains\config.html:20
 #: .\templates\pki\domains\confirm_delete.html:22
 #: .\templates\pki\domains\details.html:20
-#: .\templates\pki\issuing_cas\config.html:59
+#: .\templates\pki\issuing_cas\config.html:52
 #: .\templates\pki\issuing_cas\details.html:20
 #: .\templates\pki\truststores\truststores.html:17
 msgid "Unique Name"
@@ -987,16 +989,21 @@ msgstr "Noch nicht gültig"
 msgid "Version 3"
 msgstr "Version 3"
 
-#: .\pki\models\certificate.py:90 .\templates\pki\certificates\table.html:47
+#: .\pki\models\certificate.py:90
+#: .\templates\pki\certificates\components\hierarchy.html:33
+#: .\templates\pki\certificates\table.html:47
 msgid "Self-Signed"
 msgstr "Selbstsigniert"
 
-#: .\pki\models\certificate.py:97 .\templates\pki\issuing_cas\config.html:145
-#: .\templates\pki\issuing_cas\config.html:215
+#: .\pki\models\certificate.py:97
+#: .\templates\pki\certificates\components\general.html:15
+#: .\templates\pki\issuing_cas\config.html:134
+#: .\templates\pki\issuing_cas\config.html:202
 msgid "Fingerprint (SHA256)"
 msgstr "Fingerprint (SHA256)"
 
 #: .\pki\models\certificate.py:103
+#: .\templates\pki\certificates\components\signature.html:8
 msgid "Signature Algorithm OID"
 msgstr "OID des Signatur-Algorithmus"
 
@@ -1009,6 +1016,7 @@ msgid "Version"
 msgstr "Version"
 
 #: .\pki\models\certificate.py:120
+#: .\templates\pki\certificates\components\hierarchy.html:9
 msgid "Issuer"
 msgstr "Aussteller"
 
@@ -1025,6 +1033,7 @@ msgid "Not Valid After (UTC)"
 msgstr "Nicht gültig nach (UTC)"
 
 #: .\pki\models\certificate.py:135
+#: .\templates\pki\certificates\components\subject_and_names.html:8
 #: .\templates\pki\certificates\download.html:32
 #: .\templates\pki\certificates\download_multiple.html:34
 msgid "Subject"
@@ -1034,14 +1043,18 @@ msgstr "Subjekt"
 msgid "Subject Public Bytes"
 msgstr "Subjekt Öffentliche Bytes"
 
-#: .\pki\models\certificate.py:143 .\templates\pki\issuing_cas\config.html:158
-#: .\templates\pki\issuing_cas\config.html:228
+#: .\pki\models\certificate.py:143
+#: .\templates\pki\certificates\components\subject_public_key_info.html:7
+#: .\templates\pki\issuing_cas\config.html:147
+#: .\templates\pki\issuing_cas\config.html:215
 msgid "Public Key Algorithm OID"
 msgstr "OID des Algorithmus für den öffentlichen Schlüssel"
 
-#: .\pki\models\certificate.py:147 .\templates\pki\certificates\table.html:21
-#: .\templates\pki\issuing_cas\config.html:163
-#: .\templates\pki\issuing_cas\config.html:233
+#: .\pki\models\certificate.py:147
+#: .\templates\pki\certificates\components\subject_public_key_info.html:12
+#: .\templates\pki\certificates\table.html:21
+#: .\templates\pki\issuing_cas\config.html:152
+#: .\templates\pki\issuing_cas\config.html:220
 msgid "Public Key Algorithm"
 msgstr "Algorithmus für den öffentlichen Schlüssel"
 
@@ -1070,6 +1083,7 @@ msgid "Created-At"
 msgstr "Erstellt um"
 
 #: .\pki\models\certificate.py:334
+#: .\templates\pki\certificates\components\signature.html:13
 msgid "Signature Algorithm"
 msgstr "Signatur-Algorithmus"
 
@@ -1171,7 +1185,7 @@ msgid "Active"
 msgstr "Aktiv"
 
 #: .\pki\models\domain.py:38 .\pki\models\issuing_ca.py:63
-#: .\templates\pki\issuing_cas\config.html:50
+#: .\templates\pki\issuing_cas\config.html:43
 #: .\templates\pki\issuing_cas\issuing_cas.html:35
 msgid "Updated"
 msgstr "Aktualisiert"
@@ -1224,7 +1238,7 @@ msgstr "Nutzername:Passwort zur Authentifizierung erlauben"
 #: .\pki\models\domain.py:69
 msgid "The EST server permits username and password for authentication."
 msgstr ""
-"Der EST-Server akzeptiert Nutzername und Passwort zur Authentifizierung"
+"Der EST-Server akzeptiert Nutzername und Passwort zur Authentifizierung."
 
 #: .\pki\models\domain.py:73
 msgid "Allow Application Certificates without Domain Credential"
@@ -1260,50 +1274,65 @@ msgstr "IPv6-Netzwerk"
 #: .\pki\models\extension.py:610 .\pki\models\extension.py:663
 #: .\pki\models\extension.py:721 .\pki\models\extension.py:1457
 #: .\templates\home\notifications-tab.html:19
+#: .\templates\pki\certificates\components\extensions\basic_constraints_extension.html:11
+#: .\templates\pki\certificates\components\extensions\issuer_alternative_name_extension.html:11
+#: .\templates\pki\certificates\components\extensions\key_usage_extension.html:11
+#: .\templates\pki\certificates\components\extensions\subject_alternative_name_extension.html:11
 msgid "Critical"
 msgstr "Kritisch"
 
 #: .\pki\models\extension.py:282
+#: .\templates\pki\certificates\components\extensions\basic_constraints_extension.html:16
 msgid "CA"
 msgstr "CA"
 
 #: .\pki\models\extension.py:284
+#: .\templates\pki\certificates\components\extensions\basic_constraints_extension.html:20
 msgid "Path Length Constraint"
 msgstr "Pfadlängenbegrenzung"
 
 #: .\pki\models\extension.py:340
+#: .\templates\pki\certificates\components\extensions\key_usage_extension.html:16
 msgid "Digital Signature"
 msgstr "Digitale Signatur"
 
 #: .\pki\models\extension.py:341
+#: .\templates\pki\certificates\components\extensions\key_usage_extension.html:20
 msgid "Content Commitment"
 msgstr "Content Commitment"
 
 #: .\pki\models\extension.py:342
+#: .\templates\pki\certificates\components\extensions\key_usage_extension.html:24
 msgid "Key Encipherment"
 msgstr "Key Encipherment"
 
 #: .\pki\models\extension.py:343
+#: .\templates\pki\certificates\components\extensions\key_usage_extension.html:28
 msgid "Data Encipherment"
 msgstr "Data Encipherment"
 
 #: .\pki\models\extension.py:344
+#: .\templates\pki\certificates\components\extensions\key_usage_extension.html:32
 msgid "Key Agreement"
 msgstr "Key Agreement"
 
 #: .\pki\models\extension.py:345
+#: .\templates\pki\certificates\components\extensions\key_usage_extension.html:36
 msgid "Key Cert Sign"
 msgstr "Key Cert Sign"
 
 #: .\pki\models\extension.py:346
+#: .\templates\pki\certificates\components\extensions\key_usage_extension.html:40
 msgid "CRL Sign"
 msgstr "CRL Sign"
 
 #: .\pki\models\extension.py:347
+#: .\templates\pki\certificates\components\extensions\key_usage_extension.html:44
 msgid "Encipher Only"
 msgstr "Nur vershlüsseln"
 
 #: .\pki\models\extension.py:348
+#: .\templates\pki\certificates\components\extensions\key_usage_extension.html:48
 msgid "Decipher Only"
 msgstr "Nur entschlüsseln"
 
@@ -1551,7 +1580,7 @@ msgstr "Gerät hinzufügen"
 #: .\templates\pki\certificates\details.html:51
 #: .\templates\pki\certificates\download.html:63
 #: .\templates\pki\certificates\download_multiple.html:76
-#: .\templates\pki\devid_registration\add.html:69
+#: .\templates\pki\devid_registration\add.html:68
 #: .\templates\pki\devid_registration\confirm_delete.html:25
 #: .\templates\pki\devid_registration\method_select.html:24
 #: .\templates\pki\domains\add.html:26 .\templates\pki\domains\config.html:188
@@ -1598,11 +1627,11 @@ msgstr "Gerätekonfiguration"
 #: .\templates\pki\certificates\details.html:50
 #: .\templates\pki\certificates\download.html:62
 #: .\templates\pki\certificates\download_multiple.html:75
-#: .\templates\pki\devid_registration\add.html:68
+#: .\templates\pki\devid_registration\add.html:67
 #: .\templates\pki\devid_registration\method_select.html:23
 #: .\templates\pki\domains\config.html:186
 #: .\templates\pki\domains\details.html:70
-#: .\templates\pki\issuing_cas\config.html:303
+#: .\templates\pki\issuing_cas\config.html:284
 #: .\templates\pki\truststores\add\file_import.html:24
 #: .\templates\pki\truststores\confirm_delete.html:31
 #: .\templates\pki\truststores\details.html:28
@@ -1759,6 +1788,7 @@ msgstr "Läuft aus in"
 #: .\templates\pki\certificates\download.html:64
 #: .\templates\pki\certificates\download_multiple.html:77
 #: .\templates\pki\certificates\table.html:51
+#: .\templates\pki\certificates\table.html:69
 #: .\templates\pki\truststores\details.html:29
 #: .\templates\pki\truststores\truststores.html:31
 #: .\templates\pki\truststores\truststores.html:48
@@ -2422,7 +2452,7 @@ msgid "All"
 msgstr "Alle"
 
 #: .\templates\home\notifications-tab.html:106
-#: .\templates\pki\issuing_cas\config.html:46
+#: .\templates\pki\issuing_cas\config.html:39
 msgid "Type"
 msgstr "Art"
 
@@ -2452,25 +2482,207 @@ msgstr "Zertifikate"
 msgid "Download selected"
 msgstr "Ausgewählte herunterladen"
 
+#: .\templates\pki\certificates\components\additional.html:3
+msgid "Additional"
+msgstr "Zusätzlich"
+
+#: .\templates\pki\certificates\components\additional.html:7
+msgid "Issued to Device"
+msgstr "An Gerät ausgestellt"
+
+#: .\templates\pki\certificates\components\additional.html:11
+msgid "Certificate Type"
+msgstr "Zertifikatstyp"
+
+#: .\templates\pki\certificates\components\additional.html:15
+msgid "Issued via protocol"
+msgstr "Ausgestellt mittels Protokoll"
+
+#: .\templates\pki\certificates\components\additional.html:19
+msgid "Template Name"
+msgstr "Name der Vorlage"
+
+#: .\templates\pki\certificates\components\extensions\basic_constraints_extension.html:4
+msgid "Basic Constraints Extension"
+msgstr "Basic Constraints-Erweiterung"
+
+#: .\templates\pki\certificates\components\extensions\basic_constraints_extension.html:7
+#: .\templates\pki\certificates\components\extensions\issuer_alternative_name_extension.html:7
+#: .\templates\pki\certificates\components\extensions\key_usage_extension.html:7
+#: .\templates\pki\certificates\components\extensions\subject_alternative_name_extension.html:7
+msgid "Extension OID"
+msgstr "Erweiterungs-OID"
+
+#: .\templates\pki\certificates\components\extensions\issuer_alternative_name_extension.html:4
+msgid "Issuer Alternative Name (IAN) Extension"
+msgstr "Issuer Alternative Name (IAN)-Erweiterung"
+
+#: .\templates\pki\certificates\components\extensions\issuer_alternative_name_extension.html:17
+msgid "RFC822 Names (IAN)"
+msgstr "RFC822-Namen (IAN)"
+
+#: .\templates\pki\certificates\components\extensions\issuer_alternative_name_extension.html:28
+msgid "DNS Names (IAN)"
+msgstr "DNS-Namen (IAN)"
+
+#: .\templates\pki\certificates\components\extensions\issuer_alternative_name_extension.html:39
+msgid "Directory Names (IAN)"
+msgstr "Verzeichnisnamen (IAN)"
+
+#: .\templates\pki\certificates\components\extensions\issuer_alternative_name_extension.html:50
+msgid "Uniform Resource Identifiers (IAN)"
+msgstr "Uniform Resource Identifiers (IAN)"
+
+#: .\templates\pki\certificates\components\extensions\issuer_alternative_name_extension.html:61
+msgid "IP Addresses (IAN)"
+msgstr "IP-Adressen (IAN)"
+
+#: .\templates\pki\certificates\components\extensions\issuer_alternative_name_extension.html:72
+msgid "Registered IDs (IAN)"
+msgstr "Registrierte IDs (IAN)"
+
+#: .\templates\pki\certificates\components\extensions\issuer_alternative_name_extension.html:83
+msgid "Other Names (IAN)"
+msgstr "Andere Namen (IAN)"
+
+#: .\templates\pki\certificates\components\extensions\key_usage_extension.html:4
+msgid "Key Usage Extension"
+msgstr "Key Usage-Erweiterung"
+
+#: .\templates\pki\certificates\components\extensions\subject_alternative_name_extension.html:4
+msgid "Subject Alternative Name (SAN) Extension"
+msgstr "Subjektalternativnamen (SAN)-Erweiterung"
+
+#: .\templates\pki\certificates\components\extensions\subject_alternative_name_extension_content.html:7
+msgid "RFC822 Names (SAN)"
+msgstr "RFC-822-Namen (SAN)"
+
+#: .\templates\pki\certificates\components\extensions\subject_alternative_name_extension_content.html:18
+msgid "DNS Names (SAN)"
+msgstr "DNS-Namen (SAN)"
+
+#: .\templates\pki\certificates\components\extensions\subject_alternative_name_extension_content.html:29
+msgid "Directory Names (SAN)"
+msgstr "Verzeichnisnamen (SAN)"
+
+#: .\templates\pki\certificates\components\extensions\subject_alternative_name_extension_content.html:40
+msgid "Uniform Resource Identifiers (SAN)"
+msgstr "Uniform Resource Identifiers (SAN)"
+
+#: .\templates\pki\certificates\components\extensions\subject_alternative_name_extension_content.html:51
+msgid "IP Addresses (SAN)"
+msgstr "IP-Adressen (SAN)"
+
+#: .\templates\pki\certificates\components\extensions\subject_alternative_name_extension_content.html:62
+msgid "Registered IDs (SAN)"
+msgstr "Registrierte IDs (SAN)"
+
+#: .\templates\pki\certificates\components\extensions\subject_alternative_name_extension_content.html:73
+msgid "Other Names (SAN)"
+msgstr "Andere Namen (SAN)"
+
+#: .\templates\pki\certificates\components\general.html:3
+#: .\templates\pki\domains\config.html:16
+#: .\templates\pki\issuing_cas\config.html:35
+#: .\templates\pki\issuing_cas\details.html:16
+msgid "General"
+msgstr "Allgemein"
+
+#: .\templates\pki\certificates\components\general.html:7
+msgid "Certificate Version"
+msgstr "Zertifikatsversion"
+
+#: .\templates\pki\certificates\components\general.html:19
+msgid "Certificate Status"
+msgstr "Zertifikatsstatus"
+
+#: .\templates\pki\certificates\components\hierarchy.html:4
+msgid "Certificate Hierarchy"
+msgstr "Zertifikatshierarchie"
+
+#: .\templates\pki\certificates\components\hierarchy.html:18
+msgid "End-Entity Certificate"
+msgstr "Endeinheits-Zertifikat"
+
+#: .\templates\pki\certificates\components\hierarchy.html:23
+msgid "Certificate Authority (CA)"
+msgstr "Certificate Authority (CA)"
+
+#: .\templates\pki\certificates\components\hierarchy.html:28
+msgid "Root Certificate Authority (CA)"
+msgstr "Root Certificate Authority (CA)"
+
+#: .\templates\pki\certificates\components\hierarchy.html:40
+msgid "Certificate Chain"
+msgstr "Zertifikatskette"
+
+#: .\templates\pki\certificates\components\hierarchy.html:58
+msgid "Number of Issued Certificates"
+msgstr "Anzahl ausgestellter Zertifikate"
+
+#: .\templates\pki\certificates\components\hierarchy.html:62
+#: .\templates\pki\issuing_cas\config.html:99
+msgid "Show all issued certificates"
+msgstr "Alle ausgestellten Zertifikate anzeigen"
+
 #: .\templates\pki\certificates\components\signature.html:4
 msgid "Signature"
 msgstr "Signatur"
+
+#: .\templates\pki\certificates\components\signature.html:19
+msgid "Signature Algorithm Padding Scheme"
+msgstr "Padding-Schema des Signaturalgorithmus"
+
+#: .\templates\pki\certificates\components\signature.html:26
+msgid "Signature Curve OID"
+msgstr "OID der ECC-Kurve des Signaturalgorithmus"
+
+#: .\templates\pki\certificates\components\signature.html:33
+msgid "Signature Curve"
+msgstr "ECC-Kurve des Signaturalgorithmus"
+
+#: .\templates\pki\certificates\components\signature.html:39
+#: .\templates\pki\certificates\components\subject_public_key_info.html:31
+#: .\templates\pki\issuing_cas\config.html:171
+#: .\templates\pki\issuing_cas\config.html:239
+msgid "Signature Algorithm Key Size"
+msgstr "Schlüssellänge des Signaturalgorithmus"
+
+#: .\templates\pki\certificates\components\subject_and_names.html:3
+msgid "Certificate Subject and Names"
+msgstr "Zertifikatssubjekt und Namen"
+
+#: .\templates\pki\certificates\components\subject_public_key_info.html:3
+msgid "Subject Public Key Info"
+msgstr "Öffentliche Schlüsselinfo des Subjekts"
+
+#: .\templates\pki\certificates\components\subject_public_key_info.html:18
+#: .\templates\pki\issuing_cas\config.html:158
+#: .\templates\pki\issuing_cas\config.html:226
+msgid "Public Key Curve OID"
+msgstr "OID der Kurve des öffentlichen Schlüssels"
+
+#: .\templates\pki\certificates\components\subject_public_key_info.html:25
+#: .\templates\pki\issuing_cas\config.html:165
+#: .\templates\pki\issuing_cas\config.html:233
+msgid "Public Key Curve"
+msgstr "ECC-Kurve des öffentlichen Schlüssels"
 
 #: .\templates\pki\certificates\components\validity.html:4
 msgid "Validity"
 msgstr "Gültigkeit"
 
 #: .\templates\pki\certificates\components\validity.html:8
-#: .\templates\pki\issuing_cas\config.html:149
-#: .\templates\pki\issuing_cas\config.html:219
+#: .\templates\pki\issuing_cas\config.html:138
+#: .\templates\pki\issuing_cas\config.html:206
 #: .\templates\pki\issuing_cas\details.html:104
 #: .\templates\pki\issuing_cas\details.html:170
 msgid "Not valid before"
 msgstr "Nicht gültig vor"
 
 #: .\templates\pki\certificates\components\validity.html:12
-#: .\templates\pki\issuing_cas\config.html:153
-#: .\templates\pki\issuing_cas\config.html:223
+#: .\templates\pki\issuing_cas\config.html:142
+#: .\templates\pki\issuing_cas\config.html:210
 #: .\templates\pki\issuing_cas\details.html:108
 #: .\templates\pki\issuing_cas\details.html:174
 #: .\templates\pki\issuing_cas\issuing_cas.html:27
@@ -2512,13 +2724,54 @@ msgstr ""
 msgid "DevID Registration"
 msgstr "DevID-Registrierung"
 
-#: .\templates\pki\devid_registration\add.html:70
+#: .\templates\pki\devid_registration\add.html:34
+msgid "Regex Helper"
+msgstr "Regex-Assistent"
+
+#: .\templates\pki\devid_registration\add.html:40
+msgid "Enter an example Serial Number:"
+msgstr "Beispielhafte Seriennummer eingeben:"
+
+#: .\templates\pki\devid_registration\add.html:42
+msgid "e.g."
+msgstr "z. B."
+
+#: .\templates\pki\devid_registration\add.html:44
+msgid ""
+"Multiple regex variations will be generated based on the structure. "
+"Supported delimiters are [- _ . :]"
+msgstr ""
+"Mehrere Regex-Varianten werden basierend auf der Struktur vorgeschlagen. Als "
+"Trennzeichen sind [- _ . :] unterstützt."
+
+#: .\templates\pki\devid_registration\add.html:50
+msgid "Generated Regex Variations:"
+msgstr "Erzeugte Regex-Varianten:"
+
+#: .\templates\pki\devid_registration\add.html:58
+msgid "Serial Number Pattern (Regex)"
+msgstr "Seriennummer-Muster (Regex)"
+
+#: .\templates\pki\devid_registration\add.html:60
+msgid "Select a regex from above"
+msgstr "Regex von oben auswählen"
+
+#: .\templates\pki\devid_registration\add.html:69
 msgid "Add DevID Pattern"
 msgstr "DevID-Muster hinzufügen"
 
 #: .\templates\pki\devid_registration\confirm_delete.html:13
 msgid "Confirm DevID Pattern Delete"
 msgstr "Entfernen des DevID-Musters bestätigen"
+
+#: .\templates\pki\devid_registration\confirm_delete.html:20
+#, python-format
+msgid ""
+"Are you sure you want to delete the registration pattern <strong>%(name)s</"
+"strong>?"
+msgstr ""
+"Möchten Sie das Registrierungsmuster <strong>%(name)s</strong> wirklich "
+"entfernen?"
 
 #: .\templates\pki\devid_registration\confirm_delete.html:26
 #: .\templates\pki\devid_registration\table.html:36
@@ -2532,12 +2785,12 @@ msgid "Delete"
 msgstr "Entfernen"
 
 #: .\templates\pki\devid_registration\method_select.html:11
-msgid "Add new DevID Onboarding Pattern"
-msgstr "Neues DevID-Onboardingmuster hinzufügen"
+msgid "Add new DevID Registration Pattern for onboarding"
+msgstr "Neues DevID-Registrierungsmuster für das Onboarding hinzufügen"
 
 #: .\templates\pki\devid_registration\method_select.html:16
 msgid "Use existing Truststore"
-msgstr "Vorhandenen Truststore hinzufügen"
+msgstr "Vorhandenen Truststore verwenden"
 
 #: .\templates\pki\devid_registration\method_select.html:18
 msgid "Upload new Truststore"
@@ -2560,12 +2813,6 @@ msgstr "Neue Domain"
 #: .\templates\pki\issuing_cas\config.html:7
 msgid "Configuration"
 msgstr "Konfiguration"
-
-#: .\templates\pki\domains\config.html:16
-#: .\templates\pki\issuing_cas\config.html:42
-#: .\templates\pki\issuing_cas\details.html:16
-msgid "General"
-msgstr "Allgemein"
 
 #: .\templates\pki\domains\config.html:24
 msgid "URL Path Segment"
@@ -2636,11 +2883,11 @@ msgstr "Eindeutiger Name der Issuing CA"
 #: .\templates\pki\domains\confirm_delete.html:43
 #: .\templates\pki\domains\details.html:39
 #: .\templates\pki\domains\details.html:45
-#: .\templates\pki\issuing_cas\config.html:63
-#: .\templates\pki\issuing_cas\config.html:69
-#: .\templates\pki\issuing_cas\config.html:122
-#: .\templates\pki\issuing_cas\config.html:128
-#: .\templates\pki\issuing_cas\config.html:134
+#: .\templates\pki\issuing_cas\config.html:56
+#: .\templates\pki\issuing_cas\config.html:62
+#: .\templates\pki\issuing_cas\config.html:111
+#: .\templates\pki\issuing_cas\config.html:117
+#: .\templates\pki\issuing_cas\config.html:123
 #: .\templates\pki\issuing_cas\confirm_delete.html:23
 #: .\templates\pki\issuing_cas\confirm_delete.html:29
 #: .\templates\pki\issuing_cas\details.html:24
@@ -2670,7 +2917,7 @@ msgid "Config"
 msgstr "Konfiguration"
 
 #: .\templates\pki\domains\domain.html:8
-#: .\templates\pki\issuing_cas\config.html:16
+#: .\templates\pki\issuing_cas\config.html:14
 #: .\templates\trustpoint\base.html:69
 msgid "Domains"
 msgstr "Domains"
@@ -2753,16 +3000,16 @@ msgstr "Eine externe Issuing CA mittels CMP konfigurieren"
 msgid "Configure A Remote Issuing CA Using SCEP"
 msgstr "Eine externe Issuing CA mittels SCEP konfigurieren"
 
-#: .\templates\pki\issuing_cas\config.html:32
+#: .\templates\pki\issuing_cas\config.html:30
 msgid "No associated domains"
 msgstr "Keine zugehörigen Domains"
 
-#: .\templates\pki\issuing_cas\config.html:75
-#: .\templates\pki\issuing_cas\config.html:81
-#: .\templates\pki\issuing_cas\config.html:92
-#: .\templates\pki\issuing_cas\config.html:195
-#: .\templates\pki\issuing_cas\config.html:199
-#: .\templates\pki\issuing_cas\config.html:205
+#: .\templates\pki\issuing_cas\config.html:68
+#: .\templates\pki\issuing_cas\config.html:74
+#: .\templates\pki\issuing_cas\config.html:85
+#: .\templates\pki\issuing_cas\config.html:182
+#: .\templates\pki\issuing_cas\config.html:186
+#: .\templates\pki\issuing_cas\config.html:192
 #: .\templates\pki\issuing_cas\details.html:36
 #: .\templates\pki\issuing_cas\details.html:42
 #: .\templates\pki\issuing_cas\details.html:53
@@ -2772,61 +3019,42 @@ msgstr "Keine zugehörigen Domains"
 msgid "Root CA Certificate"
 msgstr "Root CA-Zertifikat"
 
-#: .\templates\pki\issuing_cas\config.html:86
+#: .\templates\pki\issuing_cas\config.html:79
 #: .\templates\pki\issuing_cas\details.html:47
 msgid "Intermediate CA"
 msgstr "Zwischen-CA"
 
-#: .\templates\pki\issuing_cas\config.html:100
+#: .\templates\pki\issuing_cas\config.html:93
 msgid "Certificates issued:"
 msgstr "Ausgestellte Zertifikate:"
 
-#: .\templates\pki\issuing_cas\config.html:106
-msgid "Show all issued certificates"
-msgstr "Alle ausgestellten Zertifikate anzeigen"
-
-#: .\templates\pki\issuing_cas\config.html:120
+#: .\templates\pki\issuing_cas\config.html:109
 msgid "Issuing CA Certificate (This is a self-signed Root CA Certificate)"
 msgstr ""
 "Issuing CA-Zertifikat (Dies ist ein selbstsigniertes Root CA-Zertifikat)"
 
-#: .\templates\pki\issuing_cas\config.html:169
-#: .\templates\pki\issuing_cas\config.html:239
-msgid "Public Key Curve OID"
-msgstr "OID der Kurve des öffentlichen Schlüssels"
-
-#: .\templates\pki\issuing_cas\config.html:176
-#: .\templates\pki\issuing_cas\config.html:246
-msgid "Public Key Curve"
-msgstr "ECC-Kurve des öffentlichen Schlüssels"
-
-#: .\templates\pki\issuing_cas\config.html:182
-#: .\templates\pki\issuing_cas\config.html:252
-msgid "Signature Algorithm Key Size"
-msgstr "Schlüssellänge des Signaturalgorithmus"
-
-#: .\templates\pki\issuing_cas\config.html:264
+#: .\templates\pki\issuing_cas\config.html:247
 msgid "CRL"
 msgstr "CRL"
 
-#: .\templates\pki\issuing_cas\config.html:268
+#: .\templates\pki\issuing_cas\config.html:251
 msgid "Revocation list"
 msgstr "Sperrliste"
 
-#: .\templates\pki\issuing_cas\config.html:272
+#: .\templates\pki\issuing_cas\config.html:255
 msgid "Generate CRL"
 msgstr "CRL erstellen"
 
-#: .\templates\pki\issuing_cas\config.html:277
-#: .\templates\pki\issuing_cas\config.html:281
+#: .\templates\pki\issuing_cas\config.html:260
+#: .\templates\pki\issuing_cas\config.html:264
 msgid "Download CRL"
 msgstr "CRL herunterladen"
 
-#: .\templates\pki\issuing_cas\config.html:287
+#: .\templates\pki\issuing_cas\config.html:270
 msgid "Last CRL issued"
 msgstr "CRL zuletzt ausgestellt"
 
-#: .\templates\pki\issuing_cas\config.html:291
+#: .\templates\pki\issuing_cas\config.html:274
 msgid "No CRL has been issued yet."
 msgstr "Es wurde noch keine Zertifikatssperrliste ausgestellt."
 
@@ -3113,6 +3341,20 @@ msgstr "Deutsch"
 #: .\trustpoint\settings.py:223
 msgid "English"
 msgstr "Englisch"
+
+#, python-format
+#~ msgid ""
+#~ "\n"
+#~ "                            Are you sure you want to delete the "
+#~ "registration pattern <strong>%(object.unique_name)s</strong>?\n"
+#~ "                        "
+#~ msgstr ""
+#~ "\n"
+#~ "Möchten Sie das Registrierungsmuster <strong>%(object.unique_name)s</"
+#~ "strong> wirklich entfernen?"
+
+#~ msgid "Add new DevID Onboarding Pattern"
+#~ msgstr "Neues DevID-Onboardingmuster hinzufügen"
 
 #~ msgid "Created At"
 #~ msgstr "Erstellt am"
@@ -3689,9 +3931,6 @@ msgstr "Englisch"
 
 #~ msgid "Microsoft Certificate Template"
 #~ msgstr "Microsoft Zertifikats-Template"
-
-#~ msgid "Extension OID"
-#~ msgstr "Erweiterungs-OID"
 
 #~ msgid "SECP192R1"
 #~ msgstr "SECP192R1"

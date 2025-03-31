@@ -4,24 +4,24 @@
 {% block content %}
 
 <div class="card" style="max-height: 100%; display: flex; flex-direction: column">
-  <div class="card-header">
-    {% if issuing_ca_cert %}
-    <h1>{% trans "Certificates issued by the CA: " %} {{ issuing_ca_cert.common_name }}</h1>
-    {% else %}
-    <h1>{% trans "Certificates" %}</h1>
-    {% endif %}
-  </div>
-  <div class="card-body text-start" style="overflow: auto; flex-grow: 1; max-height: 90%">
-    {% include 'pki/certificates/table.html' %}
-  </div>
-  <div class="card-footer d-flex justify-content-between tp-sticky-footer">
-      <div class="tp-card-btn-footer m-1">
-          <button type="button" class="btn btn-primary tp-table-select-btn" data-tp-url="download">
-            {% trans 'Download selected' %}
-          </button>
-      </div>
-      <div class="m-1">
-      </div>
-  </div>
+    <div class="card-header">
+        {% if issuing_ca_cert %}
+        <h1>{% trans "Certificates issued by the CA: " %} {{ issuing_ca_cert.common_name }}</h1>
+        {% else %}
+        <h1>{% trans "Certificates" %}</h1>
+        {% endif %}
+    </div>
+    <div class="card-body text-start" style="overflow: auto; flex-grow: 1; max-height: 90%">
+        {% include 'pki/certificates/table.html' %}
+    </div>
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+            <div class="tp-card-btn-footer m-1">
+                <button type="button" class="btn btn-primary tp-table-select-btn" data-tp-url="download">
+                    {% trans 'Download selected' %}
+                </button>
+            </div>
+            <div class="m-1">
+            </div>
+    </div>
 </div>
 {% endblock content %}

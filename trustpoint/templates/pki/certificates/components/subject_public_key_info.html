@@ -1,33 +1,34 @@
+{% load i18n %}
 {% block subject_public_key_info %}
-    <h2>Subject Public Key Info</h2>
+    <h2>{% trans 'Subject Public Key Info' %}</h2>
     <hr class="hr-m">
     <div class="tp-kvp-list">
         <div>
-            <div>Public Key Algorithm OID</div>
+            <div>{% trans 'Public Key Algorithm OID' %}</div>
             <div>{{ cert.spki_algorithm_oid }}</div>
         </div>
 
         <div>
-            <div>Public Key Algorithm</div>
+            <div>{% trans 'Public Key Algorithm' %}</div>
             <div>{{ cert.spki_algorithm }}</div>
         </div>
 
         {% if cert.issuer and cert.spki_ec_curve_oid != 'None' %}
             <div>
-                <div>Public Key Curve OID</div>
+                <div>{% trans 'Public Key Curve OID' %}</div>
                 <div>{{ cert.spki_ec_curve_oid }}</div>
             </div>
         {% endif %}
 
         {% if cert.issuer and cert.spki_ec_curve %}
             <div>
-                <div>Public Key Curve</div>
+                <div>{% trans 'Public Key Curve' %}</div>
                 <div>{{ cert.spki_ec_curve }}</div>
             </div>
         {% endif %}
 
         <div>
-            <div>Signature Algorithm Key Size</div>
+            <div>{% trans 'Signature Algorithm Key Size' %}</div>
             <div>
                 {{ cert.spki_key_size }} Bits
             </div>

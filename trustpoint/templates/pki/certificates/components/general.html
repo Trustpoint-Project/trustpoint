@@ -1,10 +1,10 @@
 {% load i18n %}
 {% block general %}
-    <h2>General</h2>
+    <h2>{% trans 'General' %}</h2>
     <hr class="hr-m">
     <div class="tp-kvp-list">
         <div>
-            <div>Certificate Version</div>
+            <div>{% trans 'Certificate Version' %}</div>
             <div>{{ cert.get_version_display }}</div>
         </div>
         <div>
@@ -12,11 +12,11 @@
             <div>{{ cert.serial_number }}</div>
         </div>
         <div>
-            <div>Fingerprint (SHA256)</div>
+            <div>{% trans 'Fingerprint (SHA256)' %}</div>
             <div>{{ cert.sha256_fingerprint }}</div>
         </div>
         <div>
-            <div>Certificate Status</div>
+            <div>{% trans 'Certificate Status' %}</div>
             <div>{{ cert.get_certificate_status }}</div>
         </div>
     </div>

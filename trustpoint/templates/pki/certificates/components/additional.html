@@ -1,22 +1,22 @@
 {% load i18n %}
 {% block additional %}
-    <h2>Additional</h2>
+    <h2>{% trans 'Additional' %}</h2>
     <hr class="hr-m">
     <div class="tp-kvp-list">
         <div>
-            <div>Issued to Device</div>
+            <div>{% trans 'Issued to Device' %}</div>
             <div>{{ cert.issued_device_certificate.device.device_name }}</div>
         </div>
         <div>
-            <div>Certificate Type</div>
+            <div>{% trans 'Certificate Type' %}</div>
             <div>{{ cert.issued_device_certificate.certificate_type }}</div>
         </div>
         <div>
-            <div>Issued via protocol</div>
+            <div>{% trans 'Issued via protocol' %}</div>
             <div>{{ cert.issued_device_certificate.protocol }}</div>
         </div>
         <div>
-            <div>Template Name</div>
+            <div>{% trans 'Template Name' %}</div>
             <div>{{ cert.issued_device_certificate.template_name }}</div>
         </div>
     </div>
