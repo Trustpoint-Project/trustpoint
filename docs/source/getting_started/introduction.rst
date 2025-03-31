@@ -63,7 +63,8 @@ ________________________
 ---------------
 Getting Started
 ---------------
-To begin using Trustpoint, we recommend exploring the :ref:`quickstart-setup-guide` section to familiarize yourself with the core features and setup. For detailed information on PKI concepts and best practices, refer to the :ref:`quickstart-operation-guide` and :ref:`usage_guide` section.
+To begin using Trustpoint, we recommend exploring the :ref:`quickstart-setup-guide` section to familiarize yourself with the core features and setup.
+For detailed information on PKI concepts and best practices, refer to the :ref:`quickstart-operation-guide` and :ref:`trustpoint_usage_guide` section.
 
 -------------------
 Users and Scenarios
