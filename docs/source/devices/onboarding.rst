@@ -67,10 +67,10 @@ Users can also onboard their device manually by executing commands on the device
 How It Works:
 
 - A new device with one of the the following options:
-    - ** :term:`CMP` with shared secret onboarding**
-    - ** :term:`CMP` with IDevID onboarding**
-    - ** :term:`EST` with username and password onboarding** (WIP)
-    - ** :term:`EST` with IDevID onboarding** (WIP)
+    - :term:`CMP` **with shared secret onboarding**
+    - :term:`CMP` **with IDevID onboarding**
+    - :term:`EST` **with username and password onboarding** (WIP)
+    - :term:`EST` **with IDevID onboarding** (WIP)
 - In **Devices** click **Manage** on the new device
 - Click **Help - Issue New Credentials**
 - Copy the provided (OpenSSL) commands to your clipboard and execute it on the device
@@ -184,19 +184,19 @@ This feature is not intended for production use.
 How to
 ^^^^^^
 
-1. **(Optional) Generate IDevID and ownership certificates**
+#. **(Optional) Generate IDevID and ownership certificates**
 
-2. **(Optional) Add IDevID to the device Trustpoint client**
+#. **(Optional) Add IDevID to the device Trustpoint client**
     Install the Trustpoint Client to the device. An example IDevID is provided in the ``demo-data`` directory.
 
-3. **Add Truststores in Trustpoint**
+#. **Add Truststores in Trustpoint**
     Two Truststores with arbitrary names need to be added, one containing the certificate chain of the IDevID and one containing the certificate chain of the ownership certificate.
     Demo certificates are provided in the ``tests/data/aoki_zero_touch`` directory.
 
-4. **Configure mDNS address**
+#. **Configure mDNS address**
     In ``settings.py`` set ``ADVERSISED_HOST`` to the Trustpoint server IP address as reachable by the device.
 
-5. **Onboard the device**
+#. **Onboard the device**
     Execute ``trustpoint-client provision zero-touch`` command on the client to onboard the device.
 
 
