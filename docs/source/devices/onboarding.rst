@@ -82,10 +82,11 @@ Requirements:
 - A connection to communicate with Trustpoint services.
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""
-Example for :ref:`CMP` with shared secret onboarding
+Example for CMP with shared secret onboarding
 """"""""""""""""""""""""""""""""""""""""""""""""""""
 
-This approach allows a device to obtain a domain credential from Trustpoint using the CMP protocol and a shared secret for authentication. It is a commonly used method when no initial identity certificate (IDevID) is available on the device.
+This approach allows a device to obtain a domain credential from Trustpoint using the :ref:`CMP` protocol and a shared secret for authentication.
+It is a commonly used method when no initial identity certificate (IDevID) is available on the device.
 
 .. note::
 
