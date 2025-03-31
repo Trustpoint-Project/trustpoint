@@ -41,7 +41,7 @@ To verify that only devices with valid certificates can communicate, we will tes
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_101_device_cert_validation.feature
+.. literalinclude:: ../../../../trustpoint/features/R_101_device_cert_validation.feature
    :language: gherkin
 
 ^^^^^
@@ -88,7 +88,7 @@ To verify that communication between machines is encrypted using the given algor
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_102_encrypted_communication.feature
+.. literalinclude:: ../../../../trustpoint/features/R_102_encrypted_communication.feature
    :language: gherkin
 
 ^^^^^
@@ -134,7 +134,7 @@ To verify that administrators can configure security levels for different Trustp
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_103_security_configuration.feature
+.. literalinclude:: ../../../../trustpoint/features/R_103_security_configuration.feature
    :language: gherkin
 
 ^^^^^
@@ -177,5 +177,5 @@ To verify that certificate template security is enforced properly, we will test 
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_104_certificate_template_security.feature
+.. literalinclude:: ../../../../trustpoint/features/R_104_certificate_template_security.feature
    :language: gherkin

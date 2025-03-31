@@ -29,7 +29,7 @@ Additional negative tests could confirm appropriate handling when attempting to 
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_001_CRUD.feature
+.. literalinclude:: ../../../../trustpoint/features/R_001_CRUD.feature
    :language: gherkin
 
 ^^^^^
@@ -73,7 +73,7 @@ The system should handle these scenarios gracefully, with appropriate error mess
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_003_certificate_lifecycle.feature
+.. literalinclude:: ../../../../trustpoint/features/R_003_certificate_lifecycle.feature
    :language: gherkin
 
 ^^^^^
@@ -101,7 +101,7 @@ Edge cases, such as rate limits or concurrent requests, should be addressed to c
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_004_REST_API.feature
+.. literalinclude:: ../../../../trustpoint/features/R_004_REST_API.feature
    :language: gherkin
 
 ^^^^^
@@ -162,7 +162,7 @@ Edge cases include:
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_006_backup_restore_update.feature
+.. literalinclude:: ../../../../trustpoint/features/R_006_backup_restore_update.feature
    :language: gherkin
 
 ^^^^^
@@ -203,7 +203,7 @@ Edge cases:
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_007_logging.feature
+.. literalinclude:: ../../../../trustpoint/features/R_007_logging.feature
    :language: gherkin
 
 ^^^^^
@@ -245,7 +245,7 @@ Edge cases:
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_008_auto_issuing_ca.feature
+.. literalinclude:: ../../../../trustpoint/features/R_008_auto_issuing_ca.feature
    :language: gherkin
 
 ^^^^^
@@ -341,7 +341,7 @@ Edge cases:
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_010_cmp_endpoint.feature
+.. literalinclude:: ../../../../trustpoint/features/R_010_cmp_endpoint.feature
    :language: gherkin
 
 ^^^^^
@@ -391,7 +391,7 @@ Edge cases:
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_011_est_endpoint.feature
+.. literalinclude:: ../../../../trustpoint/features/R_011_est_endpoint.feature
    :language: gherkin
 
 ^^^^^
@@ -428,7 +428,7 @@ To verify that the system provides multi-language UI options, we will test the f
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_012_multi_language_support.feature
+.. literalinclude:: ../../../../trustpoint/features/R_012_multi_language_support.feature
    :language: gherkin
 
 ^^^^^
@@ -472,5 +472,5 @@ The test covers the following scenarios:
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_013_remote_credential_download.feature
+.. literalinclude:: ../../../../trustpoint/features/R_013_remote_credential_download.feature
    :language: gherkin

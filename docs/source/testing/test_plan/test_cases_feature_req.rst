@@ -34,5 +34,5 @@ To verify that an NTEU (Non-Technical Experienced User) can successfully execute
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/F_001_nteu_identity_onboarding.feature
+.. literalinclude:: ../../../../trustpoint/features/F_001_nteu_identity_onboarding.feature
    :language: gherkin
