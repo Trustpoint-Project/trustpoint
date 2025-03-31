@@ -52,9 +52,10 @@ Authentication
 ^^^^^^^^^^^^^^
 
 To initially secure the client's request for a domain credential, various methods can be used depending on the onboarding:
- - **IDevID onboarding**: EST (WIP) and CMP both support an initial onboarding with the IDevID on the device. To do this, the initial request (for CMP an initialization request [ir]; for EST a /simpleenroll) must be signed with the IDevID.
- - **Shared secret**: Onboard a new device using CMP and a shared secret.
- - **Password**: Onboard a new device with EST protocol using a username and password
+ - **IDevID onboarding**: :term:`EST` (WIP) and :term:`CMP` both support an initial onboarding with the IDevID on the device.
+To do this, the initial request (for :term:`CMP` an initialization request [ir]; for EST a ``/simpleenroll``) must be signed with the IDevID.
+ - **Shared secret**: Onboard a new device using :term:`CMP` and a shared secret.
+ - **Password**: Onboard a new device with :term:`EST` protocol using a username and password
  - **One Time Password (OTP)**: Browser onboarding can be carried out using a one-time password
 
 ^^^^^^^^^^^^^^^^^^^^
@@ -66,10 +67,10 @@ Users can also onboard their device manually by executing commands on the device
 How It Works:
 
 - A new device with one of the the following options:
-    - **:ref:`CMP` with shared secret onboarding**
-    - **:ref:`CMP` with IDevID onboarding**
-    - **:ref:`EST` with username and password onboarding** (WIP)
-    - **:ref:`EST` with IDevID onboarding** (WIP)
+    - **:term:`CMP` with shared secret onboarding**
+    - **:term:`CMP` with IDevID onboarding**
+    - **:term:`EST` with username and password onboarding** (WIP)
+    - **:term:`EST` with IDevID onboarding** (WIP)
 - In **Devices** click **Manage** on the new device
 - Click **Help - Issue New Credentials**
 - Copy the provided (OpenSSL) commands to your clipboard and execute it on the device
@@ -85,7 +86,7 @@ Requirements:
 Example for CMP with shared secret onboarding
 """"""""""""""""""""""""""""""""""""""""""""""""""""
 
-This approach allows a device to obtain a domain credential from Trustpoint using the :ref:`CMP` protocol and a shared secret for authentication.
+This approach allows a device to obtain a domain credential from Trustpoint using the :term:`CMP` protocol and a shared secret for authentication.
 It is a commonly used method when no initial identity certificate (IDevID) is available on the device.
 
 .. note::
