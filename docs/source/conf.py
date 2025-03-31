@@ -48,5 +48,3 @@ html_theme = 'furo'
 html_static_path = ['_static']
 
 plantuml = f'java -jar {PLANTUML_PATH}'
-
-autodoc_member_order = 'bysource'
