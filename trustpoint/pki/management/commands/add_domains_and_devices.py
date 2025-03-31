@@ -75,8 +75,8 @@ class Command(BaseCommand):
         domain_ca_truststore_map = {
             'arburg': ('issuing-ca-a', 'idevid-truststore-RSA-2048'),
             'homag': ('issuing-ca-b', 'idevid-truststore-RSA-3072'),
-            'belden': ('issuing-ca-c', 'idevid-truststore-RSA-4096'),
-            'siemens': ('issuing-ca-d', 'idevid-truststore-EC-256'),
+            'siemens': ('issuing-ca-c', 'idevid-truststore-RSA-4096'),
+            'belden': ('issuing-ca-d', 'idevid-truststore-EC-256'),
             'phoenix_contact': ('issuing-ca-e', 'idevid-truststore-EC-283'),
             'schmalz': ('issuing-ca-f', 'idevid-truststore-EC-570'),
         }

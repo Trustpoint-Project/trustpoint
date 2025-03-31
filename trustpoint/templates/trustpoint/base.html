@@ -46,7 +46,14 @@
                     <svg class="bi" fill="currentColor" role="img">
                         <use href="{% static 'img/icons.svg' %}#icon-boxes"></use></svg>
                     {% translate "Devices" %}
+                    <div class="btn-collapse" data-category="devices"
+                        aria-expanded="{% if page_category == 'devices' %}true{% else %}false{% endif %}">
+                    </div>
                 </a>
+                <div class="tp-menu-collapse {% if page_category == 'devices' %}show{% endif %}">
+                    <a href="{% url 'devices:devices' %}" class="tp-menu-item {% if page_name == 'devices' %}tp-menu-active{% endif %}">{% trans 'Devices' %}</a>
+                    <a href="{% url 'devices:opc_ua_gds' %}" class="tp-menu-item {% if page_name == 'opc_ua_gds' %}tp-menu-active{% endif %}">{% trans 'OPC UA GDS' %}</a>
+                </div>
             </div>
 
             <div class="tp-menu-group">

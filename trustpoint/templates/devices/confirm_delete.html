@@ -21,12 +21,12 @@
 
                 <div class="tp-card-centered-content">
                     {% for device in devices %}
-                        <h2>({{ forloop.counter }}) {% trans 'device' %}: {{ device.unique_name }}</h2>
+                        <h2>({{ forloop.counter }}) {% trans 'device' %}: {{ device.common_name }}</h2>
                         <hr class="hr-m">
                         <div class="tp-kvp-list">
                             <div>
                                 <div>{% trans 'Unique Name' %}</div>
-                                <div>{{ device.unique_name }}</div>
+                                <div>{{ device.common_name }}</div>
                             </div>
                             <div>
                                 <div>{% trans 'Domain' %}</div>

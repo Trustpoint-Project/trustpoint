@@ -391,3 +391,78 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
                     raise forms.ValidationError(err_msg)
 
         return cleaned_data
+
+
+class CreateOpcUaGdsForm(CreateDeviceForm):
+    """Form for creating OPC UA GDS devices with a limited set of fields."""
+
+    class Meta(CreateDeviceForm.Meta):
+        """Meta class configuration."""
+
+        model = DeviceModel
+        fields: typing.ClassVar = [
+            'common_name',
+            'domain',
+            'domain_credential_onboarding',
+            'onboarding_and_pki_configuration',
+            'pki_configuration',
+        ]
+        labels: typing.ClassVar = {
+            'domain_credential_onboarding': _('Domain Credential Onboarding'),
+        }
+
+    onboarding_and_pki_configuration = forms.ChoiceField(
+        choices=[
+            ('cmp_shared_secret', _('CMP with shared secret onboarding')),
+            ('est_username_password', _('EST with username and password onboarding')),
+        ],
+        widget=DisableSelectOptionsWidget(
+            disabled_values=[
+            ]
+        ),
+        initial='est_username_password',
+    )
+
+    pki_configuration = forms.ChoiceField(
+        choices=[
+            ('cmp_shared_secret', _('CMP with shared secret authentication')),
+            ('est_username_password', _('EST with username and password authentication')),
+        ],
+        widget=DisableSelectOptionsWidget(
+            disabled_values=[
+            ]
+        ),
+        initial='est_username_password'
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the OPC UA GDS form."""
+        try:
+            super().__init__(*args, **kwargs)
+        except KeyError as e:
+            if "idevid_trust_store" in str(e):
+                pass
+            else:
+                raise
+
+        self.fields.pop('idevid_trust_store', None)
+
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.layout = Layout(
+            HTML('<h2>General</h2><hr>'),
+            Field('common_name'),
+            Field('domain'),
+            HTML('<h2 class="mt-5">Onboarding Configuration</h2><hr>'),
+            Field('domain_credential_onboarding'),
+            HTML('<h2 class="mt-5">PKI Configuration</h2><hr>'),
+            Div(
+                Field('onboarding_and_pki_configuration'),
+                id='id_onboarding_and_pki_configuration_wrapper',
+            ),
+            Div(Field('pki_configuration'), css_class='d-none', id='id_pki_configuration_wrapper'),
+            HTML('<div class="mb-4"></div>'),
+        )
+        self.fields['domain'].widget.attrs.update({
+            'required': 'True'
+        })
