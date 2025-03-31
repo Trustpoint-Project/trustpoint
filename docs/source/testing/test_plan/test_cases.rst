@@ -9,16 +9,16 @@ That being said, we state the feature files in the following and provide a brief
 Functional Requirements
 -----------------------
 
-.. include:: test_cases_func_req.rst
+.. include:: test_plan/test_cases_func_req.rst
 
 ---------------------
 Security Requirements
 ---------------------
 
-.. include:: test_cases_sec_req.rst
+.. include:: test_plan/test_cases_sec_req.rst
 
 --------------------
 Feature Requirements
 --------------------
 
-.. include:: test_cases_feature_req.rst
+.. include:: test_plan/test_cases_feature_req.rst
