@@ -1,0 +1,36 @@
+name: Docker Compose Test
+
+on: [pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services: 
+      docker: 
+        image: docker:28.0.4
+        options: --privileged
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Build Docker images
+      run: |
+        docker-compose -f docker-compose.yml build
+    - name: Run Docker-compose
+      run: |
+        docker-compose -f docker-compose.yml up -d
+        docker-compose -f docker-compose.yml ps
+        sleep 30
+    - name: Test Home Page with curl
+      run: |
+        http_response=$(curl -s -o response.txt -w "%{response_code}" http://example.com)
+        echo "Server returned: $http_response" >> $GITHUB_STEP_SUMMARY
+        if [ $http_response != "200" ]; then
+          echo "This is not expected! Failing Pipeline!" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        else
+          echo "This expected, the full response is:" >> $GITHUB_STEP_SUMMARY
+          cat response.txt >> $GITHUB_STEP_SUMMARY
+        fi
+    - name: Stop and remove containers
+      if: always()
+      run: docker-compose -f docker-compose.yml down
