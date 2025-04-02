@@ -146,3 +146,15 @@ Glossary
     ruff
         Astrals ruff ist a really fast python linter and code formatter.
         See also: `ruff <https://docs.astral.sh/ruff/>`_.
+
+    TM
+        Test Manager
+
+    PM
+        Project Manager
+
+    Dev
+        Development Team
+
+    Client
+        Stakeholders or End Users
