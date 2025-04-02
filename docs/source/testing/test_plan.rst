@@ -49,7 +49,7 @@ First, we define all needed actors to be as specific as needed.
    :widths: 10 30 60
 
    "TPC_Web", "Trustpoint Core Web Interface", "The website of Trustpoint."
-   "TP_Client", "Trustpoint Client", "The Trustpoint client program to be installed on clients."
+   "TP_Client", "Trustpoint :term:`Client`", "The Trustpoint client program to be installed on clients."
    "Admin", "Admin", "The admin user of this specific Trustpoint environment."
    "NTEU", "Non-technically experienced user", "A user who is not necessarily technically experienced. This could also be an admin."
    "TEU", "Technically experienced user", "A user who does know at least a little bit about programming and PKI."
@@ -338,16 +338,16 @@ Remaining Test Tasks
    :header: "Task", "Assigned To", "Status"
    :widths: 60, 20, 15
 
-   "Collect and finalize testing requirements (e.g., PKI workflows, certificate lifecycle scenarios).", "TM, PM, Client", "In Progress"
-   "Define and finalize acceptance criteria for Trustpoint’s features.", "TM, PM, Client", "Pending"
-   "Configure and validate the test environments (development and staging).", "TM, Dev", "In Progress"
-   "Develop unit tests using pytest for core functionalities (e.g., certificate issuance, renewal, and revocation).", "Dev", "In Progress"
-   "Develop integration tests using :term:`behave` for end-to-end workflows.", "TM, Dev", "Pending"
-   "Execute system/integration tests in the staging environment.", "TM, Dev", "Not Started"
-   "Document results from unit, integration, and acceptance tests for inclusion in the comprehensive test report.", "TM", "Not Started"
-   "Conduct acceptance testing with end users (e.g., system administrators, security teams).", "TM, Client", "Not Started"
-   "Resolve defects identified during testing and retest as needed.", "Dev", "Ongoing"
-   "Finalize and deliver the comprehensive test report (including test results and coverage).", "TM", "Not Started"
+   "Collect and finalize testing requirements (e.g., PKI workflows, certificate lifecycle scenarios).", ":term:`TM`, :term:`PM`, :term:`Client`", "In Progress"
+   "Define and finalize acceptance criteria for Trustpoint’s features.", ":term:`TM`, :term:`PM`, :term:`Client`", "Pending"
+   "Configure and validate the test environments (development and staging).", ":term:`TM`, :term:`Dev`", "In Progress"
+   "Develop unit tests using pytest for core functionalities (e.g., certificate issuance, renewal, and revocation).", ":term:`Dev`", "In Progress"
+   "Develop integration tests using :term:`behave` for end-to-end workflows.", ":term:`TM`, :term:`Dev`", "Pending"
+   "Execute system/integration tests in the staging environment.", ":term:`TM`, :term:`Dev`", "Not Started"
+   "Document results from unit, integration, and acceptance tests for inclusion in the comprehensive test report.", ":term:`TM`", "Not Started"
+   "Conduct acceptance testing with end users (e.g., system administrators, security teams).", ":term:`TM`, :term:`Client`", "Not Started"
+   "Resolve defects identified during testing and retest as needed.", ":term:`Dev`", "Ongoing"
+   "Finalize and deliver the comprehensive test report (including test results and coverage).", ":term:`TM`", "Not Started"
 
 ===================
 Environmental Needs
@@ -403,7 +403,7 @@ Responsibilities
 ================
 
 .. csv-table:: Responsibilities
-   :header: "Responsibility", "TM", "PM", "Dev", "Test Team", "Client"
+   :header: "Responsibility", ":term:`TM`", ":term:`PM`", ":term:`Dev`", "Test Team", ":term:`Client`"
    :widths: 40, 10, 10, 10, 15, 10
 
    "Acceptance Test Documentation & Execution", "X", "X", "", "X", "X"
@@ -428,12 +428,12 @@ in collaboration with development and test leads.
    :header: "Activity", "Responsibility", "Duration/Timeline", "Details"
    :widths: 30, 30, 20, 60
 
-   "Review Requirements Document", "Test Team, Dev, PM", "1 Week", "Review requirements to ensure complete understanding and alignment of test objectives."
-   "Finalize and Review Requirements", "TM, PM, Test Team", "1 Week", "Develop and review the requirements needed for writing the acceptance tests."
-   "Review System Design Document", "Test Team, Dev", "3 Days", "Enhance understanding of the system structure and refine test objectives."
-   "Conduct Unit Tests", "Dev", "Ongoing until code completion", "Verify individual methods/functions as they are completed; results reviewed by the development lead."
-   "System/Integration Testing", "Test Team, Dev", "2 Weeks", "Validate module interactions, data flow, and PKI processes in a staging environment."
-   "Acceptance Testing", "Test Team, End Users, PM", "2 Weeks", "Perform final user-driven testing to ensure Trustpoint meets functional and usability expectations."
+   "Review Requirements Document", "Test Team, :term:`Dev`, :term:`PM`", "1 Week", "Review requirements to ensure complete understanding and alignment of test objectives."
+   "Finalize and Review Requirements", ":term:`TM`, :term:`PM`, Test Team", "1 Week", "Develop and review the requirements needed for writing the acceptance tests."
+   "Review System Design Document", "Test Team, :term:`Dev`", "3 Days", "Enhance understanding of the system structure and refine test objectives."
+   "Conduct Unit Tests", ":term:`Dev`", "Ongoing until code completion", "Verify individual methods/functions as they are completed; results reviewed by the development lead."
+   "System/Integration Testing", "Test Team, :term:`Dev`", "2 Weeks", "Validate module interactions, data flow, and PKI processes in a staging environment."
+   "Acceptance Testing", "Test Team, End Users, :term:`PM`", "2 Weeks", "Perform final user-driven testing to ensure Trustpoint meets functional and usability expectations."
 
 ================================
 Planning Risks And Contingencies
@@ -1174,16 +1174,3 @@ Feature File
 
 .. literalinclude:: ../../../trustpoint/features/F_001_nteu_identity_onboarding.feature
    :language: gherkin
-
-========
-Glossary
-========
-
-.. csv-table:: Glossary
-   :header: "Abbreviation", "Definition"
-   :widths: 50, 50
-
-    "TM", "Test Manager"
-    "PM", "Project Manager"
-    "Dev", "Development Team"
-    "Client", "Stakeholders or End Users"
