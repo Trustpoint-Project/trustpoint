@@ -3,9 +3,20 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 import os
+import sys
 from pathlib import Path
 
 import django  # Required for Django-based projects
+
+# -- Path setup -------------------------------------------------------------
+# Ensures Sphinx can find the project's modules for autodoc and autoapi.
+# Get absolute path to project root
+project_root = Path(__file__).parents[2].resolve()
+
+# Add the `trustpoint/features` directory to the Sphinx path
+feature_path = project_root / 'trustpoint' / 'features'
+
+sys.path.insert(0, str(feature_path))
 
 # -- Django setup (only required if using Django models in documentation) --
 os.environ['DJANGO_SETTINGS_MODULE'] = 'trustpoint.settings'  # Set Django settings
