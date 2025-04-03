@@ -1,120 +1,173 @@
-"""Python steps file for R_102."""
+"""Python steps file for R_104."""
 
 from behave import given, runner, then, when
 
 
-@given('the system enforces encrypted communication with algorithm {algorithm}')
-def step_given_enforced_encryption(context: runner.Context, algorithm: str) -> None:  # noqa: ARG001
-    """Ensures that the system enforces encrypted communication using the specified algorithm.
+@given('the user has role {role}')
+def step_given_user_role(context: runner.Context, role: str) -> None:  # noqa: ARG001
+    """Ensures the user has a specified role.
 
     Args:
         context (runner.Context): Behave context.
-        algorithm (str): The encryption algorithm enforced by the system.
+        role (str): The role assigned to the user.
     """
-    msg = f'STEP: Given the system enforces encrypted communication with algorithm {algorithm}'
+    msg = f'STEP: Given the user has role {role}'
     raise AssertionError(msg)
 
 
-@given('a machine attempts to communicate using {algorithm}')
-def step_given_machine_attempts_encryption(context: runner.Context, algorithm: str) -> None:  # noqa: ARG001
-    """Simulates a machine attempting to communicate using a specific encryption algorithm.
+@given('a certificate template named {template_name} exists')
+def step_given_certificate_template_exists(context: runner.Context, template_name: str) -> None:  # noqa: ARG001
+    """Ensures that a specific certificate template exists.
 
     Args:
         context (runner.Context): Behave context.
-        algorithm (str): The encryption algorithm the machine attempts to use.
+        template_name (str): The name of the certificate template.
     """
-    msg = f'STEP: Given a machine attempts to communicate using {algorithm}'
+    msg = f'STEP: Given a certificate template named {template_name} exists'
     raise AssertionError(msg)
 
 
-@given('a machine attempts to communicate without encryption')
-def step_given_machine_attempts_without_encryption(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates a machine attempting to communicate without using encryption.
+@when('the user attempts to access certificate templates')
+def step_when_user_attempts_access_templates(context: runner.Context) -> None:  # noqa: ARG001
+    """Simulates a user attempting to access certificate templates.
 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'STEP: Given a machine attempts to communicate without encryption'
+    msg = 'STEP: When the user attempts to access certificate templates'
     raise AssertionError(msg)
 
 
-@given('two machines establish a secure session using {key_exchange}')
-def step_given_secure_key_exchange(context: runner.Context, key_exchange: str) -> None:  # noqa: ARG001
-    """Simulates two machines establishing a secure session using a specified key exchange mechanism.
+@when('the user attempts to modify the certificate template')
+def step_when_user_attempts_modify_template(context: runner.Context) -> None:  # noqa: ARG001
+    """Simulates a user attempting to modify a certificate template.
 
     Args:
         context (runner.Context): Behave context.
-        key_exchange (str): The key exchange protocol being used.
     """
-    msg = f'STEP: Given two machines establish a secure session using {key_exchange}'
+    msg = 'STEP: When the user attempts to modify the certificate template'
     raise AssertionError(msg)
 
 
-@given('an encrypted message is tampered with')
-def step_given_encrypted_message_tampered(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates an encrypted message being tampered with by a third party.
+@when('an unauthorized user attempts to access it')
+def step_when_unauthorized_access_attempted(context: runner.Context) -> None:  # noqa: ARG001
+    """Simulates an unauthorized user attempting to access a sensitive certificate template.
 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'STEP: Given an encrypted message is tampered with'
+    msg = 'STEP: When an unauthorized user attempts to access it'
     raise AssertionError(msg)
 
 
-@when('the system verifies the encryption')
-def step_when_system_verifies_encryption(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates the system verifying the encryption mechanism of the communication.
+@when('a non-admin user attempts to delete it')
+def step_when_non_admin_attempts_delete(context: runner.Context) -> None:  # noqa: ARG001
+    """Simulates a non-admin user attempting to delete a certificate template.
 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'STEP: When the system verifies the encryption'
+    msg = 'STEP: When a non-admin user attempts to delete it'
     raise AssertionError(msg)
 
 
-@when('the system verifies the key exchange')
-def step_when_system_verifies_key_exchange(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates the system verifying that the key exchange mechanism used is correct.
+@when('an admin exports the template')
+def step_when_admin_exports_template(context: runner.Context) -> None:  # noqa: ARG001
+    """Simulates an admin exporting a certificate template.
 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'STEP: When the system verifies the key exchange'
+    msg = 'STEP: When an admin exports the template'
     raise AssertionError(msg)
 
 
-@when('the system detects tampering')
-def step_when_system_detects_tampering(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates the system detecting tampering with an encrypted message.
+@when('a non-admin user attempts to export the template')
+def step_when_non_admin_attempts_export(context: runner.Context) -> None:  # noqa: ARG001
+    """Simulates a non-admin user attempting to export a certificate template.
 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'STEP: When the system detects tampering'
+    msg = 'STEP: When a non-admin user attempts to export the template'
     raise AssertionError(msg)
 
 
-@then('the communication should be {continuing_action}')
-def step_then_allow_communication(context: runner.Context, continuing_action: str) -> None:  # noqa: ARG001
-    """Ensures that communication is allowed/denied/terminated when encryption meets the system's requirements.
+@then('access should be {access_outcome}')
+def step_then_access_outcome(context: runner.Context, access_outcome: str) -> None:  # noqa: ARG001
+    """Ensures that access to certificate templates is correctly granted or denied.
 
     Args:
         context (runner.Context): Behave context.
-        continuing_action (str): The continuing action.
+        access_outcome (str): The expected access outcome ('granted' or 'denied').
     """
-    msg = f'STEP: Then the communication should be {continuing_action}'
+    msg = f'STEP: Then access should be {access_outcome}'
     raise AssertionError(msg)
 
 
-@then('log the failure with reason {reason}')
-def step_then_log_failure(context: runner.Context, reason: str) -> None:  # noqa: ARG001
-    """Ensures that the system logs authentication failures with the appropriate reason.
+@then('modification should be {modification_outcome}')
+def step_then_modification_outcome(context: runner.Context, modification_outcome: str) -> None:  # noqa: ARG001
+    """Ensures that modification attempts are correctly handled.
 
     Args:
-        reason (str): The reason for encryption failure.
+        context (runner.Context): Behave context.
+        modification_outcome (str): The expected modification outcome ('allowed' or 'denied').
+    """
+    msg = f'STEP: Then modification should be {modification_outcome}'
+    raise AssertionError(msg)
+
+
+@then('the deletion should be rejected')
+def step_then_deletion_rejected(context: runner.Context) -> None:  # noqa: ARG001
+    """Ensures that unauthorized deletion attempts are rejected.
 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = f'STEP: Then log the failure with reason {reason}'
+    msg = 'STEP: Then the deletion should be rejected'
+    raise AssertionError(msg)
+
+
+@then('an error message {error_message} should be shown')
+def step_then_error_message_shown(context: runner.Context, error_message: str) -> None:  # noqa: ARG001
+    """Ensures that an appropriate error message is shown for unauthorized actions.
+
+    Args:
+        context (runner.Context): Behave context.
+        error_message (str): The expected error message.
+    """
+    msg = f'STEP: Then an error message {error_message} should be shown'
+    raise AssertionError(msg)
+
+
+@then('the exported template should be encrypted')
+def step_then_export_encrypted(context: runner.Context) -> None:  # noqa: ARG001
+    """Ensures that exported certificate templates are encrypted.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
+    msg = 'STEP: Then the exported template should be encrypted'
+    raise AssertionError(msg)
+
+
+@then('export should be denied')
+def step_then_export_denied(context: runner.Context) -> None:  # noqa: ARG001
+    """Ensures that unauthorized export attempts are denied.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
+    msg = 'STEP: Then export should be denied'
+    raise AssertionError(msg)
+
+
+@then('the attempt should be logged')
+def step_then_attempt_should_be_logged(context: runner.Context) -> None:  # noqa: ARG001
+    """Ensures that unauthorized actions are logged.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
+    msg = 'STEP: Then the attempt should be logged'
     raise AssertionError(msg)

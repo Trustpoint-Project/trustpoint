@@ -51,10 +51,8 @@ For more detailed output please visit the corresponding github action pages.
    _`R_011`, ":term:`EST` Endpoint for Onboarded Devices", "|R_011_badge|"
    _`R_012`, "Language Selection and Translation", "|R_012_badge|"
    _`R_013`, "Remote Credential Download", "|R_013_badge|"
-   _`R_101`, "Devices are only allowed to communicate with valid certificates", "|R_101_badge|"
-   _`R_102`, "Encrypted Communication", "|R_102_badge|"
-   _`R_103`, "Security Level Configuration", "|R_103_badge|"
-   _`R_104`, "Certificate Template Security", "|R_104_badge|"
+   _`R_101`, "Security Level Configuration", "|R_101_badge|"
+   _`R_102`, "Certificate Template Security", "|R_102_badge|"
    _`F_001`, "NTEU must be able to execute R_001 and R_002.", "|F_001_badge|"
 
 
@@ -105,14 +103,6 @@ For more detailed output please visit the corresponding github action pages.
 .. |R_102_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml/badge.svg
     :alt: R_102_badge
     :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml
-
-.. |R_103_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_103_feature_test.yml/badge.svg
-    :alt: R_103_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_103_feature_test.yml
-
-.. |R_104_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_104_feature_test.yml/badge.svg
-    :alt: R_104_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_104_feature_test.yml
 
 .. |F_001_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/f_001_feature_test.yml/badge.svg
     :alt: F_001_badge

@@ -91,10 +91,8 @@ Security Requirements
    :header: "Name (Identifier)", "Title", "Description", "Component(s)", "Importance"
    :widths: 10, 25, 60, 30, 10
 
-   _`R_101`, "Devices are only allowed to communicate with valid certificates", "Machines or devices in the network are only allowed to communicate with a valid certificate.", "TP_Client (multiple)", "High"
-   _`R_102`, "Encrypted Communication", "The communication between machines has to be encrypted with the given algorithm.", "TP_Client (multiple)", "High"
-   _`R_103`, "Security Level Configuration", "Allow administrators to configure security levels for different Trustpoint components.", "Admin, TPC_Web", "Medium"
-   _`R_104`, "Certificate Template Security", "Enforce access control and secure handling for certificate templates.", "TPC_Web", "High"
+   _`R_101`, "Security Level Configuration", "Allow administrators to configure security levels for different Trustpoint components.", "Admin, TPC_Web", "Medium"
+   _`R_102`, "Certificate Template Security", "Enforce access control and secure handling for certificate templates.", "TPC_Web", "High"
 
 ====================
 Software Risk Issues
@@ -960,99 +958,6 @@ This testcase is related to requirement `R_101`_.
 Test Idea
 """""""""
 
-To verify that only devices with valid certificates can communicate, we will test the following scenarios:
-
-#. Device with a Valid Certificate Can Communicate
-    - A device is provisioned with a valid certificate.
-    - The system allows the device to establish communication.
-
-#. Device with an Expired Certificate is Denied
-    - A device presents an expired certificate.
-    - The system denies communication and logs the attempt.
-
-#. Device with a Revoked Certificate is Denied
-    - A certificate is revoked by the system administrator.
-    - A device attempting to communicate with the revoked certificate is rejected.
-
-#. Device with a Self-Signed or Untrusted Certificate is Denied
-    - A device presents a self-signed certificate.
-    - The system denies communication.
-
-#. Device with a Tampered Certificate is Denied
-    - A device presents a certificate with altered data.
-    - The system detects the tampering and blocks communication.
-
-#. Device Attempts Communication Without a Certificate
-    - A device attempts to communicate without presenting any certificate.
-    - The system rejects the request.
-
-#. Logging of Authentication Failures
-    - Every failed authentication attempt due to an invalid, expired, or revoked certificate is logged.
-
-""""""""""""
-Feature File
-""""""""""""
-
-.. literalinclude:: ../../../trustpoint/features/R_101_device_cert_validation.feature
-   :language: gherkin
-
-^^^^^
-R_102
-^^^^^
-
-This testcase is related to requirement `R_102`_.
-
-"""""""""
-Test Idea
-"""""""""
-
-To verify that communication between machines is encrypted using the given algorithm, we will test the following scenarios:
-
-#. Valid Encrypted Communication
-    - Two machines establish a communication session.
-    - The communication is encrypted using the specified encryption algorithm.
-    - The system successfully verifies encryption.
-
-#. Communication with No Encryption is Rejected
-    - A machine attempts to communicate without encryption.
-    - The system detects the unencrypted communication and blocks it.
-    - The system logs the rejected attempt.
-
-#. Communication Using an Unsupported Encryption Algorithm is Rejected
-    - A machine attempts to use an encryption algorithm that is not approved.
-    - The system rejects the communication.
-    - The system logs the failed attempt.
-
-#. Communication Using a Weak Encryption Algorithm is Rejected
-    - A machine attempts to use a weak or deprecated encryption algorithm.
-    - The system denies the communication.
-    - The system logs the failure with a warning.
-
-#. Communication is Encrypted with the Correct Key Exchange Mechanism
-    - Two machines establish a secure session using the correct key exchange protocol.
-    - The system verifies that the encryption is correctly applied.
-
-#. Communication is Tamper-Resistant
-    - A third party attempts to modify an encrypted message.
-    - The system detects the tampering and terminates the connection.
-
-""""""""""""
-Feature File
-""""""""""""
-
-.. literalinclude:: ../../../trustpoint/features/R_102_encrypted_communication.feature
-   :language: gherkin
-
-^^^^^
-R_103
-^^^^^
-
-This testcase is related to requirement `R_103`_.
-
-"""""""""
-Test Idea
-"""""""""
-
 To verify that administrators can configure security levels for different Trustpoint components, we will test the following scenarios:
 
 #. Set Security Level for a Component
@@ -1086,14 +991,14 @@ To verify that administrators can configure security levels for different Trustp
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_103_security_configuration.feature
+.. literalinclude:: ../../../trustpoint/features/R_101_security_configuration.feature
    :language: gherkin
 
 ^^^^^
-R_104
+R_102
 ^^^^^
 
-This testcase is related to requirement `R_104`_.
+This testcase is related to requirement `R_102`_.
 
 """""""""
 Test Idea
@@ -1129,7 +1034,7 @@ To verify that certificate template security is enforced properly, we will test 
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_104_certificate_template_security.feature
+.. literalinclude:: ../../../trustpoint/features/R_102_certificate_template_security.feature
    :language: gherkin
 
 --------------------
