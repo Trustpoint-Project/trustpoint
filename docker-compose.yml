@@ -8,6 +8,9 @@ services:
       - "443:443"
     depends_on:
       - postgres
+    volumes:
+        - trustpoint_config:/etc/trustpoint
+        - apache_config:/etc/apache2
     environment:
       DATABASE_ENGINE: "django.db.backends.postgresql"
       DATABASE_NAME: "trustpoint_db"
@@ -32,4 +35,6 @@ services:
       POSTGRES_DB: "trustpoint_db"
 
 volumes:
+  trustpoint_config:
+  apache_config:
   postgres_data:
