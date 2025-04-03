@@ -14,7 +14,7 @@ jobs:
 
     - name: Test Home Page with curl
       run: |
-        http_response=$(curl -s -o response.txt -w "%{response_code}" http://localhost:4040)
+        http_response=$(curl -s -o response.txt -w "%{response_code}" http://127.0.0.1:80)
         echo "Server returned: $http_response" >> $GITHUB_STEP_SUMMARY
         if [ $http_response != "200" ]; then
           echo "This is not expected! Failing Pipeline!" >> $GITHUB_STEP_SUMMARY
