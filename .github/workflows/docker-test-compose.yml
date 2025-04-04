@@ -17,7 +17,17 @@ jobs:
 
     - name: Test Home Page with curl
       run: |
-        http_response=$(curl -s -o response.txt -w "%{response_code}" http://127.0.0.1:80)
+        for i in {1..10}; do
+        http_response=$(curl -s -o response.txt -w "%{response_code}" http://127.0.0.1:80 || true)
+        if [ "$http_response" == "200" ]; then
+          echo "Success on attempt $i"
+          break
+        else
+          echo "Attempt $i failed with code $http_response, retrying..."
+          sleep 3
+        fi
+        done
+        
         echo "Server returned: $http_response" >> $GITHUB_STEP_SUMMARY
         if [ $http_response != "200" ]; then
           echo "This is not expected! Failing Pipeline!" >> $GITHUB_STEP_SUMMARY
