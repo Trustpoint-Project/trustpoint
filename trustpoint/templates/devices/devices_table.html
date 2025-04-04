@@ -5,46 +5,46 @@
         <tr>
             <th id="checkbox-column"><input type="checkbox"/></th>
             <th>
-                <a href="?sort={% if current_sort == 'unique_name' %}-{% endif %}unique_name">
-                    Device
+                <a href="?sort={% if current_sort == 'common_name' %}-{% endif %}common_name">
+                    {% trans 'Name' %}
                 </a>
             </th>
             <th>
                 <a href="?sort={% if current_sort == 'domain' %}-{% endif %}domain">
-                    Domain
+                    {% trans 'Domain' %}
                 </a>
             </th>
             {% if page_name != 'opc_ua_gds' %}
             <th>
                 <a href="?sort={% if current_sort == 'serial_number' %}-{% endif %}serial_number">
-                    Serial-Number
+                    {% trans 'Serial Number' %}
                 </a>
             </th>
             {% endif %}
             <th>
                 <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
-                    Created
+                    {% trans 'Created' %}
                 </a>
             </th>
             <th>
                 <a href="?sort={% if current_sort == 'onboarding_status' %}-{% endif %}onboarding_status">
-                    Onboarding Status
+                    {% trans 'Onboarding Status' %}
                 </a>
             </th>
             <th>
                 <a href="?sort={% if current_sort == 'onboarding_protocol' %}-{% endif %}onboarding_protocol">
-                    Onboarding Protocol
+                    {% trans 'Onboarding Protocol' %}
                 </a>
             </th>
             <th>
                 <a href="?sort={% if current_sort == 'pki_protocol' %}-{% endif %}pki_protocol">
-                    PKI Protocol
+                    {% trans 'PKI Protocol' %}
                 </a>
             </th>
-            <th>Certificate Management</th>
-            <th>Details</th>
-            {#            <th>Configure</th>#}
-            <th>Revoke</th>
+            <th>{% trans 'Certificate Management' %}</th>
+            <th>{% trans 'Details' %}</th>
+            {#            <th>{% trans 'Configure' %}</th>#}
+            <th>{% trans 'Revoke' %}</th>
         </tr>
         </thead>
         <tbody>
@@ -60,12 +60,12 @@
                 {% endif %}
                 <td>{{ device.created_at }}</td>
                 <td>
-                    {% if device.get_onboarding_status_display != 'No Onboarding' %}
+                    {% if device.onboarding_status != device.OnboardingStatus.NO_ONBOARDING %}
                         {{ device.get_onboarding_status_display }}
                     {% endif %}
                 </td>
                 <td>
-                    {% if device.get_onboarding_protocol_display != 'No Onboarding' %}
+                    {% if device.onboarding_protocol != device.OnboardingProtocol.NO_ONBOARDING %}
                         {{ device.get_onboarding_protocol_display }}
                     {% endif %}
                 </td>

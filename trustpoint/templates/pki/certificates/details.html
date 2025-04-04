@@ -20,7 +20,7 @@
 
                         {% include 'pki/certificates/components/general.html' %}
 
-                        {% if cert.issued_device_certificate %}
+                        {% if cert.credential_set.first.issued_credential %}
 
                             {% include 'pki/certificates/components/additional.html' %}
 
