@@ -18,7 +18,7 @@ jobs:
     - name: Test Home Page with curl
       run: |
         for i in {1..10}; do
-        http_response=$(curl -s -o response.txt -w "%{response_code}" http://127.0.0.1:80 || true)
+        http_response=$(curl -L -s -o response.txt -w "%{response_code}" http://127.0.0.1:80 || true)
         if [ "$http_response" == "200" ]; then
           echo "Success on attempt $i"
           break
