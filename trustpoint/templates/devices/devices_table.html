@@ -5,8 +5,8 @@
         <tr>
             <th id="checkbox-column"><input type="checkbox"/></th>
             <th>
-                <a href="?sort={% if current_sort == 'unique_name' %}-{% endif %}common_name">
-                    {% trans 'Device' %}
+                <a href="?sort={% if current_sort == 'common_name' %}-{% endif %}common_name">
+                    {% trans 'Name' %}
                 </a>
             </th>
             <th>
@@ -60,12 +60,12 @@
                 {% endif %}
                 <td>{{ device.created_at }}</td>
                 <td>
-                    {% if device.get_onboarding_status_display != 'No Onboarding' %}
+                    {% if device.onboarding_status != device.OnboardingStatus.NO_ONBOARDING %}
                         {{ device.get_onboarding_status_display }}
                     {% endif %}
                 </td>
                 <td>
-                    {% if device.get_onboarding_protocol_display != 'No Onboarding' %}
+                    {% if device.onboarding_protocol != device.OnboardingProtocol.NO_ONBOARDING %}
                         {{ device.get_onboarding_protocol_display }}
                     {% endif %}
                 </td>

@@ -8,8 +8,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-31 14:37+0200\n"
-"PO-Revision-Date: 2025-03-31 14:45+0200\n"
+"POT-Creation-Date: 2025-04-04 08:25+0200\n"
+"PO-Revision-Date: 2025-04-04 08:26+0200\n"
 "Last-Translator: Christian Schwinne <christian.schwinne  AT hshl.de>\n"
 "Language-Team: \n"
 "Language: de\n"
@@ -209,7 +209,6 @@ msgstr "EST mit Authentifizierung durch Nutzername und Passwort"
 #: .\templates\devices\credentials\certificate_download.html:26
 #: .\templates\devices\credentials\certificate_lifecycle_management.html:13
 #: .\templates\devices\credentials\credential_download.html:22
-#: .\templates\devices\devices_table.html:9
 #: .\templates\home\notifications-tab.html:61
 msgid "Device"
 msgstr "Gerät"
@@ -239,7 +238,7 @@ msgstr "Kein Onboarding"
 
 #: .\devices\models.py:56 .\home\models.py:44
 msgid "Pending"
-msgstr "Wartend"
+msgstr "Ausstehend"
 
 #: .\devices\models.py:57
 msgid "Onboarded"
@@ -1250,7 +1249,7 @@ msgstr ""
 "Die Ausstellung von Anwendungszertifikaten ohne ein Domain-Credential "
 "erlauben."
 
-#: .\pki\models\extension.py:119
+#: .\pki\models\extension.py:119 .\templates\devices\devices_table.html:9
 msgid "Name"
 msgstr "Name"
 
@@ -1932,7 +1931,7 @@ msgstr "Geräte"
 #: .\templates\pki\issuing_cas\issuing_cas.html:76
 #: .\templates\pki\truststores\truststores.html:69
 msgid "Delete selected"
-msgstr "Ausgewählte entfernen"
+msgstr "Auswahl entfernen"
 
 #: .\templates\devices\devices.html:25
 msgid "Add new Device"
@@ -2339,6 +2338,7 @@ msgid "Common name"
 msgstr "Common Name"
 
 #: .\templates\devices\revoke.html:25
+#: .\templates\pki\certificates\components\additional.html:20
 msgid "Credential purpose"
 msgstr "Zweck des Credentials"
 
@@ -2480,27 +2480,23 @@ msgstr "Zertifikate"
 #: .\templates\pki\certificates\certificates.html:20
 #: .\templates\pki\truststores\truststores.html:73
 msgid "Download selected"
-msgstr "Ausgewählte herunterladen"
+msgstr "Auswahl herunterladen"
 
 #: .\templates\pki\certificates\components\additional.html:3
-msgid "Additional"
-msgstr "Zusätzlich"
+msgid "Associated Credential"
+msgstr "Zugehöriges Credential"
 
-#: .\templates\pki\certificates\components\additional.html:7
+#: .\templates\pki\certificates\components\additional.html:8
 msgid "Issued to Device"
 msgstr "An Gerät ausgestellt"
 
-#: .\templates\pki\certificates\components\additional.html:11
-msgid "Certificate Type"
-msgstr "Zertifikatstyp"
-
-#: .\templates\pki\certificates\components\additional.html:15
+#: .\templates\pki\certificates\components\additional.html:12
 msgid "Issued via protocol"
 msgstr "Ausgestellt mittels Protokoll"
 
-#: .\templates\pki\certificates\components\additional.html:19
-msgid "Template Name"
-msgstr "Name der Vorlage"
+#: .\templates\pki\certificates\components\additional.html:16
+msgid "Credential type"
+msgstr "Art des Credentials"
 
 #: .\templates\pki\certificates\components\extensions\basic_constraints_extension.html:4
 msgid "Basic Constraints Extension"
@@ -2828,7 +2824,7 @@ msgstr "Alle Geräte"
 
 #: .\templates\pki\domains\config.html:35
 msgid "Pending devices"
-msgstr "Wartende Geräte"
+msgstr "Ausstehende Geräte"
 
 #: .\templates\pki\domains\config.html:39
 msgid "Running devices"
@@ -3164,11 +3160,11 @@ msgstr "Keine Log-Dateien vorhanden."
 
 #: .\templates\settings\logging\logging_files.html:65
 msgid "Download selected (tar.gz)"
-msgstr "Ausgewählte herunterladen (tar.gz)"
+msgstr "Auswahl herunterladen (tar.gz)"
 
 #: .\templates\settings\logging\logging_files.html:68
 msgid "Download selected (zip)"
-msgstr "Ausgewählte herunterladen (zip)"
+msgstr "Auswahl herunterladen (zip)"
 
 #: .\templates\settings\network.html:7
 msgid "Network Configuration"
@@ -3341,6 +3337,15 @@ msgstr "Deutsch"
 #: .\trustpoint\settings.py:223
 msgid "English"
 msgstr "Englisch"
+
+#~ msgid "Additional"
+#~ msgstr "Zusätzlich"
+
+#~ msgid "Certificate Type"
+#~ msgstr "Zertifikatstyp"
+
+#~ msgid "Template Name"
+#~ msgstr "Name der Vorlage"
 
 #, python-format
 #~ msgid ""
