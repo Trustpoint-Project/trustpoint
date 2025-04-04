@@ -1,0 +1,54 @@
+name: Docker Compose Test
+
+on: [pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step: Run Docker Compose to start services.
+      # Uses the hoverkraft-tech/compose-action to manage Docker Compose commands.
+      # "compose-file": path to the docker-compose file.
+      # "up-flags":
+      #   --build : forces a rebuild of the images.
+      #   --wait  : waits for the services to be up and running.
+      - name: Run Docker compose
+        uses: hoverkraft-tech/compose-action@v2.2.0
+        with:
+          compose-file: "./docker-compose.yml"
+          up-flags: "--build --wait"
+
+      # Step: Test the Home Page with curl.
+      # A loop attempts to fetch the HTTP response code from the running service.
+      # The -L flag tells curl to follow redirects.
+      # The -s flag makes curl run silently.
+      # The -o option saves the full response body into response.txt.
+      # The -w option writes out the HTTP status code.
+      - name: Test Home Page with curl
+        run: |
+          # Try up to 10 times to get a 200 response code from the service.
+          for i in {1..10}; do
+            http_response=$(curl -L -s -o response.txt -w "%{response_code}" http://127.0.0.1:80 || true)
+            if [ "$http_response" == "200" ]; then
+              echo "Success on attempt $i"
+              break
+            else
+              echo "Attempt $i failed with code $http_response, retrying..."
+              sleep 3
+            fi
+          done
+          
+          # Log the final HTTP response code to the GitHub Step Summary.
+          echo "Server returned: $http_response" >> $GITHUB_STEP_SUMMARY
+          
+          # If the final response code is not 200, exit with error code to fail the pipeline.
+          if [ "$http_response" != "200" ]; then
+            echo "This is not expected! Failing Pipeline!" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "This expected, the full response is:" >> $GITHUB_STEP_SUMMARY
+            cat response.txt >> $GITHUB_STEP_SUMMARY
+          fi
