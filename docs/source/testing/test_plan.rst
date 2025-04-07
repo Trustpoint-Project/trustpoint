@@ -592,14 +592,28 @@ Test Idea
 This requirement states that we want to distribute Trustpoint in a fully-configured Docker container.
 The idea for testing would be to build the container,
 run it on a production system and then check all other requirements manually or build a test suite and check the requirements automatically.
-Since the code is the same, just executed in a Docker environment, we see no need to let those tests run automatically.
-Therefore, we will pass the test for this requirement if the container can be built and ran on another system.
 
-""""""""""""
-Feature File
-""""""""""""
+For now, we have the idea of using our `docker_compose_r_005`_ to build and start the trustpoint container as well as the postgres container.
+After this, we check if the startpage is visible and returns a `200` code.
+This test is executed inside a `GitHub actions pipeline <docker_compose_action_r_005>`_.
 
-Nonexistent.
+.. _docker_compose_r_005:
+
+"""""""""""""""""""
+Docker Compose File
+"""""""""""""""""""
+
+.. literalinclude:: ../../../docker-compose.yml
+   :language: yaml
+
+.. _docker_compose_action_r_005:
+
+"""""""""""""""""""
+GitHub Actions File
+"""""""""""""""""""
+
+.. literalinclude:: ../../../.github/workflows/docker-test-compose.yml
+   :language: yaml
 
 ^^^^^
 R_006
