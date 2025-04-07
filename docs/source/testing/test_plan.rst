@@ -511,9 +511,15 @@ This testcase is related to requirement `R_002`_.
 Test Idea
 """""""""
 
+.. warning::
+    There is no test idea present. This will change in the future!
+
 """"""""""""
 Feature File
 """"""""""""
+
+.. warning::
+    There is also no feature file present! This will also change as soon as a test idea is provided.
 
 ^^^^^
 R_003
