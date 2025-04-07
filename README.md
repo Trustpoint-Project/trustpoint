@@ -118,7 +118,7 @@ the [chapter Requirements](https://trustpoint.readthedocs.io/en/latest/test_plan
 To keep this README as short as possible but still as informative as possible,
 we will state the requirements defined in
 the [Test Plan](https://trustpoint.readthedocs.io/en/latest/test_plan/test_plan.html),
-state the header and if the [pyhon behave](https://behave.readthedocs.io/en/latest/) tests are passing or failing.
+state the header and if the [python behave](https://behave.readthedocs.io/en/latest/) tests are passing or failing.
 
 | Requirement | Title                                         | Status of the behave test                                                                                                                                                                                   |
 |-------------|-----------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
