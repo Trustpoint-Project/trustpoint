@@ -6,7 +6,7 @@ authors = [{ name = "TrustPoint-Project" }]
 requires-python = ">=3.11"
 readme = "README.md"
 dependencies = [
-    "crispy-bootstrap5~=2024.10",
+    "crispy-bootstrap5~=2025.4",
     "cryptography>=44.0.1",
     "django>=5.1.6",
     "django-crispy-forms~=2.3",
