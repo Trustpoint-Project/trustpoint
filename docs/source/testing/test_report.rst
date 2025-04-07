@@ -42,7 +42,7 @@ For more detailed output please visit the corresponding github action pages.
    _`R_002`, "Usage of any zero touch onboarding protocol", "No test present."
    _`R_003`, "Certificate Lifecycle Management", "|R_003_badge|"
    _`R_004`, "REST API", "|R_004_badge|"
-   _`R_005`, "Docker Container Support", "No test present."
+   _`R_005`, "Docker Container Support", "|R_005_badge|"
    _`R_006`, "Backup, Restore, and Update Mechanisms", "|R_006_badge|"
    _`R_007`, "Logging Capabilities", "|R_007_badge|"
    _`R_008`, "Auto-Generated :term:`Issuing CA`'s", "|R_008_badge|"
@@ -67,6 +67,10 @@ For more detailed output please visit the corresponding github action pages.
 .. |R_004_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_004_feature_test.yml/badge.svg
     :alt: R_004_badge
     :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_004_feature_test.yml
+
+.. |R_005_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/docker-test-compose.yml/badge.svg
+    :alt: R_005_badge
+    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/docker-test-compose.yml
 
 .. |R_006_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_006_feature_test.yml/badge.svg
     :alt: R_006_badge
