@@ -129,6 +129,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'crispy_forms',
     'crispy_bootstrap5',
+    'dbbackup',
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
@@ -323,3 +324,9 @@ PUBLIC_PATHS = [
     '/.well-known/est',
     '/crl',
 ]
+
+BACKUP_FILE_PATH = MEDIA_ROOT / Path('backups')
+
+DBBACKUP_STORAGE = 'django.core.files.storage.FileSystemStorage'
+DBBACKUP_STORAGE_OPTIONS = {'location': BACKUP_FILE_PATH}
+DBBACKUP_FILENAME_TEMPLATE = '{databasename}-{servername}-{datetime}.sql'

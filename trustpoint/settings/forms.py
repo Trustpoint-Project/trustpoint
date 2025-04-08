@@ -94,3 +94,24 @@ class SecurityConfigForm(forms.ModelForm):
         if form_value is None:
             return self.instance.auto_gen_pki_key_algorithm if self.instance else AutoGenPkiKeyAlgorithm.RSA2048
         return form_value
+
+
+class BackupForm(forms.Form):
+    confirm = forms.BooleanField(
+        required=False,
+        label='Backup Database'
+    )
+    backup_app_config = forms.BooleanField(
+        required=False,
+        label='Backup application config'
+    )
+    backup_apache_config = forms.BooleanField(
+        required=False,
+        label='Backup Apache config'
+    )
+
+
+class RestoreForm(forms.Form):
+    backup_file = forms.FileField(
+        label='Select a backup file to restore.'
+    )

@@ -1,0 +1,96 @@
+{% extends 'trustpoint/base.html' %}
+{% load crispy_forms_filters %}
+{% load i18n %}
+{% block content %}
+
+{% if messages %}
+  {% for message in messages %}
+    <p>{{ message }}</p>
+  {% endfor %}
+{% endif %}
+
+<div class="card mb-4">
+  <div class="card-header">
+    <h1>{% trans "Backup and Restore" %}</h1>
+  </div>
+  <div class="card-body pt-4 pb-4">
+    <div class="row">
+      <!-- Backup Form Column -->
+      <div class="col-md-6">
+        <h2>{% trans "Backup Database" %}</h2>
+        <form method="POST">
+          {% csrf_token %}
+          <fieldset class="form-group tp-form-group">
+            {{ backup_form|crispy }}
+          </fieldset>
+          <button class="btn btn-primary" type="submit" name="backup_submit">
+            {% trans "Create Backup" %}
+          </button>
+        </form>
+      </div>
+      <!-- Restore Form Column -->
+      <div class="col-md-6">
+        <h2>{% trans "Restore Database" %}</h2>
+        <form method="POST" enctype="multipart/form-data">
+          {% csrf_token %}
+          <fieldset class="form-group tp-form-group">
+            {{ restore_form|crispy }}
+          </fieldset>
+          <button class="btn btn-primary" type="submit" name="restore_submit">
+            {% trans "Restore Backup" %}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Backup Records Table -->
+<div class="card">
+  <div class="card-header">
+    <h2>{% trans "Existing Backups" %}</h2>
+  </div>
+  <div class="card-body">
+    {% if backup_records %}
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>{% trans "Name" %}</th>
+            <th>{% trans "Creation Date" %}</th>
+            <th>{% trans "Created By" %}</th>
+            <th>{% trans "Items" %}</th>
+            <th>{% trans "Download" %}</th>
+            <th>{% trans "Delete" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in backup_records %}
+          <tr>
+            <td>{{ record.name }}</td>
+            <td>{{ record.created_at }}</td>
+            <td>{{ record.created_by.username }}</td>
+            <td>{{ record.items }}</td>
+            <td>
+              <a class="btn btn-sm btn-secondary" href="{{ record.backup_file.url }}" download>
+                {% trans "Download" %}
+              </a>
+            </td>
+            <td>
+              <form method="POST" action="{% url 'settings:backup_delete' record.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-danger">
+                  {% trans "Delete" %}
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>{% trans "No backups found." %}</p>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock content %}

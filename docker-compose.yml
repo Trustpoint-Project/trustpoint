@@ -11,6 +11,7 @@ services:
     volumes:
         - trustpoint_config:/etc/trustpoint
         - apache_config:/etc/apache2
+        # - trustpoint_media:/
     environment:
       DATABASE_ENGINE: "django.db.backends.postgresql"
       DATABASE_NAME: "trustpoint_db"
@@ -36,5 +37,6 @@ services:
 
 volumes:
   trustpoint_config:
+  trustpoint_media:
   apache_config:
   postgres_data:

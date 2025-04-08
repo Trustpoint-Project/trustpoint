@@ -2,7 +2,7 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, language, logging, security
+from .views import IndexView, backup_restore, language, logging, security
 
 app_name = 'settings'
 urlpatterns = [
@@ -25,4 +25,6 @@ urlpatterns = [
         name='logging-files-download-multiple',
     ),
     path('security/', security.SecurityView.as_view(), name='security'),
+    path('backup-restore/', backup_restore.BackupRestoreView.as_view(), name='backup_restore'),
+    path('backup/delete/<int:pk>/', backup_restore.BackupDeleteView.as_view(), name='backup_delete'),
 ]
