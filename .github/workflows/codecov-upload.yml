@@ -16,7 +16,7 @@ jobs:
           run_migrations: true  # Enable database migrations.
 
       - name: Run Pytest with Coverage
-        run: uv run pytest --cov --junitxml=junit.xml -o junit_family=legacy trustpoint/
+        run: uv run pytest --cov=trustpoint --cov-report=xml -o junit_family=legacy trustpoint/
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
