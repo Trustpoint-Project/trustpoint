@@ -20,12 +20,11 @@
             </div>
             <div class="card-footer d-flex justify-content-between">
                 <div class="tp-card-btn-footer m-1">
-                        <button type="button" value="Back" class="btn btn-secondary btn-half" onClick="history.back()">
-                            {% trans 'Back' %}
-                        </button>
-                        <a href="{% url 'pki:truststores' %}" class="btn btn-secondary  btn-half">{% trans 'Cancel' %}</a>
-                        <button type="submit" class="btn btn-primary">{% trans 'Add new Truststore' %}</button>
-                    </div>
+                    <button type="button" value="Back" class="btn btn-secondary btn-half" onClick="history.back()">
+                        {% trans 'Back' %}
+                    </button>
+                    <a href="{% url 'pki:truststores' %}" class="btn btn-secondary  btn-half">{% trans 'Cancel' %}</a>
+                    <button type="submit" class="btn btn-primary">{% trans 'Add new Truststore' %}</button>
                 </div>
             </div>
         </div>

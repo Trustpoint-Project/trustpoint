@@ -31,24 +31,23 @@
 
                     <div class="card mt-4">
                         <div class="card-header bg-primary text-white">
-                            <h5 class="mb-0">Regex Helper</h5>
+                            <h5 class="mb-0">{% trans 'Regex Helper' %}</h5>
                         </div>
                         <div class="card-body">
                             <!-- Example Serial Number Input -->
                             <div id="example-serial-field" class="mb-3">
                                 <label for="example-serial" class="form-label">
-                                    Enter an Example Serial Number:
+                                    {% trans 'Enter an example Serial Number:' %}
                                 </label>
-                                <input type="text" id="example-serial" class="form-control" placeholder="e.g. ABC-1234-XYZ">
+                                <input type="text" id="example-serial" class="form-control" placeholder="{% trans 'e.g.' %} ABC-1234-XYZ">
                                 <small class="form-text text-muted">
-                                    Multiple regex variations will be generated based on the structure. Supported delimiters
-                                    are [- _ . :]
+                                    {% blocktranslate %}Multiple regex variations will be generated based on the structure. Supported delimiters are [- _ . :]{% endblocktranslate %}
                                 </small>
                             </div>
 
                             <!-- Generated Regex Options -->
                             <div id="regex-options" class="mb-3" style="display: none;">
-                                <label class="form-label">Generated Regex Variations:</label>
+                                <label class="form-label">{% trans 'Generated Regex Variations:' %}</label>
                                 <ul class="list-group" id="regex-list"></ul>
                             </div>
                         </div>
@@ -56,9 +55,9 @@
                     <br>
                     <!-- Serial Number Pattern (Auto-filled from JavaScript) -->
                     <div class="mb-3">
-                        <label for="id_serial_number_pattern" class="form-label">Serial Number Pattern (Regex)</label>
+                        <label for="id_serial_number_pattern" class="form-label">{% trans 'Serial Number Pattern (Regex)' %}</label>
                         <input type="text" id="id_serial_number_pattern" name="serial_number_pattern"
-                               class="form-control" placeholder="Select a regex from above" readonly>
+                               class="form-control" placeholder="{% trans 'Select a regex from above' %}" readonly>
                     </div>
                 </div>
             </div>

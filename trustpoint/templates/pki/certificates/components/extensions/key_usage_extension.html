@@ -1,50 +1,51 @@
+{% load i18n %}
 {% block key_usage_extension %}
     {% if cert.key_usage_extension %}
-        <h2>Key Usage Extension</h2><hr class="hr-m">
+        <h2>{% trans 'Key Usage Extension' %}</h2><hr class="hr-m">
         <div class="tp-kvp-list">
             <div>
-                <div>Extension OID</div>
+                <div>{% trans 'Extension OID' %}</div>
                 <div>{{ cert.key_usage_extension.extension_oid }}</div>
             </div>
             <div>
-                <div>Critical</div>
+                <div>{% trans 'Critical' %}</div>
                 <div>{{ cert.key_usage_extension.critical }}</div>
             </div>
             <hr>
             <div>
-                <div>Digital Signature</div>
+                <div>{% trans 'Digital Signature' %}</div>
                 <div>{{ cert.key_usage_extension.digital_signature }}</div>
             </div>
             <div>
-                <div>Content Commitment</div>
+                <div>{% trans 'Content Commitment' %}</div>
                 <div>{{ cert.key_usage_extension.content_commitment }}</div>
             </div>
             <div>
-                <div>Key Encipherment</div>
+                <div>{% trans 'Key Encipherment' %}</div>
                 <div>{{ cert.key_usage_extension.key_encipherment }}</div>
             </div>
             <div>
-                <div>Data Encipherment</div>
+                <div>{% trans 'Data Encipherment' %}</div>
                 <div>{{ cert.key_usage_extension.data_encipherment }}</div>
             </div>
             <div>
-                <div>Key Agreement</div>
+                <div>{% trans 'Key Agreement' %}</div>
                 <div>{{ cert.key_usage_extension.key_agreement }}</div>
             </div>
             <div>
-                <div>Key Cert Sign</div>
+                <div>{% trans 'Key Cert Sign' %}</div>
                 <div>{{ cert.key_usage_extension.key_cert_sign }}</div>
             </div>
             <div>
-                <div>CRL Sign</div>
+                <div>{% trans 'CRL Sign' %}</div>
                 <div>{{ cert.key_usage_extension.crl_sign }}</div>
             </div>
             <div>
-                <div>Encipher Only</div>
+                <div>{% trans 'Encipher Only' %}</div>
                 <div>{{ cert.key_usage_extension.encipher_only }}</div>
             </div>
             <div>
-                <div>Decipher Only</div>
+                <div>{% trans 'Decipher Only' %}</div>
                 <div>{{ cert.key_usage_extension.decipher_only }}</div>
             </div>
         </div>

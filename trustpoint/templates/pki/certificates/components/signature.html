@@ -5,38 +5,38 @@
     <hr class="hr-m">
     <div class="tp-kvp-list">
         <div>
-            <div>Signature Algorithm OID</div>
+            <div>{% trans 'Signature Algorithm OID' %}</div>
             <div>{{ cert.signature_algorithm_oid }}</div>
         </div>
 
         <div>
-            <div>Signature Algorithm</div>
+            <div>{% trans 'Signature Algorithm' %}</div>
             <div>{{ cert.signature_algorithm }}</div>
         </div>
 
         {% if cert.signature_algorithm_padding_scheme != 'None' %}
             <div>
-                <div>Signature Algorithm Padding Scheme</div>
+                <div>{% trans 'Signature Algorithm Padding Scheme' %}</div>
                 <div>{{ cert.signature_algorithm_padding_scheme }}</div>
             </div>
         {% endif %}
 
         {% if cert.issuer and cert.issuer.spki_ec_curve_oid %}
             <div>
-                <div>Signature Curve OID</div>
+                <div>{% trans 'Signature Curve OID' %}</div>
                 <div>{{ cert.issuer.spki_ec_curve_oid }}</div>
             </div>
         {% endif %}
 
         {% if cert.issuer and cert.issuer.spki_ec_curve %}
             <div>
-                <div>Signature Curve</div>
+                <div>{% trans 'Signature Curve' %}</div>
                 <div>{{ cert.issuer.spki_ec_curve }}</div>
             </div>
         {% endif %}
 
         <div>
-            <div>Signature Algorithm Key Size</div>
+            <div>{% trans 'Signature Algorithm Key Size' %}</div>
             <div>
                 {{ cert.issuer_references.first.spki_key_size }} Bits
             </div>

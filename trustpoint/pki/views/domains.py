@@ -59,7 +59,7 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
     success_url = reverse_lazy('pki:domains')
     ignore_url = reverse_lazy('pki:domains')
 
-    def get_form(self, form_class: Any = None) -> Any:
+    def get_form(self, _form_class: Any = None) -> Any:
         """Override get_form to filter out autogen root CAs."""
         form = super().get_form()
         # Filter out autogen root CAs
