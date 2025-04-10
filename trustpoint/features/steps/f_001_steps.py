@@ -1,4 +1,4 @@
-"""Python steps for F_001"""  # noqa: INP001
+"""Python steps for F_001."""
 
 from behave import given, runner, then, when
 

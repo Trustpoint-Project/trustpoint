@@ -1,4 +1,4 @@
-"""Python steps file for R_004."""  # noqa: INP001
+"""Python steps file for R_004."""
 
 import logging
 from typing import Any

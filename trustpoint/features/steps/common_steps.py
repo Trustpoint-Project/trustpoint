@@ -1,4 +1,4 @@
-"""File for steps which are used more often across multiple feature files."""  # noqa: INP001
+"""File for steps which are used more often across multiple feature files."""
 
 import logging
 
@@ -20,7 +20,9 @@ def step_tpc_web_running(context: runner.Context) -> None:  # noqa: ARG001
         context: the behave context
     """
     response = Client().get('/users/login/')
-    assert response.status_code == HTTP_OK
+    if response.status_code != HTTP_OK:
+        msg = f'{response.status_code} != {HTTP_OK}!'
+        raise AssertionError(msg)
 
 
 @step('Commentary')
@@ -49,13 +51,20 @@ def step_admin_logged_in(context: runner.Context) -> None:
         User.objects.create_superuser(username='admin', password='testing321')  # noqa: S106
         client = Client()
         login_success = client.login(username='admin', password='testing321')  # noqa: S106
-        assert login_success, 'Login unsuccessful'
+        if not login_success:
+            msg = 'Login unsuccessful'
+            raise AssertionError(msg)  # noqa: TRY301
+
         context.authenticated_client = client
 
         response = client.get('/pki/certificates/')
-        assert response.status_code == HTTP_OK, 'Could not get a HTTP_OK from visiting the certificates page.'
-    except Exception as error:  # noqa: BLE001
-        assert False, f'Error: {error}'  # noqa: PT015, PT017, B011
+        if response.status_code != HTTP_OK:
+            msg = 'Could not get a HTTP_OK from visiting the certificates page.'
+            raise AssertionError(msg)  # noqa: TRY301
+
+    except Exception as error:
+        msg = f'Error: {error}'
+        raise AssertionError(msg) from error
 
 
 @then('the system should display a confirmation message')
@@ -65,7 +74,8 @@ def step_confirmation_message(context: runner.Context) -> None:  # noqa: ARG001
     Args:
         context: the behave context
     """
-    assert False, 'Step not implemented: Confirmation message check.'  # noqa: PT015, B011
+    msg = 'Step not implemented: Confirmation message check.'
+    raise AssertionError(msg)
 
 
 @then('the system should display an error message stating {error_message}')
@@ -76,7 +86,8 @@ def step_error_message(context: runner.Context, error_message: str) -> None:  # 
         context: the behave context
         error_message (str): The expected error message text.
     """
-    assert False, 'Step not implemented: Error message check.'  # noqa: PT015, B011
+    msg = 'Step not implemented: Error message check.'
+    raise AssertionError(msg)
 
 
 @given('an API client is authenticated')
@@ -86,7 +97,8 @@ def step_api_client_authenticated(context: runner.Context) -> None:  # noqa: ARG
     Args:
         context: the behave context
     """
-    assert False, 'Step not implemented: API client authentication.'  # noqa: PT015, B011
+    msg = 'Step not implemented: API client authentication.'
+    raise AssertionError(msg)
 
 
 @then('the API response should have a status code of {status_code}')
@@ -97,7 +109,8 @@ def step_verify_status_code(context: runner.Context, status_code: str) -> None: 
         context: the behave context
         status_code (str): The expected status code.
     """
-    assert False, 'Step not implemented: Verify API response status code.'  # noqa: PT015, B011
+    msg = 'Step not implemented: Verify API response status code.'
+    raise AssertionError(msg)
 
 
 @then('the response payload should include an error message stating {error_message}')
@@ -108,4 +121,5 @@ def step_verify_error_message(context: runner.Context, error_message: str) -> No
         context: the behave context
         error_message (str): The expected error message text.
     """
-    assert False, 'Step not implemented: Verify error message in response payload.'  # noqa: PT015, B011
+    msg = 'Step not implemented: Verify error message in response payload.'
+    raise AssertionError(msg)
