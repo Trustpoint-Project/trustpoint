@@ -47,8 +47,8 @@ class Generator:
                 ]
             )
         )
-        builder = builder.not_valid_before(datetime.datetime.today() - ONE_DAY)
-        builder = builder.not_valid_after(datetime.datetime.today() + (4 * 365 * ONE_DAY))
+        builder = builder.not_valid_before(datetime.datetime.now(datetime.UTC) - ONE_DAY)
+        builder = builder.not_valid_after(datetime.datetime.now(datetime.UTC) + (4 * 365 * ONE_DAY))
         builder = builder.serial_number(x509.random_serial_number())
         builder = builder.public_key(public_key)
         builder = builder.add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False)
@@ -95,8 +95,8 @@ class Generator:
                 ]
             )
         )
-        builder = builder.not_valid_before(datetime.datetime.today() - ONE_DAY)
-        builder = builder.not_valid_after(datetime.datetime.today() + (2 * 365 * ONE_DAY))
+        builder = builder.not_valid_before(datetime.datetime.now(datetime.UTC) - ONE_DAY)
+        builder = builder.not_valid_after(datetime.datetime.now(datetime.UTC) + (2 * 365 * ONE_DAY))
         builder = builder.serial_number(x509.random_serial_number())
         builder = builder.public_key(public_key)
         builder = builder.add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False)
@@ -138,14 +138,10 @@ class Generator:
             )
         )
         builder = builder.issuer_name(
-            x509.Name(
-                [
-                    x509.NameAttribute(NameOID.COMMON_NAME, 'Trustpoint Self-Signed TLS-Server Credential'),
-                ]
-            )
+            issuing_ca_credential.credential_certificate.as_crypto().subject
         )
-        builder = builder.not_valid_before(datetime.datetime.today() - one_day)
-        builder = builder.not_valid_after(datetime.datetime.today() + (one_day * 365))
+        builder = builder.not_valid_before(datetime.datetime.now(datetime.UTC) - one_day)
+        builder = builder.not_valid_after(datetime.datetime.now(datetime.UTC) + (one_day * 365))
         builder = builder.serial_number(x509.random_serial_number())
         builder = builder.public_key(public_key)
 
@@ -172,17 +168,15 @@ class Generator:
         builder = builder.add_extension(
             x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False
         )
-        san = []
-        for ipv4_address in self._ipv4_addresses:
-            san.append(x509.IPAddress(ipv4_address))
-        for ipv6_address in self._ipv6_addresses:
-            san.append(x509.IPAddress(ipv6_address))
-        for domain_name in self._domain_names:
-            san.append(x509.DNSName(domain_name))
+        san = (
+            [x509.IPAddress(ip) for ip in self._ipv4_addresses]
+            + [x509.IPAddress(ip) for ip in self._ipv6_addresses]
+            + [x509.DNSName(domain) for domain in self._domain_names]
+        )
         builder = builder.add_extension(x509.SubjectAlternativeName(san), critical=True)
 
         certificate = builder.sign(
-            private_key=private_key,
+            private_key=issuing_ca_credential.credential_private_key.as_crypto(),
             algorithm=hashes.SHA256(),
         )
 

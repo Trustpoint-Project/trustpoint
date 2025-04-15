@@ -3,6 +3,7 @@
 import base64
 import ipaddress
 import re
+import os
 from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol, cast
 
@@ -90,6 +91,31 @@ class CredentialRequest:
 class EstAuthenticationMixin(LoggerMixin):
     """Checks for HTTP Basic Authentication before processing the request."""
 
+    def get_client_cert_as_x509(self, request: HttpRequest) -> x509.Certificate:
+        """Retrieve the client certificate from the request and convert it to an x509.Certificate object.
+
+        Args:
+            request: Django HttpRequest containing the headers.
+
+        Returns:
+            x509.Certificate object.
+
+        Raises:
+            ClientCertificateAuthenticationError: if no client certificate found or it is not a valid PEM-encoded cert.
+        """
+        cert_data = request.META.get('SSL_CLIENT_CERT')
+        if not cert_data:
+            error_message = 'Missing SSL_CLIENT_CERT header'
+            raise ClientCertificateAuthenticationError(error_message)
+
+        try:
+            client_cert = x509.load_pem_x509_certificate(cert_data.encode('utf-8'))
+        except Exception as e:
+            error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
+            raise ClientCertificateAuthenticationError(error_message) from e
+
+        return client_cert
+
     def get_credential_for_certificate(self, cert: x509.Certificate) -> tuple[CredentialModel, DeviceModel]:
         """Retrieve a CredentialModel and associated DeviceModel instance for the given certificate.
 
@@ -135,18 +161,8 @@ class EstAuthenticationMixin(LoggerMixin):
         return device
 
     def authenticate_domain_credential(self, request: HttpRequest) -> DeviceModel:
-        """Authenticate the client using an SSL/TLS certificate (Mutual TLS) and return the associated DeviceModel."""
-        cert_data = request.META.get('SSL_CLIENT_CERT')
-
-        if not cert_data:
-            error_message = 'Missing SSL_CLIENT_CERT header'
-            raise ClientCertificateAuthenticationError(error_message)
-
-        try:
-            client_cert = x509.load_pem_x509_certificate(cert_data.encode('utf-8'), default_backend())
-        except Exception as e:
-            error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
-            raise ClientCertificateAuthenticationError(error_message) from e
+        """Authenticate client using a Domain Credential TLS cert (Mutual TLS), return the associated DeviceModel."""
+        client_cert = self.get_client_cert_as_x509(request)
 
         credential, device = self.get_credential_for_certificate(client_cert)
         is_valid, reason = credential.is_valid_domain_credential()
@@ -156,13 +172,51 @@ class EstAuthenticationMixin(LoggerMixin):
 
         return device
 
-    def authenticate_idev_id(self) -> None:
+    def authenticate_idevid(self, request: HttpRequest, domain: DomainModel) -> None:
         """Placeholder for IDevID authentication.
 
-        :raises IDevIDAuthenticationError: Always, since IDevID authentication is not implemented.
+        raises: IDevIDAuthenticationError: Always, since IDevID authentication is not implemented.
         """
         error_message = 'IDevID authentication not implemented'
         raise IDevIDAuthenticationError(error_message)
+    
+        client_cert = self.get_client_cert_as_x509(request)
+
+        # Check whether device with this IDevID already exists in the database
+        #parameters: SSL client cert, domain name
+        #decode cert from request.META
+
+        # [OPTIONAL]
+        #calculate SHA256 fingerprint
+        #check if device with this fingerprint already exists in the domain
+
+        #if device exists:
+        #   check if IDevID is in a truststore with purpose IDevID.
+        #   this is prob. not a good idea, since need to try and validate every truststore chain
+        #   yes: authenticated
+        #   no: return 403
+
+        #if device does not exist:
+        # [END of optional]
+
+        # check for existing device(s) in domain with matching serial number
+        # makes most sense to do for each existing device with matching SN and onboarding method
+        # check if exactly one device with subject serial number already exists in the domain
+        DeviceModel.objects.filter(domain=domain, serial_number=serial_number, onboarding_method=EST_IDEVID)
+        #   check if IDevID is in a truststore with purpose IDevID.
+        #   yes: authenticated
+        #   no: return 403
+
+        # at this point, auto generate a device if allowed
+            # check that the serial number matches a reg. pattern in the domain
+            # do cert chain validation with the truststore specified in the reg. pattern
+            # yes: authenticated
+            # no: return 403
+
+        # -------
+        # AOKI v0.2 IDevID authentication
+        # DevOwnerID in Truststore with IntendedPurpose DEV_OWNER_ID
+        # How to efficiently find correct owner id?
 
     def authenticate_request(
         self, request: HttpRequest, domain: DomainModel, cert_template_str: str
@@ -174,7 +228,7 @@ class EstAuthenticationMixin(LoggerMixin):
             device, http_response = self._authenticate_application_certificate_request(request, domain)
 
         if device is None and http_response is None:
-            return None, LoggedHttpResponse('Authentication failed: No valid authentication method used', status=400)
+            return None, LoggedHttpResponse('Authentication failed: No valid authentication method used', status=401)
 
         return device, http_response
 
@@ -184,7 +238,7 @@ class EstAuthenticationMixin(LoggerMixin):
         """Authenticate requests for 'domaincredential' certificates and return the associated DeviceModel."""
         if not (domain.allow_idevid_registration or domain.allow_username_password_registration):
             return None, LoggedHttpResponse(
-                'Both IDevID registration and username:password registration are disabled', status=400
+                'Both IDevID registration and username:password registration are disabled', status=403
             )
 
         if domain.allow_username_password_registration:
@@ -197,11 +251,11 @@ class EstAuthenticationMixin(LoggerMixin):
 
         if domain.allow_idevid_registration:
             try:
-                self.authenticate_idev_id()
+                self.authenticate_idevid(domain)
             except IDevIDAuthenticationError as e:
-                return None, LoggedHttpResponse(f'Error validating the IDevID: {e!s}', status=400)
+                return None, LoggedHttpResponse(f'Error validating the IDevID: {e!s}', status=500)
 
-        return None, LoggedHttpResponse('No valid authentication method provided', status=400)
+        return None, LoggedHttpResponse('No valid authentication method provided', status=401)
 
     def _authenticate_application_certificate_request(
         self, request: HttpRequest, domain: DomainModel
@@ -209,7 +263,7 @@ class EstAuthenticationMixin(LoggerMixin):
         """Authenticate requests for application certificate templates and return the associated DeviceModel."""
         if not (domain.username_password_auth or domain.domain_credential_auth):
             return None, LoggedHttpResponse(
-                'Both username:password and domain credential authentication are disabled', status=400
+                'Both username:password and domain credential authentication are disabled', status=403
             )
 
         if domain.username_password_auth:
@@ -224,11 +278,11 @@ class EstAuthenticationMixin(LoggerMixin):
             try:
                 device = self.authenticate_domain_credential(request)
             except ClientCertificateAuthenticationError as e:
-                return None, LoggedHttpResponse(f'Error validating the client certificate: {e!s}', status=400)
+                return None, LoggedHttpResponse(f'Error validating the client certificate: {e!s}', status=500)
             else:
                 return device, None
 
-        return None, LoggedHttpResponse('No valid authentication method provided', status=400)
+        return None, LoggedHttpResponse('No valid authentication method provided', status=401)
 
 
 class EstHttpMixin:
@@ -509,19 +563,19 @@ class DeviceHandlerMixin:
             return device, None
 
         if not domain.auto_create_new_device:
-            return None, LoggedHttpResponse('Creating a new device for this domain is permitted', status=400)
+            return None, LoggedHttpResponse('Creating a new device for this domain is not permitted', status=403)
 
         if cert_template == 'domaincredential':
             if domain.allow_username_password_registration:
                 onboarding_protocol = DeviceModel.OnboardingProtocol.EST_PASSWORD
                 onboarding_status = DeviceModel.OnboardingStatus.PENDING
             elif domain.allow_idevid_registration:
-                return None, LoggedHttpResponse('IDevID registration is not supported implemented', status=400)
+                return None, LoggedHttpResponse('IDevID registration is not supported implemented', status=501)
             else:
                 error_message = (
                     'For registering a new device activate Username:Password registration or IDevid registration'
                 )
-                return None, LoggedHttpResponse(content=error_message, status=400)
+                return None, LoggedHttpResponse(content=error_message, status=401)
 
         else:
             onboarding_protocol = DeviceModel.OnboardingProtocol.NO_ONBOARDING
@@ -708,15 +762,15 @@ class OnboardingMixIn(LoggedHttpResponse):
 
         if issued_credential:
             return LoggedHttpResponse(
-                'A device with the same CN already exists. Not allowed for method /simpleenroll', status=400
+                'A device with the same CN already exists. Not allowed for method /simpleenroll', status=422
             )
 
         if requested_cert_template_str == 'domaincredential':
             if device.onboarding_status == DeviceModel.OnboardingStatus.ONBOARDED:
-                return LoggedHttpResponse('The device is already onboarded.', status=400)
+                return LoggedHttpResponse('The device is already onboarded.', status=422)
             if device.onboarding_status == DeviceModel.OnboardingStatus.NO_ONBOARDING:
                 return LoggedHttpResponse(
-                    'Requested domain credential for device which does not require onboarding.', status=400
+                    'Requested domain credential for device which does not require onboarding.', status=422
                 )
         return None
 
@@ -793,7 +847,7 @@ class EstSimpleEnrollmentView(
                                                      requested_cert_template_str=requested_cert_template_str)
 
         if not http_response:
-            http_response = LoggedHttpResponse('Something went wrong.', status=500)
+            http_response = LoggedHttpResponse('Something went wrong during EST simpleenroll.', status=500)
 
         return http_response
 
@@ -939,4 +993,23 @@ class EstCsrAttrsView(View, LoggerMixin):
 
         return LoggedHttpResponse(
             'csrattrs/ is not supported', status=404
+        )
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class EstTestView(View, LoggerMixin):
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        self.logger.info('Test request view')
+        self.logger.info(request.method)
+        self.logger.info(request.headers)
+        client_cert = request.META.get('SSL_CLIENT_CERT')
+        client_cn = request.META.get('SSL_CLIENT_S_DN_CN')
+        client_verify = request.META.get('SSL_CLIENT_VERIFY')
+        self.logger.info(client_cert)
+        self.logger.info(client_cn)
+        self.logger.info(client_verify)
+        self.logger.info('donee')
+        return LoggedHttpResponse(
+            'testing headers', status=501
         )
