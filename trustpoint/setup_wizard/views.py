@@ -11,11 +11,12 @@ from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.core.management import call_command
+from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import FormView, TemplateView, View
-from pki.models import CertificateModel, CredentialModel
+from pki.models import CertificateModel, CredentialModel, IssuingCaModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TrustpointTlsServerCredentialModel
 
 from setup_wizard import SetupWizardState
@@ -539,14 +540,21 @@ class SetupWizardTlsServerCredentialApplyCancelView(View):
             )
             return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
 
+        except ProtectedError as e:
+            messages.add_message(request, messages.ERROR, f'Could not clear certificates/credentials from DB: {e}')
+            return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
+
         except Exception as e:  # noqa: BLE001
             messages.add_message(request, messages.ERROR, f'An unexpected error occurred: {e}')
+            messages.add_message(request, messages.ERROR, traceback.format_exc())
             return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
 
     def _clear_credential_and_certificate_data(self) -> None:
-        """Clears credential and certificate data."""
-        CertificateModel.objects.all().delete()
+        """Clears all credential and certificate data if canceled in the 'WIZARD_TLS_SERVER_CREDENTIAL_APPLY' state."""
+        IssuingCaModel.objects.all().delete()
+        CredentialModel.objects.all().delete()
         TrustpointTlsServerCredentialModel.objects.all().delete()
+        CertificateModel.objects.all().delete()
 
     def _map_exit_code_to_message(self, return_code: int) -> str:
         """Maps shell script exit codes to user-friendly error messages."""
