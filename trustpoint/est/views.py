@@ -3,15 +3,15 @@
 import base64
 import ipaddress
 import re
-import os
+import secrets
 from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol, cast
 
 from cryptography import x509
-from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives._serialization import Encoding
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+from cryptography.x509.verification import PolicyBuilder, Store, VerificationError
 from devices.issuer import (
     LocalDomainCredentialIssuer,
     LocalTlsClientCredentialIssuer,
@@ -25,7 +25,9 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from pki.models.credential import CredentialModel
+from pki.models.devid_registration import DevIdRegistration
 from pki.models.domain import DomainModel
+from pki.models.truststore import TruststoreModel
 from pyasn1.type.univ import ObjectIdentifier  # type: ignore[import-untyped]
 from trustpoint_core.serializer import CertificateCollectionSerializer  # type: ignore[import-untyped]
 
@@ -85,7 +87,7 @@ class CredentialRequest:
     ipv6_addresses: list[ipaddress.IPv6Address]
     dns_names: list[str]
     public_key: rsa.RSAPublicKey | ec.EllipticCurvePublicKey
-    request_format:str
+    request_format: str
 
 
 class EstAuthenticationMixin(LoggerMixin):
@@ -172,51 +174,109 @@ class EstAuthenticationMixin(LoggerMixin):
 
         return device
 
-    def authenticate_idevid(self, request: HttpRequest, domain: DomainModel) -> None:
-        """Placeholder for IDevID authentication.
+    def _verify_idevid_against_truststore(self, idevid_cert: x509.Certificate, truststore: TruststoreModel) -> bool:
+        """Verify the IDevID certificate against the provided truststore."""
+        # Need to check whether truststore has intended usage IDevID?
+        certificates = truststore.get_certificate_collection_serializer().as_crypto_list()
+        store = Store(certificates)
+        builder = PolicyBuilder().store(store)
+        # TODO(Air): How to get untrusted IDevID intermediate certs? We need to get them from Apache...
+        builder = builder.max_chain_depth(0)
+        verifier = builder.build_client_verifier()
+        try:
+            _verified_client = verifier.verify(idevid_cert, [])
+        except VerificationError:
+            return False
+        return True
 
-        raises: IDevIDAuthenticationError: Always, since IDevID authentication is not implemented.
-        """
-        error_message = 'IDevID authentication not implemented'
+    def _auto_create_device_from_idevid(
+        self, idevid_cert: x509.Certificate, idevid_subj_sn: str, domain: DomainModel
+    ) -> DeviceModel:
+        """Auto-create a new DeviceModel from the IDevID certificate."""
+        if not domain.auto_create_new_device:
+            error_message = 'Auto-creating a new device for this domain is not permitted.'
+            raise IDevIDAuthenticationError(error_message)
+
+        try:
+            cn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
+            common_name = cn_b.decode() if isinstance(cn_b, bytes) else cn_b
+        except (ValueError, IndexError):
+            common_name = 'AutoGenDevice'
+
+        if DeviceModel.objects.filter(common_name=common_name, domain=domain).exists():
+            common_name += f'_{secrets.token_hex(4)}'
+
+        return DeviceModel.objects.create(
+            serial_number=idevid_subj_sn,
+            common_name=common_name,
+            domain=domain,
+            onboarding_protocol=DeviceModel.OnboardingProtocol.EST_IDEVID,
+            onboarding_status = DeviceModel.OnboardingStatus.PENDING
+        )
+
+    def authenticate_idevid(self, request: HttpRequest, domain: DomainModel) -> DeviceModel | None:
+        """Authenticate client using IDevID certificate for Domain Credential request."""
+        idevid_cert = self.get_client_cert_as_x509(request)
+
+        try:
+            sn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
+            idevid_subj_sn = sn_b.decode() if isinstance(sn_b, bytes) else sn_b
+        except (ValueError, IndexError) as e:
+            # TODO(Air): Check if we want to add field to associate IDevID with device by fingerprint
+            # This would however be incompatible with the current approach to Registration patterns
+            # One option is to modify the registration pattern to allow matching certain Issuer DN fields instead of SN
+            error_message = 'IDevID certificates without a serial number in the subject DN are not supported.'
+            raise IDevIDAuthenticationError(error_message) from e
+
+        domain_registrations = DevIdRegistration.objects.filter(domain=domain)
+        if not domain_registrations.exists():
+            error_message = f'No registration patterns for requested domain {domain.unique_name}.'
+            raise IDevIDAuthenticationError(error_message)
+
+        matching_registrations = [
+            r for r in domain_registrations
+            if re.fullmatch(r.serial_number_pattern, idevid_subj_sn)
+        ]
+        if not matching_registrations:
+            error_message = (f'No DevID registration pattern matching SN {idevid_subj_sn} '
+                             f'for requested domain {domain.unique_name}.')
+            raise IDevIDAuthenticationError(error_message)
+
+        # verify IDevID against Truststore
+        for registration in matching_registrations:
+            #for device in candidate_devices:
+            if (self._verify_idevid_against_truststore(
+                idevid_cert=idevid_cert,
+                truststore=registration.truststore,
+            )):
+                self.logger.info(
+                    'IDevID certificate with SN %s successfully verified against truststore %s',
+                    idevid_subj_sn,
+                    registration.truststore.unique_name
+                )
+                # check for existing device(s) in domain with matching serial number
+                existing_device = None
+                try:
+                    existing_device = DeviceModel.objects.get(
+                        domain=domain,
+                        serial_number=idevid_subj_sn,
+                        onboarding_protocol=DeviceModel.OnboardingProtocol.EST_IDEVID
+                    )
+                except DeviceModel.DoesNotExist:
+                    pass
+                except DeviceModel.MultipleObjectsReturned:
+                    error_message = (f'Multiple devices with the same serial number {idevid_subj_sn} '
+                                    f'found in domain {domain.unique_name}.')
+                    self.logger.warning(error_message)
+                    self.logger.warning('Auto-creating new device.')
+
+                if existing_device:
+                    return existing_device
+                return self._auto_create_device_from_idevid(idevid_cert, idevid_subj_sn, domain)
+
+        error_message = (f'IDevID with SN {idevid_subj_sn} could not be verified against any truststore.')
+        self.logger.warning(error_message)
         raise IDevIDAuthenticationError(error_message)
-    
-        client_cert = self.get_client_cert_as_x509(request)
-
-        # Check whether device with this IDevID already exists in the database
-        #parameters: SSL client cert, domain name
-        #decode cert from request.META
-
-        # [OPTIONAL]
-        #calculate SHA256 fingerprint
-        #check if device with this fingerprint already exists in the domain
-
-        #if device exists:
-        #   check if IDevID is in a truststore with purpose IDevID.
-        #   this is prob. not a good idea, since need to try and validate every truststore chain
-        #   yes: authenticated
-        #   no: return 403
-
-        #if device does not exist:
-        # [END of optional]
-
-        # check for existing device(s) in domain with matching serial number
-        # makes most sense to do for each existing device with matching SN and onboarding method
-        # check if exactly one device with subject serial number already exists in the domain
-        DeviceModel.objects.filter(domain=domain, serial_number=serial_number, onboarding_method=EST_IDEVID)
-        #   check if IDevID is in a truststore with purpose IDevID.
-        #   yes: authenticated
-        #   no: return 403
-
-        # at this point, auto generate a device if allowed
-            # check that the serial number matches a reg. pattern in the domain
-            # do cert chain validation with the truststore specified in the reg. pattern
-            # yes: authenticated
-            # no: return 403
-
-        # -------
-        # AOKI v0.2 IDevID authentication
-        # DevOwnerID in Truststore with IntendedPurpose DEV_OWNER_ID
-        # How to efficiently find correct owner id?
 
     def authenticate_request(
         self, request: HttpRequest, domain: DomainModel, cert_template_str: str
@@ -251,9 +311,11 @@ class EstAuthenticationMixin(LoggerMixin):
 
         if domain.allow_idevid_registration:
             try:
-                self.authenticate_idevid(domain)
+                device_or_none = self.authenticate_idevid(request, domain)
             except IDevIDAuthenticationError as e:
                 return None, LoggedHttpResponse(f'Error validating the IDevID: {e!s}', status=500)
+            else:
+                return device_or_none, None
 
         return None, LoggedHttpResponse('No valid authentication method provided', status=401)
 
@@ -547,7 +609,7 @@ class DeviceHandlerMixin:
     """
 
     def get_or_create_device_from_csr(
-        self, credential_request: CredentialRequest, domain: DomainModel, cert_template: str, device: DeviceModel
+        self, credential_request: CredentialRequest, domain: DomainModel, cert_template: str, device: DeviceModel | None
     ) -> tuple[DeviceModel | None, LoggedHttpResponse | None]:
         """Retrieves a DeviceModel instance using the serial number extracted from the provided CSR.
 
@@ -566,11 +628,11 @@ class DeviceHandlerMixin:
             return None, LoggedHttpResponse('Creating a new device for this domain is not permitted', status=403)
 
         if cert_template == 'domaincredential':
+            onboarding_status = DeviceModel.OnboardingStatus.PENDING
             if domain.allow_username_password_registration:
                 onboarding_protocol = DeviceModel.OnboardingProtocol.EST_PASSWORD
-                onboarding_status = DeviceModel.OnboardingStatus.PENDING
             elif domain.allow_idevid_registration:
-                return None, LoggedHttpResponse('IDevID registration is not supported implemented', status=501)
+                onboarding_protocol = DeviceModel.OnboardingProtocol.EST_IDEVID
             else:
                 error_message = (
                     'For registering a new device activate Username:Password registration or IDevid registration'
@@ -746,7 +808,7 @@ class CredentialIssuanceMixin:
         return None
 
 
-class OnboardingMixIn(LoggedHttpResponse):
+class OnboardingMixin(LoggedHttpResponse):
     """A mixin that provides onboarding validation logic for issuing credentials."""
 
     def _validate_onboarding(
@@ -784,7 +846,7 @@ class EstSimpleEnrollmentView(
     EstPkiMessageSerializerMixin,
     DeviceHandlerMixin,
     CredentialIssuanceMixin,
-    OnboardingMixIn,
+    OnboardingMixin,
     LoggerMixin,
     View,
 ):
@@ -827,7 +889,7 @@ class EstSimpleEnrollmentView(
         if not http_response:
             credential_request, http_response = self.deserialize_pki_message(self.raw_message)
 
-        if not http_response and credential_request and device and requested_domain and requested_cert_template_str:
+        if not http_response and credential_request and requested_domain and requested_cert_template_str:
             device, http_response = self.get_or_create_device_from_csr(
                 credential_request=credential_request,
                 domain=requested_domain,
@@ -860,7 +922,7 @@ class EstSimpleReEnrollmentView(EstAuthenticationMixin,
                               EstPkiMessageSerializerMixin,
                               DeviceHandlerMixin,
                               CredentialIssuanceMixin,
-                              OnboardingMixIn,
+                              OnboardingMixin,
                               LoggerMixin,
                               View):
     """Handles simple EST (Enrollment over Secure Transport) reenrollment requests.
@@ -902,7 +964,8 @@ class EstSimpleReEnrollmentView(EstAuthenticationMixin,
         if not http_response:
             credential_request, http_response = self.deserialize_pki_message(self.raw_message)
 
-        if not http_response and credential_request and device and requested_domain and requested_cert_template_str:
+        if not http_response and credential_request and requested_domain and requested_cert_template_str:
+            # Is there really any use case for auto-creating a device during re-enrollment?
             device, http_response = self.get_or_create_device_from_csr(
                 credential_request=credential_request,
                 domain=requested_domain,
