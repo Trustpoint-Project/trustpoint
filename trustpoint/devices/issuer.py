@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import re
 from typing import TYPE_CHECKING
 
 from cryptography import x509
@@ -289,11 +290,16 @@ class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
         """
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
 
+        san_uri = re.sub(r'[^a-zA-Z0-9_.-]', '', common_name) + '.alt'
         certificate = self._build_certificate(
             common_name,
             private_key.public_key_serializer.as_crypto(),
             validity_days,
-            [(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False)],
+            [
+                (x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False),
+                # TODO(Air): This is a workaround for cryptography < 45.0.0 requiring a SAN to verify the (IDevID) cert.
+                (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(san_uri)]), False),
+            ],
         )
         credential = CredentialSerializer(
             (
@@ -325,11 +331,16 @@ class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
         Returns:
             IssuedCredentialModel: The issued TLS client certificate.
         """
+        san_uri = re.sub(r'[^a-zA-Z0-9_.-]', '', common_name) + '.alt'
         certificate = self._build_certificate(
             common_name,
             public_key,
             validity_days,
-            [(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False)],
+            [
+                (x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False),
+                # TODO (Air): This is a workaround for cryptography < 45.0.0 requiring a SAN to verify the certificate.
+                (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(san_uri)]), False),
+            ],
         )
         return self._save_keyless_credential(
             certificate,

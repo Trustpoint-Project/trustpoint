@@ -264,16 +264,16 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
     onboarding_and_pki_configuration = forms.ChoiceField(
         choices=[
             ('cmp_shared_secret', _('CMP with shared secret onboarding')),
-            ('cmp_idevid', _('CMP with IDEVID onboarding')),
+            ('cmp_idevid', _('CMP with IDevID onboarding')),
             ('aoki_cmp', _('CMP with AOKI onboarding')),
             ('brski_cmp', _('CMP with BRSKI onboarding')),
             ('est_username_password', _('EST with username and password onboarding')),
-            ('est_idevid', _('EST with IDEVID onboarding')),
+            ('est_idevid', _('EST with IDevID onboarding')),
             ('aoki_est', _('EST with AOKI onboarding')),
             ('brski_est', _('EST with BRSKI onboarding')),
         ],
         widget=DisableSelectOptionsWidget(
-            disabled_values=['aoki_est', 'brski_est', 'aoki_cmp', 'brski_cmp', 'est_idevid']
+            disabled_values=['aoki_est', 'brski_est', 'aoki_cmp', 'brski_cmp']
         ),
         initial='cmp_idevid',
     )

@@ -177,15 +177,30 @@ class EstAuthenticationMixin(LoggerMixin):
     def _verify_idevid_against_truststore(self, idevid_cert: x509.Certificate, truststore: TruststoreModel) -> bool:
         """Verify the IDevID certificate against the provided truststore."""
         # Need to check whether truststore has intended usage IDevID?
+        self.logger.info('Verifying IDevID certificate against truststore %s', truststore.unique_name)
         certificates = truststore.get_certificate_collection_serializer().as_crypto_list()
+        self.logger.debug('Certificates in truststore: %s', certificates)
         store = Store(certificates)
         builder = PolicyBuilder().store(store)
-        # TODO(Air): How to get untrusted IDevID intermediate certs? We need to get them from Apache...
         builder = builder.max_chain_depth(0)
+        # TODO(Air): For now, cryptography requires the SAN extension to be present in the IDevID
+        # and some other undisclosed extensions to be present in the truststore (CA) certificate
+        # cryptography 45.0.0 will add the API to specify all extensions as optional (which we want)
+        #builder = builder.extension_policies(
+        #    ExtensionPolicy.permit_all(),
+        #    ExtensionPolicy.permit_all(),
+        #)
         verifier = builder.build_client_verifier()
         try:
             _verified_client = verifier.verify(idevid_cert, [])
-        except VerificationError:
+        except VerificationError as e:
+            # HACK: Bypass extension validation, remove when cryptography 45.0.0 is released
+            # This is a somewhat dangerous hack
+            # message on non-matching store is 'candidates exhausted: all candidates exhausted with no interior errors'
+            if 'candidates exhausted: Certificate is missing required extension' in str(e):
+                self.logger.warning('IDevID certificate bypassed extension validation')
+                return True
+            self.logger.warning('IDevID verification failed for truststore %s: %s', truststore.unique_name, e)  # noqa: TRY400
             return False
         return True
 

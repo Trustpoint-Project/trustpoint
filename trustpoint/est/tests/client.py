@@ -164,10 +164,9 @@ class ESTClient:
     def get_ca_certificates(self):
         """Retrieves CA certificates from the EST /cacerts endpoint."""
         url = f'{self.est_url}/{self.domain}/cacerts/'
-        auth, cert = self._get_auth()
 
         logging.info('Fetching CA certificates from %s', url)
-        response = self.session.get(url, auth=auth, cert=cert)
+        response = self.session.get(url, verify=self.ca_cert_path)
 
         if response.status_code == 200:
             der_data = (
@@ -189,14 +188,14 @@ class ESTClient:
 if __name__ == '__main__':
     client = ESTClient(
         est_url='https://localhost:443/.well-known/est',
-        auth_type='both',
+        auth_type='mutual_tls',#'both',
         domain='arburg',
-        cert_template='tlsserver',
-        username='admin',
-        password='testing321',
-        cert_path='cert.pem',
-        key_path='key.pem',
+        cert_template='domaincredential',#'tlsserver',
+        username=None,#'admin',
+        password=None,#'testing321',
+        cert_path='certificate.pem',
+        key_path='pk.pem',
         ca_cert_path='trust_store.pem',
     )
-    client.enroll(common_name='test.example.com', serial_number='123456789', save_key=True)
-    client.get_ca_certificates()
+    client.enroll(common_name='test1.example.com', serial_number='123456789', save_key=True)
+    #client.get_ca_certificates()
