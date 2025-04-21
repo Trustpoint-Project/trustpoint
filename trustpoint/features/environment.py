@@ -7,6 +7,17 @@ from collections.abc import Callable
 from behave import given, runner, step, then, when
 
 
+from selenium import webdriver
+
+def before_all(context):
+    # Initialize browser (e.g., Chrome, Firefox)
+    context.browser = webdriver.Chrome()  # or webdriver.Firefox()
+    context.browser.implicitly_wait(10)  # optional: wait for elements to load
+
+def after_all(context):
+    # Quit the browser at the end of all tests
+    context.browser.quit()
+
 # Function to wrap steps and enforce failure on any exception
 def fail_on_exception(func: Callable) -> Callable:
     """Wrapper that ensures uncaught exceptions fail the scenario and are logged to the HTML report."""
