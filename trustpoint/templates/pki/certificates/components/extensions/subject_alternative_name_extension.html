@@ -1,13 +1,14 @@
+{% load i18n %}
 {% block subject_alternative_name_extension %}
     {% if cert.subject_alternative_name_extension %}
-        <h2>Subject Alternative Name (SAN) Extension</h2><hr class="hr-m">
+        <h2>{% trans 'Subject Alternative Name (SAN) Extension' %}</h2><hr class="hr-m">
         <div class="tp-kvp-list">
             <div>
-                <div>Extension OID</div>
+                <div>{% trans 'Extension OID' %}</div>
                 <div>{{ cert.subject_alternative_name_extension.extension_oid }}</div>
             </div>
             <div>
-                <div>Critical</div>
+                <div>{% trans 'Critical' %}</div>
                 <div>{{ cert.subject_alternative_name_extension.critical }}</div>
             </div>
         </div>

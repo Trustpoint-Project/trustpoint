@@ -1,11 +1,11 @@
 {% load i18n %}
 {% block subject_and_names %}
-    <h2>Certificate Subject and Names</h2>
+    <h2>{% trans 'Certificate Subject and Names' %}</h2>
     <hr class="hr-m">
 
     <div class="tp-kvp-list">
         <div>
-            <div>Subject</div>
+            <div>{% trans 'Subject' %}</div>
             <div>
                 {% for entry in cert.subject.all %}
                     {{ entry }}<br>
@@ -14,7 +14,7 @@
         </div>
 
         <div>
-            <div>Common Name</div>
+            <div>{% trans 'Common Name' %}</div>
             <div>{{ cert.common_name }}</div>
         </div>
     </div>

@@ -17,7 +17,7 @@
                 {% csrf_token %}
                 <div class="card-body">
                     <div class="tp-card-centered-content">
-                        <p>Are you sure you want to delete the registration pattern: <strong>{{ object.unique_name }}</strong>?</p>
+                        <p>{% blocktranslate with name=object.unique_name %}Are you sure you want to delete the registration pattern <strong>{{ name }}</strong>?{% endblocktranslate %}</p>
                     </div>
                 </div>
                 <div class="card-footer d-flex">

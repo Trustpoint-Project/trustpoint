@@ -5,7 +5,7 @@
 
     <div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
         <div class="card-header">
-            <h1>{% trans "Truststores" %}</h1>
+            <h1>{% trans 'Truststores' %}</h1>
         </div>
         <div class="card-body text-start" style="overflow: auto; flex-grow: 1; max-height: 90%;">
             <table class="table">
@@ -14,22 +14,22 @@
                     <th id="checkbox-column"><input type="checkbox"/></th>
                     <th>
                         <a href="?sort={% if current_sort == 'unique_name' %}-{% endif %}unique_name">
-                            Unique Name
+                            {% trans 'Unique Name' %}
                         </a>
                     </th>
                     <th>
                         <a href="?sort={% if current_sort == 'intended_usage' %}-{% endif %}intended_usage">
-                            Intended Usage
+                            {% trans 'Intended Usage' %}
                         </a>
                     </th>
                     <th>
                         <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
-                            Created at
+                            {% trans 'Created at' %}
                         </a>
                     </th>
-                    <th>Details</th>
-                    <th>Download</th>
-                    <th>Delete</th>
+                    <th>{% trans 'Details' %}</th>
+                    <th>{% trans 'Download' %}</th>
+                    <th>{% trans 'Delete' %}</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -42,13 +42,13 @@
                         <td>{{ truststore.get_intended_usage_display }}</td>
                         <td>{{ truststore.created_at }}</td>
                         <td>
-                            <a href="details/{{ truststore.id }}/" class="btn btn-primary tp-table-btn w-100">Details</a>
+                            <a href="details/{{ truststore.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Details' %}</a>
                         </td>
                         <td>
-                            <a href="download/{{ truststore.id }}/" class="btn btn-primary tp-table-btn w-100">Download</a>
+                            <a href="download/{{ truststore.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Download' %}</a>
                         </td>
                         <td>
-                            <a href="delete/{{ truststore.id }}/" class="btn btn-danger tp-table-btn w-100">Delete</a>
+                            <a href="delete/{{ truststore.id }}/" class="btn btn-danger tp-table-btn w-100">{% trans 'Delete' %}</a>
                         </td>
                     </tr>
                 {% empty %}
