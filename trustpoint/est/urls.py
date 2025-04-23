@@ -26,5 +26,4 @@ urlpatterns = [
         views.EstCsrAttrsView.as_view(),
         name='csrattrs'
     ),
-    path('test/', views.EstTestView.as_view(), name='test'),
 ]

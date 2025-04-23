@@ -1081,22 +1081,3 @@ class EstCsrAttrsView(View, LoggerMixin):
         return LoggedHttpResponse(
             'csrattrs/ is not supported', status=404
         )
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class EstTestView(View, LoggerMixin):
-
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        self.logger.info('Test request view')
-        self.logger.info(request.method)
-        self.logger.info(request.headers)
-        client_cert = request.META.get('SSL_CLIENT_CERT')
-        client_cn = request.META.get('SSL_CLIENT_S_DN_CN')
-        client_verify = request.META.get('SSL_CLIENT_VERIFY')
-        self.logger.info(client_cert)
-        self.logger.info(client_cn)
-        self.logger.info(client_verify)
-        self.logger.info('donee')
-        return LoggedHttpResponse(
-            'testing headers', status=501
-        )
