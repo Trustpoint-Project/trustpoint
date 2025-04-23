@@ -94,7 +94,9 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     # Property would not be sortable.
     # We may want to resolve this later by modifying the queryset within the view
     common_name = models.CharField(verbose_name=_('Common Name'), max_length=256, default='')
-    sha256_fingerprint = models.CharField(verbose_name=_('Fingerprint (SHA256)'), max_length=256, editable=False)
+    sha256_fingerprint = models.CharField(
+        verbose_name=_('Fingerprint (SHA256)'), max_length=256, editable=False, unique=True
+    )
 
     # ------------------------------------------ Certificate Fields (Header) -------------------------------------------
 
@@ -165,7 +167,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
 
     # ---------------------------------------------------- Raw Data ----------------------------------------------------
 
-    cert_pem = models.CharField(verbose_name=_('Certificate (PEM)'), max_length=65536, editable=False, unique=True)
+    cert_pem = models.TextField(verbose_name=_('Certificate (PEM)'), editable=False)
     public_key_pem = models.CharField(verbose_name=_('Public Key (PEM, SPKI)'), max_length=65536, editable=False)
 
     # ----------------------------------------- CertificateModel Creation Data -----------------------------------------
@@ -274,27 +276,45 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     )
 
     authority_information_access_extension = models.ForeignKey(
-        AuthorityInformationAccessExtension, null=True, blank=True, on_delete=models.PROTECT,
+        AuthorityInformationAccessExtension,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
     )
 
     subject_information_access_extension = models.ForeignKey(
-        SubjectInformationAccessExtension, null=True, blank=True, on_delete=models.PROTECT,
+        SubjectInformationAccessExtension,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
     )
 
     inhibit_any_policy_extension = models.ForeignKey(
-        InhibitAnyPolicyExtension, null=True, blank=True, on_delete=models.PROTECT,
+        InhibitAnyPolicyExtension,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
     )
 
     policy_constraints_extension = models.ForeignKey(
-        PolicyConstraintsExtension, null=True, blank=True, on_delete=models.PROTECT,
+        PolicyConstraintsExtension,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
     )
 
     subject_directory_attributes_extension = models.ForeignKey(
-        SubjectDirectoryAttributesExtension, null=True, blank=True, on_delete=models.PROTECT,
+        SubjectDirectoryAttributesExtension,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
     )
 
     freshest_crl_extension = models.ForeignKey(
-        FreshestCrlExtension, null=True, blank=True, on_delete=models.PROTECT,
+        FreshestCrlExtension,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
     )
 
     class Meta(TypedModelMeta):
@@ -596,23 +616,47 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         return cls._save_certificate(certificate=certificate)
 
     # ---------------------------------------------- Post-deletion cleanup ---------------------------------------------
+    def pre_delete(self) -> None:
+        """Store the related objects before deletion."""
+        self._related_objects = {
+            'basic_constraints_extension': self.basic_constraints_extension,
+            'key_usage_extension': self.key_usage_extension,
+            'issuer_alternative_name_extension': self.issuer_alternative_name_extension,
+            'subject_alternative_name_extension': self.subject_alternative_name_extension,
+            'authority_key_identifier_extension': self.authority_key_identifier_extension,
+            'subject_key_identifier_extension': self.subject_key_identifier_extension,
+            'certificate_policies_extension': self.certificate_policies_extension,
+            'extended_key_usage_extension': self.extended_key_usage_extension,
+            'name_constraints_extension': self.name_constraints_extension,
+            'crl_distribution_points_extension': self.crl_distribution_points_extension,
+            'authority_information_access_extension': self.authority_information_access_extension,
+            'subject_information_access_extension': self.subject_information_access_extension,
+            'inhibit_any_policy_extension': self.inhibit_any_policy_extension,
+            'policy_constraints_extension': self.policy_constraints_extension,
+            'freshest_crl_extension': self.freshest_crl_extension,
+        }
+
     def post_delete(self) -> None:
         """Clean up related orphaned extension models."""
-        BasicConstraintsExtension.delete_if_orphaned(self.basic_constraints_extension)
-        KeyUsageExtension.delete_if_orphaned(self.key_usage_extension)
-        IssuerAlternativeNameExtension.delete_if_orphaned(self.issuer_alternative_name_extension)
-        SubjectAlternativeNameExtension.delete_if_orphaned(self.subject_alternative_name_extension)
-        AuthorityKeyIdentifierExtension.delete_if_orphaned(self.authority_key_identifier_extension)
-        SubjectKeyIdentifierExtension.delete_if_orphaned(self.subject_key_identifier_extension)
-        CertificatePoliciesExtension.delete_if_orphaned(self.certificate_policies_extension)
-        ExtendedKeyUsageExtension.delete_if_orphaned(self.extended_key_usage_extension)
-        NameConstraintsExtension.delete_if_orphaned(self.name_constraints_extension)
-        CrlDistributionPointsExtension.delete_if_orphaned(self.crl_distribution_points_extension)
-        AuthorityInformationAccessExtension.delete_if_orphaned(self.authority_information_access_extension)
-        SubjectInformationAccessExtension.delete_if_orphaned(self.subject_information_access_extension)
-        InhibitAnyPolicyExtension.delete_if_orphaned(self.inhibit_any_policy_extension)
-        PolicyConstraintsExtension.delete_if_orphaned(self.policy_constraints_extension)
-        FreshestCrlExtension.delete_if_orphaned(self.freshest_crl_extension)
+        BasicConstraintsExtension.delete_if_orphaned(self._related_objects['basic_constraints_extension'])
+        KeyUsageExtension.delete_if_orphaned(self._related_objects['key_usage_extension'])
+        IssuerAlternativeNameExtension.delete_if_orphaned(self._related_objects['issuer_alternative_name_extension'])
+        SubjectAlternativeNameExtension.delete_if_orphaned(self._related_objects['subject_alternative_name_extension'])
+        AuthorityKeyIdentifierExtension.delete_if_orphaned(self._related_objects['authority_key_identifier_extension'])
+        SubjectKeyIdentifierExtension.delete_if_orphaned(self._related_objects['subject_key_identifier_extension'])
+        CertificatePoliciesExtension.delete_if_orphaned(self._related_objects['certificate_policies_extension'])
+        ExtendedKeyUsageExtension.delete_if_orphaned(self._related_objects['extended_key_usage_extension'])
+        NameConstraintsExtension.delete_if_orphaned(self._related_objects['name_constraints_extension'])
+        CrlDistributionPointsExtension.delete_if_orphaned(self._related_objects['crl_distribution_points_extension'])
+        AuthorityInformationAccessExtension.delete_if_orphaned(
+            self._related_objects['authority_information_access_extension']
+        )
+        SubjectInformationAccessExtension.delete_if_orphaned(
+            self._related_objects['subject_information_access_extension']
+        )
+        InhibitAnyPolicyExtension.delete_if_orphaned(self._related_objects['inhibit_any_policy_extension'])
+        PolicyConstraintsExtension.delete_if_orphaned(self._related_objects['policy_constraints_extension'])
+        FreshestCrlExtension.delete_if_orphaned(self._related_objects['freshest_crl_extension'])
 
     # ---------------------------------------------- Utility ---------------------------------------------
     def subjects_match(self, other_certificate: x509.Certificate) -> bool:

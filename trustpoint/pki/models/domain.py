@@ -38,7 +38,7 @@ class DomainModel(models.Model):
     updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
 
     auto_create_new_device = models.BooleanField(
-        _('Auto-create New Device'),
+        _('Auto-create new device'),
         default=False,
         help_text=_(
             'Automatically create a new device if no device with the same serial number exists in the database.'
