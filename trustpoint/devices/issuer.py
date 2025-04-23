@@ -78,6 +78,24 @@ class SaveCredentialToDbMixin:
         issued_credential_type: IssuedCredentialModel.IssuedCredentialType,
         issued_credential_purpose: IssuedCredentialModel.IssuedCredentialPurpose,
     ) -> IssuedCredentialModel:
+        # check for existing issued credentials
+        existing_credentials = IssuedCredentialModel.objects.filter(
+            device=self.device,
+            domain=self.domain,
+            issued_credential_type=issued_credential_type,
+            issued_credential_purpose=issued_credential_purpose,
+            common_name=common_name,
+        )
+        for issued_credential in existing_credentials:
+            cred_model: CredentialModel = issued_credential.credential
+            if cred_model.certificate.subjects_match(certificate):
+                # if the certificate already exists, we need to update the certificate (e.g. reenroll)
+                cred_model.update_keyless_credential(
+                    certificate, certificate_chain
+                )
+                cred_model.save()
+                return issued_credential
+
         credential_model = CredentialModel.save_keyless_credential(
             certificate=certificate,
             certificate_chain=certificate_chain,

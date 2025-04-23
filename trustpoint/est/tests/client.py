@@ -198,4 +198,9 @@ if __name__ == '__main__':
         ca_cert_path='trust_store.pem',
     )
     client.enroll(common_name='test1.example.com', serial_number='123456789', save_key=True)
+    # client.reenroll(
+    #     cert_path='issued_cert.pem',
+    #     key_path='private_key.pem',
+    #     generate_new_key=False,
+    # )
     #client.get_ca_certificates()

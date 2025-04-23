@@ -93,7 +93,8 @@ class CredentialRequest:
 class EstAuthenticationMixin(LoggerMixin):
     """Checks for HTTP Basic Authentication before processing the request."""
 
-    def get_client_cert_as_x509(self, request: HttpRequest) -> x509.Certificate:
+    @staticmethod
+    def get_client_cert_as_x509(request: HttpRequest) -> x509.Certificate:
         """Retrieve the client certificate from the request and convert it to an x509.Certificate object.
 
         Args:
@@ -118,7 +119,8 @@ class EstAuthenticationMixin(LoggerMixin):
 
         return client_cert
 
-    def get_credential_for_certificate(self, cert: x509.Certificate) -> tuple[CredentialModel, DeviceModel]:
+    @staticmethod
+    def get_credential_for_certificate(cert: x509.Certificate) -> tuple[CredentialModel, DeviceModel]:
         """Retrieve a CredentialModel and associated DeviceModel instance for the given certificate.
 
         :param cert: x509.Certificate to search for.
@@ -136,7 +138,8 @@ class EstAuthenticationMixin(LoggerMixin):
 
         return credential, device
 
-    def authenticate_username_password(self, request: HttpRequest) -> DeviceModel:
+    @staticmethod
+    def authenticate_username_password(request: HttpRequest) -> DeviceModel:
         """Authenticate a user using HTTP Basic credentials and return associated DeviceModel.
 
         :param request: Django HttpRequest containing the headers.
@@ -204,6 +207,24 @@ class EstAuthenticationMixin(LoggerMixin):
             return False
         return True
 
+    @staticmethod
+    def _get_matching_registrations(domain: DomainModel, idevid_subj_sn: str) -> list[DevIdRegistration]:
+        """Get DevIdRegistration patters matching the given domain and serial number."""
+        domain_registrations = DevIdRegistration.objects.filter(domain=domain)
+        if not domain_registrations.exists():
+            error_message = f'No registration patterns for requested domain {domain.unique_name}.'
+            raise IDevIDAuthenticationError(error_message)
+
+        matching_registrations = [
+            r for r in domain_registrations
+            if re.fullmatch(r.serial_number_pattern, idevid_subj_sn)
+        ]
+        if not matching_registrations:
+            error_message = (f'No DevID registration pattern matching SN {idevid_subj_sn} '
+                             f'for requested domain {domain.unique_name}.')
+            raise IDevIDAuthenticationError(error_message)
+        return matching_registrations
+
     def _auto_create_device_from_idevid(
         self, idevid_cert: x509.Certificate, idevid_subj_sn: str, domain: DomainModel
     ) -> DeviceModel:
@@ -243,19 +264,7 @@ class EstAuthenticationMixin(LoggerMixin):
             error_message = 'IDevID certificates without a serial number in the subject DN are not supported.'
             raise IDevIDAuthenticationError(error_message) from e
 
-        domain_registrations = DevIdRegistration.objects.filter(domain=domain)
-        if not domain_registrations.exists():
-            error_message = f'No registration patterns for requested domain {domain.unique_name}.'
-            raise IDevIDAuthenticationError(error_message)
-
-        matching_registrations = [
-            r for r in domain_registrations
-            if re.fullmatch(r.serial_number_pattern, idevid_subj_sn)
-        ]
-        if not matching_registrations:
-            error_message = (f'No DevID registration pattern matching SN {idevid_subj_sn} '
-                             f'for requested domain {domain.unique_name}.')
-            raise IDevIDAuthenticationError(error_message)
+        matching_registrations = self._get_matching_registrations(domain, idevid_subj_sn)
 
         # verify IDevID against Truststore
         for registration in matching_registrations:
@@ -995,7 +1004,7 @@ class EstSimpleReEnrollmentView(EstAuthenticationMixin,
                                                      requested_cert_template_str=requested_cert_template_str)
 
         if not http_response:
-            http_response = LoggedHttpResponse('Something went wrong.', status=500)
+            http_response = LoggedHttpResponse('Something went wrong during EST simplereenroll.', status=500)
 
         return http_response
 
@@ -1047,7 +1056,7 @@ class EstCACertsView(EstAuthenticationMixin, EstRequestedDomainExtractorMixin, V
                     del http_response['Content-Language']
 
             if not http_response:
-                http_response = LoggedHttpResponse('Something went wrong.', status=500)
+                http_response = LoggedHttpResponse('Something went wrong during EST getcacerts.', status=500)
 
         except Exception as e:  # noqa:BLE001
             return LoggedHttpResponse(
