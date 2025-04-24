@@ -2,6 +2,7 @@
 
 import base64
 import ipaddress
+import itertools
 import re
 import secrets
 from dataclasses import dataclass
@@ -94,7 +95,7 @@ class EstAuthenticationMixin(LoggerMixin):
     """Checks for HTTP Basic Authentication before processing the request."""
 
     @staticmethod
-    def get_client_cert_as_x509(request: HttpRequest) -> x509.Certificate:
+    def get_client_cert_as_x509(request: HttpRequest) -> tuple[x509.Certificate, list[x509.Certificate]]:
         """Retrieve the client certificate from the request and convert it to an x509.Certificate object.
 
         Args:
@@ -117,7 +118,21 @@ class EstAuthenticationMixin(LoggerMixin):
             error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
             raise ClientCertificateAuthenticationError(error_message) from e
 
-        return client_cert
+        # Extract intermediate CAs from Apache variables
+        intermediate_cas = []
+
+        for i in itertools.count():
+            ca = request.META.get(f'SSL_CLIENT_CERT_CHAIN_{i}')
+            if not ca:
+                break
+            try:
+                ca_cert = x509.load_pem_x509_certificate(ca.encode('utf-8'))
+            except Exception as e:
+                error_message = f'Invalid SSL_CLIENT_CERT_CHAIN_{i} PEM: {e}'
+                raise ClientCertificateAuthenticationError(error_message) from e
+            intermediate_cas.append(ca_cert)
+
+        return (client_cert, intermediate_cas)
 
     @staticmethod
     def get_credential_for_certificate(cert: x509.Certificate) -> tuple[CredentialModel, DeviceModel]:
@@ -167,7 +182,7 @@ class EstAuthenticationMixin(LoggerMixin):
 
     def authenticate_domain_credential(self, request: HttpRequest) -> DeviceModel:
         """Authenticate client using a Domain Credential TLS cert (Mutual TLS), return the associated DeviceModel."""
-        client_cert = self.get_client_cert_as_x509(request)
+        client_cert, _intermediary_cas = self.get_client_cert_as_x509(request)
 
         credential, device = self.get_credential_for_certificate(client_cert)
         is_valid, reason = credential.is_valid_domain_credential()
@@ -177,7 +192,9 @@ class EstAuthenticationMixin(LoggerMixin):
 
         return device
 
-    def _verify_idevid_against_truststore(self, idevid_cert: x509.Certificate, truststore: TruststoreModel) -> bool:
+    def _verify_idevid_against_truststore(
+        self, idevid_cert: x509.Certificate, intermediate_cas: list[x509.Certificate], truststore: TruststoreModel
+    ) -> bool:
         """Verify the IDevID certificate against the provided truststore."""
         # Need to check whether truststore has intended usage IDevID?
         self.logger.info('Verifying IDevID certificate against truststore %s', truststore.unique_name)
@@ -195,7 +212,9 @@ class EstAuthenticationMixin(LoggerMixin):
         #)
         verifier = builder.build_client_verifier()
         try:
-            _verified_client = verifier.verify(idevid_cert, [])
+            # intermediate CAs do not work with the hack (will incorrectly report as verified!!), should work on 45.0.0
+            del intermediate_cas
+            _verified_client = verifier.verify(idevid_cert, []) # intermediate_cas)
         except VerificationError as e:
             # HACK: Bypass extension validation, remove when cryptography 45.0.0 is released
             # This is a somewhat dangerous hack
@@ -252,7 +271,7 @@ class EstAuthenticationMixin(LoggerMixin):
 
     def authenticate_idevid(self, request: HttpRequest, domain: DomainModel) -> DeviceModel | None:
         """Authenticate client using IDevID certificate for Domain Credential request."""
-        idevid_cert = self.get_client_cert_as_x509(request)
+        idevid_cert, intermediate_cas = self.get_client_cert_as_x509(request)
 
         try:
             sn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
@@ -271,6 +290,7 @@ class EstAuthenticationMixin(LoggerMixin):
             #for device in candidate_devices:
             if (self._verify_idevid_against_truststore(
                 idevid_cert=idevid_cert,
+                intermediate_cas=intermediate_cas,
                 truststore=registration.truststore,
             )):
                 self.logger.info(
