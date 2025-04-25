@@ -926,7 +926,7 @@ class OnboardingMixin(LoggedHttpResponse):
 
         if issued_credential:
             return LoggedHttpResponse(
-                'A device with the same CN already exists. Not allowed for method /simpleenroll', status=422
+                'A credential with the same CN already exists. Not allowed for method /simpleenroll', status=422
             )
 
         if requested_cert_template_str == 'domaincredential':

@@ -241,11 +241,24 @@ if __name__ == '__main__':
         out_cert_path='app_cert.pem',
         out_key_path='app_key.pem',
     )
-    app_client.enroll(common_name='test2.example.com', serial_number='4232', save_key=True)
+    #app_client.enroll(common_name='test4.example.com', serial_number='4232', save_key=True)
 
+    app_reenroll_client = ESTClient(
+        est_url='https://localhost:443/.well-known/est',
+        auth_type='mutual_tls',#'both',
+        domain='arburg',
+        cert_template='tlsclient',
+        username=None,#'admin',
+        password=None,#'testing321',
+        cert_path='app_cert.pem',
+        key_path='app_key.pem',
+        ca_cert_path='trust_store.pem',
+        out_cert_path='app_cert.pem',
+        out_key_path='app_key.pem',
+    )
     # re-enroll the application certificate
-    # app_client.reenroll(
-    #     cert_path='issued_cert.pem',
-    #     key_path='private_key.pem',
-    #     generate_new_key=False,
-    # )
+    app_reenroll_client.reenroll(
+        cert_path='app_cert.pem',
+        key_path='app_key.pem',
+        generate_new_key=False,
+    )
