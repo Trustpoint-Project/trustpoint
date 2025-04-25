@@ -43,12 +43,14 @@ def test_get_credential_for_certificate(mock_get, mock_filter, est_simple_enroll
     mock_filter.return_value.first.return_value = mock_credential
 
     mock_issued_credential = MagicMock()
+    mock_issued_credential.credential = mock_credential
     mock_issued_credential.device = MagicMock()
     mock_get.return_value = mock_issued_credential
 
-    credential, device = est_simple_enrollment_view.get_credential_for_certificate(cert_mock)
-    assert credential == mock_credential
-    assert device == mock_issued_credential.device
+    issued_credential = est_simple_enrollment_view.get_credential_for_certificate(cert_mock)
+    assert issued_credential == mock_issued_credential
+    assert issued_credential.device == mock_issued_credential.device
+    assert issued_credential.credential == mock_credential
 
 
 @patch('devices.models.DeviceModel.objects.filter')

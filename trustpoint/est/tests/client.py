@@ -219,7 +219,7 @@ if __name__ == '__main__':
         out_key_path='dc_private_key.pem',
     )
     # enroll Domain Credential
-    #dc_client.enroll(common_name='test2.example.com', serial_number='123456788', save_key=True)
+    dc_client.enroll(common_name='test2.example.com', serial_number='123456788', save_key=True)
     # dc_client.reenroll(
     #     cert_path='dc_cert.pem',
     #     key_path='dc_private_key.pem',
@@ -257,8 +257,8 @@ if __name__ == '__main__':
         out_key_path='app_key.pem',
     )
     # re-enroll the application certificate
-    app_reenroll_client.reenroll(
-        cert_path='app_cert.pem',
-        key_path='app_key.pem',
-        generate_new_key=False,
-    )
+    #app_reenroll_client.reenroll(
+    #    cert_path='app_cert.pem',
+    #    key_path='app_key.pem',
+    #    generate_new_key=False,
+    #)
