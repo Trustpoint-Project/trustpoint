@@ -226,6 +226,29 @@ class IssuedCredentialModel(CustomDeleteActionModel):
         self.revoke()
         self.credential.delete()  # this will also delete the IssuedCredentialModel via cascade
 
+    def is_valid_domain_credential(self) -> tuple[bool, str]:
+        """Determines if this issued credential is valid for enrolling new application credentials.
+
+        This method performs the following checks:
+          1. The IssuedCredentialModel type must be of type DOMAIN_CREDENTIAL.
+          2. The credential must be of type ISSUED_CREDENTIAL.
+          3. A primary certificate must exist.
+          4. The certificate's status must be 'OK'.
+
+        Returns:
+            tuple[bool, str]: A tuple where:
+                          - The first value is True if the credential meets all criteria, False otherwise.
+                          - The second value is a reason string explaining why the credential is invalid.
+        """
+        if self.issued_credential_type != IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL:
+            return False, 'Invalid issued credential type: Must be DOMAIN_CREDENTIAL.'
+
+        result, reason = self.credential.is_valid_issued_credential()
+        if not result:
+            return False, reason
+
+        return True, 'Valid domain credential.'
+
 
 class RemoteDeviceCredentialDownloadModel(models.Model):
     """Model to associate a credential model with an OTP and token for unauthenticated remoted download."""

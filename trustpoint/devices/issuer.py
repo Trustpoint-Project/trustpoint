@@ -88,7 +88,7 @@ class SaveCredentialToDbMixin:
         )
         for issued_credential in existing_credentials:
             cred_model: CredentialModel = issued_credential.credential
-            if cred_model.certificate.subjects_match(certificate):
+            if cred_model.certificate.subjects_match(certificate.subject):
                 # if the certificate already exists, we need to update the certificate (e.g. reenroll)
                 cred_model.update_keyless_credential(
                     certificate, certificate_chain

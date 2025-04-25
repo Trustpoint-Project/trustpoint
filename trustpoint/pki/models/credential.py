@@ -349,8 +349,8 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         """Returns the hash algorithm used by the current credential."""
         return self.get_certificate().signature_hash_algorithm
 
-    def is_valid_domain_credential(self) -> tuple[bool, str]:
-        """Determines if this credential is valid for domain usage.
+    def is_valid_issued_credential(self) -> tuple[bool, str]:
+        """Determines if this issued credential is valid.
 
         This method performs the following checks:
           1. The credential must be of type ISSUED_CREDENTIAL.
@@ -372,7 +372,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         if primary_cert.certificate_status != primary_cert.CertificateStatus.OK:
             return False, f'Invalid certificate status: {primary_cert.certificate_status} (Must be OK).'
 
-        return True, 'Valid domain credential.'
+        return True, 'Valid issued credential.'
 
 
 class PrimaryCredentialCertificate(models.Model):
