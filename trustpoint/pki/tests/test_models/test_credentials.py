@@ -1,4 +1,4 @@
-"""Test module for credential models in the PKI application."""
+"""Test module for credential models."""
 
 from datetime import timedelta
 
@@ -102,8 +102,6 @@ def create_test_credential_serializer() -> CredentialSerializer:
 
 
 # Fixtures
-
-
 @pytest.fixture
 def test_certificate() -> CertificateModel:
     """Fixture to create and return a test certificate."""
@@ -166,6 +164,27 @@ def test_credential_model_get_private_key(test_credential: CredentialModel) -> N
     assert isinstance(private_key, rsa.RSAPrivateKey)
 
 
+def test_credential_model_get_private_key_failure(test_credential: CredentialModel) -> None:
+    """Test getting private key when none exists should raise RuntimeError."""
+    test_credential.private_key = ''
+    with pytest.raises(RuntimeError):
+        test_credential.get_private_key()
+
+
+def test_credential_model_get_private_key_serializer(test_credential: CredentialModel) -> None:
+    """Test getting the private key serializer from a credential."""
+    serializer = test_credential.get_private_key_serializer()
+    assert serializer is not None
+    assert isinstance(serializer, PrivateKeySerializer)
+
+
+def test_credential_model_get_private_key_serializer_failure(test_credential: CredentialModel) -> None:
+    """Test getting private key serializer when none exists should raise RuntimeError."""
+    test_credential.private_key = ''
+    with pytest.raises(RuntimeError):
+        test_credential.get_private_key_serializer()
+
+
 def test_credential_model_get_certificate(test_credential: CredentialModel) -> None:
     """Test getting the certificate from a credential."""
     cert = test_credential.get_certificate()
@@ -181,11 +200,39 @@ def test_credential_model_get_certificate_chain(test_credential: CredentialModel
     assert all(isinstance(c, x509.Certificate) for c in chain)
 
 
+def test_credential_model_get_certificate_serializer(test_credential: CredentialModel) -> None:
+    """Test getting a certificate serializer from a credential model."""
+    serializer = test_credential.get_certificate_serializer()
+    assert serializer is not None
+    assert isinstance(serializer, CertificateSerializer)
+
+
+def test_credential_model_get_certificate_chain_serializer(test_credential: CredentialModel) -> None:
+    """Test getting a certificate chain serializer from a credential model."""
+    serializer = test_credential.get_certificate_chain_serializer()
+    assert serializer is not None
+    assert isinstance(serializer, CertificateCollectionSerializer)
+
+
+def test_credential_model_get_root_ca_certificate(test_credential: CredentialModel) -> None:
+    """Test getting the root CA certificate of the credential certificate chain."""
+    root_ca = test_credential.get_root_ca_certificate()
+    assert root_ca is not None
+    assert isinstance(root_ca, x509.Certificate)
+
+
 def test_credential_model_get_credential_serializer(test_credential: CredentialModel) -> None:
     """Test getting a credential serializer from a credential model."""
     serializer = test_credential.get_credential_serializer()
     assert serializer is not None
     assert isinstance(serializer, CredentialSerializer)
+
+
+def test_credential_model_hash_algorithm(test_credential: CredentialModel) -> None:
+    """Test the hash_algorithm property."""
+    algorithm = test_credential.hash_algorithm
+    assert algorithm is not None
+    assert isinstance(algorithm, hashes.HashAlgorithm)
 
 
 def test_credential_model_is_valid_domain_credential(test_credential: CredentialModel) -> None:
@@ -195,9 +242,16 @@ def test_credential_model_is_valid_domain_credential(test_credential: Credential
     assert reason == 'Valid domain credential.'
 
 
+def test_credential_model_invalid_domain_credential_type(test_credential: CredentialModel) -> None:
+    """Test domain credential validation with wrong credential type."""
+    test_credential.credential_type = CredentialModel.CredentialTypeChoice.ROOT_CA
+    is_valid, reason = test_credential.is_valid_domain_credential()
+    assert is_valid is False
+    assert 'Invalid credential type' in reason
+
+
 def test_credential_model_invalid_domain_credential_status(test_credential_serializer: CredentialSerializer) -> None:
     """Test domain credential validation with expired certificate."""
-    # Create an expired certificate from scratch
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public_key = private_key.public_key()
 
@@ -232,7 +286,6 @@ def test_credential_model_invalid_domain_credential_status(test_credential_seria
 
 def test_credential_model_invalid_domain_credential_status_expired() -> None:
     """Test domain credential validation with expired certificate."""
-    # Create an expired certificate
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public_key = private_key.public_key()
 
@@ -282,11 +335,11 @@ def test_credential_model_invalid_domain_credential_status_expired() -> None:
 
 def test_credential_model_save_keyless_credential() -> None:
     """Test saving a credential without a private key."""
-    cert, _ = create_test_certificate()
-    chain_cert, _ = create_test_certificate(is_ca=True)
+    cert1, priv_key1 = create_test_certificate('End Entity', 'Intermediate CA')
+    cert2, _ = create_test_certificate('Intermediate CA', 'Root CA', is_ca=True)
 
     credential = CredentialModel.save_keyless_credential(
-        cert, [chain_cert], CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL
+        cert1, [cert2], CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL
     )
 
     assert credential is not None
@@ -382,7 +435,17 @@ def test_certificate_chain_order_invalid_order(test_credential: CredentialModel)
         CertificateChainOrderModel.objects.create(
             certificate=new_cert_model,
             credential=test_credential,
-            order=current_max + 2,  # Should be current_max
+            order=current_max + 2,
+        )
+
+
+def test_certificate_chain_order_invalid_certificate(test_credential: CredentialModel) -> None:
+    """Test creating a chain order entry with invalid certificate."""
+    with pytest.raises(ValidationError):
+        CertificateChainOrderModel.objects.create(
+            certificate=None,  # Invalid certificate
+            credential=test_credential,
+            order=0,
         )
 
 
