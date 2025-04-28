@@ -33,6 +33,7 @@ from trustpoint_core import oid  # type: ignore[import-untyped]
 from trustpoint_core.file_builder.enum import ArchiveFormat  # type: ignore[import-untyped]
 from trustpoint_core.serializer import CredentialSerializer  # type: ignore[import-untyped]
 from django import forms
+from django_filters.views import FilterView
 
 from devices.forms import (
     BrowserLoginForm,
@@ -53,6 +54,7 @@ from devices.issuer import (
 )
 from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
 from devices.revocation import DeviceCredentialRevocation
+from devices.filters import DeviceFilter
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import BulkDeleteView, ListInDetailView, LoggerMixin, SortableTableMixin
 
@@ -92,7 +94,7 @@ class DeviceContextMixin:
 # ----------------------------------------------------- Main Pages -----------------------------------------------------
 
 
-class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceModel]):
+class DeviceTableView(DeviceContextMixin, SortableTableMixin, FilterView[DeviceModel]):
     """Device Table View."""
 
     http_method_names = ('get',)
@@ -102,6 +104,7 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
     context_object_name = 'devices'
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'common_name'
+    filterset_class = DeviceFilter
 
     def get_queryset(self):
         """Filter queryset to only include devices where opc_ua_gds is False."""
@@ -117,6 +120,12 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
             The context to use for rendering the devices page.
         """
         context = super().get_context_data(**kwargs)
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+        context['current_sort'] = sort_param
+
+        params = self.request.GET.copy()
+        params.pop('sort', None)
+        context['preserve_qs'] = params.urlencode()
 
         for device in context['devices']:
             device.clm_button = self._get_clm_button_html(device)

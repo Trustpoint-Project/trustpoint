@@ -5,39 +5,39 @@
         <tr>
             <th id="checkbox-column"><input type="checkbox"/></th>
             <th>
-                <a href="?sort={% if current_sort == 'common_name' %}-{% endif %}common_name">
+                <a href="?{{ preserve_qs }}{% if preserve_qs %}&{% endif %}sort={% if current_sort == 'common_name' %}-{% endif %}common_name">
                     {% trans 'Name' %}
                 </a>
             </th>
             <th>
-                <a href="?sort={% if current_sort == 'domain' %}-{% endif %}domain">
+                <a href="?{{ preserve_qs }}{% if preserve_qs %}&{% endif %}sort={% if current_sort == 'domain' %}-{% endif %}domain">
                     {% trans 'Domain' %}
-                </a>
+                  </a>
             </th>
             {% if page_name != 'opc_ua_gds' %}
             <th>
-                <a href="?sort={% if current_sort == 'serial_number' %}-{% endif %}serial_number">
+                <a href="?{{ preserve_qs }}{% if preserve_qs %}&{% endif %}sort={% if current_sort == 'serial_number' %}-{% endif %}serial_number">
                     {% trans 'Serial Number' %}
                 </a>
             </th>
             {% endif %}
             <th>
-                <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
+                <a href="?{{ preserve_qs }}{% if preserve_qs %}&{% endif %}sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
                     {% trans 'Created' %}
                 </a>
             </th>
             <th>
-                <a href="?sort={% if current_sort == 'onboarding_status' %}-{% endif %}onboarding_status">
+                <a href="?{{ preserve_qs }}{% if preserve_qs %}&{% endif %}sort={% if current_sort == 'onboarding_status' %}-{% endif %}onboarding_status">
                     {% trans 'Onboarding Status' %}
                 </a>
             </th>
             <th>
-                <a href="?sort={% if current_sort == 'onboarding_protocol' %}-{% endif %}onboarding_protocol">
+                <a href="?{{ preserve_qs }}{% if preserve_qs %}&{% endif %}sort={% if current_sort == 'onboarding_protocol' %}-{% endif %}onboarding_protocol">
                     {% trans 'Onboarding Protocol' %}
                 </a>
             </th>
             <th>
-                <a href="?sort={% if current_sort == 'pki_protocol' %}-{% endif %}pki_protocol">
+                <a href="?{{ preserve_qs }}{% if preserve_qs %}&{% endif %}sort={% if current_sort == 'pki_protocol' %}-{% endif %}pki_protocol">
                     {% trans 'PKI Protocol' %}
                 </a>
             </th>
