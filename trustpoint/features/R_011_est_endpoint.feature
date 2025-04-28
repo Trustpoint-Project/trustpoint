@@ -4,15 +4,39 @@ Feature: EST Endpoint for Onboarded Devices
   Background:
     Given the EST endpoint is available
 
-  Scenario: A device successfully requests a certificate
-    Given a new device with identifier "Device123"
+  Scenario Outline: Credential enrollment with a client certificate
+    Given a new device with serial number "<serial_number>"
+    And the IDevID Truststore and serial number registration pattern is configured in Trustpoint
+    When the device sends an EST simpleenroll request for a new <credential_type> credential using its <client_cert_type> cert
+    Then the request should <outcome>
+    And if successful issue a new <credential_type> credential for "<serial_number>"
+    And if failed the error message should be "<error_message>"
+
+    Examples:
+      | serial_number | client_cert_type | credential_type  | outcome | error_message |
+      | Device123     | idevid           | domaincredential | succeed | -             |
+      | Device234     | domaincredential | tlsserver        | succeed | -             |
+      | Device345     | idevid           | tlsserver        | fail    | (any)         |
+      | Device456     | tlsserver        | tlsserver        | fail    | must be DOMAIN_CREDENTIAL |
+      | Device567     | idevid           | tlsserver        | fail    | must be DOMAIN_CREDENTIAL |
+      | Device678     | tlsserver        | domaincredential | fail    | (any)         |
+
+  Scenario: A device requests a second domain credential with its IDevID
+    Given an onboarded device with serial number "Device123" and an issued valid domain credential
+    When the device sends a EST request for a new domain credential using its IDevID
+    Then the system should reject the request
+    And if failed the error message should be "Device already onboarded"
+
+  Scenario: A device successfully requests an application credential with username and password
+    Given a new device with serial number "Device234"
+    And the device is added to Trustpoint and the password is known to the device
     When the device sends a EST request for a new certificate
-    Then the system should issue a new certificate for "Device123"
+    Then the system should issue a new certificate for "Device234"
     And the device should store the issued certificate
 
   Scenario: An onboarded device renews its certificate
     Given an onboarded device with identifier "Device456" and an active certificate
-    When the device sends a EST request for certificate renewal
+    When the device sends a EST simplereenroll request for certificate renewal
     Then the system should issue a new certificate for "Device456"
     And the device should replace its old certificate with the new one
 
