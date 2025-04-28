@@ -13,11 +13,10 @@ build:
   os: ubuntu-24.04
   tools:
     python: "3.12"
+  apt_packages:
+    - graphviz
   jobs:
     create_environment:
-      - asdf plugin add graphviz
-      - asdf install graphviz latest
-      - asdf global graphviz latest
       - asdf plugin add uv
       - asdf install uv latest
       - asdf global uv latest
