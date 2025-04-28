@@ -40,6 +40,23 @@ Feature: EST Endpoint for Onboarded Devices
     Then the system should issue a new certificate for "Device456"
     And the device should replace its old certificate with the new one
 
+  Scenario: A device attempts to renew a different certificate
+    Given an onboarded device with identifier "Device567" and an active certificate
+    When the device sends a EST simplereenroll request where the CSR signer is different from the TLS client certificate
+    Then the system should reject the request
+
+  Scenario: A device attempts to renew an expired certificate
+    Given an onboarded device with identifier "Device567" and an active certificate
+    And the certificate has expired
+    When the device sends a EST simplereenroll request for certificate renewal
+    Then the system should reject the request
+
+  Scenario: A device attempts to renew a revoked certificate
+    Given an onboarded device with identifier "Device567" and an active certificate
+    And an admin revokes the certificate for "Device567"
+    When the device sends a EST simplereenroll request for certificate renewal
+    Then the system should reject the request
+
   Scenario: Unauthorized device attempts to access the EST endpoint
     Given a device with invalid credentials
     When the device sends a EST request

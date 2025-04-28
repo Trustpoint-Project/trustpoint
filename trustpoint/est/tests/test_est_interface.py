@@ -97,3 +97,83 @@ def test_issue_credential_invalid_template(mock_issue, est_simple_enrollment_vie
         est_simple_enrollment_view.issue_credential(
             'invalid_template', MagicMock(), est_simple_enrollment_view.requested_domain, MagicMock()
         )
+
+# TLS client certificate verification tests
+
+def test_tls_client_cert_verification(est_simple_enrollment_view) -> None:
+    """Tests the TLS client certificate verification with the direct Issuing CA in the Truststore."""
+    request = MagicMock()
+    request.META = {
+        'SSL_CLIENT_CERT': 'mocked_client_cert_pem',
+    }
+    # ...
+
+def test_tls_client_cert_verification_self_signed() -> None:
+    """Tests the TLS client certificate verification with a self-signed client certificate."""
+    request = MagicMock()
+    request.META = {
+        'SSL_CLIENT_CERT': 'mocked_self_signed_cert_pem',
+    }
+    # ...
+
+def test_tls_client_cert_verification_not_in_truststore() -> None:
+    """Tests the TLS client certificate verification without certificate in the Truststore."""
+    # ...
+
+def test_tls_client_cert_verification_no_cert() -> None:
+    """Tests the TLS client certificate verification if no valid PEM is passed."""
+    request = MagicMock()
+    request.META = {
+        'SSL_CLIENT_CERT': '41foobar',
+    }
+    # ...
+
+@pytest.mark.parametrize('client_includes_root_ca', [True, False])
+def test_tls_client_cert_verification_chain(client_includes_root_ca: bool) -> None:  # noqa: FBT001
+    """Tests the TLS client certificate verification with an intermediate CA."""
+    request = MagicMock()
+    request.META = {
+        'SSL_CLIENT_CERT': 'mocked_client_cert_pem',
+        'SSL_CLIENT_CERT_CHAIN_0': 'mocked_intermediate_ca_cert_pem',
+    }
+    if (client_includes_root_ca):
+        request.META['SSL_CLIENT_CERT_CHAIN_1'] = 'mocked_root_ca_cert_pem'
+    # ...
+
+def test_tls_client_cert_chain_too_long() -> None:
+    """Tests the TLS client certificate verification with a too long chain."""
+    request = MagicMock()
+    request.META = {
+        'SSL_CLIENT_CERT': 'mocked_client_cert_pem',
+        'SSL_CLIENT_CERT_CHAIN_0': 'mocked_intermediate_ca_0_cert_pem',
+        'SSL_CLIENT_CERT_CHAIN_1': 'mocked_intermediate_ca_1_cert_pem',
+        'SSL_CLIENT_CERT_CHAIN_2': 'mocked_root_ca_cert_pem',
+    }
+    # ...
+
+def test_tls_client_cert_idevid_in_truststore() -> None:
+    """Tests that verification works with just the IDevID directly in the Truststore (not the CA)."""
+    request = MagicMock()
+    request.META = {
+        'SSL_CLIENT_CERT': 'mocked_client_cert_pem',
+    }
+    # ...
+
+def test_tls_client_cert_idevid_expired() -> None:
+    """Tests that verification fails if the IDevID certificate is expired."""
+    request = MagicMock()
+    request.META = {
+        'SSL_CLIENT_CERT': 'mocked_client_cert_pem',
+    }
+    # ...
+
+def test_tls_client_cert_ca_expired() -> None:
+    """Tests that verification fails if the CA certificate is expired."""
+    request = MagicMock()
+    request.META = {
+        'SSL_CLIENT_CERT': 'mocked_client_cert_pem',
+    }
+    # ...
+
+def test_tls_client_cert_attributes() -> None:
+    """Tests that verification fails if the client cert has no subject serial number."""
