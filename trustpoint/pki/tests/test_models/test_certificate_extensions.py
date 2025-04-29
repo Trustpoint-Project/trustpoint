@@ -415,3 +415,9 @@ def test_multi_extension_deletion(self_signed_cert_with_ext: Certificate,
     cert_model.delete()
 
     assert BasicConstraintsExtension.objects.filter(pk=cert_model.basic_constraints_extension.pk).exists()
+
+@pytest.mark.django_db
+def test_basic_certificate_deletion(self_signed_cert_basic: tuple[CertificateModel, Certificate]) -> None:
+    """Test that the basic certificate is deleted without exceptions."""
+    cert_model, _ = self_signed_cert_basic
+    cert_model.delete()
