@@ -6,7 +6,6 @@ import pytest
 from cryptography import x509
 from django.test import RequestFactory
 from pki.util.x509 import CertificateGenerator
-from trustpoint_core.types import PrivateKey
 
 from est.views import (
     ClientCertificateAuthenticationError,
@@ -176,3 +175,26 @@ def test_tls_client_cert_ca_expired() -> None:
 
 def test_tls_client_cert_attributes() -> None:
     """Tests that verification fails if the client cert has no subject serial number."""
+
+
+def test_tls_client_cert_domain_credential_enrollment() -> None:
+    """Tests that an issued credential can be enrolled via EST simpleenroll using an IDevID."""
+
+
+def test_tls_client_cert_enrollment_twice() -> None:
+    """Tests that the same domain credential cannot be enrolled twice via EST simpleenroll using an IDevID."""
+
+
+def test_tls_client_cert_application_credential_enrollment() -> None:
+    """Tests that an application credential cannot directly be enrolled via EST simpleenroll using an IDevID."""
+
+
+def test_tls_reenrollment_valid() -> None:
+    """Tests that an issued credential can be re-enrolled via EST simplereenroll."""
+
+
+def test_tls_reenrollment_mismatched() -> None:
+    """Tests that an issued credential cannot be re-enrolled if the TLS client cert does not match the issued cred.
+
+    For this example, it is attempted to re-enroll a domain credential with an application credential.
+    """

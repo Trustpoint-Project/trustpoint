@@ -245,7 +245,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
         certificate_builder = certificate_builder.issuer_name(
             self.domain.issuing_ca.credential.get_certificate().subject
         )
-        certificate_builder = certificate_builder.not_valid_before(datetime.datetime.now(datetime.UTC))
+        certificate_builder = certificate_builder.not_valid_before(datetime.datetime.now(datetime.UTC) - one_day)
         certificate_builder = certificate_builder.not_valid_after(
             datetime.datetime.now(datetime.UTC) + (one_day * validity_days)
         )

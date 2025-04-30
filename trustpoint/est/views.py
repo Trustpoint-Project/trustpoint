@@ -1068,8 +1068,6 @@ class EstSimpleReEnrollmentView(EstAuthenticationMixin,
             )
 
 
-        # self._validate_reenroll_subject
-
         if not http_response and credential_request and device and requested_domain and requested_cert_template_str:
             http_response = self._issue_simpleenroll(device=device,
                                                      domain=requested_domain,

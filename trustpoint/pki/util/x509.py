@@ -104,7 +104,7 @@ class CertificateGenerator:
         if private_key is None:
             private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-        not_valid_before = datetime.datetime.now(tz=datetime.UTC)
+        not_valid_before = datetime.datetime.now(tz=datetime.UTC) - one_day
         not_valid_after = not_valid_before + (one_day * validity_days)
 
         public_key = private_key.public_key()
