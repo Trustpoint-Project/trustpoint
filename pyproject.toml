@@ -21,6 +21,7 @@ dependencies = [
     "psycopg-binary>=3.2.6",
     "pyasn1>=0.6.1,<0.7",
     "pyasn1-modules>=0.4.1,<0.5",
+    "sphinx>=8.2.3",
     "trustpoint-core>=0.0.5",
     "zeroconf>=0.146,<0.147",
 ]
