@@ -1,5 +1,5 @@
 FROM debian:bookworm-slim
-COPY --from=ghcr.io/astral-sh/uv:0.6.16 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.7.2 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
