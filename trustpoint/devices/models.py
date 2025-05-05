@@ -5,10 +5,10 @@ from __future__ import annotations
 import datetime
 import logging
 import secrets
-import typing
 from typing import TYPE_CHECKING
 
-from django.db import models, transaction
+from cryptography.hazmat.primitives import hashes
+from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
@@ -23,6 +23,8 @@ from util.db import CustomDeleteActionModel
 
 if TYPE_CHECKING:
     from typing import Any
+
+    from cryptography import x509
 
 logger = logging.getLogger(__name__)
 
@@ -248,6 +250,28 @@ class IssuedCredentialModel(CustomDeleteActionModel):
             return False, reason
 
         return True, 'Valid domain credential.'
+
+    @staticmethod
+    def get_credential_for_certificate(cert: x509.Certificate) -> IssuedCredentialModel:
+        """Retrieve an IssuedCredentialModel instance for the given certificate.
+
+        :param cert: x509.Certificate to search for.
+        :return: The corresponding IssuedCredentialModel instance.
+        :raises ClientCertificateAuthenticationError: if no matching issued credential is found.
+        """
+        cert_fingerprint = cert.fingerprint(hashes.SHA256()).hex().upper()
+        credential = CredentialModel.objects.filter(certificates__sha256_fingerprint=cert_fingerprint).first()
+        if not credential:
+            error_message = f'No credential found for certificate with fingerprint {cert_fingerprint}'
+            raise IssuedCredentialModel.DoesNotExist(error_message)
+
+        try:
+            issued_credential = IssuedCredentialModel.objects.get(credential=credential)
+        except IssuedCredentialModel.DoesNotExist:
+            error_message = f'No issued credential found for certificate with fingerprint {cert_fingerprint}'
+            raise IssuedCredentialModel.DoesNotExist(error_message) from None
+
+        return issued_credential
 
 
 class RemoteDeviceCredentialDownloadModel(models.Model):

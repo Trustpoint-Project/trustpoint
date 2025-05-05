@@ -2,17 +2,13 @@
 
 import base64
 import ipaddress
-import itertools
 import re
-import secrets
 from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol, cast
 
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives._serialization import Encoding
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
-from cryptography.x509.verification import PolicyBuilder, Store, VerificationError
 from devices.issuer import (
     LocalDomainCredentialIssuer,
     LocalTlsClientCredentialIssuer,
@@ -29,17 +25,13 @@ from pki.models.credential import CredentialModel
 from pki.models.devid_registration import DevIdRegistration
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
+from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
+from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pyasn1.type.univ import ObjectIdentifier  # type: ignore[import-untyped]
 from trustpoint_core.serializer import CertificateCollectionSerializer  # type: ignore[import-untyped]
 
 from trustpoint.views.base import LoggerMixin
 
-
-class ClientCertificateAuthenticationError(Exception):
-    """Exception raised for client certificate authentication failures."""
-
-class IDevIDAuthenticationError(Exception):
-    """Exception raised for IDevID authentication failures."""
 
 class UsernamePasswordAuthenticationError(Exception):
     """Exception raised for username and password authentication failures."""
@@ -95,68 +87,6 @@ class EstAuthenticationMixin(LoggerMixin):
     """Checks for HTTP Basic Authentication before processing the request."""
 
     @staticmethod
-    def get_client_cert_as_x509(request: HttpRequest) -> tuple[x509.Certificate, list[x509.Certificate]]:
-        """Retrieve the client certificate from the request and convert it to an x509.Certificate object.
-
-        Args:
-            request: Django HttpRequest containing the headers.
-
-        Returns:
-            x509.Certificate object.
-
-        Raises:
-            ClientCertificateAuthenticationError: if no client certificate found or it is not a valid PEM-encoded cert.
-        """
-        cert_data = request.META.get('SSL_CLIENT_CERT')
-        if not cert_data:
-            error_message = 'Missing SSL_CLIENT_CERT header'
-            raise ClientCertificateAuthenticationError(error_message)
-
-        try:
-            client_cert = x509.load_pem_x509_certificate(cert_data.encode('utf-8'))
-        except Exception as e:
-            error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
-            raise ClientCertificateAuthenticationError(error_message) from e
-
-        # Extract intermediate CAs from Apache variables
-        intermediate_cas = []
-
-        for i in itertools.count():
-            ca = request.META.get(f'SSL_CLIENT_CERT_CHAIN_{i}')
-            if not ca:
-                break
-            try:
-                ca_cert = x509.load_pem_x509_certificate(ca.encode('utf-8'))
-            except Exception as e:
-                error_message = f'Invalid SSL_CLIENT_CERT_CHAIN_{i} PEM: {e}'
-                raise ClientCertificateAuthenticationError(error_message) from e
-            intermediate_cas.append(ca_cert)
-
-        return (client_cert, intermediate_cas)
-
-    @staticmethod
-    def get_credential_for_certificate(cert: x509.Certificate) -> IssuedCredentialModel:
-        """Retrieve an IssuedCredentialModel instance for the given certificate.
-
-        :param cert: x509.Certificate to search for.
-        :return: The corresponding IssuedCredentialModel instance.
-        :raises ClientCertificateAuthenticationError: if no matching issued credential is found.
-        """
-        cert_fingerprint = cert.fingerprint(hashes.SHA256()).hex().upper()
-        credential = CredentialModel.objects.filter(certificates__sha256_fingerprint=cert_fingerprint).first()
-        if not credential:
-            error_message = f'No credential found for certificate with fingerprint {cert_fingerprint}'
-            raise ClientCertificateAuthenticationError(error_message)
-
-        try:
-            issued_credential = IssuedCredentialModel.objects.get(credential=credential)
-        except IssuedCredentialModel.DoesNotExist:
-            error_message = f'No issued credential found for certificate with fingerprint {cert_fingerprint}'
-            raise ClientCertificateAuthenticationError(error_message) from None
-
-        return issued_credential
-
-    @staticmethod
     def authenticate_username_password(request: HttpRequest) -> DeviceModel:
         """Authenticate a user using HTTP Basic credentials and return associated DeviceModel.
 
@@ -185,9 +115,12 @@ class EstAuthenticationMixin(LoggerMixin):
 
     def authenticate_domain_credential(self, request: HttpRequest) -> DeviceModel:
         """Authenticate client using a Domain Credential TLS cert (Mutual TLS), return the associated DeviceModel."""
-        client_cert, _intermediary_cas = self.get_client_cert_as_x509(request)
+        client_cert, _intermediary_cas = ApacheTLSClientCertExtractor.get_client_cert_as_x509(request)
 
-        issued_credential = self.get_credential_for_certificate(client_cert)
+        try:
+            issued_credential = IssuedCredentialModel.get_credential_for_certificate(client_cert)
+        except IssuedCredentialModel.DoesNotExist as e:
+            raise ClientCertificateAuthenticationError from e
         is_valid, reason = issued_credential.is_valid_domain_credential()
         if not is_valid:
             error_message = f'Invalid SSL_CLIENT_CERT header: {reason}'
@@ -202,9 +135,12 @@ class EstAuthenticationMixin(LoggerMixin):
 
         Only authenticates if subject and SAN in both client cert and CSR match the existing issued credential.
         """
-        client_cert, _intermediary_cas = self.get_client_cert_as_x509(request)
+        client_cert, _intermediary_cas = ApacheTLSClientCertExtractor.get_client_cert_as_x509(request)
 
-        issued_credential = self.get_credential_for_certificate(client_cert)
+        try:
+            issued_credential = IssuedCredentialModel.get_credential_for_certificate(client_cert)
+        except IssuedCredentialModel.DoesNotExist as e:
+            raise ClientCertificateAuthenticationError from e
         credential_model: CredentialModel = issued_credential.credential
         is_valid, reason = credential_model.is_valid_issued_credential()
         if not is_valid:
@@ -237,136 +173,6 @@ class EstAuthenticationMixin(LoggerMixin):
             raise ClientCertificateAuthenticationError(error_message)
 
         return issued_credential.device
-
-    def _verify_idevid_against_truststore(
-        self, idevid_cert: x509.Certificate, intermediate_cas: list[x509.Certificate], truststore: TruststoreModel
-    ) -> bool:
-        """Verify the IDevID certificate against the provided truststore."""
-        # Need to check whether truststore has intended usage IDevID?
-        self.logger.info('Verifying IDevID certificate against truststore %s', truststore.unique_name)
-        certificates = truststore.get_certificate_collection_serializer().as_crypto_list()
-        self.logger.debug('Certificates in truststore: %s', certificates)
-        store = Store(certificates)
-        builder = PolicyBuilder().store(store)
-        builder = builder.max_chain_depth(0)
-        # TODO(Air): For now, cryptography requires the SAN extension to be present in the IDevID
-        # and some other undisclosed extensions to be present in the truststore (CA) certificate
-        # cryptography 45.0.0 will add the API to specify all extensions as optional (which we want)
-        #builder = builder.extension_policies(
-        #    ExtensionPolicy.permit_all(),
-        #    ExtensionPolicy.permit_all(),
-        #)
-        verifier = builder.build_client_verifier()
-        try:
-            # intermediate CAs do not work with the hack (will incorrectly report as verified!!), should work on 45.0.0
-            del intermediate_cas
-            _verified_client = verifier.verify(idevid_cert, []) # intermediate_cas)
-        except VerificationError as e:
-            # HACK: Bypass extension validation, remove when cryptography 45.0.0 is released
-            # This is a somewhat dangerous hack
-            # message on non-matching store is 'candidates exhausted: all candidates exhausted with no interior errors'
-            if 'candidates exhausted: Certificate is missing required extension' in str(e):
-                self.logger.warning('IDevID certificate bypassed extension validation')
-                return True
-            self.logger.warning('IDevID verification failed for truststore %s: %s', truststore.unique_name, e)  # noqa: TRY400
-            return False
-        return True
-
-    @staticmethod
-    def _get_matching_registrations(domain: DomainModel, idevid_subj_sn: str) -> list[DevIdRegistration]:
-        """Get DevIdRegistration patters matching the given domain and serial number."""
-        domain_registrations = DevIdRegistration.objects.filter(domain=domain)
-        if not domain_registrations.exists():
-            error_message = f'No registration patterns for requested domain {domain.unique_name}.'
-            raise IDevIDAuthenticationError(error_message)
-
-        matching_registrations = [
-            r for r in domain_registrations
-            if re.fullmatch(r.serial_number_pattern, idevid_subj_sn)
-        ]
-        if not matching_registrations:
-            error_message = (f'No DevID registration pattern matching SN {idevid_subj_sn} '
-                             f'for requested domain {domain.unique_name}.')
-            raise IDevIDAuthenticationError(error_message)
-        return matching_registrations
-
-    def _auto_create_device_from_idevid(
-        self, idevid_cert: x509.Certificate, idevid_subj_sn: str, domain: DomainModel
-    ) -> DeviceModel:
-        """Auto-create a new DeviceModel from the IDevID certificate."""
-        if not domain.auto_create_new_device:
-            error_message = 'Auto-creating a new device for this domain is not permitted.'
-            raise IDevIDAuthenticationError(error_message)
-
-        try:
-            cn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
-            common_name = cn_b.decode() if isinstance(cn_b, bytes) else cn_b
-        except (ValueError, IndexError):
-            common_name = 'AutoGenDevice'
-
-        if DeviceModel.objects.filter(common_name=common_name, domain=domain).exists():
-            common_name += f'_{secrets.token_hex(4)}'
-
-        return DeviceModel.objects.create(
-            serial_number=idevid_subj_sn,
-            common_name=common_name,
-            domain=domain,
-            onboarding_protocol=DeviceModel.OnboardingProtocol.EST_IDEVID,
-            onboarding_status = DeviceModel.OnboardingStatus.PENDING
-        )
-
-    def authenticate_idevid(self, request: HttpRequest, domain: DomainModel) -> DeviceModel | None:
-        """Authenticate client using IDevID certificate for Domain Credential request."""
-        idevid_cert, intermediate_cas = self.get_client_cert_as_x509(request)
-
-        try:
-            sn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
-            idevid_subj_sn = sn_b.decode() if isinstance(sn_b, bytes) else sn_b
-        except (ValueError, IndexError) as e:
-            # TODO(Air): Check if we want to add field to associate IDevID with device by fingerprint
-            # This would however be incompatible with the current approach to Registration patterns
-            # One option is to modify the registration pattern to allow matching certain Issuer DN fields instead of SN
-            error_message = 'IDevID certificates without a serial number in the subject DN are not supported.'
-            raise IDevIDAuthenticationError(error_message) from e
-
-        matching_registrations = self._get_matching_registrations(domain, idevid_subj_sn)
-
-        # verify IDevID against Truststore
-        for registration in matching_registrations:
-            #for device in candidate_devices:
-            if (self._verify_idevid_against_truststore(
-                idevid_cert=idevid_cert,
-                intermediate_cas=intermediate_cas,
-                truststore=registration.truststore,
-            )):
-                self.logger.info(
-                    'IDevID certificate with SN %s successfully verified against truststore %s',
-                    idevid_subj_sn,
-                    registration.truststore.unique_name
-                )
-                # check for existing device(s) in domain with matching serial number
-                existing_device = None
-                try:
-                    existing_device = DeviceModel.objects.get(
-                        domain=domain,
-                        serial_number=idevid_subj_sn,
-                        onboarding_protocol=DeviceModel.OnboardingProtocol.EST_IDEVID
-                    )
-                except DeviceModel.DoesNotExist:
-                    pass
-                except DeviceModel.MultipleObjectsReturned:
-                    error_message = (f'Multiple devices with the same serial number {idevid_subj_sn} '
-                                    f'found in domain {domain.unique_name}.')
-                    self.logger.warning(error_message)
-                    self.logger.warning('Auto-creating new device.')
-
-                if existing_device:
-                    return existing_device
-                return self._auto_create_device_from_idevid(idevid_cert, idevid_subj_sn, domain)
-
-        error_message = (f'IDevID with SN {idevid_subj_sn} could not be verified against any truststore.')
-        self.logger.warning(error_message)
-        raise IDevIDAuthenticationError(error_message)
 
     def authenticate_request(
         self, request: HttpRequest, domain: DomainModel, cert_template_str: str,
@@ -402,7 +208,7 @@ class EstAuthenticationMixin(LoggerMixin):
 
         if domain.allow_idevid_registration:
             try:
-                device_or_none = self.authenticate_idevid(request, domain)
+                device_or_none = IDevIDAuthenticator.authenticate_idevid(request, domain)
             except IDevIDAuthenticationError as e:
                 return None, LoggedHttpResponse(f'Error validating the IDevID: {e!s}', status=500)
             else:
