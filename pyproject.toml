@@ -3,7 +3,7 @@ name = "trustpoint"
 version = "0.2.0"
 description = "Trustpoint Server Software"
 authors = [{ name = "TrustPoint-Project" }]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 readme = "README.md"
 dependencies = [
     "crispy-bootstrap5~=2025.4",
