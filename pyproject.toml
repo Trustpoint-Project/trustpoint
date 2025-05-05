@@ -22,7 +22,7 @@ dependencies = [
     "pyasn1>=0.6.1,<0.7",
     "pyasn1-modules>=0.4.1,<0.5",
     "trustpoint-core>=0.0.5",
-    "zeroconf>=0.146,<0.147",
+    "zeroconf>=0.147,<0.148",
 ]
 
 [dependency-groups]
