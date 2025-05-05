@@ -42,8 +42,8 @@ RUN if [ "${BRANCH}" != "" ]; then \
     chown www-data:www-data /var/www/html/trustpoint/
 
 USER www-data
-RUN uv sync --python-preference only-system --python 3.12
-RUN uv pip install --upgrade pip && uv pip install mod_wsgi
+RUN uv sync --python-preference only-system
+RUN uv pip install mod_wsgi
 USER root
 
 RUN uv run mod_wsgi-express install-module \
