@@ -3,7 +3,7 @@ name = "trustpoint"
 version = "0.2.0"
 description = "Trustpoint Server Software"
 authors = [{ name = "TrustPoint-Project" }]
-requires-python = "~=3.12"
+requires-python = ">=3.11"
 readme = "README.md"
 license = { file = "LICENSE" }
 keywords = ["django", "trustpoint", "server"]
@@ -21,7 +21,6 @@ dependencies = [
     "psycopg-binary>=3.2.6",
     "pyasn1>=0.6.1,<0.7",
     "pyasn1-modules>=0.4.1,<0.5",
-    "sphinx>=8.2.3",
     "trustpoint-core>=0.0.5",
     "zeroconf>=0.147,<0.148",
 ]

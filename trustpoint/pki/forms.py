@@ -124,16 +124,15 @@ class TruststoreAddForm(forms.Form):
         intended_usage = cleaned_data.get('intended_usage')
 
         try:
-            trust_store_file = cleaned_data.get('trust_store_file').read()
+            trust_store_file = cast(bytes, cleaned_data.get('trust_store_file').read())
         except (OSError, AttributeError) as original_exception:
             error_message = _(
                 'Unexpected error occurred while trying to get file contents. Please see logs for further details.'
             )
             raise ValidationError(error_message, code='unexpected-error') from original_exception
 
-        # TODO(FHatCSW): Also support PKCS#7 PEM and PKCS#7 DER files.
         try:
-            certificates = x509.load_pem_x509_certificates(trust_store_file)
+            certificate_collection_serializer = CertificateCollectionSerializer.from_bytes(trust_store_file)
         except Exception as exception:
             error_message = 'Unable to process the Truststore. May be malformed / corrupted.'
             raise ValidationError(error_message) from exception
@@ -142,7 +141,7 @@ class TruststoreAddForm(forms.Form):
             trust_store_model = self._save_trust_store(
                 unique_name=unique_name,
                 intended_usage=TruststoreModel.IntendedUsage(int(intended_usage)),
-                certificates=certificates,
+                certificates=certificate_collection_serializer.as_crypto(),
             )
         except Exception as exception:
             raise ValidationError(str(exception)) from exception
@@ -415,7 +414,7 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             pkcs12_password = None
 
         try:
-            credential_serializer = CredentialSerializer(pkcs12_raw, pkcs12_password)
+            credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
         except Exception as exception:
             err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
             raise ValidationError(err_msg) from exception
@@ -513,10 +512,11 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             raise ValidationError(err_msg)
 
         try:
-            return PrivateKeySerializer(private_key_file.read(), private_key_file_password)
+            return PrivateKeySerializer.from_bytes(private_key_file.read(), private_key_file_password)
         except Exception as exception:
             err_msg = _('Failed to parse the private key file. Either wrong password or file corrupted.')
             raise ValidationError(err_msg) from exception
+
 
     @LoggerMixin.log_exceptions
     def clean_ca_certificate(self) -> CertificateSerializer:
@@ -546,7 +546,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             raise ValidationError(err_msg)
 
         try:
-            certificate_serializer = CertificateSerializer(ca_certificate.read())
+            certificate_serializer = CertificateSerializer.from_bytes(ca_certificate.read())
         except Exception as exception:
             err_msg = _('Failed to parse the Issuing CA certificate. Seems to be corrupted.')
             raise ValidationError(err_msg) from exception
@@ -583,13 +583,12 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         """
         ca_certificate_chain = self.cleaned_data['ca_certificate_chain']
 
-        # TODO(AlexHx8472): Validate if full chain is available
         if ca_certificate_chain:
             try:
-                return CertificateCollectionSerializer(ca_certificate_chain.read())
-            except Exception as original_exception:
-                err_msg = 'Failed to parse the Issuing CA certificate chain. Seems to be corrupted.'
-                raise ValidationError(err_msg) from original_exception
+                return CertificateCollectionSerializer.from_bytes(ca_certificate_chain.read())
+            except Exception as exception:
+                err_msg = _('Failed to parse the Issuing CA certificate chain. Seems to be corrupted.')
+                raise ValidationError(err_msg) from exception
 
         return None
 
@@ -615,11 +614,20 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             ca_certificate_chain = (
                 cleaned_data.get('ca_certificate_chain') if cleaned_data.get('ca_certificate_chain') else None
             )
+            if ca_certificate_chain:
+                certificate_collection_serializer = CertificateCollectionSerializer.from_bytes(
+                    ca_certificate_chain.read())
+            else:
+                certificate_collection_serializer = CertificateCollectionSerializer([])
 
             if not unique_name or not private_key_file or not ca_certificate:
                 return
 
-            credential_serializer = CredentialSerializer((private_key_file, ca_certificate, ca_certificate_chain))
+            credential_serializer = CredentialSerializer.from_serializers(
+                private_key_serializer= PrivateKeySerializer.from_bytes(private_key_file.read(), None),
+                certificate_serializer=CertificateSerializer.from_bytes(ca_certificate.read()),
+                certificate_collection_serializer=certificate_collection_serializer
+            )
 
             IssuingCaModel.create_new_issuing_ca(
                 unique_name=unique_name,
