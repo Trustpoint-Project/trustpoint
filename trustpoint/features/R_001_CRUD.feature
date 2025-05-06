@@ -23,7 +23,7 @@ Feature: Manage digital devices via TPC_Web
     Given the device <name> with <serial_number> exists
     When the admin navigates to the device list page
     And the admin deletes the device with the name <name>
-    Then the system should display a confirmation message
+    Then the system should display a device delete confirmation message
     And the device <name> should no longer appear in the device list
 
     Examples:
