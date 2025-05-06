@@ -5,6 +5,7 @@ import logging
 from behave import given, runner, step, then
 from django.contrib.auth.models import User
 from django.test import Client
+from pki.models.domain import DomainModel
 
 HTTP_OK = 200
 logger = logging.getLogger(__name__)
@@ -21,6 +22,20 @@ def step_tpc_web_running(context: runner.Context) -> None:  # noqa: ARG001
     """
     response = Client().get('/users/login/')
     assert response.status_code == HTTP_OK
+
+@given('a domain with a name {domain_name} exist')
+def step_domain_exists(context: runner.Context, domain_name: str) -> None:  # noqa: ARG001
+    """.
+
+    Args:
+        context: the behave context
+        domain_name: a domain name
+    """
+    domain, created = DomainModel.objects.get_or_create(unique_name=domain_name)
+    assert created, f" Domain creation failed"
+    assert domain.unique_name == domain_name, f" Domain name mismatch: expected '{domain_name}', got '{domain.name}'"
+
+    context.domain = domain
 
 
 @step('Commentary')
