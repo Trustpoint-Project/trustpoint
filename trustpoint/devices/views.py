@@ -1100,11 +1100,11 @@ class DeviceBaseCredentialDownloadView(
         elif file_format == CredentialFileFormat.PEM_ZIP:
             file_data = Archiver.archive_zip(
                 data_to_archive = {
-                    "private_key.pem": credential_serializer.private_key_serializer().as_pkcs8_pem(
+                    "private_key.pem": credential_serializer.get_private_key_serializer().as_pkcs8_pem(
                         password=password
                     ),
-                    "certificate.pem": credential_serializer.certificate_serializer().as_pem(),
-                    "certificate_chain.pem": credential_serializer.additional_certificates_serializer().as_pem(),
+                    "certificate.pem": credential_serializer.get_certificate_serializer().as_pem(),
+                    "certificate_chain.pem": credential_serializer.get_additional_certificates_serializer().as_pem(),
                 }
             )
             file_stream_data = io.BytesIO(file_data)
@@ -1112,11 +1112,11 @@ class DeviceBaseCredentialDownloadView(
         elif file_format == CredentialFileFormat.PEM_TAR_GZ:
             file_data = Archiver.archive_tar_gz(
                 data_to_archive={
-                    "private_key.pem": credential_serializer.private_key_serializer().as_pkcs8_pem(
+                    "private_key.pem": credential_serializer.get_private_key_serializer().as_pkcs8_pem(
                         password=password
                     ),
-                    "certificate.pem": credential_serializer.certificate_serializer().as_pem(),
-                    "certificate_chain.pem": credential_serializer.additional_certificates_serializer().as_pem(),
+                    "certificate.pem": credential_serializer.get_certificate_serializer().as_pem(),
+                    "certificate_chain.pem": credential_serializer.get_additional_certificates_serializer().as_pem(),
                 }
             )
             file_stream_data = io.BytesIO(file_data)
