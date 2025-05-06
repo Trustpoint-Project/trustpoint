@@ -41,19 +41,44 @@ def step_display_identity_details(context: runner.Context, name: str, identifier
     raise AssertionError(msg)
 
 
-@when('the admin navigates to the "Create Identity" page')
-def step_navigate_create_identity(context: runner.Context) -> None:  # noqa: ARG001
-    """Navigates to the "Create Identity" page.
+@when('the admin navigates to the "Add Device" page')
+def step_navigate_add_device(context: runner.Context) -> None:  # noqa: ARG001
+    """Navigates to the "Add Device" page.
 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'Step not implemented: Navigate to Create Identity page.'
-    raise AssertionError(msg)
+    #Navigate (GET request) to the Add Device page
+    response = context.authenticated_client.get("/devices/add/")
+
+    # Save response to context for later assertions
+    context.response = response
+
+    # Check that page loaded successfully
+    assert response.status_code == 200, f"Failed to load Add Device page: {response.status_code}"
+
+    # Retrieve CSRF token
+    csrf_token = get_token(response.wsgi_request)
+
+    # Prepare POST data
+    data = {
+        'csrfmiddlewaretoken': csrf_token,
+        'name': name,
+        'serial_number': serial,
+        '_save': 'Save',  # simulate the "Save" button in admin
+    }
+
+    # Submit the form
+    response = client.post('/admin/yourapp/device/add/', data, follow=True)
+
+    # Store response for later checks
+    context.response = response
+    assert response.status_code == 200, "Form submission failed"
 
 
-@when('the admin fills in the identity details with {name} and {identifier}')
-def step_fill_identity_details(context: runner.Context, name: str, identifier: str) -> None:  # noqa: ARG001
+
+@when('the admin fills in the identity details with {name} and {identifier}'the admin fills in the device details with <name>, <serial_number> and "trustpoint_test"')
+def step_fill_identity_details(context: runner.Context, name: str, serial_number: str, ) -> None:  # noqa: ARG001
     """Fills in the identity creation form.
 
     Args:
