@@ -21,6 +21,7 @@ dependencies = [
     "psycopg-binary>=3.2.6",
     "pyasn1>=0.6.1,<0.7",
     "pyasn1-modules>=0.4.1,<0.5",
+    "sphinx>=8.2.3",
     "trustpoint-core>=0.0.5",
     "zeroconf>=0.147,<0.148",
 ]
@@ -50,6 +51,7 @@ dev = [
 # For building docs
 docs = [
     "sphinx >= 8.2.3",
+    "sphinx-autoapi>=3.6.0",
     "sphinxcontrib-plantuml >= 0.30",
     "furo >= 2024.8.6",
     "pillow >= 11.2.1",
