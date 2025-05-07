@@ -610,8 +610,6 @@ class SetupWizardDemoDataView(FormView):
                 messages.add_message(self.request, messages.ERROR, 'Invalid option selected for demo data setup.')
                 return redirect('setup_wizard:demo_data', permanent=False)
 
-            call_command('execute_all_notifications')
-
         except subprocess.CalledProcessError as e:
             messages.add_message(
                 self.request,
@@ -643,6 +641,7 @@ class SetupWizardDemoDataView(FormView):
     def _execute_notifications(self) -> None:
         """Creating notifications."""
         try:
+            call_command('initialize_notification_config')
             call_command('execute_all_notifications')
         except Exception as e:
             err_msg = f'Error executing notifications: {e}'

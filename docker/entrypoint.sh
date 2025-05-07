@@ -37,6 +37,9 @@ echo "Compiling Messages..."
 run_as_www_data "uv run trustpoint/manage.py compilemessages -l de -l en"
 echo "Messages compiled."
 
+echo "Starting cron service..."
+cron
+
 # Start Apache server
 echo "Starting Apache server..."
 exec apache2ctl -D FOREGROUND
