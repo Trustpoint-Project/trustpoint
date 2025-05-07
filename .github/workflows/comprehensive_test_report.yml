@@ -18,10 +18,10 @@ jobs:
       - name: Run Pytest and create reports
         run: |
           uv run pytest \
-            --cov=trustpoint \
-            --cov-report=xml:reports/coverage/coverage.xml \
-            --alluredir=reports/allure-results/unit \
-            --junitxml=reports/junit/pytest.xml
+          --cov=trustpoint \
+          --cov-report=xml:reports/coverage/coverage.xml \
+          --alluredir=reports/allure-results/unit \
+          --junitxml=reports/junit/pytest.xml
           trustpoint/ 
           
       - name: Upload unit test results
@@ -42,13 +42,13 @@ jobs:
       - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action
         with:
-          run_migrations: true  # Enable database migrations.
+          run_migrations: true
 
       - name: Run Behave tests and generate reports
         run: |
           uv run trustpoint/manage.py behave \
-            --format allure_behave.formatter:AllureFormatter \
-            --outfile reports/allure-results/bdd \
+          --format allure_behave.formatter:AllureFormatter \
+          --outfile reports/allure-results/bdd \
           trustpoint/features/
 
       - name: Upload BDD results
