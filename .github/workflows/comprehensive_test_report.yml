@@ -49,7 +49,7 @@ jobs:
         run: |
           uv run trustpoint/manage.py behave \
           --format allure_behave.formatter:AllureFormatter \
-          --outfiles reports/allure-results/bdd \
+          --outfile reports/allure-results/bdd \
           trustpoint/features/
 
       - name: Upload BDD results
