@@ -69,19 +69,21 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: unit-test-results
-          path: merged-results
+          path: unit-test-results
 
       - name: Download bdd-test-results
         uses: actions/download-artifact@v4
         with:
           name: bdd-test-results
-          path: merged-results
+          path: bdd-test-results
 
       - name: Merge Allure result folders
         run: |
           mkdir -p reports/allure-results/merged
-          cp -r merged-results/allure-results/unit/* reports/allure-results/merged/
-          cp -r merged-results/allure-results/bdd/*  reports/allure-results/merged/
+          cp -r unit-test-results/reports/allure-results/unit/* \
+          reports/allure-results/merged/
+          cp -r bdd-test-results/reports/allure-results/bdd/*  \
+          reports/allure-results/merged/
 
       - name: Generate Allure HTML report
         uses:  simple-elf/allure-report-action@v1
