@@ -7,7 +7,7 @@ from typing import Any
 from devices.models import DeviceModel
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from home.models import NotificationModel, NotificationStatus
+from notifications.models import NotificationModel, NotificationStatus
 
 new_status, created = NotificationStatus.objects.get_or_create(status='NEW')
 

@@ -14,7 +14,7 @@ from typing import Any, cast
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from home.models import NotificationModel, NotificationStatus
+from notifications.models import NotificationModel, NotificationStatus, NotificationConfig
 from pki.models import CertificateModel
 
 
@@ -42,7 +42,8 @@ class Command(BaseCommand):
         Expiring certificates: Within the next 30 days.
         Expired certificates: Already past their `not_valid_after` date.
         """
-        expiring_threshold = timezone.now() + timedelta(days=30)
+        config = NotificationConfig.get()
+        expiring_threshold = timezone.now() + timedelta(days=config.cert_expiry_warning_days)
         current_time = timezone.now()
 
         expiring_certificates = CertificateModel.objects.filter(
@@ -58,10 +59,10 @@ class Command(BaseCommand):
                 certificate=cert,
                 event='CERTIFICATE_EXPIRING',
                 notification_type=cast(
-                    NotificationModel.NotificationTypes, NotificationModel.NotificationTypes.WARNING
+                    'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.WARNING
                 ),
                 message_type=cast(
-                    NotificationModel.NotificationMessageType, NotificationModel.NotificationMessageType.CERT_EXPIRING
+                    'NotificationModel.NotificationMessageType', NotificationModel.NotificationMessageType.CERT_EXPIRING
                 ),
                 new_status=new_status,
             )
@@ -72,10 +73,10 @@ class Command(BaseCommand):
                 certificate=cert,
                 event='CERTIFICATE_EXPIRED',
                 notification_type=cast(
-                    NotificationModel.NotificationTypes, NotificationModel.NotificationTypes.CRITICAL
+                    'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.CRITICAL
                 ),
                 message_type=cast(
-                    NotificationModel.NotificationMessageType, NotificationModel.NotificationMessageType.CERT_EXPIRED
+                    'NotificationModel.NotificationMessageType', NotificationModel.NotificationMessageType.CERT_EXPIRED
                 ),
                 new_status=new_status,
             )
@@ -93,7 +94,8 @@ class Command(BaseCommand):
         Skips notification creation if one already exists for the given event and certificate.
         """
         if not NotificationModel.objects.filter(event=event, certificate=certificate).exists():
-            message_data = {'common_name': certificate.common_name, 'not_valid_after': certificate.not_valid_after}
+            message_data = {'common_name': certificate.common_name,
+                            'not_valid_after': certificate.not_valid_after.isoformat()}
             notification = NotificationModel.objects.create(
                 certificate=certificate,
                 created_at=timezone.now(),
