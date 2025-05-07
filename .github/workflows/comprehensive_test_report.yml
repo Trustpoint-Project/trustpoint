@@ -12,6 +12,8 @@ jobs:
 
       - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action
+        with:
+          run_migrations: true
 
       - name: Run Pytest and create reports
         run: |
@@ -39,13 +41,15 @@ jobs:
 
       - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action
+        with:
+          run_migrations: true  # Enable database migrations.
 
       - name: Run Behave tests and generate reports
         run: |
           uv run trustpoint/manage.py behave \
             --format allure_behave.formatter:AllureFormatter \
             --outfile reports/allure-results/bdd \
-          trustpoint/features/${{ inputs.feature_file }}.feature
+          trustpoint/features/
 
       - name: Upload BDD results
         uses: actions/upload-artifact@v4
