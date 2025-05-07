@@ -28,10 +28,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-results
-          path: |
-            reports/allure-results/unit
-            reports/coverage/coverage.xml
-            reports/junit/pytest.xml
+          path: reports/allure-results/unit
 
   generate-bdd-test-results:
     runs-on: ubuntu-latest
@@ -77,17 +74,17 @@ jobs:
           name: bdd-test-results
           path: bdd-test-results
 
-      - name: Merge Allure result folders
-        run: |
-          mkdir -p reports/allure-results/merged
-          cp -r unit-test-results/reports/allure-results/unit/* \
-          reports/allure-results/merged/
-          cp -r bdd-test-results/reports/allure-results/bdd/*  \
-          reports/allure-results/merged/
+      - name: Create new allure result folder
+        run: mkdir -p reports/allure-results/merged
+
+      - name: Copy unit-test results to the allure folder
+        run: cp -r unit-test-results/* reports/allure-results/merged/
+
+      - name: Copy bdd test results to the allure folder
+        run: cp -r bdd-test-results/*  reports/allure-results/merged/
 
       - name: Generate Allure HTML report
         uses:  simple-elf/allure-report-action@v1
-        if: always()
         with:
           allure_results: reports/allure-results/merged # default
           allure_report: reports/allure-report # default
