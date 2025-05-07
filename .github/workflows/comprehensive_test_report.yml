@@ -21,7 +21,7 @@ jobs:
           --cov=trustpoint \
           --cov-report=xml:reports/coverage/coverage.xml \
           --alluredir=reports/allure-results/unit \
-          --junitxml=reports/junit/pytest.xml
+          --junitxml=reports/junit/pytest.xml \
           trustpoint/ 
           
       - name: Upload unit test results
