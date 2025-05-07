@@ -94,9 +94,6 @@ jobs:
       - name: Copy bdd test results to the allure folder
         run: cp -r bdd-test-results/*  allure-results/
 
-      - name: List all files inside the folder
-        run: ls -la allure-results/
-
       - name: Generate Allure HTML report
         uses:  simple-elf/allure-report-action@v1
         if: always()
