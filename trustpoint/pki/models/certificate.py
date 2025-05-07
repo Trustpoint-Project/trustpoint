@@ -439,11 +439,11 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
 
     def get_certificate_serializer(self) -> CertificateSerializer:
         """Get the serializer for the certificate."""
-        return CertificateSerializer(self.cert_pem)
+        return CertificateSerializer.from_pem(self.cert_pem.encode())
 
     def get_public_key_serializer(self) -> PublicKeySerializer:
         """Get the serializer for the certificate's public key."""
-        return PublicKeySerializer(self.public_key_pem)
+        return PublicKeySerializer.from_pem(self.public_key_pem.encode())
 
     # ---------------------------------------------- Private save methods ----------------------------------------------
 

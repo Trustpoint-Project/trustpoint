@@ -10,8 +10,8 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from pki.models.credential import CredentialModel
 from pki.util.keys import KeyGenerator
-from trustpoint_core import oid  # type: ignore[import-untyped]
-from trustpoint_core.serializer import CredentialSerializer  # type: ignore[import-untyped]
+from trustpoint_core import oid
+from trustpoint_core.serializer import CredentialSerializer
 
 from devices.models import DeviceModel, IssuedCredentialModel
 
@@ -320,14 +320,12 @@ class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
             ],
         )
         credential = CredentialSerializer(
-            (
-                private_key,
-                certificate,
-                [
-                    self.domain.issuing_ca.credential.get_certificate(),
-                    *self.domain.issuing_ca.credential.get_certificate_chain(),
-                ],
-            )
+            private_key=private_key,
+            certificate=certificate,
+            additional_certificates=[
+                self.domain.issuing_ca.credential.get_certificate(),
+                *self.domain.issuing_ca.credential.get_certificate_chain(),
+            ]
         )
         return self._save(
             credential,
@@ -427,15 +425,11 @@ class LocalTlsServerCredentialIssuer(BaseTlsCredentialIssuer):
             validity_days,
             [(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), False), (san_extension, san_critical)],
         )
+        cert_chain = self.domain.issuing_ca.credential.get_credential_serializer().get_full_chain_as_crypto()
         credential = CredentialSerializer(
-            (
-                private_key,
-                certificate,
-                [
-                    self.domain.issuing_ca.credential.get_certificate(),
-                    *self.domain.issuing_ca.credential.get_certificate_chain(),
-                ],
-            )
+            private_key=private_key,
+            certificate=certificate,
+            additional_certificates=cert_chain
         )
         return self._save(
             credential,
@@ -509,15 +503,11 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             extra_extensions=[(x509.BasicConstraints(ca=False, path_length=None), True)],
         )
 
+        cert_chain = self.domain.issuing_ca.credential.get_credential_serializer().get_full_chain_as_crypto()
         credential = CredentialSerializer(
-            (
-                private_key,
-                certificate,
-                [
-                    self.domain.issuing_ca.credential.get_certificate(),
-                    *self.domain.issuing_ca.credential.get_certificate_chain(),
-                ],
-            )
+            private_key=private_key,
+            certificate=certificate,
+            additional_certificates=cert_chain
         )
 
         issued_domain_credential = self._save(
@@ -662,15 +652,11 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
             ],
         )
 
+        cert_chain = self.domain.issuing_ca.credential.get_credential_serializer().get_full_chain_as_crypto()
         credential = CredentialSerializer(
-            (
-                private_key,
-                certificate,
-                [
-                    self.domain.issuing_ca.credential.get_certificate(),
-                    *self.domain.issuing_ca.credential.get_certificate_chain(),
-                ],
-            )
+            private_key=private_key,
+            certificate=certificate,
+            additional_certificates=cert_chain
         )
 
         return self._save(
@@ -800,15 +786,11 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
             ],
         )
 
+        cert_chain = self.domain.issuing_ca.credential.get_credential_serializer().get_full_chain_as_crypto()
         credential = CredentialSerializer(
-            (
-                private_key,
-                certificate,
-                [
-                    self.domain.issuing_ca.credential.get_certificate(),
-                    *self.domain.issuing_ca.credential.get_certificate_chain(),
-                ],
-            )
+            private_key=private_key,
+            certificate=certificate,
+            additional_certificates=cert_chain
         )
 
         return self._save(

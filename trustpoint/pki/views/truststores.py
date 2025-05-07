@@ -15,11 +15,9 @@ from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
-from trustpoint_core.file_builder.certificate import (
-    CertificateCollectionArchiveFileBuilder,
-    CertificateCollectionBuilder,
-)
-from trustpoint_core.file_builder.enum import ArchiveFormat, CertificateFileFormat
+
+from trustpoint_core.serializer import CertificateFormat
+from trustpoint_core.archiver import ArchiveFormat, Archiver
 
 from pki.forms import TruststoreAddForm
 from pki.models import DomainModel
@@ -150,13 +148,12 @@ class TruststoreDownloadView(TruststoresContextMixin, DetailView[TruststoreModel
             return super().get(request, *args, **kwargs)
 
         try:
-            file_format_enum = CertificateFileFormat(value=self.kwargs.get('file_format'))
+            file_format_enum = CertificateFormat(value=self.kwargs.get('file_format'))
         except Exception as exception:
             raise Http404 from exception
 
         certificate_serializer = TruststoreModel.objects.get(pk=pk).get_certificate_collection_serializer()
-
-        file_bytes = CertificateCollectionBuilder.build(certificate_serializer, file_format=file_format_enum)
+        file_bytes = certificate_serializer.as_format(file_format_enum)
 
         response = HttpResponse(file_bytes, content_type=file_format_enum.mime_type)
         response['Content-Disposition'] = f'attachment; filename="truststore{file_format_enum.file_extension}"'
@@ -233,7 +230,7 @@ class TruststoreMultipleDownloadView(
             return super().get(request, *args, **kwargs)
 
         try:
-            file_format_enum = CertificateFileFormat(value=file_format)
+            file_format_enum = CertificateFormat(value=file_format)
         except Exception as exception:
             raise Http404 from exception
 
@@ -246,11 +243,12 @@ class TruststoreMultipleDownloadView(
             TruststoreModel.objects.get(pk=pk).get_certificate_collection_serializer() for pk in pks_list
         ]
 
-        file_bytes = CertificateCollectionArchiveFileBuilder.build(
-            certificate_collection_serializers=certificate_collection_serializers,
-            file_format=file_format_enum,
-            archive_format=archive_format_enum,
-        )
+        data_to_archive = {
+            f'trust-store-{i}': trust_store.as_format(file_format_enum)
+            for i, trust_store in enumerate(certificate_collection_serializers)
+        }
+
+        file_bytes = Archiver.archive(data_to_archive, archive_format_enum)
 
         response = HttpResponse(file_bytes, content_type=archive_format_enum.mime_type)
         response['Content-Disposition'] = f'attachment; filename="truststores{archive_format_enum.file_extension}"'

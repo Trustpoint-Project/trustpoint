@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim
+FROM python:3.12-slim-bookworm
 COPY --from=ghcr.io/astral-sh/uv:0.7.2 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1 \
@@ -20,7 +20,7 @@ RUN apt-get update && \
         apache2 \
         apache2-utils \
         gettext \
-        libapache2-mod-wsgi-py3 && \
+        apache2-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Sets the current WORKDIR for the following commands
@@ -42,8 +42,13 @@ RUN if [ "${BRANCH}" != "" ]; then \
     chown www-data:www-data /var/www/html/trustpoint/
 
 USER www-data
-RUN uv sync --python-preference only-system --python 3.11.2
+RUN uv sync --python-preference only-system
+RUN uv pip install mod_wsgi
 USER root
+
+RUN uv run mod_wsgi-express install-module \
+    > /etc/apache2/mods-available/wsgi.load && \
+    a2enmod wsgi
 
 # Sets DEBUG = False and DOCKER_CONTAINER = True in the Django settings
 RUN sed -i '/DEBUG = True/s/True/False/' trustpoint/trustpoint/settings.py && \
