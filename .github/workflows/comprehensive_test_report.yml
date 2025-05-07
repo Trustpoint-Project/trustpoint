@@ -86,23 +86,26 @@ jobs:
           path: bdd-test-results
 
       - name: Create new allure result folder
-        run: mkdir -p reports/allure-results/merged
+        run: mkdir -p allure-results
 
       - name: Copy unit-test results to the allure folder
-        run: cp -r unit-test-results/* reports/allure-results/merged/
+        run: cp -r unit-test-results/* allure-results/
 
       - name: Copy bdd test results to the allure folder
-        run: cp -r bdd-test-results/*  reports/allure-results/merged/
+        run: cp -r bdd-test-results/*  allure-results/
+
+      - name: List all files inside the folder
+        run: ls -la allure-results/
 
       - name: Generate Allure HTML report
         uses:  simple-elf/allure-report-action@v1
         if: always()
         with:
-          allure_results: reports/allure-results/merged # default
-          allure_report: reports/allure-report # default
+          allure_results: allure-results # default
+          allure_report: allure-report # default
 
       - name: Upload consolidated report
         uses: actions/upload-artifact@v4
         with:
           name: allure-report
-          path: reports/allure-report
+          path: allure-report
