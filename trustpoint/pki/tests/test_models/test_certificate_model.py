@@ -12,7 +12,7 @@ from pki.tests.fixtures import self_signed_cert_with_ext  # noqa: F401
 
 
 @pytest.mark.django_db
-def test_save_certificate_method(self_signed_cert_with_ext: CertificateModel) -> None:
+def test_save_certificate_method(self_signed_cert_with_ext: x509.Certificate) -> None:
     """Test that save_certificate method creates and stores a certificate model instance."""
     cert_model = CertificateModel.save_certificate(self_signed_cert_with_ext)
     assert isinstance(cert_model, CertificateModel)
