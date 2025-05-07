@@ -62,6 +62,17 @@ jobs:
       - generate-bdd-test-results
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Get Allure history
+        uses: actions/checkout@v4
+        if: always()
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: gh-pages
+
       - name: Download unit-test-results
         uses: actions/download-artifact@v4
         with:
@@ -85,6 +96,7 @@ jobs:
 
       - name: Generate Allure HTML report
         uses:  simple-elf/allure-report-action@v1
+        if: always()
         with:
           allure_results: reports/allure-results/merged # default
           allure_report: reports/allure-report # default
@@ -94,3 +106,10 @@ jobs:
         with:
           name: allure-report
           path: reports/allure-report
+
+      - name: Deploy report to Github Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v4
+        env:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-history
