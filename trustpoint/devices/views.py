@@ -1092,8 +1092,6 @@ class DeviceBaseCredentialDownloadView(
         ).label
         credential_type_name = credential_purpose.replace(' ', '-').lower().replace('-credential', '')
 
-
-
         if file_format == CredentialFileFormat.PKCS12:
             file_stream_data = io.BytesIO(credential_serializer.as_pkcs12(password=password))
 

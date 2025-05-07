@@ -94,7 +94,6 @@ class TruststoreAddForm(forms.Form):
 
     trust_store_file = forms.FileField(label=_('PEM or PKCS#7 File'), required=True)
 
-    @LoggerMixin.log_exceptions
     def clean_unique_name(self) -> str:
         """Validates the uniqueness of the truststore name.
 
@@ -107,7 +106,6 @@ class TruststoreAddForm(forms.Form):
             raise ValidationError(error_message)
         return cast(str, unique_name)
 
-    @LoggerMixin.log_exceptions
     def clean(self) -> None:
         """Cleans and validates the form data.
 
@@ -361,7 +359,6 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         required=False,
     )
 
-    @LoggerMixin.log_exceptions
     def clean_unique_name(self) -> str:
         """Validates the unique name to ensure it is not already in use.
 
@@ -374,7 +371,6 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             raise ValidationError(error_message)
         return cast(str, unique_name)
 
-    @LoggerMixin.log_exceptions
     def clean(self) -> None:
         """Cleans and validates the entire form.
 
@@ -467,7 +463,6 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
     ca_certificate = forms.FileField(label=_('Issuing CA Certificate (.cer, .der, .pem, .p7b, .p7c)'), required=True)
     ca_certificate_chain = forms.FileField(label=_('[Optional] Certificate Chain (.pem, .p7b, .p7c).'), required=False)
 
-    @LoggerMixin.log_exceptions
     def clean_unique_name(self) -> str:
         """Validates the unique name to ensure it does not already exist in the database.
 
@@ -480,7 +475,6 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             raise ValidationError(error_message)
         return unique_name
 
-    @LoggerMixin.log_exceptions
     def clean_private_key_file(self) -> PrivateKeySerializer:
         """Validates and parses the uploaded private key file.
 
@@ -518,7 +512,6 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             raise ValidationError(err_msg) from exception
 
 
-    @LoggerMixin.log_exceptions
     def clean_ca_certificate(self) -> CertificateSerializer:
         """Validates and parses the uploaded Issuing CA certificate file.
 
@@ -565,7 +558,6 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
 
         return certificate_serializer
 
-    @LoggerMixin.log_exceptions
     def clean_ca_certificate_chain(self) -> None | CertificateCollectionSerializer:
         """Validates and parses the uploaded Issuing CA certificate chain file.
 
@@ -592,7 +584,6 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
 
         return None
 
-    @LoggerMixin.log_exceptions
     def clean(self) -> None:
         """Cleans and validates the form data.
 
@@ -609,24 +600,19 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             if not cleaned_data:
                 return
             unique_name = cleaned_data.get('unique_name')
-            private_key_file = cleaned_data.get('private_key_file')
-            ca_certificate = cleaned_data.get('ca_certificate')
-            ca_certificate_chain = (
+            private_key_serializer = cleaned_data.get('private_key_file')
+            ca_certificate_serializer = cleaned_data.get('ca_certificate')
+            ca_certificate_chain_serializer = (
                 cleaned_data.get('ca_certificate_chain') if cleaned_data.get('ca_certificate_chain') else None
             )
-            if ca_certificate_chain:
-                certificate_collection_serializer = CertificateCollectionSerializer.from_bytes(
-                    ca_certificate_chain.read())
-            else:
-                certificate_collection_serializer = CertificateCollectionSerializer([])
 
-            if not unique_name or not private_key_file or not ca_certificate:
+            if not unique_name or not private_key_serializer or not ca_certificate_serializer:
                 return
 
             credential_serializer = CredentialSerializer.from_serializers(
-                private_key_serializer= PrivateKeySerializer.from_bytes(private_key_file.read(), None),
-                certificate_serializer=CertificateSerializer.from_bytes(ca_certificate.read()),
-                certificate_collection_serializer=certificate_collection_serializer
+                private_key_serializer= private_key_serializer,
+                certificate_serializer=ca_certificate_serializer,
+                certificate_collection_serializer=ca_certificate_chain_serializer
             )
 
             IssuingCaModel.create_new_issuing_ca(
