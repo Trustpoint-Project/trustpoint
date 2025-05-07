@@ -1,0 +1,104 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h1 class="m-0">{% trans "Backup-Verwaltung" %}</h1>
+    <form method="post" class="m-0">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary">
+        {% trans "Neues Backup erstellen" %}
+      </button>
+    </form>
+  </div>
+
+  <form id="batch-form" method="post" action="">
+    {% csrf_token %}
+    <div class="card-body p-0">
+      <table class="table table-striped mb-0">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="select-all" /></th>
+            <th>
+              <a href="?sort={% if current_sort == 'filename' %}-{% endif %}filename">
+                {% trans "File name" %}
+              </a>
+            </th>
+            <th>
+              <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
+                {% trans "Created at" %}
+              </a>
+            </th>
+            <th>
+              <a href="?sort={% if current_sort == 'modified_at' %}-{% endif %}modified_at">
+                {% trans "Last modified" %}
+              </a>
+            </th>
+            <th class="text-end">
+              <a href="?sort={% if current_sort == 'size_kb' %}-{% endif %}size_kb">
+                {% trans "Size (KB)" %}
+              </a>
+            </th>
+            <th>{% trans "Download" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for backup in backup_files %}
+          <tr>
+            <td>
+              <input type="checkbox" name="selected" value="{{ backup.filename }}" class="row-checkbox" />
+            </td>
+            <td>{{ backup.filename }}</td>
+            <td>{{ backup.created_at }}</td>
+            <td>{{ backup.modified_at }}</td>
+            <td class="text-end">{{ backup.size_kb }}</td>
+            <td>
+              <a href="{% url 'settings:backup-download' filename=backup.filename %}"
+                 class="btn btn-sm btn-outline-primary">
+                {% trans "Herunterladen" %}
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="text-center">
+              {% trans "Keine Backups gefunden." %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between">
+      <div>
+        <button formaction="{% url 'settings:backup-download-multiple' archive_format='tar.gz' %}"
+                formmethod="post"
+                class="btn btn-secondary">
+          {% trans "Download (tar.gz)" %}
+        </button>
+        <button formaction="{% url 'settings:backup-download-multiple' archive_format='zip' %}"
+                formmethod="post"
+                class="btn btn-secondary">
+          {% trans "Download (zip)" %}
+        </button>
+      </div>
+      <div>
+        <button formaction="{% url 'settings:backup-delete-multiple' %}"
+                formmethod="post"
+                class="btn btn-danger">
+          {% trans "Löschen" %}
+        </button>
+      </div>
+      {% include "trustpoint/pagination.html" %}
+    </div>
+  </form>
+</div>
+
+<script>
+  document.getElementById('select-all').addEventListener('change', function(e) {
+    document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = e.target.checked);
+  });
+</script>
+{% endblock %}
