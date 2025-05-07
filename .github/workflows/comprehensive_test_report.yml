@@ -1,0 +1,91 @@
+name: Comprehensive Test Report
+
+on: [pull_request]
+
+jobs:
+
+  generate-unit-test-results:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action
+
+      - name: Run Pytest and create reports
+        run: |
+          uv run pytest \
+            --cov=trustpoint \
+            --cov-report=xml:reports/coverage/coverage.xml \
+            --alluredir=reports/allure-results/unit \
+            --junitxml=reports/junit/pytest.xml
+          trustpoint/ 
+          
+      - name: Upload unit test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: |
+            reports/allure-results/unit
+            reports/coverage/coverage.xml
+            reports/junit/pytest.xml
+
+  generate-bdd-test-results:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action
+
+      - name: Run Behave tests and generate reports
+        run: |
+          uv run trustpoint/manage.py behave \
+            --format allure_behave.formatter:AllureFormatter \
+            --outfile reports/allure-results/bdd \
+          trustpoint/features/${{ inputs.feature_file }}.feature
+
+      - name: Upload BDD results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bdd-test-results
+          path: reports/allure-results/bdd
+
+  generate-allure:
+    needs:
+      - generate-unit-test-results
+      - generate-bdd-test-results
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download unit-test-results
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-test-results
+          path: merged-results
+
+      - name: Download bdd-test-results
+        uses: actions/download-artifact@v4
+        with:
+          name: bdd-test-results
+          path: merged-results
+
+      - name: Merge Allure result folders
+        run: |
+          mkdir -p reports/allure-results/merged
+          cp -r merged-results/allure-results/unit/* reports/allure-results/merged/
+          cp -r merged-results/allure-results/bdd/*  reports/allure-results/merged/
+
+      - name: Generate Allure HTML report
+        uses:  simple-elf/allure-report-action@v1
+        if: always()
+        with:
+          allure_results: reports/allure-results/merged # default
+          allure_report: reports/allure-report # default
+
+      - name: Upload consolidated report
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: reports/allure-report
