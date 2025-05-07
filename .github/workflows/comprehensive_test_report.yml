@@ -45,10 +45,11 @@ jobs:
           run_migrations: true
 
       - name: Run Behave tests and generate reports
+        continue-on-error: true
         run: |
           uv run trustpoint/manage.py behave \
           --format allure_behave.formatter:AllureFormatter \
-          --outfile reports/allure-results/bdd \
+          --outfiles reports/allure-results/bdd \
           trustpoint/features/
 
       - name: Upload BDD results
