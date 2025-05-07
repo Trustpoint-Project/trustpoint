@@ -69,14 +69,14 @@ Functional Requirements
    :header: "Name (Identifier)", "Title", "Description", "Component(s)", "Importance"
    :widths: 10, 25, 60, 30, 10
 
-   _`R_001`, "Create, view, edit and delete an identity", "TPC_Web must provide a way to create, view, edit and delete a digital identity.", "TPC_Web, Admin", "High"
+   _`R_001`, "Create, view, revoke and delete a device", "TPC_Web must provide a way to create, view, revoke and delete a device.", "TPC_Web, Admin", "High"
    _`R_002`, "Usage of any zero touch onboarding protocol", "Any zero touch onboarding protocol should be used, preferably the Bootstrapping Remote Secure Key Infrastructure (BRSKI) process, while connecting a new device to the network.", "TP_Client", "High"
    _`R_003`, "Certificate Lifecycle Management", "Enable complete lifecycle management for certificates, including renewal and revocation.", "All components", "High"
    _`R_004`, "REST API", "Provide a REST API for interacting with Trustpoint programmatically.", "TPC_Web", "High"
    _`R_005`, "Docker Container Support", "Distribute Trustpoint within a fully-configured Docker container for deployment.", "TPC_Web", "Medium"
    _`R_006`, "Backup, Restore, and Update Mechanisms", "Implement backup, restoration, and update features to ensure data and system resilience.", "TPC_Web, Admin", "High"
    _`R_007`, "Logging Capabilities", "Provide detailed and configurable logging for system events and actions.", "TPC_Web, TP_Client", "High"
-   _`R_008`, "Auto-Generated :term:`Issuing CA`'s", "Automatically generate Issuing Certificate Authorities based on configuration.", "TPC_Web", "High"
+   _`R_008`, "Add, delete new :term:`Issuing CA`'s", "The admin should be able to add and delete new :term:`Issuing CA`'s.", "TPC_Web", "High"
    _`R_009`, "High Availability", "Ensure system availability using redundancy or failover mechanisms.", "TPC_Web, TP_Client", "High"
    _`R_010`, ":term:`CMP` Endpoint for Onboarded Devices", "Provide a :term:`CMP` endpoint for device onboarding.", "All components", "High"
    _`R_011`, ":term:`EST` Endpoint for Onboarded Devices", "Provide an :term:`EST` endpoint for device onboarding.", "All components", "High"
@@ -705,36 +705,19 @@ This testcase is related to requirement `R_008`_.
 Test Idea
 """""""""
 
-To verify that the system automatically generates Issuing CAs based on configuration, we will test the following scenarios:
+To verify that the admin is allowed to add or delete new :term:`Issuing CA`'s, there are the following steps needed.
 
-#. Successful Auto-Generation of an :term:`Issuing CA`
-    - The admin configures the system with predefined settings for an :term:`Issuing CA`.
-    - The system automatically generates the CA without manual intervention.
-    - The CA appears in the list of available CAs.
-
-#. Auto-Generation with Different Configurations
-    - The admin sets different parameters for CA generation (e.g., key size, validity period).
-    - The system creates the CA using the specified configuration.
-    - The generated CA matches the given settings.
-
-#. Failure Handling in CA Generation
-    - The system prevents generation if required parameters are missing.
-    - The system logs errors when CA generation fails.
-
-#. Verification of Generated CA Details
-    - The generated CA contains the expected attributes (issuer name, serial number, key usage, etc.).
-    - The CA is functional and can issue end-entity certificates.
-
-Edge cases:
-
-- Attempting to generate a CA with invalid parameters.
-- Generating multiple CAs in quick succession.
+- Admin is logged in
+- Admin navigates to the page "pki-issuing ca's"
+- Admin can click on "add new issuing ca"
+- Admin is able to either upload a pkcs12 file or upload separate key and certificate file
+- The system should display the newly added :term:`Issuing CA`
 
 """"""""""""
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_008_auto_issuing_ca.feature
+.. literalinclude:: ../../../trustpoint/features/R_008_issuing_ca_management.feature
    :language: gherkin
 
 ^^^^^
