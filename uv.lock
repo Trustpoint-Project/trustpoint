@@ -12,6 +12,45 @@ wheels = [
 ]
 
 [[package]]
+name = "allure-behave"
+version = "2.14.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "allure-python-commons" },
+    { name = "behave" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/98/40/70cd8c95edfbdff9acd243df59512805f4dfa21291ae3df259319e7169a8/allure_behave-2.14.2.tar.gz", hash = "sha256:b145a838150cd2cdf6288b1922a855e4c6fb11ad0c950cd0f17146d1ea83adf4", size = 11563, upload-time = "2025-05-06T17:03:58.924Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3c/27/696764b87750dacc92fd8736805e735fbe086a583c3f8afc27cb707784a4/allure_behave-2.14.2-py3-none-any.whl", hash = "sha256:159a54eee88e6117017160a565af18fd1c2c46fa5d0da993aa75e97a47d3d352", size = 8040, upload-time = "2025-05-06T17:03:57.639Z" },
+]
+
+[[package]]
+name = "allure-pytest"
+version = "2.14.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "allure-python-commons" },
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d6/f4/59d3d3ca7cbcdb5efae990072f6b4aafebff524237fa277c14daac8b84f8/allure_pytest-2.14.2.tar.gz", hash = "sha256:d387492178d27805863d95350bdc38b7feca3ed7165841997630fd4073cc9101", size = 17153, upload-time = "2025-05-06T17:04:07.395Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f3/bb/d6b28ee5cced087a171715945e578bd6f2c0a32e6bbbd3578fe701f7ae4c/allure_pytest-2.14.2-py3-none-any.whl", hash = "sha256:18f3baa9ebd1b6148223cfa898bacfc2794bb9446221adac1be71deeb26ed79a", size = 11673, upload-time = "2025-05-06T17:04:06.406Z" },
+]
+
+[[package]]
+name = "allure-python-commons"
+version = "2.14.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "pluggy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d0/79/53fe62ff56fa1f972b9fcbc46d04687786907cecc40b412421c4554d3734/allure_python_commons-2.14.2.tar.gz", hash = "sha256:7acdc4fe3efbe709604895e2393f082b2659d8e5653e77ff6367682e6e4a41bc", size = 15186, upload-time = "2025-05-06T17:03:55.04Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d5/b7/41b4323f65911b216a616087c37a8fd337d2cd92f7b8fa89bc35cb91cd1d/allure_python_commons-2.14.2-py3-none-any.whl", hash = "sha256:ad50385a4c601ec31c86eed773d8ccfdcc687fecbb6535c9768af3bf03b50a19", size = 16191, upload-time = "2025-05-06T17:03:53.564Z" },
+]
+
+[[package]]
 name = "asgiref"
 version = "3.8.1"
 source = { registry = "https://pypi.org/simple" }
@@ -39,6 +78,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/45/1d/f03bcb60c4a3212e15f99a56085d93093a497718adf828d050b9d675da81/asttokens-2.4.1.tar.gz", hash = "sha256:b03869718ba9a6eb027e134bfdf69f38a236d681c83c160d510768af11254ba0", size = 62284, upload-time = "2023-10-26T10:03:05.06Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/45/86/4736ac618d82a20d87d2f92ae19441ebc7ac9e7a581d7e58bbe79233b24a/asttokens-2.4.1-py2.py3-none-any.whl", hash = "sha256:051ed49c3dcae8913ea7cd08e46a606dba30b79993209636c4875bc1d637bc24", size = 27764, upload-time = "2023-10-26T10:03:01.789Z" },
+]
+
+[[package]]
+name = "attrs"
+version = "25.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/b0/1367933a8532ee6ff8d63537de4f1177af4bff9f3e829baf7331f595bb24/attrs-25.3.0.tar.gz", hash = "sha256:75d7cefc7fb576747b2c81b4442d4d4a1ce0900973527c011d1030fd3bf4af1b", size = 812032, upload-time = "2025-03-13T11:10:22.779Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/77/06/bb80f5f86020c4551da315d78b3ab75e8228f89f0162f2c3a819e407941a/attrs-25.3.0-py3-none-any.whl", hash = "sha256:427318ce031701fea540783410126f03899a97ffc6f61596ad581ac2e40e3bc3", size = 63815, upload-time = "2025-03-13T11:10:21.14Z" },
 ]
 
 [[package]]
@@ -1121,6 +1169,8 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "allure-behave" },
+    { name = "allure-pytest" },
     { name = "beautifulsoup4" },
     { name = "behave" },
     { name = "behave-django" },
@@ -1169,6 +1219,8 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "allure-behave", specifier = ">=2.14.2" },
+    { name = "allure-pytest", specifier = ">=2.14.2" },
     { name = "beautifulsoup4", specifier = ">=4.13.4" },
     { name = "behave", specifier = ">=1.2.7.dev6" },
     { name = "behave-django", specifier = ">=1.5.0" },
