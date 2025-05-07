@@ -6,10 +6,10 @@ from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 
 class SecurityConfig(models.Model):
-    """Security Configuration model"""
+    """Security Configuration model."""
 
     class SecurityModeChoices(models.TextChoices):
-        """Types of security modes"""
+        """Types of security modes."""
 
         DEV = '0', _('Testing env')
         LOW = '1', _('Basic')
@@ -25,5 +25,5 @@ class SecurityConfig(models.Model):
     )
 
     def __str__(self) -> str:
-        """Output as string"""
+        """Output as string."""
         return f'{self.security_mode}'
