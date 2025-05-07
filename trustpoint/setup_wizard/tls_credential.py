@@ -73,7 +73,11 @@ class Generator:
             algorithm=hashes.SHA256(),
         )
 
-        return CredentialSerializer((private_key, root_ca_certificate, None))
+        return CredentialSerializer(
+            private_key=private_key,
+            certificate=root_ca_certificate,
+            additional_certificates=[]
+        )
 
     def _generate_issuing_ca_credential(self, root_ca_credential: CredentialSerializer) -> CredentialSerializer:
         private_key_serializer = self._generate_key_pair()
@@ -117,12 +121,14 @@ class Generator:
             critical=True,
         )
         issuing_ca_certificate = builder.sign(
-            private_key=root_ca_credential.credential_private_key.as_crypto(),
+            private_key=root_ca_credential.private_key,
             algorithm=hashes.SHA256(),
         )
 
         return CredentialSerializer(
-            (private_key, issuing_ca_certificate, [root_ca_credential.credential_certificate.as_crypto()])
+            private_key=private_key,
+            certificate=issuing_ca_certificate,
+            additional_certificates=root_ca_credential.additional_certificates
         )
 
     def _generate_tls_server_credential(self, issuing_ca_credential: CredentialSerializer) -> CredentialSerializer:
@@ -187,14 +193,9 @@ class Generator:
         )
 
         return CredentialSerializer(
-            (
-                private_key,
-                certificate,
-                [
-                    issuing_ca_credential.credential_certificate.as_crypto(),
-                    issuing_ca_credential.additional_certificates.as_crypto()[0],
-                ],
-            )
+            private_key=private_key,
+            certificate=certificate,
+            additional_certificates=issuing_ca_credential.get_full_chain_as_crypto(),
         )
 
     def generate_tls_credential(self) -> CredentialSerializer:

@@ -140,7 +140,7 @@ def step_then_they_will_receive_page_to_select_the_format(context: runner.Contex
     Args:
         context (runner.Context): Behave context.
     """
-    if 'value="PEM_ZIP"' not in context.otp_post_view_response.decode():
+    if 'value="pem_zip"' not in context.otp_post_view_response.decode():
         msg = 'Page does not contain "Download as ZIP (PEM)" button'
         raise AssertionError(msg)
 
@@ -227,7 +227,7 @@ def step_when_user_selects_a_file(context: runner.Context) -> None:
         context (runner.Context): Behave context.
     """
     url = f'/devices/browser/credential-download/{context.download_id}/?token={context.download_token}'
-    post_data = {'password': context.test_password, 'confirm_password': context.test_password, 'file_format': 'PEM_ZIP'}
+    post_data = {'password': context.test_password, 'confirm_password': context.test_password, 'file_format': 'pem_zip'}
     download_response = context.unauthenticated_user_client.post(url, post_data)
 
     if download_response.status_code != HTTP_OK:
