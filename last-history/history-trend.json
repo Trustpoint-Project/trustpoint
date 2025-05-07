@@ -1,0 +1,13 @@
+[ {
+  "buildOrder" : 16,
+  "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16",
+  "reportName" : "Allure Report with history",
+  "data" : {
+    "failed" : 99,
+    "broken" : 1,
+    "skipped" : 0,
+    "passed" : 60,
+    "unknown" : 0,
+    "total" : 160
+  }
+} ]

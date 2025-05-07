@@ -1,0 +1,133 @@
+{
+  "uid" : "ba7ed88a186e2228",
+  "name" : "NTEU logs into the system -- @1.1 ",
+  "fullName" : "NTEU Identity Management and Zero-Touch Onboarding: NTEU logs into the system",
+  "historyId" : "d4c1b4176a5b93c9c0aae79066a2d89d",
+  "time" : {
+    "start" : 1746616893751,
+    "stop" : 1746616893822,
+    "duration" : 71
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: Given the user is an NTEU with username valid_user and password correct_pw\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/f_001_steps.py\", line 19, in step_given_nteu_credentials\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: Given the user is an NTEU with username valid_user and password correct_pw\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/f_001_steps.py\", line 19, in step_given_nteu_credentials\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the TPC_Web application is running",
+      "time" : {
+        "start" : 1746616893760,
+        "stop" : 1746616893788,
+        "duration" : 28
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given the user is an NTEU with username valid_user and password correct_pw",
+      "time" : {
+        "start" : 1746616893788,
+        "stop" : 1746616893789,
+        "duration" : 1
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: Given the user is an NTEU with username valid_user and password correct_pw\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/f_001_steps.py\", line 19, in step_given_nteu_credentials\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "When the user attempts to log in",
+      "time" : {
+        "start" : 1746616893822,
+        "stop" : 1746616893822,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then login should be successful",
+      "time" : {
+        "start" : 1746616893822,
+        "stop" : 1746616893822,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "feature",
+    "value" : "NTEU Identity Management and Zero-Touch Onboarding"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "login_outcome",
+    "value" : "successful"
+  }, {
+    "name" : "password",
+    "value" : "correct_pw"
+  }, {
+    "name" : "username",
+    "value" : "valid_user"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "tags" : [ ]
+  },
+  "source" : "ba7ed88a186e2228.json",
+  "parameterValues" : [ "successful", "correct_pw", "valid_user" ]
+}

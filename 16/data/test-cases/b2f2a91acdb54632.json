@@ -1,0 +1,115 @@
+{
+  "uid" : "b2f2a91acdb54632",
+  "name" : "Verification of generated CA details",
+  "fullName" : "Auto-Generated Issuing CAs: Verification of generated CA details",
+  "historyId" : "0033b990b82416d6e36750478a5a9b04",
+  "time" : {
+    "start" : 1746616914790,
+    "stop" : 1746616915368,
+    "duration" : 578
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: When the admin inspects the generated CA details\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_008_steps.py\", line 104, in step_when_admin_inspects_ca\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: When the admin inspects the generated CA details\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_008_steps.py\", line 104, in step_when_admin_inspects_ca\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1746616914792,
+        "stop" : 1746616915339,
+        "duration" : 547
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the admin inspects the generated CA details",
+      "time" : {
+        "start" : 1746616915339,
+        "stop" : 1746616915339,
+        "duration" : 0
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: When the admin inspects the generated CA details\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_008_steps.py\", line 104, in step_when_admin_inspects_ca\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "Then the CA should contain:",
+      "time" : {
+        "start" : 1746616915368,
+        "stop" : 1746616915368,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ {
+        "uid" : "f3af7fa1d7409c58",
+        "name" : ".table",
+        "source" : "f3af7fa1d7409c58.csv",
+        "type" : "text/csv",
+        "size" : 108
+      } ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 1,
+      "shouldDisplayMessage" : false,
+      "hasContent" : true
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 3,
+    "attachmentsCount" : 1,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "feature",
+    "value" : "Auto-Generated Issuing CAs"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "tags" : [ ]
+  },
+  "source" : "b2f2a91acdb54632.json",
+  "parameterValues" : [ ]
+}

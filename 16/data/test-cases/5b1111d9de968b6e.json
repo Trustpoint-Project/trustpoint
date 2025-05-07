@@ -1,0 +1,117 @@
+{
+  "uid" : "5b1111d9de968b6e",
+  "name" : "User enters one time password incorrectly",
+  "fullName" : "Remote Credential Download: User enters one time password incorrectly",
+  "historyId" : "3c2b368b9054fc4030db3ef21bc9f220",
+  "time" : {
+    "start" : 1746616918817,
+    "stop" : 1746616918866,
+    "duration" : 49
+  },
+  "status" : "passed",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "passed",
+    "steps" : [ {
+      "name" : "Given the TPC_Web application is running",
+      "time" : {
+        "start" : 1746616918820,
+        "stop" : 1746616918826,
+        "duration" : 6
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given an incorrect one-time password",
+      "time" : {
+        "start" : 1746616918826,
+        "stop" : 1746616918826,
+        "duration" : 0
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the user visits the \"/devices/browser\" endpoint and enters the OTP",
+      "time" : {
+        "start" : 1746616918826,
+        "stop" : 1746616918832,
+        "duration" : 6
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then they will receive a warning saying the OTP is incorrect",
+      "time" : {
+        "start" : 1746616918832,
+        "stop" : 1746616918833,
+        "duration" : 1
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "tag",
+    "value" : "fixture.r013.setup"
+  }, {
+    "name" : "feature",
+    "value" : "Remote Credential Download"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ ],
+    "tags" : [ "fixture.r013.setup" ]
+  },
+  "source" : "5b1111d9de968b6e.json",
+  "parameterValues" : [ ]
+}

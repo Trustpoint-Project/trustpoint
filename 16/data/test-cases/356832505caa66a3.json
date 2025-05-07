@@ -1,0 +1,148 @@
+{
+  "uid" : "356832505caa66a3",
+  "name" : "Unauthorized user attempts to modify a certificate template -- @1.1 ",
+  "fullName" : "Certificate Template Security: Unauthorized user attempts to modify a certificate template",
+  "historyId" : "c94878b42f6f51398c6859c96556c9ac",
+  "time" : {
+    "start" : 1746616925683,
+    "stop" : 1746616926270,
+    "duration" : 587
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: Given the user has role Admin\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_102_steps.py\", line 15, in step_given_user_role\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: Given the user has role Admin\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_102_steps.py\", line 15, in step_given_user_role\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1746616925686,
+        "stop" : 1746616926235,
+        "duration" : 549
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given the user has role Admin",
+      "time" : {
+        "start" : 1746616926235,
+        "stop" : 1746616926236,
+        "duration" : 1
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: Given the user has role Admin\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_102_steps.py\", line 15, in step_given_user_role\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "And a certificate template named Secure_Template exists",
+      "time" : {
+        "start" : 1746616926270,
+        "stop" : 1746616926270,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the user attempts to modify the certificate template",
+      "time" : {
+        "start" : 1746616926270,
+        "stop" : 1746616926270,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then modification should be allowed",
+      "time" : {
+        "start" : 1746616926270,
+        "stop" : 1746616926270,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 5,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "feature",
+    "value" : "Certificate Template Security"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "modification_outcome",
+    "value" : "allowed"
+  }, {
+    "name" : "role",
+    "value" : "Admin"
+  }, {
+    "name" : "template_name",
+    "value" : "Secure_Template"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "tags" : [ ]
+  },
+  "source" : "356832505caa66a3.json",
+  "parameterValues" : [ "allowed", "Admin", "Secure_Template" ]
+}

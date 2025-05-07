@@ -1,0 +1,147 @@
+{
+  "uid" : "3eff86c3affd0d02",
+  "name" : "User downloads credential on remote device browser",
+  "fullName" : "Remote Credential Download: User downloads credential on remote device browser",
+  "historyId" : "3898aad47a03f52a6c47fbe05f4fbe14",
+  "time" : {
+    "start" : 1746616918866,
+    "stop" : 1746616919791,
+    "duration" : 925
+  },
+  "status" : "passed",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "passed",
+    "steps" : [ {
+      "name" : "Given the TPC_Web application is running",
+      "time" : {
+        "start" : 1746616918869,
+        "stop" : 1746616918874,
+        "duration" : 5
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given the user is on the credential download page",
+      "time" : {
+        "start" : 1746616918875,
+        "stop" : 1746616919705,
+        "duration" : 830
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And the download token is not yet expired",
+      "time" : {
+        "start" : 1746616919705,
+        "stop" : 1746616919706,
+        "duration" : 1
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the user enters a password to encrypt the credential private key",
+      "time" : {
+        "start" : 1746616919706,
+        "stop" : 1746616919706,
+        "duration" : 0
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And selects a file format",
+      "time" : {
+        "start" : 1746616919706,
+        "stop" : 1746616919755,
+        "duration" : 49
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then the credential will be downloaded to their browser in the requested format",
+      "time" : {
+        "start" : 1746616919755,
+        "stop" : 1746616919755,
+        "duration" : 0
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 6,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "tag",
+    "value" : "fixture.r013.setup"
+  }, {
+    "name" : "feature",
+    "value" : "Remote Credential Download"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ ],
+    "tags" : [ "fixture.r013.setup" ]
+  },
+  "source" : "3eff86c3affd0d02.json",
+  "parameterValues" : [ ]
+}

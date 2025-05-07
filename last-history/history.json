@@ -1,0 +1,3302 @@
+{
+  "d4c1b4176a5b93c9c0aae79066a2d89d" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "ba7ed88a186e2228",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/ba7ed88a186e2228",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the user is an NTEU with username valid_user and password correct_pw\n",
+      "time" : {
+        "start" : 1746616893751,
+        "stop" : 1746616893822,
+        "duration" : 71
+      }
+    } ]
+  },
+  "55ac715d13b23416bcbbd86bbd39e423" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "af41bec3ca17eb0f",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/af41bec3ca17eb0f",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616904267,
+        "stop" : 1746616904347,
+        "duration" : 80
+      }
+    } ]
+  },
+  "7bd982b4f185971a124cbb8c68b08442" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "20d4f1a19d9cfbb9",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/20d4f1a19d9cfbb9",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Identity creation or precondition setup.\n",
+      "time" : {
+        "start" : 1746616896993,
+        "stop" : 1746616897568,
+        "duration" : 575
+      }
+    } ]
+  },
+  "d6ae61816be46e12029efc9c999697a3" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "6ceffe71029dfc92",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/6ceffe71029dfc92",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616917962,
+        "stop" : 1746616918817,
+        "duration" : 855
+      }
+    } ]
+  },
+  "a700d82052705bd37a5e530ace739162" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "f84b3571d7ede069",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/f84b3571d7ede069",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin attempts to issue a certificate using the generated CA\n",
+      "time" : {
+        "start" : 1746616915368,
+        "stop" : 1746616915985,
+        "duration" : 617
+      }
+    } ]
+  },
+  "10119992457f6e45421bb4d4c1a10e0a" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "57a359b477b4acc8",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/57a359b477b4acc8",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Set certificate to active state.\n",
+      "time" : {
+        "start" : 1746616901097,
+        "stop" : 1746616901674,
+        "duration" : 577
+      }
+    } ]
+  },
+  "195b87ae51c066eb73306195133be09e" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "51ebb7c1b63dbae4",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/51ebb7c1b63dbae4",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin performs an action delete\n",
+      "time" : {
+        "start" : 1746616908404,
+        "stop" : 1746616908983,
+        "duration" : 579
+      }
+    } ]
+  },
+  "e494cdcb3f938feb87ce6fa9423ce443" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "86fb433d823fd0db",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/86fb433d823fd0db",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+      "time" : {
+        "start" : 1746616916213,
+        "stop" : 1746616916246,
+        "duration" : 33
+      }
+    } ]
+  },
+  "0ff4208b3519ebc2d3dbd3350f4b97a3" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "db54f38ca03475de",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/db54f38ca03475de",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+      "time" : {
+        "start" : 1746616916315,
+        "stop" : 1746616916350,
+        "duration" : 35
+      }
+    } ]
+  },
+  "6060586035b36ba0182350219aeb924d" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "cd09d402ad82c270",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/cd09d402ad82c270",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given a certificate template named \"Exportable_Template\" exists\n",
+      "time" : {
+        "start" : 1746616928034,
+        "stop" : 1746616928621,
+        "duration" : 587
+      }
+    } ]
+  },
+  "fd45458ef09eef6fa212d952c980d3dc" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "8add6ec127a10206",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/8add6ec127a10206",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Set certificate near expiration.\n",
+      "time" : {
+        "start" : 1746616899884,
+        "stop" : 1746616900519,
+        "duration" : 635
+      }
+    } ]
+  },
+  "2101fb9a1662dac4fa025a4df71785a4" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "df756d3b69e681be",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/df756d3b69e681be",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616905999,
+        "stop" : 1746616906000,
+        "duration" : 1
+      }
+    } ]
+  },
+  "8a181e70d0e508600a82f26f1c35d2b7" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "931978f095322c8a",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/931978f095322c8a",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the NTEU is on any action page\n",
+      "time" : {
+        "start" : 1746616894031,
+        "stop" : 1746616894066,
+        "duration" : 35
+      }
+    } ]
+  },
+  "8c394cdb16bf890ac1a8c6cdbfe25b92" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "8f123952437dc88b",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/8f123952437dc88b",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin performs an action create\n",
+      "time" : {
+        "start" : 1746616907234,
+        "stop" : 1746616907813,
+        "duration" : 579
+      }
+    } ]
+  },
+  "0033b990b82416d6e36750478a5a9b04" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "b2f2a91acdb54632",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/b2f2a91acdb54632",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin inspects the generated CA details\n",
+      "time" : {
+        "start" : 1746616914790,
+        "stop" : 1746616915368,
+        "duration" : 578
+      }
+    } ]
+  },
+  "e091d13d5c7812154d29af0175c16998" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "51502d0bfcd37593",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/51502d0bfcd37593",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the user has role User\n",
+      "time" : {
+        "start" : 1746616925096,
+        "stop" : 1746616925683,
+        "duration" : 587
+      }
+    } ]
+  },
+  "ef1b564f02baaeb2709cebb98426fc0a" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "945c5dc8640eb8d7",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/945c5dc8640eb8d7",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616903245,
+        "stop" : 1746616903355,
+        "duration" : 110
+      }
+    } ]
+  },
+  "37708dd66780ceb5d47b539d138c1065" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "72b30dfdb770d60e",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/72b30dfdb770d60e",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin configures the system for auto-generation of an Issuing CA\n",
+      "time" : {
+        "start" : 1746616912471,
+        "stop" : 1746616913051,
+        "duration" : 580
+      }
+    } ]
+  },
+  "6e821daed0ff28ad3d8afb554bea9653" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "dc4420a1cec32519",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/dc4420a1cec32519",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616906788,
+        "stop" : 1746616906789,
+        "duration" : 1
+      }
+    } ]
+  },
+  "86af5a0ea76fa9f3950c70c16fe46b92" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "37312d15d01738ef",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/37312d15d01738ef",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the NTEU is logged in\n",
+      "time" : {
+        "start" : 1746616893961,
+        "stop" : 1746616893995,
+        "duration" : 34
+      }
+    } ]
+  },
+  "5e98e7a8e0828eeb2f0a0768071e9821" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "1874162361467abb",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/1874162361467abb",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+      "time" : {
+        "start" : 1746616905307,
+        "stop" : 1746616905338,
+        "duration" : 31
+      }
+    } ]
+  },
+  "ff86fea02e5588877cea4efa7039cb87" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "1455baa7f455f33c",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/1455baa7f455f33c",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the TrustPoint component \"TP_Client_01\" has security level \"High\"\n",
+      "time" : {
+        "start" : 1746616922731,
+        "stop" : 1746616923318,
+        "duration" : 587
+      }
+    } ]
+  },
+  "8beb546e93b1ceaee155e92e62ee9c24" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "cfae93911c665096",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/cfae93911c665096",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the TrustPoint component \"TP_Client_01\" has security level \"Medium\"\n",
+      "time" : {
+        "start" : 1746616921554,
+        "stop" : 1746616922141,
+        "duration" : 587
+      }
+    } ]
+  },
+  "2c4fdfff0cfd3ecfe945fe02977814f1" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "b837ad63decda837",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/b837ad63decda837",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616905745,
+        "stop" : 1746616905825,
+        "duration" : 80
+      }
+    } ]
+  },
+  "656f47e0949e0f034ea24fc4cbc38762" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "6bc4e88fb3d441fb",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/6bc4e88fb3d441fb",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616905895,
+        "stop" : 1746616905896,
+        "duration" : 1
+      }
+    } ]
+  },
+  "eab676c1e524718ef3133cf958773c3c" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "5d4b11552c313c2c",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/5d4b11552c313c2c",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616906402,
+        "stop" : 1746616906402,
+        "duration" : 0
+      }
+    } ]
+  },
+  "094e7e3f128981d9cca9cdcd4250c372" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "7fad91d7be28c8f1",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/7fad91d7be28c8f1",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Identity creation or precondition setup.\n",
+      "time" : {
+        "start" : 1746616898145,
+        "stop" : 1746616898723,
+        "duration" : 578
+      }
+    } ]
+  },
+  "e7517dde3f7a6ddb3b92e6aba023e18e" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "132c18b4ebea7f8d",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/132c18b4ebea7f8d",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616907111,
+        "stop" : 1746616907112,
+        "duration" : 1
+      }
+    } ]
+  },
+  "32ce35d566b3f8a655444d675e8d76a5" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "9afa62c0ac7e5a20",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/9afa62c0ac7e5a20",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the TrustPoint component TP_Client_03 is selected\n",
+      "time" : {
+        "start" : 1746616920967,
+        "stop" : 1746616921554,
+        "duration" : 587
+      }
+    } ]
+  },
+  "6519eed8b4c8081b5fac04072f9f00c2" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "725ba7401341c87",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/725ba7401341c87",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616904842,
+        "stop" : 1746616904921,
+        "duration" : 79
+      }
+    } ]
+  },
+  "27e2e9fef1d5dbc5ea1bbe2ee41a062d" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "6e819a35fdbcc061",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/6e819a35fdbcc061",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616905110,
+        "stop" : 1746616905110,
+        "duration" : 0
+      }
+    } ]
+  },
+  "5f2a8b9d807d43d79a5459be6903b2a9" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "35abeacdc01d834",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/35abeacdc01d834",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916999,
+        "stop" : 1746616917035,
+        "duration" : 36
+      }
+    } ]
+  },
+  "afe5b3a7e688490aed42ca55884b706a" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "851b62523af71006",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/851b62523af71006",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin retrieves logs for the time range last 24 hours\n",
+      "time" : {
+        "start" : 1746616908983,
+        "stop" : 1746616909571,
+        "duration" : 588
+      }
+    } ]
+  },
+  "fa727d89c0a49674bbbf82d77d690cec" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "f98209520aa8b9d",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/f98209520aa8b9d",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616900548,
+        "stop" : 1746616900549,
+        "duration" : 1
+      }
+    } ]
+  },
+  "60b31798b4d8a313ec4d8282874f004c" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "d1b8e8b3c86d252a",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/d1b8e8b3c86d252a",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+      "time" : {
+        "start" : 1746616905276,
+        "stop" : 1746616905306,
+        "duration" : 30
+      }
+    } ]
+  },
+  "6bb70a1b1871f9e0c5bd399d59cbec46" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "4d4c7fea78860f9f",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/4d4c7fea78860f9f",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the NTEU is logged in\n",
+      "time" : {
+        "start" : 1746616893926,
+        "stop" : 1746616893960,
+        "duration" : 34
+      }
+    } ]
+  },
+  "652533513ad1b036bcb64602f1bf46b3" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "ff239c7c772d94b6",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/ff239c7c772d94b6",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916775,
+        "stop" : 1746616916811,
+        "duration" : 36
+      }
+    } ]
+  },
+  "672e3b03c4e72115c6dd0967e82fd019" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "644e240301270be8",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/644e240301270be8",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the user has role User\n",
+      "time" : {
+        "start" : 1746616926271,
+        "stop" : 1746616926859,
+        "duration" : 588
+      }
+    } ]
+  },
+  "4b1bb3179d8cabf226fd872b34c9bda7" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "118679af5096eca1",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/118679af5096eca1",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+      "time" : {
+        "start" : 1746616905245,
+        "stop" : 1746616905276,
+        "duration" : 31
+      }
+    } ]
+  },
+  "3f408db859a4f80e69fc960dbea48a70" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "ddee31ff7f0210b5",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/ddee31ff7f0210b5",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+      "time" : {
+        "start" : 1746616916247,
+        "stop" : 1746616916280,
+        "duration" : 33
+      }
+    } ]
+  },
+  "05d56a8d2f736c1abf6a098363ebc7c5" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "20a9f9eb0af901b1",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/20a9f9eb0af901b1",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Navigate to Create Identity page.\n",
+      "time" : {
+        "start" : 1746616894673,
+        "stop" : 1746616895248,
+        "duration" : 575
+      }
+    } ]
+  },
+  "1f3f1b7e80415fa1a764d833f5466b5d" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "7d6dff0129742283",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/7d6dff0129742283",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the NTEU is logged in\n",
+      "time" : {
+        "start" : 1746616893996,
+        "stop" : 1746616894030,
+        "duration" : 34
+      }
+    } ]
+  },
+  "08f4f9a314b6af8128e2d10b0f8d3d43" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "396eab1de7b84f20",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/396eab1de7b84f20",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916665,
+        "stop" : 1746616916701,
+        "duration" : 36
+      }
+    } ]
+  },
+  "154f006eb3819d584b4def468dee61c5" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "9b3dd71886b6873e",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/9b3dd71886b6873e",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin sets the following CA configuration\n",
+      "time" : {
+        "start" : 1746616913051,
+        "stop" : 1746616913631,
+        "duration" : 580
+      }
+    } ]
+  },
+  "1f3d8e4deed75e09d7d95264923603ac" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "dd2f61b3eefaf1be",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/dd2f61b3eefaf1be",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616901160,
+        "stop" : 1746616901162,
+        "duration" : 2
+      }
+    } ]
+  },
+  "4b4108fb6f1e9e2257944b6011187ab3" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "772573fdc2044c46",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/772573fdc2044c46",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Set certificate to revoked state.\n",
+      "time" : {
+        "start" : 1746616903993,
+        "stop" : 1746616904571,
+        "duration" : 578
+      }
+    } ]
+  },
+  "af31ffb5bc9ca74b3f2eca8136f7cc88" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "c6b7664eb30e5bcb",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/c6b7664eb30e5bcb",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin triggers a system update\n",
+      "time" : {
+        "start" : 1746616906653,
+        "stop" : 1746616907232,
+        "duration" : 579
+      }
+    } ]
+  },
+  "d8703ed6d78ebabe5cbed3e2410f235b" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "e56001115fc4a3f4",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/e56001115fc4a3f4",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given a certificate template named \"HighSecurity_Template\" exists\n",
+      "time" : {
+        "start" : 1746616927446,
+        "stop" : 1746616928034,
+        "duration" : 588
+      }
+    } ]
+  },
+  "d251679cf2c5d76bafb706a785c9035a" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "2e031766b8249887",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/2e031766b8249887",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin retrieves logs for the time range last 7 days\n",
+      "time" : {
+        "start" : 1746616909571,
+        "stop" : 1746616910149,
+        "duration" : 578
+      }
+    } ]
+  },
+  "6fd66ffb98cb9b48cc5c4b8f95ba2c37" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "f39caff6dcc31b37",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/f39caff6dcc31b37",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616907703,
+        "stop" : 1746616907705,
+        "duration" : 2
+      }
+    } ]
+  },
+  "93a3fcf9ea52cf284e7069b213c88ccb" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "970dc81a205c8557",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/970dc81a205c8557",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+      "time" : {
+        "start" : 1746616905214,
+        "stop" : 1746616905244,
+        "duration" : 30
+      }
+    } ]
+  },
+  "281b85636d2f7cbe4b82514ac89a1f1c" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "d0dcfb4a41e17281",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/d0dcfb4a41e17281",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916495,
+        "stop" : 1746616916592,
+        "duration" : 97
+      }
+    } ]
+  },
+  "9520e1ec687b26c1adf6567c464972c5" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "6025e874a586fc21",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/6025e874a586fc21",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916887,
+        "stop" : 1746616916924,
+        "duration" : 37
+      }
+    } ]
+  },
+  "9d0b26b0300b85db72426fbc472e4e0a" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "2a8dfe1e1132b667",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/2a8dfe1e1132b667",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616904146,
+        "stop" : 1746616904233,
+        "duration" : 87
+      }
+    } ]
+  },
+  "80cb5030f5de29793afc59ab885448cc" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "df09b648ff333f8b",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/df09b648ff333f8b",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+      "time" : {
+        "start" : 1746616916350,
+        "stop" : 1746616916384,
+        "duration" : 34
+      }
+    } ]
+  },
+  "75915d0f44a4489e2b4f36deffd8c78a" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "5522a62999cb1030",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/5522a62999cb1030",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616907255,
+        "stop" : 1746616907299,
+        "duration" : 44
+      }
+    } ]
+  },
+  "a91413ff1301df67a7d0913ad2db5fca" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "fdc045d78d62ae4a",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/fdc045d78d62ae4a",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916738,
+        "stop" : 1746616916775,
+        "duration" : 37
+      }
+    } ]
+  },
+  "f39952333722768bb7355185ab53f022" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "138f6f0174f678d3",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/138f6f0174f678d3",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616900852,
+        "stop" : 1746616900855,
+        "duration" : 3
+      }
+    } ]
+  },
+  "625e8370fca2507f9ee1c2738d4456a4" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "c1dc137214e06fed",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/c1dc137214e06fed",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616902675,
+        "stop" : 1746616902683,
+        "duration" : 8
+      }
+    } ]
+  },
+  "b3027acd7e47e02b1f41d6bde68b46a0" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "2f3666ca41eed8cf",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/2f3666ca41eed8cf",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given a certificate template named \"Sensitive_Template\" exists\n",
+      "time" : {
+        "start" : 1746616926859,
+        "stop" : 1746616927446,
+        "duration" : 587
+      }
+    } ]
+  },
+  "a3e8cd088ca177d7853a3edafd2eb932" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "27fd5d13ee38cebf",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/27fd5d13ee38cebf",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+      "time" : {
+        "start" : 1746616905432,
+        "stop" : 1746616905462,
+        "duration" : 30
+      }
+    } ]
+  },
+  "9b12700f1838db7bab8f01671e2ac226" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "289d9718a03140bf",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/289d9718a03140bf",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916924,
+        "stop" : 1746616916961,
+        "duration" : 37
+      }
+    } ]
+  },
+  "5f61ceedfb794cc8010508b9047e88c9" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "3ca8c9dae86ce4d3",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/3ca8c9dae86ce4d3",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the user is an NTEU with username invalid_user and password wrong_pw\n",
+      "time" : {
+        "start" : 1746616893822,
+        "stop" : 1746616893857,
+        "duration" : 35
+      }
+    } ]
+  },
+  "764ce2de7c30e452606468e2d948243f" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 1,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "54f006ebb885816b",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/54f006ebb885816b",
+      "status" : "broken",
+      "statusDetails" : "TypeError: step_attempt_view_nonexistent() got an unexpected keyword argument 'non_existent_ID'\n",
+      "time" : {
+        "start" : 1746616898724,
+        "stop" : 1746616899300,
+        "duration" : 576
+      }
+    } ]
+  },
+  "3d07e08cb62c23559094a523a7138296" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "6fb5118e2fb383b6",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/6fb5118e2fb383b6",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916387,
+        "stop" : 1746616916422,
+        "duration" : 35
+      }
+    } ]
+  },
+  "31998537c1d369e52f302c4d420b42e1" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "42bb7e1f3258dd0a",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/42bb7e1f3258dd0a",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616907691,
+        "stop" : 1746616907694,
+        "duration" : 3
+      }
+    } ]
+  },
+  "f7f4d1096e88e62476aa41b381acb147" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "30501020184dc5d",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/30501020184dc5d",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616906655,
+        "stop" : 1746616906656,
+        "duration" : 1
+      }
+    } ]
+  },
+  "c94878b42f6f51398c6859c96556c9ac" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "356832505caa66a3",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/356832505caa66a3",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the user has role Admin\n",
+      "time" : {
+        "start" : 1746616925683,
+        "stop" : 1746616926270,
+        "duration" : 587
+      }
+    } ]
+  },
+  "04c64c0ca872406c2a967a8a9ee4bd34" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "c367bb6db039186c",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/c367bb6db039186c",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+      "time" : {
+        "start" : 1746616905369,
+        "stop" : 1746616905400,
+        "duration" : 31
+      }
+    } ]
+  },
+  "9aee4fe389160eea8e352d14655fd9af" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "aab56d1c9c9cd7d8",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/aab56d1c9c9cd7d8",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616902656,
+        "stop" : 1746616902660,
+        "duration" : 4
+      }
+    } ]
+  },
+  "441b48f2e414a882f9ee6e140acc950e" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "8c8d5b6c659cdb49",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/8c8d5b6c659cdb49",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin modifies logging configuration to INFO\n",
+      "time" : {
+        "start" : 1746616910732,
+        "stop" : 1746616911311,
+        "duration" : 579
+      }
+    } ]
+  },
+  "aea15d68d317b0e22ed12d7a671a0f18" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "2f14f18ab0ef51ff",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/2f14f18ab0ef51ff",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616906108,
+        "stop" : 1746616906109,
+        "duration" : 1
+      }
+    } ]
+  },
+  "4cffb84e638ac65d1745068a3da92d73" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "3db2b93671b573c1",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/3db2b93671b573c1",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616902696,
+        "stop" : 1746616903119,
+        "duration" : 423
+      }
+    } ]
+  },
+  "aece16e5a18eddb9c7c94e727800b146" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "d3f1ffd5fb0bca17",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/d3f1ffd5fb0bca17",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Navigate to Create Identity page.\n",
+      "time" : {
+        "start" : 1746616894069,
+        "stop" : 1746616894672,
+        "duration" : 603
+      }
+    } ]
+  },
+  "f5d7d04c21620617d981f49fa8f1bd70" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "78dcd0748867a079",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/78dcd0748867a079",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916592,
+        "stop" : 1746616916627,
+        "duration" : 35
+      }
+    } ]
+  },
+  "3e31c45a63dda3a36c90a22877820ada" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "162fd9ddcc02cfa0",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/162fd9ddcc02cfa0",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616907042,
+        "stop" : 1746616907043,
+        "duration" : 1
+      }
+    } ]
+  },
+  "23afd23714f9fbc0066c6500e9969bcd" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "5408db36dd7e8eeb",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/5408db36dd7e8eeb",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the TrustPoint component TP_Client_02 is selected\n",
+      "time" : {
+        "start" : 1746616920380,
+        "stop" : 1746616920967,
+        "duration" : 587
+      }
+    } ]
+  },
+  "b907570cd79df11b89f0177d1c526184" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "257f105a57cb93b8",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/257f105a57cb93b8",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916628,
+        "stop" : 1746616916664,
+        "duration" : 36
+      }
+    } ]
+  },
+  "7dbb078cd453a82a490e591db89cf279" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "8db92bee256c5e2f",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/8db92bee256c5e2f",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616901765,
+        "stop" : 1746616901787,
+        "duration" : 22
+      }
+    } ]
+  },
+  "2ce37baaceb93c89182b6edf96a4bfdc" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "910a6ad4daa4d019",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/910a6ad4daa4d019",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616906297,
+        "stop" : 1746616906297,
+        "duration" : 0
+      }
+    } ]
+  },
+  "81fc91d128d1318847bafe9d1b51f147" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "b8e9d96f2f11683e",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/b8e9d96f2f11683e",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin attempts to <renew> a non-existent certificate \"NONEXISTENT\"\n",
+      "time" : {
+        "start" : 1746616901675,
+        "stop" : 1746616902251,
+        "duration" : 576
+      }
+    } ]
+  },
+  "10171c6c1b4b43b214ff0bf96900806b" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "b768deab6cca6e13",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/b768deab6cca6e13",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+      "time" : {
+        "start" : 1746616905463,
+        "stop" : 1746616905494,
+        "duration" : 31
+      }
+    } ]
+  },
+  "c7536cc9fc0fdd54e617c1207009e379" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "c361af5e02cc0303",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/c361af5e02cc0303",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916458,
+        "stop" : 1746616916494,
+        "duration" : 36
+      }
+    } ]
+  },
+  "302b7a97541fc7fbbd5e10c4b84723a4" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "a6dbbdec129733b5",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/a6dbbdec129733b5",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616906452,
+        "stop" : 1746616906453,
+        "duration" : 1
+      }
+    } ]
+  },
+  "78225b04519639fd5479676f644300f9" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "be1b837c52b49de9",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/be1b837c52b49de9",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616907401,
+        "stop" : 1746616907570,
+        "duration" : 169
+      }
+    } ]
+  },
+  "cd72d270bcedbda9852780aba1785219" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "e0623a39a11d61aa",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/e0623a39a11d61aa",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616917036,
+        "stop" : 1746616917962,
+        "duration" : 926
+      }
+    } ]
+  },
+  "cc3cadff882284b420ac6966311c9bc9" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "15e0c664d14125dc",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/15e0c664d14125dc",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Set certificate to revoked state.\n",
+      "time" : {
+        "start" : 1746616903409,
+        "stop" : 1746616903992,
+        "duration" : 583
+      }
+    } ]
+  },
+  "67f0cb6bd4302905d2227e83f97ce79b" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "7a7e6a89b0645fc1",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/7a7e6a89b0645fc1",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616902137,
+        "stop" : 1746616902156,
+        "duration" : 19
+      }
+    } ]
+  },
+  "96c610551c4ad30e308a658acefc2c36" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "cb405ddde63e3ec8",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/cb405ddde63e3ec8",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+      "time" : {
+        "start" : 1746616916050,
+        "stop" : 1746616916082,
+        "duration" : 32
+      }
+    } ]
+  },
+  "3898aad47a03f52a6c47fbe05f4fbe14" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "3eff86c3affd0d02",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/3eff86c3affd0d02",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616918866,
+        "stop" : 1746616919791,
+        "duration" : 925
+      }
+    } ]
+  },
+  "b702a2d26f365fadaf2682794c78505b" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "81c17a299d3d7f6c",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/81c17a299d3d7f6c",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916423,
+        "stop" : 1746616916458,
+        "duration" : 35
+      }
+    } ]
+  },
+  "7395553986b42462bba65a4fe8813416" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "153f2abe5368626",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/153f2abe5368626",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616904963,
+        "stop" : 1746616905043,
+        "duration" : 80
+      }
+    } ]
+  },
+  "8c565dc2571393aaa925fbe732b53ee9" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "85dcee7784f1fbdf",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/85dcee7784f1fbdf",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the user has role Admin\n",
+      "time" : {
+        "start" : 1746616924508,
+        "stop" : 1746616925095,
+        "duration" : 587
+      }
+    } ]
+  },
+  "cc294676d64275e5fbbe3fe0c9dc71f6" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "2730f2ad0efefc67",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/2730f2ad0efefc67",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin modifies logging configuration to WARNING\n",
+      "time" : {
+        "start" : 1746616911311,
+        "stop" : 1746616911890,
+        "duration" : 579
+      }
+    } ]
+  },
+  "7ab6300ce4111d070723f881d06932a5" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "807a58d897df15f",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/807a58d897df15f",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916849,
+        "stop" : 1746616916887,
+        "duration" : 38
+      }
+    } ]
+  },
+  "7d426d5679b1c61acf2d9cb2abbf189c" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "af76cd93dc09b800",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/af76cd93dc09b800",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616906892,
+        "stop" : 1746616906892,
+        "duration" : 0
+      }
+    } ]
+  },
+  "d258ff2a33072e3fbc871649d098d70f" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "9d4825d3db6e1c85",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/9d4825d3db6e1c85",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+      "time" : {
+        "start" : 1746616916281,
+        "stop" : 1746616916315,
+        "duration" : 34
+      }
+    } ]
+  },
+  "52658639629b64d140a142108ce022ef" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "c9fd07e019533262",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/c9fd07e019533262",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616904026,
+        "stop" : 1746616904105,
+        "duration" : 79
+      }
+    } ]
+  },
+  "6888cd6e72ccac7c28f61b3cd3cf67dc" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "fdfba9a81be60ab0",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/fdfba9a81be60ab0",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616903131,
+        "stop" : 1746616903212,
+        "duration" : 81
+      }
+    } ]
+  },
+  "c60f8e5e3e51ac1b836f3a661458d934" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "42fed6decfc8fcd4",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/42fed6decfc8fcd4",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the TrustPoint component \"TPC_Web\" has security level \"High\"\n",
+      "time" : {
+        "start" : 1746616923318,
+        "stop" : 1746616923910,
+        "duration" : 592
+      }
+    } ]
+  },
+  "703e8994842d2f940b034fc0fafeccb5" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "51a5ebc1f2769fdc",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/51a5ebc1f2769fdc",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the NTEU is logged in\n",
+      "time" : {
+        "start" : 1746616893892,
+        "stop" : 1746616893926,
+        "duration" : 34
+      }
+    } ]
+  },
+  "2b2c2c2b9951c15e6c32c215c08a103e" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "38b3bdf618a41c89",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/38b3bdf618a41c89",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the TrustPoint component TP_Client_01 is selected\n",
+      "time" : {
+        "start" : 1746616919792,
+        "stop" : 1746616920380,
+        "duration" : 588
+      }
+    } ]
+  },
+  "7779bcba3d5734bc5d8a5305ff78ca73" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "9cc5bbad7b30a80c",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/9cc5bbad7b30a80c",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin sets the following CA configuration\n",
+      "time" : {
+        "start" : 1746616913631,
+        "stop" : 1746616914209,
+        "duration" : 578
+      }
+    } ]
+  },
+  "6c0df58276061f6d7b1b835253ec8dff" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "46624d9def89eb33",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/46624d9def89eb33",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+      "time" : {
+        "start" : 1746616905183,
+        "stop" : 1746616905214,
+        "duration" : 31
+      }
+    } ]
+  },
+  "72e46d1fb059320417aa16ce466588f8" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "f2aa8a8dcaf049a0",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/f2aa8a8dcaf049a0",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+      "time" : {
+        "start" : 1746616916018,
+        "stop" : 1746616916050,
+        "duration" : 32
+      }
+    } ]
+  },
+  "6d355b2c229671d9a584e4b5a3713927" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "ec61a02ff6f0e1d5",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/ec61a02ff6f0e1d5",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Identity creation or precondition setup.\n",
+      "time" : {
+        "start" : 1746616897568,
+        "stop" : 1746616898145,
+        "duration" : 577
+      }
+    } ]
+  },
+  "8b034db2ffb562c60eb992ee9b4fb32f" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "63e8eaeb9114263b",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/63e8eaeb9114263b",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin modifies logging configuration to DEBUG\n",
+      "time" : {
+        "start" : 1746616910149,
+        "stop" : 1746616910731,
+        "duration" : 582
+      }
+    } ]
+  },
+  "3c2b368b9054fc4030db3ef21bc9f220" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "5b1111d9de968b6e",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/5b1111d9de968b6e",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616918817,
+        "stop" : 1746616918866,
+        "duration" : 49
+      }
+    } ]
+  },
+  "307a59b6ec9b76ba311e89b2d0fdcf4c" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "f10ebeaff9f3d82c",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/f10ebeaff9f3d82c",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Set certificate to revoked state.\n",
+      "time" : {
+        "start" : 1746616902831,
+        "stop" : 1746616903409,
+        "duration" : 578
+      }
+    } ]
+  },
+  "2f235d42852bb258734f1934661e7cec" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "1919ec2400416155",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/1919ec2400416155",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+      "time" : {
+        "start" : 1746616916180,
+        "stop" : 1746616916213,
+        "duration" : 33
+      }
+    } ]
+  },
+  "bf556f4698a79d2182ec41431a0163c7" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "16a7b0bd1e4be89d",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/16a7b0bd1e4be89d",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin performs an action update\n",
+      "time" : {
+        "start" : 1746616907813,
+        "stop" : 1746616908404,
+        "duration" : 591
+      }
+    } ]
+  },
+  "6ec41c33a3afea392e463eed55ca005e" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "75c27fa4415f33e9",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/75c27fa4415f33e9",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin attempts to <revoke> a non-existent certificate \"NONEXISTENT\"\n",
+      "time" : {
+        "start" : 1746616902251,
+        "stop" : 1746616902831,
+        "duration" : 580
+      }
+    } ]
+  },
+  "d657459d919bbeb5dab64c037afbe369" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "f78de5986be6277a",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/f78de5986be6277a",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Set certificate to revoked state.\n",
+      "time" : {
+        "start" : 1746616904572,
+        "stop" : 1746616905149,
+        "duration" : 577
+      }
+    } ]
+  },
+  "cce6f90706d9e0f20094a64d1613ec14" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "327dcd5c174b4088",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/327dcd5c174b4088",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Identity creation or precondition setup.\n",
+      "time" : {
+        "start" : 1746616896415,
+        "stop" : 1746616896992,
+        "duration" : 577
+      }
+    } ]
+  },
+  "bb1f210d3f3813e90b990184d3fd01fa" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "2d352803e4fce634",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/2d352803e4fce634",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Identity creation or precondition setup.\n",
+      "time" : {
+        "start" : 1746616895249,
+        "stop" : 1746616895826,
+        "duration" : 577
+      }
+    } ]
+  },
+  "dc9675fe128d71b633bbe3567f8d89d7" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "133e19f47526ca16",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/133e19f47526ca16",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616905183,
+        "stop" : 1746616905302,
+        "duration" : 119
+      }
+    } ]
+  },
+  "9989cf60e51d2f9a292c313a2fbf370c" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "56d4ce139346d63e",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/56d4ce139346d63e",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916962,
+        "stop" : 1746616916998,
+        "duration" : 36
+      }
+    } ]
+  },
+  "9ea1a96b61a133d568043e9ad268dd09" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "49703f5661617195",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/49703f5661617195",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin attempts to generate an Issuing CA with incomplete configuration\n",
+      "time" : {
+        "start" : 1746616914210,
+        "stop" : 1746616914789,
+        "duration" : 579
+      }
+    } ]
+  },
+  "95331264b9e1918300ea14aad333f424" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "a4246a5519398982",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/a4246a5519398982",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616904392,
+        "stop" : 1746616904486,
+        "duration" : 94
+      }
+    } ]
+  },
+  "888694b82ca8bda554a841bd883feae8" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "b120e156d5ea06f9",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/b120e156d5ea06f9",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616907725,
+        "stop" : 1746616907726,
+        "duration" : 1
+      }
+    } ]
+  },
+  "e7ef67bfa45b3706b2c107905f7608be" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "3dc9055155f85f88",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/3dc9055155f85f88",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616906957,
+        "stop" : 1746616906958,
+        "duration" : 1
+      }
+    } ]
+  },
+  "0a0f6162e12760255290b8492127355d" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "b52e17d8333e407a",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/b52e17d8333e407a",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+      "time" : {
+        "start" : 1746616916114,
+        "stop" : 1746616916146,
+        "duration" : 32
+      }
+    } ]
+  },
+  "3493e96f510eecf884cf17023c82a3d1" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "ad5e73b6b6297d07",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/ad5e73b6b6297d07",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616907715,
+        "stop" : 1746616907715,
+        "duration" : 0
+      }
+    } ]
+  },
+  "dc04ace52d494cd10d659af1b360d4ae" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "c0f0c8f7ff2b03f5",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/c0f0c8f7ff2b03f5",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+      "time" : {
+        "start" : 1746616916147,
+        "stop" : 1746616916179,
+        "duration" : 32
+      }
+    } ]
+  },
+  "2838756a2a8c2503a8955541db18c14f" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "b16ee00dc60a96b5",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/b16ee00dc60a96b5",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616907665,
+        "stop" : 1746616907678,
+        "duration" : 13
+      }
+    } ]
+  },
+  "ff2005083d14da2d24dc8efe8aea8ea2" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "34ea2243845338f8",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/34ea2243845338f8",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+      "time" : {
+        "start" : 1746616916082,
+        "stop" : 1746616916114,
+        "duration" : 32
+      }
+    } ]
+  },
+  "e210c96b4038fc024e051c2307fcd095" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "b904cfbca2038b68",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/b904cfbca2038b68",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+      "time" : {
+        "start" : 1746616905152,
+        "stop" : 1746616905183,
+        "duration" : 31
+      }
+    } ]
+  },
+  "5d0e81762439b8a4d9a973560f9e2f3d" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "62809f1f2813efdc",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/62809f1f2813efdc",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616901394,
+        "stop" : 1746616901397,
+        "duration" : 3
+      }
+    } ]
+  },
+  "73c21c2d544f227e42d354e80b49568c" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "91d66a1cf54ca462",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/91d66a1cf54ca462",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+      "time" : {
+        "start" : 1746616905338,
+        "stop" : 1746616905369,
+        "duration" : 31
+      }
+    } ]
+  },
+  "e6e50b6d328cd01779ecb36a3408be13" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "a89eaa00a6581256",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/a89eaa00a6581256",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Identity creation or precondition setup.\n",
+      "time" : {
+        "start" : 1746616895826,
+        "stop" : 1746616896414,
+        "duration" : 588
+      }
+    } ]
+  },
+  "dd882333d92aab22cc07afee5a2b209b" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "b9d61b9f96696987",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/b9d61b9f96696987",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+      "time" : {
+        "start" : 1746616905400,
+        "stop" : 1746616905431,
+        "duration" : 31
+      }
+    } ]
+  },
+  "4154c25dbe8009704060fbd1e4d92821" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "aa9a88af8c19b711",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/aa9a88af8c19b711",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916811,
+        "stop" : 1746616916848,
+        "duration" : 37
+      }
+    } ]
+  },
+  "7eabd597d45576cd42ba55131bfb29c6" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "d8e28e28e259bb5e",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/d8e28e28e259bb5e",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616905611,
+        "stop" : 1746616905696,
+        "duration" : 85
+      }
+    } ]
+  },
+  "cc79542131a7ce81b49fc388f138f9f3" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "d96a95fc3371bc4e",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/d96a95fc3371bc4e",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616903834,
+        "stop" : 1746616903920,
+        "duration" : 86
+      }
+    } ]
+  },
+  "77026e4a17d10ab6926fa986318a984b" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "d59973bd88bce9f8",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/d59973bd88bce9f8",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616904701,
+        "stop" : 1746616904783,
+        "duration" : 82
+      }
+    } ]
+  },
+  "f8378de211ef0fdebac4909979724d24" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "3cbe8a4bc14cab18",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/3cbe8a4bc14cab18",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin initiates a system backup\n",
+      "time" : {
+        "start" : 1746616905495,
+        "stop" : 1746616906074,
+        "duration" : 579
+      }
+    } ]
+  },
+  "9ce02d9ddcd95682e31f21e0dbb3b52a" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "5c7201ba235a93c6",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/5c7201ba235a93c6",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "time" : {
+        "start" : 1746616916701,
+        "stop" : 1746616916737,
+        "duration" : 36
+      }
+    } ]
+  },
+  "7c4367fcd969321cf76897989ab5f00d" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "4241e670be888e7a",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/4241e670be888e7a",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+      "time" : {
+        "start" : 1746616915986,
+        "stop" : 1746616916018,
+        "duration" : 32
+      }
+    } ]
+  },
+  "e33ac408ddd3c43736640b06b9ead00b" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "2894b1ce82f5756d",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/2894b1ce82f5756d",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the admin uploads a backup file backup_20250128\n",
+      "time" : {
+        "start" : 1746616906074,
+        "stop" : 1746616906652,
+        "duration" : 578
+      }
+    } ]
+  },
+  "7c9e58edf336cac9108e149db964e986" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "c9d153c4c9115252",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/c9d153c4c9115252",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616905563,
+        "stop" : 1746616905569,
+        "duration" : 6
+      }
+    } ]
+  },
+  "9dcc6b9cc46b52335b02643b76137f88" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "7d83ac923bf09ccb",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/7d83ac923bf09ccb",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the TrustPoint component \"TP_Client_01\" is selected\n",
+      "time" : {
+        "start" : 1746616923911,
+        "stop" : 1746616924507,
+        "duration" : 596
+      }
+    } ]
+  },
+  "147794cc9fdf1e7d9040ef6ace2be08f" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "64418311c32e9079",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/64418311c32e9079",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given a certificate template named \"Exportable_Template\" exists\n",
+      "time" : {
+        "start" : 1746616928621,
+        "stop" : 1746616929208,
+        "duration" : 587
+      }
+    } ]
+  },
+  "89a471142aa79094c8f3964b201e5dd4" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "5b7ce07e48c40c22",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/5b7ce07e48c40c22",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616906736,
+        "stop" : 1746616906737,
+        "duration" : 1
+      }
+    } ]
+  },
+  "0e38a87f254fef04a9010c520916b06a" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "3914d1be35bc6cb7",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/3914d1be35bc6cb7",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the TrustPoint component \"TP_Client_01\" is selected\n",
+      "time" : {
+        "start" : 1746616922142,
+        "stop" : 1746616922731,
+        "duration" : 589
+      }
+    } ]
+  },
+  "327610303c112f6c4dcfdd5d04bb225a" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "f9ff3fb98abd9465",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/f9ff3fb98abd9465",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: Given the NTEU is logged in\n",
+      "time" : {
+        "start" : 1746616893857,
+        "stop" : 1746616893891,
+        "duration" : 34
+      }
+    } ]
+  },
+  "a62c04fb5bd45b67e69d5336156a42d4" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "e808d69babff76a6",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/e808d69babff76a6",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616903690,
+        "stop" : 1746616903771,
+        "duration" : 81
+      }
+    } ]
+  },
+  "de8dbb37668e805ac5f9745a0562c668" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "bb7718e35f2d7273",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/bb7718e35f2d7273",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616904575,
+        "stop" : 1746616904660,
+        "duration" : 85
+      }
+    } ]
+  },
+  "28e7ff0faf4890a6a10acbb289dcefd1" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "77d4388d025c5820",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/77d4388d025c5820",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616906609,
+        "stop" : 1746616906610,
+        "duration" : 1
+      }
+    } ]
+  },
+  "4adab699b431a726f26658b0647e0123" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "ecbdc06a206ce84d",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/ecbdc06a206ce84d",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616906845,
+        "stop" : 1746616906845,
+        "duration" : 0
+      }
+    } ]
+  },
+  "e62c34eb79898007cd294c7beb438198" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "f0db81ddb5faf57d",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/f0db81ddb5faf57d",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: STEP: When the system restarts\n",
+      "time" : {
+        "start" : 1746616911891,
+        "stop" : 1746616912470,
+        "duration" : 579
+      }
+    } ]
+  },
+  "35f25ab134c0cb36242192477ba776ad" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "27074897b9c4f289",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/27074897b9c4f289",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616906193,
+        "stop" : 1746616906194,
+        "duration" : 1
+      }
+    } ]
+  },
+  "3bc7db11f2e2d4070d16344b69b458eb" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "c85ab06bb5fef2c3",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/c85ab06bb5fef2c3",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616906363,
+        "stop" : 1746616906364,
+        "duration" : 1
+      }
+    } ]
+  },
+  "45cf8b19edde4f7a72d596b604ab834c" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "49a6c430acc4e033",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/49a6c430acc4e033",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Set certificate to active state.\n",
+      "time" : {
+        "start" : 1746616900519,
+        "stop" : 1746616901096,
+        "duration" : 577
+      }
+    } ]
+  },
+  "ef14fc012ff7adf52f146811cd926342" : {
+    "statistic" : {
+      "failed" : 1,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "9544139d968d358f",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/9544139d968d358f",
+      "status" : "failed",
+      "statusDetails" : "AssertionError: Step not implemented: Set certificate near expiration.\n",
+      "time" : {
+        "start" : 1746616899302,
+        "stop" : 1746616899883,
+        "duration" : 581
+      }
+    } ]
+  },
+  "e5f0b80326474ad79f714551e83a3a46" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "331d662c36fe4969",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/331d662c36fe4969",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616906251,
+        "stop" : 1746616906252,
+        "duration" : 1
+      }
+    } ]
+  },
+  "958de8a76d4af8e7b6cc4f3f3b76306a" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "32f2e3d97ddc29a7",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/32f2e3d97ddc29a7",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616902391,
+        "stop" : 1746616902410,
+        "duration" : 19
+      }
+    } ]
+  },
+  "9f5bab21a187c643d2e67563edd54779" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "5b376afb92c45d88",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/5b376afb92c45d88",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616906496,
+        "stop" : 1746616906497,
+        "duration" : 1
+      }
+    } ]
+  },
+  "3e6a15cb90faddc78def0fb7965709dd" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "386222f5ca725c3e",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/386222f5ca725c3e",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616905394,
+        "stop" : 1746616905512,
+        "duration" : 118
+      }
+    } ]
+  },
+  "ed37e08f32eaa453fcfdc22cceb5c541" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "72de87275b00ace0",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/72de87275b00ace0",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616903403,
+        "stop" : 1746616903502,
+        "duration" : 99
+      }
+    } ]
+  },
+  "96d50b3b5d97980d44b638a710e017a8" : {
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 1
+    },
+    "items" : [ {
+      "uid" : "8e08970d96bd5205",
+      "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/8e08970d96bd5205",
+      "status" : "passed",
+      "time" : {
+        "start" : 1746616903561,
+        "stop" : 1746616903647,
+        "duration" : 86
+      }
+    } ]
+  }
+}

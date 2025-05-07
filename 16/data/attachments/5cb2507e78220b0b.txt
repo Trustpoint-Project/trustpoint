@@ -1,0 +1,10 @@
+WARNING  tp.pki:auto_gen_pki.py:34 ! Enabling auto-generated PKI !
+INFO     pki.util.x509:x509.py:169 Issuing CA 'AutoGenPKI_Root_CA_RSA2048SHA256' saved successfully.
+INFO     pki.util.x509:x509.py:169 Issuing CA 'AutoGenPKI_Issuing_CA' saved successfully.
+WARNING  tp.pki:auto_gen_pki.py:95 Auto-generated PKI enabled.
+WARNING  tp.pki:auto_gen_pki.py:108 ! Disabling auto-generated PKI !
+INFO     trustpoint.pki.models.issuing_ca.IssuingCaModel:issuing_ca.py:216 All 1 certificates issued by CA AutoGenPKI_Issuing_CA have been revoked.
+INFO     trustpoint.pki.models.issuing_ca.IssuingCaModel:issuing_ca.py:174 CRL generation for CA AutoGenPKI_Issuing_CA finished.
+INFO     trustpoint.pki.models.issuing_ca.IssuingCaModel:issuing_ca.py:216 All 1 certificates issued by CA AutoGenPKI_Root_CA_RSA2048SHA256 have been revoked.
+INFO     trustpoint.pki.models.issuing_ca.IssuingCaModel:issuing_ca.py:174 CRL generation for CA AutoGenPKI_Root_CA_RSA2048SHA256 finished.
+WARNING  tp.pki:auto_gen_pki.py:142 Auto-generated PKI disabled.

@@ -1,0 +1,10 @@
+[ {
+  "name" : "GitHub Actions",
+  "type" : "github",
+  "url" : "https://Trustpoint-Project.github.io/trustpoint",
+  "buildOrder" : 16,
+  "buildName" : "GitHub Actions Run #14882089613",
+  "buildUrl" : "https://github.com/Trustpoint-Project/trustpoint/actions/runs/14882089613",
+  "reportName" : "Allure Report with history",
+  "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16"
+} ]
