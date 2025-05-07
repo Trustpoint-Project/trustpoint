@@ -18,7 +18,7 @@ from pki.models import IssuingCaModel
 from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
-    from trustpoint_core.types import PrivateKey
+    from trustpoint_core.key_types import PrivateKey
 
 logger = logging.getLogger(__name__)
 
@@ -205,11 +205,9 @@ class CertificateGenerator:
     ) -> IssuingCaModel:
         """Saves an Issuing CA certificate to the database."""
         issuing_ca_credential_serializer = CredentialSerializer(
-            (
-                private_key,
-                issuing_ca_cert,
-                chain,
-            )
+            private_key=private_key,
+            certificate=issuing_ca_cert,
+            additional_certificates=chain
         )
 
         issuing_ca = IssuingCaModel.create_new_issuing_ca(

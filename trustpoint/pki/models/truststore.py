@@ -137,7 +137,10 @@ class TruststoreModel(models.Model):
             The serialized representation of the certificates.
         """
         return CertificateCollectionSerializer(
-            [cert.certificate.get_certificate_serializer() for cert in self.truststoreordermodel_set.order_by('order')]
+            [
+                cert.certificate.get_certificate_serializer().as_crypto()
+                for cert in self.truststoreordermodel_set.order_by('order')
+            ]
         )
 
 

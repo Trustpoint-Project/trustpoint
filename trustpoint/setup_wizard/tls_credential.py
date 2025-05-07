@@ -88,5 +88,8 @@ class Generator:
         )
 
         return CredentialSerializer(
-            (private_key, certificate, [certificate])
+            private_key=private_key,
+            certificate=certificate,
+            additional_certificates=[certificate]
         )
+

@@ -910,18 +910,14 @@ class EstCACertsView(EstAuthenticationMixin, EstRequestedDomainExtractorMixin, V
 
             if not http_response and requested_domain:
 
-                ca_credential = requested_domain.issuing_ca.credential
-
-                ca_cert = ca_credential.get_certificate()
-                certificate_chain = [ca_cert, *ca_credential.get_certificate_chain()]
-                pkcs7_certs = CertificateCollectionSerializer(certificate_chain).as_pkcs7_der()
-
-                b64_pkcs7 = base64.b64encode(pkcs7_certs).decode('utf-8')
+                ca_credential_serializer = requested_domain.issuing_ca.credential.get_credential_serializer()
+                pkcs7_certs = ca_credential_serializer.get_full_chain_as_serializer().as_pkcs7_der()
+                b64_pkcs7 = base64.b64encode(pkcs7_certs).decode()
 
                 formatted_b64_pkcs7 = '\n'.join([b64_pkcs7[i:i + 64] for i in range(0, len(b64_pkcs7), 64)])
 
                 http_response = LoggedHttpResponse(
-                    formatted_b64_pkcs7.encode('utf-8'),
+                    formatted_b64_pkcs7.encode(),
                     status=200,
                     content_type='application/pkcs7-mime',
                     headers={'Content-Transfer-Encoding': 'base64'}
