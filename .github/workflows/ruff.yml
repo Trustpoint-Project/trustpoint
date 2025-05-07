@@ -15,11 +15,4 @@ jobs:
         uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.
 
       - name: Run Ruff Linting
-        run: ruff check .
-
-      - name: Upload Ruff Logs
-        if: failure()  # Only upload logs if the step fails.
-        uses: actions/upload-artifact@v4
-        with:
-          name: ruff-report
-          path: ruff-report.txt
+        run: uv run ruff check .

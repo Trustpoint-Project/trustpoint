@@ -24,6 +24,9 @@ build:
     install:
       - "true"
 
+  apt_packages:
+    - plantuml
+
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:
   configuration: docs/source/conf.py
