@@ -5,7 +5,7 @@
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
-from trustpoint_core.serializer.certificate import CertificateSerializer
+from trustpoint_core.serializer import CertificateSerializer
 
 from pki.models.certificate import CertificateModel
 from pki.tests.fixtures import self_signed_cert_with_ext  # noqa: F401
@@ -23,6 +23,6 @@ def test_save_certificate_method(self_signed_cert_with_ext: CertificateModel) ->
 def test_save_certificate_with_serializer(self_signed_cert_with_ext: x509.Certificate) -> None:
     """Test saving a certificate using a CertificateSerializer instead of a raw x509.Certificate."""
     cert_pem = self_signed_cert_with_ext.public_bytes(serialization.Encoding.PEM)
-    serializer = CertificateSerializer(cert_pem)
+    serializer = CertificateSerializer.from_pem(cert_pem)
     cert_model = CertificateModel.save_certificate(serializer)
     assert cert_model
