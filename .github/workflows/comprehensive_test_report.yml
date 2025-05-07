@@ -53,6 +53,7 @@ jobs:
 
       - name: Upload BDD results
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: bdd-test-results
           path: reports/allure-results/bdd
