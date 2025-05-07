@@ -407,9 +407,15 @@ class WeakECCCurve(models.Model):
 
     class ECCCurveChoices(models.TextChoices):
         """Enumeration of weak or deprecated ECC curve OIDs."""
+        SECP160R1 = '1.3.132.0.8', _('SECP160R1')
         SECP192R1 = '1.2.840.10045.3.1.1', _('SECP192R1')
         SECP224R1 = '1.3.132.0.33', _('SECP224R1')
-        SECP160R1 = '1.3.132.0.8', _('SECP160R1')
+        SECP256K1 = '1.3.132.0.10', _('SECP256K1')
+        SECT163K1 = '1.3.132.0.1', _('SECT163K1')
+        SECT163R2 = '1.3.132.0.15', _('SECT163R2')
+        SECT233K1 = '1.3.132.0.26', _('SECT233K1')
+        SECT233R1 = '1.3.132.0.27', _('SECT233R1')
+        SECT283K1 = '1.3.132.0.16', _('SECT283K1')
 
     oid = models.CharField(max_length=64, choices=ECCCurveChoices.choices, unique=True)
 
@@ -424,9 +430,15 @@ class WeakSignatureAlgorithm(models.Model):
 
     class SignatureChoices(models.TextChoices):
         """Enumeration of weak or deprecated signature algorithm OIDs."""
+        MD2 = '1.2.840.113549.2.2', _('MD2')
+        MD4 = '1.2.840.113549.2.4', _('MD4')
         MD5 = '1.2.840.113549.2.5', _('MD5')
         SHA1 = '1.3.14.3.2.26', _('SHA-1')
         SHA224 = '2.16.840.1.101.3.4.2.4', _('SHA-224')
+        SHA1WITHRSA = '1.2.840.113549.1.1.5', _('SHA-1 with RSA')
+        MD2WITHRSA = '1.2.840.113549.1.1.2', _('MD2 with RSA')
+        MD4WITHRSA = '1.2.840.113549.1.1.3', _('MD4 with RSA')
+        MD5WITHRSA = '1.2.840.113549.1.1.4', _('MD5 with RSA')
 
     oid = models.CharField(max_length=64, choices=SignatureChoices.choices, unique=True)
 
@@ -469,7 +481,6 @@ class NotificationConfig(models.Model):
     class Meta:
         """Meta class configuration."""
         verbose_name = _('Notification Configuration')
-        verbose_name_plural = _('Notification Configuration')
 
     def __str__(self) -> str:
         """Return the human-readable name for the notification configuration."""

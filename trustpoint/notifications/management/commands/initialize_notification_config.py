@@ -16,28 +16,16 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
         """Create or update NotificationConfig with default weak ECC curves and signature algorithms."""
-        # Create or get ECC curve entries
-        ecc_oids = {
-            '1.2.840.10045.3.1.1': 'SECP192R1',
-            '1.3.132.0.8': 'SECP160R1',
-            '1.3.132.0.33': 'SECP224R1',
-        }
-
+        self.stdout.write("Seeding weak ECC curves...")
         ecc_instances = []
-        for oid, label in ecc_oids.items():
+        for oid, label in WeakECCCurve.ECCCurveChoices.choices:
             ecc, created = WeakECCCurve.objects.get_or_create(oid=oid)
             ecc_instances.append(ecc)
             self.stdout.write(f"{'Created' if created else 'Found'} ECC curve: {label} ({oid})")
 
-        # Create or get Signature algorithm entries
-        sig_oids = {
-            '1.2.840.113549.2.5': 'MD5',
-            '1.3.14.3.2.26': 'SHA-1',
-            '2.16.840.1.101.3.4.2.4': 'SHA-224',
-        }
-
+        self.stdout.write("Seeding weak signature algorithms...")
         sig_instances = []
-        for oid, label in sig_oids.items():
+        for oid, label in WeakSignatureAlgorithm.SignatureChoices.choices:
             sig, created = WeakSignatureAlgorithm.objects.get_or_create(oid=oid)
             sig_instances.append(sig)
             self.stdout.write(f"{'Created' if created else 'Found'} Signature algorithm: {label} ({oid})")
