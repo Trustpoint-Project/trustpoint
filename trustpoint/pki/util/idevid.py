@@ -30,6 +30,9 @@ class IDevIDVerifier(LoggerMixin):
     ) -> bool:
         """Verify the IDevID certificate against the provided truststore."""
         # Need to check whether truststore has intended usage IDevID?
+        if truststore.intended_usage != TruststoreModel.IntendedUsage.IDEVID:
+            cls.logger.warning('Truststore %s is not intended for IDevID verification', truststore.unique_name)
+            return False
         cls.logger.info('Verifying IDevID certificate against truststore %s', truststore.unique_name)
         certificates = truststore.get_certificate_collection_serializer().as_crypto_list()
         cls.logger.debug('Certificates in truststore: %s', certificates)
@@ -64,11 +67,15 @@ class IDevIDAuthenticator(LoggerMixin):
     """Authenticates IDevID certificates as used e.g. by EST with mutual TLS auth."""
 
     @staticmethod
-    def _get_matching_registrations(domain: DomainModel, idevid_subj_sn: str) -> list[DevIdRegistration]:
+    def _get_matching_registrations(idevid_subj_sn: str, domain: DomainModel | None) -> list[DevIdRegistration]:
         """Get DevIdRegistration patters matching the given domain and serial number."""
-        domain_registrations = DevIdRegistration.objects.filter(domain=domain)
+        domain_name = domain.unique_name if domain else 'Any'
+        if domain:
+            domain_registrations = DevIdRegistration.objects.filter(domain=domain)
+        else:
+            domain_registrations = DevIdRegistration.objects.all()
         if not domain_registrations.exists():
-            error_message = f'No registration patterns for requested domain {domain.unique_name}.'
+            error_message = f'No registration patterns for requested domain {domain_name}.'
             raise IDevIDAuthenticationError(error_message)
 
         matching_registrations = [
@@ -77,7 +84,7 @@ class IDevIDAuthenticator(LoggerMixin):
         ]
         if not matching_registrations:
             error_message = (f'No DevID registration pattern matching SN {idevid_subj_sn} '
-                             f'for requested domain {domain.unique_name}.')
+                             f'for requested domain {domain_name}.')
             raise IDevIDAuthenticationError(error_message)
         return matching_registrations
 
@@ -104,17 +111,15 @@ class IDevIDAuthenticator(LoggerMixin):
             common_name=common_name,
             domain=domain,
             onboarding_protocol=DeviceModel.OnboardingProtocol.EST_IDEVID,
+            pki_protocol=DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE,
             onboarding_status = DeviceModel.OnboardingStatus.PENDING
         )
 
-    @classmethod
-    def authenticate_idevid(cls, request: HttpRequest, domain: DomainModel) -> DeviceModel | None:
-        """Authenticate client using IDevID certificate for Domain Credential request."""
-        idevid_cert, intermediate_cas = ApacheTLSClientCertExtractor.get_client_cert_as_x509(request)
-
+    @staticmethod
+    def get_subject_serial_number(idevid_cert: x509.Certificate) -> str:
+        """Get the serial number from the subject of the IDevID certificate."""
         try:
             sn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
-            idevid_subj_sn = sn_b.decode() if isinstance(sn_b, bytes) else sn_b
         except (ValueError, IndexError) as e:
             # TODO(Air): Check if we want to add field to associate IDevID with device by fingerprint
             # This would however be incompatible with the current approach to Registration patterns
@@ -122,11 +127,19 @@ class IDevIDAuthenticator(LoggerMixin):
             error_message = 'IDevID certificates without a serial number in the subject DN are not supported.'
             raise IDevIDAuthenticationError(error_message) from e
 
-        matching_registrations = cls._get_matching_registrations(domain, idevid_subj_sn)
+        return sn_b.decode() if isinstance(sn_b, bytes) else sn_b
+
+    @classmethod
+    def authenticate_idevid_from_x509_no_device(
+        cls, idevid_cert: x509.Certificate, intermediate_cas: list[x509.Certificate], domain: DomainModel | None = None
+    ) -> tuple[DomainModel, str]:
+        """Authenticate client using an IDevID certificate."""
+        idevid_subj_sn = cls.get_subject_serial_number(idevid_cert)
+
+        matching_registrations = cls._get_matching_registrations(idevid_subj_sn, domain)
 
         # verify IDevID against Truststore
         for registration in matching_registrations:
-            #for device in candidate_devices:
             if (IDevIDVerifier.verify_idevid_against_truststore(
                 idevid_cert=idevid_cert,
                 intermediate_cas=intermediate_cas,
@@ -137,26 +150,47 @@ class IDevIDAuthenticator(LoggerMixin):
                     idevid_subj_sn,
                     registration.truststore.unique_name
                 )
-                # check for existing device(s) in domain with matching serial number
-                existing_device = None
-                try:
-                    existing_device = DeviceModel.objects.get(
-                        domain=domain,
-                        serial_number=idevid_subj_sn,
-                        onboarding_protocol=DeviceModel.OnboardingProtocol.EST_IDEVID
-                    )
-                except DeviceModel.DoesNotExist:
-                    pass
-                except DeviceModel.MultipleObjectsReturned:
-                    error_message = (f'Multiple devices with the same serial number {idevid_subj_sn} '
-                                    f'found in domain {domain.unique_name}.')
-                    cls.logger.warning(error_message)
-                    cls.logger.warning('Auto-creating new device.')
-
-                if existing_device:
-                    return existing_device
-                return cls._auto_create_device_from_idevid(idevid_cert, idevid_subj_sn, domain)
+                return (registration.domain, idevid_subj_sn)
 
         error_message = (f'IDevID with SN {idevid_subj_sn} could not be verified against any truststore.')
         cls.logger.warning(error_message)
         raise IDevIDAuthenticationError(error_message)
+
+    @classmethod
+    def authenticate_idevid_from_x509(
+        cls, idevid_cert: x509.Certificate, intermediate_cas: list[x509.Certificate], domain: DomainModel | None = None
+    ) -> DeviceModel:
+        """Authenticate client using IDevID certificate for Domain Credential request and create a device."""
+        domain, idevid_subj_sn = cls.authenticate_idevid_from_x509_no_device(
+            idevid_cert=idevid_cert, intermediate_cas=intermediate_cas, domain=domain
+        )
+        # Check if we have a device with the same serial number
+        existing_device = None
+        try:
+            existing_device = DeviceModel.objects.get(
+                domain=registration.domain,
+                serial_number=idevid_subj_sn,
+                onboarding_protocol=DeviceModel.OnboardingProtocol.EST_IDEVID
+            )
+        except DeviceModel.DoesNotExist:
+            pass
+        except DeviceModel.MultipleObjectsReturned:
+            error_message = (f'Multiple devices with the same serial number {idevid_subj_sn} '
+                            f'found in domain {registration.domain.unique_name}.')
+            cls.logger.warning(error_message)
+            cls.logger.warning('Auto-creating new device.')
+
+        if existing_device:
+            return existing_device
+        return cls._auto_create_device_from_idevid(idevid_cert, idevid_subj_sn, registration.domain)
+
+    @classmethod
+    def authenticate_idevid(cls, request: HttpRequest, domain: DomainModel | None = None) -> DeviceModel:
+        """Authenticate client using IDevID certificate for Domain Credential request."""
+        idevid_cert, intermediate_cas = ApacheTLSClientCertExtractor.get_client_cert_as_x509(request)
+
+        return cls.authenticate_idevid_from_x509(
+            idevid_cert=idevid_cert,
+            intermediate_cas=intermediate_cas,
+            domain=domain
+        )
