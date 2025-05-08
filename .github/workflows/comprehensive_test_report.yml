@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - comprehensive_test_report
 
 jobs:
 
