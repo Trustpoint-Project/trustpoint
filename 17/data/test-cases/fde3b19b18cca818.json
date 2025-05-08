@@ -1,0 +1,145 @@
+{
+  "uid" : "fde3b19b18cca818",
+  "name" : "Security level persists after system restart",
+  "fullName" : "Security Level Configuration: Security level persists after system restart",
+  "historyId" : "ff86fea02e5588877cea4efa7039cb87",
+  "time" : {
+    "start" : 1746705371281,
+    "stop" : 1746705371867,
+    "duration" : 586
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: Given the TrustPoint component \"TP_Client_01\" has security level \"High\"\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_101_steps.py\", line 28, in step_given_component_has_security_level\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: Given the TrustPoint component \"TP_Client_01\" has security level \"High\"\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_101_steps.py\", line 28, in step_given_component_has_security_level\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1746705371283,
+        "stop" : 1746705371833,
+        "duration" : 550
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given the TrustPoint component \"TP_Client_01\" has security level \"High\"",
+      "time" : {
+        "start" : 1746705371833,
+        "stop" : 1746705371833,
+        "duration" : 0
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: Given the TrustPoint component \"TP_Client_01\" has security level \"High\"\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_101_steps.py\", line 28, in step_given_component_has_security_level\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "When the system is restarted",
+      "time" : {
+        "start" : 1746705371867,
+        "stop" : 1746705371867,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then the TrustPoint component \"TP_Client_01\" should still have security level \"High\"",
+      "time" : {
+        "start" : 1746705371867,
+        "stop" : 1746705371867,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "feature",
+    "value" : "Security Level Configuration"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 2,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 2
+      },
+      "items" : [ {
+        "uid" : "1455baa7f455f33c",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/1455baa7f455f33c",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the TrustPoint component \"TP_Client_01\" has security level \"High\"\n",
+        "time" : {
+          "start" : 1746616922731,
+          "stop" : 1746616923318,
+          "duration" : 587
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "fde3b19b18cca818.json",
+  "parameterValues" : [ ]
+}

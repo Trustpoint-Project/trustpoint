@@ -1,0 +1,4 @@
+attribute,expected_value
+issuer name,TPC_Web_CA
+key usage,Certificate Sign
+serial number,Auto-Generated

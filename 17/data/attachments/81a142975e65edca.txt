@@ -1,0 +1,5 @@
+2025-05-08 11:55:42 - pki.util.x509 - INFO - Issuing CA 'test_local_ca' saved successfully.
+2025-05-08 11:55:42 - devices.models - WARNING - Incorrect OTP attempt 1 for browser credential download for device test_device (credential id=1)
+2025-05-08 11:55:42 - devices.models - WARNING - Incorrect OTP attempt 2 for browser credential download for device test_device (credential id=1)
+2025-05-08 11:55:42 - devices.models - WARNING - Incorrect OTP attempt 3 for browser credential download for device test_device (credential id=1)
+2025-05-08 11:55:42 - devices.models - WARNING - Too many incorrect OTP attempts. Download invalidated.

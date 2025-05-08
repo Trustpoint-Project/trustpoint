@@ -1,0 +1,5 @@
+INFO     pki.util.x509:x509.py:169 Issuing CA 'test_local_ca' saved successfully.
+WARNING  devices.models:models.py:282 Incorrect OTP attempt 1 for browser credential download for device test_device (credential id=1)
+WARNING  devices.models:models.py:282 Incorrect OTP attempt 2 for browser credential download for device test_device (credential id=1)
+WARNING  devices.models:models.py:282 Incorrect OTP attempt 3 for browser credential download for device test_device (credential id=1)
+WARNING  devices.models:models.py:291 Too many incorrect OTP attempts. Download invalidated.
