@@ -100,14 +100,12 @@ jobs:
 
       - name: Generate Allure HTML report
         uses:  simple-elf/allure-report-action@v1
-        if: always()
         with:
           allure_results: allure-results # default
           allure_report: allure-report # default
           allure_history: allure-history # default
 
       - name: Deploy report to Github Pages
-        if: always()
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
