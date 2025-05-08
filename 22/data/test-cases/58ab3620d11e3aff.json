@@ -1,0 +1,173 @@
+{
+  "uid" : "58ab3620d11e3aff",
+  "name" : "Successfully create a new identity -- @1.1 ",
+  "fullName" : "REST API interaction with TrustPoint: Successfully create a new identity",
+  "historyId" : "e210c96b4038fc024e051c2307fcd095",
+  "time" : {
+    "start" : 1746711065676,
+    "stop" : 1746711065706,
+    "duration" : 30
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: Step not implemented: API client authentication.\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/common_steps.py\", line 101, in step_api_client_authenticated\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: Step not implemented: API client authentication.\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/common_steps.py\", line 101, in step_api_client_authenticated\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given an API client is authenticated",
+      "time" : {
+        "start" : 1746711065678,
+        "stop" : 1746711065679,
+        "duration" : 1
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: Step not implemented: API client authentication.\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/common_steps.py\", line 101, in step_api_client_authenticated\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "When the API client sends a POST request to \"/api/identities\" with the following payload:",
+      "time" : {
+        "start" : 1746711065706,
+        "stop" : 1746711065706,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ {
+        "uid" : "eb0543a40e1849f2",
+        "name" : ".table",
+        "source" : "eb0543a40e1849f2.csv",
+        "type" : "text/csv",
+        "size" : 39
+      } ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 1,
+      "shouldDisplayMessage" : false,
+      "hasContent" : true
+    }, {
+      "name" : "Then the API response should have a status code of 201",
+      "time" : {
+        "start" : 1746711065706,
+        "stop" : 1746711065706,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And the response payload should include the created identity with:",
+      "time" : {
+        "start" : 1746711065706,
+        "stop" : 1746711065706,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ {
+        "uid" : "8505b2cf0dacdfad",
+        "name" : ".table",
+        "source" : "8505b2cf0dacdfad.csv",
+        "type" : "text/csv",
+        "size" : 39
+      } ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 1,
+      "shouldDisplayMessage" : false,
+      "hasContent" : true
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 2,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "feature",
+    "value" : "REST API interaction with TrustPoint"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "identifier",
+    "value" : "alice123"
+  }, {
+    "name" : "name",
+    "value" : "Alice Smith"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 3,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 3
+      },
+      "items" : [ {
+        "uid" : "a4f52f69826c7df9",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/a4f52f69826c7df9",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+        "time" : {
+          "start" : 1746710231475,
+          "stop" : 1746710231505,
+          "duration" : 30
+        }
+      }, {
+        "uid" : "6b2a19a23dd32d06",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/6b2a19a23dd32d06",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+        "time" : {
+          "start" : 1746709777610,
+          "stop" : 1746709777640,
+          "duration" : 30
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "58ab3620d11e3aff.json",
+  "parameterValues" : [ "alice123", "Alice Smith" ]
+}

@@ -1,0 +1,161 @@
+{
+  "uid" : "76dcadf6013ffda1",
+  "name" : "View an existing identity -- @1.2 ",
+  "fullName" : "Manage digital identities via TPC_Web: View an existing identity",
+  "historyId" : "e6e50b6d328cd01779ecb36a3408be13",
+  "time" : {
+    "start" : 1746711056489,
+    "stop" : 1746711057057,
+    "duration" : 568
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: Step not implemented: Identity creation or precondition setup.\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_001_steps.py\", line 16, in step_identity_exists\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: Step not implemented: Identity creation or precondition setup.\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_001_steps.py\", line 16, in step_identity_exists\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1746711056491,
+        "stop" : 1746711057030,
+        "duration" : 539
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given the identity BobID with ID5678 exists",
+      "time" : {
+        "start" : 1746711057030,
+        "stop" : 1746711057030,
+        "duration" : 0
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: Step not implemented: Identity creation or precondition setup.\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_001_steps.py\", line 16, in step_identity_exists\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "When the admin navigates to the identity details page for BobID",
+      "time" : {
+        "start" : 1746711057057,
+        "stop" : 1746711057057,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then the system should display the correct details for BobID and ID5678",
+      "time" : {
+        "start" : 1746711057057,
+        "stop" : 1746711057057,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "feature",
+    "value" : "Manage digital identities via TPC_Web"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "identifier",
+    "value" : "ID5678"
+  }, {
+    "name" : "name",
+    "value" : "BobID"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 3,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 3
+      },
+      "items" : [ {
+        "uid" : "9ca1b52d60a90b25",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/9ca1b52d60a90b25",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: Identity creation or precondition setup.\n",
+        "time" : {
+          "start" : 1746710222344,
+          "stop" : 1746710222914,
+          "duration" : 570
+        }
+      }, {
+        "uid" : "bb3641c33e7af525",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/bb3641c33e7af525",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: Identity creation or precondition setup.\n",
+        "time" : {
+          "start" : 1746709768394,
+          "stop" : 1746709768961,
+          "duration" : 567
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "76dcadf6013ffda1.json",
+  "parameterValues" : [ "ID5678", "BobID" ]
+}

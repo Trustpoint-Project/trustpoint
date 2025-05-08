@@ -1,0 +1,164 @@
+{
+  "uid" : "40525ac17e64e926",
+  "name" : "User manually selects a different language -- @1.4 ",
+  "fullName" : "Language Selection and Translation: User manually selects a different language",
+  "historyId" : "9ce02d9ddcd95682e31f21e0dbb3b52a",
+  "time" : {
+    "start" : 1746711077021,
+    "stop" : 1746711077056,
+    "duration" : 35
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: Given the system supports the following languages\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_012_steps.py\", line 14, in step_given_supported_languages\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: Given the system supports the following languages\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_012_steps.py\", line 14, in step_given_supported_languages\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the system supports the following languages:",
+      "time" : {
+        "start" : 1746711077023,
+        "stop" : 1746711077024,
+        "duration" : 1
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_012_steps.py\", line 14, in step_given_supported_languages\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ {
+        "uid" : "53d011aa06549578",
+        "name" : ".table",
+        "source" : "53d011aa06549578.csv",
+        "type" : "text/csv",
+        "size" : 31
+      } ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 1,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "Given a logged-in user",
+      "time" : {
+        "start" : 1746711077056,
+        "stop" : 1746711077056,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the user selects French from the language settings",
+      "time" : {
+        "start" : 1746711077056,
+        "stop" : 1746711077056,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then the system should display the UI in French",
+      "time" : {
+        "start" : 1746711077056,
+        "stop" : 1746711077056,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 1,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "feature",
+    "value" : "Language Selection and Translation"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "language",
+    "value" : "French"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 3,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 3
+      },
+      "items" : [ {
+        "uid" : "fc92e569c84a4ac8",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/fc92e569c84a4ac8",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+        "time" : {
+          "start" : 1746710242722,
+          "stop" : 1746710242755,
+          "duration" : 33
+        }
+      }, {
+        "uid" : "72db300ee0fd489e",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/72db300ee0fd489e",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the system supports the following languages\n",
+        "time" : {
+          "start" : 1746709788840,
+          "stop" : 1746709788874,
+          "duration" : 34
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "40525ac17e64e926.json",
+  "parameterValues" : [ "French" ]
+}

@@ -1,0 +1,143 @@
+{
+  "uid" : "fdc11fc918b87f3d",
+  "name" : "Logging user actions -- @1.2 ",
+  "fullName" : "Logging Capabilities: Logging user actions",
+  "historyId" : "bf556f4698a79d2182ec41431a0163c7",
+  "time" : {
+    "start" : 1746711068290,
+    "stop" : 1746711068859,
+    "duration" : 569
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: When the admin performs an action update\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_007_steps.py\", line 15, in step_when_admin_performs_action\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: When the admin performs an action update\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_007_steps.py\", line 15, in step_when_admin_performs_action\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1746711068291,
+        "stop" : 1746711068830,
+        "duration" : 539
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the admin performs an action update",
+      "time" : {
+        "start" : 1746711068831,
+        "stop" : 1746711068831,
+        "duration" : 0
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: When the admin performs an action update\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_007_steps.py\", line 15, in step_when_admin_performs_action\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "Then the system logs the action update with relevant details",
+      "time" : {
+        "start" : 1746711068859,
+        "stop" : 1746711068859,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 3,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "feature",
+    "value" : "Logging Capabilities"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "action",
+    "value" : "update"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 3,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 3
+      },
+      "items" : [ {
+        "uid" : "b9f5d337e20b5f11",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/b9f5d337e20b5f11",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin performs an action update\n",
+        "time" : {
+          "start" : 1746710234078,
+          "stop" : 1746710234647,
+          "duration" : 569
+        }
+      }, {
+        "uid" : "fb8300117ea67782",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/fb8300117ea67782",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin performs an action update\n",
+        "time" : {
+          "start" : 1746709780206,
+          "stop" : 1746709780774,
+          "duration" : 568
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "fdc11fc918b87f3d.json",
+  "parameterValues" : [ "update" ]
+}

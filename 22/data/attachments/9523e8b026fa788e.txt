@@ -1,0 +1,10 @@
+2025-05-08 13:31:03 - tp.pki - WARNING - ! Enabling auto-generated PKI !
+2025-05-08 13:31:03 - pki.util.x509 - INFO - Issuing CA 'AutoGenPKI_Root_CA_SECP256R1SHA256' saved successfully.
+2025-05-08 13:31:03 - pki.util.x509 - INFO - Issuing CA 'AutoGenPKI_Issuing_CA' saved successfully.
+2025-05-08 13:31:03 - tp.pki - WARNING - Auto-generated PKI enabled.
+2025-05-08 13:31:03 - tp.pki - WARNING - ! Disabling auto-generated PKI !
+2025-05-08 13:31:03 - trustpoint.pki.models.issuing_ca.IssuingCaModel - INFO - All 1 certificates issued by CA AutoGenPKI_Issuing_CA have been revoked.
+2025-05-08 13:31:03 - trustpoint.pki.models.issuing_ca.IssuingCaModel - INFO - CRL generation for CA AutoGenPKI_Issuing_CA finished.
+2025-05-08 13:31:03 - trustpoint.pki.models.issuing_ca.IssuingCaModel - INFO - All 1 certificates issued by CA AutoGenPKI_Root_CA_SECP256R1SHA256 have been revoked.
+2025-05-08 13:31:03 - trustpoint.pki.models.issuing_ca.IssuingCaModel - INFO - CRL generation for CA AutoGenPKI_Root_CA_SECP256R1SHA256 finished.
+2025-05-08 13:31:03 - tp.pki - WARNING - Auto-generated PKI disabled.

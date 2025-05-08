@@ -1,0 +1,173 @@
+{
+  "uid" : "fc1c334e91ebda0c",
+  "name" : "Delete an identity -- @1.2 ",
+  "fullName" : "REST API interaction with TrustPoint: Delete an identity",
+  "historyId" : "04c64c0ca872406c2a967a8a9ee4bd34",
+  "time" : {
+    "start" : 1746711065884,
+    "stop" : 1746711065913,
+    "duration" : 29
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: Step not implemented: API client authentication.\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/common_steps.py\", line 101, in step_api_client_authenticated\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: Step not implemented: API client authentication.\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/common_steps.py\", line 101, in step_api_client_authenticated\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given an API client is authenticated",
+      "time" : {
+        "start" : 1746711065886,
+        "stop" : 1746711065886,
+        "duration" : 0
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: Step not implemented: API client authentication.\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/common_steps.py\", line 101, in step_api_client_authenticated\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "Given the identity bob567 exists",
+      "time" : {
+        "start" : 1746711065913,
+        "stop" : 1746711065913,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the API client sends a DELETE request to \"/api/identities/bob567\"",
+      "time" : {
+        "start" : 1746711065913,
+        "stop" : 1746711065913,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then the API response should have a status code of 204",
+      "time" : {
+        "start" : 1746711065913,
+        "stop" : 1746711065913,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And the identity bob567 should no longer exist",
+      "time" : {
+        "start" : 1746711065913,
+        "stop" : 1746711065913,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 5,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "feature",
+    "value" : "REST API interaction with TrustPoint"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "identifier",
+    "value" : "bob567"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 3,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 3
+      },
+      "items" : [ {
+        "uid" : "6fd72373ac80b194",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/6fd72373ac80b194",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+        "time" : {
+          "start" : 1746710231681,
+          "stop" : 1746710231709,
+          "duration" : 28
+        }
+      }, {
+        "uid" : "5111d5f561bb8fd",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/5111d5f561bb8fd",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+        "time" : {
+          "start" : 1746709777816,
+          "stop" : 1746709777845,
+          "duration" : 29
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "fc1c334e91ebda0c.json",
+  "parameterValues" : [ "bob567" ]
+}

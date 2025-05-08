@@ -1,0 +1,2 @@
+2025-05-08 13:31:07 - pki.util.x509 - INFO - Issuing CA 'root_ca' saved successfully.
+2025-05-08 13:31:07 - trustpoint.pki.models.issuing_ca.IssuingCaModel - INFO - CRL generation for CA root_ca finished.

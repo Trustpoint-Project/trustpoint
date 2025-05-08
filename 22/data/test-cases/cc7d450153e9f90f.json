@@ -1,0 +1,191 @@
+{
+  "uid" : "cc7d450153e9f90f",
+  "name" : "Create a new identity -- @1.1 ",
+  "fullName" : "Manage digital identities via TPC_Web: Create a new identity",
+  "historyId" : "aece16e5a18eddb9c7c94e727800b146",
+  "time" : {
+    "start" : 1746711054757,
+    "stop" : 1746711055351,
+    "duration" : 594
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: Step not implemented: Navigate to Create Identity page.\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_001_steps.py\", line 52, in step_navigate_create_identity\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: Step not implemented: Navigate to Create Identity page.\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_001_steps.py\", line 52, in step_navigate_create_identity\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1746711054759,
+        "stop" : 1746711055324,
+        "duration" : 565
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the admin navigates to the \"Create Identity\" page",
+      "time" : {
+        "start" : 1746711055324,
+        "stop" : 1746711055325,
+        "duration" : 1
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: Step not implemented: Navigate to Create Identity page.\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_001_steps.py\", line 52, in step_navigate_create_identity\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "And the admin fills in the identity details with AliceID and ID1234",
+      "time" : {
+        "start" : 1746711055351,
+        "stop" : 1746711055351,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And the admin submits the form",
+      "time" : {
+        "start" : 1746711055351,
+        "stop" : 1746711055351,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then the system should display a confirmation message",
+      "time" : {
+        "start" : 1746711055351,
+        "stop" : 1746711055351,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And the new identity AliceID with ID1234 should appear in the identity list",
+      "time" : {
+        "start" : 1746711055351,
+        "stop" : 1746711055351,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 6,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "feature",
+    "value" : "Manage digital identities via TPC_Web"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "identifier",
+    "value" : "ID1234"
+  }, {
+    "name" : "name",
+    "value" : "AliceID"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 3,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 3
+      },
+      "items" : [ {
+        "uid" : "1ad8a8fdcf13ac4c",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/1ad8a8fdcf13ac4c",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: Navigate to Create Identity page.\n",
+        "time" : {
+          "start" : 1746710220616,
+          "stop" : 1746710221211,
+          "duration" : 595
+        }
+      }, {
+        "uid" : "38a241f639fef4c2",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/38a241f639fef4c2",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: Navigate to Create Identity page.\n",
+        "time" : {
+          "start" : 1746709766666,
+          "stop" : 1746709767258,
+          "duration" : 592
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "cc7d450153e9f90f.json",
+  "parameterValues" : [ "ID1234", "AliceID" ]
+}
