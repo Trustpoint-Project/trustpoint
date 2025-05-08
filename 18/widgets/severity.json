@@ -1,0 +1,1601 @@
+[ {
+  "uid" : "f28e644e421d3e5c",
+  "name" : "Attempt to revoke an already revoked certificate -- @1.1 ",
+  "time" : {
+    "start" : 1746708241261,
+    "stop" : 1746708241832,
+    "duration" : 571
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "5c10d66c1bbc6d57",
+  "name" : "test_key_usage_ext",
+  "time" : {
+    "start" : 1746708246875,
+    "stop" : 1746708246965,
+    "duration" : 90
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "442fccc893fa1add",
+  "name" : "Attempt to renew a revoked certificate -- @1.1 ",
+  "time" : {
+    "start" : 1746708240120,
+    "stop" : 1746708240690,
+    "duration" : 570
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "b6dd6bd069e280d1",
+  "name" : "test_certificate_version",
+  "time" : {
+    "start" : 1746708250124,
+    "stop" : 1746708250125,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "185aa056cb16187a",
+  "name" : "User enters one time password incorrectly",
+  "time" : {
+    "start" : 1746708256135,
+    "stop" : 1746708256182,
+    "duration" : 47
+  },
+  "status" : "passed",
+  "severity" : "minor"
+}, {
+  "uid" : "92f3fd9b431aba9c",
+  "name" : "test_revoke_all_issued_certificates_and_crl",
+  "time" : {
+    "start" : 1746708251099,
+    "stop" : 1746708251312,
+    "duration" : 213
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "53d9ec707c584434",
+  "name" : "NTEU logs into the system -- @1.2 ",
+  "time" : {
+    "start" : 1746708231255,
+    "stop" : 1746708231289,
+    "duration" : 34
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "4c5bc02b5eb995e",
+  "name" : "test_subject_key_identifier_ext",
+  "time" : {
+    "start" : 1746708247792,
+    "stop" : 1746708247871,
+    "duration" : 79
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "5f9f3b5052951d4e",
+  "name" : "test_authority_information_access_extension",
+  "time" : {
+    "start" : 1746708248396,
+    "stop" : 1746708248480,
+    "duration" : 84
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "9a7b355392910c0f",
+  "name" : "Attempt to renew a revoked certificate -- @1.2 ",
+  "time" : {
+    "start" : 1746708240690,
+    "stop" : 1746708241260,
+    "duration" : 570
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "ff2d78b1cbd6bbdb",
+  "name" : "test_san_ext",
+  "time" : {
+    "start" : 1746708247127,
+    "stop" : 1746708247216,
+    "duration" : 89
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "714763d7ee063ae4",
+  "name" : "test_basic_constraints_ext",
+  "time" : {
+    "start" : 1746708247385,
+    "stop" : 1746708247466,
+    "duration" : 81
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "65036d4e65778a88",
+  "name" : "High load certificate issuance -- @1.2 ",
+  "time" : {
+    "start" : 1746708253573,
+    "stop" : 1746708253610,
+    "duration" : 37
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "5c1213397fce832f",
+  "name" : "test_name_constraints_ext",
+  "time" : {
+    "start" : 1746708248219,
+    "stop" : 1746708248312,
+    "duration" : 93
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "a7d0e545159860cf",
+  "name" : "test_issue_credential_invalid_template",
+  "time" : {
+    "start" : 1746708251469,
+    "stop" : 1746708251470,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "26cf270d68612a9a",
+  "name" : "test_public_key_pem",
+  "time" : {
+    "start" : 1746708250549,
+    "stop" : 1746708250550,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "9d6f5826bc5db1d6",
+  "name" : "Successfully renew a certificate -- @1.2 ",
+  "time" : {
+    "start" : 1746708237216,
+    "stop" : 1746708237834,
+    "duration" : 618
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "4ade8e3433f52f0f",
+  "name" : "Language setting persists after logout -- @1.1 ",
+  "time" : {
+    "start" : 1746708253904,
+    "stop" : 1746708253940,
+    "duration" : 36
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "d96127bf098fe12c",
+  "name" : "test_is_self_signed",
+  "time" : {
+    "start" : 1746708249759,
+    "stop" : 1746708249760,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "be1481f41134cb61",
+  "name" : "User enters one time password correctly",
+  "time" : {
+    "start" : 1746708255200,
+    "stop" : 1746708256134,
+    "duration" : 934
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "fcb82d393dc3c96a",
+  "name" : "Logging user actions -- @1.3 ",
+  "time" : {
+    "start" : 1746708245657,
+    "stop" : 1746708246229,
+    "duration" : 572
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "88d2fc89fc1e33f8",
+  "name" : "test_otp_generation",
+  "time" : {
+    "start" : 1746708244180,
+    "stop" : 1746708244181,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "2342378be8d9a570",
+  "name" : "Auto-generation with different configurations -- @1.2 ",
+  "time" : {
+    "start" : 1746708250818,
+    "stop" : 1746708251392,
+    "duration" : 574
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "3ade8c9d535eb5e6",
+  "name" : "test_save_certificate_method",
+  "time" : {
+    "start" : 1746708249402,
+    "stop" : 1746708249486,
+    "duration" : 84
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "4128aed6dec901e7",
+  "name" : "test_validity_period",
+  "time" : {
+    "start" : 1746708250342,
+    "stop" : 1746708250342,
+    "duration" : 0
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "9a2cdf644c5da072",
+  "name" : "Verification of generated CA details",
+  "time" : {
+    "start" : 1746708251966,
+    "stop" : 1746708252539,
+    "duration" : 573
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "55e2674769e99dac",
+  "name" : "Configuring logging settings -- @1.2 ",
+  "time" : {
+    "start" : 1746708247953,
+    "stop" : 1746708248526,
+    "duration" : 573
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "8b1969dd727286fb",
+  "name" : "test_get_credential_for_certificate",
+  "time" : {
+    "start" : 1746708251434,
+    "stop" : 1746708251436,
+    "duration" : 2
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "86abce0b754baf78",
+  "name" : "High load certificate issuance -- @1.1 ",
+  "time" : {
+    "start" : 1746708253308,
+    "stop" : 1746708253340,
+    "duration" : 32
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "6e15999a9f72d6e8",
+  "name" : "Successfully create a new identity -- @1.1 ",
+  "time" : {
+    "start" : 1746708242407,
+    "stop" : 1746708242438,
+    "duration" : 31
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "a5498b2232cc7ca5",
+  "name" : "test_serial_number",
+  "time" : {
+    "start" : 1746708250167,
+    "stop" : 1746708250168,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "d83f5cc2fb86048",
+  "name" : "test_post_authentication_failure",
+  "time" : {
+    "start" : 1746708246321,
+    "stop" : 1746708246329,
+    "duration" : 8
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "5fd95e73deebcd6",
+  "name" : "test_ca_attributes",
+  "time" : {
+    "start" : 1746708250710,
+    "stop" : 1746708250711,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "3337671f948eb06",
+  "name" : "test_multi_device_delete",
+  "time" : {
+    "start" : 1746708245669,
+    "stop" : 1746708245688,
+    "duration" : 19
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "36d8ca4eee3792dd",
+  "name" : "Admin revokes a device certificate",
+  "time" : {
+    "start" : 1746708253211,
+    "stop" : 1746708253308,
+    "duration" : 97
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "dcd200bfb9560f45",
+  "name" : "Attempt to retrieve a non-existent identity -- @1.1 ",
+  "time" : {
+    "start" : 1746708242686,
+    "stop" : 1746708242717,
+    "duration" : 31
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "1f69bee36ac48578",
+  "name" : "Verifying the backup mechanism -- @1.1 ",
+  "time" : {
+    "start" : 1746708242749,
+    "stop" : 1746708243327,
+    "duration" : 578
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "ec5e174477b253d7",
+  "name" : "User manually selects a different language -- @1.3 ",
+  "time" : {
+    "start" : 1746708253830,
+    "stop" : 1746708253866,
+    "duration" : 36
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "4d861ec76c75474a",
+  "name" : "Unauthorized device attempts to access the CMP endpoint",
+  "time" : {
+    "start" : 1746708253179,
+    "stop" : 1746708253211,
+    "duration" : 32
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "2c8d91fa9bcfa431",
+  "name" : "Successful auto-generation of an issuing CA",
+  "time" : {
+    "start" : 1746708249672,
+    "stop" : 1746708250244,
+    "duration" : 572
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "930f718330a64690",
+  "name" : "test_attributes_and_properties",
+  "time" : {
+    "start" : 1746708250883,
+    "stop" : 1746708250884,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "577b08e20eb69aa6",
+  "name" : "Authorized user accesses certificate templates -- @1.1 ",
+  "time" : {
+    "start" : 1746708261840,
+    "stop" : 1746708262419,
+    "duration" : 579
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "f77ba73961cb0405",
+  "name" : "test_certificate_status",
+  "time" : {
+    "start" : 1746708249690,
+    "stop" : 1746708249691,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "7013e6f8e685421e",
+  "name" : "Admin revokes a device certificate",
+  "time" : {
+    "start" : 1746708253477,
+    "stop" : 1746708253515,
+    "duration" : 38
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "fb474676aa44dde",
+  "name" : "View an existing identity -- @1.1 ",
+  "time" : {
+    "start" : 1746708232660,
+    "stop" : 1746708233228,
+    "duration" : 568
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "3a1539920ee9b7e6",
+  "name" : "Attempt to access the API without authentication",
+  "time" : {
+    "start" : 1746708242655,
+    "stop" : 1746708242686,
+    "duration" : 31
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "bc968986f97ff5c",
+  "name" : "test_ian_ext",
+  "time" : {
+    "start" : 1746708247263,
+    "stop" : 1746708247348,
+    "duration" : 85
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "65758b6a8baae163",
+  "name" : "Verifying the system update mechanism",
+  "time" : {
+    "start" : 1746708243899,
+    "stop" : 1746708244476,
+    "duration" : 577
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "930ace599abbc5cb",
+  "name" : "test_authority_key_identifier_ext",
+  "time" : {
+    "start" : 1746708247655,
+    "stop" : 1746708247740,
+    "duration" : 85
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "470641fce408936b",
+  "name" : "Admin sets security level for a component -- @1.2 ",
+  "time" : {
+    "start" : 1746708257775,
+    "stop" : 1746708258356,
+    "duration" : 581
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "c732d9ac6aa3cbe0",
+  "name" : "test_otp_use_once",
+  "time" : {
+    "start" : 1746708244735,
+    "stop" : 1746708244736,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "ae921e7dd7d41975",
+  "name" : "Logging user actions -- @1.1 ",
+  "time" : {
+    "start" : 1746708244479,
+    "stop" : 1746708245085,
+    "duration" : 606
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "8739cc135f9148f3",
+  "name" : "Verifying the restoration mechanism -- @1.1 ",
+  "time" : {
+    "start" : 1746708243327,
+    "stop" : 1746708243899,
+    "duration" : 572
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "435f530b1df06e84",
+  "name" : "Create a new identity -- @1.2 ",
+  "time" : {
+    "start" : 1746708232087,
+    "stop" : 1746708232659,
+    "duration" : 572
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "232242e3651317ab",
+  "name" : "Edit an existing identity -- @1.2 ",
+  "time" : {
+    "start" : 1746708234366,
+    "stop" : 1746708234934,
+    "duration" : 568
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "292d66d263fc0c67",
+  "name" : "test_extension_deletion",
+  "time" : {
+    "start" : 1746708248905,
+    "stop" : 1746708249022,
+    "duration" : 117
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "29f9ae9bedfb78d7",
+  "name" : "NTEU creates a digital identity",
+  "time" : {
+    "start" : 1746708231289,
+    "stop" : 1746708231322,
+    "duration" : 33
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "b4dad4b6c2974525",
+  "name" : "A device successfully requests a certificate",
+  "time" : {
+    "start" : 1746708253374,
+    "stop" : 1746708253406,
+    "duration" : 32
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "1ca9a8ce7e8e9ee6",
+  "name" : "An onboarded device renews its certificate",
+  "time" : {
+    "start" : 1746708253147,
+    "stop" : 1746708253178,
+    "duration" : 31
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "8a9b383ef3fdde1c",
+  "name" : "UI provides clear feedback to the NTEU",
+  "time" : {
+    "start" : 1746708231455,
+    "stop" : 1746708231489,
+    "duration" : 34
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "e155d5610cb0adf7",
+  "name" : "test_ca_delete_with_issued_certificates",
+  "time" : {
+    "start" : 1746708246303,
+    "stop" : 1746708246306,
+    "duration" : 3
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "6d2ca72b46f0abfa",
+  "name" : "test_multi_extension_deletion",
+  "time" : {
+    "start" : 1746708249082,
+    "stop" : 1746708249198,
+    "duration" : 116
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "ffa9231482499547",
+  "name" : "Verify UI elements are translated correctly -- @1.4 ",
+  "time" : {
+    "start" : 1746708254158,
+    "stop" : 1746708254195,
+    "duration" : 37
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "3a3c11372ea2ee32",
+  "name" : "test_authenticate_username_password_success",
+  "time" : {
+    "start" : 1746708251446,
+    "stop" : 1746708251447,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "9f71be53b7da393e",
+  "name" : "test_freshest_crl",
+  "time" : {
+    "start" : 1746708248847,
+    "stop" : 1746708248847,
+    "duration" : 0
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "8fd639e7560cf18a",
+  "name" : "Handling missing parameters during CA generation",
+  "time" : {
+    "start" : 1746708251393,
+    "stop" : 1746708251965,
+    "duration" : 572
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "7f3da314f56e3a0c",
+  "name" : "Unauthorized user attempts to modify a certificate template -- @1.2 ",
+  "time" : {
+    "start" : 1746708263582,
+    "stop" : 1746708264159,
+    "duration" : 577
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "b3accf959f8294ec",
+  "name" : "Default language selection based on browser settings -- @1.1 ",
+  "time" : {
+    "start" : 1746708253613,
+    "stop" : 1746708253650,
+    "duration" : 37
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "3c9d2e8e77812284",
+  "name" : "User manually selects a different language -- @1.4 ",
+  "time" : {
+    "start" : 1746708253867,
+    "stop" : 1746708253903,
+    "duration" : 36
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "efcb9524e07e2f4",
+  "name" : "Auto-generation with different configurations -- @1.1 ",
+  "time" : {
+    "start" : 1746708250245,
+    "stop" : 1746708250818,
+    "duration" : 573
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "d14c0d695c5afb64",
+  "name" : "Verify UI elements are translated correctly -- @1.3 ",
+  "time" : {
+    "start" : 1746708254123,
+    "stop" : 1746708254158,
+    "duration" : 35
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "136bfa9d382db643",
+  "name" : "Retrieve an existing identity -- @1.1 ",
+  "time" : {
+    "start" : 1746708242469,
+    "stop" : 1746708242499,
+    "duration" : 30
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "62eb87b93fcee528",
+  "name" : "test_policy_constraints",
+  "time" : {
+    "start" : 1746708248731,
+    "stop" : 1746708248811,
+    "duration" : 80
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "a3943dac16c32210",
+  "name" : "Retrieve an existing identity -- @1.2 ",
+  "time" : {
+    "start" : 1746708242499,
+    "stop" : 1746708242530,
+    "duration" : 31
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "40e350f081105ea6",
+  "name" : "NTEU logs into the system -- @1.1 ",
+  "time" : {
+    "start" : 1746708231187,
+    "stop" : 1746708231255,
+    "duration" : 68
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "c54731c62bc95f8c",
+  "name" : "test_auto_gen_pki[SECP256R1SHA256]",
+  "time" : {
+    "start" : 1746708246718,
+    "stop" : 1746708246798,
+    "duration" : 80
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "45e89378156a8a8c",
+  "name" : "Delete an existing identity -- @1.1 ",
+  "time" : {
+    "start" : 1746708234935,
+    "stop" : 1746708235504,
+    "duration" : 569
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "e7747c4cf188c985",
+  "name" : "Update an existing identity -- @1.2 ",
+  "time" : {
+    "start" : 1746708242562,
+    "stop" : 1746708242593,
+    "duration" : 31
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "9090422bbc09eafd",
+  "name" : "High load certificate issuance -- @1.1 ",
+  "time" : {
+    "start" : 1746708253515,
+    "stop" : 1746708253572,
+    "duration" : 57
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "c88844db10409756",
+  "name" : "test_issue_crl",
+  "time" : {
+    "start" : 1746708250977,
+    "stop" : 1746708251023,
+    "duration" : 46
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "f8b370fc98c6973b",
+  "name" : "Edit an existing identity -- @1.1 ",
+  "time" : {
+    "start" : 1746708233797,
+    "stop" : 1746708234365,
+    "duration" : 568
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "dc3553c57acc4466",
+  "name" : "Successfully create a new identity -- @1.2 ",
+  "time" : {
+    "start" : 1746708242438,
+    "stop" : 1746708242468,
+    "duration" : 30
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "5381f5fd650d2122",
+  "name" : "test_token_invalidation",
+  "time" : {
+    "start" : 1746708244418,
+    "stop" : 1746708244421,
+    "duration" : 3
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "718ea8cba35ede5c",
+  "name" : "test_issuing_ca_delete",
+  "time" : {
+    "start" : 1746708251407,
+    "stop" : 1746708251421,
+    "duration" : 14
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "c2d14d47ade6098a",
+  "name" : "Secure handling of certificate templates",
+  "time" : {
+    "start" : 1746708264160,
+    "stop" : 1746708264740,
+    "duration" : 580
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "4a7a8068ed500843",
+  "name" : "test_subject_attributes",
+  "time" : {
+    "start" : 1746708250394,
+    "stop" : 1746708250396,
+    "duration" : 2
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "580b5037aba7bab1",
+  "name" : "Language setting persists after logout -- @1.2 ",
+  "time" : {
+    "start" : 1746708253940,
+    "stop" : 1746708253976,
+    "duration" : 36
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "57799c00da222b58",
+  "name" : "test_signature_value",
+  "time" : {
+    "start" : 1746708250087,
+    "stop" : 1746708250088,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "9d30751645859b50",
+  "name" : "test_extended_key_usage_ext",
+  "time" : {
+    "start" : 1746708248099,
+    "stop" : 1746708248178,
+    "duration" : 79
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "58411bca4b3ddb82",
+  "name" : "Delete an existing identity -- @1.2 ",
+  "time" : {
+    "start" : 1746708235504,
+    "stop" : 1746708236073,
+    "duration" : 569
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "7a5db09bd5c79f5",
+  "name" : "A device successfully requests a certificate",
+  "time" : {
+    "start" : 1746708253114,
+    "stop" : 1746708253146,
+    "duration" : 32
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "dba299e472ca4439",
+  "name" : "test_fingerprint",
+  "time" : {
+    "start" : 1746708249956,
+    "stop" : 1746708249957,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "f23caff49959736e",
+  "name" : "test_common_name",
+  "time" : {
+    "start" : 1746708249868,
+    "stop" : 1746708249869,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "cb8cef1b2b6cc2a0",
+  "name" : "test_domain_delete",
+  "time" : {
+    "start" : 1746708245972,
+    "stop" : 1746708245991,
+    "duration" : 19
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "7cc52d92d7a1432d",
+  "name" : "test_signature_algorithm_oid",
+  "time" : {
+    "start" : 1746708250033,
+    "stop" : 1746708250034,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "4b843520905489c2",
+  "name" : "Attempt to revoke an already revoked certificate -- @1.2 ",
+  "time" : {
+    "start" : 1746708241832,
+    "stop" : 1746708242404,
+    "duration" : 572
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "b55cfa58769f3917",
+  "name" : "test_save_certificate_with_serializer",
+  "time" : {
+    "start" : 1746708249549,
+    "stop" : 1746708249628,
+    "duration" : 79
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "cdf2b3245de88da0",
+  "name" : "Update an existing identity -- @1.1 ",
+  "time" : {
+    "start" : 1746708242531,
+    "stop" : 1746708242561,
+    "duration" : 30
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "c771d9a6949f60c1",
+  "name" : "Admin modifies an existing security level",
+  "time" : {
+    "start" : 1746708258935,
+    "stop" : 1746708259519,
+    "duration" : 584
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "19363a71639662a7",
+  "name" : "Ensuring the CA can issue certificates",
+  "time" : {
+    "start" : 1746708252540,
+    "stop" : 1746708253113,
+    "duration" : 573
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "4688fe310217fb27",
+  "name" : "test_certificate_policies_multiple_entries",
+  "time" : {
+    "start" : 1746708247952,
+    "stop" : 1746708248039,
+    "duration" : 87
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "c50d990d0dcc002b",
+  "name" : "User manually selects a different language -- @1.2 ",
+  "time" : {
+    "start" : 1746708253794,
+    "stop" : 1746708253830,
+    "duration" : 36
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "d2adde72b3bb021f",
+  "name" : "Security level persists after system restart",
+  "time" : {
+    "start" : 1746708260099,
+    "stop" : 1746708260680,
+    "duration" : 581
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "341b548533c72e67",
+  "name" : "Language setting persists after logout -- @1.4 ",
+  "time" : {
+    "start" : 1746708254013,
+    "stop" : 1746708254049,
+    "duration" : 36
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "15153b090504894",
+  "name" : "Attempt to renew a non-existent certificate",
+  "time" : {
+    "start" : 1746708238976,
+    "stop" : 1746708239550,
+    "duration" : 574
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "be7377628dae7cd4",
+  "name" : "NTEU views an existing digital identity",
+  "time" : {
+    "start" : 1746708231322,
+    "stop" : 1746708231355,
+    "duration" : 33
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "86a05a2b6a600310",
+  "name" : "test_basic_certificate_deletion",
+  "time" : {
+    "start" : 1746708249325,
+    "stop" : 1746708249331,
+    "duration" : 6
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "248ccc9f58fc5830",
+  "name" : "test_otp_max_attempts",
+  "time" : {
+    "start" : 1746708245050,
+    "stop" : 1746708245053,
+    "duration" : 3
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "53ecaef360f75a6d",
+  "name" : "Default language selection based on browser settings -- @1.3 ",
+  "time" : {
+    "start" : 1746708253686,
+    "stop" : 1746708253721,
+    "duration" : 35
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "46e801f87732293a",
+  "name" : "Logging user actions -- @1.2 ",
+  "time" : {
+    "start" : 1746708245085,
+    "stop" : 1746708245656,
+    "duration" : 571
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "de13085f6a61d7cf",
+  "name" : "Admin sets security level for a component -- @1.1 ",
+  "time" : {
+    "start" : 1746708257194,
+    "stop" : 1746708257774,
+    "duration" : 580
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "3a16a96bc1ea2582",
+  "name" : "Invalid security level input is rejected",
+  "time" : {
+    "start" : 1746708259520,
+    "stop" : 1746708260099,
+    "duration" : 579
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "a61e4c615c6e917a",
+  "name" : "test_inhibit_any_policy",
+  "time" : {
+    "start" : 1746708248622,
+    "stop" : 1746708248700,
+    "duration" : 78
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "28f9a88806f4ac4",
+  "name" : "Admin sets security level for a component -- @1.3 ",
+  "time" : {
+    "start" : 1746708258356,
+    "stop" : 1746708258935,
+    "duration" : 579
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "54028066c4a579bd",
+  "name" : "Security level affects system behavior",
+  "time" : {
+    "start" : 1746708260680,
+    "stop" : 1746708261258,
+    "duration" : 578
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "77c96ec367663f9c",
+  "name" : "Language setting persists after logout -- @1.3 ",
+  "time" : {
+    "start" : 1746708253977,
+    "stop" : 1746708254013,
+    "duration" : 36
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "892409d6623a37e6",
+  "name" : "Create a new identity -- @1.1 ",
+  "time" : {
+    "start" : 1746708231491,
+    "stop" : 1746708232087,
+    "duration" : 596
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "ccad5dc21a694e82",
+  "name" : "Delete an identity -- @1.1 ",
+  "time" : {
+    "start" : 1746708242593,
+    "stop" : 1746708242624,
+    "duration" : 31
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "cf4b0ea76467089f",
+  "name" : "Delete an identity -- @1.2 ",
+  "time" : {
+    "start" : 1746708242624,
+    "stop" : 1746708242655,
+    "duration" : 31
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "7e0130f04481fd07",
+  "name" : "Authorized user accesses certificate templates -- @1.2 ",
+  "time" : {
+    "start" : 1746708262420,
+    "stop" : 1746708263000,
+    "duration" : 580
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "edcf617a5053205c",
+  "name" : "Attempt to revoke a non-existent certificate",
+  "time" : {
+    "start" : 1746708239551,
+    "stop" : 1746708240120,
+    "duration" : 569
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "551f1039b6b08f99",
+  "name" : "Unauthorized device attempts to access the EST endpoint",
+  "time" : {
+    "start" : 1746708253440,
+    "stop" : 1746708253477,
+    "duration" : 37
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "2ea249c33368c44b",
+  "name" : "Attempt to retrieve a non-existent identity -- @1.2 ",
+  "time" : {
+    "start" : 1746708242717,
+    "stop" : 1746708242748,
+    "duration" : 31
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "61b14a062e7bba37",
+  "name" : "Default language selection based on browser settings -- @1.4 ",
+  "time" : {
+    "start" : 1746708253721,
+    "stop" : 1746708253757,
+    "duration" : 36
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "821a586e19b270f5",
+  "name" : "High load certificate issuance -- @1.2 ",
+  "time" : {
+    "start" : 1746708253341,
+    "stop" : 1746708253373,
+    "duration" : 32
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "18db59594fddc186",
+  "name" : "Admin creates one time password",
+  "time" : {
+    "start" : 1746708254195,
+    "stop" : 1746708255199,
+    "duration" : 1004
+  },
+  "status" : "passed",
+  "severity" : "critical"
+}, {
+  "uid" : "eab140371b508e1",
+  "name" : "Configuring logging settings -- @1.1 ",
+  "time" : {
+    "start" : 1746708247377,
+    "stop" : 1746708247953,
+    "duration" : 576
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "218bd7aad18fc25d",
+  "name" : "Unauthorized export attempt",
+  "time" : {
+    "start" : 1746708265903,
+    "stop" : 1746708266483,
+    "duration" : 580
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "29220e3cfdb03f2f",
+  "name" : "NTEU deletes a digital identity",
+  "time" : {
+    "start" : 1746708231389,
+    "stop" : 1746708231422,
+    "duration" : 33
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "1dc923b0977fecbd",
+  "name" : "Unauthorized user attempts to modify a certificate template -- @1.1 ",
+  "time" : {
+    "start" : 1746708263000,
+    "stop" : 1746708263582,
+    "duration" : 582
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "9ef1f92e314fd589",
+  "name" : "Verify UI elements are translated correctly -- @1.2 ",
+  "time" : {
+    "start" : 1746708254087,
+    "stop" : 1746708254122,
+    "duration" : 35
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "b5293cd14c53da0b",
+  "name" : "Ensuring log storage and integrity",
+  "time" : {
+    "start" : 1746708249099,
+    "stop" : 1746708249671,
+    "duration" : 572
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "2b6a84ce80b5b9f2",
+  "name" : "test_issuer_attributes",
+  "time" : {
+    "start" : 1746708250222,
+    "stop" : 1746708250223,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "9cb7c78ec65613c0",
+  "name" : "Handle non-existent identities",
+  "time" : {
+    "start" : 1746708236073,
+    "stop" : 1746708236643,
+    "duration" : 570
+  },
+  "status" : "broken",
+  "severity" : "normal"
+}, {
+  "uid" : "45aa50731484a33c",
+  "name" : "Configuring logging settings -- @1.3 ",
+  "time" : {
+    "start" : 1746708248526,
+    "stop" : 1746708249098,
+    "duration" : 572
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "35412654ed734f1a",
+  "name" : "Unauthorized deletion attempt",
+  "time" : {
+    "start" : 1746708264741,
+    "stop" : 1746708265320,
+    "duration" : 579
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "a16da4086094bd42",
+  "name" : "test_auto_gen_pki[RSA2048SHA256]",
+  "time" : {
+    "start" : 1746708246341,
+    "stop" : 1746708246705,
+    "duration" : 364
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "f8b23d566ca9766e",
+  "name" : "Retrieving and filtering logs -- @1.2 ",
+  "time" : {
+    "start" : 1746708246805,
+    "stop" : 1746708247376,
+    "duration" : 571
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "d1912a70113ee668",
+  "name" : "Security configuration changes are logged",
+  "time" : {
+    "start" : 1746708261259,
+    "stop" : 1746708261838,
+    "duration" : 579
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "13c368a58cc9b706",
+  "name" : "NTEU initiates device onboarding using a zero-touch protocol",
+  "time" : {
+    "start" : 1746708231422,
+    "stop" : 1746708231455,
+    "duration" : 33
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "74458823d98cbf7d",
+  "name" : "test_device_delete_revocation",
+  "time" : {
+    "start" : 1746708245279,
+    "stop" : 1746708245300,
+    "duration" : 21
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "e2fbe179b46acff1",
+  "name" : "Default language selection based on browser settings -- @1.2 ",
+  "time" : {
+    "start" : 1746708253650,
+    "stop" : 1746708253686,
+    "duration" : 36
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "15d9c5be2aa2913c",
+  "name" : "NTEU edits a digital identity",
+  "time" : {
+    "start" : 1746708231356,
+    "stop" : 1746708231388,
+    "duration" : 32
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "9fceda4686feb03c",
+  "name" : "User downloads credential on remote device browser",
+  "time" : {
+    "start" : 1746708256183,
+    "stop" : 1746708257193,
+    "duration" : 1010
+  },
+  "status" : "passed",
+  "severity" : "critical"
+}, {
+  "uid" : "b4f185b99c6cc97e",
+  "name" : "An onboarded device renews its certificate",
+  "time" : {
+    "start" : 1746708253407,
+    "stop" : 1746708253440,
+    "duration" : 33
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "a26ced54b59c0a93",
+  "name" : "test_subject_public_bytes",
+  "time" : {
+    "start" : 1746708250598,
+    "stop" : 1746708250599,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "3a02255dad5bdd3e",
+  "name" : "User manually selects a different language -- @1.1 ",
+  "time" : {
+    "start" : 1746708253758,
+    "stop" : 1746708253793,
+    "duration" : 35
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "b17aec621f7062ca",
+  "name" : "test_certificate_pem",
+  "time" : {
+    "start" : 1746708250473,
+    "stop" : 1746708250474,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "39d4f138b0d3aed4",
+  "name" : "Verify UI elements are translated correctly -- @1.1 ",
+  "time" : {
+    "start" : 1746708254050,
+    "stop" : 1746708254086,
+    "duration" : 36
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "b00af75948e12e6e",
+  "name" : "Successfully revoke a certificate -- @1.1 ",
+  "time" : {
+    "start" : 1746708237834,
+    "stop" : 1746708238405,
+    "duration" : 571
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "ad29fefa6810c5f9",
+  "name" : "View an existing identity -- @1.2 ",
+  "time" : {
+    "start" : 1746708233229,
+    "stop" : 1746708233797,
+    "duration" : 568
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "53a132b775529ebc",
+  "name" : "test_created_at_timestamp",
+  "time" : {
+    "start" : 1746708250640,
+    "stop" : 1746708250640,
+    "duration" : 0
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "17092b58b07fa2af",
+  "name" : "Successfully renew a certificate -- @1.1 ",
+  "time" : {
+    "start" : 1746708236645,
+    "stop" : 1746708237216,
+    "duration" : 571
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "4a7749595d658dd3",
+  "name" : "Successfully revoke a certificate -- @1.2 ",
+  "time" : {
+    "start" : 1746708238405,
+    "stop" : 1746708238975,
+    "duration" : 570
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "462b16ab3ed55b27",
+  "name" : "Secure export of certificate templates",
+  "time" : {
+    "start" : 1746708265321,
+    "stop" : 1746708265903,
+    "duration" : 582
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "62a3ee588618a48c",
+  "name" : "Retrieving and filtering logs -- @1.1 ",
+  "time" : {
+    "start" : 1746708246230,
+    "stop" : 1746708246804,
+    "duration" : 574
+  },
+  "status" : "failed",
+  "severity" : "normal"
+}, {
+  "uid" : "88eb0ff6887334c5",
+  "name" : "test_subject_information_access_extension",
+  "time" : {
+    "start" : 1746708248518,
+    "stop" : 1746708248599,
+    "duration" : 81
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "e2ed0ea9a793e18a",
+  "name" : "test_attributes_and_properties",
+  "time" : {
+    "start" : 1746708250935,
+    "stop" : 1746708250936,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "f575aad982fdc386",
+  "name" : "test_authenticate_username_password_missing_header",
+  "time" : {
+    "start" : 1746708251457,
+    "stop" : 1746708251457,
+    "duration" : 0
+  },
+  "status" : "passed",
+  "severity" : "normal"
+}, {
+  "uid" : "33a3fbdca83d103",
+  "name" : "test_issuer_public_bytes",
+  "time" : {
+    "start" : 1746708250267,
+    "stop" : 1746708250268,
+    "duration" : 1
+  },
+  "status" : "passed",
+  "severity" : "normal"
+} ]

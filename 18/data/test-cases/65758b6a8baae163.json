@@ -1,0 +1,155 @@
+{
+  "uid" : "65758b6a8baae163",
+  "name" : "Verifying the system update mechanism",
+  "fullName" : "Backup, Restore, and Update Mechanisms: Verifying the system update mechanism",
+  "historyId" : "af31ffb5bc9ca74b3f2eca8136f7cc88",
+  "time" : {
+    "start" : 1746708243899,
+    "stop" : 1746708244476,
+    "duration" : 577
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: When the admin triggers a system update\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_006_steps.py\", line 82, in step_when_admin_triggers_update\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: When the admin triggers a system update\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_006_steps.py\", line 82, in step_when_admin_triggers_update\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1746708243901,
+        "stop" : 1746708244442,
+        "duration" : 541
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the admin triggers a system update",
+      "time" : {
+        "start" : 1746708244442,
+        "stop" : 1746708244442,
+        "duration" : 0
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: When the admin triggers a system update\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_006_steps.py\", line 82, in step_when_admin_triggers_update\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "Then the system downloads and applies the update",
+      "time" : {
+        "start" : 1746708244476,
+        "stop" : 1746708244476,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And the system verifies the integrity and functionality post-update",
+      "time" : {
+        "start" : 1746708244476,
+        "stop" : 1746708244476,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "feature",
+    "value" : "Backup, Restore, and Update Mechanisms"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 3,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 3
+      },
+      "items" : [ {
+        "uid" : "36593e2b851b32a5",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/17/#testresult/36593e2b851b32a5",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin triggers a system update\n",
+        "time" : {
+          "start" : 1746705355457,
+          "stop" : 1746705356028,
+          "duration" : 571
+        }
+      }, {
+        "uid" : "c6b7664eb30e5bcb",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16/#testresult/c6b7664eb30e5bcb",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin triggers a system update\n",
+        "time" : {
+          "start" : 1746616906653,
+          "stop" : 1746616907232,
+          "duration" : 579
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "65758b6a8baae163.json",
+  "parameterValues" : [ ]
+}

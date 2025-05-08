@@ -1,0 +1,2137 @@
+{
+  "uid" : "98d3104e051c652961429bf95fa0b5d6",
+  "children" : [ {
+    "name" : "NTEU logs into the system -- @1.1 ",
+    "uid" : "40e350f081105ea6",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708231187,
+      "stop" : 1746708231255,
+      "duration" : 68
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "successful", "correct_pw", "valid_user" ]
+  }, {
+    "name" : "NTEU logs into the system -- @1.2 ",
+    "uid" : "53d9ec707c584434",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708231255,
+      "stop" : 1746708231289,
+      "duration" : 34
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "failed", "wrong_pw", "invalid_user" ]
+  }, {
+    "name" : "NTEU creates a digital identity",
+    "uid" : "29f9ae9bedfb78d7",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708231289,
+      "stop" : 1746708231322,
+      "duration" : 33
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "NTEU views an existing digital identity",
+    "uid" : "be7377628dae7cd4",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708231322,
+      "stop" : 1746708231355,
+      "duration" : 33
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "NTEU edits a digital identity",
+    "uid" : "15d9c5be2aa2913c",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708231356,
+      "stop" : 1746708231388,
+      "duration" : 32
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "NTEU deletes a digital identity",
+    "uid" : "29220e3cfdb03f2f",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708231389,
+      "stop" : 1746708231422,
+      "duration" : 33
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "NTEU initiates device onboarding using a zero-touch protocol",
+    "uid" : "13c368a58cc9b706",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708231422,
+      "stop" : 1746708231455,
+      "duration" : 33
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "UI provides clear feedback to the NTEU",
+    "uid" : "8a9b383ef3fdde1c",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708231455,
+      "stop" : 1746708231489,
+      "duration" : 34
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Create a new identity -- @1.1 ",
+    "uid" : "892409d6623a37e6",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708231491,
+      "stop" : 1746708232087,
+      "duration" : 596
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "ID1234", "AliceID" ]
+  }, {
+    "name" : "Create a new identity -- @1.2 ",
+    "uid" : "435f530b1df06e84",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708232087,
+      "stop" : 1746708232659,
+      "duration" : 572
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "ID5678", "BobID" ]
+  }, {
+    "name" : "View an existing identity -- @1.1 ",
+    "uid" : "fb474676aa44dde",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708232660,
+      "stop" : 1746708233228,
+      "duration" : 568
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "ID1234", "AliceID" ]
+  }, {
+    "name" : "View an existing identity -- @1.2 ",
+    "uid" : "ad29fefa6810c5f9",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708233229,
+      "stop" : 1746708233797,
+      "duration" : 568
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "ID5678", "BobID" ]
+  }, {
+    "name" : "Edit an existing identity -- @1.1 ",
+    "uid" : "f8b370fc98c6973b",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708233797,
+      "stop" : 1746708234365,
+      "duration" : 568
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "ID5678", "AliceUpdated", "ID1234", "AliceID" ]
+  }, {
+    "name" : "Edit an existing identity -- @1.2 ",
+    "uid" : "232242e3651317ab",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708234366,
+      "stop" : 1746708234934,
+      "duration" : 568
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "ID9101", "BobUpdated", "ID5678", "BobID" ]
+  }, {
+    "name" : "Delete an existing identity -- @1.1 ",
+    "uid" : "45e89378156a8a8c",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708234935,
+      "stop" : 1746708235504,
+      "duration" : 569
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "ID5678", "AliceUpdated" ]
+  }, {
+    "name" : "Delete an existing identity -- @1.2 ",
+    "uid" : "58411bca4b3ddb82",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708235504,
+      "stop" : 1746708236073,
+      "duration" : 569
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "ID9101", "BobUpdated" ]
+  }, {
+    "name" : "Handle non-existent identities",
+    "uid" : "9cb7c78ec65613c0",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "broken",
+    "time" : {
+      "start" : 1746708236073,
+      "stop" : 1746708236643,
+      "duration" : 570
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Successfully renew a certificate -- @1.1 ",
+    "uid" : "17092b58b07fa2af",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708236645,
+      "stop" : 1746708237216,
+      "duration" : 571
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "CERT1234" ]
+  }, {
+    "name" : "Successfully renew a certificate -- @1.2 ",
+    "uid" : "9d6f5826bc5db1d6",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708237216,
+      "stop" : 1746708237834,
+      "duration" : 618
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "CERT5678" ]
+  }, {
+    "name" : "Successfully revoke a certificate -- @1.1 ",
+    "uid" : "b00af75948e12e6e",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708237834,
+      "stop" : 1746708238405,
+      "duration" : 571
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "CERT9101" ]
+  }, {
+    "name" : "Successfully revoke a certificate -- @1.2 ",
+    "uid" : "4a7749595d658dd3",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708238405,
+      "stop" : 1746708238975,
+      "duration" : 570
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "CERT1121" ]
+  }, {
+    "name" : "Attempt to renew a non-existent certificate",
+    "uid" : "15153b090504894",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708238976,
+      "stop" : 1746708239550,
+      "duration" : 574
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Attempt to revoke a non-existent certificate",
+    "uid" : "edcf617a5053205c",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708239551,
+      "stop" : 1746708240120,
+      "duration" : 569
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Attempt to renew a revoked certificate -- @1.1 ",
+    "uid" : "442fccc893fa1add",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708240120,
+      "stop" : 1746708240690,
+      "duration" : 570
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "CERT3131" ]
+  }, {
+    "name" : "Attempt to renew a revoked certificate -- @1.2 ",
+    "uid" : "9a7b355392910c0f",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708240690,
+      "stop" : 1746708241260,
+      "duration" : 570
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "CERT4151" ]
+  }, {
+    "name" : "Attempt to revoke an already revoked certificate -- @1.1 ",
+    "uid" : "f28e644e421d3e5c",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708241261,
+      "stop" : 1746708241832,
+      "duration" : 571
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "CERT6161" ]
+  }, {
+    "name" : "Attempt to revoke an already revoked certificate -- @1.2 ",
+    "uid" : "4b843520905489c2",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708241832,
+      "stop" : 1746708242404,
+      "duration" : 572
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "CERT7171" ]
+  }, {
+    "name" : "Successfully create a new identity -- @1.1 ",
+    "uid" : "6e15999a9f72d6e8",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708242407,
+      "stop" : 1746708242438,
+      "duration" : 31
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "alice123", "Alice Smith" ]
+  }, {
+    "name" : "Successfully create a new identity -- @1.2 ",
+    "uid" : "dc3553c57acc4466",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708242438,
+      "stop" : 1746708242468,
+      "duration" : 30
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "bob567", "Bob Johnson" ]
+  }, {
+    "name" : "Retrieve an existing identity -- @1.1 ",
+    "uid" : "136bfa9d382db643",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708242469,
+      "stop" : 1746708242499,
+      "duration" : 30
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "alice123", "Alice Smith" ]
+  }, {
+    "name" : "Retrieve an existing identity -- @1.2 ",
+    "uid" : "a3943dac16c32210",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708242499,
+      "stop" : 1746708242530,
+      "duration" : 31
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "bob567", "Bob Johnson" ]
+  }, {
+    "name" : "Update an existing identity -- @1.1 ",
+    "uid" : "cdf2b3245de88da0",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708242531,
+      "stop" : 1746708242561,
+      "duration" : 30
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "alice123", "Alice Cooper" ]
+  }, {
+    "name" : "Update an existing identity -- @1.2 ",
+    "uid" : "e7747c4cf188c985",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708242562,
+      "stop" : 1746708242593,
+      "duration" : 31
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "bob567", "Robert Jones" ]
+  }, {
+    "name" : "Delete an identity -- @1.1 ",
+    "uid" : "ccad5dc21a694e82",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708242593,
+      "stop" : 1746708242624,
+      "duration" : 31
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "alice123" ]
+  }, {
+    "name" : "Delete an identity -- @1.2 ",
+    "uid" : "cf4b0ea76467089f",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708242624,
+      "stop" : 1746708242655,
+      "duration" : 31
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "bob567" ]
+  }, {
+    "name" : "Attempt to access the API without authentication",
+    "uid" : "3a1539920ee9b7e6",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708242655,
+      "stop" : 1746708242686,
+      "duration" : 31
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Attempt to retrieve a non-existent identity -- @1.1 ",
+    "uid" : "dcd200bfb9560f45",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708242686,
+      "stop" : 1746708242717,
+      "duration" : 31
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "unknown123" ]
+  }, {
+    "name" : "Attempt to retrieve a non-existent identity -- @1.2 ",
+    "uid" : "2ea249c33368c44b",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708242717,
+      "stop" : 1746708242748,
+      "duration" : 31
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "invalid567" ]
+  }, {
+    "name" : "Verifying the backup mechanism -- @1.1 ",
+    "uid" : "1f69bee36ac48578",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708242749,
+      "stop" : 1746708243327,
+      "duration" : 578
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "backup_20250128" ]
+  }, {
+    "name" : "Verifying the restoration mechanism -- @1.1 ",
+    "uid" : "8739cc135f9148f3",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708243327,
+      "stop" : 1746708243899,
+      "duration" : 572
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "backup_20250128" ]
+  }, {
+    "name" : "Verifying the system update mechanism",
+    "uid" : "65758b6a8baae163",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708243899,
+      "stop" : 1746708244476,
+      "duration" : 577
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "trustpoint.devices.tests",
+    "children" : [ {
+      "name" : "test_credential_download",
+      "children" : [ {
+        "name" : "test_otp_generation",
+        "uid" : "88d2fc89fc1e33f8",
+        "parentUid" : "9691aa2a4dc720a3a5d14458e8fb2ee3",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708244180,
+          "stop" : 1746708244181,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_token_invalidation",
+        "uid" : "5381f5fd650d2122",
+        "parentUid" : "9691aa2a4dc720a3a5d14458e8fb2ee3",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708244418,
+          "stop" : 1746708244421,
+          "duration" : 3
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_otp_use_once",
+        "uid" : "c732d9ac6aa3cbe0",
+        "parentUid" : "9691aa2a4dc720a3a5d14458e8fb2ee3",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708244735,
+          "stop" : 1746708244736,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_otp_max_attempts",
+        "uid" : "248ccc9f58fc5830",
+        "parentUid" : "9691aa2a4dc720a3a5d14458e8fb2ee3",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708245050,
+          "stop" : 1746708245053,
+          "duration" : 3
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "9691aa2a4dc720a3a5d14458e8fb2ee3"
+    }, {
+      "name" : "test_model_delete",
+      "children" : [ {
+        "name" : "test_device_delete_revocation",
+        "uid" : "74458823d98cbf7d",
+        "parentUid" : "75e153d5cca4cf9a56d8f1824ae3b900",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708245279,
+          "stop" : 1746708245300,
+          "duration" : 21
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_multi_device_delete",
+        "uid" : "3337671f948eb06",
+        "parentUid" : "75e153d5cca4cf9a56d8f1824ae3b900",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708245669,
+          "stop" : 1746708245688,
+          "duration" : 19
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_domain_delete",
+        "uid" : "cb8cef1b2b6cc2a0",
+        "parentUid" : "75e153d5cca4cf9a56d8f1824ae3b900",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708245972,
+          "stop" : 1746708245991,
+          "duration" : 19
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_ca_delete_with_issued_certificates",
+        "uid" : "e155d5610cb0adf7",
+        "parentUid" : "75e153d5cca4cf9a56d8f1824ae3b900",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708246303,
+          "stop" : 1746708246306,
+          "duration" : 3
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "75e153d5cca4cf9a56d8f1824ae3b900"
+    } ],
+    "uid" : "c534426baa197b103a7e8377f6cb91be"
+  }, {
+    "name" : "Logging user actions -- @1.1 ",
+    "uid" : "ae921e7dd7d41975",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708244479,
+      "stop" : 1746708245085,
+      "duration" : 606
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "create" ]
+  }, {
+    "name" : "Logging user actions -- @1.2 ",
+    "uid" : "46e801f87732293a",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708245085,
+      "stop" : 1746708245656,
+      "duration" : 571
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "update" ]
+  }, {
+    "name" : "Logging user actions -- @1.3 ",
+    "uid" : "fcb82d393dc3c96a",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708245657,
+      "stop" : 1746708246229,
+      "duration" : 572
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "delete" ]
+  }, {
+    "name" : "Retrieving and filtering logs -- @1.1 ",
+    "uid" : "62a3ee588618a48c",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708246230,
+      "stop" : 1746708246804,
+      "duration" : 574
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "user", "last 24 hours" ]
+  }, {
+    "name" : "trustpoint.est.tests",
+    "children" : [ {
+      "name" : "test_est_interface",
+      "children" : [ {
+        "name" : "test_post_authentication_failure",
+        "uid" : "d83f5cc2fb86048",
+        "parentUid" : "e789cc191c05d748f8fa23fb459a4bbd",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708246321,
+          "stop" : 1746708246329,
+          "duration" : 8
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_get_credential_for_certificate",
+        "uid" : "8b1969dd727286fb",
+        "parentUid" : "e789cc191c05d748f8fa23fb459a4bbd",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708251434,
+          "stop" : 1746708251436,
+          "duration" : 2
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_authenticate_username_password_success",
+        "uid" : "3a3c11372ea2ee32",
+        "parentUid" : "e789cc191c05d748f8fa23fb459a4bbd",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708251446,
+          "stop" : 1746708251447,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_authenticate_username_password_missing_header",
+        "uid" : "f575aad982fdc386",
+        "parentUid" : "e789cc191c05d748f8fa23fb459a4bbd",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708251457,
+          "stop" : 1746708251457,
+          "duration" : 0
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_issue_credential_invalid_template",
+        "uid" : "a7d0e545159860cf",
+        "parentUid" : "e789cc191c05d748f8fa23fb459a4bbd",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708251469,
+          "stop" : 1746708251470,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "e789cc191c05d748f8fa23fb459a4bbd"
+    } ],
+    "uid" : "33f72b91a6d028e01fb7f5226c3f1872"
+  }, {
+    "name" : "trustpoint.pki.tests",
+    "children" : [ {
+      "name" : "test_auto_gen_pki",
+      "children" : [ {
+        "name" : "test_auto_gen_pki[RSA2048SHA256]",
+        "uid" : "a16da4086094bd42",
+        "parentUid" : "59cc35fe2d461924389e58955e510b44",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708246341,
+          "stop" : 1746708246705,
+          "duration" : 364
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "'RSA2048SHA256'" ]
+      }, {
+        "name" : "test_auto_gen_pki[SECP256R1SHA256]",
+        "uid" : "c54731c62bc95f8c",
+        "parentUid" : "59cc35fe2d461924389e58955e510b44",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708246718,
+          "stop" : 1746708246798,
+          "duration" : 80
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "'SECP256R1SHA256'" ]
+      } ],
+      "uid" : "59cc35fe2d461924389e58955e510b44"
+    } ],
+    "uid" : "492daaf7d0b3bb970444dae23e3dc037"
+  }, {
+    "name" : "Retrieving and filtering logs -- @1.2 ",
+    "uid" : "f8b23d566ca9766e",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708246805,
+      "stop" : 1746708247376,
+      "duration" : 571
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "event type", "last 7 days" ]
+  }, {
+    "name" : "trustpoint.pki.tests.test_models",
+    "children" : [ {
+      "name" : "test_certificate_extensions",
+      "children" : [ {
+        "name" : "test_key_usage_ext",
+        "uid" : "5c10d66c1bbc6d57",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708246875,
+          "stop" : 1746708246965,
+          "duration" : 90
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_san_ext",
+        "uid" : "ff2d78b1cbd6bbdb",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708247127,
+          "stop" : 1746708247216,
+          "duration" : 89
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_ian_ext",
+        "uid" : "bc968986f97ff5c",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708247263,
+          "stop" : 1746708247348,
+          "duration" : 85
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_basic_constraints_ext",
+        "uid" : "714763d7ee063ae4",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708247385,
+          "stop" : 1746708247466,
+          "duration" : 81
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_authority_key_identifier_ext",
+        "uid" : "930ace599abbc5cb",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708247655,
+          "stop" : 1746708247740,
+          "duration" : 85
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_subject_key_identifier_ext",
+        "uid" : "4c5bc02b5eb995e",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708247792,
+          "stop" : 1746708247871,
+          "duration" : 79
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_certificate_policies_multiple_entries",
+        "uid" : "4688fe310217fb27",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708247952,
+          "stop" : 1746708248039,
+          "duration" : 87
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_extended_key_usage_ext",
+        "uid" : "9d30751645859b50",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708248099,
+          "stop" : 1746708248178,
+          "duration" : 79
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_name_constraints_ext",
+        "uid" : "5c1213397fce832f",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708248219,
+          "stop" : 1746708248312,
+          "duration" : 93
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_authority_information_access_extension",
+        "uid" : "5f9f3b5052951d4e",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708248396,
+          "stop" : 1746708248480,
+          "duration" : 84
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_subject_information_access_extension",
+        "uid" : "88eb0ff6887334c5",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708248518,
+          "stop" : 1746708248599,
+          "duration" : 81
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_inhibit_any_policy",
+        "uid" : "a61e4c615c6e917a",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708248622,
+          "stop" : 1746708248700,
+          "duration" : 78
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_policy_constraints",
+        "uid" : "62eb87b93fcee528",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708248731,
+          "stop" : 1746708248811,
+          "duration" : 80
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_freshest_crl",
+        "uid" : "9f71be53b7da393e",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708248847,
+          "stop" : 1746708248847,
+          "duration" : 0
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_extension_deletion",
+        "uid" : "292d66d263fc0c67",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708248905,
+          "stop" : 1746708249022,
+          "duration" : 117
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_multi_extension_deletion",
+        "uid" : "6d2ca72b46f0abfa",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708249082,
+          "stop" : 1746708249198,
+          "duration" : 116
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_basic_certificate_deletion",
+        "uid" : "86a05a2b6a600310",
+        "parentUid" : "b7f98a9b3bcb0dced2b1f572e6bbc457",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708249325,
+          "stop" : 1746708249331,
+          "duration" : 6
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "b7f98a9b3bcb0dced2b1f572e6bbc457"
+    }, {
+      "name" : "test_certificate_model",
+      "children" : [ {
+        "name" : "test_save_certificate_method",
+        "uid" : "3ade8c9d535eb5e6",
+        "parentUid" : "07fc1ad69861f1ee0c6181b46839bf1f",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708249402,
+          "stop" : 1746708249486,
+          "duration" : 84
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_save_certificate_with_serializer",
+        "uid" : "b55cfa58769f3917",
+        "parentUid" : "07fc1ad69861f1ee0c6181b46839bf1f",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708249549,
+          "stop" : 1746708249628,
+          "duration" : 79
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "07fc1ad69861f1ee0c6181b46839bf1f"
+    }, {
+      "name" : "test_certificate_values",
+      "children" : [ {
+        "name" : "test_certificate_status",
+        "uid" : "f77ba73961cb0405",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708249690,
+          "stop" : 1746708249691,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_is_self_signed",
+        "uid" : "d96127bf098fe12c",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708249759,
+          "stop" : 1746708249760,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_common_name",
+        "uid" : "f23caff49959736e",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708249868,
+          "stop" : 1746708249869,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_fingerprint",
+        "uid" : "dba299e472ca4439",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708249956,
+          "stop" : 1746708249957,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_signature_algorithm_oid",
+        "uid" : "7cc52d92d7a1432d",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250033,
+          "stop" : 1746708250034,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_signature_value",
+        "uid" : "57799c00da222b58",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250087,
+          "stop" : 1746708250088,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_certificate_version",
+        "uid" : "b6dd6bd069e280d1",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250124,
+          "stop" : 1746708250125,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_serial_number",
+        "uid" : "a5498b2232cc7ca5",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250167,
+          "stop" : 1746708250168,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_issuer_attributes",
+        "uid" : "2b6a84ce80b5b9f2",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250222,
+          "stop" : 1746708250223,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_issuer_public_bytes",
+        "uid" : "33a3fbdca83d103",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250267,
+          "stop" : 1746708250268,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_validity_period",
+        "uid" : "4128aed6dec901e7",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250342,
+          "stop" : 1746708250342,
+          "duration" : 0
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_subject_attributes",
+        "uid" : "4a7a8068ed500843",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250394,
+          "stop" : 1746708250396,
+          "duration" : 2
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_certificate_pem",
+        "uid" : "b17aec621f7062ca",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250473,
+          "stop" : 1746708250474,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_public_key_pem",
+        "uid" : "26cf270d68612a9a",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250549,
+          "stop" : 1746708250550,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_subject_public_bytes",
+        "uid" : "a26ced54b59c0a93",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250598,
+          "stop" : 1746708250599,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_created_at_timestamp",
+        "uid" : "53a132b775529ebc",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250640,
+          "stop" : 1746708250640,
+          "duration" : 0
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_ca_attributes",
+        "uid" : "5fd95e73deebcd6",
+        "parentUid" : "3dfc3834ecca84da5ec0d5f22cdcc844",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250710,
+          "stop" : 1746708250711,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "3dfc3834ecca84da5ec0d5f22cdcc844"
+    }, {
+      "name" : "test_domain_model",
+      "children" : [ {
+        "name" : "test_attributes_and_properties",
+        "uid" : "930f718330a64690",
+        "parentUid" : "b83dda4696f1f33a67d1f62dcac53834",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250883,
+          "stop" : 1746708250884,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "b83dda4696f1f33a67d1f62dcac53834"
+    }, {
+      "name" : "test_issuing_ca_model",
+      "children" : [ {
+        "name" : "test_attributes_and_properties",
+        "uid" : "e2ed0ea9a793e18a",
+        "parentUid" : "9981ce5fdbfa355483353531bd71f9b5",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250935,
+          "stop" : 1746708250936,
+          "duration" : 1
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_issue_crl",
+        "uid" : "c88844db10409756",
+        "parentUid" : "9981ce5fdbfa355483353531bd71f9b5",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708250977,
+          "stop" : 1746708251023,
+          "duration" : 46
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_revoke_all_issued_certificates_and_crl",
+        "uid" : "92f3fd9b431aba9c",
+        "parentUid" : "9981ce5fdbfa355483353531bd71f9b5",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708251099,
+          "stop" : 1746708251312,
+          "duration" : 213
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "test_issuing_ca_delete",
+        "uid" : "718ea8cba35ede5c",
+        "parentUid" : "9981ce5fdbfa355483353531bd71f9b5",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746708251407,
+          "stop" : 1746708251421,
+          "duration" : 14
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "9981ce5fdbfa355483353531bd71f9b5"
+    } ],
+    "uid" : "709193ed45518a8f8cc34fd0c23e8518"
+  }, {
+    "name" : "Configuring logging settings -- @1.1 ",
+    "uid" : "eab140371b508e1",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708247377,
+      "stop" : 1746708247953,
+      "duration" : 576
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "DEBUG" ]
+  }, {
+    "name" : "Configuring logging settings -- @1.2 ",
+    "uid" : "55e2674769e99dac",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708247953,
+      "stop" : 1746708248526,
+      "duration" : 573
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "INFO" ]
+  }, {
+    "name" : "Configuring logging settings -- @1.3 ",
+    "uid" : "45aa50731484a33c",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708248526,
+      "stop" : 1746708249098,
+      "duration" : 572
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "WARNING" ]
+  }, {
+    "name" : "Ensuring log storage and integrity",
+    "uid" : "b5293cd14c53da0b",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708249099,
+      "stop" : 1746708249671,
+      "duration" : 572
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Successful auto-generation of an issuing CA",
+    "uid" : "2c8d91fa9bcfa431",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708249672,
+      "stop" : 1746708250244,
+      "duration" : 572
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Auto-generation with different configurations -- @1.1 ",
+    "uid" : "efcb9524e07e2f4",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708250245,
+      "stop" : 1746708250818,
+      "duration" : 573
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "2048", "CA_Test1", "365" ]
+  }, {
+    "name" : "Auto-generation with different configurations -- @1.2 ",
+    "uid" : "2342378be8d9a570",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708250818,
+      "stop" : 1746708251392,
+      "duration" : 574
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "4096", "Secure_CA", "730" ]
+  }, {
+    "name" : "Handling missing parameters during CA generation",
+    "uid" : "8fd639e7560cf18a",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708251393,
+      "stop" : 1746708251965,
+      "duration" : 572
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Verification of generated CA details",
+    "uid" : "9a2cdf644c5da072",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708251966,
+      "stop" : 1746708252539,
+      "duration" : 573
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Ensuring the CA can issue certificates",
+    "uid" : "19363a71639662a7",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708252540,
+      "stop" : 1746708253113,
+      "duration" : 573
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "A device successfully requests a certificate",
+    "uid" : "7a5db09bd5c79f5",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253114,
+      "stop" : 1746708253146,
+      "duration" : 32
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "An onboarded device renews its certificate",
+    "uid" : "1ca9a8ce7e8e9ee6",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253147,
+      "stop" : 1746708253178,
+      "duration" : 31
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Unauthorized device attempts to access the CMP endpoint",
+    "uid" : "4d861ec76c75474a",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253179,
+      "stop" : 1746708253211,
+      "duration" : 32
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Admin revokes a device certificate",
+    "uid" : "36d8ca4eee3792dd",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253211,
+      "stop" : 1746708253308,
+      "duration" : 97
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "High load certificate issuance -- @1.1 ",
+    "uid" : "86abce0b754baf78",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253308,
+      "stop" : 1746708253340,
+      "duration" : 32
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "500", "100" ]
+  }, {
+    "name" : "High load certificate issuance -- @1.2 ",
+    "uid" : "821a586e19b270f5",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253341,
+      "stop" : 1746708253373,
+      "duration" : 32
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "1000", "1000" ]
+  }, {
+    "name" : "A device successfully requests a certificate",
+    "uid" : "b4dad4b6c2974525",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253374,
+      "stop" : 1746708253406,
+      "duration" : 32
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "An onboarded device renews its certificate",
+    "uid" : "b4f185b99c6cc97e",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253407,
+      "stop" : 1746708253440,
+      "duration" : 33
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Unauthorized device attempts to access the EST endpoint",
+    "uid" : "551f1039b6b08f99",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253440,
+      "stop" : 1746708253477,
+      "duration" : 37
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Admin revokes a device certificate",
+    "uid" : "7013e6f8e685421e",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253477,
+      "stop" : 1746708253515,
+      "duration" : 38
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "High load certificate issuance -- @1.1 ",
+    "uid" : "9090422bbc09eafd",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253515,
+      "stop" : 1746708253572,
+      "duration" : 57
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "500", "100" ]
+  }, {
+    "name" : "High load certificate issuance -- @1.2 ",
+    "uid" : "65036d4e65778a88",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253573,
+      "stop" : 1746708253610,
+      "duration" : 37
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "1000", "1000" ]
+  }, {
+    "name" : "Default language selection based on browser settings -- @1.1 ",
+    "uid" : "b3accf959f8294ec",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253613,
+      "stop" : 1746708253650,
+      "duration" : 37
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "English" ]
+  }, {
+    "name" : "Default language selection based on browser settings -- @1.2 ",
+    "uid" : "e2fbe179b46acff1",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253650,
+      "stop" : 1746708253686,
+      "duration" : 36
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "German" ]
+  }, {
+    "name" : "Default language selection based on browser settings -- @1.3 ",
+    "uid" : "53ecaef360f75a6d",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253686,
+      "stop" : 1746708253721,
+      "duration" : 35
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "Spanish" ]
+  }, {
+    "name" : "Default language selection based on browser settings -- @1.4 ",
+    "uid" : "61b14a062e7bba37",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253721,
+      "stop" : 1746708253757,
+      "duration" : 36
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "French" ]
+  }, {
+    "name" : "User manually selects a different language -- @1.1 ",
+    "uid" : "3a02255dad5bdd3e",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253758,
+      "stop" : 1746708253793,
+      "duration" : 35
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "English" ]
+  }, {
+    "name" : "User manually selects a different language -- @1.2 ",
+    "uid" : "c50d990d0dcc002b",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253794,
+      "stop" : 1746708253830,
+      "duration" : 36
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "German" ]
+  }, {
+    "name" : "User manually selects a different language -- @1.3 ",
+    "uid" : "ec5e174477b253d7",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253830,
+      "stop" : 1746708253866,
+      "duration" : 36
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "Spanish" ]
+  }, {
+    "name" : "User manually selects a different language -- @1.4 ",
+    "uid" : "3c9d2e8e77812284",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253867,
+      "stop" : 1746708253903,
+      "duration" : 36
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "French" ]
+  }, {
+    "name" : "Language setting persists after logout -- @1.1 ",
+    "uid" : "4ade8e3433f52f0f",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253904,
+      "stop" : 1746708253940,
+      "duration" : 36
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "English" ]
+  }, {
+    "name" : "Language setting persists after logout -- @1.2 ",
+    "uid" : "580b5037aba7bab1",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253940,
+      "stop" : 1746708253976,
+      "duration" : 36
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "German" ]
+  }, {
+    "name" : "Language setting persists after logout -- @1.3 ",
+    "uid" : "77c96ec367663f9c",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708253977,
+      "stop" : 1746708254013,
+      "duration" : 36
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "Spanish" ]
+  }, {
+    "name" : "Language setting persists after logout -- @1.4 ",
+    "uid" : "341b548533c72e67",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708254013,
+      "stop" : 1746708254049,
+      "duration" : 36
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "French" ]
+  }, {
+    "name" : "Verify UI elements are translated correctly -- @1.1 ",
+    "uid" : "39d4f138b0d3aed4",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708254050,
+      "stop" : 1746708254086,
+      "duration" : 36
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "English" ]
+  }, {
+    "name" : "Verify UI elements are translated correctly -- @1.2 ",
+    "uid" : "9ef1f92e314fd589",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708254087,
+      "stop" : 1746708254122,
+      "duration" : 35
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "German" ]
+  }, {
+    "name" : "Verify UI elements are translated correctly -- @1.3 ",
+    "uid" : "d14c0d695c5afb64",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708254123,
+      "stop" : 1746708254158,
+      "duration" : 35
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "Spanish" ]
+  }, {
+    "name" : "Verify UI elements are translated correctly -- @1.4 ",
+    "uid" : "ffa9231482499547",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708254158,
+      "stop" : 1746708254195,
+      "duration" : 37
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "French" ]
+  }, {
+    "name" : "Admin creates one time password",
+    "uid" : "18db59594fddc186",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "passed",
+    "time" : {
+      "start" : 1746708254195,
+      "stop" : 1746708255199,
+      "duration" : 1004
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "User enters one time password correctly",
+    "uid" : "be1481f41134cb61",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "passed",
+    "time" : {
+      "start" : 1746708255200,
+      "stop" : 1746708256134,
+      "duration" : 934
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "User enters one time password incorrectly",
+    "uid" : "185aa056cb16187a",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "passed",
+    "time" : {
+      "start" : 1746708256135,
+      "stop" : 1746708256182,
+      "duration" : 47
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "User downloads credential on remote device browser",
+    "uid" : "9fceda4686feb03c",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "passed",
+    "time" : {
+      "start" : 1746708256183,
+      "stop" : 1746708257193,
+      "duration" : 1010
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Admin sets security level for a component -- @1.1 ",
+    "uid" : "de13085f6a61d7cf",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708257194,
+      "stop" : 1746708257774,
+      "duration" : 580
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "TP_Client_01", "High" ]
+  }, {
+    "name" : "Admin sets security level for a component -- @1.2 ",
+    "uid" : "470641fce408936b",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708257775,
+      "stop" : 1746708258356,
+      "duration" : 581
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "TP_Client_02", "Medium" ]
+  }, {
+    "name" : "Admin sets security level for a component -- @1.3 ",
+    "uid" : "28f9a88806f4ac4",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708258356,
+      "stop" : 1746708258935,
+      "duration" : 579
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "TP_Client_03", "Low" ]
+  }, {
+    "name" : "Admin modifies an existing security level",
+    "uid" : "c771d9a6949f60c1",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708258935,
+      "stop" : 1746708259519,
+      "duration" : 584
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Invalid security level input is rejected",
+    "uid" : "3a16a96bc1ea2582",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708259520,
+      "stop" : 1746708260099,
+      "duration" : 579
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Security level persists after system restart",
+    "uid" : "d2adde72b3bb021f",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708260099,
+      "stop" : 1746708260680,
+      "duration" : 581
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Security level affects system behavior",
+    "uid" : "54028066c4a579bd",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708260680,
+      "stop" : 1746708261258,
+      "duration" : 578
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Security configuration changes are logged",
+    "uid" : "d1912a70113ee668",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708261259,
+      "stop" : 1746708261838,
+      "duration" : 579
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Authorized user accesses certificate templates -- @1.1 ",
+    "uid" : "577b08e20eb69aa6",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708261840,
+      "stop" : 1746708262419,
+      "duration" : 579
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "granted", "Admin" ]
+  }, {
+    "name" : "Authorized user accesses certificate templates -- @1.2 ",
+    "uid" : "7e0130f04481fd07",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708262420,
+      "stop" : 1746708263000,
+      "duration" : 580
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "denied", "User" ]
+  }, {
+    "name" : "Unauthorized user attempts to modify a certificate template -- @1.1 ",
+    "uid" : "1dc923b0977fecbd",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708263000,
+      "stop" : 1746708263582,
+      "duration" : 582
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "allowed", "Admin", "Secure_Template" ]
+  }, {
+    "name" : "Unauthorized user attempts to modify a certificate template -- @1.2 ",
+    "uid" : "7f3da314f56e3a0c",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708263582,
+      "stop" : 1746708264159,
+      "duration" : 577
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ "denied", "User", "Secure_Template" ]
+  }, {
+    "name" : "Secure handling of certificate templates",
+    "uid" : "c2d14d47ade6098a",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708264160,
+      "stop" : 1746708264740,
+      "duration" : 580
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Unauthorized deletion attempt",
+    "uid" : "35412654ed734f1a",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708264741,
+      "stop" : 1746708265320,
+      "duration" : 579
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Secure export of certificate templates",
+    "uid" : "462b16ab3ed55b27",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708265321,
+      "stop" : 1746708265903,
+      "duration" : 582
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  }, {
+    "name" : "Unauthorized export attempt",
+    "uid" : "218bd7aad18fc25d",
+    "parentUid" : "98d3104e051c652961429bf95fa0b5d6",
+    "status" : "failed",
+    "time" : {
+      "start" : 1746708265903,
+      "stop" : 1746708266483,
+      "duration" : 580
+    },
+    "flaky" : false,
+    "newFailed" : false,
+    "parameters" : [ ]
+  } ],
+  "name" : "suites"
+}
