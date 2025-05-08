@@ -1,22 +1,3 @@
 [ {
-  "buildOrder" : 18,
-  "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/18",
-  "reportName" : "Allure Report with history",
-  "data" : {
-    "duration" : 35296
-  }
-}, {
-  "buildOrder" : 17,
-  "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/17",
-  "reportName" : "Allure Report with history",
-  "data" : {
-    "duration" : 36303
-  }
-}, {
-  "buildOrder" : 16,
-  "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/16",
-  "reportName" : "Allure Report with history",
-  "data" : {
-    "duration" : 35457
-  }
+  "data" : { }
 } ]
