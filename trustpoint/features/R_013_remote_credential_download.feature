@@ -1,7 +1,7 @@
 @allure.label.owner:Aircoookie
-@allure.label.epic: R_013 Remote Credential Download
-@allure.label.suite: R_013 Remote Credential Download
-@allure.label.package: R_013 Remote Credential Download
+@allure.label.epic:R_013_Remote_Credential_Download
+@allure.label.suite:R_013_Remote_Credential_Download
+@allure.label.package:R_013_Remote_Credential_Download
 @fixture.r013.setup
 Feature: R_013 Remote Credential Download
   The system must allow users to securely download an issued credential
