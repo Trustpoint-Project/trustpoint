@@ -1,0 +1,2 @@
+2025-05-08 14:09:08 - pki.util.x509 - INFO - Issuing CA 'test_local_ca' saved successfully.
+2025-05-08 14:09:08 - devices.models - INFO - Deleting all issued credentials for device test_device

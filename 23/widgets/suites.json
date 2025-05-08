@@ -1,0 +1,70 @@
+{
+  "total" : 100,
+  "items" : [ {
+    "uid" : "3a065da41cbea9525442ec8cf4b3efe7",
+    "name" : "R_011_EST_Endpoint_for_Onboarded_Devices",
+    "statistic" : {
+      "failed" : 6,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 6
+    }
+  }, {
+    "uid" : "709193ed45518a8f8cc34fd0c23e8518",
+    "name" : "trustpoint.pki.tests.test_models",
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 41,
+      "unknown" : 0,
+      "total" : 41
+    }
+  }, {
+    "uid" : "c534426baa197b103a7e8377f6cb91be",
+    "name" : "trustpoint.devices.tests",
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 8,
+      "unknown" : 0,
+      "total" : 8
+    }
+  }, {
+    "uid" : "33f72b91a6d028e01fb7f5226c3f1872",
+    "name" : "trustpoint.est.tests",
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 5,
+      "unknown" : 0,
+      "total" : 5
+    }
+  }, {
+    "uid" : "f3c4ef6c57c747f284099fe361b8c36a",
+    "name" : "R_013_Remote_Credential_Download",
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 4,
+      "unknown" : 0,
+      "total" : 4
+    }
+  }, {
+    "uid" : "492daaf7d0b3bb970444dae23e3dc037",
+    "name" : "trustpoint.pki.tests",
+    "statistic" : {
+      "failed" : 0,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 2,
+      "unknown" : 0,
+      "total" : 2
+    }
+  } ]
+}

@@ -1,0 +1,114 @@
+{
+  "total" : 68,
+  "items" : [ {
+    "uid" : "6dcbf2a4e605aabe59587af59a24f840",
+    "name" : "Language Selection and Translation",
+    "statistic" : {
+      "failed" : 16,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 16
+    }
+  }, {
+    "uid" : "4308df1279c1f4d97e51cf4ef4e6aa1a",
+    "name" : "REST API interaction with TrustPoint",
+    "statistic" : {
+      "failed" : 11,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 11
+    }
+  }, {
+    "uid" : "14437424295d5d6ed72b637747d6fc95",
+    "name" : "Certificate lifecycle management via TPC_Web",
+    "statistic" : {
+      "failed" : 10,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 10
+    }
+  }, {
+    "uid" : "a43616a4aa33b93e77497eec93bdb6ab",
+    "name" : "Logging Capabilities",
+    "statistic" : {
+      "failed" : 9,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 9
+    }
+  }, {
+    "uid" : "4902ca7e1b76c673fd64b5d1e0dff108",
+    "name" : "Manage digital identities via TPC_Web",
+    "statistic" : {
+      "failed" : 8,
+      "broken" : 1,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 9
+    }
+  }, {
+    "uid" : "922df7a7fc26e1c18362ad5f2e9ada72",
+    "name" : "NTEU Identity Management and Zero-Touch Onboarding",
+    "statistic" : {
+      "failed" : 8,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 8
+    }
+  }, {
+    "uid" : "0bed90d2c2918057fc867ac1f725b6a1",
+    "name" : "Security Level Configuration",
+    "statistic" : {
+      "failed" : 8,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 8
+    }
+  }, {
+    "uid" : "429d81c59517bd63f3e77c0eb5685444",
+    "name" : "Certificate Template Security",
+    "statistic" : {
+      "failed" : 8,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 8
+    }
+  }, {
+    "uid" : "82859bc23442656f976afbdcf68ed0d4",
+    "name" : "Auto-Generated Issuing CAs",
+    "statistic" : {
+      "failed" : 6,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 6
+    }
+  }, {
+    "uid" : "0c269b9ff06d637808ceee5d4b973f53",
+    "name" : "CMP Endpoint for Onboarded Devices",
+    "statistic" : {
+      "failed" : 6,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 6
+    }
+  } ]
+}

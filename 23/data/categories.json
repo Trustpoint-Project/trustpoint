@@ -1,0 +1,1489 @@
+{
+  "uid" : "4b4757e66a1912dae1a509f688f20b0f",
+  "children" : [ {
+    "name" : "Product defects",
+    "children" : [ {
+      "name" : "AssertionError: STEP: Given the user is an NTEU with username valid_user and password correct_pw\n",
+      "children" : [ {
+        "name" : "NTEU logs into the system -- @1.1 ",
+        "uid" : "69e7aa42a9a9bd12",
+        "parentUid" : "80293ca90dd51dcf08a2aa32cb4a8a50",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713346739,
+          "stop" : 1746713346809,
+          "duration" : 70
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "successful", "correct_pw", "valid_user" ]
+      } ],
+      "uid" : "80293ca90dd51dcf08a2aa32cb4a8a50"
+    }, {
+      "name" : "AssertionError: STEP: Given the user is an NTEU with username invalid_user and password wrong_pw\n",
+      "children" : [ {
+        "name" : "NTEU logs into the system -- @1.2 ",
+        "uid" : "1a8ab6b6833de202",
+        "parentUid" : "ac0bd8e37f94697af934dc9f63aefed3",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713346809,
+          "stop" : 1746713346843,
+          "duration" : 34
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "failed", "wrong_pw", "invalid_user" ]
+      } ],
+      "uid" : "ac0bd8e37f94697af934dc9f63aefed3"
+    }, {
+      "name" : "AssertionError: STEP: Given the NTEU is logged in\n",
+      "children" : [ {
+        "name" : "NTEU creates a digital identity",
+        "uid" : "545a74ed72b6a7b0",
+        "parentUid" : "78c1165c9d7703ee9cdd8d7a9b9ef127",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713346843,
+          "stop" : 1746713346876,
+          "duration" : 33
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "NTEU views an existing digital identity",
+        "uid" : "2a1deff7ea8b1b3e",
+        "parentUid" : "78c1165c9d7703ee9cdd8d7a9b9ef127",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713346877,
+          "stop" : 1746713346909,
+          "duration" : 32
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "NTEU edits a digital identity",
+        "uid" : "2424d521bacd2850",
+        "parentUid" : "78c1165c9d7703ee9cdd8d7a9b9ef127",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713346909,
+          "stop" : 1746713346942,
+          "duration" : 33
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "NTEU deletes a digital identity",
+        "uid" : "4b051e9f0971bd1d",
+        "parentUid" : "78c1165c9d7703ee9cdd8d7a9b9ef127",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713346943,
+          "stop" : 1746713346976,
+          "duration" : 33
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "NTEU initiates device onboarding using a zero-touch protocol",
+        "uid" : "2508f68d1fe0b00c",
+        "parentUid" : "78c1165c9d7703ee9cdd8d7a9b9ef127",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713346976,
+          "stop" : 1746713347010,
+          "duration" : 34
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "78c1165c9d7703ee9cdd8d7a9b9ef127"
+    }, {
+      "name" : "AssertionError: STEP: Given the NTEU is on any action page\n",
+      "children" : [ {
+        "name" : "UI provides clear feedback to the NTEU",
+        "uid" : "484ac5eea5c6555d",
+        "parentUid" : "fc969d73772d6a80b195b2f7a0cecb40",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713347010,
+          "stop" : 1746713347044,
+          "duration" : 34
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "fc969d73772d6a80b195b2f7a0cecb40"
+    }, {
+      "name" : "AssertionError: Step not implemented: Navigate to Create Identity page.\n",
+      "children" : [ {
+        "name" : "Create a new identity -- @1.1 ",
+        "uid" : "b68ad5e04d16ba79",
+        "parentUid" : "d43f91b061e275fb29a4ab7a22906ba0",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713347046,
+          "stop" : 1746713347649,
+          "duration" : 603
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "ID1234", "AliceID" ]
+      }, {
+        "name" : "Create a new identity -- @1.2 ",
+        "uid" : "48d3e87e817cbfac",
+        "parentUid" : "d43f91b061e275fb29a4ab7a22906ba0",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713347649,
+          "stop" : 1746713348218,
+          "duration" : 569
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "ID5678", "BobID" ]
+      } ],
+      "uid" : "d43f91b061e275fb29a4ab7a22906ba0"
+    }, {
+      "name" : "AssertionError: Step not implemented: Identity creation or precondition setup.\n",
+      "children" : [ {
+        "name" : "View an existing identity -- @1.1 ",
+        "uid" : "d4a87ebce40752c1",
+        "parentUid" : "4880261fa61fc78c60148e1a523b8b55",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713348219,
+          "stop" : 1746713348788,
+          "duration" : 569
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "ID1234", "AliceID" ]
+      }, {
+        "name" : "View an existing identity -- @1.2 ",
+        "uid" : "7f6d99abd55ba227",
+        "parentUid" : "4880261fa61fc78c60148e1a523b8b55",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713348788,
+          "stop" : 1746713349359,
+          "duration" : 571
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "ID5678", "BobID" ]
+      }, {
+        "name" : "Edit an existing identity -- @1.1 ",
+        "uid" : "62f1bd04dcd1bb73",
+        "parentUid" : "4880261fa61fc78c60148e1a523b8b55",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713349359,
+          "stop" : 1746713349949,
+          "duration" : 590
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "ID5678", "AliceUpdated", "ID1234", "AliceID" ]
+      }, {
+        "name" : "Edit an existing identity -- @1.2 ",
+        "uid" : "9a62320993bcf92f",
+        "parentUid" : "4880261fa61fc78c60148e1a523b8b55",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713349949,
+          "stop" : 1746713350530,
+          "duration" : 581
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "ID9101", "BobUpdated", "ID5678", "BobID" ]
+      }, {
+        "name" : "Delete an existing identity -- @1.1 ",
+        "uid" : "bfa73edc619138d",
+        "parentUid" : "4880261fa61fc78c60148e1a523b8b55",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713350530,
+          "stop" : 1746713351098,
+          "duration" : 568
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "ID5678", "AliceUpdated" ]
+      }, {
+        "name" : "Delete an existing identity -- @1.2 ",
+        "uid" : "a7c72ea8c5665f88",
+        "parentUid" : "4880261fa61fc78c60148e1a523b8b55",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713351098,
+          "stop" : 1746713351669,
+          "duration" : 571
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "ID9101", "BobUpdated" ]
+      } ],
+      "uid" : "4880261fa61fc78c60148e1a523b8b55"
+    }, {
+      "name" : "AssertionError: Step not implemented: Set certificate near expiration.\n",
+      "children" : [ {
+        "name" : "Successfully renew a certificate -- @1.1 ",
+        "uid" : "9efb2ace178f6394",
+        "parentUid" : "13ba3f84823b0ec4747f12c064c3488d",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713352244,
+          "stop" : 1746713352827,
+          "duration" : 583
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "CERT1234" ]
+      }, {
+        "name" : "Successfully renew a certificate -- @1.2 ",
+        "uid" : "bf4c626cc18551e2",
+        "parentUid" : "13ba3f84823b0ec4747f12c064c3488d",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713352828,
+          "stop" : 1746713353478,
+          "duration" : 650
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "CERT5678" ]
+      } ],
+      "uid" : "13ba3f84823b0ec4747f12c064c3488d"
+    }, {
+      "name" : "AssertionError: Step not implemented: Set certificate to active state.\n",
+      "children" : [ {
+        "name" : "Successfully revoke a certificate -- @1.1 ",
+        "uid" : "f0b5e5fbc60c2224",
+        "parentUid" : "80362d21a560895773b9203beaef95fd",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713353479,
+          "stop" : 1746713354055,
+          "duration" : 576
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "CERT9101" ]
+      }, {
+        "name" : "Successfully revoke a certificate -- @1.2 ",
+        "uid" : "5eb40f30d377e163",
+        "parentUid" : "80362d21a560895773b9203beaef95fd",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713354056,
+          "stop" : 1746713354628,
+          "duration" : 572
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "CERT1121" ]
+      } ],
+      "uid" : "80362d21a560895773b9203beaef95fd"
+    }, {
+      "name" : "AssertionError: STEP: When the admin attempts to <renew> a non-existent certificate \"NONEXISTENT\"\n",
+      "children" : [ {
+        "name" : "Attempt to renew a non-existent certificate",
+        "uid" : "902c558762025fba",
+        "parentUid" : "9bbca7885a64396f3142939b6de1971b",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713354628,
+          "stop" : 1746713355205,
+          "duration" : 577
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "9bbca7885a64396f3142939b6de1971b"
+    }, {
+      "name" : "AssertionError: STEP: When the admin attempts to <revoke> a non-existent certificate \"NONEXISTENT\"\n",
+      "children" : [ {
+        "name" : "Attempt to revoke a non-existent certificate",
+        "uid" : "14a3c71716adad7",
+        "parentUid" : "b15bdf90931647d8f9e93505e2d80145",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713355205,
+          "stop" : 1746713355778,
+          "duration" : 573
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "b15bdf90931647d8f9e93505e2d80145"
+    }, {
+      "name" : "AssertionError: Step not implemented: Set certificate to revoked state.\n",
+      "children" : [ {
+        "name" : "Attempt to renew a revoked certificate -- @1.1 ",
+        "uid" : "8984237f2f0e1f13",
+        "parentUid" : "55bf9f4780d64bc1943955d662b6ad9b",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713355778,
+          "stop" : 1746713356348,
+          "duration" : 570
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "CERT3131" ]
+      }, {
+        "name" : "Attempt to renew a revoked certificate -- @1.2 ",
+        "uid" : "6e04be8438ea64ef",
+        "parentUid" : "55bf9f4780d64bc1943955d662b6ad9b",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713356349,
+          "stop" : 1746713356919,
+          "duration" : 570
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "CERT4151" ]
+      }, {
+        "name" : "Attempt to revoke an already revoked certificate -- @1.1 ",
+        "uid" : "681169fa6685f34d",
+        "parentUid" : "55bf9f4780d64bc1943955d662b6ad9b",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713356919,
+          "stop" : 1746713357492,
+          "duration" : 573
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "CERT6161" ]
+      }, {
+        "name" : "Attempt to revoke an already revoked certificate -- @1.2 ",
+        "uid" : "e9964207d725fe5b",
+        "parentUid" : "55bf9f4780d64bc1943955d662b6ad9b",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713357492,
+          "stop" : 1746713358062,
+          "duration" : 570
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "CERT7171" ]
+      } ],
+      "uid" : "55bf9f4780d64bc1943955d662b6ad9b"
+    }, {
+      "name" : "AssertionError: Step not implemented: API client authentication.\n",
+      "children" : [ {
+        "name" : "Successfully create a new identity -- @1.1 ",
+        "uid" : "818181b16068c790",
+        "parentUid" : "ab725f00fa64b2036c9b8c74e0efb129",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713358065,
+          "stop" : 1746713358096,
+          "duration" : 31
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "alice123", "Alice Smith" ]
+      }, {
+        "name" : "Successfully create a new identity -- @1.2 ",
+        "uid" : "20d98f9b2625303b",
+        "parentUid" : "ab725f00fa64b2036c9b8c74e0efb129",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713358096,
+          "stop" : 1746713358126,
+          "duration" : 30
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "bob567", "Bob Johnson" ]
+      }, {
+        "name" : "Retrieve an existing identity -- @1.1 ",
+        "uid" : "2289f70b449d8c03",
+        "parentUid" : "ab725f00fa64b2036c9b8c74e0efb129",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713358127,
+          "stop" : 1746713358157,
+          "duration" : 30
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "alice123", "Alice Smith" ]
+      }, {
+        "name" : "Retrieve an existing identity -- @1.2 ",
+        "uid" : "8a7de6e07176b0a5",
+        "parentUid" : "ab725f00fa64b2036c9b8c74e0efb129",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713358157,
+          "stop" : 1746713358187,
+          "duration" : 30
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "bob567", "Bob Johnson" ]
+      }, {
+        "name" : "Update an existing identity -- @1.1 ",
+        "uid" : "60f3d0046cb9f52f",
+        "parentUid" : "ab725f00fa64b2036c9b8c74e0efb129",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713358187,
+          "stop" : 1746713358217,
+          "duration" : 30
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "alice123", "Alice Cooper" ]
+      }, {
+        "name" : "Update an existing identity -- @1.2 ",
+        "uid" : "610504a6eebf7dd",
+        "parentUid" : "ab725f00fa64b2036c9b8c74e0efb129",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713358217,
+          "stop" : 1746713358247,
+          "duration" : 30
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "bob567", "Robert Jones" ]
+      }, {
+        "name" : "Delete an identity -- @1.1 ",
+        "uid" : "6c897ac4369c9169",
+        "parentUid" : "ab725f00fa64b2036c9b8c74e0efb129",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713358247,
+          "stop" : 1746713358277,
+          "duration" : 30
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "alice123" ]
+      }, {
+        "name" : "Delete an identity -- @1.2 ",
+        "uid" : "8daa59dd4b06a438",
+        "parentUid" : "ab725f00fa64b2036c9b8c74e0efb129",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713358277,
+          "stop" : 1746713358307,
+          "duration" : 30
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "bob567" ]
+      }, {
+        "name" : "Attempt to access the API without authentication",
+        "uid" : "faf06d2e82419506",
+        "parentUid" : "ab725f00fa64b2036c9b8c74e0efb129",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713358307,
+          "stop" : 1746713358337,
+          "duration" : 30
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "Attempt to retrieve a non-existent identity -- @1.1 ",
+        "uid" : "cb7d9ef8bea3237d",
+        "parentUid" : "ab725f00fa64b2036c9b8c74e0efb129",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713358337,
+          "stop" : 1746713358367,
+          "duration" : 30
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "unknown123" ]
+      }, {
+        "name" : "Attempt to retrieve a non-existent identity -- @1.2 ",
+        "uid" : "84053899975fda46",
+        "parentUid" : "ab725f00fa64b2036c9b8c74e0efb129",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713358367,
+          "stop" : 1746713358396,
+          "duration" : 29
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "invalid567" ]
+      } ],
+      "uid" : "ab725f00fa64b2036c9b8c74e0efb129"
+    }, {
+      "name" : "AssertionError: STEP: When the admin initiates a system backup\n",
+      "children" : [ {
+        "name" : "Verifying the backup mechanism -- @1.1 ",
+        "uid" : "33c5ab0383fd8686",
+        "parentUid" : "deb5b01f21ce988890a39b135a381cb3",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713358397,
+          "stop" : 1746713358969,
+          "duration" : 572
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "backup_20250128" ]
+      } ],
+      "uid" : "deb5b01f21ce988890a39b135a381cb3"
+    }, {
+      "name" : "AssertionError: STEP: When the admin uploads a backup file backup_20250128\n",
+      "children" : [ {
+        "name" : "Verifying the restoration mechanism -- @1.1 ",
+        "uid" : "31b7f64b74a17732",
+        "parentUid" : "6a50ea74b1ad2c3ca14f60bf368ce680",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713358970,
+          "stop" : 1746713359544,
+          "duration" : 574
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "backup_20250128" ]
+      } ],
+      "uid" : "6a50ea74b1ad2c3ca14f60bf368ce680"
+    }, {
+      "name" : "AssertionError: STEP: When the admin triggers a system update\n",
+      "children" : [ {
+        "name" : "Verifying the system update mechanism",
+        "uid" : "31534febed67de37",
+        "parentUid" : "bdbf82469c3dcb7b149cba44816751c7",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713359545,
+          "stop" : 1746713360131,
+          "duration" : 586
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "bdbf82469c3dcb7b149cba44816751c7"
+    }, {
+      "name" : "AssertionError: STEP: When the admin performs an action create\n",
+      "children" : [ {
+        "name" : "Logging user actions -- @1.1 ",
+        "uid" : "31f03118c036d9bc",
+        "parentUid" : "e2b356d01a2bc2c5438cd6e4f1451b83",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713360133,
+          "stop" : 1746713360720,
+          "duration" : 587
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "create" ]
+      } ],
+      "uid" : "e2b356d01a2bc2c5438cd6e4f1451b83"
+    }, {
+      "name" : "AssertionError: STEP: When the admin performs an action update\n",
+      "children" : [ {
+        "name" : "Logging user actions -- @1.2 ",
+        "uid" : "a84c7fe15ac437b4",
+        "parentUid" : "c862c3b6e4907732a4b554ec92ee4fdc",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713360721,
+          "stop" : 1746713361296,
+          "duration" : 575
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "update" ]
+      } ],
+      "uid" : "c862c3b6e4907732a4b554ec92ee4fdc"
+    }, {
+      "name" : "AssertionError: STEP: When the admin performs an action delete\n",
+      "children" : [ {
+        "name" : "Logging user actions -- @1.3 ",
+        "uid" : "e7e69ccaaabbe7f7",
+        "parentUid" : "15064ed4af44c6c90eb4636d4e7fb548",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713361297,
+          "stop" : 1746713361868,
+          "duration" : 571
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "delete" ]
+      } ],
+      "uid" : "15064ed4af44c6c90eb4636d4e7fb548"
+    }, {
+      "name" : "AssertionError: STEP: When the admin retrieves logs for the time range last 24 hours\n",
+      "children" : [ {
+        "name" : "Retrieving and filtering logs -- @1.1 ",
+        "uid" : "df5c959580018ddd",
+        "parentUid" : "f9840f9d9770f76d25d59f84465cb548",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713361868,
+          "stop" : 1746713362451,
+          "duration" : 583
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "user", "last 24 hours" ]
+      } ],
+      "uid" : "f9840f9d9770f76d25d59f84465cb548"
+    }, {
+      "name" : "AssertionError: STEP: When the admin retrieves logs for the time range last 7 days\n",
+      "children" : [ {
+        "name" : "Retrieving and filtering logs -- @1.2 ",
+        "uid" : "1e42745cdd487790",
+        "parentUid" : "07eb5647abcdfb22ff5ea85b7f8bc6f0",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713362452,
+          "stop" : 1746713363026,
+          "duration" : 574
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "event type", "last 7 days" ]
+      } ],
+      "uid" : "07eb5647abcdfb22ff5ea85b7f8bc6f0"
+    }, {
+      "name" : "AssertionError: STEP: When the admin modifies logging configuration to DEBUG\n",
+      "children" : [ {
+        "name" : "Configuring logging settings -- @1.1 ",
+        "uid" : "778874f8d5d26f3c",
+        "parentUid" : "d1eda2af4e3cd498e77b04d78f24202a",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713363027,
+          "stop" : 1746713363600,
+          "duration" : 573
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "DEBUG" ]
+      } ],
+      "uid" : "d1eda2af4e3cd498e77b04d78f24202a"
+    }, {
+      "name" : "AssertionError: STEP: When the admin modifies logging configuration to INFO\n",
+      "children" : [ {
+        "name" : "Configuring logging settings -- @1.2 ",
+        "uid" : "37cf5632047dcde",
+        "parentUid" : "9842dfa533ac765828e3f1b88b4d8df7",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713363601,
+          "stop" : 1746713364174,
+          "duration" : 573
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "INFO" ]
+      } ],
+      "uid" : "9842dfa533ac765828e3f1b88b4d8df7"
+    }, {
+      "name" : "AssertionError: STEP: When the admin modifies logging configuration to WARNING\n",
+      "children" : [ {
+        "name" : "Configuring logging settings -- @1.3 ",
+        "uid" : "cbb8eec5722cf7fd",
+        "parentUid" : "57e64c983e400cdfacf64aa6b751327e",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713364175,
+          "stop" : 1746713364747,
+          "duration" : 572
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "WARNING" ]
+      } ],
+      "uid" : "57e64c983e400cdfacf64aa6b751327e"
+    }, {
+      "name" : "AssertionError: STEP: When the system restarts\n",
+      "children" : [ {
+        "name" : "Ensuring log storage and integrity",
+        "uid" : "abb800ef8477b9fc",
+        "parentUid" : "400fc6c7b0bb44fc97bf78981f2f1ded",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713364747,
+          "stop" : 1746713365338,
+          "duration" : 591
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "400fc6c7b0bb44fc97bf78981f2f1ded"
+    }, {
+      "name" : "AssertionError: STEP: When the admin configures the system for auto-generation of an Issuing CA\n",
+      "children" : [ {
+        "name" : "Successful auto-generation of an issuing CA",
+        "uid" : "3a09b833389ddc18",
+        "parentUid" : "7b23cced28e113dbf187888e047868f7",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713365339,
+          "stop" : 1746713365970,
+          "duration" : 631
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "7b23cced28e113dbf187888e047868f7"
+    }, {
+      "name" : "AssertionError: STEP: When the admin sets the following CA configuration\n",
+      "children" : [ {
+        "name" : "Auto-generation with different configurations -- @1.1 ",
+        "uid" : "61f22e3b3dad22b",
+        "parentUid" : "7ecc0a2b9c501cda7160e1c33e356475",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713365971,
+          "stop" : 1746713366597,
+          "duration" : 626
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "2048", "CA_Test1", "365" ]
+      }, {
+        "name" : "Auto-generation with different configurations -- @1.2 ",
+        "uid" : "4c618709f06c5dd9",
+        "parentUid" : "7ecc0a2b9c501cda7160e1c33e356475",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713366597,
+          "stop" : 1746713367181,
+          "duration" : 584
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "4096", "Secure_CA", "730" ]
+      } ],
+      "uid" : "7ecc0a2b9c501cda7160e1c33e356475"
+    }, {
+      "name" : "AssertionError: STEP: When the admin attempts to generate an Issuing CA with incomplete configuration\n",
+      "children" : [ {
+        "name" : "Handling missing parameters during CA generation",
+        "uid" : "747de83304da273f",
+        "parentUid" : "c990c9c2bff7505f3bedbc92445ebd1e",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713367181,
+          "stop" : 1746713367758,
+          "duration" : 577
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "c990c9c2bff7505f3bedbc92445ebd1e"
+    }, {
+      "name" : "AssertionError: STEP: When the admin inspects the generated CA details\n",
+      "children" : [ {
+        "name" : "Verification of generated CA details",
+        "uid" : "6ae7f81130680e4d",
+        "parentUid" : "d0a6642a73787f02830fcd4513b398c0",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713367759,
+          "stop" : 1746713368331,
+          "duration" : 572
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "d0a6642a73787f02830fcd4513b398c0"
+    }, {
+      "name" : "AssertionError: STEP: When the admin attempts to issue a certificate using the generated CA\n",
+      "children" : [ {
+        "name" : "Ensuring the CA can issue certificates",
+        "uid" : "4132248fae1d9f14",
+        "parentUid" : "7b936fcf84726db4f7e6e14b147a3075",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713368331,
+          "stop" : 1746713368904,
+          "duration" : 573
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "7b936fcf84726db4f7e6e14b147a3075"
+    }, {
+      "name" : "AssertionError: STEP: Given the endpoint is available\n",
+      "children" : [ {
+        "name" : "A device successfully requests a certificate",
+        "uid" : "e8c0d5e6df1637f1",
+        "parentUid" : "df0016cb090c6005c2ef48daced9dc8d",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713368905,
+          "stop" : 1746713368936,
+          "duration" : 31
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "An onboarded device renews its certificate",
+        "uid" : "60b42c11a5ba1c1d",
+        "parentUid" : "df0016cb090c6005c2ef48daced9dc8d",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713368937,
+          "stop" : 1746713368968,
+          "duration" : 31
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "Unauthorized device attempts to access the CMP endpoint",
+        "uid" : "d698e0953f8abde6",
+        "parentUid" : "df0016cb090c6005c2ef48daced9dc8d",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713368968,
+          "stop" : 1746713368999,
+          "duration" : 31
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "Admin revokes a device certificate",
+        "uid" : "aa06d3b32f152dcc",
+        "parentUid" : "df0016cb090c6005c2ef48daced9dc8d",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713368999,
+          "stop" : 1746713369093,
+          "duration" : 94
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "High load certificate issuance -- @1.1 ",
+        "uid" : "81972ea9f6c38c30",
+        "parentUid" : "df0016cb090c6005c2ef48daced9dc8d",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369093,
+          "stop" : 1746713369125,
+          "duration" : 32
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "500", "100" ]
+      }, {
+        "name" : "High load certificate issuance -- @1.2 ",
+        "uid" : "62c863fe2bc0e235",
+        "parentUid" : "df0016cb090c6005c2ef48daced9dc8d",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369125,
+          "stop" : 1746713369157,
+          "duration" : 32
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "1000", "1000" ]
+      }, {
+        "name" : "A device successfully requests a certificate",
+        "uid" : "ef97466e001d763e",
+        "parentUid" : "df0016cb090c6005c2ef48daced9dc8d",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369158,
+          "stop" : 1746713369191,
+          "duration" : 33
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "An onboarded device renews its certificate",
+        "uid" : "43f7dbaa0bf1bed4",
+        "parentUid" : "df0016cb090c6005c2ef48daced9dc8d",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369192,
+          "stop" : 1746713369225,
+          "duration" : 33
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "Unauthorized device attempts to access the EST endpoint",
+        "uid" : "6209d79a468926a2",
+        "parentUid" : "df0016cb090c6005c2ef48daced9dc8d",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369225,
+          "stop" : 1746713369260,
+          "duration" : 35
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "Admin revokes a device certificate",
+        "uid" : "66c59420872d8e77",
+        "parentUid" : "df0016cb090c6005c2ef48daced9dc8d",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369260,
+          "stop" : 1746713369297,
+          "duration" : 37
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "High load certificate issuance -- @1.1 ",
+        "uid" : "9e3b5af5a020b59",
+        "parentUid" : "df0016cb090c6005c2ef48daced9dc8d",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369297,
+          "stop" : 1746713369333,
+          "duration" : 36
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "500", "100" ]
+      }, {
+        "name" : "High load certificate issuance -- @1.2 ",
+        "uid" : "4be0658ef36e64f0",
+        "parentUid" : "df0016cb090c6005c2ef48daced9dc8d",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369334,
+          "stop" : 1746713369369,
+          "duration" : 35
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "1000", "1000" ]
+      } ],
+      "uid" : "df0016cb090c6005c2ef48daced9dc8d"
+    }, {
+      "name" : "AssertionError: STEP: Given the system supports the following languages\n",
+      "children" : [ {
+        "name" : "Default language selection based on browser settings -- @1.1 ",
+        "uid" : "d8e73e1c6bef9ae",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369372,
+          "stop" : 1746713369408,
+          "duration" : 36
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "English" ]
+      }, {
+        "name" : "Default language selection based on browser settings -- @1.2 ",
+        "uid" : "212231ebbd1f559d",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369409,
+          "stop" : 1746713369444,
+          "duration" : 35
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "German" ]
+      }, {
+        "name" : "Default language selection based on browser settings -- @1.3 ",
+        "uid" : "e0b31269db6db8f6",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369445,
+          "stop" : 1746713369480,
+          "duration" : 35
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "Spanish" ]
+      }, {
+        "name" : "Default language selection based on browser settings -- @1.4 ",
+        "uid" : "6428c818eb8d1ffe",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369481,
+          "stop" : 1746713369517,
+          "duration" : 36
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "French" ]
+      }, {
+        "name" : "User manually selects a different language -- @1.1 ",
+        "uid" : "c8658e93f24483c9",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369518,
+          "stop" : 1746713369556,
+          "duration" : 38
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "English" ]
+      }, {
+        "name" : "User manually selects a different language -- @1.2 ",
+        "uid" : "67e93a09b09ab146",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369557,
+          "stop" : 1746713369593,
+          "duration" : 36
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "German" ]
+      }, {
+        "name" : "User manually selects a different language -- @1.3 ",
+        "uid" : "49930caac4e787ce",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369594,
+          "stop" : 1746713369631,
+          "duration" : 37
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "Spanish" ]
+      }, {
+        "name" : "User manually selects a different language -- @1.4 ",
+        "uid" : "4de93b68a040efec",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369631,
+          "stop" : 1746713369666,
+          "duration" : 35
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "French" ]
+      }, {
+        "name" : "Language setting persists after logout -- @1.1 ",
+        "uid" : "cf87d6acd7fda031",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369667,
+          "stop" : 1746713369701,
+          "duration" : 34
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "English" ]
+      }, {
+        "name" : "Language setting persists after logout -- @1.2 ",
+        "uid" : "a2a2fd53e95fb244",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369702,
+          "stop" : 1746713369738,
+          "duration" : 36
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "German" ]
+      }, {
+        "name" : "Language setting persists after logout -- @1.3 ",
+        "uid" : "5d215bda2b2226fb",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369739,
+          "stop" : 1746713369776,
+          "duration" : 37
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "Spanish" ]
+      }, {
+        "name" : "Language setting persists after logout -- @1.4 ",
+        "uid" : "8b48d46daaebe172",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369776,
+          "stop" : 1746713369812,
+          "duration" : 36
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "French" ]
+      }, {
+        "name" : "Verify UI elements are translated correctly -- @1.1 ",
+        "uid" : "634251da1444c092",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369813,
+          "stop" : 1746713369849,
+          "duration" : 36
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "English" ]
+      }, {
+        "name" : "Verify UI elements are translated correctly -- @1.2 ",
+        "uid" : "350fbf714c232250",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369849,
+          "stop" : 1746713369885,
+          "duration" : 36
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "German" ]
+      }, {
+        "name" : "Verify UI elements are translated correctly -- @1.3 ",
+        "uid" : "96cf6dcae74d5d1b",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369886,
+          "stop" : 1746713369921,
+          "duration" : 35
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "Spanish" ]
+      }, {
+        "name" : "Verify UI elements are translated correctly -- @1.4 ",
+        "uid" : "fde64461288a615e",
+        "parentUid" : "6af898ed42e2dc3a32cd9f087dc52a10",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713369921,
+          "stop" : 1746713369956,
+          "duration" : 35
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "French" ]
+      } ],
+      "uid" : "6af898ed42e2dc3a32cd9f087dc52a10"
+    }, {
+      "name" : "AssertionError: STEP: Given the TrustPoint component TP_Client_01 is selected\n",
+      "children" : [ {
+        "name" : "Admin sets security level for a component -- @1.1 ",
+        "uid" : "d2b1136d95767e37",
+        "parentUid" : "cb835814e9e9aa88cc96abee4bf1ee54",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713372675,
+          "stop" : 1746713373256,
+          "duration" : 581
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "TP_Client_01", "High" ]
+      } ],
+      "uid" : "cb835814e9e9aa88cc96abee4bf1ee54"
+    }, {
+      "name" : "AssertionError: STEP: Given the TrustPoint component TP_Client_02 is selected\n",
+      "children" : [ {
+        "name" : "Admin sets security level for a component -- @1.2 ",
+        "uid" : "e99ae5ea9577c9ab",
+        "parentUid" : "94ec6fa1358af315c411a555f45f3b0d",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713373257,
+          "stop" : 1746713373835,
+          "duration" : 578
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "TP_Client_02", "Medium" ]
+      } ],
+      "uid" : "94ec6fa1358af315c411a555f45f3b0d"
+    }, {
+      "name" : "AssertionError: STEP: Given the TrustPoint component TP_Client_03 is selected\n",
+      "children" : [ {
+        "name" : "Admin sets security level for a component -- @1.3 ",
+        "uid" : "e5128419b81685c9",
+        "parentUid" : "8c6e5ccc9cddd8bdf67c8f4704651c41",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713373836,
+          "stop" : 1746713374418,
+          "duration" : 582
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "TP_Client_03", "Low" ]
+      } ],
+      "uid" : "8c6e5ccc9cddd8bdf67c8f4704651c41"
+    }, {
+      "name" : "AssertionError: STEP: Given the TrustPoint component \"TP_Client_01\" has security level \"Medium\"\n",
+      "children" : [ {
+        "name" : "Admin modifies an existing security level",
+        "uid" : "e22112fe86162069",
+        "parentUid" : "0ffe599396f5b07034e357d7dcebf00e",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713374418,
+          "stop" : 1746713375001,
+          "duration" : 583
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "0ffe599396f5b07034e357d7dcebf00e"
+    }, {
+      "name" : "AssertionError: STEP: Given the TrustPoint component \"TP_Client_01\" is selected\n",
+      "children" : [ {
+        "name" : "Invalid security level input is rejected",
+        "uid" : "452371474d3d238a",
+        "parentUid" : "6285aaeeec36f65ad59b7661399d68f4",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713375001,
+          "stop" : 1746713375581,
+          "duration" : 580
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "Security configuration changes are logged",
+        "uid" : "d28eed3fe8836f4d",
+        "parentUid" : "6285aaeeec36f65ad59b7661399d68f4",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713376753,
+          "stop" : 1746713377335,
+          "duration" : 582
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "6285aaeeec36f65ad59b7661399d68f4"
+    }, {
+      "name" : "AssertionError: STEP: Given the TrustPoint component \"TP_Client_01\" has security level \"High\"\n",
+      "children" : [ {
+        "name" : "Security level persists after system restart",
+        "uid" : "b23571d260abfbc6",
+        "parentUid" : "040d8e5d305f137b19e9f2d87116d71c",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713375582,
+          "stop" : 1746713376170,
+          "duration" : 588
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "040d8e5d305f137b19e9f2d87116d71c"
+    }, {
+      "name" : "AssertionError: STEP: Given the TrustPoint component \"TPC_Web\" has security level \"High\"\n",
+      "children" : [ {
+        "name" : "Security level affects system behavior",
+        "uid" : "ff1648d176f30473",
+        "parentUid" : "1261fd069d3152a079776a0b3a860219",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713376171,
+          "stop" : 1746713376752,
+          "duration" : 581
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "1261fd069d3152a079776a0b3a860219"
+    }, {
+      "name" : "AssertionError: STEP: Given the user has role Admin\n",
+      "children" : [ {
+        "name" : "Authorized user accesses certificate templates -- @1.1 ",
+        "uid" : "94ce3a82ac8d88fa",
+        "parentUid" : "c5387fd3a26c1f945ffef17718701a77",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713377337,
+          "stop" : 1746713377921,
+          "duration" : 584
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "granted", "Admin" ]
+      }, {
+        "name" : "Unauthorized user attempts to modify a certificate template -- @1.1 ",
+        "uid" : "4f79ae9d7de9eb12",
+        "parentUid" : "c5387fd3a26c1f945ffef17718701a77",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713378504,
+          "stop" : 1746713379087,
+          "duration" : 583
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "allowed", "Admin", "Secure_Template" ]
+      } ],
+      "uid" : "c5387fd3a26c1f945ffef17718701a77"
+    }, {
+      "name" : "AssertionError: STEP: Given the user has role User\n",
+      "children" : [ {
+        "name" : "Authorized user accesses certificate templates -- @1.2 ",
+        "uid" : "62bd2e51ce06771",
+        "parentUid" : "a6f7991fb61d74f2a89551f8fe476335",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713377922,
+          "stop" : 1746713378503,
+          "duration" : 581
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "denied", "User" ]
+      }, {
+        "name" : "Unauthorized user attempts to modify a certificate template -- @1.2 ",
+        "uid" : "dada4c1aea37d585",
+        "parentUid" : "a6f7991fb61d74f2a89551f8fe476335",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713379088,
+          "stop" : 1746713379672,
+          "duration" : 584
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ "denied", "User", "Secure_Template" ]
+      } ],
+      "uid" : "a6f7991fb61d74f2a89551f8fe476335"
+    }, {
+      "name" : "AssertionError: STEP: Given a certificate template named \"Sensitive_Template\" exists\n",
+      "children" : [ {
+        "name" : "Secure handling of certificate templates",
+        "uid" : "d63b809557c74ae4",
+        "parentUid" : "4ce999f512402c355b79cae2d8ada22f",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713379672,
+          "stop" : 1746713380254,
+          "duration" : 582
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "4ce999f512402c355b79cae2d8ada22f"
+    }, {
+      "name" : "AssertionError: STEP: Given a certificate template named \"HighSecurity_Template\" exists\n",
+      "children" : [ {
+        "name" : "Unauthorized deletion attempt",
+        "uid" : "c34ea130bd1c677",
+        "parentUid" : "01dd7827c454a5264488ce7844fb3e33",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713380255,
+          "stop" : 1746713380839,
+          "duration" : 584
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "01dd7827c454a5264488ce7844fb3e33"
+    }, {
+      "name" : "AssertionError: STEP: Given a certificate template named \"Exportable_Template\" exists\n",
+      "children" : [ {
+        "name" : "Secure export of certificate templates",
+        "uid" : "e99bcd624fe7d2a",
+        "parentUid" : "eaff40e1dceb996de6ac25815d1540ee",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713380840,
+          "stop" : 1746713381426,
+          "duration" : 586
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      }, {
+        "name" : "Unauthorized export attempt",
+        "uid" : "54856786dd47db58",
+        "parentUid" : "eaff40e1dceb996de6ac25815d1540ee",
+        "status" : "failed",
+        "time" : {
+          "start" : 1746713381426,
+          "stop" : 1746713382007,
+          "duration" : 581
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "eaff40e1dceb996de6ac25815d1540ee"
+    } ],
+    "uid" : "8fb3a91ba5aaf9de24cc8a92edc82b5d"
+  }, {
+    "name" : "Test defects",
+    "children" : [ {
+      "name" : "TypeError: step_attempt_view_nonexistent() got an unexpected keyword argument 'non_existent_ID'\n",
+      "children" : [ {
+        "name" : "Handle non-existent identities",
+        "uid" : "185e13d3195ff79b",
+        "parentUid" : "691e47e3ffa3d4f58e1a03afe533243e",
+        "status" : "broken",
+        "time" : {
+          "start" : 1746713351670,
+          "stop" : 1746713352242,
+          "duration" : 572
+        },
+        "flaky" : false,
+        "newFailed" : false,
+        "parameters" : [ ]
+      } ],
+      "uid" : "691e47e3ffa3d4f58e1a03afe533243e"
+    } ],
+    "uid" : "bdbf199525818fae7a8651db9eafe741"
+  } ],
+  "name" : "categories"
+}

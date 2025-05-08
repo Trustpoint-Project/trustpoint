@@ -1,0 +1,171 @@
+{
+  "uid" : "4c618709f06c5dd9",
+  "name" : "Auto-generation with different configurations -- @1.2 ",
+  "fullName" : "Auto-Generated Issuing CAs: Auto-generation with different configurations",
+  "historyId" : "7779bcba3d5734bc5d8a5305ff78ca73",
+  "time" : {
+    "start" : 1746713366597,
+    "stop" : 1746713367181,
+    "duration" : 584
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: When the admin sets the following CA configuration\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_008_steps.py\", line 49, in step_when_admin_sets_ca_config\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: When the admin sets the following CA configuration\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_008_steps.py\", line 49, in step_when_admin_sets_ca_config\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1746713366600,
+        "stop" : 1746713367151,
+        "duration" : 551
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the admin sets the following CA configuration:",
+      "time" : {
+        "start" : 1746713367151,
+        "stop" : 1746713367152,
+        "duration" : 1
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: When the admin sets the following CA configuration\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_008_steps.py\", line 49, in step_when_admin_sets_ca_config\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ {
+        "uid" : "5fbbe71c4f6412a8",
+        "name" : ".table",
+        "source" : "5fbbe71c4f6412a8.csv",
+        "type" : "text/csv",
+        "size" : 59
+      } ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 1,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "Then the system generates a CA with:",
+      "time" : {
+        "start" : 1746713367181,
+        "stop" : 1746713367181,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ {
+        "uid" : "98e8751e2aa8894d",
+        "name" : ".table",
+        "source" : "98e8751e2aa8894d.csv",
+        "type" : "text/csv",
+        "size" : 59
+      } ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 1,
+      "shouldDisplayMessage" : false,
+      "hasContent" : true
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 3,
+    "attachmentsCount" : 2,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "feature",
+    "value" : "Auto-Generated Issuing CAs"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "key_size",
+    "value" : "4096"
+  }, {
+    "name" : "subject_name",
+    "value" : "Secure_CA"
+  }, {
+    "name" : "validity",
+    "value" : "730"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 4,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 4
+      },
+      "items" : [ {
+        "uid" : "c8d8a3e79caa610c",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/22/#testresult/c8d8a3e79caa610c",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin sets the following CA configuration\n",
+        "time" : {
+          "start" : 1746711073995,
+          "stop" : 1746711074565,
+          "duration" : 570
+        }
+      }, {
+        "uid" : "b05591d9d38d423e",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/b05591d9d38d423e",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin sets the following CA configuration\n",
+        "time" : {
+          "start" : 1746710239764,
+          "stop" : 1746710240334,
+          "duration" : 570
+        }
+      }, {
+        "uid" : "38192143cd27cba8",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/38192143cd27cba8",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin sets the following CA configuration\n",
+        "time" : {
+          "start" : 1746709785893,
+          "stop" : 1746709786463,
+          "duration" : 570
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "4c618709f06c5dd9.json",
+  "parameterValues" : [ "4096", "Secure_CA", "730" ]
+}

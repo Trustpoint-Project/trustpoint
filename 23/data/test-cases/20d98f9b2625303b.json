@@ -1,0 +1,183 @@
+{
+  "uid" : "20d98f9b2625303b",
+  "name" : "Successfully create a new identity -- @1.2 ",
+  "fullName" : "REST API interaction with TrustPoint: Successfully create a new identity",
+  "historyId" : "6c0df58276061f6d7b1b835253ec8dff",
+  "time" : {
+    "start" : 1746713358096,
+    "stop" : 1746713358126,
+    "duration" : 30
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: Step not implemented: API client authentication.\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/common_steps.py\", line 101, in step_api_client_authenticated\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: Step not implemented: API client authentication.\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/common_steps.py\", line 101, in step_api_client_authenticated\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given an API client is authenticated",
+      "time" : {
+        "start" : 1746713358098,
+        "stop" : 1746713358098,
+        "duration" : 0
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: Step not implemented: API client authentication.\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/common_steps.py\", line 101, in step_api_client_authenticated\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "When the API client sends a POST request to \"/api/identities\" with the following payload:",
+      "time" : {
+        "start" : 1746713358126,
+        "stop" : 1746713358126,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ {
+        "uid" : "17c1a84b5fdb7a70",
+        "name" : ".table",
+        "source" : "17c1a84b5fdb7a70.csv",
+        "type" : "text/csv",
+        "size" : 37
+      } ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 1,
+      "shouldDisplayMessage" : false,
+      "hasContent" : true
+    }, {
+      "name" : "Then the API response should have a status code of 201",
+      "time" : {
+        "start" : 1746713358126,
+        "stop" : 1746713358126,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And the response payload should include the created identity with:",
+      "time" : {
+        "start" : 1746713358126,
+        "stop" : 1746713358126,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ {
+        "uid" : "a2ca0f2a319ad6bc",
+        "name" : ".table",
+        "source" : "a2ca0f2a319ad6bc.csv",
+        "type" : "text/csv",
+        "size" : 37
+      } ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 1,
+      "shouldDisplayMessage" : false,
+      "hasContent" : true
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 2,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "feature",
+    "value" : "REST API interaction with TrustPoint"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "identifier",
+    "value" : "bob567"
+  }, {
+    "name" : "name",
+    "value" : "Bob Johnson"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 4,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 4
+      },
+      "items" : [ {
+        "uid" : "9ee957263bc912dc",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/22/#testresult/9ee957263bc912dc",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+        "time" : {
+          "start" : 1746711065706,
+          "stop" : 1746711065735,
+          "duration" : 29
+        }
+      }, {
+        "uid" : "7e9909b37346a920",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/7e9909b37346a920",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+        "time" : {
+          "start" : 1746710231505,
+          "stop" : 1746710231534,
+          "duration" : 29
+        }
+      }, {
+        "uid" : "198db7de16521f0",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/198db7de16521f0",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+        "time" : {
+          "start" : 1746709777640,
+          "stop" : 1746709777669,
+          "duration" : 29
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "20d98f9b2625303b.json",
+  "parameterValues" : [ "bob567", "Bob Johnson" ]
+}
