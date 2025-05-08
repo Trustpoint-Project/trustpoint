@@ -1,5 +1,5 @@
 @allure.label.owner:Aircoookie
-@allure.label.epic:R_013_Remote_Credential_Download
+@allure.label.epic:Features
 @allure.label.suite:R_013_Remote_Credential_Download
 @allure.label.package:R_013_Remote_Credential_Download
 @fixture.r013.setup
