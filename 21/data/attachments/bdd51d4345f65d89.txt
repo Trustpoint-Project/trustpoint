@@ -1,0 +1,2 @@
+INFO     pki.util.x509:x509.py:169 Issuing CA 'root_ca' saved successfully.
+INFO     trustpoint.pki.models.issuing_ca.IssuingCaModel:issuing_ca.py:174 CRL generation for CA root_ca finished.

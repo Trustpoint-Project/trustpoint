@@ -1,0 +1,4 @@
+2025-05-08 13:17:07 - pki.util.x509 - INFO - Issuing CA 'root_ca' saved successfully.
+2025-05-08 13:17:07 - trustpoint.pki.models.issuing_ca.IssuingCaModel - INFO - All 2 certificates issued by CA root_ca have been revoked.
+2025-05-08 13:17:07 - trustpoint.pki.models.issuing_ca.IssuingCaModel - INFO - CRL generation for CA root_ca finished.
+2025-05-08 13:17:07 - trustpoint.pki.models.issuing_ca.IssuingCaModel - INFO - CRL generation for CA root_ca finished.

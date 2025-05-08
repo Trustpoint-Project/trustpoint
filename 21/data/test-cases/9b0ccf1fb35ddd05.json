@@ -1,0 +1,165 @@
+{
+  "uid" : "9b0ccf1fb35ddd05",
+  "name" : "Admin creates one time password",
+  "fullName" : "R_013 Remote Credential Download: Admin creates one time password",
+  "historyId" : "da17a41ebc0b8fc21291c96879b86789",
+  "time" : {
+    "start" : 1746710243027,
+    "stop" : 1746710243873,
+    "duration" : 846
+  },
+  "status" : "passed",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "passed",
+    "steps" : [ {
+      "name" : "Given the TPC_Web application is running",
+      "time" : {
+        "start" : 1746710243029,
+        "stop" : 1746710243034,
+        "duration" : 5
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given an issued credential is successfully issued",
+      "time" : {
+        "start" : 1746710243034,
+        "stop" : 1746710243282,
+        "duration" : 248
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1746710243282,
+        "stop" : 1746710243827,
+        "duration" : 545
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the admin visits the associated \"Download on Device browser\" view",
+      "time" : {
+        "start" : 1746710243827,
+        "stop" : 1746710243834,
+        "duration" : 7
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then a one-time password is displayed which can be used to download the credential from a remote device",
+      "time" : {
+        "start" : 1746710243834,
+        "stop" : 1746710243839,
+        "duration" : 5
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 5,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "epic",
+    "value" : "R_013_Remote_Credential_Download"
+  }, {
+    "name" : "owner",
+    "value" : "Aircoookie"
+  }, {
+    "name" : "package",
+    "value" : "R_013_Remote_Credential_Download"
+  }, {
+    "name" : "severity",
+    "value" : "critical"
+  }, {
+    "name" : "suite",
+    "value" : "R_013_Remote_Credential_Download"
+  }, {
+    "name" : "tag",
+    "value" : "fixture.r013.setup"
+  }, {
+    "name" : "feature",
+    "value" : "R_013 Remote Credential Download"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "critical",
+    "owner" : "Aircoookie",
+    "retries" : [ ],
+    "categories" : [ ],
+    "history" : {
+      "statistic" : {
+        "failed" : 0,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 2,
+        "unknown" : 0,
+        "total" : 2
+      },
+      "items" : [ {
+        "uid" : "24e7a5414ce9917c",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/24e7a5414ce9917c",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746709789148,
+          "stop" : 1746709790121,
+          "duration" : 973
+        }
+      } ]
+    },
+    "tags" : [ "fixture.r013.setup" ]
+  },
+  "source" : "9b0ccf1fb35ddd05.json",
+  "parameterValues" : [ ]
+}

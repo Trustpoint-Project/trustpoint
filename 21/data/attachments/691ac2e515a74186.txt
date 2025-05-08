@@ -1,0 +1,3 @@
+INFO     trustpoint.est.views.EstSimpleEnrollmentView:views.py:63 EST - SUCCESS - None
+ERROR    trustpoint.est.views.LoggedHttpResponse:views.py:61 EST - ERROR - 400 - Authentication failed
+INFO     trustpoint.est.views.EstSimpleEnrollmentView:views.py:746 Request received: method=POST path=/

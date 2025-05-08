@@ -1,0 +1,172 @@
+{
+  "uid" : "9aa8668ddd4518be",
+  "name" : "Retrieve an existing identity -- @1.2 ",
+  "fullName" : "REST API interaction with TrustPoint: Retrieve an existing identity",
+  "historyId" : "4b1bb3179d8cabf226fd872b34c9bda7",
+  "time" : {
+    "start" : 1746710231563,
+    "stop" : 1746710231592,
+    "duration" : 29
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: Step not implemented: API client authentication.\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/common_steps.py\", line 101, in step_api_client_authenticated\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: Step not implemented: API client authentication.\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/common_steps.py\", line 101, in step_api_client_authenticated\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given an API client is authenticated",
+      "time" : {
+        "start" : 1746710231565,
+        "stop" : 1746710231565,
+        "duration" : 0
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: Step not implemented: API client authentication.\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/common_steps.py\", line 101, in step_api_client_authenticated\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "Given the identity bob567 exists",
+      "time" : {
+        "start" : 1746710231592,
+        "stop" : 1746710231592,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the API client sends a GET request to \"/api/identities/bob567\"",
+      "time" : {
+        "start" : 1746710231592,
+        "stop" : 1746710231592,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then the API response should have a status code of 200",
+      "time" : {
+        "start" : 1746710231592,
+        "stop" : 1746710231592,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And the response payload should include the identity with:",
+      "time" : {
+        "start" : 1746710231592,
+        "stop" : 1746710231592,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ {
+        "uid" : "1e7449bf90915369",
+        "name" : ".table",
+        "source" : "1e7449bf90915369.csv",
+        "type" : "text/csv",
+        "size" : 37
+      } ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 1,
+      "shouldDisplayMessage" : false,
+      "hasContent" : true
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 5,
+    "attachmentsCount" : 1,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "feature",
+    "value" : "REST API interaction with TrustPoint"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "identifier",
+    "value" : "bob567"
+  }, {
+    "name" : "name",
+    "value" : "Bob Johnson"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 2,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 2
+      },
+      "items" : [ {
+        "uid" : "f1b0dc85154f287f",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/f1b0dc85154f287f",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: API client authentication.\n",
+        "time" : {
+          "start" : 1746709777698,
+          "stop" : 1746709777727,
+          "duration" : 29
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "9aa8668ddd4518be.json",
+  "parameterValues" : [ "bob567", "Bob Johnson" ]
+}
