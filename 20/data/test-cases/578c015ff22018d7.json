@@ -1,0 +1,160 @@
+{
+  "uid" : "578c015ff22018d7",
+  "name" : "User downloads credential on remote device browser",
+  "fullName" : "R_013 Remote Credential Download: User downloads credential on remote device browser",
+  "historyId" : "cab5fa3e20c2c5a0d26168b8eed1573b",
+  "time" : {
+    "start" : 1746709790992,
+    "stop" : 1746709791888,
+    "duration" : 896
+  },
+  "status" : "passed",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "passed",
+    "steps" : [ {
+      "name" : "Given the TPC_Web application is running",
+      "time" : {
+        "start" : 1746709790994,
+        "stop" : 1746709790999,
+        "duration" : 5
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given the user is on the credential download page",
+      "time" : {
+        "start" : 1746709790999,
+        "stop" : 1746709791806,
+        "duration" : 807
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And the download token is not yet expired",
+      "time" : {
+        "start" : 1746709791807,
+        "stop" : 1746709791807,
+        "duration" : 0
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the user enters a password to encrypt the credential private key",
+      "time" : {
+        "start" : 1746709791808,
+        "stop" : 1746709791808,
+        "duration" : 0
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And selects a file format",
+      "time" : {
+        "start" : 1746709791808,
+        "stop" : 1746709791854,
+        "duration" : 46
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then the credential will be downloaded to their browser in the requested format",
+      "time" : {
+        "start" : 1746709791855,
+        "stop" : 1746709791855,
+        "duration" : 0
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 6,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "epic",
+    "value" : "R_013_Remote_Credential_Download"
+  }, {
+    "name" : "owner",
+    "value" : "Aircoookie"
+  }, {
+    "name" : "package",
+    "value" : "R_013_Remote_Credential_Download"
+  }, {
+    "name" : "severity",
+    "value" : "critical"
+  }, {
+    "name" : "suite",
+    "value" : "R_013_Remote_Credential_Download"
+  }, {
+    "name" : "tag",
+    "value" : "fixture.r013.setup"
+  }, {
+    "name" : "feature",
+    "value" : "R_013 Remote Credential Download"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "critical",
+    "owner" : "Aircoookie",
+    "retries" : [ ],
+    "categories" : [ ],
+    "tags" : [ "fixture.r013.setup" ]
+  },
+  "source" : "578c015ff22018d7.json",
+  "parameterValues" : [ ]
+}
