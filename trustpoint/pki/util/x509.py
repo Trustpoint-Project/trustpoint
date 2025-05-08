@@ -11,13 +11,13 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509.oid import NameOID
-from django.http import HttpRequest
 from trustpoint_core.serializer import CredentialSerializer
 
 from pki.models import IssuingCaModel
 from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
+    from django.http import HttpRequest
     from trustpoint_core.key_types import PrivateKey
 
 logger = logging.getLogger(__name__)
@@ -122,7 +122,16 @@ class CertificateGenerator:
         elif isinstance(subject_name, x509.Name):
             builder = builder.subject_name(subject_name)
         else:
-            raise TypeError("subject_name must be a string or x509.Name")
+            exc_msg = 'subject_name must be a string or x509.Name'
+            raise TypeError(exc_msg)
+
+        builder = builder.issuer_name(
+            x509.Name(
+                [
+                    x509.NameAttribute(NameOID.COMMON_NAME, issuer_cn),
+                ]
+            )
+        )
 
         builder = builder.not_valid_before(not_valid_before)
         builder = builder.not_valid_after(not_valid_after)
@@ -216,7 +225,7 @@ class CertificateGenerator:
         logger.info("Issuing CA '%s' saved successfully.", unique_name)
 
         return cast(IssuingCaModel, issuing_ca)
-    
+
 
 class ClientCertificateAuthenticationError(Exception):
     """Exception raised for general client certificate authentication failures."""
