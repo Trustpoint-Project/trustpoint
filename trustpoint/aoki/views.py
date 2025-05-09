@@ -4,24 +4,45 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from django.http import JsonResponse
 from django.views import View
+from pki.models.certificate import CertificateModel
+from pki.models.extension import GeneralNameUniformResourceIdentifier, SubjectAlternativeNameExtension
+from pki.models.issuing_ca import IssuingCaModel
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
 
 from trustpoint.views.base import LoggedHttpResponse, LoggerMixin
 
 if TYPE_CHECKING:
-    from cryptography import x509
     from django.http import HttpRequest
 
 
 class AokiNoOwnerIdError(Exception):
-    """Exception raised when no owner ID for the device IDevID in the AOKI request."""
+    """Exception raised when no owner ID is found in the database for the device IDevID in the AOKI request."""
 
 
 class AokiServiceMixin:
     """Mixin for AOKI functionality."""
-    def get_owner_cert(self, idevid_subj_sn: str) -> x509.Certificate:
+    @staticmethod
+    def _get_idevid_owner_san_uri(idevid_cert: x509.Certificate) -> str:
+        """Get the Owner ID SAN URI corresponding to a IDevID certificate.
+
+        Formatted as "<idevid_subj_sn>.aoki.owner.<idevid_x509_sn>.<idevid_sha256_fingerprint>.alt
+        """
+        try:
+            sn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
+            idevid_subj_sn = sn_b.decode() if isinstance(sn_b, bytes) else sn_b
+        except (ValueError, IndexError):
+            idevid_subj_sn = '_'
+        idevid_x509_sn = hex(idevid_cert.serial_number)[2:].zfill(16)
+        idevid_sha256_fingerprint = idevid_cert.fingerprint(hashes.SHA256()).hex()
+        return f'{idevid_subj_sn}.aoki.owner.{idevid_x509_sn}.{idevid_sha256_fingerprint}.alt'
+
+    def get_owner_cert(self, idevid_cert: x509.Certificate) -> CertificateModel:
         """Get the ownership certificate for the given IDevID."""
         # This method should be implemented to retrieve the ownership certificate
         # based on the provided IDevID subject serial number.
@@ -29,15 +50,38 @@ class AokiServiceMixin:
         # Build URI string "<idevid_subj_sn>.<idevid_sha256_fingerprint>.owner.aoki.alt"
         # Check SAN extension in DB for owner cert
         # if present, check that the certificate is in truststore with usage "Device Owner ID"
+        idevid_san_uri = self._get_idevid_owner_san_uri(idevid_cert)
+        gn_uri_query = GeneralNameUniformResourceIdentifier.objects.filter(value=idevid_san_uri)
+        if not gn_uri_query.exists():
+            exc_msg = f'No Owner ID SAN URI found for IDevID with owner SAN URI {idevid_san_uri}.'
+            raise AokiNoOwnerIdError(exc_msg)
+        gn = gn_uri_query.first().general_names_set.first()
+        san_ext = SubjectAlternativeNameExtension.objects.filter(subject_alt_name=gn).first()
+        if not san_ext:
+            exc_msg = f'No SAN extension found for IDevID with owner SAN URI {idevid_san_uri}.'
+            raise AokiNoOwnerIdError(exc_msg)
+        cert = CertificateModel.objects.filter(subject_alternative_name_extension=san_ext).first()
+        if not cert:
+            exc_msg = f'No certificate found for IDevID with owner SAN URI {idevid_san_uri}.'
+            raise AokiNoOwnerIdError(exc_msg)
+        # Check that the certificate is in a truststore with usage "Device Owner ID"
+
+
+        return cert
 
 class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
     """View for handling AOKI initialization requests."""
 
-    http_method_names = ('post',)
+    http_method_names = ('get',)
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
-        """Handle POST requests for AOKI initialization."""
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse | JsonResponse:
+        """Handle GET requests for AOKI initialization."""
         del args, kwargs  # Unused
+        tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
+        if not tls_cert:
+            return LoggedHttpResponse(
+                'No TLS server certificate available. Are you on the development server?', status = 500
+            )
         try:
             client_cert, intermediary_cas = ApacheTLSClientCertExtractor.get_client_cert_as_x509(request)
         except ClientCertificateAuthenticationError:
@@ -46,7 +90,7 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
             )
 
         try:
-            domain, idevid_subj_sn = IDevIDAuthenticator.authenticate_idevid_from_x509_no_device(
+            domain, _idevid_subj_sn = IDevIDAuthenticator.authenticate_idevid_from_x509_no_device(
                 client_cert, intermediary_cas, domain=None)
         except IDevIDAuthenticationError as e:
             return LoggedHttpResponse(
@@ -54,16 +98,40 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
             )
 
         try:
-            self.get_owner_cert(client_cert, idevid_subj_sn)
+            owner_id_cert = self.get_owner_cert(client_cert)
         except AokiNoOwnerIdError:
             return LoggedHttpResponse(
                 'No Owner ID present for this IDevID.', status = 422
             )
 
-        return LoggedHttpResponse(
-            'AOKI initialization request received.',
-            status = 200,
+        # Problem: We need to store an owner credential, not just the cert
+        # Probably should create a new OwnerCredentialModel for this
+        demo_owner_cred = IssuingCaModel.objects.get(unique_name='DevOwnerID')
+
+        aoki_init_response = {
+            'aoki-init': {
+                'version': '1.0',
+                'enrollment_info': {
+                    'protocols': [
+                        {
+                            'protocol': 'EST',
+                            'url': f'/.well-known/est/{domain.unique_name}/domaincredential/'
+                        }
+                    ]
+                },
+                'owner-id-cert': owner_id_cert.get_certificate_serializer().as_pem().decode(),
+                'tls-truststore': tls_cert.credential.certificate.get_certificate_serializer().as_pem().decode()
+            },
+        }
+        resp = JsonResponse(aoki_init_response)
+        resp.headers['AOKI-Signature'] = demo_owner_cred.private_key.sign(
+            data=resp.content,
+            algorithm=hashes.SHA256(),
         )
+        resp.headers['AOKI-Signature-Algorithm'] = 'SHA256'
+        print(resp.content)
+
+        return resp
         # Verify Device IDevID against Truststores
         # (need to figure out how to do this efficiently as we have no domain here)
         # Maybe first look for ownership certs and reference the truststore there?

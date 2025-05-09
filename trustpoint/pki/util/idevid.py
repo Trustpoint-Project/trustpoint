@@ -34,7 +34,7 @@ class IDevIDVerifier(LoggerMixin):
             cls.logger.warning('Truststore %s is not intended for IDevID verification', truststore.unique_name)
             return False
         cls.logger.info('Verifying IDevID certificate against truststore %s', truststore.unique_name)
-        certificates = truststore.get_certificate_collection_serializer().as_crypto_list()
+        certificates = truststore.get_certificate_collection_serializer().as_crypto()
         cls.logger.debug('Certificates in truststore: %s', certificates)
         store = Store(certificates)
         builder = PolicyBuilder().store(store)

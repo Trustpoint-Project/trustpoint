@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 
 import requests
+import urllib3
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.x509.verification import PolicyBuilder, Store, VerificationError
@@ -72,10 +73,12 @@ class AokiClient:
             exc_msg = f'Could not parse PEM format in certificate: {pem_str}'
             raise AokiClientCertLoadError(exc_msg) from e
 
+    @staticmethod
+    def _get_idevid_owner_san_uri(idevid_cert: x509.Certificate) -> str:
+        """Get the Owner ID SAN URI corresponding to a IDevID certificate.
 
-    def _verify_matches_idevid_cert(self, owner_id_cert: x509.Certificate, idevid_cert: x509.Certificate) -> None:
-        """Verify the Owner ID certificate is valid for the device IDevID."""
-        log.info('Verifying Owner ID certificate matches IDevID certificate')
+        Formatted as "<idevid_subj_sn>.aoki.owner.<idevid_x509_sn>.<idevid_sha256_fingerprint>.alt
+        """
         try:
             sn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
             idevid_subj_sn = sn_b.decode() if isinstance(sn_b, bytes) else sn_b
@@ -83,7 +86,12 @@ class AokiClient:
             idevid_subj_sn = '_'
         idevid_x509_sn = hex(idevid_cert.serial_number)[2:].zfill(16)
         idevid_sha256_fingerprint = idevid_cert.fingerprint(hashes.SHA256()).hex()
-        idevid_san_uri = f'{idevid_subj_sn}.aoki.owner.{idevid_x509_sn}.{idevid_sha256_fingerprint}.alt'
+        return f'{idevid_subj_sn}.aoki.owner.{idevid_x509_sn}.{idevid_sha256_fingerprint}.alt'
+
+    def _verify_matches_idevid_cert(self, owner_id_cert: x509.Certificate, idevid_cert: x509.Certificate) -> None:
+        """Verify the Owner ID certificate is valid for the device IDevID."""
+        log.info('Verifying Owner ID certificate matches IDevID certificate')
+        idevid_san_uri = self._get_idevid_owner_san_uri(idevid_cert)
         for san in owner_id_cert.extensions.get_extension_for_oid(x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value:
             if isinstance(san, x509.UniformResourceIdentifier) and san.value == idevid_san_uri:
                 log.info('Owner ID certificate SAN URI matches IDevID certificate!')
@@ -144,6 +152,7 @@ class AokiClient:
         # Step 0: Owner Service discovery via mDNS
 
         # Step 1: AOKI initialization request
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         response = requests.get(
             self.server_url + '/aoki/init',
             cert=(CERTS_DIR / self.cert_file, CERTS_DIR / self.key_file),
@@ -155,16 +164,6 @@ class AokiClient:
             return
         # Step 2: Parse server response
         # We are expecting a 200 OK response with a JSON body containing the aoki initialization data.
-        # Get signature headers
-        if 'AOKI-Signature' not in response.headers:
-            exc_msg = 'AOKI-Signature header is required but missing in response headers.'
-            raise AokiClientInitResponseError(exc_msg)
-        if 'AOKI-Signature-Algorithm' not in response.headers:
-            exc_msg = 'AOKI-Signature-Algorithm header is required but missing in response headers.'
-            raise AokiClientInitResponseError(exc_msg)
-
-        signature = response.headers['AOKI-Signature']
-        signature_algorithm = response.headers['AOKI-Signature-Algorithm']
 
         # Step 3: Parse the JSON body
         # We are expecting a JSON body with the following structure:
@@ -188,6 +187,17 @@ class AokiClient:
         except requests.exceptions.JSONDecodeError as e:
             exc_msg = f'Invalid JSON response from server. content={response.text}'
             raise AokiClientInitResponseError(exc_msg) from e
+
+        # Get signature headers
+        if 'AOKI-Signature' not in response.headers:
+            exc_msg = 'AOKI-Signature header is required but missing in response headers.'
+            raise AokiClientInitResponseError(exc_msg)
+        if 'AOKI-Signature-Algorithm' not in response.headers:
+            exc_msg = 'AOKI-Signature-Algorithm header is required but missing in response headers.'
+            raise AokiClientInitResponseError(exc_msg)
+
+        signature = response.headers['AOKI-Signature']
+        signature_algorithm = response.headers['AOKI-Signature-Algorithm']
 
         try:
             aoki_init = json_data['aoki-init']
