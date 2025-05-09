@@ -31,7 +31,7 @@ class IDevIDVerifier(LoggerMixin):
         """Verify the IDevID certificate against the provided truststore."""
         # Need to check whether truststore has intended usage IDevID?
         cls.logger.info('Verifying IDevID certificate against truststore %s', truststore.unique_name)
-        certificates = truststore.get_certificate_collection_serializer().as_crypto_list()
+        certificates = truststore.get_certificate_collection_serializer().as_crypto()
         cls.logger.debug('Certificates in truststore: %s', certificates)
         store = Store(certificates)
         builder = PolicyBuilder().store(store)

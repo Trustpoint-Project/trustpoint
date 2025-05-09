@@ -13,7 +13,7 @@ def get_mock_truststore(certificates: list[x509.Certificate]) -> MagicMock:
     """Get a mock truststore for testing."""
     ts = MagicMock()
     ts.unique_name = 'test_mock_truststore'
-    ts.get_certificate_collection_serializer.return_value.as_crypto_list.return_value = certificates
+    ts.get_certificate_collection_serializer.return_value.as_crypto.return_value = certificates
     return ts
 
 def test_tls_client_cert_verification() -> None:
