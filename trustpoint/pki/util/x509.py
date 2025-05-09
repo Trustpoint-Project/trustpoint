@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import itertools
 import logging
 from typing import TYPE_CHECKING, cast
 
@@ -10,6 +11,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509.oid import NameOID
+from django.http import HttpRequest
 from trustpoint_core.serializer import CredentialSerializer
 
 from pki.models import IssuingCaModel
@@ -96,7 +98,7 @@ class CertificateGenerator:
         issuer_cn: str,
         subject_cn: str,
         private_key: None | PrivateKey = None,
-        key_usage_extension: x509.KeyUsage = None,
+        extensions: list[tuple[x509.ExtensionType, bool]] | None = None,
         validity_days: int = 365,
     ) -> tuple[x509.Certificate, PrivateKey]:
         """Creates a generic end entity certificate + key pair."""
@@ -104,11 +106,8 @@ class CertificateGenerator:
         if private_key is None:
             private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-        not_valid_before = datetime.datetime.now(tz=datetime.UTC)
+        not_valid_before = datetime.datetime.now(tz=datetime.UTC) - one_day
         not_valid_after = not_valid_before + (one_day * validity_days)
-        # Note: There was an if-else with strange logic for negative validity days here
-        # I do not understand the concept of negative validity days
-        # Logic??: not_valid_after = now + (one_day * validity_days / 2)
 
         public_key = private_key.public_key()
         builder = x509.CertificateBuilder()
@@ -134,8 +133,12 @@ class CertificateGenerator:
             x509.BasicConstraints(ca=False, path_length=None),
             critical=True,
         )
-        if key_usage_extension:
-            builder = builder.add_extension(key_usage_extension, critical=False)
+        builder = builder.add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False)
+        builder = builder.add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_private_key.public_key()), critical=False
+        )
+        for ext, critical in extensions or []:
+            builder = builder.add_extension(ext, critical=critical)
 
         hash_algorithm = CryptographyUtils.get_hash_algorithm_for_private_key(issuer_private_key)
 
@@ -144,6 +147,53 @@ class CertificateGenerator:
             algorithm=hash_algorithm,
         )
         return certificate, private_key
+    
+    @staticmethod
+    def create_test_pki(chain_depth: int = 0) -> tuple[list[x509.Certificate], list[PrivateKey]]:
+        """Get a test PKI chain with a specified depth (excluding root CA). depth=0 is a self-signed EE."""
+        ee_extensions = [
+            (x509.SubjectAlternativeName([x509.UniformResourceIdentifier('test_ee.alt')]), False),
+            (x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=True,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=False,
+                decipher_only=False,
+            ), True),
+        ]
+        if (chain_depth == 0):
+            # Create a self-signed EE
+            key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+            cert, _key = CertificateGenerator.create_ee(key, 'Test End Entity', 'Test End Entity', key, ee_extensions)
+            return ([cert], [key])
+
+        certs = []
+        keys = []
+        (root_cert, root_key) = CertificateGenerator.create_root_ca('Test Root CA')
+        certs.append(root_cert)
+        keys.append(root_key)
+        parent_key = root_key
+        parent_cn = 'Test Root CA'
+        for i in range(chain_depth - 1):
+            ca_cn = f'Test Intermediate CA {i + 1}'
+            (cert, key) = CertificateGenerator.create_issuing_ca(
+                parent_key, parent_cn, ca_cn
+            )
+            parent_key = key
+            parent_cn = ca_cn
+            certs.append(cert)
+            keys.append(key)
+
+        (cert, key) = CertificateGenerator.create_ee(
+            parent_key, parent_cn, 'Test End Entity', None, ee_extensions
+        )
+        certs.append(cert)
+        keys.append(key)
+        return (certs, keys)
 
     @staticmethod
     def save_issuing_ca(
@@ -167,3 +217,54 @@ class CertificateGenerator:
         logger.info("Issuing CA '%s' saved successfully.", unique_name)
 
         return cast(IssuingCaModel, issuing_ca)
+    
+
+class ClientCertificateAuthenticationError(Exception):
+    """Exception raised for general client certificate authentication failures."""
+
+class IDevIDAuthenticationError(Exception):
+    """Exception raised for IDevID authentication failures."""
+
+
+class ApacheTLSClientCertExtractor:
+    """Extracts the TLS client certificate from the request."""
+
+    @staticmethod
+    def get_client_cert_as_x509(request: HttpRequest) -> tuple[x509.Certificate, list[x509.Certificate]]:
+        """Retrieve the client certificate from the request and convert it to an x509.Certificate object.
+
+        Args:
+            request: Django HttpRequest containing the headers.
+
+        Returns:
+            x509.Certificate object.
+
+        Raises:
+            ClientCertificateAuthenticationError: if no client certificate found or it is not a valid PEM-encoded cert.
+        """
+        cert_data = request.META.get('SSL_CLIENT_CERT')
+        if not cert_data:
+            error_message = 'Missing SSL_CLIENT_CERT header'
+            raise ClientCertificateAuthenticationError(error_message)
+
+        try:
+            client_cert = x509.load_pem_x509_certificate(cert_data.encode('utf-8'))
+        except Exception as e:
+            error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
+            raise ClientCertificateAuthenticationError(error_message) from e
+
+        # Extract intermediate CAs from Apache variables
+        intermediate_cas = []
+
+        for i in itertools.count():
+            ca = request.META.get(f'SSL_CLIENT_CERT_CHAIN_{i}')
+            if not ca:
+                break
+            try:
+                ca_cert = x509.load_pem_x509_certificate(ca.encode('utf-8'))
+            except Exception as e:
+                error_message = f'Invalid SSL_CLIENT_CERT_CHAIN_{i} PEM: {e}'
+                raise ClientCertificateAuthenticationError(error_message) from e
+            intermediate_cas.append(ca_cert)
+
+        return (client_cert, intermediate_cas)
