@@ -1,4 +1,7 @@
-"""AOKI Client for testing purposes."""
+"""AOKI Client for testing purposes.
+
+Please run from /rootdir/trustpoint with "uv run -m aoki.tests.client" for paths and imports to work.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +16,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.x509.verification import PolicyBuilder, Store, VerificationError
 from est.tests.client import ESTClient
+from requests import Response
 
 log = logging.getLogger('aoki.client')
 
@@ -134,6 +138,73 @@ class AokiClient:
             raise AokiClientOwnerIdCertVerificationError(exc_msg) from e
         return self._verify_matches_idevid_cert(owner_id_cert, idevid_cert)
 
+    def _verify_owner_signature(
+            self, signature: bytes, owner_key: rsa.RSAPublicKey | ec.EllipticCurvePublicKey, data: bytes
+        ) -> None:
+        """Verify the signature using the Owner ID public key."""
+        if not isinstance(owner_key, rsa.RSAPublicKey | ec.EllipticCurvePublicKey):
+            error_message = 'Unsupported public key type for CSR signature verification.'
+            raise TypeError(error_message)
+        try:
+            if isinstance(owner_key, rsa.RSAPublicKey):
+                owner_key.verify(
+                    signature=signature,
+                    data=data,
+                    padding=padding.PKCS1v15(),
+                    algorithm=hashes.SHA256(),  # get this from the header
+                )
+            elif isinstance(owner_key, ec.EllipticCurvePublicKey):
+                owner_key.verify(
+                    signature=signature,
+                    data=data,
+                    signature_algorithm=ec.ECDSA(hashes.SHA256()),
+                )
+        except Exception as e:
+            exc_msg = f'AOKI init signature verification failed: {e}'
+            raise AokiClientSignatureError(exc_msg) from e
+
+    @staticmethod
+    def _get_aoki_signature_headers(response: Response) -> tuple[bytes, str]:
+        """Get the AOKI Signature HTTP headers from the server init response."""
+        if 'AOKI-Signature' not in response.headers:
+            exc_msg = 'AOKI-Signature header is required but missing in response headers.'
+            raise AokiClientInitResponseError(exc_msg)
+        if 'AOKI-Signature-Algorithm' not in response.headers:
+            exc_msg = 'AOKI-Signature-Algorithm header is required but missing in response headers.'
+            raise AokiClientInitResponseError(exc_msg)
+
+        signature = response.headers['AOKI-Signature']
+        signature_b = base64.b64decode(signature.encode('utf-8'))
+        signature_algorithm_oid = response.headers['AOKI-Signature-Algorithm']
+        return (signature_b, signature_algorithm_oid)
+
+    def _parse_aoki_init_json(self, json_data: dict) -> None:
+        try:
+            aoki_init = json_data['aoki-init']
+            self.owner_id_cert_str = aoki_init['owner-id-cert']
+            self.tls_truststore_str = aoki_init['tls-truststore']
+            enrollment_info = aoki_init['enrollment-info']
+            protocols = enrollment_info['protocols']
+        except KeyError as e:
+            exc_msg = f'Missing required field in AOKI initialization response: {e}'
+            raise AokiClientInitResponseError(exc_msg) from e
+
+        if not isinstance(protocols, list) or not protocols:
+            exc_msg = 'enrollment-info.protocols should be a non-empty list.'
+            raise AokiClientInitResponseError(exc_msg)
+
+        for protocol in protocols:
+            if not isinstance(protocol, dict) or 'protocol' not in protocol or 'url' not in protocol:
+                continue
+            if protocol['protocol'] != 'EST':
+                continue
+            est_url = protocol['url'] if protocol['url'].startswith('https://') else self.server_url + protocol['url']
+            self.est_url = est_url
+            break
+        else:
+            exc_msg = 'No valid EST protocol definition found in AOKI initialization response.'
+            raise AokiClientInitResponseError(exc_msg)
+
 
     def __init__(
             self,
@@ -192,73 +263,21 @@ class AokiClient:
             exc_msg = f'Invalid JSON response from server. content={response.text}'
             raise AokiClientInitResponseError(exc_msg) from e
 
-        # Get signature headers
-        if 'AOKI-Signature' not in response.headers:
-            exc_msg = 'AOKI-Signature header is required but missing in response headers.'
-            raise AokiClientInitResponseError(exc_msg)
-        if 'AOKI-Signature-Algorithm' not in response.headers:
-            exc_msg = 'AOKI-Signature-Algorithm header is required but missing in response headers.'
-            raise AokiClientInitResponseError(exc_msg)
+        signature_b, _signature_algorithm_oid = self._get_aoki_signature_headers(response)
 
-        signature = response.headers['AOKI-Signature']
-        signature_b = base64.b64decode(signature.encode('utf-8'))
-        _signature_algorithm_oid = response.headers['AOKI-Signature-Algorithm']
-
-        try:
-            aoki_init = json_data['aoki-init']
-            owner_id_cert_str = aoki_init['owner-id-cert']
-            tls_truststore_str = aoki_init['tls-truststore']
-            enrollment_info = aoki_init['enrollment-info']
-            protocols = enrollment_info['protocols']
-        except KeyError as e:
-            exc_msg = f'Missing required field in AOKI initialization response: {e}'
-            raise AokiClientInitResponseError(exc_msg) from e
-
-        if not isinstance(protocols, list) or not protocols:
-            exc_msg = 'enrollment-info.protocols should be a non-empty list.'
-            raise AokiClientInitResponseError(exc_msg)
-
-        for protocol in protocols:
-            if not isinstance(protocol, dict) or 'protocol' not in protocol or 'url' not in protocol:
-                continue
-            if protocol['protocol'] != 'EST':
-                continue
-            est_url = protocol['url'] if protocol['url'].startswith('https://') else self.server_url + protocol['url']
-            break
-        else:
-            exc_msg = 'No valid EST protocol definition found in AOKI initialization response.'
-            raise AokiClientInitResponseError(exc_msg)
+        self._parse_aoki_init_json(json_data)
 
         # Step 4: Verify the Owner ID certificate against the owner truststore
-        owner_id_cert = self._parse_json_pem_cert(owner_id_cert_str)
+        owner_id_cert = self._parse_json_pem_cert(self.owner_id_cert_str)
         idevid_cert = self._load_certificate(CERTS_DIR / self.cert_file)
         owner_truststore = self._load_certificates(CERTS_DIR / self.owner_truststore_file)
         self._verify_owner_id_cert(owner_id_cert, owner_truststore, idevid_cert)
 
         # Step 5: Verify the signature using the Owner ID public key
         owner_key = owner_id_cert.public_key()
-        if not isinstance(owner_key, rsa.RSAPublicKey | ec.EllipticCurvePublicKey):
-            error_message = 'Unsupported public key type for CSR signature verification.'
-            raise TypeError(error_message)
-        try:
-            if isinstance(owner_key, rsa.RSAPublicKey):
-                owner_key.verify(
-                    signature=signature_b,
-                    data=response.content,
-                    padding=padding.PKCS1v15(),
-                    algorithm=hashes.SHA256(),  # get this from the header
-                )
-            elif isinstance(owner_key, ec.EllipticCurvePublicKey):
-                owner_key.verify(
-                    signature=signature_b,
-                    data=response.content,
-                    signature_algorithm=ec.ECDSA(hashes.SHA256()),
-                )
-        except Exception as e:
-            exc_msg = f'AOKI init signature verification failed: {e}'
-            raise AokiClientSignatureError(exc_msg) from e
+        self._verify_owner_signature(signature_b, owner_key, response.content)
 
-        tls_truststore = self._parse_json_pem_cert(tls_truststore_str)
+        tls_truststore = self._parse_json_pem_cert(self.tls_truststore_str)
         tls_truststore_path = CERTS_DIR / 'trust_store.pem'
         with tls_truststore_path.open('wb') as cert_file:
             cert_file.write(tls_truststore.public_bytes(encoding=serialization.Encoding.PEM))
@@ -266,7 +285,7 @@ class AokiClient:
         # Step 6: Enrollment
         log.info('AOKI init response verified successfully, requesting domain credential via EST...')
         est_client = ESTClient(
-            est_url=est_url,
+            est_url=self.est_url,
             auth_type='mutual_tls',#'both',
             domain=None,
             cert_template=None,
