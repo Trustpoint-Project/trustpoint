@@ -5,11 +5,7 @@ cd /var/www/html/trustpoint/trustpoint/
 
 export DJANGO_SETTINGS_MODULE=trustpoint.settings
 
-uv run python -c "from django.conf import settings; print(settings.DATABASES['default'])"
-
 echo "[$(date)] Running scheduled Django management commands..."
-env >> /tmp/notifications_cron_debug.log
-pwd >> /tmp/notifications_cron_debug.log
 
 uv run python manage.py trustpoint_setup_notifications
 uv run python manage.py check_system_health
