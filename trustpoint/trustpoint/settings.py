@@ -29,7 +29,7 @@ except PackageNotFoundError:
     APP_VERSION = 'Version not found'
 
 def app_version(request):
-    return {"APP_VERSION": APP_VERSION}
+    return {'APP_VERSION': APP_VERSION}
 
 # Monkeypatching Django, so stubs will work for all generics,
 # see: https://github.com/typeddjango/django-stubs
