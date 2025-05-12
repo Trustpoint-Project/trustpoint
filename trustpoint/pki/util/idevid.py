@@ -168,7 +168,7 @@ class IDevIDAuthenticator(LoggerMixin):
         existing_device = None
         try:
             existing_device = DeviceModel.objects.get(
-                domain=registration.domain,
+                domain=domain,
                 serial_number=idevid_subj_sn,
                 onboarding_protocol=DeviceModel.OnboardingProtocol.EST_IDEVID
             )
@@ -176,13 +176,13 @@ class IDevIDAuthenticator(LoggerMixin):
             pass
         except DeviceModel.MultipleObjectsReturned:
             error_message = (f'Multiple devices with the same serial number {idevid_subj_sn} '
-                            f'found in domain {registration.domain.unique_name}.')
+                            f'found in domain {domain.unique_name}.')
             cls.logger.warning(error_message)
             cls.logger.warning('Auto-creating new device.')
 
         if existing_device:
             return existing_device
-        return cls._auto_create_device_from_idevid(idevid_cert, idevid_subj_sn, registration.domain)
+        return cls._auto_create_device_from_idevid(idevid_cert, idevid_subj_sn, domain)
 
     @classmethod
     def authenticate_idevid(cls, request: HttpRequest, domain: DomainModel | None = None) -> DeviceModel:

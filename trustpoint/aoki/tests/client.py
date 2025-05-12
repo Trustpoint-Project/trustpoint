@@ -202,13 +202,13 @@ class AokiClient:
 
         signature = response.headers['AOKI-Signature']
         signature_b = base64.b64decode(signature.encode('utf-8'))
-        signature_algorithm = response.headers['AOKI-Signature-Algorithm']
+        _signature_algorithm_oid = response.headers['AOKI-Signature-Algorithm']
 
         try:
             aoki_init = json_data['aoki-init']
             owner_id_cert_str = aoki_init['owner-id-cert']
             tls_truststore_str = aoki_init['tls-truststore']
-            enrollment_info = aoki_init['enrollment_info']
+            enrollment_info = aoki_init['enrollment-info']
             protocols = enrollment_info['protocols']
         except KeyError as e:
             exc_msg = f'Missing required field in AOKI initialization response: {e}'
@@ -272,11 +272,11 @@ class AokiClient:
             cert_template=None,
             username=None,#'admin',
             password=None,#'testing321',
-            cert_path='/certs/idevid.pem',
-            key_path='/certs/idevid_pk.pem',
+            cert_path=CERTS_DIR / 'idevid.pem',
+            key_path=CERTS_DIR / 'idevid_pk.pem',
             ca_cert_path=tls_truststore_path,
-            out_cert_path='dc_cert.pem',
-            out_key_path='dc_private_key.pem',
+            out_cert_path=CERTS_DIR / 'dc_cert.pem',
+            out_key_path=CERTS_DIR /'dc_private_key.pem',
         )
         est_client.enroll(common_name='aokitest.example.com', serial_number=self.idevid_subj_sn, save_key=True)
 
