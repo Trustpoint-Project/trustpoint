@@ -123,7 +123,9 @@ class AokiTestCertGenerator:
             extensions=[
                 (x509.SubjectAlternativeName([
                     x509.UniformResourceIdentifier(idevid_san_uri)
-                ]), True),
+                ]), False),
+                # SAN should be critical for an OwnerID cert,
+                # but then the subject name should be empty according to RFC 5280
             ],
             validity_days=99999,
         )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import logging
 from pathlib import Path
 
@@ -9,6 +10,7 @@ import requests
 import urllib3
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.x509.verification import PolicyBuilder, Store, VerificationError
 from est.tests.client import ESTClient
 
@@ -38,6 +40,8 @@ class AokiClientCertLoadError(Exception):
 
 class AokiClient:
     """AOKI Client for testing purposes."""
+
+    idevid_subj_sn : str = '_'
 
     @staticmethod
     def _load_certificate(cert_path: Path) -> x509.Certificate:
@@ -73,8 +77,7 @@ class AokiClient:
             exc_msg = f'Could not parse PEM format in certificate: {pem_str}'
             raise AokiClientCertLoadError(exc_msg) from e
 
-    @staticmethod
-    def _get_idevid_owner_san_uri(idevid_cert: x509.Certificate) -> str:
+    def _get_idevid_owner_san_uri(self, idevid_cert: x509.Certificate) -> str:
         """Get the Owner ID SAN URI corresponding to a IDevID certificate.
 
         Formatted as "<idevid_subj_sn>.aoki.owner.<idevid_x509_sn>.<idevid_sha256_fingerprint>.alt
@@ -84,6 +87,7 @@ class AokiClient:
             idevid_subj_sn = sn_b.decode() if isinstance(sn_b, bytes) else sn_b
         except (ValueError, IndexError):
             idevid_subj_sn = '_'
+        self.idevid_subj_sn = idevid_subj_sn
         idevid_x509_sn = hex(idevid_cert.serial_number)[2:].zfill(16)
         idevid_sha256_fingerprint = idevid_cert.fingerprint(hashes.SHA256()).hex()
         return f'{idevid_subj_sn}.aoki.owner.{idevid_x509_sn}.{idevid_sha256_fingerprint}.alt'
@@ -136,14 +140,14 @@ class AokiClient:
             server_url: str,
             cert_file: str,
             key_file: str,
-            owner_truststore_path: str,
+            owner_truststore_file: str,
             *args: str, **kwargs: str
         ) -> None:
         """Initialize the AokiClient."""
         self.server_url = server_url
         self.cert_file = cert_file
         self.key_file = key_file
-        self.owner_truststore_path = owner_truststore_path
+        self.owner_truststore_file = owner_truststore_file
         self.args = args
         self.kwargs = kwargs
 
@@ -197,13 +201,14 @@ class AokiClient:
             raise AokiClientInitResponseError(exc_msg)
 
         signature = response.headers['AOKI-Signature']
+        signature_b = base64.b64decode(signature.encode('utf-8'))
         signature_algorithm = response.headers['AOKI-Signature-Algorithm']
 
         try:
             aoki_init = json_data['aoki-init']
             owner_id_cert_str = aoki_init['owner-id-cert']
             tls_truststore_str = aoki_init['tls-truststore']
-            enrollment_info = aoki_init['enrollment-info']
+            enrollment_info = aoki_init['enrollment_info']
             protocols = enrollment_info['protocols']
         except KeyError as e:
             exc_msg = f'Missing required field in AOKI initialization response: {e}'
@@ -227,17 +232,28 @@ class AokiClient:
         # Step 4: Verify the Owner ID certificate against the owner truststore
         owner_id_cert = self._parse_json_pem_cert(owner_id_cert_str)
         idevid_cert = self._load_certificate(CERTS_DIR / self.cert_file)
-        owner_truststore = self._load_certificates(self.owner_truststore_path)
+        owner_truststore = self._load_certificates(CERTS_DIR / self.owner_truststore_file)
         self._verify_owner_id_cert(owner_id_cert, owner_truststore, idevid_cert)
 
         # Step 5: Verify the signature using the Owner ID public key
         owner_key = owner_id_cert.public_key()
+        if not isinstance(owner_key, rsa.RSAPublicKey | ec.EllipticCurvePublicKey):
+            error_message = 'Unsupported public key type for CSR signature verification.'
+            raise TypeError(error_message)
         try:
-            owner_key.verify(
-                signature=signature,
-                data=response.content,
-                # signature_algorithm=hashes.SHA256(),  # get this from the header
-            )
+            if isinstance(owner_key, rsa.RSAPublicKey):
+                owner_key.verify(
+                    signature=signature_b,
+                    data=response.content,
+                    padding=padding.PKCS1v15(),
+                    algorithm=hashes.SHA256(),  # get this from the header
+                )
+            elif isinstance(owner_key, ec.EllipticCurvePublicKey):
+                owner_key.verify(
+                    signature=signature_b,
+                    data=response.content,
+                    signature_algorithm=ec.ECDSA(hashes.SHA256()),
+                )
         except Exception as e:
             exc_msg = f'AOKI init signature verification failed: {e}'
             raise AokiClientSignatureError(exc_msg) from e
@@ -259,10 +275,10 @@ class AokiClient:
             cert_path='/certs/idevid.pem',
             key_path='/certs/idevid_pk.pem',
             ca_cert_path=tls_truststore_path,
-            out_cert_path='/certs/dc_cert.pem',
-            out_key_path='/certs/dc_private_key.pem',
+            out_cert_path='dc_cert.pem',
+            out_key_path='dc_private_key.pem',
         )
-        est_client.enroll()
+        est_client.enroll(common_name='aokitest.example.com', serial_number=self.idevid_subj_sn, save_key=True)
 
 
 if __name__ == '__main__':
@@ -270,7 +286,7 @@ if __name__ == '__main__':
         server_url='https://localhost:443',
         cert_file='idevid.pem',
         key_file='idevid_pk.pem',
-        owner_truststore_path='certs/ownerid_ca.pem',
+        owner_truststore_file='ownerid_ca.pem',
         mdns = False, # not yet implemented
     )
     client.onboard()

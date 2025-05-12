@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import base64
 from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from django.http import JsonResponse
 from django.views import View
 from pki.models.certificate import CertificateModel
@@ -14,6 +16,7 @@ from pki.models.issuing_ca import IssuingCaModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
+from trustpoint_core.oid import AlgorithmIdentifier
 
 from trustpoint.views.base import LoggedHttpResponse, LoggerMixin
 
@@ -107,11 +110,12 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
         # Problem: We need to store an owner credential, not just the cert
         # Probably should create a new OwnerCredentialModel for this
         demo_owner_cred = IssuingCaModel.objects.get(unique_name='DevOwnerID')
+        owner_pk = demo_owner_cred.credential.get_private_key()
 
         aoki_init_response = {
             'aoki-init': {
                 'version': '1.0',
-                'enrollment_info': {
+                'enrollment-info': {
                     'protocols': [
                         {
                             'protocol': 'EST',
@@ -124,12 +128,27 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
             },
         }
         resp = JsonResponse(aoki_init_response)
-        resp.headers['AOKI-Signature'] = demo_owner_cred.private_key.sign(
-            data=resp.content,
-            algorithm=hashes.SHA256(),
-        )
-        resp.headers['AOKI-Signature-Algorithm'] = 'SHA256'
-        print(resp.content)
+
+        if isinstance(owner_pk, rsa.RSAPrivateKey):
+            owner_signature = owner_pk.sign(
+                data=resp.content,
+                padding=padding.PKCS1v15(),
+                algorithm=hashes.SHA256(),
+            )
+            signature_algo = AlgorithmIdentifier.RSA_SHA256.dotted_string
+        elif isinstance(owner_pk, ec.EllipticCurvePrivateKey):
+            owner_signature = owner_pk.sign(
+                data=resp.content,
+                signature_algorithm=ec.ECDSA(hashes.SHA256()),
+            )
+            signature_algo = AlgorithmIdentifier.ECDSA_SHA256.dotted_string
+        else:
+            exc_msg = f'Unsupported private key type: {type(owner_pk)} for AOKI owner signing.'
+            raise TypeError(exc_msg)
+
+        resp.headers['AOKI-Signature'] = base64.b64encode(owner_signature).decode()
+        resp.headers['AOKI-Signature-Algorithm'] = signature_algo
+        self.logger.info(resp.content)
 
         return resp
         # Verify Device IDevID against Truststores
