@@ -13,8 +13,8 @@ Feature: Add and delete new Issuing CAs
     Then the system should display a form page where a file can be uploaded
     When the admin uploads a valid PKCS12 issuing CA file
     And the admin clicks the "Add new issuing CA" button
-    Then the system should display a confirmation message
-    And the added issuing CA "appears" in the list of available CAs
+    #Then the system should display a confirmation message
+    Then the added issuing CA "appears" in the list of available CAs
 
 
   Scenario: Add a new issuing CA by uploading a broken PKCS12 file

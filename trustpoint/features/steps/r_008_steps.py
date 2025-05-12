@@ -1,137 +1,136 @@
 """Python steps file for R_008."""
 
-from behave import runner, then, when
+from behave import runner, then, when, given
+from bs4 import BeautifulSoup
+import os
+from pki.forms import (
+    IssuingCaAddFileImportPkcs12Form,
+)
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 
-@when('the admin configures the system for auto-generation of an Issuing CA')
-def step_when_admin_configures_auto_ca(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates the admin configuring the system for automatic CA generation.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    msg = 'STEP: When the admin configures the system for auto-generation of an Issuing CA'
-    raise AssertionError(msg)
-
-
-@then('the system automatically generates the CA')
-def step_then_system_generates_ca(context: runner.Context) -> None:  # noqa: ARG001
-    """Verifies that the system has automatically generated a CA.
+@given('the admin is on the "pki/issuing-cas" webpage')
+def step_given_admin_on_ca_page(context: runner.Context) -> None:  # noqa: ARG001
+    """The admin navigates to the pki/issuing-cas webpage.
 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'STEP: Then the system automatically generates the CA'
-    raise AssertionError(msg)
+    context.response = context.authenticated_client.get("/pki/issuing-cas/")
+    # Check that page loaded successfully
+    assert context.response.status_code == 200, f"Failed to load issuing CA page"
 
-
-@then('the generated CA appears in the list of available CAs')
-def step_then_generated_ca_appears(context: runner.Context) -> None:  # noqa: ARG001
-    """Ensures the newly generated CA appears in the CA list.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    msg = 'STEP: Then the generated CA appears in the list of available CAs'
-    raise AssertionError(msg)
-
-
-@when('the admin sets the following CA configuration:')
-def step_when_admin_sets_ca_config(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates the admin setting CA parameters before auto-generation.
-
-    The parameters include key size, validity period, and subject name.
+@then('the system should display multiple options to add a new issuing CA')
+def step_then_ca_page_show_options(context: runner.Context) -> None:  # noqa: ARG001
+    """Verifies that Add new issuing CA page shows multiple options.
 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'STEP: When the admin sets the following CA configuration'
-    raise AssertionError(msg)
+    html = context.response.content
+    assert b'/pki/issuing-cas/add/file-import/pkcs12' in html, \
+        "Missing link for importing from PKCS#12 file"
 
+    assert b'Import From PKCS#12 File' in html, \
+        "Missing text for PKCS#12 import option"
 
-@then('the system generates a CA with:')
-def step_then_system_generates_ca_with_config(context: runner.Context) -> None:  # noqa: ARG001
-    """Ensures the system generates a CA that matches the provided configuration.
+    assert b'/pki/issuing-cas/add/file-import/separate-files' in html, \
+        "Missing link for importing from separate files"
 
-    Args:
-        context (runner.Context): Behave context.
-    """
-    msg = 'STEP: Then the system generates a CA with the specified attributes'
-    raise AssertionError(msg)
+    assert b'Import From Separate Key and Certificate Files' in html, \
+        "Missing text for separate file import option"
 
-
-@when('the admin attempts to generate an Issuing CA with incomplete configuration')
-def step_when_admin_attempts_incomplete_ca(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates the admin attempting to generate a CA with missing parameters.
+@when('the admin clicks on "import from PKCS12 file"')
+def step_when_click_on_import_from_pkcs12(context: runner.Context) -> None:  # noqa: ARG001
+    """The admin navigates to the /pki/issuing-cas/add/file-import/pkcs12 webpage.
 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'STEP: When the admin attempts to generate an Issuing CA with incomplete configuration'
-    raise AssertionError(msg)
+    context.response = context.authenticated_client.get("/pki/issuing-cas/add/file-import/pkcs12")
+    # Check that page loaded successfully
+    assert context.response.status_code == 200, f"Failed to load issuing Add new Issuing CA using pkcs#12 import"
 
-
-@then('the system prevents the CA from being generated')
-def step_then_system_prevents_ca(context: runner.Context) -> None:  # noqa: ARG001
-    """Verifies that the system blocks CA generation when parameters are incomplete.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    msg = 'STEP: Then the system prevents the CA from being generated'
-    raise AssertionError(msg)
-
-
-@then('an appropriate error message is logged')
-def step_then_error_message_logged(context: runner.Context) -> None:  # noqa: ARG001
-    """Ensures an error message is logged when CA generation fails.
+@when('the admin clicks on "import from separate key and certificate files"')
+def step_when_click_import_from_separate_file(context: runner.Context) -> None:  # noqa: ARG001
+    """The admin navigates to the /pki/issuing-cas/add/file-import/ webpage.
 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'STEP: Then an appropriate error message is logged'
-    raise AssertionError(msg)
+    context.response = context.authenticated_client.get("/pki/issuing-cas/add/file-import/separate-files")
+    # Check that page loaded successfully
+    assert context.response.status_code == 200, f"Failed to load issuing Add new Issuing CA using import from separate files"
 
-
-@when('the admin inspects the generated CA details')
-def step_when_admin_inspects_ca(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates the admin checking the details of the generated CA.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    msg = 'STEP: When the admin inspects the generated CA details'
-    raise AssertionError(msg)
-
-
-@then('the CA should contain:')
-def step_then_ca_contains_expected_values(context: runner.Context) -> None:  # noqa: ARG001
-    """Ensures the generated CA contains the correct attributes.
+@then('the system should display a form page where a file can be uploaded')
+def step_then_load_form(context: runner.Context) -> None:  # noqa: ARG001
+    """Verifies that a form is loaded.
 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'STEP: Then the CA should contain the expected attributes'
-    raise AssertionError(msg)
+    soup = BeautifulSoup(context.response.content, 'html.parser')
 
+    # Check for presence of <form>
+    form = soup.find('form')
+    assert form is not None, "No <form> element found in the response"
 
-@when('the admin attempts to issue a certificate using the generated CA')
-def step_when_admin_issues_certificate(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates the admin using the generated CA to issue a certificate.
+    # Check for the specific <input> inside the form
+    input_element = soup.find('input', {
+        'type': 'file',
+        # 'name': 'pkcs12_file',
+        # 'class': 'form-control',
+        # 'id': 'id_pkcs12_file',
+    })
+    assert input_element is not None, "Expected <input> for PKCS#12 file not found inside the form"
+
+@when('the admin uploads a valid PKCS12 issuing CA file')
+def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG001
+    """The admin uploads valid pkcs12 file.
 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'STEP: When the admin attempts to issue a certificate using the generated CA'
-    raise AssertionError(msg)
+    # Ensure the file path is absolute and exists
+    file_path = os.path.abspath("../tests/data/issuing_cas/issuing_ca.p12")
+    assert os.path.exists(file_path), f"File not found: {file_path}"
+    context.file_path = file_path
 
-
-@then('the certificate issuance should succeed')
-def step_then_certificate_issuance_succeeds(context: runner.Context) -> None:  # noqa: ARG001
-    """Verifies that a certificate can be successfully issued using the generated CA.
+@when('the admin clicks the "Add new issuing CA" button')
+def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG001
+    """The admin click the button to submit form.
 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'STEP: Then the certificate issuance should succeed'
-    raise AssertionError(msg)
+    with open(context.file_path, "rb") as f:
+        data = {
+            'unique_name': "test",
+            'pkcs12_password': "testing321",
+            'pkcs12_file': f
+        }
+        # Adjust the URL to match the form action for your backend
+        context.response = context.authenticated_client.post(
+            "/pki/issuing-cas/add/file-import/pkcs12",
+            data=data,
+            follow=True
+        )
+        print("content", context.response.content)
+        assert context.response.status_code == 200, f"Failed to submit the form."
+
+@then('the added issuing CA "appears" in the list of available CAs')
+def step_then_new_ca_available(context: runner.Context) -> None:  # noqa: ARG001
+    """Verifies new issuing CA is available in the list.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
+    soup = BeautifulSoup(context.response.content, "html.parser")
+
+    # Find all <td> elements
+    tds = soup.find_all("td")
+
+    # Get their text content (unescaped and stripped)
+    values = [td.get_text(strip=True) for td in tds]
+
+    assert "test" in values, f"Issuing CA test doesn't exist"

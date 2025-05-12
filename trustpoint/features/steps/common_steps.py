@@ -2,7 +2,7 @@
 
 import logging
 
-from behave import given, runner, step, then
+from behave import given, runner, step, then, when
 from django.contrib.auth.models import User
 from django.test import Client
 from pki.models.domain import DomainModel
@@ -138,3 +138,16 @@ def step_verify_error_message(context: runner.Context, error_message: str) -> No
     """
     msg = 'Step not implemented: Verify error message in response payload.'
     raise AssertionError(msg)
+
+@when('the admin clicks on "add new issuing ca"')
+def step_verify_error_message(context: runner.Context) -> None:  # noqa: ARG001
+    """Simulates click on add new issuing ca.
+
+    Args:
+        context: the behave context
+        error_message (str): The expected error message text.
+    """
+    context.response = context.authenticated_client.get("/pki/issuing-cas/add/method-select/")
+    # Check that page loaded successfully
+    assert context.response.status_code == 200, f"Failed to load Add new Issuing CA page"
+
