@@ -366,9 +366,12 @@ class NotificationModel(models.Model):
         """Returns a human-readable string.
 
         Returns:
-            The notification type to display.
+            The notification type to display with message description if available.
         """
-        return f'{self.get_notification_type_display()} - {self.message.short_description[:20]}'
+        message_text = "No message"
+        if self.message and hasattr(self.message, 'short_description'):
+            message_text = self.message.short_description[:20]
+        return f'{self.get_notification_type_display()} - {message_text}'
 
     @property
     def short_translated(self) -> Any:

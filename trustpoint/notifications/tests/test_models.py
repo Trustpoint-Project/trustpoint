@@ -1,62 +1,78 @@
+"""Tests for the NotificationModel model and related functionality in the notifications app."""
+import typing
+
 import pytest
+from devices.models import DeviceModel
 from django.core.management import call_command
 from django.utils import timezone
+from pki.models import DomainModel, IssuingCaModel
 
 from notifications.models import (
+    NotificationConfig,
+    NotificationMessageModel,
     NotificationModel,
     NotificationStatus,
-    NotificationMessageModel,
 )
-from pki.models import IssuingCaModel, DomainModel
+
+DEFAULT_EXPIRY_WARNING_DAYS = 30
+DEFAULT_RSA_KEY_SIZE = 2048
+EXPECTED_STATUS_COUNT = 2
+
+@pytest.fixture
+def setup_test_issuing_ca() -> IssuingCaModel :
+    """Use custom management command to create a test Issuing CA."""
+    call_command('create_single_test_issuing_ca')
+    issuing_ca = IssuingCaModel.objects.get(unique_name='issuing-ca-a-test-fixture')
+    return typing.cast(IssuingCaModel, issuing_ca)
+
 
 
 @pytest.fixture
-def setup_test_issuing_ca(db):
-    """
-    Use custom management command to create a test Issuing CA.
-    """
-    call_command("create_single_test_issuing_ca")
-    return IssuingCaModel.objects.get(unique_name="issuing-ca-a-test-fixture")
-
-
-@pytest.fixture
-def test_domain(db, setup_test_issuing_ca):
-    """
-    Create a domain linked to the test issuing CA.
-    """
+def test_domain(setup_test_issuing_ca: IssuingCaModel) -> DomainModel:
+    """Create a domain linked to the test issuing CA."""
     domain, _ = DomainModel.objects.get_or_create(
-        unique_name="test-domain",
-        defaults={"issuing_ca": setup_test_issuing_ca},
+        unique_name='test-domain',
+        defaults={'issuing_ca': setup_test_issuing_ca},
     )
     domain.issuing_ca = setup_test_issuing_ca
     domain.save()
     return domain
 
+@pytest.fixture
+def test_device(test_domain: DomainModel) -> DeviceModel:
+    """Create a test device fixture."""
+    device = DeviceModel.objects.create(
+        common_name='test-device-1',
+        serial_number='TEST123456',
+        domain=test_domain,
+        onboarding_status=DeviceModel.OnboardingStatus.NO_ONBOARDING,
+        onboarding_protocol=DeviceModel.OnboardingProtocol.EST_PASSWORD,
+        pki_protocol=DeviceModel.PkiProtocol.EST_PASSWORD,
+    )
+    return typing.cast(DeviceModel, device)
+
 
 @pytest.fixture
-def test_message(db):
-    """
-    Create a NotificationMessageModel used for custom notifications.
-    """
+def test_message() -> NotificationMessageModel:
+    """Create a NotificationMessageModel used for custom notifications."""
     return NotificationMessageModel.objects.create(
-        short_description="Test short",
-        long_description="Test long description"
+        short_description='Test short',
+        long_description='Test long description'
     )
 
 
 @pytest.fixture
-def test_status(db):
-    """
-    Create a notification status object.
-    """
+def test_status() -> NotificationStatus:
+    """Create a notification status object."""
     return NotificationStatus.objects.create(status=NotificationStatus.StatusChoices.NEW)
 
 
 @pytest.mark.django_db
-def test_create_notification_with_issuing_ca(test_message, test_status, setup_test_issuing_ca):
-    """
-    Test creation of a NotificationModel linked to an Issuing CA.
-    """
+def test_create_notification_with_issuing_ca(
+        test_message: NotificationMessageModel,
+        test_status: NotificationStatus,
+        setup_test_issuing_ca: IssuingCaModel) -> None:
+    """Test creation of a NotificationModel linked to an Issuing CA."""
     notification = NotificationModel.objects.create(
         notification_type=NotificationModel.NotificationTypes.WARNING,
         notification_source=NotificationModel.NotificationSource.ISSUING_CA,
@@ -67,16 +83,17 @@ def test_create_notification_with_issuing_ca(test_message, test_status, setup_te
     notification.statuses.set([test_status])
 
     assert notification.issuing_ca == setup_test_issuing_ca
-    assert notification.short_translated == "Test short"
-    assert notification.long_translated == "Test long description"
-    assert str(notification).startswith("WARNING - Test short")
+    assert notification.short_translated == 'Test short'
+    assert notification.long_translated == 'Test long description'
+    assert str(notification).startswith('WARNING - Test short')
 
 
 @pytest.mark.django_db
-def test_create_notification_with_domain(test_message, test_status, test_domain):
-    """
-    Test creation of a NotificationModel linked to a domain.
-    """
+def test_create_notification_with_domain(
+        test_message: NotificationMessageModel,
+        test_status: NotificationStatus,
+        test_domain: DomainModel) -> None:
+    """Test creation of a NotificationModel linked to a domain."""
     notification = NotificationModel.objects.create(
         notification_type=NotificationModel.NotificationTypes.INFO,
         notification_source=NotificationModel.NotificationSource.DOMAIN,
@@ -87,15 +104,13 @@ def test_create_notification_with_domain(test_message, test_status, test_domain)
     notification.statuses.set([test_status])
 
     assert notification.domain == test_domain
-    assert notification.short_translated == "Test short"
-    assert notification.long_translated == "Test long description"
+    assert notification.short_translated == 'Test short'
+    assert notification.long_translated == 'Test long description'
 
 
 @pytest.mark.django_db
-def test_notification_translations_for_builtins(test_status):
-    """
-    Test translated messages for built-in (non-CUSTOM) notification types.
-    """
+def test_notification_translations_for_builtins(test_status: NotificationStatus) -> None :
+    """Test translated messages for built-in (non-CUSTOM) notification types."""
     notification = NotificationModel.objects.create(
         notification_type=NotificationModel.NotificationTypes.CRITICAL,
         notification_source=NotificationModel.NotificationSource.SYSTEM,
@@ -104,31 +119,27 @@ def test_notification_translations_for_builtins(test_status):
     )
     notification.statuses.set([test_status])
 
-    assert "System health check failed" in notification.short_translated
-    assert "The system health check detected an issue" in notification.long_translated
+    assert 'System health check failed' in notification.short_translated
+    assert 'The system health check detected an issue' in notification.long_translated
 
 
 @pytest.mark.django_db
-def test_unknown_message_type_fallback(test_status):
-    """
-    Test fallback behavior when an unknown message_type is provided.
-    """
+def test_unknown_message_type_fallback(test_status: NotificationStatus) -> None:
+    """Test fallback behavior when an unknown message_type is provided."""
     notification = NotificationModel.objects.create(
         notification_type=NotificationModel.NotificationTypes.CRITICAL,
         notification_source=NotificationModel.NotificationSource.SYSTEM,
-        message_type="UNKNOWN_CODE",
+        message_type='UNKNOWN_CODE',
         message_data={},
     )
     notification.statuses.set([test_status])
 
-    assert "Unknown Notification message type." in notification.short_translated
-    assert "Guess we messed up" in notification.long_translated
+    assert 'Unknown Notification message type.' in notification.short_translated
+    assert 'Guess we messed up' in notification.long_translated
 
 @pytest.mark.django_db
-def test_notification_with_multiple_statuses(test_message, test_domain):
-    """
-    Test that multiple statuses can be added to a NotificationModel.
-    """
+def test_notification_with_multiple_statuses(test_message: NotificationMessageModel, test_domain: DomainModel) -> None:
+    """Test that multiple statuses can be added to a NotificationModel."""
     status_new = NotificationStatus.objects.create(status=NotificationStatus.StatusChoices.NEW)
     status_ack = NotificationStatus.objects.create(status=NotificationStatus.StatusChoices.ACKNOWLEDGED)
 
@@ -142,15 +153,13 @@ def test_notification_with_multiple_statuses(test_message, test_domain):
     notif.statuses.set([status_new, status_ack])
 
     statuses = notif.statuses.all()
-    assert statuses.count() == 2
+    assert statuses.count() == EXPECTED_STATUS_COUNT
     assert status_new in statuses
     assert status_ack in statuses
 
 @pytest.mark.django_db
-def test_notification_str_fallback_missing_message(test_domain):
-    """
-    Test that __str__ handles missing message (should not raise).
-    """
+def test_notification_str_fallback_missing_message(test_domain: DomainModel) -> None:
+    """Test that __str__ handles missing message (should not raise)."""
     notif = NotificationModel.objects.create(
         notification_type=NotificationModel.NotificationTypes.CRITICAL,
         notification_source=NotificationModel.NotificationSource.DOMAIN,
@@ -158,4 +167,154 @@ def test_notification_str_fallback_missing_message(test_domain):
         domain=test_domain,
         message=None,  # required=False on model level
     )
-    assert isinstance(str(notif), str)
+    assert str(notif) == f'{notif.get_notification_type_display()} - No message'
+
+@pytest.mark.django_db
+def test_notification_str_with_long_message(test_domain: DomainModel) -> None:
+    """Test that __str__ properly truncates long messages to 20 characters."""
+    message = NotificationMessageModel.objects.create(
+        short_description='This is a very long message that should be truncated',
+        long_description='Full description'
+    )
+    notif = NotificationModel.objects.create(
+        notification_type=NotificationModel.NotificationTypes.INFO,
+        notification_source=NotificationModel.NotificationSource.DOMAIN,
+        message_type=NotificationModel.NotificationMessageType.CUSTOM,
+        domain=test_domain,
+        message=message,
+    )
+    assert str(notif) == f'{notif.get_notification_type_display()} - This is a very long '
+
+@pytest.mark.django_db
+def test_notification_str_with_empty_message(test_domain: DomainModel) -> None:
+    """Test that __str__ handles empty message description properly."""
+    message = NotificationMessageModel.objects.create(
+        short_description='',
+        long_description='Some long description'
+    )
+    notif = NotificationModel.objects.create(
+        notification_type=NotificationModel.NotificationTypes.WARNING,
+        notification_source=NotificationModel.NotificationSource.DOMAIN,
+        message_type=NotificationModel.NotificationMessageType.CUSTOM,
+        domain=test_domain,
+        message=message,
+    )
+    assert str(notif) == f'{notif.get_notification_type_display()} - '
+
+@pytest.mark.django_db
+def test_notification_str_with_special_characters(test_domain: DomainModel) -> None:
+    """Test that __str__ handles messages with special characters properly."""
+    message = NotificationMessageModel.objects.create(
+        short_description='!@#$%^&*()_+-=[]{}',
+        long_description='Test with special characters'
+    )
+    notif = NotificationModel.objects.create(
+        notification_type=NotificationModel.NotificationTypes.CRITICAL,
+        notification_source=NotificationModel.NotificationSource.DOMAIN,
+        message_type=NotificationModel.NotificationMessageType.CUSTOM,
+        domain=test_domain,
+        message=message,
+    )
+    assert str(notif) == f'{notif.get_notification_type_display()} - !@#$%^&*()_+-=[]{{}}'
+
+@pytest.mark.django_db
+def test_notification_for_issuing_ca_creation(
+        test_message: NotificationMessageModel,
+        test_status: NotificationStatus,
+        setup_test_issuing_ca: IssuingCaModel) -> None:
+    """Test notification creation when a new issuing CA is created."""
+    notification = NotificationModel.objects.create(
+        notification_type=NotificationModel.NotificationTypes.INFO,
+        notification_source=NotificationModel.NotificationSource.ISSUING_CA,
+        message_type=NotificationModel.NotificationMessageType.CUSTOM,
+        message=test_message,
+        issuing_ca=setup_test_issuing_ca,
+        message_data={
+            'ca_name': setup_test_issuing_ca.unique_name,
+            'ca_type': setup_test_issuing_ca.IssuingCaTypeChoice(setup_test_issuing_ca.issuing_ca_type).label,
+            'common_name': setup_test_issuing_ca.common_name
+        }
+    )
+    notification.statuses.set([test_status])
+
+    assert notification.issuing_ca == setup_test_issuing_ca
+    assert notification.message_data['ca_name'] == setup_test_issuing_ca.unique_name
+
+@pytest.mark.django_db
+def test_create_notification_with_device(
+    test_message: NotificationMessageModel,
+    test_status: NotificationStatus,
+    test_device: DeviceModel
+) -> None:
+    """Test creation of a NotificationModel linked to a device."""
+    notification = NotificationModel.objects.create(
+        notification_type=NotificationModel.NotificationTypes.WARNING,
+        notification_source=NotificationModel.NotificationSource.DEVICE,
+        message_type=NotificationModel.NotificationMessageType.CUSTOM,
+        message=test_message,
+        device=test_device,
+    )
+    notification.statuses.set([test_status])
+
+    assert notification.device == test_device
+    assert notification.short_translated == 'Test short'
+    assert notification.long_translated == 'Test long description'
+
+
+@pytest.mark.django_db
+def test_notification_config_defaults() -> None:
+    """Test NotificationConfig default values and singleton behavior."""
+    config = NotificationConfig.get()
+
+    assert config.cert_expiry_warning_days == DEFAULT_EXPIRY_WARNING_DAYS
+    assert config.issuing_ca_expiry_warning_days == DEFAULT_EXPIRY_WARNING_DAYS
+    assert config.rsa_minimum_key_size == DEFAULT_RSA_KEY_SIZE
+
+    config2 = NotificationConfig.get()
+    assert config == config2
+
+
+@pytest.mark.django_db
+def test_notification_created_at_auto_now() -> None:
+    """Test that created_at is automatically set when creating a notification."""
+    before_creation = timezone.now()
+    notification = NotificationModel.objects.create(
+        notification_type=NotificationModel.NotificationTypes.INFO,
+        notification_source=NotificationModel.NotificationSource.SYSTEM,
+        message_type=NotificationModel.NotificationMessageType.SYSTEM_NOT_HEALTHY
+    )
+    after_creation = timezone.now()
+
+    assert before_creation <= notification.created_at <= after_creation
+
+
+@pytest.mark.django_db
+def test_notification_event_filtering() -> None:
+    """Test that notifications can be filtered by event."""
+    NotificationModel.objects.create(
+        notification_type=NotificationModel.NotificationTypes.WARNING,
+        notification_source=NotificationModel.NotificationSource.SYSTEM,
+        message_type=NotificationModel.NotificationMessageType.SYSTEM_NOT_HEALTHY,
+        event='test_event'
+    )
+
+    found = NotificationModel.objects.filter(event='test_event').exists()
+    assert found
+    assert NotificationModel.objects.filter(event='non_existent').exists() is False
+
+@pytest.mark.django_db
+def test_custom_message_with_empty_descriptions() -> None:
+    """Test custom notification message with empty descriptions."""
+    message = NotificationMessageModel.objects.create(
+        short_description='',
+        long_description=''
+    )
+    notification = NotificationModel.objects.create(
+        notification_type=NotificationModel.NotificationTypes.INFO,
+        notification_source=NotificationModel.NotificationSource.SYSTEM,
+        message_type=NotificationModel.NotificationMessageType.CUSTOM,
+        message=message
+    )
+
+    assert notification.short_translated == ''
+    assert notification.long_translated == ''
