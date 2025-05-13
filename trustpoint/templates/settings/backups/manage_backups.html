@@ -94,7 +94,30 @@
       {% include "trustpoint/pagination.html" %}
     </div>
   </form>
+
+ 
 </div>
+
+<hr class="my-3"/>
+
+<form method="post"
+      action="{% url 'settings:backup-restore' %}"
+      enctype="multipart/form-data"
+      class="d-flex align-items-center">
+  {% csrf_token %}
+  <div class="me-2">
+    <input type="file"
+          name="backup_file"
+          accept=".dump,.gz"
+          required
+          class="form-control"/>
+  </div>
+  <button type="submit" class="btn btn-warning">
+    {% trans "Backup wiederherstellen" %}
+  </button>
+</form>
+
+
 
 <script>
   document.getElementById('select-all').addEventListener('change', function(e) {

@@ -223,3 +223,28 @@ class BackupFilesDeleteMultipleView(View):
         if errors:
             messages.error(request, f'Errors deleting: {", ".join(errors)}')
         return redirect('settings:backups')
+
+
+class BackupRestoreView(View):
+    """Upload a dump file and restore the database from it."""
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        backup_file = request.FILES.get('backup_file')
+        if not backup_file:
+            messages.error(request, "No file uploaded for restore.")
+            return redirect('settings:backups')
+
+        temp_dir = settings.BACKUP_FILE_PATH
+        temp_path = temp_dir / backup_file.name
+        # save upload
+        with open(temp_path, 'wb+') as f:
+            for chunk in backup_file.chunks():
+                f.write(chunk)
+
+        try:
+            call_command('dbrestore',  '-z', '--noinput', '-I', str(temp_path))
+            messages.success(request, f"Database restored from {backup_file.name}")
+        except Exception as e:
+            messages.error(request, f"Error restoring database: {e}")
+
+        return redirect('settings:backups')

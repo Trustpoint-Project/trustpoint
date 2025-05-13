@@ -20,7 +20,8 @@ RUN apt-get update && \
         apache2 \
         apache2-utils \
         gettext \
-        libapache2-mod-wsgi-py3 && \
+        libapache2-mod-wsgi-py3 \
+        postgresql-client && \
     rm -rf /var/lib/apt/lists/*
 
 # Sets the current WORKDIR for the following commands
