@@ -1,0 +1,184 @@
+{
+  "uid" : "305e03013cb43747",
+  "name" : "Security level affects system behavior",
+  "fullName" : "Security Level Configuration: Security level affects system behavior",
+  "historyId" : "c60f8e5e3e51ac1b836f3a661458d934",
+  "time" : {
+    "start" : 1747122037115,
+    "stop" : 1747122037697,
+    "duration" : 582
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: Given the TrustPoint component \"TPC_Web\" has security level \"High\"\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_101_steps.py\", line 28, in step_given_component_has_security_level\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: Given the TrustPoint component \"TPC_Web\" has security level \"High\"\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_101_steps.py\", line 28, in step_given_component_has_security_level\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1747122037118,
+        "stop" : 1747122037663,
+        "duration" : 545
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given the TrustPoint component \"TPC_Web\" has security level \"High\"",
+      "time" : {
+        "start" : 1747122037663,
+        "stop" : 1747122037663,
+        "duration" : 0
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: Given the TrustPoint component \"TPC_Web\" has security level \"High\"\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_101_steps.py\", line 28, in step_given_component_has_security_level\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "When an unauthorized user attempts access",
+      "time" : {
+        "start" : 1747122037697,
+        "stop" : 1747122037697,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then access should be denied",
+      "time" : {
+        "start" : 1747122037697,
+        "stop" : 1747122037697,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "epic",
+    "value" : "Features"
+  }, {
+    "name" : "package",
+    "value" : "R_101_Security_Configuration"
+  }, {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "suite",
+    "value" : "R_101_Security_Configuration"
+  }, {
+    "name" : "feature",
+    "value" : "Security Level Configuration"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 5,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 5
+      },
+      "items" : [ {
+        "uid" : "ff1648d176f30473",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/23/#testresult/ff1648d176f30473",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the TrustPoint component \"TPC_Web\" has security level \"High\"\n",
+        "time" : {
+          "start" : 1746713376171,
+          "stop" : 1746713376752,
+          "duration" : 581
+        }
+      }, {
+        "uid" : "14e523754629fcef",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/22/#testresult/14e523754629fcef",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the TrustPoint component \"TPC_Web\" has security level \"High\"\n",
+        "time" : {
+          "start" : 1746711083656,
+          "stop" : 1746711084236,
+          "duration" : 580
+        }
+      }, {
+        "uid" : "9732a61ed110462c",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/9732a61ed110462c",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the TrustPoint component \"TPC_Web\" has security level \"High\"\n",
+        "time" : {
+          "start" : 1746710249331,
+          "stop" : 1746710249906,
+          "duration" : 575
+        }
+      }, {
+        "uid" : "cf15c39fb4b9f01c",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/cf15c39fb4b9f01c",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the TrustPoint component \"TPC_Web\" has security level \"High\"\n",
+        "time" : {
+          "start" : 1746709795352,
+          "stop" : 1746709795928,
+          "duration" : 576
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "305e03013cb43747.json",
+  "parameterValues" : [ ]
+}

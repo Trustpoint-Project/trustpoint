@@ -1,0 +1,190 @@
+{
+  "uid" : "8c9cea45c5331015",
+  "name" : "Retrieving and filtering logs -- @1.2 ",
+  "fullName" : "Logging Capabilities: Retrieving and filtering logs",
+  "historyId" : "d251679cf2c5d76bafb706a785c9035a",
+  "time" : {
+    "start" : 1747122023793,
+    "stop" : 1747122024366,
+    "duration" : 573
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: When the admin retrieves logs for the time range last 7 days\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_007_steps.py\", line 39, in step_when_admin_retrieves_logs\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: When the admin retrieves logs for the time range last 7 days\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_007_steps.py\", line 39, in step_when_admin_retrieves_logs\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1747122023795,
+        "stop" : 1747122024337,
+        "duration" : 542
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the admin retrieves logs for the time range last 7 days",
+      "time" : {
+        "start" : 1747122024338,
+        "stop" : 1747122024338,
+        "duration" : 0
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: When the admin retrieves logs for the time range last 7 days\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_007_steps.py\", line 39, in step_when_admin_retrieves_logs\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "Then the system displays logs within the last 7 days",
+      "time" : {
+        "start" : 1747122024366,
+        "stop" : 1747122024366,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And logs can be filtered by event type",
+      "time" : {
+        "start" : 1747122024366,
+        "stop" : 1747122024366,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "epic",
+    "value" : "Features"
+  }, {
+    "name" : "package",
+    "value" : "R_007_Logging_capabilities"
+  }, {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "suite",
+    "value" : "R_007_Logging_capabilities"
+  }, {
+    "name" : "feature",
+    "value" : "Logging Capabilities"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "filter_criteria",
+    "value" : "event type"
+  }, {
+    "name" : "time_range",
+    "value" : "last 7 days"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 5,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 5
+      },
+      "items" : [ {
+        "uid" : "1e42745cdd487790",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/23/#testresult/1e42745cdd487790",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin retrieves logs for the time range last 7 days\n",
+        "time" : {
+          "start" : 1746713362452,
+          "stop" : 1746713363026,
+          "duration" : 574
+        }
+      }, {
+        "uid" : "599c56baae69c0bc",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/22/#testresult/599c56baae69c0bc",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin retrieves logs for the time range last 7 days\n",
+        "time" : {
+          "start" : 1746711069998,
+          "stop" : 1746711070568,
+          "duration" : 570
+        }
+      }, {
+        "uid" : "72fe3634d7ea514e",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/72fe3634d7ea514e",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin retrieves logs for the time range last 7 days\n",
+        "time" : {
+          "start" : 1746710235783,
+          "stop" : 1746710236350,
+          "duration" : 567
+        }
+      }, {
+        "uid" : "fb7761fcf40825b9",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/fb7761fcf40825b9",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin retrieves logs for the time range last 7 days\n",
+        "time" : {
+          "start" : 1746709781910,
+          "stop" : 1746709782479,
+          "duration" : 569
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "8c9cea45c5331015.json",
+  "parameterValues" : [ "event type", "last 7 days" ]
+}

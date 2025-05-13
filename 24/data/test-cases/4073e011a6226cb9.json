@@ -1,0 +1,187 @@
+{
+  "uid" : "4073e011a6226cb9",
+  "name" : "Configuring logging settings -- @1.2 ",
+  "fullName" : "Logging Capabilities: Configuring logging settings",
+  "historyId" : "441b48f2e414a882f9ee6e140acc950e",
+  "time" : {
+    "start" : 1747122024940,
+    "stop" : 1747122025510,
+    "duration" : 570
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: When the admin modifies logging configuration to INFO\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_007_steps.py\", line 75, in step_when_admin_modifies_logging\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: When the admin modifies logging configuration to INFO\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_007_steps.py\", line 75, in step_when_admin_modifies_logging\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1747122024942,
+        "stop" : 1747122025482,
+        "duration" : 540
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the admin modifies logging configuration to INFO",
+      "time" : {
+        "start" : 1747122025482,
+        "stop" : 1747122025482,
+        "duration" : 0
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: When the admin modifies logging configuration to INFO\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_007_steps.py\", line 75, in step_when_admin_modifies_logging\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "Then the system applies the new logging configuration",
+      "time" : {
+        "start" : 1747122025510,
+        "stop" : 1747122025510,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And logs reflect the new verbosity level INFO",
+      "time" : {
+        "start" : 1747122025510,
+        "stop" : 1747122025510,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "epic",
+    "value" : "Features"
+  }, {
+    "name" : "package",
+    "value" : "R_007_Logging_capabilities"
+  }, {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "suite",
+    "value" : "R_007_Logging_capabilities"
+  }, {
+    "name" : "feature",
+    "value" : "Logging Capabilities"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "log_level",
+    "value" : "INFO"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 5,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 5
+      },
+      "items" : [ {
+        "uid" : "37cf5632047dcde",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/23/#testresult/37cf5632047dcde",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin modifies logging configuration to INFO\n",
+        "time" : {
+          "start" : 1746713363601,
+          "stop" : 1746713364174,
+          "duration" : 573
+        }
+      }, {
+        "uid" : "2e1a5c9fa644bc66",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/22/#testresult/2e1a5c9fa644bc66",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin modifies logging configuration to INFO\n",
+        "time" : {
+          "start" : 1746711071139,
+          "stop" : 1746711071711,
+          "duration" : 572
+        }
+      }, {
+        "uid" : "289a34dfe971bdfb",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/289a34dfe971bdfb",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin modifies logging configuration to INFO\n",
+        "time" : {
+          "start" : 1746710236920,
+          "stop" : 1746710237488,
+          "duration" : 568
+        }
+      }, {
+        "uid" : "c9e924dc025a9a21",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/c9e924dc025a9a21",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin modifies logging configuration to INFO\n",
+        "time" : {
+          "start" : 1746709783048,
+          "stop" : 1746709783618,
+          "duration" : 570
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "4073e011a6226cb9.json",
+  "parameterValues" : [ "INFO" ]
+}

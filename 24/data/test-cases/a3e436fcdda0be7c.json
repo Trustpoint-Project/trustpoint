@@ -1,0 +1,187 @@
+{
+  "uid" : "a3e436fcdda0be7c",
+  "name" : "Attempt to revoke an already revoked certificate -- @1.2 ",
+  "fullName" : "Certificate lifecycle management via TPC_Web: Attempt to revoke an already revoked certificate",
+  "historyId" : "d657459d919bbeb5dab64c037afbe369",
+  "time" : {
+    "start" : 1747122018888,
+    "stop" : 1747122019458,
+    "duration" : 570
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: Step not implemented: Set certificate to revoked state.\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_003_steps.py\", line 39, in step_certificate_revoked\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: Step not implemented: Set certificate to revoked state.\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_003_steps.py\", line 39, in step_certificate_revoked\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1747122018890,
+        "stop" : 1747122019429,
+        "duration" : 539
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given the certificate CERT7171 exists and is revoked",
+      "time" : {
+        "start" : 1747122019430,
+        "stop" : 1747122019430,
+        "duration" : 0
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: Step not implemented: Set certificate to revoked state.\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_003_steps.py\", line 39, in step_certificate_revoked\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "When the admin attempts to revoke the certificate CERT7171",
+      "time" : {
+        "start" : 1747122019458,
+        "stop" : 1747122019458,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then the system should display an error message stating \"Certificate is already revoked\"",
+      "time" : {
+        "start" : 1747122019458,
+        "stop" : 1747122019458,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "epic",
+    "value" : "Features"
+  }, {
+    "name" : "package",
+    "value" : "R_003_Certificate_lifecycle_management_via_TPC_Web"
+  }, {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "suite",
+    "value" : "R_003_Certificate_lifecycle_management_via_TPC_Web"
+  }, {
+    "name" : "feature",
+    "value" : "Certificate lifecycle management via TPC_Web"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "certificate_id",
+    "value" : "CERT7171"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 5,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 5
+      },
+      "items" : [ {
+        "uid" : "e9964207d725fe5b",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/23/#testresult/e9964207d725fe5b",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: Set certificate to revoked state.\n",
+        "time" : {
+          "start" : 1746713357492,
+          "stop" : 1746713358062,
+          "duration" : 570
+        }
+      }, {
+        "uid" : "5f65634d97bee607",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/22/#testresult/5f65634d97bee607",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: Set certificate to revoked state.\n",
+        "time" : {
+          "start" : 1746711065095,
+          "stop" : 1746711065674,
+          "duration" : 579
+        }
+      }, {
+        "uid" : "b0bd4e71187fcc19",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/b0bd4e71187fcc19",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: Set certificate to revoked state.\n",
+        "time" : {
+          "start" : 1746710230903,
+          "stop" : 1746710231472,
+          "duration" : 569
+        }
+      }, {
+        "uid" : "14536fcb1fe41d1a",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/14536fcb1fe41d1a",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: Step not implemented: Set certificate to revoked state.\n",
+        "time" : {
+          "start" : 1746709776985,
+          "stop" : 1746709777607,
+          "duration" : 622
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "a3e436fcdda0be7c.json",
+  "parameterValues" : [ "CERT7171" ]
+}

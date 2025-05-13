@@ -1,0 +1,114 @@
+{
+  "total" : 17,
+  "items" : [ {
+    "uid" : "7f47c818b7c82e4c1716e07e89b728a0",
+    "name" : "R_012_Multi_language_support",
+    "statistic" : {
+      "failed" : 16,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 16
+    }
+  }, {
+    "uid" : "adcb1715c5aafaba1cbd4ced29a6de7c",
+    "name" : "R_004_REST_API_interaction_with_Trustpoint",
+    "statistic" : {
+      "failed" : 11,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 11
+    }
+  }, {
+    "uid" : "125283078e3e0faa87abb386cd3f3365",
+    "name" : "R_003_Certificate_lifecycle_management_via_TPC_Web",
+    "statistic" : {
+      "failed" : 10,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 10
+    }
+  }, {
+    "uid" : "2bb6093f3f8b4e5b736a390134a2dae5",
+    "name" : "R_007_Logging_capabilities",
+    "statistic" : {
+      "failed" : 9,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 9
+    }
+  }, {
+    "uid" : "9d117dc3736f68b0426c1f486ad040d8",
+    "name" : "R_001_Manage_digital_identities_via_TPC_Web",
+    "statistic" : {
+      "failed" : 8,
+      "broken" : 1,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 9
+    }
+  }, {
+    "uid" : "7643f5319d0e6505239efbfa9aa816a7",
+    "name" : "F_001_NTEU_Identity_Management_and_Zero-Touch_Onboarding",
+    "statistic" : {
+      "failed" : 8,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 8
+    }
+  }, {
+    "uid" : "3a7333ee47a2ed78c6af0fa2f5ca85e8",
+    "name" : "R_101_Security_Configuration",
+    "statistic" : {
+      "failed" : 8,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 8
+    }
+  }, {
+    "uid" : "296e859a0f71dc561b0bb2c9d9cdef08",
+    "name" : "R_102_Certificate_Template_Security",
+    "statistic" : {
+      "failed" : 8,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 8
+    }
+  }, {
+    "uid" : "a20335d37012e1802d23c86430991d7d",
+    "name" : "R_008_Auto_generated_Issuing_CAs",
+    "statistic" : {
+      "failed" : 6,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 6
+    }
+  }, {
+    "uid" : "073359058ee6e0bff253761c660bef1a",
+    "name" : "R_010_CMP_Endpoint",
+    "statistic" : {
+      "failed" : 6,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 0,
+      "unknown" : 0,
+      "total" : 6
+    }
+  } ]
+}

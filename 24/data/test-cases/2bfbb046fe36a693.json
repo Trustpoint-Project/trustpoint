@@ -1,0 +1,207 @@
+{
+  "uid" : "2bfbb046fe36a693",
+  "name" : "User downloads credential on remote device browser",
+  "fullName" : "R_013 Remote Credential Download: User downloads credential on remote device browser",
+  "historyId" : "cab5fa3e20c2c5a0d26168b8eed1573b",
+  "time" : {
+    "start" : 1747122032786,
+    "stop" : 1747122033629,
+    "duration" : 843
+  },
+  "status" : "passed",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "passed",
+    "steps" : [ {
+      "name" : "Given the TPC_Web application is running",
+      "time" : {
+        "start" : 1747122032788,
+        "stop" : 1747122032793,
+        "duration" : 5
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given the user is on the credential download page",
+      "time" : {
+        "start" : 1747122032793,
+        "stop" : 1747122033546,
+        "duration" : 753
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And the download token is not yet expired",
+      "time" : {
+        "start" : 1747122033546,
+        "stop" : 1747122033547,
+        "duration" : 1
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the user enters a password to encrypt the credential private key",
+      "time" : {
+        "start" : 1747122033547,
+        "stop" : 1747122033547,
+        "duration" : 0
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And selects a file format",
+      "time" : {
+        "start" : 1747122033548,
+        "stop" : 1747122033594,
+        "duration" : 46
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then the credential will be downloaded to their browser in the requested format",
+      "time" : {
+        "start" : 1747122033594,
+        "stop" : 1747122033594,
+        "duration" : 0
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 6,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "epic",
+    "value" : "Features"
+  }, {
+    "name" : "owner",
+    "value" : "Aircoookie"
+  }, {
+    "name" : "package",
+    "value" : "R_013_Remote_Credential_Download"
+  }, {
+    "name" : "severity",
+    "value" : "critical"
+  }, {
+    "name" : "suite",
+    "value" : "R_013_Remote_Credential_Download"
+  }, {
+    "name" : "tag",
+    "value" : "fixture.r013.setup"
+  }, {
+    "name" : "feature",
+    "value" : "R_013 Remote Credential Download"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "critical",
+    "owner" : "Aircoookie",
+    "retries" : [ ],
+    "categories" : [ ],
+    "history" : {
+      "statistic" : {
+        "failed" : 0,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 5,
+        "unknown" : 0,
+        "total" : 5
+      },
+      "items" : [ {
+        "uid" : "327ee3a90ad3c478",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/23/#testresult/327ee3a90ad3c478",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746713371752,
+          "stop" : 1746713372674,
+          "duration" : 922
+        }
+      }, {
+        "uid" : "dd3d1e594e4d5cf9",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/22/#testresult/dd3d1e594e4d5cf9",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746711079222,
+          "stop" : 1746711080146,
+          "duration" : 924
+        }
+      }, {
+        "uid" : "cfca67f64e55316",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/cfca67f64e55316",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746710244796,
+          "stop" : 1746710245854,
+          "duration" : 1058
+        }
+      }, {
+        "uid" : "578c015ff22018d7",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/578c015ff22018d7",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746709790992,
+          "stop" : 1746709791888,
+          "duration" : 896
+        }
+      } ]
+    },
+    "tags" : [ "fixture.r013.setup" ]
+  },
+  "source" : "2bfbb046fe36a693.json",
+  "parameterValues" : [ ]
+}

@@ -1,0 +1,199 @@
+{
+  "uid" : "9bfa1eacb55c09f1",
+  "name" : "Unauthorized export attempt",
+  "fullName" : "Certificate Template Security: Unauthorized export attempt",
+  "historyId" : "147794cc9fdf1e7d9040ef6ace2be08f",
+  "time" : {
+    "start" : 1747122042351,
+    "stop" : 1747122042935,
+    "duration" : 584
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: Given a certificate template named \"Exportable_Template\" exists\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_102_steps.py\", line 27, in step_given_certificate_template_exists\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: Given a certificate template named \"Exportable_Template\" exists\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_102_steps.py\", line 27, in step_given_certificate_template_exists\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1747122042353,
+        "stop" : 1747122042901,
+        "duration" : 548
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given a certificate template named \"Exportable_Template\" exists",
+      "time" : {
+        "start" : 1747122042901,
+        "stop" : 1747122042901,
+        "duration" : 0
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: Given a certificate template named \"Exportable_Template\" exists\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_102_steps.py\", line 27, in step_given_certificate_template_exists\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "When a non-admin user attempts to export the template",
+      "time" : {
+        "start" : 1747122042935,
+        "stop" : 1747122042935,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then export should be denied",
+      "time" : {
+        "start" : 1747122042935,
+        "stop" : 1747122042935,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And the attempt should be logged",
+      "time" : {
+        "start" : 1747122042935,
+        "stop" : 1747122042935,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 5,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "epic",
+    "value" : "Features"
+  }, {
+    "name" : "package",
+    "value" : "R_102_Certificate_Template_Security"
+  }, {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "suite",
+    "value" : "R_102_Certificate_Template_Security"
+  }, {
+    "name" : "feature",
+    "value" : "Certificate Template Security"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 5,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 5
+      },
+      "items" : [ {
+        "uid" : "54856786dd47db58",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/23/#testresult/54856786dd47db58",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given a certificate template named \"Exportable_Template\" exists\n",
+        "time" : {
+          "start" : 1746713381426,
+          "stop" : 1746713382007,
+          "duration" : 581
+        }
+      }, {
+        "uid" : "ae686d6359aefb09",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/22/#testresult/ae686d6359aefb09",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given a certificate template named \"Exportable_Template\" exists\n",
+        "time" : {
+          "start" : 1746711088889,
+          "stop" : 1746711089470,
+          "duration" : 581
+        }
+      }, {
+        "uid" : "6aae01f955d81a3d",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/6aae01f955d81a3d",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given a certificate template named \"Exportable_Template\" exists\n",
+        "time" : {
+          "start" : 1746710254531,
+          "stop" : 1746710255105,
+          "duration" : 574
+        }
+      }, {
+        "uid" : "502c5c22c94fc850",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/502c5c22c94fc850",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given a certificate template named \"Exportable_Template\" exists\n",
+        "time" : {
+          "start" : 1746709800539,
+          "stop" : 1746709801116,
+          "duration" : 577
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "9bfa1eacb55c09f1.json",
+  "parameterValues" : [ ]
+}

@@ -1,0 +1,193 @@
+{
+  "uid" : "809a91df3b2eb8ef",
+  "name" : "NTEU logs into the system -- @1.2 ",
+  "fullName" : "NTEU Identity Management and Zero-Touch Onboarding: NTEU logs into the system",
+  "historyId" : "5f61ceedfb794cc8010508b9047e88c9",
+  "time" : {
+    "start" : 1747122008324,
+    "stop" : 1747122008357,
+    "duration" : 33
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: Given the user is an NTEU with username invalid_user and password wrong_pw\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/f_001_steps.py\", line 19, in step_given_nteu_credentials\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: Given the user is an NTEU with username invalid_user and password wrong_pw\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/f_001_steps.py\", line 19, in step_given_nteu_credentials\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the TPC_Web application is running",
+      "time" : {
+        "start" : 1747122008326,
+        "stop" : 1747122008330,
+        "duration" : 4
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given the user is an NTEU with username invalid_user and password wrong_pw",
+      "time" : {
+        "start" : 1747122008330,
+        "stop" : 1747122008331,
+        "duration" : 1
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: Given the user is an NTEU with username invalid_user and password wrong_pw\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/f_001_steps.py\", line 19, in step_given_nteu_credentials\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "When the user attempts to log in",
+      "time" : {
+        "start" : 1747122008357,
+        "stop" : 1747122008357,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then login should be failed",
+      "time" : {
+        "start" : 1747122008357,
+        "stop" : 1747122008357,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "epic",
+    "value" : "Features"
+  }, {
+    "name" : "package",
+    "value" : "F_001_NTEU_Identity_Management_and_Zero-Touch_Onboarding"
+  }, {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "suite",
+    "value" : "F_001_NTEU_Identity_Management_and_Zero-Touch_Onboarding"
+  }, {
+    "name" : "feature",
+    "value" : "NTEU Identity Management and Zero-Touch Onboarding"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "login_outcome",
+    "value" : "failed"
+  }, {
+    "name" : "password",
+    "value" : "wrong_pw"
+  }, {
+    "name" : "username",
+    "value" : "invalid_user"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 5,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 5
+      },
+      "items" : [ {
+        "uid" : "1a8ab6b6833de202",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/23/#testresult/1a8ab6b6833de202",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the user is an NTEU with username invalid_user and password wrong_pw\n",
+        "time" : {
+          "start" : 1746713346809,
+          "stop" : 1746713346843,
+          "duration" : 34
+        }
+      }, {
+        "uid" : "c1f858e917f5e16b",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/22/#testresult/c1f858e917f5e16b",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the user is an NTEU with username invalid_user and password wrong_pw\n",
+        "time" : {
+          "start" : 1746711054527,
+          "stop" : 1746711054560,
+          "duration" : 33
+        }
+      }, {
+        "uid" : "ddc945522d68c265",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/ddc945522d68c265",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the user is an NTEU with username invalid_user and password wrong_pw\n",
+        "time" : {
+          "start" : 1746710220391,
+          "stop" : 1746710220422,
+          "duration" : 31
+        }
+      }, {
+        "uid" : "bafc09e3d1b0c32c",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/bafc09e3d1b0c32c",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the user is an NTEU with username invalid_user and password wrong_pw\n",
+        "time" : {
+          "start" : 1746709766439,
+          "stop" : 1746709766471,
+          "duration" : 32
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "809a91df3b2eb8ef.json",
+  "parameterValues" : [ "failed", "wrong_pw", "invalid_user" ]
+}

@@ -1,0 +1,175 @@
+{
+  "uid" : "bf0be416f84f466",
+  "name" : "Verification of generated CA details",
+  "fullName" : "Auto-Generated Issuing CAs: Verification of generated CA details",
+  "historyId" : "0033b990b82416d6e36750478a5a9b04",
+  "time" : {
+    "start" : 1747122028952,
+    "stop" : 1747122029524,
+    "duration" : 572
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: When the admin inspects the generated CA details\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_008_steps.py\", line 104, in step_when_admin_inspects_ca\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: When the admin inspects the generated CA details\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_008_steps.py\", line 104, in step_when_admin_inspects_ca\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1747122028954,
+        "stop" : 1747122029494,
+        "duration" : 540
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the admin inspects the generated CA details",
+      "time" : {
+        "start" : 1747122029494,
+        "stop" : 1747122029495,
+        "duration" : 1
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: When the admin inspects the generated CA details\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_008_steps.py\", line 104, in step_when_admin_inspects_ca\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "Then the CA should contain:",
+      "time" : {
+        "start" : 1747122029524,
+        "stop" : 1747122029524,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ {
+        "uid" : "3964a22c9f85013f",
+        "name" : ".table",
+        "source" : "3964a22c9f85013f.csv",
+        "type" : "text/csv",
+        "size" : 108
+      } ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 1,
+      "shouldDisplayMessage" : false,
+      "hasContent" : true
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 3,
+    "attachmentsCount" : 1,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "epic",
+    "value" : "Features"
+  }, {
+    "name" : "package",
+    "value" : "R_008_Auto_generated_Issuing_CAs"
+  }, {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "suite",
+    "value" : "R_008_Auto_generated_Issuing_CAs"
+  }, {
+    "name" : "feature",
+    "value" : "Auto-Generated Issuing CAs"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 5,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 5
+      },
+      "items" : [ {
+        "uid" : "6ae7f81130680e4d",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/23/#testresult/6ae7f81130680e4d",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin inspects the generated CA details\n",
+        "time" : {
+          "start" : 1746713367759,
+          "stop" : 1746713368331,
+          "duration" : 572
+        }
+      }, {
+        "uid" : "90bac42433f38a71",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/22/#testresult/90bac42433f38a71",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin inspects the generated CA details\n",
+        "time" : {
+          "start" : 1746711075178,
+          "stop" : 1746711075749,
+          "duration" : 571
+        }
+      }, {
+        "uid" : "b1a95f37e62b1e8f",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/b1a95f37e62b1e8f",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin inspects the generated CA details\n",
+        "time" : {
+          "start" : 1746710240905,
+          "stop" : 1746710241473,
+          "duration" : 568
+        }
+      }, {
+        "uid" : "5e4a51e7b4d8fc82",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/5e4a51e7b4d8fc82",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: When the admin inspects the generated CA details\n",
+        "time" : {
+          "start" : 1746709787034,
+          "stop" : 1746709787604,
+          "duration" : 570
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "bf0be416f84f466.json",
+  "parameterValues" : [ ]
+}
