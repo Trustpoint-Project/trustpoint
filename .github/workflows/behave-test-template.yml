@@ -24,6 +24,8 @@ jobs:
       - name: Run Behave Tests and Generate HTML Report for ${{ inputs.feature_file }}.feature
         run: |
           uv run trustpoint/manage.py behave \
+          --format behave_html_pretty_formatter:PrettyHTMLFormatter \
+          --outfile behave-report.html \
           trustpoint/features/${{ inputs.feature_file }}.feature
 
       - name: Upload Test Report

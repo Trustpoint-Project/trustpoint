@@ -1,3 +1,6 @@
+@allure.label.epic:Features
+@allure.label.suite:R_008_Auto_generated_Issuing_CAs
+@allure.label.package:R_008_Auto_generated_Issuing_CAs
 Feature: Auto-Generated Issuing CAs
   The system must automatically generate Issuing Certificate Authorities (CAs) based on configuration.
 

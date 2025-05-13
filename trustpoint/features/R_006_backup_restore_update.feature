@@ -1,3 +1,6 @@
+@allure.label.epic:Features
+@allure.label.suite:R_006_Backup_Restore_Update
+@allure.label.package:R_006_Backup_Restore_Update
 Feature: Backup, Restore, and Update Mechanisms
   Ensure system resilience through robust backup, restoration, and update features.
 

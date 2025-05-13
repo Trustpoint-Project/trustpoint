@@ -1,3 +1,6 @@
+@allure.label.epic:Features
+@allure.label.suite:R_001_Manage_digital_identities_via_TPC_Web
+@allure.label.package:R_001_Manage_digital_identities_via_TPC_Web
 Feature: Manage digital identities via TPC_Web
   As an admin user
   I want to create, view, edit, and delete digital identities

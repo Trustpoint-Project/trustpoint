@@ -1,6 +1,9 @@
-Feature: REST API interaction with TrustPoint
+@allure.label.epic:Features
+@allure.label.suite:R_004_REST_API_interaction_with_Trustpoint
+@allure.label.package:R_004_REST_API_interaction_with_Trustpoint
+Feature: REST API interaction with Trustpoint
   As an API client
-  I want to use the REST API to interact with TrustPoint
+  I want to use the REST API to interact with Trustpoint
   So that I can programmatically manage digital identities.
 
   Background:

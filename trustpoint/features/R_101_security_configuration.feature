@@ -1,3 +1,6 @@
+@allure.label.epic:Features
+@allure.label.suite:R_101_Security_Configuration
+@allure.label.package:R_101_Security_Configuration
 Feature: Security Level Configuration
   Administrators can configure security levels for different TrustPoint components.
 
