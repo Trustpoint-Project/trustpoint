@@ -1194,7 +1194,7 @@ requires-dist = [
     { name = "psycopg-binary", specifier = ">=3.2.6" },
     { name = "pyasn1", specifier = ">=0.6.1,<0.7" },
     { name = "pyasn1-modules", specifier = ">=0.4.1,<0.5" },
-    { name = "trustpoint-core", specifier = ">=0.1.0" },
+    { name = "trustpoint-core", specifier = ">=0.1.1" },
     { name = "zeroconf", specifier = ">=0.147,<0.148" },
 ]
 
@@ -1229,15 +1229,15 @@ docs = [
 
 [[package]]
 name = "trustpoint-core"
-version = "0.1.0"
+version = "0.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "hatchling" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8e/8a/5c14715ba77bd004981db60a9e7e1c46d77a31f38c2a1cfc2f23bad25d80/trustpoint_core-0.1.0.tar.gz", hash = "sha256:65f8d10577c599aab451f243a8076f907930b546e0fce9a7e1a0dadafc04d387", size = 62387, upload-time = "2025-05-06T16:00:14.387Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9b/29/19be701a4fdf908c630da7cb5f5e92bd50da4c853287e42a89fdbce3d5b1/trustpoint_core-0.1.1.tar.gz", hash = "sha256:c0df5661dac4cbbc8a45884f81f09abcaf3f437ff585466a94dc9fbc410db7b7", size = 60723, upload-time = "2025-05-13T14:59:00.367Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/82/dd3a28a1a673fdf3055c19c96cc97cb959cb095be1a09881dfe28c5090f8/trustpoint_core-0.1.0-py3-none-any.whl", hash = "sha256:79bb5cf17988e3edcf231d15737b993e82fcc597ccbb25e7eeec8917e5485e9c", size = 20164, upload-time = "2025-05-06T16:00:13.37Z" },
+    { url = "https://files.pythonhosted.org/packages/2e/13/a445d03b8ad7110e9007e41ffe6d91e1cd376af99b294d8da30ea8f55470/trustpoint_core-0.1.1-py3-none-any.whl", hash = "sha256:bca4034dc30c398baa9fb88eb3d7f9d63632d723e5d60fba64370f3b6233b144", size = 20331, upload-time = "2025-05-13T14:58:59.466Z" },
 ]
 
 [[package]]

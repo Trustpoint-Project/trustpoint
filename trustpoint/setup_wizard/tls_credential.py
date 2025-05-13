@@ -74,9 +74,7 @@ class Generator:
         )
 
         return CredentialSerializer(
-            private_key=private_key,
-            certificate=root_ca_certificate,
-            additional_certificates=[]
+            private_key=private_key, certificate=root_ca_certificate, additional_certificates=[]
         )
 
     def _generate_issuing_ca_credential(self, root_ca_credential: CredentialSerializer) -> CredentialSerializer:
@@ -128,7 +126,7 @@ class Generator:
         return CredentialSerializer(
             private_key=private_key,
             certificate=issuing_ca_certificate,
-            additional_certificates=root_ca_credential.additional_certificates
+            additional_certificates=root_ca_credential.additional_certificates,
         )
 
     def _generate_tls_server_credential(self, issuing_ca_credential: CredentialSerializer) -> CredentialSerializer:

@@ -23,7 +23,8 @@ from django.views.generic.list import ListView
 from pki.models import CertificateModel, IssuingCaModel
 
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import LoggerMixin, SortableTableMixin
+from trustpoint.logger import LoggerMixin
+from trustpoint.views.base import SortableTableMixin
 
 from .filters import NotificationFilter
 from .models import NotificationModel, NotificationStatus

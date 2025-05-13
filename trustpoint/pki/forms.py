@@ -20,7 +20,7 @@ from util.field import UniqueNameValidator
 from pki.models import DevIdRegistration, IssuingCaModel
 from pki.models.certificate import CertificateModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
-from trustpoint.views.base import LoggerMixin
+from trustpoint.logger import LoggerMixin
 
 
 class DevIdAddMethodSelectForm(forms.Form):
