@@ -7,6 +7,7 @@ from django.apps import AppConfig
 from django.conf import settings as django_settings
 from django.db.backends.signals import connection_created
 from django.db.models.signals import post_migrate
+from django.db.utils import ProgrammingError
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +19,8 @@ class SettingsConfig(AppConfig):
 
     def ready(self) -> None:
         """Settings app initialization."""
-        # Signal to run after database migrations
-        post_migrate.connect(self.update_app_version, sender=self)
-
+        # if 'makemigrations' in sys.argv or 'reset_db' in sys.argv or 'migrate' in sys.argv:
+        #     return
         # Signal to run after database connection is established
         connection_created.connect(self.on_connection_created)
 
@@ -34,13 +34,18 @@ class SettingsConfig(AppConfig):
         current = django_settings.APP_VERSION
 
         qs = AppVersion.objects.all()
-        if not qs.exists():
-            AppVersion.objects.create(version=current)
-        else:
-            obj = qs.first()
-            if obj and obj.version != current:
-                old_version= obj.version
-                obj.version = current
-                obj.save()
-                msg = f'Trustpoint Version updated from {old_version} to {current}.'
-                logger.info(msg)
+
+        try:
+            if not qs.exists():
+                AppVersion.objects.create(version=current)
+            else:
+                obj = qs.first()
+                if obj and obj.version != current:
+                    old_version= obj.version
+                    obj.version = current
+                    obj.save()
+                    msg = f'Trustpoint Version updated from {old_version} to {current}.'
+                    logger.info(msg)
+        except ProgrammingError:
+            # AppVersion table doesn not exist yet → skip
+            return

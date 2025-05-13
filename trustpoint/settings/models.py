@@ -37,7 +37,6 @@ class AppVersion(models.Model):
 
     class Meta:
         verbose_name = 'App Version'
-        verbose_name_plural = 'App Versions'
 
     def __str__(self) -> str:
         return f'{self.version} @ {self.last_updated.isoformat()}'
