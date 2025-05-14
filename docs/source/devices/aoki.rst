@@ -12,11 +12,10 @@ of the three stages the infrastructure is composed of - Device
 Initialization, Device Ownership Transfer Authorization, and the actual
 Zero-Touch Device Onboarding.
 
-.. figure::
-   https://raw.githubusercontent.com/Aircoookie/aircoookie.github.io/refs/heads/main/AOKIv02_tr2.png
+.. figure:: /_static/aoki.png
    :alt: Fig. 1
 
-   Fig. 1
+   AOKI overview
 
 Overview
 --------
