@@ -1,3 +1,7 @@
+/******************************
+ * CSS FOR TEST REPORTS
+ * This file is used to style HTML reports, not by the Trustpoint stack itself.
+ ******************************/
 body {
   font-family: Helvetica, Arial, sans-serif;
   font-size: 12px;

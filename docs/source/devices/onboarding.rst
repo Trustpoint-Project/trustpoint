@@ -32,7 +32,7 @@ onboarding devices to Trustpoint may not always be feasible or necessary.
 
 In these cases, devices may continue to operate without a domain credential managed by Trustpoint.
 However, this approach is discouraged as it introduces security risks
-and limits the device’s ability to participate in secure,
+and limits the device's ability to participate in secure,
 authenticated communication within the industrial network.
 
 Trustpoint aims to reduce the need for "No Onboarding" scenarios by providing flexible onboarding methods
@@ -169,34 +169,31 @@ Requirements:
 
 
 The Trustpoint beta release contains zero touch onboarding functionality for demonstration purposes only,
-based on the AOKI (Automated Onboarding Key Infrastructure) protocol.
-This is a simple protocol that uses mDNS to discover the Trustpoint server
-and then uses a simple REST API for mutual trust establishment.
-Afterwards, the device is in possession of a OTP it can use for LDevID provisioning via standard CMP.
+based on the :ref:`aoki` protocol.
+This is a simple protocol that uses mDNS to discover the Trustpoint server and then uses a simple REST API for mutual trust establishment.
+Afterwards, the device can use a standard PKI protocol (CMP or EST) to request a domain credential (LDevID).
 Before the device can be onboarded, it must possess a valid IDevID (Initial device identifier per IEEE 802.1AR) certificate.
 The Trustpoint needs to have a valid trust anchor certificate for the device's IDevID certificate added as a Truststore.
-It also needs an ownership certificate, which is issued by the manufacturer
-and verified by the device to authenticate the Trustpoint.
+It also needs an DevOwnerID credential, which is issued by the manufacturer and verified by the device to authenticate the Trustpoint.
 
-This feature is not intended for production use.
+This feature is not yet intended for production use.
 
 ^^^^^^
 How to
 ^^^^^^
 
 #. **(Optional) Generate IDevID and ownership certificates**
+    This can be done by executing ``uv run manage.py aoki_gen_test_certs``.
 
-#. **(Optional) Add IDevID to the device Trustpoint client**
-    Install the Trustpoint Client to the device. An example IDevID is provided in the ``demo-data`` directory.
+#. **Add DevOwnerID to Trustpoint**
+    This is still work in progress, you can currently import the DevOwnerID as an Issuing CA with the unique name ``DevOwnerID``.
 
-#. **Add Truststores in Trustpoint**
-    Two Truststores with arbitrary names need to be added, one containing the certificate chain of the IDevID and one containing the certificate chain of the ownership certificate.
-    Demo certificates are provided in the ``tests/data/aoki_zero_touch`` directory.
+#. **Add IDevID Truststore in Trustpoint**
+    A Truststore containing the certificate chain of the IDevID has to be added.
+    Add a DevID registration pattern for the domain you want the device to onboard to and select the IDevID truststore.
+    Make sure "Auto-Generate new Device" is enabled in the domain config.
 
-#. **Configure mDNS address**
-    In ``settings.py`` set ``ADVERSISED_HOST`` to the Trustpoint server IP address as reachable by the device.
-
-#. **Onboard the device**
-    Execute ``trustpoint-client provision zero-touch`` command on the client to onboard the device.
+#. **Start AOKI Onboarding**
+    Run ``uv run -m aoki.tests.client`` from the ``trustpoint`` directory. This will start the AOKI test client.
 
 

@@ -101,7 +101,7 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
     template_name = 'devices/devices.html'
     context_object_name = 'devices'
     paginate_by = UIConfig.paginate_by
-    default_sort_param = 'common_name'
+    default_sort_param = '-created_at'
 
     def get_queryset(self):
         """Filter queryset to only include devices where opc_ua_gds is False."""
