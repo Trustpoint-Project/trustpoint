@@ -6,4 +6,4 @@ jobs:
   test:
     uses: ./.github/workflows/behave-test-template.yml
     with:
-      feature_file: R_102_encrypted_communication
+      feature_file: R_102_certificate_template_security
