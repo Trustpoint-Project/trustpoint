@@ -477,22 +477,18 @@ This testcase is related to requirement `R_001`_.
 Test Idea
 """""""""
 
-To test the requirement of creating, viewing, editing, and deleting digital identities using the TPC_Web interface,
-the focus will be on validating the complete lifecycle of identity management through the web platform.
+To test the requirement of creating, viewing, editing, and deleting devices using the TPC_Web interface,
+the focus will be on validating the complete lifecycle of device management through the web platform.
 
-The test would start with an admin user creating a new digital identity through the web interface.
-This process involves navigating to the appropriate page, filling out the required fields (e.g., name and identifier),
-and submitting the form. Once the identity is created,
-the test would verify that it appears in the list of identities and that all details are accurately displayed on its details page.
-
-Following the creation, the admin user would edit the identity's details,
-such as updating the name or identifier, and save the changes.
-The test should confirm that the modifications are reflected immediately and correctly in both the details view and any listings.
+The test would start with an admin user creating a new device through the web interface.
+This process involves navigating to the appropriate page, filling out the required fields (e.g., name, serial number and domain),
+and submitting the form. Once the device is created,
+the test would verify that it appears in the list of devices and that all details are accurately displayed on its details page.
 
 Finally, the test would validate the deletion process,
-where the admin removes the identity through the web interface.
-Once deleted, the system should ensure that the identity is no longer accessible or visible in any lists or details pages.
-Additional negative tests could confirm appropriate handling when attempting to access or manipulate a non-existent or already-deleted identity.
+where the admin removes the device through the web interface.
+Once deleted, the system should ensure that the device is no longer accessible or visible in any lists or details pages.
+Additional negative tests could confirm appropriate handling when attempting to access or manipulate a non-existent or already-deleted device.
 
 """"""""""""
 Feature File
