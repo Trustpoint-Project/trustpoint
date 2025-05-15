@@ -4,10 +4,8 @@ import logging
 from typing import Any
 
 from django.apps import AppConfig
-from django.conf import settings as django_settings
+from django.core.management import call_command
 from django.db.backends.signals import connection_created
-from django.db.models.signals import post_migrate
-from django.db.utils import ProgrammingError
 
 logger = logging.getLogger(__name__)
 
@@ -26,26 +24,4 @@ class SettingsConfig(AppConfig):
 
     def on_connection_created(self, sender: Any, connection: Any, **_kwargs: Any) -> None:
         """Execute update_app_version after a database connection is created."""
-        self.update_app_version(sender=self)
-
-    def update_app_version(self, sender: Any, **kwargs: Any) -> None:
-        """Update app version if pyproject.toml is different than verison in db."""
-        from .models import AppVersion
-        current = django_settings.APP_VERSION
-
-        qs = AppVersion.objects.all()
-
-        try:
-            if not qs.exists():
-                AppVersion.objects.create(version=current)
-            else:
-                obj = qs.first()
-                if obj and obj.version != current:
-                    old_version= obj.version
-                    obj.version = current
-                    obj.save()
-                    msg = f'Trustpoint Version updated from {old_version} to {current}.'
-                    logger.info(msg)
-        except ProgrammingError:
-            # AppVersion table doesn not exist yet → skip
-            return
+        call_command('updateversion')
