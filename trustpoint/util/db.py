@@ -1,4 +1,4 @@
-"""Database model utilities for Trustpoint TEST TEST."""
+"""Database model utilities for Trustpoint."""
 
 from __future__ import annotations
 
