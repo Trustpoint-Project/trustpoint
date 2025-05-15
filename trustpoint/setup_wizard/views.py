@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpResponseRedirect
@@ -16,16 +17,17 @@ from django.urls import reverse_lazy
 from django.views.generic import FormView, TemplateView, View
 from pki.models import CertificateModel, CredentialModel, IssuingCaModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TrustpointTlsServerCredentialModel
+from util.db import get_objects_manager
 
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import EmptyForm, StartupWizardTlsCertificateForm
-from setup_wizard.tls_credential import Generator
+from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
     from typing import Any
-    from django.contrib.auth.models import User
+
     from trustpoint_core.serializer import CertificateSerializer
 
 APACHE_PATH = Path(__file__).parent.parent.parent / 'docker/apache/tls'
@@ -213,11 +215,11 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
 
         return super().dispatch(request, *args, **kwargs)
 
-    def form_valid(self, form: UserCreationForm[User]) -> HttpResponse:
+    def form_valid(self, form: StartupWizardTlsCertificateForm) -> HttpResponse:
         """Handle a valid form submission for TLS Server Credential generation.
 
         Args:
-            form (UserCreationForm): The validated form containing user input
+            form: The validated form containing user input
                                      for generating the TLS Server Credential.
 
         Returns:
@@ -232,24 +234,24 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
         try:
             # Generate the TLS Server Credential
             cleaned_data = form.cleaned_data
-            generator = Generator(
+            generator = TlsServerCredentialGenerator(
                 ipv4_addresses=cleaned_data['ipv4_addresses'],
                 ipv6_addresses=cleaned_data['ipv6_addresses'],
                 domain_names=cleaned_data['domain_names'],
             )
-            tls_server_credential = generator.generate_tls_credential()
+            tls_server_credential = generator.generate_tls_server_credential()
 
-            tls_server_credential = CredentialModel.save_credential_serializer(
+            tls_server_credential_model = CredentialModel.save_credential_serializer(
                 credential_serializer=tls_server_credential,
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
             )
 
-            trustpoint_tls_server_credential, _ = TrustpointTlsServerCredentialModel.objects.get_or_create(
-                certificate=tls_server_credential.certificate,
-                defaults={'private_key_pem': tls_server_credential.get_private_key_serializer().as_pkcs8_pem()},
+            trustpoint_tls_server_credential, _ = get_objects_manager(TrustpointTlsServerCredentialModel).get_or_create(
+                certificate=tls_server_credential_model.certificate,
+                defaults={'private_key_pem': tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem()},
             )
 
-            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+            active_tls, _ = get_objects_manager(ActiveTrustpointTlsServerCredentialModel).get_or_create(id=1)
             active_tls.credential = trustpoint_tls_server_credential
             active_tls.save()
 
@@ -311,7 +313,7 @@ class SetupWizardImportTlsServerCredentialView(View):
         return redirect('setup_wizard:initial', permanent=False)
 
 
-class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView):
+class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
     """View for handling the application of TLS Server Credentials in the setup wizard.
 
     Attributes:
@@ -369,17 +371,17 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView):
 
         return super().post(*args, **kwargs)
 
-    def form_valid(self, form: UserCreationForm[User]) -> HttpResponse:
+    def form_valid(self, form: EmptyForm) -> HttpResponse:
         """Process a valid form submission during the TLS Server Credential application.
 
         Args:
-            form (UserCreationForm): The form instance containing the submitted data.
+            form: The form instance containing the submitted data.
 
         Returns:
             HttpResponseRedirect: Redirect to the next step or an error page based on the outcome.
         """
         try:
-            trustpoint_tls_server_credential_model = CredentialModel.objects.get(
+            trustpoint_tls_server_credential_model = get_objects_manager(CredentialModel).get(
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
             )
             if not trustpoint_tls_server_credential_model:
@@ -417,7 +419,7 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView):
         """Raise a TrustpointTlsServerCredentialError with a given message.
 
         Args:
-            message (str): The error message to include in the exception.
+            message: The error message to include in the exception.
         """
         raise TrustpointTlsServerCredentialError(message)
 
@@ -446,13 +448,13 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView):
         """Generate a response containing the trust store in the requested format.
 
         Args:
-            file_format (str): The desired file format for the trust store (e.g., 'pem', 'pkcs7_der', 'pkcs7_pem').
+            file_format: The desired file format for the trust store (e.g., 'pem', 'pkcs7_der', 'pkcs7_pem').
 
         Returns:
             HttpResponse: A response with the trust store content or an error message.
         """
         try:
-            trustpoint_tls_server_credential_model = CredentialModel.objects.get(
+            trustpoint_tls_server_credential_model = get_objects_manager(CredentialModel).get(
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
             )
         except CredentialModel.DoesNotExist:
@@ -485,7 +487,7 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView):
     @staticmethod
     def _get_trust_store_and_content_type(
         file_format: str, certificate_serializer: CertificateSerializer
-    ) -> tuple[str, str]:
+    ) -> tuple[str | bytes, str]:
         """Tries to get the certificate in the requested format and adds the corresponding content type.
 
         Args:
@@ -496,21 +498,27 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView):
             The tuple of the certificate in the requested format and the content type.
         """
         if file_format == 'pem':
-            trust_store = certificate_serializer.as_pem().decode()
+            trust_store = certificate_serializer.as_pem()
             content_type = 'application/x-pem-file'
         elif file_format == 'pkcs7_der':
             trust_store = certificate_serializer.as_pkcs7_der()
             content_type = 'application/pkcs7-mime'
         elif file_format == 'pkcs7_pem':
-            trust_store = certificate_serializer.as_pkcs7_pem().decode()
+            trust_store = certificate_serializer.as_pkcs7_pem()
             content_type = 'application/x-pem-file'
         else:
             err_msg = f'Unknown file_format requested: {file_format}'
             raise ValueError(err_msg)
 
+        try:
+            return trust_store.decode(), content_type
+        except UnicodeDecodeError:
+            pass
+
         return trust_store, content_type
 
-    def _write_pem_files(self, credential_model: CredentialModel) -> None:
+    @staticmethod
+    def _write_pem_files(credential_model: CredentialModel) -> None:
         """Writes the private key, certificate, and trust store PEM files to disk.
 
         Args:
@@ -529,7 +537,7 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
     """View for handling the cancellation of TLS Server Credential application.
 
     Attributes:
-        http_method_names (list[str]): Allowed HTTP methods for this view.
+        http_method_names: Allowed HTTP methods for this view.
     """
 
     http_method_names = ('get',)
@@ -538,7 +546,7 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
         """Handle GET requests for the TLS Server Credential import view.
 
         Args:
-            request (HttpRequest): The HTTP request object.
+            request: The HTTP request object.
 
         Returns:
             HttpResponse: A redirect to the next step or an error response.
@@ -556,7 +564,7 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
         """Clear the credential and certificate data and executes the corresponding action suing a shell script.
 
         Args:
-            request (HttpRequest): The HTTP request object.
+            request: The HTTP request object.
         """
         try:
             self._clear_credential_and_certificate_data()
@@ -595,10 +603,10 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
 
     def _clear_credential_and_certificate_data(self) -> None:
         """Clears all credential and certificate data if canceled in the 'WIZARD_TLS_SERVER_CREDENTIAL_APPLY' state."""
-        IssuingCaModel.objects.all().delete()
-        CredentialModel.objects.all().delete()
-        TrustpointTlsServerCredentialModel.objects.all().delete()
-        CertificateModel.objects.all().delete()
+        get_objects_manager(IssuingCaModel).all().delete()
+        get_objects_manager(CredentialModel).all().delete()
+        get_objects_manager(TrustpointTlsServerCredentialModel).all().delete()
+        get_objects_manager(CertificateModel).all().delete()
 
     def _map_exit_code_to_message(self, return_code: int) -> str:
         """Maps shell script exit codes to user-friendly error messages."""
@@ -614,7 +622,7 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
         return error_messages.get(return_code, 'An unknown error occurred during the cancel operation.')
 
 
-class SetupWizardDemoDataView(LoggerMixin, FormView):
+class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
     """View for handling the demo data setup during the setup wizard.
 
     This view allows the user to either add demo data to the database or proceed without
@@ -638,7 +646,7 @@ class SetupWizardDemoDataView(LoggerMixin, FormView):
 
         return super().dispatch(request, *args, **kwargs)
 
-    def form_valid(self, form: UserCreationForm[User]) -> HttpResponse:
+    def form_valid(self, form: EmptyForm) -> HttpResponse:
         """Handle form submission for demo data setup."""
         try:
             if 'without-demo-data' in self.request.POST:
@@ -703,7 +711,7 @@ class SetupWizardDemoDataView(LoggerMixin, FormView):
         """Map script exit codes to meaningful error messages.
 
         Args:
-            return_code (int): The exit code returned by the script.
+            return_code: The exit code returned by the script.
 
         Returns:
             str: A descriptive error message corresponding to the exit code.
@@ -717,7 +725,7 @@ class SetupWizardDemoDataView(LoggerMixin, FormView):
         return error_messages.get(return_code, 'An unknown error occurred while executing the demo data script.')
 
 
-class SetupWizardCreateSuperUserView(LoggerMixin, FormView):
+class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User]]):
     """View for handling the creation of a superuser during the setup wizard.
 
     This view is part of the setup wizard process. It allows an admin to create a
@@ -746,7 +754,7 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView):
         """Handle form submission for creating a superuser.
 
         Args:
-            form (UserCreationForm): The form containing the data for the superuser creation.
+            form: The form containing the data for the superuser creation.
 
         Returns:
             HttpResponseRedirect: Redirect to the next step or login page.
@@ -756,7 +764,7 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView):
             password = form.cleaned_data['password1']
             call_command('createsuperuser', interactive=False, username=username, email='')
 
-            user = User.objects.get(username=username)
+            user = get_objects_manager(User).get(username=username)
             user.set_password(password)
             user.save()
             messages.add_message(self.request, messages.SUCCESS, 'Successfully created super-user.')
