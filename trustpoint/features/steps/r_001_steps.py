@@ -189,4 +189,4 @@ def step_device_list(context: runner.Context) -> None:  # noqa: ARG001
         context (runner.Context): Behave context.
     """
 
-    assert context.response.status_code == 404,  f"Expected 404 Not Found, but got {response.status_code}"
+    assert context.response.status_code == 404,  f"Expected 404 Not Found, but got {context.response.status_code}"
