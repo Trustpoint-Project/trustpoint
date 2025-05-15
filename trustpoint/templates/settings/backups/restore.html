@@ -1,0 +1,19 @@
+{% load i18n %}
+{% block additional %}
+<form method="post"
+      action="{% url 'settings:backup-restore' %}"
+      enctype="multipart/form-data"
+      class="d-flex align-items-center">
+  {% csrf_token %}
+  <div class="me-2">
+    <input type="file"
+          name="backup_file"
+          accept=".dump,.gz"
+          required
+          class="form-control"/>
+  </div>
+  <button type="submit" class="btn btn-warning">
+    {% trans "Backup wiederherstellen" %}
+  </button>
+</form>
+{% endblock additional %}

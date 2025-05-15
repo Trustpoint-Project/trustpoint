@@ -8,6 +8,7 @@ from setup_wizard.views import (
     SetupWizardGenerateTlsServerCredentialView,
     SetupWizardImportTlsServerCredentialView,
     SetupWizardInitialView,
+    SetupWizardRestoreView,
     SetupWizardTlsServerCredentialApplyCancelView,
     SetupWizardTlsServerCredentialApplyView,
 )
@@ -24,6 +25,11 @@ urlpatterns = [
         'import-tls-server-credential/',
         SetupWizardImportTlsServerCredentialView.as_view(),
         name='import_tls_server_credential',
+    ),
+    path(
+        'restore-backup/',
+        SetupWizardRestoreView.as_view(),
+        name='restore_backup',
     ),
     path(
         'tls-server-credential-apply/',

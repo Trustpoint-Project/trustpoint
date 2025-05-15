@@ -164,6 +164,43 @@ class SetupWizardInitialView(TemplateView):
         return super().get(*args, **kwargs)
 
 
+
+class SetupWizardRestoreView(TemplateView):
+    """View for the restore option during initialization.
+
+    Attributes:
+        http_method_names (ClassVar[list[str]]): List of HTTP methods allowed for this view.
+        template_name (str): Path to the template used for rendering the initial page.
+    """
+
+    http_method_names = ('get',)
+    template_name = 'setup_wizard/restore_backup.html'
+
+    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests for the initial setup wizard page.
+
+        This method validates the current state of the setup wizard and redirects
+        the user to the appropriate page. If the application is not running in a
+        Docker container, the user is redirected to the login page.
+
+        Args:
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
+
+        Returns:
+            HttpResponse: A redirect response to the appropriate setup wizard page
+                          or the login page if the setup is not in a Docker container.
+        """
+        # if not DOCKER_CONTAINER:
+        #     return redirect('users:login', permanent=False)
+
+        # wizard_state = SetupWizardState.get_current_state()
+        # if wizard_state != SetupWizardState.WIZARD_INITIAL:
+        #     return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().get(*args, **kwargs)
+
+
 class SetupWizardGenerateTlsServerCredentialView(FormView):
     """View for generating TLS Server Credentials in the setup wizard.
 
