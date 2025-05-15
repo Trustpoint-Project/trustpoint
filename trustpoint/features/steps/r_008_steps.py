@@ -115,7 +115,6 @@ def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG0
             data=data,
             follow=True
         )
-        print("content", context.response.content)
         assert context.response.status_code == 200, f"Failed to submit the form."
 
 @then('the added issuing CA "appears" in the list of available CAs')
@@ -134,3 +133,70 @@ def step_then_new_ca_available(context: runner.Context) -> None:  # noqa: ARG001
     values = [td.get_text(strip=True) for td in tds]
 
     assert "test" in values, f"Issuing CA test doesn't exist"
+
+
+@when('the admin uploads a broken PKCS12 issuing CA file')
+def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG001
+    """The admin uploads valid pkcs12 file.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
+    # Ensure the file path is absolute and exists
+    file_path = os.path.abspath("../tests/data/issuing_cas/issuing_ca_broken.p12")
+    assert os.path.exists(file_path), f"File not found: {file_path}"
+    context.file_path = file_path
+
+@then('the added issuing CA "does not appear" in the list of available CAs')
+def step_then_new_ca_not_available(context: runner.Context) -> None:  # noqa: ARG001
+    """Verifies new issuing CA is not available in the list.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
+    context.response = context.authenticated_client.get("/pki/issuing-cas/")
+    soup = BeautifulSoup(context.response.content, "html.parser")
+
+    # Find all <td> elements
+    tds = soup.find_all("td")
+
+    # Get their text content (unescaped and stripped)
+    values = [td.get_text(strip=True) for td in tds]
+
+    assert "test" not in values, f"Issuing CA test doesn't exist"
+
+@when('the key file of type {key_type} is {status}')
+def step_when_pkcs12_file_import(context: runner.Context, key_type: str, status: str) -> None:  # noqa: ARG001
+    """The admin uploads key file of type and with a status.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
+    # Ensure the file path is absolute and exists
+    file_path = os.path.abspath(f"../tests/data/issuing_cas/key0_{status}.{key_type}")
+    assert os.path.exists(file_path), f"Key file not found: {file_path}"
+    context.key_file_path = file_path
+
+@when('the certificate file of type {cert_type} is {status}')
+def step_when_pkcs12_file_import(context: runner.Context, cert_type: str, status: str) -> None:  # noqa: ARG001
+    """The admin uploads certificate file of type and with a status.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
+    # Ensure the file path is absolute and exists
+    file_path = os.path.abspath(f"../tests/data/issuing_cas/ee0_{status}.{cert_type}")
+    assert os.path.exists(file_path), f"Certificate file not found: {file_path}"
+    context.cert_file_path = file_path
+
+@when('the certificate chain of type {chain} is {status}')
+def step_when_pkcs12_file_import(context: runner.Context, chain: str, status: str) -> None:  # noqa: ARG001
+    """The admin uploads certificate file of type and with a status.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
+    # Ensure the file path is absolute and exists
+    file_path = os.path.abspath(f"../tests/data/issuing_cas/ee0_{status}.{chain}")
+    assert os.path.exists(file_path), f"File not found: {file_path}"
+    context.cert_file_path = file_path
