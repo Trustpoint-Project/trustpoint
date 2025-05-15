@@ -25,7 +25,7 @@ Feature: Add and delete new Issuing CAs
     Then the system should display a form page where a file can be uploaded
     When the admin uploads a broken PKCS12 issuing CA file
     And the admin clicks the "Add new issuing CA" button
-    Then the system should display an error message
+    Then the response payload should include an error message stating "Failed to parse and load the uploaded file. Either wrong password or corrupted file."
     And the added issuing CA "does not appear" in the list of available CAs
 
 
