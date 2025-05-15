@@ -7,7 +7,6 @@ import enum
 import ipaddress
 import re
 import secrets
-import uuid
 from typing import TYPE_CHECKING, Protocol, cast
 
 from cryptography import x509

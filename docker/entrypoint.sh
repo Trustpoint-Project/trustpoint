@@ -24,7 +24,15 @@ if [ -f "$RESET_DB_FILE" ]; then
   echo "Database reset."
   rm -f "$RESET_DB_FILE"
 else
-  echo "Skipping database reset."
+  echo "Running migrations."
+  
+  if run_as_www_data "uv run trustpoint/manage.py migrate --noinput"; then
+    echo "Migrations ran successfully."
+  else
+    echo "Migrations failed!" >&2
+    # initiate a rollback here
+    exit 1
+  fi
 fi
 
 # Collect static files
