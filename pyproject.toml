@@ -11,7 +11,7 @@ keywords = ["django", "trustpoint", "server"]
 dependencies = [
     "crispy-bootstrap5~=2025.4",
     "cryptography>=44.0.3",
-    "django~=5.1.8",
+    "django~=5.2.1",
     "django-crispy-forms~=2.3",
     "django-filter~=25.1",
     "django-stubs>=5.1.3,<6",
@@ -44,8 +44,8 @@ dev = [
     "pyopenssl >= 25, < 26",
     "werkzeug >= 3.1.3, < 4",
     "beautifulsoup4 >= 4.13.4",
-    "ruff >= 0.11.8",
     "mypy >= 1.15.0",
+    "ruff>=0.11.9",
 ]
 # For building docs
 docs = [
@@ -80,6 +80,7 @@ ignore = [
     # TODO(AlexHx8472): We should use this in the future:
     "TD003",
 ]
+exclude = ["**/migrations/*"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/**.py" = ["S101"]
