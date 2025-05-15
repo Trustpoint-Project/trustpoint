@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm
-from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpResponseRedirect
@@ -26,7 +25,7 @@ from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
     from typing import Any
-
+    from django.contrib.auth.models import User
     from trustpoint_core.serializer import CertificateSerializer
 
 APACHE_PATH = Path(__file__).parent.parent.parent / 'docker/apache/tls'
@@ -169,7 +168,7 @@ class SetupWizardInitialView(TemplateView):
         return super().get(*args, **kwargs)
 
 
-class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView):
+class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWizardTlsCertificateForm]):
     """View for generating TLS Server Credentials in the setup wizard.
 
     This view handles the generation of TLS Server Credentials as part of the
@@ -214,7 +213,7 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView):
 
         return super().dispatch(request, *args, **kwargs)
 
-    def form_valid(self, form: UserCreationForm) -> HttpResponse:
+    def form_valid(self, form: UserCreationForm[User]) -> HttpResponse:
         """Handle a valid form submission for TLS Server Credential generation.
 
         Args:
@@ -370,7 +369,7 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView):
 
         return super().post(*args, **kwargs)
 
-    def form_valid(self, form: UserCreationForm) -> HttpResponse:
+    def form_valid(self, form: UserCreationForm[User]) -> HttpResponse:
         """Process a valid form submission during the TLS Server Credential application.
 
         Args:
@@ -639,7 +638,7 @@ class SetupWizardDemoDataView(LoggerMixin, FormView):
 
         return super().dispatch(request, *args, **kwargs)
 
-    def form_valid(self, form: UserCreationForm) -> HttpResponse:
+    def form_valid(self, form: UserCreationForm[User]) -> HttpResponse:
         """Handle form submission for demo data setup."""
         try:
             if 'without-demo-data' in self.request.POST:
@@ -743,7 +742,7 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView):
 
         return super().dispatch(request, *args, **kwargs)
 
-    def form_valid(self, form: UserCreationForm) -> HttpResponse:
+    def form_valid(self, form: UserCreationForm[User]) -> HttpResponse:
         """Handle form submission for creating a superuser.
 
         Args:
