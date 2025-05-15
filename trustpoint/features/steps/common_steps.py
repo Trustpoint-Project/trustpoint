@@ -136,8 +136,10 @@ def step_verify_error_message(context: runner.Context, error_message: str) -> No
         context: the behave context
         error_message (str): The expected error message text.
     """
-    msg = 'Step not implemented: Verify error message in response payload.'
-    raise AssertionError(msg)
+    html = context.response.content
+    print("content", html)
+    assert b'Failed to parse and load the uploaded file. Either wrong password or corrupted file.' in html, \
+        "Missing error message"
 
 @when('the admin clicks on "add new issuing ca"')
 def step_verify_error_message(context: runner.Context) -> None:  # noqa: ARG001
