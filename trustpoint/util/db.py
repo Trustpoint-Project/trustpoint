@@ -66,6 +66,8 @@ class CustomDeleteActionModel(models.Model):
     It uses a custom manager to ensure the methods are called both on individual and bulk (queryset) deletes.
     """
 
+    objects = CustomDeleteActionManager()
+
     class Meta:
         """Metaclass configuration."""
 
