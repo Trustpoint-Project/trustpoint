@@ -70,6 +70,15 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
         del form.fields['is_active']
         return form
 
+    def form_valid(self, form: BaseModelForm[DomainModel]) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        domain = form.save()
+        messages.success(
+            self.request,
+            _('Successfully created domain {name}.').format(name=domain.unique_name),
+        )
+        return super().form_valid(form)
+
 
 class DomainUpdateView(DomainContextMixin, UpdateView[DomainModel]):
     """View to edit a domain."""
@@ -269,7 +278,7 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
         dev_id_registration = form.save()
         messages.success(
             self.request,
-            f'Successfully created DevID Registration: {dev_id_registration.unique_name}',
+            _('Successfully created DevID registration pattern {name}.').format(name=dev_id_registration.unique_name),
         )
         return super().form_valid(form)
 

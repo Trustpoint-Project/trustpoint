@@ -548,8 +548,9 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             certificate_serializer.as_crypto().fingerprint(algorithm=hashes.SHA256()).hex()
         )
         if certificate_in_db:
-            issuing_ca_in_db = IssuingCaModel.objects.get(credential__certificate=certificate_in_db)
-            if issuing_ca_in_db:
+            issuing_ca_qs = IssuingCaModel.objects.filter(credential__certificate=certificate_in_db)
+            if issuing_ca_qs.exists():
+                issuing_ca_in_db = issuing_ca_qs.first()
                 err_msg = (
                     f'Issuing CA {issuing_ca_in_db.unique_name} is already configured '
                     'with the same Issuing CA certificate.'
