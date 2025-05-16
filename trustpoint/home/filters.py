@@ -7,7 +7,7 @@ import django_filters  # type: ignore[import-untyped]
 from django.db.models import QuerySet
 from django.utils import timezone
 
-from home.models import NotificationModel
+from notifications.models import NotificationModel
 
 
 class NotificationFilter(django_filters.FilterSet):  # type: ignore[misc]

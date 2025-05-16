@@ -26,7 +26,7 @@ from trustpoint.settings import UIConfig
 from trustpoint.views.base import LoggerMixin, SortableTableMixin
 
 from .filters import NotificationFilter
-from .models import NotificationModel, NotificationStatus
+from notifications.models import NotificationModel, NotificationStatus
 
 if TYPE_CHECKING:
     from django.utils.safestring import SafeString
