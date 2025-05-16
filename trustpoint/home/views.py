@@ -6,6 +6,8 @@ from collections import Counter
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from django.urls import reverse
+
 from devices.models import DeviceModel, IssuedCredentialModel
 from django.contrib import messages
 from django.core.management import call_command

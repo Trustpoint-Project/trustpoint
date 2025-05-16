@@ -842,31 +842,56 @@ code {
 /* ----- Notification dashboard view ----- */
 
 .filter-button {
-    padding: 2px 6px;          /* Smaller padding for a more compact size */
-    margin: 3px;                /* Reduced space between buttons */
-    border: none;               /* Remove default border */
-    border-radius: 13px;        /* Rounded corners for a softer look */
-    background-color: #e0e0e0;  /* Light gray background for default state */
-    color: #333;                /* Darker text color for good contrast */
-    cursor: pointer;            /* Pointer cursor on hover */
-    font-size: 11px;            /* Smaller font size */
-    transition: all 0.3s ease;  /* Smooth transition for hover and active effects */
+    padding: 2px 6px;
+    margin: 3px;
+    border: none;
+    border-radius: 13px;
+    background-color: #e0e0e0;
+    color: #333;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.3s ease;
 }
 
-/* Hover effect for all buttons */
 .filter-button:hover {
-    background-color: #c0c0c0;  /* Darken the background on hover */
-    color: #000;                /* Darker text color on hover */
+    background-color: #c0c0c0;
+    color: #000;
 }
 
 .filter-button.active {
-    background-color: #0d6efd;  /* Darken the background on hover */
-    color: #ffffff;                /* Darker text color on hover */
+    background-color: #0d6efd;
+    color: #ffffff;
     box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
 }
 
+.execute-notifications-button {
+    padding: 2px 12px;
+    margin: 3px;
+    border: none;
+    border-radius: 13px;
+    background-color: #0d6efd;
+    color: #ffffff;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.5;
+    text-align: center;
+    min-height: 22px;
+}
+
+.execute-notifications-button .icon {
+    margin: 0;
+}
+
+.execute-notifications-button:hover {
+    background-color: #007BFF7F;
+}
+
 .filter-container {
-    white-space: nowrap; /* Ensure items stay on one line */
+    white-space: nowrap;
 }
 
 .filter-buttons {
@@ -878,8 +903,8 @@ code {
     display: inline-block;
     width: 1px;
     height: 30px;
-    background-color: #ccc; /* Light gray color for the separator */
-    vertical-align: middle; /* Align vertically with the buttons */
+    background-color: #ccc;
+    vertical-align: middle;
 }
 
 .copy-container {
