@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from settings.models import SecurityConfig
 from settings.security import LEVEL_FEATURE_MAP
-from trustpoint.views.base import LoggerMixin
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from settings.security.features import SecurityFeature

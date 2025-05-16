@@ -25,9 +25,9 @@ from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
     ContextDataMixin,
-    LoggerMixin,
     SortableTableMixin,
 )
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet

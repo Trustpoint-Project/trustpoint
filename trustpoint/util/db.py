@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, final
+from typing import TYPE_CHECKING, Any, TypeVar, cast, final
 
 from django.db import models, transaction
 from django.db.models import ProtectedError
@@ -16,6 +16,37 @@ if TYPE_CHECKING:
     _ModelBase = models.Model
 else:
     _ModelBase = object
+
+
+_BaseModelForManager = TypeVar('_BaseModelForManager', bound=models.Model)
+
+
+__all__ = [
+    'CustomDeleteActionManager',
+    'CustomDeleteActionModel',
+    'CustomDeleteActionQuerySet',
+    'OrphanDeletionMixin',
+    'get_objects_manager',
+]
+
+
+def get_objects_manager(model: _BaseModelForManager | type[_BaseModelForManager]) -> Manager[_BaseModelForManager]:
+    """This is a workaround for mypy issues using the dynamically added objects attribute of model classes.
+
+    Args:
+        model: The model class to get the objects manager from.
+
+    Returns:
+        The corresponding objects manager.
+
+    Raises:
+        AttributeError: If the model does actually not have an objects attribute.
+    """
+    objects = getattr(model, 'objects', None)
+    if objects is None:
+        err_msg = f'Model {type(model)} has no objects attribute and thus no manager.'
+        raise AttributeError(err_msg)
+    return cast('Manager[_BaseModelForManager]', objects)
 
 
 class CustomDeleteActionManager(models.Manager['CustomDeleteActionModel']):
