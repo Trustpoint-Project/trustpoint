@@ -128,7 +128,7 @@ def step_verify_status_code(context: runner.Context, status_code: str) -> None: 
     raise AssertionError(msg)
 
 
-@then('the response payload should include an error message stating {error_message}')
+@then('the response payload should include an error message stating "{error_message}"')
 def step_verify_error_message(context: runner.Context, error_message: str) -> None:  # noqa: ARG001
     """Verifies the response payload includes the specified error message.
 
@@ -137,12 +137,11 @@ def step_verify_error_message(context: runner.Context, error_message: str) -> No
         error_message (str): The expected error message text.
     """
     html = context.response.content
-    print("content", html)
-    assert b'Failed to parse and load the uploaded file. Either wrong password or corrupted file.' in html, \
-        "Missing error message"
+    assert error_message.encode() in html, \
+       f"Missing error message, {error_message}"
 
 @when('the admin clicks on "add new issuing ca"')
-def step_verify_error_message(context: runner.Context) -> None:  # noqa: ARG001
+def step_when_admin_click_add_ca(context: runner.Context) -> None:  # noqa: ARG001
     """Simulates click on add new issuing ca.
 
     Args:
