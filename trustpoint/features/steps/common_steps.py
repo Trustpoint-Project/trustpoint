@@ -82,15 +82,16 @@ def step_admin_logged_in(context: runner.Context) -> None:
         raise AssertionError(msg) from error
 
 
-@then('the system should display a confirmation message')
-def step_confirmation_message(context: runner.Context) -> None:  # noqa: ARG001
+@then('the system should display a confirmation message stating "{confirm_message}"')
+def step_confirmation_message(context: runner.Context, confirm_message: str) -> None:  # noqa: ARG001
     """Verifies that the system displays a success message after an action.
 
     Args:
         context: the behave context
     """
-    msg = 'Step not implemented: Confirmation message check.'
-    raise AssertionError(msg)
+    html = context.response.content
+    assert confirm_message.encode() in html, \
+       f"Missing error message, {confirm_message}"
 
 
 @then('the system should display an error message stating {error_message}')
@@ -140,15 +141,27 @@ def step_verify_error_message(context: runner.Context, error_message: str) -> No
     assert error_message.encode() in html, \
        f"Missing error message, {error_message}"
 
-@when('the admin clicks on "add new issuing ca"')
-def step_when_admin_click_add_ca(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates click on add new issuing ca.
+@when('the admin clicks on "{button_name}"')
+def step_when_admin_click_button(context: runner.Context, button_name: str) -> None:  # noqa: ARG001
+    """Simulates click on given button.
 
     Args:
         context: the behave context
         error_message (str): The expected error message text.
     """
-    context.response = context.authenticated_client.get("/pki/issuing-cas/add/method-select/")
-    # Check that page loaded successfully
-    assert context.response.status_code == 200, f"Failed to load Add new Issuing CA page"
+    if button_name == "Add new Issuing CA":
+        context.response = context.authenticated_client.get("/pki/issuing-cas/add/method-select/")
+        # Check that page loaded successfully
+        assert context.response.status_code == 200, f"Failed to load Add new Issuing CA page"
+    elif button_name == "Import From PKCS#12 File":
+        context.response = context.authenticated_client.get("/pki/issuing-cas/add/file-import/pkcs12")
+        # Check that page loaded successfully
+        assert context.response.status_code == 200, f"Failed to load issuing Add new Issuing CA using pkcs#12 import"
+    elif button_name == "Import From Separate Key and Certificate Files":
+        context.response = context.authenticated_client.get("/pki/issuing-cas/add/file-import/separate-files")
+        # Check that page loaded successfully
+        assert context.response.status_code == 200, f"Failed to load issuing Add new Issuing CA using import from separate files"
+    else:
+        msg = 'Step not implemented: Verify API response status code.'
+        raise AssertionError(msg)
 

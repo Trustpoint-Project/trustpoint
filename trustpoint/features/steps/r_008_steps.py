@@ -14,9 +14,6 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 from cryptography import x509
-from cryptography.hazmat.backends import default_backend
-
-
 
 @given('the admin is on the "pki/issuing-cas" webpage')
 def step_given_admin_on_ca_page(context: runner.Context) -> None:  # noqa: ARG001
@@ -48,28 +45,6 @@ def step_then_ca_page_show_options(context: runner.Context) -> None:  # noqa: AR
 
     assert b'Import From Separate Key and Certificate Files' in html, \
         "Missing text for separate file import option"
-
-@when('the admin clicks on "import from PKCS12 file"')
-def step_when_click_on_import_from_pkcs12(context: runner.Context) -> None:  # noqa: ARG001
-    """The admin navigates to the /pki/issuing-cas/add/file-import/pkcs12 webpage.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    context.response = context.authenticated_client.get("/pki/issuing-cas/add/file-import/pkcs12")
-    # Check that page loaded successfully
-    assert context.response.status_code == 200, f"Failed to load issuing Add new Issuing CA using pkcs#12 import"
-
-@when('the admin clicks on "import from separate key and certificate files"')
-def step_when_click_import_from_separate_file(context: runner.Context) -> None:  # noqa: ARG001
-    """The admin navigates to the /pki/issuing-cas/add/file-import/ webpage.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    context.response = context.authenticated_client.get("/pki/issuing-cas/add/file-import/separate-files")
-    # Check that page loaded successfully
-    assert context.response.status_code == 200, f"Failed to load issuing Add new Issuing CA using import from separate files"
 
 @then('the system should display a form page where a file can be uploaded')
 def step_then_load_form(context: runner.Context) -> None:  # noqa: ARG001
