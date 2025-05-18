@@ -3262,7 +3262,7 @@ msgstr ""
 "oder Betriebssystems zu importieren."
 
 #: .\templates\setup_wizard\tls_server_credential_apply.html:47
-msgid "Apply TLS-Configurations"
+msgid "Apply TLS configuration"
 msgstr "TLS-Konfiguration anwenden"
 
 #: .\templates\trustpoint\base.html:40

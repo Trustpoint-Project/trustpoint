@@ -8,7 +8,7 @@ from django.db.models import ProtectedError
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
-from unittest.mock import patch
+
 
 from devices.models import DeviceModel, IssuedCredentialModel
 

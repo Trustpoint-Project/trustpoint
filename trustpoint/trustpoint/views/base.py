@@ -6,15 +6,12 @@ which can be used within the apps.
 
 from __future__ import annotations
 
-import functools
-import logging
-import traceback
 from typing import TYPE_CHECKING, Any
 
 from django import forms as dj_forms
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Model, QuerySet
-from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.views.generic.base import RedirectView
 from django.views.generic.edit import FormMixin
@@ -219,44 +216,3 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
 class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFromUrlMixin, BaseBulkDeleteView):
     pass
 
-
-class LoggerMixin:
-    """Mixin that adds log features to the subclass."""
-
-    logger: logging.Logger
-
-    @classmethod
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        """Adds an appropriate logger to the subclass and makes it available through cls.logger."""
-        super().__init_subclass__(**kwargs)
-
-        cls.logger = logging.getLogger('trustpoint').getChild(cls.__module__).getChild(cls.__name__)
-
-    @staticmethod
-    def log_exceptions(function: Callable) -> Callable:
-        """Decorator that gets an appropriate logger and logs any unhandled exception.
-
-        Logs the type and message to both levels error and debug.
-        Also adds the traceback to the debug level log.
-
-        Args:
-            function: The decorated method or function.
-        """
-
-        @functools.wraps(function)
-        def _wrapper(*args: Any, **kwargs: Any) -> Callable:
-            try:
-                return function(*args, **kwargs)
-            except Exception as exception:
-                logger = logging.getLogger('trustpoint').getChild(function.__module__).getChild(function.__qualname__)
-                logger.error(f'Exception in {function.__name__}. Type: {type(exception)}, Message: {exception}')
-
-                logger.debug(
-                    f'Exception in {function.__name__}. '
-                    f'Type: {type(exception)}, '
-                    f'Message: {exception}, '
-                    f'Traceback: {traceback.format_exc()}'
-                )
-                raise
-
-        return _wrapper

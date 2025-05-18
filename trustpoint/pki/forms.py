@@ -20,7 +20,7 @@ from util.field import UniqueNameValidator
 from pki.models import DevIdRegistration, IssuingCaModel
 from pki.models.certificate import CertificateModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
-from trustpoint.views.base import LoggerMixin
+from trustpoint.logger import LoggerMixin
 
 
 class DevIdAddMethodSelectForm(forms.Form):
@@ -548,8 +548,9 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             certificate_serializer.as_crypto().fingerprint(algorithm=hashes.SHA256()).hex()
         )
         if certificate_in_db:
-            issuing_ca_in_db = IssuingCaModel.objects.get(credential__certificate=certificate_in_db)
-            if issuing_ca_in_db:
+            issuing_ca_qs = IssuingCaModel.objects.filter(credential__certificate=certificate_in_db)
+            if issuing_ca_qs.exists():
+                issuing_ca_in_db = issuing_ca_qs.first()
                 err_msg = (
                     f'Issuing CA {issuing_ca_in_db.unique_name} is already configured '
                     'with the same Issuing CA certificate.'

@@ -17,7 +17,7 @@ from trustpoint_core.serializer import (
 from util.db import CustomDeleteActionModel
 
 from pki.models import CertificateModel
-from trustpoint.views.base import LoggerMixin
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
