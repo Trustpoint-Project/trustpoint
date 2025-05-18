@@ -240,22 +240,9 @@ def step_when_cert_file_import(context: runner.Context, cert_type: str, status: 
     assert os.path.exists(file_path), f"Certificate file not found: {file_path}"
     context.cert_file_path = file_path
 
-@when('the certificate file is "a CA certificate"')
-def step_when_cert_file_ca(context: runner.Context) -> None:  # noqa: ARG001
-    """Ensures that certificate file is a CA certificate.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-  
-    with open(context.cert_file_path, "rb") as cert_file:
-        certificate_serializer = CertificateSerializer.from_bytes(cert_file.read())
-        is_ca = is_ca_cert(certificate_serializer._certificate)
-        assert is_ca is not None, "Certificate file is not valid"
-
-@when('the certificate file is "an end entity certificate"')
-def step_when_cert_file_ca(context: runner.Context) -> None:  # noqa: ARG001
-    """Ensures that certificate file is a CA certificate.
+@when('the certificate file is "{type}"')
+def step_when_cert_file_ca(context: runner.Context, type: str) -> None:  # noqa: ARG001
+    """Verifies that certificate file is a CA or end-entity certificate.
 
     Args:
         context (runner.Context): Behave context.
@@ -263,7 +250,24 @@ def step_when_cert_file_ca(context: runner.Context) -> None:  # noqa: ARG001
     with open(context.cert_file_path, "rb") as cert_file:
         certificate_serializer = CertificateSerializer.from_bytes(cert_file.read())
         is_ca = is_ca_cert(certificate_serializer._certificate)
-        assert not is_ca, "the certificate is not end-entity certificate"
+        if (type == 'a CA certificate'):
+            assert is_ca, f"certificate file is not {type}"
+        elif (type == 'an end entity certificate'):
+            assert not is_ca, f"the certificate file is not {type}"
+        else:
+            raise AssertionError("no valid type given")
+
+# @when('the certificate file is "an end entity certificate"')
+# def step_when_cert_file_ca(context: runner.Context) -> None:  # noqa: ARG001
+#     """Ensures that certificate file is a CA certificate.
+
+#     Args:
+#         context (runner.Context): Behave context.
+#     """
+#     with open(context.cert_file_path, "rb") as cert_file:
+#         certificate_serializer = CertificateSerializer.from_bytes(cert_file.read())
+#         is_ca = is_ca_cert(certificate_serializer._certificate)
+#         assert not is_ca, "the certificate is not end-entity certificate"
 
 @when('the certificate chain of type {cert_chain} is "{status}"')
 @when('the certificate chain of type "{cert_chain}" is "{status}"')
