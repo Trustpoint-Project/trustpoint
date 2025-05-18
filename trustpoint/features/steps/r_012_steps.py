@@ -4,8 +4,8 @@ from behave import given, runner, then, when
 from django.conf import settings
 from django.test import Client
 from django.contrib.auth.models import User
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import Select
+# from selenium.webdriver.common.by import By
+# from selenium.webdriver.support.ui import Select
 import time
 
 TRANSLATION_LOOKUP = {
