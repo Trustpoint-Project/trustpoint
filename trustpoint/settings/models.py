@@ -6,18 +6,20 @@ from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 
 class SecurityConfig(models.Model):
-    """Security Configuration model"""
+    """Security Configuration model."""
 
-    class SecurityModeChoices(models.TextChoices):
-        """Types of security modes"""
+    class SecurityModeChoices(models.IntegerChoices):
+        """Types of security modes."""
 
-        DEV = '0', _('Testing env')
-        LOW = '1', _('Basic')
-        MEDIUM = '2', _('Medium')
-        HIGH = '3', _('High')
-        HIGHEST = '4', _('Highest')
+        DEV = 0, _('Testing env')
+        LOW = 1, _('Basic')
+        MEDIUM = 2, _('Medium')
+        HIGH = 3, _('High')
+        HIGHEST = 4, _('Highest')
 
-    security_mode = models.CharField(max_length=6, choices=SecurityModeChoices.choices, default=SecurityModeChoices.LOW)
+    security_mode = models.IntegerField(
+        max_length=6, choices=SecurityModeChoices.choices, default=SecurityModeChoices.LOW
+    )
 
     auto_gen_pki = models.BooleanField(default=False)
     auto_gen_pki_key_algorithm = models.CharField(
@@ -25,5 +27,9 @@ class SecurityConfig(models.Model):
     )
 
     def __str__(self) -> str:
-        """Output as string"""
+        """Gets a human-readable string representation.
+
+        Returns:
+            The human-readable string representation.
+        """
         return f'{self.security_mode}'

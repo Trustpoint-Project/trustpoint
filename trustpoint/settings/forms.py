@@ -1,4 +1,4 @@
-"""Forms definition"""
+"""This module contains forms for the settings app."""
 
 from __future__ import annotations
 
@@ -15,17 +15,17 @@ from settings.security import manager
 from settings.security.features import AutoGenPkiFeature, SecurityFeature
 
 if TYPE_CHECKING:
-    from typing import ClassVar
+    from typing import Any, ClassVar
 
 
-class SecurityConfigForm(forms.ModelForm):
-    """Security configuration model form"""
+class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
+    """Security configuration model form."""
 
     FEATURE_TO_FIELDS: dict[type[SecurityFeature], list[str]] = {
         AutoGenPkiFeature: ['auto_gen_pki', 'auto_gen_pki_key_algorithm'],
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
         # Determine the 'current_mode' from form data or instance
