@@ -6,23 +6,19 @@ which can be used within the apps.
 
 from __future__ import annotations
 
-from typing import Any, Callable
-import logging
-import traceback
-import functools
+from typing import TYPE_CHECKING, Any
 
 from django import forms as dj_forms
-from django.contrib import messages
-from django.db.models import QuerySet
-from django.http import Http404
 from django.core.exceptions import ImproperlyConfigured
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponseRedirect
+from django.db.models import Model, QuerySet
+from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
-from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import RedirectView
 from django.views.generic.edit import FormMixin
 from django.views.generic.list import BaseListView, ListView, MultipleObjectTemplateResponseMixin
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class IndexView(RedirectView):
@@ -39,16 +35,18 @@ class ListInDetailView(ListView):
     Note that 'model' and 'context_object_name' refer to the ListView.
     Use 'detail_model' and 'detail_context_object_name' for the DetailView.
     """
-    detail_context_object_name = 'object'
 
-    def get(self, request, *args, **kwargs):
+    detail_context_object_name = 'object'
+    object: Model
+
+    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
         self.object = self.get_object()
-        return super().get(request, *args, **kwargs)
+        return super().get(*args, **kwargs)
 
     def get_queryset_for_object(self):
         return self.detail_model.objects.all()
 
-    def get_object(self):
+    def get_object(self) -> Model:
         queryset = self.get_queryset_for_object()
         pk = self.kwargs.get('pk')
         if pk is None:
@@ -60,10 +58,10 @@ class ListInDetailView(ListView):
         context = super().get_context_data(**kwargs)
         context[self.detail_context_object_name] = self.object
         return context
-    
+
 
 class SortableTableMixin:
-    """Adds utility for sorting a ListView query by URL parameters
+    """Adds utility for sorting a ListView query by URL parameters.
 
     default_sort_param must be set in the view to specify default sorting order.
     """
@@ -81,7 +79,7 @@ class SortableTableMixin:
         """
         return sorted(list_of_dicts, key=lambda x: x[sort_param.lstrip('-')], reverse=sort_param.startswith('-'))
 
-    def get_queryset(self) -> QuerySet | list:
+    def get_queryset(self) -> QuerySet[Any]:
         if hasattr(self, 'queryset') and self.queryset is not None:
             queryset = self.queryset
         else:
@@ -90,7 +88,7 @@ class SortableTableMixin:
         # Get sort parameter (e.g., "name" or "-name")
         sort_param = self.request.GET.get('sort', self.default_sort_param)
         queryset_type = type(queryset)
-        if queryset_type is QuerySet:
+        if issubclass(queryset_type, QuerySet):
             if hasattr(self.model, 'is_active'):
                 return queryset.order_by('-is_active', sort_param)
             return queryset.order_by(sort_param)
@@ -100,8 +98,8 @@ class SortableTableMixin:
         exc_msg = f'Unknown queryset type: {type}'
         raise TypeError(exc_msg)
 
-    def get_context_data(self, **kwargs: dict) -> dict:
-        context = super().get_context_data(**kwargs)
+    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(*args, **kwargs)
 
         # Get current sorting column
         sort_param = self.request.GET.get('sort', self.default_sort_param)
@@ -109,16 +107,6 @@ class SortableTableMixin:
         # Pass sorting details to the template
         context['current_sort'] = sort_param
         return context
-
-
-class TpLoginRequiredMixin(LoginRequiredMixin):
-    """LoginRequiredMixin that adds a warning message if the user is not logged in."""
-    request: HttpRequest
-
-    def handle_no_permission(self) -> HttpResponseRedirect:
-        """Redirects to the login page with a warning message if the user is not logged in."""
-        messages.add_message(self.request, messages.WARNING, message=_('Login required!'))
-        return super().handle_no_permission()
 
 
 class ContextDataMixin:
@@ -147,57 +135,47 @@ class ContextDataMixin:
         prefix = 'context_'
         for attr in dir(self):
             if attr.startswith(prefix) and len(attr) > len(prefix):
-                kwargs.setdefault(attr[len(prefix):], getattr(self, attr))
+                kwargs.setdefault(attr[len(prefix) :], getattr(self, attr))
 
         super_get_context_method = getattr(super(), 'get_context_data', None)
         if super_get_context_method is None:
             return kwargs
-        else:
-            return super_get_context_method(**kwargs)
+        return super_get_context_method(**kwargs)
 
 
-class BulkDeletionMixin:
+class BaseBulkDeleteView(FormMixin, BaseListView):
+    """Base view for bulk deletion of objects."""
 
     queryset: Any
     get_queryset: Callable
     success_url = None
-    object_list = list
-
-    def delete(self, *args, **kwargs):
-        self.queryset = self.get_queryset()
-        success_url = self.get_success_url()
-        self.queryset.delete()
-        return HttpResponseRedirect(success_url)
-
-    def post(self, request, *args, **kwargs):
-        return self.delete(request, *args, **kwargs)
-
-    def get_success_url(self):
-        if self.success_url:
-            return self.success_url
-
-        raise ImproperlyConfigured("No URL to redirect to. Provide a success_url.")
-
-
-class BaseBulkDeleteView(BulkDeletionMixin, FormMixin, BaseListView):
 
     form_class = dj_forms.Form
 
-    def post(self, *args, **kwargs):
+    def post(self, *_args: tuple[Any], **_kwargs: dict[str, Any]) -> HttpResponse:
+        """Handles POST requests to the BulkDeleteView."""
         self.queryset = self.get_queryset()
         form = self.get_form()
         if form.is_valid():
             return self.form_valid(form)
         return self.form_invalid(form)
 
-    def form_valid(self, form):
+    def form_valid(self, _form: form_class) -> HttpResponse:
+        """Delete the selected objects on valid form."""
         success_url = self.get_success_url()
         self.queryset.delete()
         return HttpResponseRedirect(success_url)
 
+    def get_success_url(self) -> str:
+        """Returns the URL to redirect to after a successful deletion."""
+        if self.success_url:
+            return self.success_url
+
+        exc_msg = 'No URL to redirect to. Provide a success_url.'
+        raise ImproperlyConfigured(exc_msg)
+
 
 class PrimaryKeyListFromPrimaryKeyString:
-
     @staticmethod
     def get_pks_as_list(pks: str) -> list[str]:
         if pks:
@@ -213,7 +191,8 @@ class PrimaryKeyListFromPrimaryKeyString:
             return pks_list
 
         return []
-    
+
+
 class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
     def get_pks_path(self) -> str:
         return self.kwargs.get('pks')
@@ -237,49 +216,3 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
 class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFromUrlMixin, BaseBulkDeleteView):
     pass
 
-
-class LoggerMixin:
-    """Mixin that adds log features to the subclass."""
-
-    logger: logging.Logger
-
-    @classmethod
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        """Adds an appropriate logger to the subclass and makes it available through cls.logger."""
-        super().__init_subclass__(**kwargs)
-
-        cls.logger = logging.getLogger('trustpoint').getChild(cls.__module__).getChild(cls.__name__)
-
-
-    @staticmethod
-    def log_exceptions(function):
-        """
-        Decorator that gets an appropriate logger and logs any unhandled exception.
-
-        Logs the type and message to both levels error and debug.
-        Also adds the traceback to the debug level log.
-
-        Args:
-            function: The decorated method or function.
-        """
-
-        @functools.wraps(function)
-        def _wrapper(*args, **kwargs):
-            try:
-                return function(*args, **kwargs)
-            except Exception as exception:
-                logger = logging.getLogger('trustpoint').getChild(function.__module__).getChild(function.__qualname__)
-                logger.error(
-                    f'Exception in {function.__name__}. '
-                    f'Type: {type(exception)}, '
-                    f'Message: {exception}'
-                )
-                logger.debug(
-                    f'Exception in {function.__name__}. '
-                    f'Type: {type(exception)}, '
-                    f'Message: {exception}, '
-                    f'Traceback: {traceback.format_exc()}'
-                )
-                raise
-
-        return _wrapper

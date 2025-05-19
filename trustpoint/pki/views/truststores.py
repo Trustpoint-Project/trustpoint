@@ -4,18 +4,20 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from trustpoint_core.file_builder.certificate import CertificateCollectionArchiveFileBuilder, CertificateCollectionBuilder
-from trustpoint_core.file_builder.enum import ArchiveFormat, CertificateFileFormat
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import ngettext
 from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
+from trustpoint_core.archiver import ArchiveFormat, Archiver
+from trustpoint_core.serializer import CertificateFormat
 
 from pki.forms import TruststoreAddForm
 from pki.models import DomainModel
@@ -25,14 +27,15 @@ from trustpoint.views.base import (
     BulkDeleteView,
     PrimaryKeyListFromPrimaryKeyString,
     SortableTableMixin,
-    TpLoginRequiredMixin,
 )
 
 if TYPE_CHECKING:
-    from typing import ClassVar
+    from typing import Any, ClassVar
+
+    from django.forms import Form
 
 
-class TruststoresRedirectView(TpLoginRequiredMixin, RedirectView):
+class TruststoresRedirectView(RedirectView):
     """View that redirects to the index of the PKI Truststores application: Truststores."""
 
     permanent = False
@@ -44,7 +47,8 @@ class TruststoresContextMixin:
 
     extra_context: ClassVar = {'page_category': 'pki', 'page_name': 'truststores'}
 
-class TruststoreTableView(TruststoresContextMixin, TpLoginRequiredMixin, SortableTableMixin, ListView):
+
+class TruststoreTableView(TruststoresContextMixin, SortableTableMixin, ListView[TruststoreModel]):
     """Truststore Table View."""
 
     model = TruststoreModel
@@ -54,7 +58,7 @@ class TruststoreTableView(TruststoresContextMixin, TpLoginRequiredMixin, Sortabl
     default_sort_param = 'unique_name'
 
 
-class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormView):
+class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm]):
     """View for creating a new Truststore."""
 
     model = TruststoreModel
@@ -62,28 +66,47 @@ class TruststoreCreateView(TruststoresContextMixin, TpLoginRequiredMixin, FormVi
     template_name = 'pki/truststores/add/file_import.html'
     ignore_url = reverse_lazy('pki:truststores')
 
-    def form_valid(self, form):
+    def form_valid(self, form: TruststoreAddForm) -> HttpResponseRedirect:
+        """If the form is valid, redirect to Truststore overview."""
         truststore = form.cleaned_data['truststore']
-        domain_id = self.kwargs.get("pk")
+        domain_id = self.kwargs.get('pk')
 
         if domain_id:
-            return HttpResponseRedirect(reverse('pki:devid_registration_create-with_truststore_id', kwargs={'pk': domain_id, 'truststore_id': truststore.id}))
+            return HttpResponseRedirect(
+                reverse(
+                    'pki:devid_registration_create-with_truststore_id',
+                    kwargs={'pk': domain_id, 'truststore_id': truststore.id},
+                )
+            )
+
+        n_certificates = truststore.number_of_certificates
+        msg_str = ngettext(
+            'Successfully created the Truststore %(name)s with %(count)i certificate.',
+            'Successfully created the Truststore %(name)s with %(count)i certificates.',
+            n_certificates,
+        ) % {
+            'name': truststore.unique_name,
+            'count': n_certificates,
+        }
+
+        messages.success(self.request, msg_str)
 
         return HttpResponseRedirect(reverse('pki:truststores'))
 
-    def get_success_url(self):
-        """You could still use a success URL here if needed"""
+    def get_success_url(self) -> str:
+        """You could still use a success URL here if needed."""
         return reverse_lazy('pki:truststores')
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
         """Include domain in context only if pk is present."""
         context = super().get_context_data(**kwargs)
-        pk = self.kwargs.get("pk")
+        pk = self.kwargs.get('pk')
         if pk:
-            context["domain"] = get_object_or_404(DomainModel, id=pk)
+            context['domain'] = get_object_or_404(DomainModel, id=pk)
         return context
 
-class TruststoreDetailView(TruststoresContextMixin, TpLoginRequiredMixin, DetailView):
+
+class TruststoreDetailView(TruststoresContextMixin, DetailView[TruststoreModel]):
     """The truststore detail view."""
 
     model = TruststoreModel
@@ -92,7 +115,8 @@ class TruststoreDetailView(TruststoresContextMixin, TpLoginRequiredMixin, Detail
     template_name = 'pki/truststores/details.html'
     context_object_name = 'truststore'
 
-class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, DetailView):
+
+class TruststoreDownloadView(TruststoresContextMixin, DetailView[TruststoreModel]):
     """View for downloading a single truststore."""
 
     model = TruststoreModel
@@ -102,7 +126,12 @@ class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, Deta
     context_object_name = 'truststore'
 
     def get(
-        self, request: HttpRequest, pk: str | None = None, file_format: str | None = None, *args: tuple, **kwargs: dict
+        self,
+        request: HttpRequest,
+        pk: str | None = None,
+        file_format: str | None = None,
+        *args: tuple[Any],
+        **kwargs: dict[str, Any],
     ) -> HttpResponse:
         """HTTP GET Method.
 
@@ -131,23 +160,21 @@ class TruststoreDownloadView(TruststoresContextMixin, TpLoginRequiredMixin, Deta
             return super().get(request, *args, **kwargs)
 
         try:
-            file_format_enum = CertificateFileFormat(value=self.kwargs.get('file_format'))
+            file_format_enum = CertificateFormat(value=self.kwargs.get('file_format'))
         except Exception as exception:
             raise Http404 from exception
 
         certificate_serializer = TruststoreModel.objects.get(pk=pk).get_certificate_collection_serializer()
-
-        file_bytes = CertificateCollectionBuilder.build(
-            certificate_serializer,
-            file_format=file_format_enum)
+        file_bytes = certificate_serializer.as_format(file_format_enum)
 
         response = HttpResponse(file_bytes, content_type=file_format_enum.mime_type)
         response['Content-Disposition'] = f'attachment; filename="truststore{file_format_enum.file_extension}"'
 
         return response
 
+
 class TruststoreMultipleDownloadView(
-    TruststoresContextMixin, TpLoginRequiredMixin, PrimaryKeyListFromPrimaryKeyString, ListView
+    TruststoresContextMixin, PrimaryKeyListFromPrimaryKeyString, ListView[TruststoreModel]
 ):
     """View for downloading multiple truststores at once as archived files."""
 
@@ -157,7 +184,7 @@ class TruststoreMultipleDownloadView(
     template_name = 'pki/truststores/download_multiple.html'
     context_object_name = 'truststores'
 
-    def get_context_data(self, **kwargs: dict) -> dict:
+    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
         """Adding the part of the url to the context, that contains the truststores primary keys.
 
         This is used for the {% url }% tags in the template to download files.
@@ -178,8 +205,8 @@ class TruststoreMultipleDownloadView(
         pks: str | None = None,
         file_format: None | str = None,
         archive_format: None | str = None,
-        *args: tuple,
-        **kwargs: dict,
+        *args: tuple[Any],
+        **kwargs: dict[str, Any],
     ) -> HttpResponse:
         """HTTP GET Method.
 
@@ -215,7 +242,7 @@ class TruststoreMultipleDownloadView(
             return super().get(request, *args, **kwargs)
 
         try:
-            file_format_enum = CertificateFileFormat(value=file_format)
+            file_format_enum = CertificateFormat(value=file_format)
         except Exception as exception:
             raise Http404 from exception
 
@@ -228,18 +255,20 @@ class TruststoreMultipleDownloadView(
             TruststoreModel.objects.get(pk=pk).get_certificate_collection_serializer() for pk in pks_list
         ]
 
-        file_bytes = CertificateCollectionArchiveFileBuilder.build(
-            certificate_collection_serializers=certificate_collection_serializers,
-            file_format=file_format_enum,
-            archive_format=archive_format_enum
-        )
+        data_to_archive = {
+            f'trust-store-{i}': trust_store.as_format(file_format_enum)
+            for i, trust_store in enumerate(certificate_collection_serializers)
+        }
+
+        file_bytes = Archiver.archive(data_to_archive, archive_format_enum)
 
         response = HttpResponse(file_bytes, content_type=archive_format_enum.mime_type)
         response['Content-Disposition'] = f'attachment; filename="truststores{archive_format_enum.file_extension}"'
 
         return response
 
-class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, TpLoginRequiredMixin, BulkDeleteView):
+
+class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
     """View for confirming the deletion of multiple truststores."""
 
     model = TruststoreModel
@@ -248,7 +277,7 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, TpLoginRequiredMi
     template_name = 'pki/truststores/confirm_delete.html'
     context_object_name = 'truststores'
 
-    def form_valid(self, form) -> HttpResponse:
+    def form_valid(self, form: Form) -> HttpResponse:
         """Attempts to delete the selected truststores on valid form."""
         queryset = self.get_queryset()
         deleted_count = queryset.count()
@@ -259,15 +288,13 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, TpLoginRequiredMi
         except ProtectedError:
             messages.error(
                 self.request,
-                _(
-                    'Cannot delete the selected Truststore(s) because they are referenced by other objects.'
-                )
+                _('Cannot delete the selected Truststore(s) because they are referenced by other objects.'),
             )
             return HttpResponseRedirect(self.success_url)
+        except ValidationError as exc:
+            messages.error(self.request, exc.message)
+            return HttpResponseRedirect(self.success_url)
 
-        messages.success(
-            self.request,
-            _('Successfully deleted {count} Truststore(s).').format(count=deleted_count)
-        )
+        messages.success(self.request, _('Successfully deleted {count} Truststore(s).').format(count=deleted_count))
 
         return response

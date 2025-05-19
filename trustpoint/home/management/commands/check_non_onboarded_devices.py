@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from devices.models import DeviceModel
-from django.core.management.base import BaseCommand  # type: ignore[import-untyped]
-from django.utils import timezone  # type: ignore[import-untyped]
+from django.core.management.base import BaseCommand
+from django.utils import timezone
 from home.models import NotificationModel, NotificationStatus
 
 new_status, created = NotificationStatus.objects.get_or_create(status='NEW')
@@ -23,7 +23,12 @@ class Command(BaseCommand):
     help = 'Check for devices not onboarded.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         self._check_non_onboarded_devices()
         self.stdout.write(self.style.SUCCESS('Non-onboarded devices check completed.'))
 
@@ -33,7 +38,7 @@ class Command(BaseCommand):
 
         for device in non_onboarded_devices:
             if not NotificationModel.objects.filter(event='DEVICE_NOT_ONBOARDED', device=device).exists():
-                message_data = {'device': device.unique_name, 'domain': device.domain.unique_name}
+                message_data = {'device': device.common_name, 'domain': device.domain.unique_name}
 
                 notification = NotificationModel.objects.create(
                     device=device,

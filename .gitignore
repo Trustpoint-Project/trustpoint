@@ -51,6 +51,7 @@ coverage.xml
 .pytest_cache/
 cover/
 behave-report.html
+*/md-report.md
 
 # Translations
 *.mo
@@ -83,6 +84,9 @@ target/
 # IPython
 profile_default/
 ipython_config.py
+
+# MacOS
+.DS_Store
 
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is
@@ -167,7 +171,8 @@ media/
 trustpoint/media/*
 !trustpoint/media/log/.gitkeep
 
-migrations/
+**/migrations/*
+!**/migrations/__init__.py
 
 .python-version
 
@@ -181,3 +186,4 @@ docs/build/
 collected_static
 
 _*.sh
+/md-report.md

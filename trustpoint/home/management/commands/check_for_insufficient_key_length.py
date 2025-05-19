@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.core.management.base import BaseCommand  # type: ignore[import-untyped]
-from django.utils import timezone  # type: ignore[import-untyped]
+from django.core.management.base import BaseCommand
+from django.utils import timezone
 from home.models import NotificationModel, NotificationStatus
 from pki.models import CertificateModel
 
@@ -16,7 +16,12 @@ class Command(BaseCommand):
     help = 'Check certificates with insufficient key lengths.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """Entrypoint for the command."""
+        """Entrypoint for the command.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         self._check_for_insufficient_key_length()
         self.stdout.write(self.style.SUCCESS('Insufficient key length check completed.'))
 

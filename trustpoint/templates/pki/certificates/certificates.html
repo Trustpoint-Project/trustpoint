@@ -4,99 +4,24 @@
 {% block content %}
 
 <div class="card" style="max-height: 100%; display: flex; flex-direction: column">
-  <div class="card-header">
-    {% if issuing_ca_cert %}
-    <h1>{% trans "Certificates issued by the CA: " %} {{ issuing_ca_cert.common_name }}</h1>
-    {% else %}
-    <h1>{% trans "Certificates" %}</h1>
-    {% endif %}
-  </div>
-  <div class="card-body text-start" style="overflow: auto; flex-grow: 1; max-height: 90%">
-    <table class="table">
-      <thead>
-        <tr>
-          <th id="checkbox-column"><input type="checkbox"/></th>
-          <th>
-            <a href="?sort={% if current_sort == 'common_name' %}-{% endif %}common_name">
-              Common Name
-            </a>
-          </th>
-          <th>
-            <a href="?sort={% if current_sort == 'not_valid_after' %}-{% endif %}not_valid_after">
-              Not Valid After (UTC)
-            </a>
-          </th>
-          <th>
-            <a href="?sort={% if current_sort == 'spki_algorithm' %}-{% endif %}spki_algorithm">
-              Public Key Algorithm
-            </a>
-          </th>
-          <th>
-            <a href="?sort={% if current_sort == 'spki_key_size' %}-{% endif %}spki_key_size">
-              Public Key Size
-            </a>
-          </th>
-          <th>
-            <a href="?sort={% if current_sort == 'spki_ec_curve' %}-{% endif %}spki_ec_curve">
-              Public Key Curve (ECC)
-            </a>
-          </th>
-          <th>
-            <a
-              href="?sort={% if current_sort == 'certificate_status' %}-{% endif %}certificate_status"
-            >
-              Status
-            </a>
-          </th>
-          <th>
-            <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
-              Created-At
-            </a>
-          </th>
-          <th>
-            <a href="?sort={% if current_sort == 'is_self_signed' %}-{% endif %}is_self_signed">
-              Self-Signed
-            </a>
-          </th>
-          <th>Details</th>
-          <th>Download</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for certificate in page_obj %}
-        <tr>
-          <td class="row_checkbox">
-            <input type="checkbox" name="row_checkbox" value="{{ certificate.id }}" />
-          </td>
-          <td>{{ certificate.common_name }}</td>
-          <td>{{ certificate.not_valid_after }}</td>
-          <td>{{ certificate.spki_algorithm }}</td>
-          <td>{{ certificate.spki_key_size }}</td>
-          <td>{% if certificate.spki_ec_curve%} {{ certificate.spki_ec_curve }} {% else %}—{% endif %}</td>
-          <td>{{ certificate.certificate_status }}</td>
-          <td>{{ certificate.created_at }}</td>
-          <td>{% if certificate.is_self_signed == 1 %} ✔ {% else %} ✘ {% endif %}</td>
-          <td><a href="details/{{certificate.id}}/" class="btn btn-primary tp-table-btn w-100">Details</a></td>
-          <td><a href="download/{{certificate.id}}/" class="btn btn-primary tp-table-btn w-100">Download</a></td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="11" class="middle">{% trans 'No certificates are available. Add an Issuing CA first.' %}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-
-    {% include 'trustpoint/pagination.html' %}
-  </div>
-  <div class="card-footer d-flex justify-content-between tp-sticky-footer">
-      <div class="tp-card-btn-footer m-1">
-          <button type="button" class="btn btn-primary tp-table-select-btn" data-tp-url="download">
-            {% trans 'Download selected' %}
-          </button>
-      </div>
-      <div class="m-1">
-      </div>
-  </div>
+    <div class="card-header">
+        {% if issuing_ca_cert %}
+        <h1>{% trans "Certificates issued by the CA: " %} {{ issuing_ca_cert.common_name }}</h1>
+        {% else %}
+        <h1>{% trans "Certificates" %}</h1>
+        {% endif %}
+    </div>
+    <div class="card-body text-start" style="overflow: auto; flex-grow: 1; max-height: 90%">
+        {% include 'pki/certificates/table.html' %}
+    </div>
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+            <div class="tp-card-btn-footer m-1">
+                <button type="button" class="btn btn-primary tp-table-select-btn" data-tp-url="download">
+                    {% trans 'Download selected' %}
+                </button>
+            </div>
+            <div class="m-1">
+            </div>
+    </div>
 </div>
 {% endblock content %}

@@ -1,0 +1,2 @@
+If this file is present in /etc/trustpoint and named RESET_DB, it will reset the database and run migrations on startup.
+Then it is deleted so the database is kept between container restarts.

@@ -4,190 +4,177 @@
 {% block content %}
     <div class="card tp-card-centered">
         <div class="card-header">
-            <h2>{{ issuing_ca.unique_name }} {% trans "Configuration" %}</h2>
+            <h2>{{ issuing_ca.unique_name }} {% trans 'Configuration' %}</h2>
         </div>
 
         <form method="POST" autocomplete="on" enctype="multipart/form-data">
             {% csrf_token %}
             <div class="card tp-card-centered">
                 <div class="card-body">
-                    <div class="tp-card-centered-content">
-                        <div class="card-body">
-                            <h3>{% trans "Domains" %}</h3>
-                            <hr class="hr-m">
-                            {% if issuing_ca.domain_set.all %} {# TODO #}
-                                {% for domain in issuing_ca.domain_set.all %}
-                                    <li class="tp-card-split">
-                                        {{ domain.unique_name }}
-                                        <div>
-
-                                        </div>
-                                    </li>
-                                {% endfor %}
-                            {% else %}
-                                <div class="tp-kvp-list">
-                                    <div class="text-muted">
-                                        {% trans "No associated domains" %}
-                                    </div>
-                                </div>
-                            {% endif %}
-
-                        </div>
-                    </div>
-
-                    <div class="tp-card-centered-content">
-                        <div class="card-body">
-                            <h3>{% trans 'General' %}</h3>
-                            <hr class="hr-m">
-                            <div class="tp-kvp-list">
-                                <div>
-                                    <div>{% trans 'Type' %}</div>
-                                    <div>{{ issuing_ca.get_issuing_ca_type_display }}</div>
-                                </div>
-                                <div>
-                                    <div>{% trans 'Updated' %}</div>
-                                    <div>{{ issuing_ca.updated_at }}</div>
-                                </div>
-                                <div>
-                                    <div>{% trans 'Created' %}</div>
-                                    <div>{{ issuing_ca.created_at }}</div>
-                                </div>
-
-                                <div>
-                                    <div>{% trans 'Unique Name' %}</div>
-                                    <div>{{ issuing_ca.unique_name }}</div>
-                                </div>
-                                <div>
-                                    <div>{% trans 'Issuing CA Certificate' %}</div>
-                                    <div>
-                                        <a href="{% url 'pki:certificate-detail' pk=issuing_ca.credential.certificate.id %}">
-                                            {% if issuing_ca.credential.certificate.common_name %}
-                                                CN: {{ issuing_ca.credential.certificate.common_name }}
-                                            {% else %}
-                                                <h3>{% trans 'Issuing CA Certificate' %}</h3>
-                                            {% endif %}
-                                        </a>
-                                    </div>
-                                    {% for certificate_chain_order in issuing_ca.credential.ordered_certificate_chain_queryset %}
-                                        {% if forloop.last %}
-                                            <div>{% trans 'Root CA Certificate' %}</div>
-                                            <div>
-                                                <a href="{% url 'pki:certificate-detail' pk=certificate_chain_order.certificate.id %}">
-                                                    {% if certificate_chain_order.certificate.common_name %}
-                                                        CN: {{ certificate_chain_order.certificate.common_name }}
-                                                    {% else %}
-                                                        {% trans 'Root CA Certificate' %}
-                                                    {% endif %}
-                                                </a>
-                                            </div>
-                                        {% else %}
-                                            <div>{% trans 'Intermediate CA' %} {{ forloop.counter }} {% trans 'Certificate' %}</div>
-                                            <div>
-                                                <a href="{% url 'pki:certificate-detail' pk=certificate_chain_order.certificate.id %}">
-                                                    {% if certificate_chain_order.certificate.common_name %}
-                                                        CN: {{ certificate_chain_order.certificate.common_name }}
-                                                    {% else %}
-                                                        {% trans 'Root CA Certificate' %}
-                                                    {% endif %}
-                                                </a>
-                                            </div>
-                                        {% endif %}
-                                    {% endfor %}
-                                </div>
-                                <div>
-                                    <div>{% trans 'Certificates issued:' %}</div>
-                                    <div></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {% if issuing_ca.issuing_ca_certificate.issued_certificate_references.all %}
-                        <div>
-                            <div>Number of Issued Certificates</div>
+                    <h3>{% trans 'Domains' %}</h3>
+                    <hr class="hr-m">
+                    {% if issuing_ca.domains.all %}
+                        <div class="tp-kvp-list">
+                        {% for domain in issuing_ca.domains.all %}
                             <div>
-                                {{ issuing_ca.issuing_ca_certificate.issued_certificate_references.count }}
-                                <br>
-                                <a href="{% url 'pki:issued_certificates' pk=issuing_ca.issuing_ca_certificate.id %}"
-                                   class="btn btn-primary my-1">Show All Issued Certificates</a>
+                                <div>
+                                    <a href="{% url 'pki:domains-config' pk=domain.id %}">{{ domain.unique_name }}</a>
+                                </div>
+                                <div></div>
+                            </div>
+                        {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="tp-kvp-list">
+                            <div class="text-muted">
+                                {% trans 'No associated domains' %}
                             </div>
                         </div>
                     {% endif %}
-                    <div class="tp-card-centered-content">
-                        <div class="card-body">
-                            <h3>
-                                {% if issuing_ca.credential.certificate.subject_public_bytes == issuing_ca.credential.certificate.issuer_public_bytes %}
-                                    Issuing CA Certificate (This is a self-signed Root CA Certificate)
-                                {% else %}
-                                    Issuing CA Certificate
-                                {% endif %}
-                            </h3>
-                            <hr class="hr-m">
-                            <div class="tp-kvp-list">
-                                <div>
-                                    <div>{% trans 'Issuing CA Certificate' %}</div>
+
+                    <h3>{% trans 'General' %}</h3>
+                    <hr class="hr-m">
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>{% trans 'Type' %}</div>
+                            <div>{{ issuing_ca.get_issuing_ca_type_display }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Updated' %}</div>
+                            <div>{{ issuing_ca.updated_at }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Created' %}</div>
+                            <div>{{ issuing_ca.created_at }}</div>
+                        </div>
+
+                        <div>
+                            <div>{% trans 'Unique Name' %}</div>
+                            <div>{{ issuing_ca.unique_name }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Issuing CA Certificate' %}</div>
+                            <div>
+                                <a href="{% url 'pki:certificate-detail' pk=issuing_ca.credential.certificate.id %}">
+                                    {% if issuing_ca.credential.certificate.common_name %}
+                                        CN: {{ issuing_ca.credential.certificate.common_name }}
+                                    {% else %}
+                                        <h3>{% trans 'Issuing CA Certificate' %}</h3>
+                                    {% endif %}
+                                </a>
+                            </div>
+                            {% for certificate_chain_order in issuing_ca.credential.ordered_certificate_chain_queryset %}
+                                {% if forloop.last %}
+                                    <div>{% trans 'Root CA Certificate' %}</div>
                                     <div>
-                                        <a href="{% url 'pki:certificate-detail' pk=issuing_ca.credential.certificate.id %}">
-                                            {% if issuing_ca.credential.certificate.common_name %}
-                                                CN: {{ issuing_ca.credential.certificate.common_name }}
+                                        <a href="{% url 'pki:certificate-detail' pk=certificate_chain_order.certificate.id %}">
+                                            {% if certificate_chain_order.certificate.common_name %}
+                                                CN: {{ certificate_chain_order.certificate.common_name }}
                                             {% else %}
-                                                {% trans 'Issuing CA Certificate' %}
+                                                {% trans 'Root CA Certificate' %}
                                             {% endif %}
                                         </a>
                                     </div>
-                                </div>
-                                {% with issuing_ca_certificate=issuing_ca.credential.certificate %}
+                                {% else %}
+                                    <div>{% trans 'Intermediate CA' %} {{ forloop.counter }} {% trans 'Certificate' %}</div>
                                     <div>
-                                        <div>{% trans 'Serial Number' %}</div>
-                                        <div>{{ issuing_ca_certificate.serial_number }}</div>
+                                        <a href="{% url 'pki:certificate-detail' pk=certificate_chain_order.certificate.id %}">
+                                            {% if certificate_chain_order.certificate.common_name %}
+                                                CN: {{ certificate_chain_order.certificate.common_name }}
+                                            {% else %}
+                                                {% trans 'Root CA Certificate' %}
+                                            {% endif %}
+                                        </a>
                                     </div>
-                                    <div>
-                                        <div>Fingerprint (SHA256)</div>
-                                        <div>{{ issuing_ca_certificate.sha256_fingerprint }}</div>
-                                    </div>
-                                    <div>
-                                        <div>{% trans 'Not valid before' %}</div>
-                                        <div>{{ issuing_ca_certificate.not_valid_before }}</div>
-                                    </div>
-                                    <div>
-                                        <div>{% trans 'Not valid after' %}</div>
-                                        <div>{{ issuing_ca_certificate.not_valid_after }}</div>
-                                    </div>
-
-                                    <div>
-                                        <div>Public Key Algorithm OID</div>
-                                        <div>{{ issuing_ca_certificate.spki_algorithm_oid }}</div>
-                                    </div>
-
-                                    <div>
-                                        <div>Public Key Algorithm</div>
-                                        <div>{{ issuing_ca_certificate.spki_algorithm }}</div>
-                                    </div>
-
-                                    {% if issuing_ca_certificate.spki_ec_curve_oid != 'None' %}
-                                        <div>
-                                            <div>Public Key Curve OID</div>
-                                            <div>{{ issuing_ca_certificate.spki_ec_curve_oid }}</div>
-                                        </div>
-                                    {% endif %}
-
-                                    {% if issuing_ca_certificate.spki_ec_curve %}
-                                        <div>
-                                            <div>Public Key Curve</div>
-                                            <div>{{ issuing_ca_certificate.spki_ec_curve }}</div>
-                                        </div>
-                                    {% endif %}
-
-                                    <div>
-                                        <div>Signature Algorithm Key Size</div>
-                                        <div>
-                                            {{ issuing_ca_certificate.spki_key_size }} Bits
-                                        </div>
-                                    </div>
-
-                                {% endwith %}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                        <div>
+                            <div>{% trans 'Certificates issued:' %}</div>
+                            <div>
+                                {% if issued_certificates|length > 0 %}
+                                    {{ issued_certificates|length }}
+                                    <br>
+                                    <a href="{% url 'pki:issuing_ca-issued_certificates' pk=issuing_ca.id %}"
+                                        class="btn btn-sm btn-primary mt-2">{% trans 'Show all issued certificates' %}</a>
+                                {% else %}
+                                    0
+                                {% endif %}
                             </div>
                         </div>
+                    </div>
+
+                    <h3>
+                        {% if issuing_ca.credential.certificate.subject_public_bytes == issuing_ca.credential.certificate.issuer_public_bytes %}
+                            {% trans 'Issuing CA Certificate (This is a self-signed Root CA Certificate)' %}
+                        {% else %}
+                            {% trans 'Issuing CA Certificate' %}
+                        {% endif %}
+                    </h3>
+                    <hr class="hr-m">
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>{% trans 'Issuing CA Certificate' %}</div>
+                            <div>
+                                <a href="{% url 'pki:certificate-detail' pk=issuing_ca.credential.certificate.id %}">
+                                    {% if issuing_ca.credential.certificate.common_name %}
+                                        CN: {{ issuing_ca.credential.certificate.common_name }}
+                                    {% else %}
+                                        {% trans 'Issuing CA Certificate' %}
+                                    {% endif %}
+                                </a>
+                            </div>
+                        </div>
+                        {% with issuing_ca_certificate=issuing_ca.credential.certificate %}
+                            <div>
+                                <div>{% trans 'Serial Number' %}</div>
+                                <div>{{ issuing_ca_certificate.serial_number }}</div>
+                            </div>
+                            <div>
+                                <div>{% trans 'Fingerprint (SHA256)' %}</div>
+                                <div>{{ issuing_ca_certificate.sha256_fingerprint }}</div>
+                            </div>
+                            <div>
+                                <div>{% trans 'Not valid before' %}</div>
+                                <div>{{ issuing_ca_certificate.not_valid_before }}</div>
+                            </div>
+                            <div>
+                                <div>{% trans 'Not valid after' %}</div>
+                                <div>{{ issuing_ca_certificate.not_valid_after }}</div>
+                            </div>
+
+                            <div>
+                                <div>{% trans 'Public Key Algorithm OID' %}</div>
+                                <div>{{ issuing_ca_certificate.spki_algorithm_oid }}</div>
+                            </div>
+
+                            <div>
+                                <div>{% trans 'Public Key Algorithm' %}</div>
+                                <div>{{ issuing_ca_certificate.spki_algorithm }}</div>
+                            </div>
+
+                            {% if issuing_ca_certificate.spki_ec_curve_oid != 'None' %}
+                                <div>
+                                    <div>{% trans 'Public Key Curve OID' %}</div>
+                                    <div>{{ issuing_ca_certificate.spki_ec_curve_oid }}</div>
+                                </div>
+                            {% endif %}
+
+                            {% if issuing_ca_certificate.spki_ec_curve %}
+                                <div>
+                                    <div>{% trans 'Public Key Curve' %}</div>
+                                    <div>{{ issuing_ca_certificate.spki_ec_curve }}</div>
+                                </div>
+                            {% endif %}
+
+                            <div>
+                                <div>{% trans 'Signature Algorithm Key Size' %}</div>
+                                <div>
+                                    {{ issuing_ca_certificate.spki_key_size }} Bits
+                                </div>
+                            </div>
+
+                        {% endwith %}
                     </div>
 
                     <div>
@@ -212,7 +199,7 @@
                                 <div>{{ issuing_ca.root_ca_certificate.serial_number }}</div>
                             </div>
                             <div>
-                                <div>Fingerprint (SHA256)</div>
+                                <div>{% trans 'Fingerprint (SHA256)' %}</div>
                                 <div>{{ issuing_ca.root_ca_certificate.sha256_fingerprint }}</div>
                             </div>
                             <div>
@@ -225,31 +212,31 @@
                             </div>
 
                             <div>
-                                <div>Public Key Algorithm OID</div>
+                                <div>{% trans 'Public Key Algorithm OID' %}</div>
                                 <div>{{ issuing_ca.root_ca_certificate.spki_algorithm_oid }}</div>
                             </div>
 
                             <div>
-                                <div>Public Key Algorithm</div>
+                                <div>{% trans 'Public Key Algorithm' %}</div>
                                 <div>{{ issuing_ca.root_ca_certificate.spki_algorithm }}</div>
                             </div>
 
                             {% if cert.issuer and cert.spki_ec_curve_oid != 'None' %}
                                 <div>
-                                    <div>Public Key Curve OID</div>
+                                    <div>{% trans 'Public Key Curve OID' %}</div>
                                     <div>{{ issuing_ca.root_ca_certificate.spki_ec_curve_oid }}</div>
                                 </div>
                             {% endif %}
 
                             {% if cert.issuer and cert.spki_ec_curve %}
                                 <div>
-                                    <div>Public Key Curve</div>
+                                    <div>{% trans 'Public Key Curve' %}</div>
                                     <div>{{ issuing_ca.root_ca_certificate.spki_ec_curve }}</div>
                                 </div>
                             {% endif %}
 
                             <div>
-                                <div>Signature Algorithm Key Size</div>
+                                <div>{% trans 'Signature Algorithm Key Size' %}</div>
                                 <div>
                                     {{ issuing_ca.root_ca_certificate.spki_key_size }} Bits
                                 </div>
@@ -257,51 +244,44 @@
 
                         {% endif %}
 
-
-                        <div>
-                            <div class="tp-card-centered-content">
-                                <div class="card-body">
-                                    <h3>{% trans 'CRL' %}</h3>
-                                    <hr class="hr-m">
-                                    <div class="tp-kvp-list">
-                                        <div>
-                                            <div>{% trans 'Revocation list' %}</div>
-                                            <div>
-                                                <a href="{% url 'pki:issuing_cas-crl-gen' pk=issuing_ca.pk %}"
-                                                   class="btn btn-sm btn-primary me-2">
-                                                    {% trans 'Generate CRL' %}
-                                                </a>
-                                                {% if issuing_ca.last_crl_issued_at %}
-                                                    <a href="{% url 'crl-download' pk=issuing_ca.pk %}"
-                                                       class="btn btn-sm btn-primary">
-                                                        {% trans 'Download CRL' %}
-                                                    </a>
-                                                {% else %}
-                                                    <a class="btn btn-sm btn-primary disabled">
-                                                        {% trans 'Download CRL' %}
-                                                    </a>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div>{% trans 'Last CRL issued' %}</div>
-                                            {% if issuing_ca.last_crl_issued_at %}
-                                                <div>{{ issuing_ca.last_crl_issued_at }}</div>
-                                            {% else %}
-                                                <div>{% trans 'No CRL has been issued yet.' %}</div>
-                                            {% endif %}
-                                        </div>
-                                    </div>
+                        <h3>{% trans 'CRL' %}</h3>
+                        <hr class="hr-m">
+                        <div class="tp-kvp-list">
+                            <div>
+                                <div>{% trans 'Revocation list' %}</div>
+                                <div>
+                                    <a href="{% url 'pki:issuing_cas-crl-gen' pk=issuing_ca.pk %}"
+                                        class="btn btn-sm btn-primary me-2">
+                                        {% trans 'Generate CRL' %}
+                                    </a>
+                                    {% if issuing_ca.last_crl_issued_at %}
+                                        <a href="{% url 'crl-download' pk=issuing_ca.pk %}"
+                                            class="btn btn-sm btn-primary">
+                                            {% trans 'Download CRL' %}
+                                        </a>
+                                    {% else %}
+                                        <a class="btn btn-sm btn-primary disabled">
+                                            {% trans 'Download CRL' %}
+                                        </a>
+                                    {% endif %}
                                 </div>
                             </div>
-                        </div>
+                            <div>
+                                <div>{% trans 'Last CRL issued' %}</div>
+                                {% if issuing_ca.last_crl_issued_at %}
+                                    <div>{{ issuing_ca.last_crl_issued_at }}</div>
+                                {% else %}
+                                    <div>{% trans 'No CRL has been issued yet.' %}</div>
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
-                    <div class="card-footer d-flex">
-                        <div class="tp-card-btn-footer m-1">
-                            <a href="{% url 'pki:issuing_cas' %}"
-                               class="btn btn-secondary">{% trans 'Back' %}</a>
-                        </div>
+                </div>
+                    
+                <div class="card-footer d-flex">
+                    <div class="tp-card-btn-footer m-1">
+                        <a href="{% url 'pki:issuing_cas' %}"
+                            class="btn btn-secondary">{% trans 'Back' %}</a>
                     </div>
                 </div>
             </div>

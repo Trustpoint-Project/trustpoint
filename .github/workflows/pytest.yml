@@ -1,26 +1,24 @@
 name: Pytest
 
-on: [ pull_request ]
+# Trigger this workflow on pull requests to ensure tests are executed before merging.
+on: [pull_request]
 
 jobs:
   pytest:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # Use the latest Ubuntu runner for compatibility and performance.
+
     permissions:
-      contents: read
-      pull-requests: write
+      contents: read  # Grants read access to repository contents.
+      pull-requests: write  # Allows posting test reports as comments on pull requests.
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4  # Ensures the repository code is available.
 
-      - name: Install the latest version of uv
-        uses: astral-sh/setup-uv@v5
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.
         with:
-          enable-cache: true
-          python-version: 3.12
-
-      - name: Run database migrations
-        run: |
-          echo "y" | uv run trustpoint/manage.py reset_db
+          run_migrations: true  # Enable database migrations.
 
       - name: Run Pytest and create reports
         run: |
@@ -29,10 +27,10 @@ jobs:
           --md-report-flavor gfm \
           --html=reports/pytest-report.html \
           --junitxml=reports/junit-report.xml \
-          trustpoint/
+          trustpoint/ 
 
       - name: Display Summary in GitHub Actions even if tests fail
-        if: always()
+        if: always()  # Ensures this step runs even if pytest fails.
         run: |
           echo "<details><summary>Pytest Report</summary>" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -41,16 +39,16 @@ jobs:
           echo "</details>" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Test Reports even if tests fail
-        uses: actions/upload-artifact@v4
-        if: always()
+        uses: actions/upload-artifact@v4  # Uploads reports for review.
+        if: always()  # Ensures this step runs even if pytest fails.
         with:
           name: pytest-reports
           path: reports/
 
-      - name: Render the report to the PR when tests fail
-        uses: marocchino/sticky-pull-request-comment@v2
-        if: failure()
+      - name: Render the report to the PR
+        uses: marocchino/sticky-pull-request-comment@v2  # Posts test results as a comment on PRs.
+        if: always()  # Always runs.
         with:
           header: test-report
-          recreate: true
-          path: md-report.md
+          recreate: true  # Replaces previous test reports to keep PR comments clean.
+          path: md-report.md  # Posts the markdown test report in the PR.

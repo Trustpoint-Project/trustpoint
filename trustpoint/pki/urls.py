@@ -1,9 +1,10 @@
 """URL configuration for the PKI application."""
 
-from django.urls import path, re_path  # type: ignore[import-untyped]
+from django.urls import path, re_path
 
 from pki.views import certificates, domains, issuing_cas, truststores
-from pki.views.domains import DevIdRegistrationCreateView, DevIdRegistrationDeleteView, DevIdMethodSelectView
+from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
+from pki.views.issuing_cas import IssuedCertificatesListView
 
 app_name = 'pki'
 
@@ -13,12 +14,8 @@ urlpatterns = [
         truststores.TruststoreTableView.as_view(),
         name='truststores',
     ),
-    path('truststores/add/',
-         truststores.TruststoreCreateView.as_view(),
-         name='truststores-add'),
-    path('truststores/add/<int:pk>/',
-         truststores.TruststoreCreateView.as_view(),
-         name='truststores-add-with-pk'),
+    path('truststores/add/', truststores.TruststoreCreateView.as_view(), name='truststores-add'),
+    path('truststores/add/<int:pk>/', truststores.TruststoreCreateView.as_view(), name='truststores-add-with-pk'),
     re_path(
         r'^truststores/download/(?P<pk>[0-9]+)/?$',
         truststores.TruststoreDownloadView.as_view(),
@@ -42,9 +39,7 @@ urlpatterns = [
         truststores.TruststoreDownloadView.as_view(),
         name='truststore-file-download',
     ),
-    path('truststores/details/<int:pk>/',
-         truststores.TruststoreDetailView.as_view(),
-         name='truststore-detail'),
+    path('truststores/details/<int:pk>/', truststores.TruststoreDetailView.as_view(), name='truststore-detail'),
     re_path(
         r'^truststores/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
         truststores.TruststoreBulkDeleteConfirmView.as_view(),
@@ -83,9 +78,7 @@ urlpatterns = [
         certificates.CmpIssuingCaCertificateDownloadView.as_view(),
         name='certificate-issuing-ca-download',
     ),
-    path('certificates/details/<int:pk>/',
-         certificates.CertificateDetailView.as_view(),
-         name='certificate-detail'),
+    path('certificates/details/<int:pk>/', certificates.CertificateDetailView.as_view(), name='certificate-detail'),
     path('issuing-cas/', issuing_cas.IssuingCaTableView.as_view(), name='issuing_cas'),
     path(
         'issuing-cas/add/method-select/',
@@ -105,6 +98,11 @@ urlpatterns = [
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
     path('issuing-cas/crl-gen/<int:pk>/', issuing_cas.IssuingCaCrlGenerationView.as_view(), name='issuing_cas-crl-gen'),
+    path(
+        'issuing-cas/issued-certificates/<int:pk>',
+        IssuedCertificatesListView.as_view(),
+        name='issuing_ca-issued_certificates',
+    ),
     re_path(
         r'^issuing-cas/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
         issuing_cas.IssuingCaBulkDeleteConfirmView.as_view(),
@@ -118,6 +116,11 @@ urlpatterns = [
         r'^domains/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
         domains.DomainCaBulkDeleteConfirmView.as_view(),
         name='domains-delete_confirm',
+    ),
+    path(
+        'domains/issued-certificates/<int:pk>/',
+        domains.IssuedCertificatesView.as_view(),
+        name='domain-issued_certificates',
     ),
     path(
         'devid-registration/method_select/<int:pk>/',
@@ -134,8 +137,12 @@ urlpatterns = [
         DevIdRegistrationCreateView.as_view(),
         name='devid_registration_create-with_truststore_id',
     ),
-    path('devid-registration/delete/<int:pk>/',
-         DevIdRegistrationDeleteView.as_view(),
-         name='devid_registration_delete'),
-
+    path(
+        'devid-registration/delete/<int:pk>/', DevIdRegistrationDeleteView.as_view(), name='devid_registration_delete'
+    ),
+    path(
+        'trustpoint/download/tls-server/',
+        certificates.TlsServerCertificateDownloadView.as_view(),
+        name='trustpoint-tls-server-download',
+    ),
 ]

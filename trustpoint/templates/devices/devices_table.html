@@ -1,0 +1,85 @@
+{% load i18n %}
+{% block devices_table %}
+    <table class="table">
+        <thead>
+        <tr>
+            <th id="checkbox-column"><input type="checkbox"/></th>
+            <th>
+                <a href="?sort={% if current_sort == 'common_name' %}-{% endif %}common_name">
+                    {% trans 'Name' %}
+                </a>
+            </th>
+            <th>
+                <a href="?sort={% if current_sort == 'domain' %}-{% endif %}domain">
+                    {% trans 'Domain' %}
+                </a>
+            </th>
+            {% if page_name != 'opc_ua_gds' %}
+            <th>
+                <a href="?sort={% if current_sort == 'serial_number' %}-{% endif %}serial_number">
+                    {% trans 'Serial Number' %}
+                </a>
+            </th>
+            {% endif %}
+            <th>
+                <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
+                    {% trans 'Created' %}
+                </a>
+            </th>
+            <th>
+                <a href="?sort={% if current_sort == 'onboarding_status' %}-{% endif %}onboarding_status">
+                    {% trans 'Onboarding Status' %}
+                </a>
+            </th>
+            <th>
+                <a href="?sort={% if current_sort == 'onboarding_protocol' %}-{% endif %}onboarding_protocol">
+                    {% trans 'Onboarding Protocol' %}
+                </a>
+            </th>
+            <th>
+                <a href="?sort={% if current_sort == 'pki_protocol' %}-{% endif %}pki_protocol">
+                    {% trans 'PKI Protocol' %}
+                </a>
+            </th>
+            <th>{% trans 'Certificate Management' %}</th>
+            <th>{% trans 'Details' %}</th>
+            {#            <th>{% trans 'Configure' %}</th>#}
+            <th>{% trans 'Revoke' %}</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for device in page_obj %}
+            <tr>
+                <td class="row_checkbox">
+                    <input type="checkbox" name="row_checkbox" value="{{ device.id }}"/>
+                </td>
+                <td>{{ device.common_name }}</td>
+                <td>{{ device.domain }}</td>
+                {% if page_name != 'opc_ua_gds' %}
+                    <td>{{ device.serial_number }}</td>
+                {% endif %}
+                <td>{{ device.created_at }}</td>
+                <td>
+                    {% if device.onboarding_status != device.OnboardingStatus.NO_ONBOARDING %}
+                        {{ device.get_onboarding_status_display }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if device.onboarding_protocol != device.OnboardingProtocol.NO_ONBOARDING %}
+                        {{ device.get_onboarding_protocol_display }}
+                    {% endif %}
+                </td>
+                <td>{{ device.get_pki_protocol_display }}</td>
+                <td>{{ device.clm_button| safe }}</td>
+                <td>{{ device.detail_button| safe }}</td>
+                <td>{{ device.revoke_button| safe }}</td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="12" class="middle">{% trans 'No devices have been added yet.' %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+{% endblock devices_table %}

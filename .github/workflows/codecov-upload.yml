@@ -1,29 +1,32 @@
 name: Codecov upload
 
-on: [ pull_request ]
+# Trigger this workflow on pull requests to ensure tests are executed before merging.
+on: [pull_request]
 
 jobs:
   codecov-upload:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # Use the latest Ubuntu runner for compatibility and performance.
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4  # Ensures the repository code is available.
 
-      - name: Install the latest version of uv
-        uses: astral-sh/setup-uv@v5
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.
         with:
-          enable-cache: true
-          python-version: 3.12
-
-      - name: Run database migrations
-        run: |
-          echo "y" | uv run trustpoint/manage.py reset_db
+          run_migrations: true  # Enable database migrations.
 
       - name: Run Pytest with Coverage
-        run: uv run pytest --cov=trustpoint --cov-report=xml trustpoint/
+        run: uv run pytest --cov=trustpoint --cov-report=xml -o junit_family=legacy trustpoint/
 
-      - name: Upload Coverage to Codecov
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+

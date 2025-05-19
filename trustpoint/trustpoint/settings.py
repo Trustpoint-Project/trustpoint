@@ -40,6 +40,7 @@ DATABASE_NAME = 'trustpoint_db'
 DATABASE_USER = 'admin'
 DATABASE_PASSWORD = 'testing321'  # noqa: S105
 
+
 def is_postgre_available() -> bool:
     """Checks whether PostgreSQL is available and issues differentiated error messages.
 
@@ -63,7 +64,7 @@ def is_postgre_available() -> bool:
         print(f'Trying to connect to {host}:{port}...')
         with socket.create_connection((host, port), timeout=5):
             print(f'Connection to {host}:{port} successful.')
-    except OSError as e:
+    except OSError:
         msg = f'PostgreSQL host {host} on port {port} is unreachable. \n'
         msg += 'Switching to SQLite Database'
         print(msg)
@@ -86,6 +87,7 @@ def is_postgre_available() -> bool:
         return False
 
     return True
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
@@ -117,6 +119,7 @@ INSTALLED_APPS = [
     'devices.apps.DevicesConfig',
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
+    'est.apps.EstConfig',
     'settings.apps.SettingsConfig',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -140,6 +143,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -185,9 +189,7 @@ else:
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
-            'OPTIONS': {
-                'timeout': 20
-            }
+            'OPTIONS': {'timeout': 20},
         },
     }
 
@@ -220,7 +222,6 @@ LANGUAGES = [
     ('de', _('German')),
     ('en', _('English')),
 ]
-
 
 
 USE_I18N = True
@@ -266,9 +267,12 @@ LOG_FILE_PATH = LOG_DIR_PATH / Path('trustpoint.log')
 
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
+
 class UTCFormatter(logging.Formatter):
     """Custom logging formatter to use UTC time."""
+
     converter = time.gmtime
+
 
 LOGGING = {
     'version': 1,  # Indicates the version of the logging configuration
@@ -304,8 +308,18 @@ LOGGING = {
     },
 }
 
+
 # User interface config defaults
 class UIConfig:
     """User interface configuration defaults."""
+
     paginate_by: ClassVar[int] = 50
     notifications_paginate_by: ClassVar[int] = 5
+
+
+PUBLIC_PATHS = [
+    '/setup-wizard',
+    '/.well-known/cmp',
+    '/.well-known/est',
+    '/crl',
+]

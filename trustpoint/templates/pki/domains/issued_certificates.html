@@ -1,0 +1,20 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card tp-card-centered">
+    <div class="card-header">
+        <h2>{% trans 'Issued Certificates for' %} {{ domain.unique_name }}</h2>
+    </div>
+
+    <div class="card-body text-start" style="overflow: auto; flex-grow: 1; max-height: 90%">
+        {% include 'pki/certificates/table.html' with certificates=issued_certificates %}
+    </div>
+
+    <div class="card-footer">
+        <a href="{% url 'pki:domains-config' pk=domain.pk %}" class="btn btn-secondary">
+            {% trans 'Back to Domain' %}
+        </a>
+    </div>
+</div>
+{% endblock content %}
