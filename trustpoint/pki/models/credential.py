@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from cryptography.hazmat.primitives import hashes
     from django.db.models import QuerySet
     from trustpoint_core.key_types import PrivateKey
+    from util.db import CustomDeleteActionManager
 
 
 __all__ = ['CertificateChainOrderModel', 'CredentialAlreadyExistsError', 'CredentialModel']
@@ -47,6 +48,8 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
 
     PKCS#11 credentials are not yet supported.
     """
+
+    objects: CustomDeleteActionManager[CredentialModel]
 
     class CredentialTypeChoice(models.IntegerChoices):
         """The CredentialTypeChoice defines the type of the credential and thus implicitly restricts its usage.
