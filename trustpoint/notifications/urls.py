@@ -6,5 +6,7 @@ from . import views
 
 app_name = 'notifications'
 urlpatterns = [
-    path('notifications/execute/', views.ExecuteNotificationsView.as_view(), name='execute_notifications'),
+    path('notifications/refresh/', views.RefreshNotificationsView.as_view(), name='refresh_notifications'),
+    path('notifications/<int:pk>/delete/', views.NotificationDeleteView.as_view(), name='notification_delete'),
+
 ]

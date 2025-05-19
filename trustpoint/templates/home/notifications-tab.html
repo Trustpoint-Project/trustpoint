@@ -5,8 +5,8 @@
     <div class="row py-3 px-0 d-flex justify-content-between align-items-center">
         <div class="d-flex align-items-center">
             <h1 class="mb-0">{% trans 'Notifications' %}</h1>
-            <a href="{% url 'notifications:execute_notifications' %}" class="btn execute-notifications-button ms-3">
-                <span class="ms-2">{% trans 'Execute Notifications' %}</span>
+            <a href="{% url 'notifications:refresh_notifications' %}" class="btn refresh-notifications-button ms-3">
+                <span class="ms-2">{% trans 'Refresh Notifications' %}</span>
             </a>
         </div>
     </div>
@@ -126,6 +126,7 @@
                     </a>
                 </th>
                 <th>{% trans 'Details' %}</th>
+                <th>{% trans 'Delete' %}</th>
             </tr>
             </thead>
             <tbody>
@@ -142,6 +143,12 @@
                            class="btn btn-primary tp-table-btn">
                         {% trans 'Details' %}
                     </a></td>
+                    <td>
+                        <a href="{% url 'notifications:notification_delete' notification.id %}"
+                           class="btn btn-danger tp-table-btn">
+                            {% trans 'Delete' %}
+                        </a>
+                    </td>
                 </tr>
             {% empty %}
                 <tr>
@@ -151,16 +158,6 @@
             </tbody>
         </table>
         {% include 'trustpoint/pagination.html' %}
-        <div class="row py-3 px-0">
-            <div class="d-flex justify-content-between align-items-center">
-                <a href="{% url 'notifications:execute_notifications' %}" class="btn btn-primary">
-                    <svg class="icon me-2" width="16" height="16" fill="currentColor">
-                        <use xlink:href="{% static 'img/icons.svg' %}#icon-refresh"></use>
-                    </svg>
-                    {% trans 'Execute Notifications' %}
-                </a>
-            </div>
-        </div>
 
 
     </div>

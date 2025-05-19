@@ -864,7 +864,7 @@ code {
     box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
 }
 
-.execute-notifications-button {
+.refresh-notifications-button {
     padding: 2px 12px;
     margin: 3px;
     border: none;
@@ -882,11 +882,11 @@ code {
     min-height: 22px;
 }
 
-.execute-notifications-button .icon {
+.refresh-notifications-button .icon {
     margin: 0;
 }
 
-.execute-notifications-button:hover {
+.refresh-notifications-button:hover {
     background-color: #007BFF7F;
 }
 
