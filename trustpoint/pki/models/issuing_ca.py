@@ -18,7 +18,7 @@ from util.field import UniqueNameValidator
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
 from cryptography.hazmat.primitives import hashes
-from trustpoint.views.base import LoggerMixin
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet
@@ -83,7 +83,6 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
         return self.credential.certificate.common_name
 
     @classmethod
-    @LoggerMixin.log_exceptions
     def create_new_issuing_ca(
         cls,
         unique_name: str,

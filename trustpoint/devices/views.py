@@ -54,7 +54,8 @@ from devices.issuer import (
 from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
 from devices.revocation import DeviceCredentialRevocation
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import BulkDeleteView, ListInDetailView, LoggerMixin, SortableTableMixin
+from trustpoint.views.base import BulkDeleteView, ListInDetailView, SortableTableMixin
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     import ipaddress
