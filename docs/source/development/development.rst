@@ -234,3 +234,20 @@ Trustpoint uses behave to run BDD tests. The tests are located in the
 .. code:: shell
 
    uv run behave
+
+--------------------
+Editor configuration
+--------------------
+
+We recommend using Visual Studio Code as the editor for Trustpoint development.
+To ensure the recommended settings are correctly loaded,
+please ensure that you open the project via the ``.code-workspace`` file:
+
+.. code:: shell
+
+   code .vscode/trustpoint.code-workspace
+
+Alternatively, use "File -> Open Workspace from File..." in the menu bar.
+
+Please place project-specific settings in the ``trustpoint.code-workspace`` file.
+The ``.vscode/settings.json`` file is ignored by git and is intended for user-specific configuration.
