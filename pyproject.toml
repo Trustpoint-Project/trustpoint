@@ -10,7 +10,7 @@ keywords = ["django", "trustpoint", "server"]
 
 dependencies = [
     "crispy-bootstrap5~=2025.4",
-    "cryptography>=44.0.3",
+    "cryptography>=45.0.2",
     "django~=5.1.8",
     "django-crispy-forms~=2.3",
     "django-filter~=25.1",
@@ -46,6 +46,7 @@ dev = [
     "beautifulsoup4 >= 4.13.4",
     "mypy >= 1.15.0",
     "ruff>=0.11.9",
+    "requests>=2.32.3",
 ]
 # For building docs
 docs = [

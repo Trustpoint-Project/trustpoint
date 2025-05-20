@@ -7,12 +7,12 @@ import secrets
 from typing import TYPE_CHECKING
 
 from cryptography import x509
-from cryptography.x509.verification import PolicyBuilder, Store, VerificationError
+from cryptography.x509.verification import Criticality, ExtensionPolicy, PolicyBuilder, Store, VerificationError
 from devices.models import DeviceModel
 
 from pki.models import DevIdRegistration, DomainModel, TruststoreModel
 from pki.util.x509 import ApacheTLSClientCertExtractor
-from trustpoint.views.base import LoggerMixin
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -20,6 +20,39 @@ if TYPE_CHECKING:
 
 class IDevIDAuthenticationError(Exception):
     """Exception raised for IDevID authentication failures."""
+
+class IDevIDExtensionPolicy:
+    """Builder for IDevID extension policies."""
+
+    @staticmethod
+    def _idevid_base_policy() -> ExtensionPolicy:
+        """Create an extension policy for all certificates in a IDevID PKI."""
+        policy = ExtensionPolicy.permit_all()
+        # Require the presence of the Authority Key Identifier extension as per IEEE 802.1AR 8.10.1
+        return policy.require_present(
+            x509.AuthorityKeyIdentifier, Criticality.AGNOSTIC, None
+        )
+
+    @staticmethod
+    def idevid_ee_policy() -> ExtensionPolicy:
+        """Create an extension policy for IDevID end-entity certificates."""
+        return IDevIDExtensionPolicy._idevid_base_policy()
+
+    @staticmethod
+    def idevid_ca_policy() -> ExtensionPolicy:
+        """Create an extension policy for IDevID CA certificates."""
+        policy = IDevIDExtensionPolicy._idevid_base_policy()
+        # Require the presence of the Subject Key Identifier extension as per IEEE 802.1AR 8.10.2
+        policy = policy.require_present(
+            x509.SubjectKeyIdentifier, Criticality.AGNOSTIC, None
+        )
+        # Require the presence of the Basic Constraints extension as per RFC 5280
+        # Note: There are conflicting requirements in RFC 5280 and IEEE 802.1AR 8.10
+        # with respect to CA Basic Constraints being critical
+        return policy.require_present(
+            x509.BasicConstraints, Criticality.CRITICAL, None
+        )
+
 
 class IDevIDVerifier(LoggerMixin):
     """Verifies IDevID certificates as used e.g. by EST with mutual TLS auth."""
@@ -36,25 +69,14 @@ class IDevIDVerifier(LoggerMixin):
         store = Store(certificates)
         builder = PolicyBuilder().store(store)
         builder = builder.max_chain_depth(0)
-        # TODO(Air): For now, cryptography requires the SAN extension to be present in the IDevID
-        # and some other undisclosed extensions to be present in the truststore (CA) certificate
-        # cryptography 45.0.0 will add the API to specify all extensions as optional (which we want)
-        #builder = builder.extension_policies(
-        #    ExtensionPolicy.permit_all(),
-        #    ExtensionPolicy.permit_all(),
-        #)
+        builder = builder.extension_policies(
+           ca_policy=IDevIDExtensionPolicy.idevid_ca_policy(),
+           ee_policy=IDevIDExtensionPolicy.idevid_ee_policy(),
+        )
         verifier = builder.build_client_verifier()
         try:
-            # intermediate CAs do not work with the hack (will incorrectly report as verified!!), should work on 45.0.0
-            del intermediate_cas
-            _verified_client = verifier.verify(idevid_cert, []) # intermediate_cas)
+            _verified_client = verifier.verify(idevid_cert, intermediate_cas)
         except VerificationError as e:
-            # HACK: Bypass extension validation, remove when cryptography 45.0.0 is released
-            # This is a somewhat dangerous hack
-            # message on non-matching store is 'candidates exhausted: all candidates exhausted with no interior errors'
-            if 'candidates exhausted: Certificate is missing required extension' in str(e):
-                cls.logger.warning('IDevID certificate bypassed extension validation')
-                return True
             cls.logger.warning('IDevID verification failed for truststore %s: %s', truststore.unique_name, e)
             return False
         return True
