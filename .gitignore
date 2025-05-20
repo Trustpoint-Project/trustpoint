@@ -165,6 +165,9 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 
+# VS Code
+.vscode/settings.json
+
 media/
 # A very verbose way to ensure git tracks the /media/log directory
 !trustpoint/media/
