@@ -111,7 +111,7 @@ class DeviceModel(CustomDeleteActionModel):
         OPC_UA_GDS = 1, _('OPC UA GDS')
 
     device_type = models.IntegerField(
-        choices=DeviceType.choices,
+        choices=DeviceType,
         verbose_name=_('Device Type'),
         default=DeviceType.GENERIC_DEVICE,
     )
