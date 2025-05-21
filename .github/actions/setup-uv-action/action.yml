@@ -23,4 +23,4 @@ runs:
       if: ${{ inputs.run_migrations == 'true' }} # Only run migrations if input is true.
       shell: bash
       run: |
-        echo "y" | uv run trustpoint/manage.py reset_db  
+        echo "y" | uv run django/manage.py reset_db  

@@ -23,7 +23,7 @@ jobs:
 
       - name: Run Behave Tests and Generate HTML Report for ${{ inputs.feature_file }}.feature
         run: |
-          uv run trustpoint/manage.py behave \
+          uv run django/manage.py behave \
           trustpoint/features/${{ inputs.feature_file }}.feature
 
       - name: Upload Test Report
