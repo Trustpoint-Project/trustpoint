@@ -18,7 +18,8 @@ from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
 from trustpoint_core.oid import AlgorithmIdentifier
 
-from trustpoint.views.base import LoggedHttpResponse, LoggerMixin
+from trustpoint.logger import LoggerMixin
+from trustpoint.views.base import LoggedHttpResponse
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
