@@ -14,7 +14,7 @@ import urllib3
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
-from cryptography.x509.verification import PolicyBuilder, Store, VerificationError
+from cryptography.x509.verification import ExtensionPolicy, PolicyBuilder, Store, VerificationError
 from est.tests.client import ESTClient
 from requests import Response
 
@@ -116,24 +116,15 @@ class AokiClient:
         log.debug('Certificates in truststore: %s', truststore)
         store = Store(truststore)
         builder = PolicyBuilder().store(store)
-        builder = builder.max_chain_depth(0)
-        # TODO(Air): For now, cryptography requires the SAN extension to be present in the IDevID
-        # and some other undisclosed extensions to be present in the truststore (CA) certificate
-        # cryptography 45.0.0 will add the API to specify all extensions as optional (which we want)
-        #builder = builder.extension_policies(
-        #    ExtensionPolicy.permit_all(),
-        #    ExtensionPolicy.permit_all(),
-        #)
+        builder = builder.max_chain_depth(2)
+        builder = builder.extension_policies(
+           ExtensionPolicy.permit_all(),
+           ExtensionPolicy.permit_all(),
+        )
         verifier = builder.build_client_verifier()
         try:
-            _verified_client = verifier.verify(owner_id_cert, []) # intermediate_cas)
+            _verified_client = verifier.verify(owner_id_cert, [])
         except VerificationError as e:
-            # HACK: Bypass extension validation, remove when cryptography 45.0.0 is released
-            # This is a somewhat dangerous hack
-            # message on non-matching store is 'candidates exhausted: all candidates exhausted with no interior errors'
-            if 'candidates exhausted: Certificate is missing required extension' in str(e):
-                log.warning('Owner certificate bypassed extension validation')
-                return self._verify_matches_idevid_cert(owner_id_cert, idevid_cert)
             exc_msg = f'Owner ID certificate verification failed: {e}'
             raise AokiClientOwnerIdCertVerificationError(exc_msg) from e
         return self._verify_matches_idevid_cert(owner_id_cert, idevid_cert)
