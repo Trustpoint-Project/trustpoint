@@ -1,0 +1,1 @@
+*/2 * * * * /etc/trustpoint/notifications/execute_notifications.sh >> /var/log/cron.log 2>&1

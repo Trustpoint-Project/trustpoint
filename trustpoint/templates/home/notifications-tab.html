@@ -2,9 +2,16 @@
 {% load static %}
 
 {% block content %}
-    <div class="row py-3 px-0">
-        <h1>{% trans 'Notifications' %}</h1>
+    <div class="row py-3 px-0 d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center">
+            <h1 class="mb-0">{% trans 'Notifications' %}</h1>
+            <a href="{% url 'notifications:refresh_notifications' %}" class="btn refresh-notifications-button ms-3">
+                <span class="ms-2">{% trans 'Refresh Notifications' %}</span>
+            </a>
+        </div>
     </div>
+
+
 
     <div class="filter-container d-flex align-items-center">
 
@@ -86,7 +93,8 @@
             <button type="button" class="filter-button filter-button-last30days" onclick="setDateRange('last30days')">
                 {% trans 'Last 30 Days' %}
             </button>
-            <button type="button" class="filter-button filter-button-all" onclick="setDateRange('all')">{% trans 'All' %}</button>
+            <button type="button" class="filter-button filter-button-all"
+                    onclick="setDateRange('all')">{% trans 'All' %}</button>
         </div>
     </div>
 
@@ -99,29 +107,30 @@
     <div>
         <table class="table">
             <thead>
-              <tr>
+            <tr>
                 <!-- <th id="checkbox-column"><input type="checkbox"/></th> -->
                 <th>
-                  <a href="#" onclick="updateQueryParam(event, 'sort', 'notification_type')">
-                    {% trans 'Type' %}
-                  </a>
+                    <a href="#" onclick="updateQueryParam(event, 'sort', 'notification_type')">
+                        {% trans 'Type' %}
+                    </a>
                 </th>
                 <th>
-                  <a href="#" onclick="updateQueryParam(event, 'sort', 'notification_source')">
-                    {% trans 'Source' %}
-                  </a>
+                    <a href="#" onclick="updateQueryParam(event, 'sort', 'notification_source')">
+                        {% trans 'Source' %}
+                    </a>
                 </th>
                 <th>{% trans 'Description' %}</th>
                 <th>
-                  <a href="#" onclick="updateQueryParam(event, 'sort', 'created_at')">
-                    {% trans 'Created at' %}
-                  </a>
+                    <a href="#" onclick="updateQueryParam(event, 'sort', 'created_at')">
+                        {% trans 'Created at' %}
+                    </a>
                 </th>
                 <th>{% trans 'Details' %}</th>
-              </tr>
+                <th>{% trans 'Delete' %}</th>
+            </tr>
             </thead>
             <tbody>
-                {% for notification in notifications %}
+            {% for notification in notifications %}
                 <tr>
                     <!-- <td class="row_checkbox"> -->
                     <!--   <input type="checkbox" name="row_checkbox" value="{{ notification.id }}" /> -->
@@ -130,16 +139,27 @@
                     <td>{{ notification.get_notification_source_display }}</td>
                     <td>{{ notification.short_translated }}</td>
                     <td>{{ notification.created }}</td>
-                    <td><a href="{% url 'home:notification_details' notification.id %}" class="btn btn-primary tp-table-btn">
+                    <td><a href="{% url 'home:notification_details' notification.id %}"
+                           class="btn btn-primary tp-table-btn">
                         {% trans 'Details' %}
                     </a></td>
+                    <td>
+                        <a href="{% url 'notifications:notification_delete' notification.id %}"
+                           class="btn btn-danger tp-table-btn">
+                            {% trans 'Delete' %}
+                        </a>
+                    </td>
                 </tr>
-                {% empty %}
-                <tr><td colspan="5" class="middle">{% trans 'No notifications available.' %}</td></tr>
-                {% endfor %}
+            {% empty %}
+                <tr>
+                    <td colspan="5" class="middle">{% trans 'No notifications available.' %}</td>
+                </tr>
+            {% endfor %}
             </tbody>
         </table>
         {% include 'trustpoint/pagination.html' %}
+
+
     </div>
 
     <script>
