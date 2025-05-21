@@ -17,7 +17,7 @@ class SecurityConfig(models.Model):
         HIGH = '3', _('High')
         HIGHEST = '4', _('Highest')
 
-    security_mode = models.CharField(max_length=6, choices=SecurityModeChoices.choices, default=SecurityModeChoices.LOW)
+    security_mode = models.CharField(max_length=6, choices=SecurityModeChoices, default=SecurityModeChoices.LOW)
 
     auto_gen_pki = models.BooleanField(default=False)
     auto_gen_pki_key_algorithm = models.CharField(
