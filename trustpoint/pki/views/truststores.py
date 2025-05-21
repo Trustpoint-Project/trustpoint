@@ -11,13 +11,13 @@ from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import ngettext
 from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
-
-from trustpoint_core.serializer import CertificateFormat
 from trustpoint_core.archiver import ArchiveFormat, Archiver
+from trustpoint_core.serializer import CertificateFormat
 
 from pki.forms import TruststoreAddForm
 from pki.models import DomainModel
@@ -78,6 +78,18 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
                     kwargs={'pk': domain_id, 'truststore_id': truststore.id},
                 )
             )
+
+        n_certificates = truststore.number_of_certificates
+        msg_str = ngettext(
+            'Successfully created the Truststore %(name)s with %(count)i certificate.',
+            'Successfully created the Truststore %(name)s with %(count)i certificates.',
+            n_certificates,
+        ) % {
+            'name': truststore.unique_name,
+            'count': n_certificates,
+        }
+
+        messages.success(self.request, msg_str)
 
         return HttpResponseRedirect(reverse('pki:truststores'))
 

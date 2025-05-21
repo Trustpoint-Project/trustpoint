@@ -30,7 +30,7 @@ from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pyasn1.type.univ import ObjectIdentifier  # type: ignore[import-untyped]
 from trustpoint_core.serializer import CertificateCollectionSerializer  # type: ignore[import-untyped]
 
-from trustpoint.views.base import LoggerMixin
+from trustpoint.logger import LoggerMixin
 
 
 class UsernamePasswordAuthenticationError(Exception):

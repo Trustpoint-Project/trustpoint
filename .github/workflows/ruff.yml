@@ -1,7 +1,11 @@
 name: Ruff
 
 # Trigger this workflow on pull requests to ensure tests are executed before merging.
-on: [pull_request]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
   ruff:

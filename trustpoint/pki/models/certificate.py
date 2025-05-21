@@ -44,7 +44,7 @@ from pki.models.extension import (
     SubjectInformationAccessExtension,
     SubjectKeyIdentifierExtension,
 )
-from trustpoint.views.base import LoggerMixin
+from trustpoint.logger import LoggerMixin
 
 __all__ = ['CertificateModel', 'RevokedCertificateModel']
 
