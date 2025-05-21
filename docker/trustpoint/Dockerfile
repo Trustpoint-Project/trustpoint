@@ -47,8 +47,8 @@ RUN uv sync --python-preference only-system --python 3.11.2
 USER root
 
 # Sets DEBUG = False and DOCKER_CONTAINER = True in the Django settings
-RUN sed -i '/DEBUG = True/s/True/False/' django/trustpoint/settings.py && \
-    sed -i '/DOCKER_CONTAINER = False/s/False/True/' django/trustpoint/settings.py
+RUN sed -i '/DEBUG = True/s/True/False/' trustpoint/trustpoint/settings.py && \
+    sed -i '/DOCKER_CONTAINER = False/s/False/True/' trustpoint/trustpoint/settings.py
 
 # Create and setup the /etc/trustpoint/ directory
 RUN mkdir -p /etc/trustpoint/ && \

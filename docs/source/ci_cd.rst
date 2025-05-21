@@ -67,7 +67,7 @@ This workflow template uses a string as an input value which just specifies whic
 First of all, we checkout the code via `actions/checkout <https://github.com/actions/checkout>`_.
 Then, we are using the previously defined action (see :ref:`composite_setup_action`) to make :term:`uv` usable inside this workflow.
 Having :term:`uv` activated, the behave action is triggered for the given feature file.
-Note that we need to use ``uv run django/manage.py behave`` instead of ``uv run behave`` to make :term:`Django` available for behave.
+Note that we need to use ``uv run trustpoint/manage.py behave`` instead of ``uv run behave`` to make :term:`Django` available for behave.
 Once the tests are ran, an artifact with the test reports is uploaded.
 
 .. literalinclude:: ../../.github/workflows/behave-test-template.yml
