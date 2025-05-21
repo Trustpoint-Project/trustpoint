@@ -1,7 +1,11 @@
 name: MyPy
 
 # Trigger this workflow on pull requests, ensuring type checks are performed before merging.
-on: [pull_request]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
   mypy:

@@ -2,60 +2,32 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, TypeVar, cast, final
+from typing import TYPE_CHECKING, Any, Self, final
 
 from django.db import models, transaction
-from django.db.models import ProtectedError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-    from typing import ClassVar, Self
-
-    from django.db.models.manager import Manager
 
     _ModelBase = models.Model
 else:
     _ModelBase = object
 
 
-_BaseModelForManager = TypeVar('_BaseModelForManager', bound=models.Model)
-
-
 __all__ = [
     'CustomDeleteActionManager',
     'CustomDeleteActionModel',
     'CustomDeleteActionQuerySet',
-    'OrphanDeletionMixin',
-    'get_objects_manager',
 ]
 
 
-def get_objects_manager(model: _BaseModelForManager | type[_BaseModelForManager]) -> Manager[_BaseModelForManager]:
-    """This is a workaround for mypy issues using the dynamically added objects attribute of model classes.
-
-    Args:
-        model: The model class to get the objects manager from.
-
-    Returns:
-        The corresponding objects manager.
-
-    Raises:
-        AttributeError: If the model does actually not have an objects attribute.
-    """
-    objects = getattr(model, 'objects', None)
-    if objects is None:
-        err_msg = f'Model {type(model)} has no objects attribute and thus no manager.'
-        raise AttributeError(err_msg)
-    return cast('Manager[_BaseModelForManager]', objects)
-
-
-class CustomDeleteActionManager(models.Manager['CustomDeleteActionModel']):
+class CustomDeleteActionManager[T: 'CustomDeleteActionModel'](models.Manager[T]):
     """Default manager for CustomDeleteActionModel.
 
     It ensures the CustomDeleteActionQuerySet is the default queryset.
     """
 
-    def get_queryset(self) -> CustomDeleteActionQuerySet:
+    def get_queryset(self) -> CustomDeleteActionQuerySet[T, T]:
         """Return the queryset with individual delete."""
         return CustomDeleteActionQuerySet(self.model, using=self._db)
 
@@ -64,6 +36,7 @@ class CustomDeleteActionModel(models.Model):
     """Model that provides the pre_delete() and post_delete() methods to implement custom deletion logic.
 
     It uses a custom manager to ensure the methods are called both on individual and bulk (queryset) deletes.
+
     """
 
     objects = CustomDeleteActionManager()
@@ -96,7 +69,9 @@ class CustomDeleteActionModel(models.Model):
         return count
 
 
-class CustomDeleteActionQuerySet(models.QuerySet[CustomDeleteActionModel]):
+class CustomDeleteActionQuerySet[_Model: CustomDeleteActionModel, _Row: CustomDeleteActionModel](
+    models.QuerySet[_Model, _Row]
+):
     """Overrides a model's queryset to invoke pre- and post-delete hooks.
 
     This ensures the pre_delete() and post_delete() methods are called on each object in the queryset.
@@ -120,7 +95,7 @@ class CustomDeleteActionQuerySet(models.QuerySet[CustomDeleteActionModel]):
         del args
         del kwargs
 
-        obj_set = set()
+        obj_set: set[_Row] = set()
         for obj in self:
             obj_set.add(obj)
             obj.pre_delete()
@@ -144,7 +119,8 @@ class OrphanDeletionMixin(_ModelBase):
         (by adding it to the "check_references_on_delete" class attribute tuple in the model class).
     """
 
-    objects: ClassVar[Manager[Self]]
+    objects: models.Manager[Self]
+
     check_references_on_delete: tuple[str, ...] | None = None
 
     @classmethod
@@ -169,7 +145,7 @@ class OrphanDeletionMixin(_ModelBase):
                     return
         try:
             instance.delete()
-        except ProtectedError:
+        except models.ProtectedError:
             return
 
     @classmethod

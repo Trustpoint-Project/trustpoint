@@ -23,6 +23,7 @@ from trustpoint.logger import LoggerMixin
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet
     from trustpoint_core.serializer import CredentialSerializer
+    from util.db import CustomDeleteActionManager
 
 
 class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
@@ -30,6 +31,8 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
 
     This model contains the configurations of all Issuing CAs available within the Trustpoint.
     """
+
+    objects: CustomDeleteActionManager[IssuingCaModel]
 
     class IssuingCaTypeChoice(models.IntegerChoices):
         """The IssuingCaTypeChoice defines the type of Issuing CA.
