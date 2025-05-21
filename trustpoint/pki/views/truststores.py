@@ -11,15 +11,13 @@ from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import ngettext
 from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
-from trustpoint_core.file_builder.certificate import (
-    CertificateCollectionArchiveFileBuilder,
-    CertificateCollectionBuilder,
-)
-from trustpoint_core.file_builder.enum import ArchiveFormat, CertificateFileFormat
+from trustpoint_core.archiver import ArchiveFormat, Archiver
+from trustpoint_core.serializer import CertificateFormat
 
 from pki.forms import TruststoreAddForm
 from pki.models import DomainModel
@@ -80,6 +78,18 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
                     kwargs={'pk': domain_id, 'truststore_id': truststore.id},
                 )
             )
+
+        n_certificates = truststore.number_of_certificates
+        msg_str = ngettext(
+            'Successfully created the Truststore %(name)s with %(count)i certificate.',
+            'Successfully created the Truststore %(name)s with %(count)i certificates.',
+            n_certificates,
+        ) % {
+            'name': truststore.unique_name,
+            'count': n_certificates,
+        }
+
+        messages.success(self.request, msg_str)
 
         return HttpResponseRedirect(reverse('pki:truststores'))
 
@@ -150,13 +160,12 @@ class TruststoreDownloadView(TruststoresContextMixin, DetailView[TruststoreModel
             return super().get(request, *args, **kwargs)
 
         try:
-            file_format_enum = CertificateFileFormat(value=self.kwargs.get('file_format'))
+            file_format_enum = CertificateFormat(value=self.kwargs.get('file_format'))
         except Exception as exception:
             raise Http404 from exception
 
         certificate_serializer = TruststoreModel.objects.get(pk=pk).get_certificate_collection_serializer()
-
-        file_bytes = CertificateCollectionBuilder.build(certificate_serializer, file_format=file_format_enum)
+        file_bytes = certificate_serializer.as_format(file_format_enum)
 
         response = HttpResponse(file_bytes, content_type=file_format_enum.mime_type)
         response['Content-Disposition'] = f'attachment; filename="truststore{file_format_enum.file_extension}"'
@@ -233,7 +242,7 @@ class TruststoreMultipleDownloadView(
             return super().get(request, *args, **kwargs)
 
         try:
-            file_format_enum = CertificateFileFormat(value=file_format)
+            file_format_enum = CertificateFormat(value=file_format)
         except Exception as exception:
             raise Http404 from exception
 
@@ -246,11 +255,12 @@ class TruststoreMultipleDownloadView(
             TruststoreModel.objects.get(pk=pk).get_certificate_collection_serializer() for pk in pks_list
         ]
 
-        file_bytes = CertificateCollectionArchiveFileBuilder.build(
-            certificate_collection_serializers=certificate_collection_serializers,
-            file_format=file_format_enum,
-            archive_format=archive_format_enum,
-        )
+        data_to_archive = {
+            f'trust-store-{i}': trust_store.as_format(file_format_enum)
+            for i, trust_store in enumerate(certificate_collection_serializers)
+        }
+
+        file_bytes = Archiver.archive(data_to_archive, archive_format_enum)
 
         response = HttpResponse(file_bytes, content_type=archive_format_enum.mime_type)
         response['Content-Disposition'] = f'attachment; filename="truststores{archive_format_enum.file_extension}"'

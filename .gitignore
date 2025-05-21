@@ -54,7 +54,7 @@ coverage.xml
 .pytest_cache/
 cover/
 behave-report.html
-*/md-report.md
+**/md-report.md
 
 # Translations
 *.mo
@@ -168,13 +168,17 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 
+# VS Code
+.vscode/settings.json
+
 media/
 # A very verbose way to ensure git tracks the /media/log directory
 !trustpoint/media/
 trustpoint/media/*
 !trustpoint/media/log/.gitkeep
 
-migrations/
+**/migrations/*
+!**/migrations/__init__.py
 
 .python-version
 
@@ -188,4 +192,3 @@ docs/build/
 collected_static
 
 _*.sh
-/md-report.md

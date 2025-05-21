@@ -8,6 +8,11 @@ from django.utils.translation import gettext_lazy as _
 from trustpoint_core import oid
 from util.field import UniqueNameValidator
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Any
+
 from . import IssuingCaModel
 
 __all__ = ['DomainModel']

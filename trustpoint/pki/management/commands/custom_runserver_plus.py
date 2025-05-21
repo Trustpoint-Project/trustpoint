@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import os
 
+from typing import Callable
 from django_extensions.management.commands.runserver_plus import Command as RunServerPlusCommand
 from pki.models import CertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TrustpointTlsServerCredentialModel
@@ -20,13 +23,13 @@ class Command(RunServerPlusCommand):
             print('Active TLS credential already exists in the database.')
             return None, None
 
-        with open(cert_file_path) as cert_file:
+        with open(cert_file_path, 'rb') as cert_file:
             cert_pem = cert_file.read()
+        certificate_serializer = CertificateSerializer.from_pem(cert_pem)
 
         with open(key_file_path) as key_file:
             key_pem = key_file.read()
 
-        certificate_serializer = CertificateSerializer(cert_pem)
         stored_tls_cert = CertificateModel.save_certificate(certificate_serializer)
 
         tls_server_credential, _ = TrustpointTlsServerCredentialModel.objects.get_or_create(

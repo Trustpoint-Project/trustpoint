@@ -29,9 +29,9 @@ from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.devid_registration import DevIdRegistration
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from trustpoint_core import oid  # type: ignore[import-untyped]
-from trustpoint_core.file_builder.enum import ArchiveFormat  # type: ignore[import-untyped]
-from trustpoint_core.serializer import CredentialSerializer  # type: ignore[import-untyped]
+from trustpoint_core import oid
+from trustpoint_core.serializer import CredentialFileFormat
+from trustpoint_core.archiver import Archiver
 from django import forms
 
 from devices.forms import (
@@ -54,7 +54,8 @@ from devices.issuer import (
 from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
 from devices.revocation import DeviceCredentialRevocation
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import BulkDeleteView, ListInDetailView, LoggerMixin, SortableTableMixin
+from trustpoint.views.base import BulkDeleteView, ListInDetailView, SortableTableMixin
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     import ipaddress
@@ -1057,7 +1058,7 @@ class DeviceBaseCredentialDownloadView(
             err_msg = 'Unknown IssuedCredentialType'
             raise Http404(err_msg)
 
-        context['FileFormat'] = CredentialSerializer.FileFormat.__members__
+        context['FileFormat'] = CredentialFileFormat.__members__
         context['is_browser_dl'] = self.is_browser_download
         context['show_browser_dl'] = not self.is_browser_download
         context['issued_credential'] = issued_credential
@@ -1080,7 +1081,7 @@ class DeviceBaseCredentialDownloadView(
         password = form.cleaned_data['password'].encode()
 
         try:
-            file_format = CredentialSerializer.FileFormat(self.request.POST.get('file_format'))
+            file_format = CredentialFileFormat(self.request.POST.get('file_format'))
         except ValueError as exception:
             err_msg = _('Unknown file format.')
             raise Http404(err_msg) from exception
@@ -1092,33 +1093,43 @@ class DeviceBaseCredentialDownloadView(
         ).label
         credential_type_name = credential_purpose.replace(' ', '-').lower().replace('-credential', '')
 
-        if file_format == CredentialSerializer.FileFormat.PKCS12:
-            response = FileResponse(
-                io.BytesIO(credential_serializer.as_pkcs12(password=password)),
-                content_type='application/pkcs12',
-                as_attachment=True,
-                filename=f'trustpoint-{credential_type_name}-credential.p12',
-            )
+        if file_format == CredentialFileFormat.PKCS12:
+            file_stream_data = io.BytesIO(credential_serializer.as_pkcs12(password=password))
 
-        elif file_format == CredentialSerializer.FileFormat.PEM_ZIP:
-            response = FileResponse(
-                io.BytesIO(credential_serializer.as_pem_zip(password=password)),
-                content_type=ArchiveFormat.ZIP.mime_type,
-                as_attachment=True,
-                filename=f'trustpoint-{credential_type_name}-credential{ArchiveFormat.ZIP.file_extension}',
+        elif file_format == CredentialFileFormat.PEM_ZIP:
+            file_data = Archiver.archive_zip(
+                data_to_archive = {
+                    "private_key.pem": credential_serializer.get_private_key_serializer().as_pkcs8_pem(
+                        password=password
+                    ),
+                    "certificate.pem": credential_serializer.get_certificate_serializer().as_pem(),
+                    "certificate_chain.pem": credential_serializer.get_additional_certificates_serializer().as_pem(),
+                }
             )
+            file_stream_data = io.BytesIO(file_data)
 
-        elif file_format == CredentialSerializer.FileFormat.PEM_TAR_GZ:
-            response = FileResponse(
-                io.BytesIO(credential_serializer.as_pem_tar_gz(password=password)),
-                content_type=ArchiveFormat.TAR_GZ.mime_type,
-                as_attachment=True,
-                filename=f'trustpoint-{credential_type_name}-credential{ArchiveFormat.TAR_GZ.file_extension}',
+        elif file_format == CredentialFileFormat.PEM_TAR_GZ:
+            file_data = Archiver.archive_tar_gz(
+                data_to_archive={
+                    "private_key.pem": credential_serializer.get_private_key_serializer().as_pkcs8_pem(
+                        password=password
+                    ),
+                    "certificate.pem": credential_serializer.get_certificate_serializer().as_pem(),
+                    "certificate_chain.pem": credential_serializer.get_additional_certificates_serializer().as_pem(),
+                }
             )
+            file_stream_data = io.BytesIO(file_data)
 
         else:
             err_msg = _('Unknown file format.')
             raise Http404(err_msg)
+
+        response = FileResponse(
+            file_stream_data,
+            content_type=file_format.mime_type,
+            as_attachment=True,
+            filename=f'trustpoint-{credential_type_name}-credential{file_format.file_extension}'
+        )
 
         return cast('HttpResponse', response)
 

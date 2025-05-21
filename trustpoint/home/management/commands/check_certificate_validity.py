@@ -58,10 +58,10 @@ class Command(BaseCommand):
                 certificate=cert,
                 event='CERTIFICATE_EXPIRING',
                 notification_type=cast(
-                    NotificationModel.NotificationTypes, NotificationModel.NotificationTypes.WARNING
+                    'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.WARNING
                 ),
                 message_type=cast(
-                    NotificationModel.NotificationMessageType, NotificationModel.NotificationMessageType.CERT_EXPIRING
+                    'NotificationModel.NotificationMessageType', NotificationModel.NotificationMessageType.CERT_EXPIRING
                 ),
                 new_status=new_status,
             )
@@ -72,10 +72,10 @@ class Command(BaseCommand):
                 certificate=cert,
                 event='CERTIFICATE_EXPIRED',
                 notification_type=cast(
-                    NotificationModel.NotificationTypes, NotificationModel.NotificationTypes.CRITICAL
+                    'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.CRITICAL
                 ),
                 message_type=cast(
-                    NotificationModel.NotificationMessageType, NotificationModel.NotificationMessageType.CERT_EXPIRED
+                    'NotificationModel.NotificationMessageType', NotificationModel.NotificationMessageType.CERT_EXPIRED
                 ),
                 new_status=new_status,
             )
