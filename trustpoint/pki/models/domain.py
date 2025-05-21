@@ -21,8 +21,6 @@ __all__ = ['DomainModel']
 class DomainModel(models.Model):
     """Domain Model."""
 
-    objects: models.Manager[DomainModel]
-
     unique_name = models.CharField(_('Domain Name'), max_length=100, unique=True, validators=[UniqueNameValidator()])
 
     issuing_ca = models.ForeignKey(

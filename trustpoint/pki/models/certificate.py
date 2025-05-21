@@ -55,8 +55,6 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     See RFC5280 for more information.
     """
 
-    objects: models.Manager[CertificateModel]
-
     class CertificateStatus(models.TextChoices):
         """CertificateModel status."""
 
@@ -661,8 +659,6 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
 
 class RevokedCertificateModel(models.Model):
     """Model to store revoked certificates."""
-
-    objects: models.Manager[RevokedCertificateModel]
 
     class ReasonCode(models.TextChoices):
         """Revocation reasons per RFC 5280."""

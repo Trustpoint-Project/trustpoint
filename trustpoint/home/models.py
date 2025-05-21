@@ -23,8 +23,6 @@ log = logging.getLogger('tp.home')
 class NotificationStatus(models.Model):
     """Model representing a status a notification can have."""
 
-    objects: models.Manager[NotificationStatus]
-
     class StatusChoices(models.TextChoices):
         """Status Types."""
 
@@ -68,8 +66,6 @@ class NotificationStatus(models.Model):
 
 class NotificationMessageModel(models.Model):
     """Message Model for Notifications with Short and Optional Long Descriptions."""
-
-    objects: models.Manager[NotificationMessageModel]
 
     short_description = models.CharField(max_length=255)
     long_description = models.CharField(max_length=65536, default='No description provided')
@@ -132,8 +128,6 @@ class NotificationMessage:
 
 class NotificationModel(models.Model):
     """Notifications Model."""
-
-    objects: models.Manager[NotificationModel]
 
     class NotificationTypes(models.TextChoices):
         """Supported Notification Types."""

@@ -28,8 +28,6 @@ class TrustpointTlsServerCredentialModel(models.Model):
     certificate.
     """
 
-    objects: models.Manager[TrustpointTlsServerCredentialModel]
-
     private_key_pem = models.CharField(verbose_name=_('Private Key (PEM)'), max_length=65536, editable=False)
     certificate = models.ForeignKey(CertificateModel, on_delete=models.CASCADE)
 
@@ -51,8 +49,6 @@ class ActiveTrustpointTlsServerCredentialModel(models.Model):
     This model tracks the active server credential, ensuring that it is always
     up-to-date and linked to a specific `TrustpointTlsServerCredentialModel` instance.
     """
-
-    objects: models.Manager[ActiveTrustpointTlsServerCredentialModel]
 
     credential = models.ForeignKey(TrustpointTlsServerCredentialModel, on_delete=models.CASCADE, blank=True, null=True)
 
@@ -85,8 +81,6 @@ class TruststoreModel(models.Model):
     by a unique name and supports operations like retrieving the number of certificates
     or serializing its content.
     """
-
-    objects: models.Manager[TruststoreModel]
 
     class IntendedUsage(models.IntegerChoices):
         """Intended Usage of the Truststore."""
@@ -152,8 +146,6 @@ class TruststoreOrderModel(models.Model):
         CertificateModel, on_delete=models.CASCADE, editable=False, related_name='trust_store_components'
     )
     trust_store = models.ForeignKey(TruststoreModel, on_delete=models.CASCADE, editable=False)
-
-    objects: models.Manager[TruststoreOrderModel]
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""
