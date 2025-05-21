@@ -24,7 +24,7 @@ from setup_wizard.forms import EmptyForm, StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import Generator
 from trustpoint.settings import DOCKER_CONTAINER
 
-APACHE_PATH = Path(__file__).parent.parent.parent / 'docker/apache/tls'
+APACHE_PATH = Path(__file__).parent.parent.parent / 'docker/trustpoint/apache/tls'
 APACHE_KEY_PATH = APACHE_PATH / Path('apache-tls-server-key.key')
 APACHE_CERT_PATH = APACHE_PATH / Path('apache-tls-server-cert.pem')
 APACHE_CERT_CHAIN_PATH = APACHE_PATH / Path('apache-tls-server-cert-chain.pem')
