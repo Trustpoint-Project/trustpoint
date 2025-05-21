@@ -2,7 +2,7 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, language, logging, notifications, security
+from .views import IndexView, language, logging, security
 
 app_name = 'settings'
 urlpatterns = [
@@ -25,5 +25,4 @@ urlpatterns = [
         name='logging-files-download-multiple',
     ),
     path('security/', security.SecurityView.as_view(), name='security'),
-    path('notifications/', notifications.NotificationSettingsView.as_view(), name='notifications'),
 ]

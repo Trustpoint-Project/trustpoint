@@ -7,7 +7,7 @@ from typing import Any, cast
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from notifications.models import NotificationModel, NotificationStatus, NotificationConfig
+from notifications.models import NotificationConfig, NotificationModel, NotificationStatus
 from pki.models import IssuingCaModel
 
 
@@ -52,7 +52,7 @@ class Command(BaseCommand):
         # Handle expiring Issuing CAs
         for ca in expiring_cas:
             self._create_notification(
-                issuing_ca=ca,
+                issuing_ca=cast(IssuingCaModel, ca),
                 event='ISSUING_CA_EXPIRING',
                 notification_type=cast(
                     'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.WARNING
@@ -66,7 +66,7 @@ class Command(BaseCommand):
         # Handle expired Issuing CAs
         for ca in expired_cas:
             self._create_notification(
-                issuing_ca=ca,
+                issuing_ca=cast(IssuingCaModel, ca),
                 event='ISSUING_CA_EXPIRED',
                 notification_type=cast(
                     'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.CRITICAL

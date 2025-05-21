@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Fieldset, Layout
 from django import forms
-from django.forms import CheckboxSelectMultiple
 from django.utils.translation import gettext_lazy as _
-from notifications.models import NotificationConfig
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 from settings.models import SecurityConfig
@@ -96,53 +94,3 @@ class SecurityConfigForm(forms.ModelForm):
         if form_value is None:
             return self.instance.auto_gen_pki_key_algorithm if self.instance else AutoGenPkiKeyAlgorithm.RSA2048
         return form_value
-
-class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
-    """Form for editing notification-related thresholds and weak algorithm/cipher settings.
-
-    This form provides a clean admin interface for:
-    - Certificate and issuing CA expiry thresholds
-    - Minimum RSA key size requirement
-    - Lists of weak ECC curves and signature algorithms (many-to-many selection)
-    """
-
-    class Meta:
-        """Metadata for NotificationConfigForm."""
-
-        model = NotificationConfig
-        fields: ClassVar[list[str]] = [
-            'cert_expiry_warning_days',
-            'issuing_ca_expiry_warning_days',
-            'rsa_minimum_key_size',
-            'weak_ecc_curves',
-            'weak_signature_algorithms',
-        ]
-
-        labels: ClassVar[dict[str, str]] = {
-            'cert_expiry_warning_days': _('Certificate Expiry Warning (Days)'),
-            'issuing_ca_expiry_warning_days': _('Issuing CA Expiry Warning (Days)'),
-            'rsa_minimum_key_size': _('Minimum RSA Key Size (bits)'),
-            'weak_ecc_curves': _('Weak ECC Curves'),
-            'weak_signature_algorithms': _('Weak Signature Algorithms'),
-        }
-
-        widgets: ClassVar[dict[str, type[CheckboxSelectMultiple]]] = {
-            'weak_ecc_curves': forms.CheckboxSelectMultiple,
-            'weak_signature_algorithms': forms.CheckboxSelectMultiple,
-        }
-
-        help_texts: ClassVar[dict[str, str]] = {
-            'cert_expiry_warning_days': _('Number of days before a certificate expires to trigger a warning.'),
-            'issuing_ca_expiry_warning_days':
-                _('Number of days before an issuing CA certificate expires to trigger a warning.'),
-            'rsa_minimum_key_size': _('Minimum allowed RSA key length in bits.'),
-            'weak_ecc_curves': _('Select one or more ECC curves that should be treated as weak.'),
-            'weak_signature_algorithms': _('Select one or more signature algorithms that should be treated as weak.'),
-        }
-
-    def clean(self) -> dict[str, Any] | None:
-        """Custom validation hook, if needed in future.
-
-        Currently just calls the default implementation.
-        """
-        return super().clean()

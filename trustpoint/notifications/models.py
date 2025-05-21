@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from devices.models import DeviceModel
 from django.db import models
@@ -368,7 +368,7 @@ class NotificationModel(models.Model):
         Returns:
             The notification type to display with message description if available.
         """
-        message_text = "No message"
+        message_text = 'No message'
         if self.message and hasattr(self.message, 'short_description'):
             message_text = self.message.short_description[:20]
         return f'{self.get_notification_type_display()} - {message_text}'
@@ -406,7 +406,7 @@ class NotificationModel(models.Model):
 class WeakECCCurve(models.Model):
     """Represents a weak or deprecated ECC curve."""
 
-    objects: models.Manager["WeakECCCurve"]
+    objects: models.Manager['WeakECCCurve']
 
     class ECCCurveChoices(models.TextChoices):
         """Enumeration of weak or deprecated ECC curve OIDs."""
@@ -420,39 +420,42 @@ class WeakECCCurve(models.Model):
         SECT233R1 = '1.3.132.0.27', _('SECT233R1')
         SECT283K1 = '1.3.132.0.16', _('SECT283K1')
 
-    oid = models.CharField(max_length=64, choices=ECCCurveChoices.choices, unique=True)
+    oid = models.CharField(
+        max_length=64,
+        choices=ECCCurveChoices.choices,
+        unique=True
+    )
 
     def __str__(self) -> str:
         """Return the human-readable name for the ECC curve."""
-        return str(dict(self.ECCCurveChoices.choices).get(self.oid, self.oid))
+        return str(dict(self.ECCCurveChoices.choices).get(self.oid, self.oid)) # type: ignore[misc]
+
 
 class WeakSignatureAlgorithm(models.Model):
     """Represents a weak or deprecated signature algorithm."""
 
-    objects: models.Manager["WeakSignatureAlgorithm"]
+    objects: models.Manager[WeakSignatureAlgorithm]
 
     class SignatureChoices(models.TextChoices):
         """Enumeration of weak or deprecated signature algorithm OIDs."""
-        MD2 = '1.2.840.113549.2.2', _('MD2')
-        MD4 = '1.2.840.113549.2.4', _('MD4')
         MD5 = '1.2.840.113549.2.5', _('MD5')
         SHA1 = '1.3.14.3.2.26', _('SHA-1')
         SHA224 = '2.16.840.1.101.3.4.2.4', _('SHA-224')
-        SHA1WITHRSA = '1.2.840.113549.1.1.5', _('SHA-1 with RSA')
-        MD2WITHRSA = '1.2.840.113549.1.1.2', _('MD2 with RSA')
-        MD4WITHRSA = '1.2.840.113549.1.1.3', _('MD4 with RSA')
-        MD5WITHRSA = '1.2.840.113549.1.1.4', _('MD5 with RSA')
 
-    oid = models.CharField(max_length=64, choices=SignatureChoices.choices, unique=True)
+    oid = models.CharField(
+        max_length=64,
+        choices=SignatureChoices.choices,
+        unique=True
+    )
 
     def __str__(self) -> str:
         """Return the human-readable name for the weak signature algorithm."""
-        return str(dict(self.SignatureChoices.choices).get(self.oid, self.oid))
+        return str(dict(self.SignatureChoices.choices).get(self.oid, self.oid)) # type: ignore[misc]
 
 class NotificationConfig(models.Model):
     """Stores global configuration for notification thresholds and behaviors."""
 
-    objects: models.Manager["NotificationConfig"]
+    objects: models.Manager[NotificationConfig]
 
     cert_expiry_warning_days = models.PositiveIntegerField(
         default=30,
@@ -479,7 +482,7 @@ class NotificationConfig(models.Model):
         WeakSignatureAlgorithm,
         blank=True,
         help_text=_('Select signature algorithms considered weak or deprecated.')
-    )
+    ) # type: ignore
 
     class Meta:
         """Meta class configuration."""

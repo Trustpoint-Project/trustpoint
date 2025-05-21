@@ -3,11 +3,11 @@
 import typing
 
 import pytest
-from django.core.management import call_command
-
 from devices.models import DeviceModel
+from django.core.management import call_command
+from pki.models import DomainModel, IssuingCaModel
+
 from notifications.models import NotificationMessageModel, NotificationStatus
-from pki.models import IssuingCaModel, DomainModel
 
 
 @pytest.fixture
@@ -15,7 +15,7 @@ def setup_test_issuing_ca() -> IssuingCaModel :
     """Use custom management command to create a test Issuing CA."""
     call_command('create_single_test_issuing_ca')
     issuing_ca = IssuingCaModel.objects.get(unique_name='issuing-ca-a-test-fixture')
-    return typing.cast(IssuingCaModel, issuing_ca)
+    return typing.cast('IssuingCaModel', issuing_ca)
 
 
 
@@ -41,7 +41,7 @@ def test_device(test_domain: DomainModel) -> DeviceModel:
         onboarding_protocol=DeviceModel.OnboardingProtocol.EST_PASSWORD,
         pki_protocol=DeviceModel.PkiProtocol.EST_PASSWORD,
     )
-    return typing.cast(DeviceModel, device)
+    return typing.cast('DeviceModel', device)
 
 
 @pytest.fixture

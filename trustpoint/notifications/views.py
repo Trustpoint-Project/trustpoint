@@ -1,16 +1,18 @@
-from typing import Any
+"""Defines views for the notifications application."""
+
+from typing import Any, Type
 
 from django.contrib import messages
-from django.core.management import call_command, CommandError
-from django.http import HttpResponseRedirect, HttpRequest, HttpResponse
+from django.core.management import CommandError, call_command
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
-from django.views.generic import TemplateView, DeleteView
+from django.views.generic import DeleteView, TemplateView
+from home.views import ERROR, SUCCESS
 
-from home.views import SUCCESS, ERROR
 from notifications.models import NotificationModel
-from trustpoint.views.base import LoggerMixin
+from trustpoint.logger import LoggerMixin
 
 
 class RefreshNotificationsView(LoggerMixin, TemplateView):
@@ -39,10 +41,10 @@ class RefreshNotificationsView(LoggerMixin, TemplateView):
         return redirect('home:dashboard')
 
 
-class NotificationDeleteView(LoggerMixin, DeleteView):
+class NotificationDeleteView(LoggerMixin, DeleteView[NotificationModel, Any]):
     """View to delete a notification."""
 
-    model = NotificationModel
+    model: Type[NotificationModel] = NotificationModel  # Explicitly set the model type
     template_name = 'home/notification_confirm_delete.html'
     success_url = reverse_lazy('home:dashboard')
 

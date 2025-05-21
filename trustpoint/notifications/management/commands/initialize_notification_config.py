@@ -16,14 +16,14 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
         """Create or update NotificationConfig with default weak ECC curves and signature algorithms."""
-        self.stdout.write("Seeding weak ECC curves...")
+        self.stdout.write('Seeding weak ECC curves...')
         ecc_instances = []
         for oid, label in WeakECCCurve.ECCCurveChoices.choices:
             ecc, created = WeakECCCurve.objects.get_or_create(oid=oid)
             ecc_instances.append(ecc)
             self.stdout.write(f"{'Created' if created else 'Found'} ECC curve: {label} ({oid})")
 
-        self.stdout.write("Seeding weak signature algorithms...")
+        self.stdout.write('Seeding weak signature algorithms...')
         sig_instances = []
         for oid, label in WeakSignatureAlgorithm.SignatureChoices.choices:
             sig, created = WeakSignatureAlgorithm.objects.get_or_create(oid=oid)
