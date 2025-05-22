@@ -54,5 +54,5 @@ class Command(BaseCommand):
                 # Pytest creates a testdatabase, connects to the db and than executes migrations.
                 # During the connection to the db (no migrations executed yet), The singal already tries to set up the version. (No tables initated yet).
                 # So when the OperationalError gets thrown -> do it again after migrations.
-                post_migrate.connect(self.update_app_version, sender=self)
+                post_migrate.connect(self.update_app_version)
                 return
