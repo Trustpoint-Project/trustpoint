@@ -4,7 +4,7 @@ import os
 import tarfile
 import zipfile
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 from django.conf import settings
 from django.contrib import messages
@@ -231,7 +231,7 @@ class BackupRestoreView(View):
     def post(self, request: HttpRequest) -> HttpResponse:
         backup_file = request.FILES.get('backup_file')
         if not backup_file:
-            messages.error(request, "No file uploaded for restore.")
+            messages.error(request, 'No file uploaded for restore.')
             return redirect('settings:backups')
 
         temp_dir = settings.BACKUP_FILE_PATH
@@ -243,8 +243,8 @@ class BackupRestoreView(View):
 
         try:
             call_command('dbrestore',  '-z', '--noinput', '-I', str(temp_path))
-            messages.success(request, f"Database restored from {backup_file.name}")
+            messages.success(request, f'Database restored from {backup_file.name}')
         except Exception as e:
-            messages.error(request, f"Error restoring database: {e}")
+            messages.error(request, 'Error restoring database: Please make sure to upload valid .dump.gz file ')
 
         return redirect('settings:backups')
