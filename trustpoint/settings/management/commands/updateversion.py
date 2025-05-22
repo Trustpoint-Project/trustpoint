@@ -3,6 +3,7 @@
 from typing import Any
 
 from django.conf import settings as django_settings
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.db.models.signals import post_migrate
 from django.db.utils import OperationalError, ProgrammingError
@@ -12,11 +13,7 @@ from trustpoint.settings import DOCKER_CONTAINER
 
 
 class Command(BaseCommand):
-    """A Django management command to delete all existing notifications.
-
-    If running inside a Docker container, the command deletes notifications
-    without user confirmation. Otherwise, it prompts the user for confirmation.
-    """
+    """A Django management command to check and update the trustpoint version."""
 
     help = 'Updates app version'
 
@@ -54,5 +51,9 @@ class Command(BaseCommand):
                 # Pytest creates a testdatabase, connects to the db and than executes migrations.
                 # During the connection to the db (no migrations executed yet), The singal already tries to set up the version. (No tables initated yet).
                 # So when the OperationalError gets thrown -> do it again after migrations.
-                post_migrate.connect(self.update_app_version)
+                post_migrate.connect(self.update_version)
                 return
+
+    def update_version(self, sender: Any, connection: Any, **_kwargs: Any) -> None:
+        """Execute update_app_version after migrations are run."""
+        call_command('updateversion')
