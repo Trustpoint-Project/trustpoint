@@ -45,7 +45,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
                 issuer_private_key=issuing_1_key,
                 issuer_cn='issuing_ca',
                 subject_cn=f'EE {i}',
-                key_usage_extension=key_usage_extension,
+                extensions=[(key_usage_extension, False)],
                 validity_days=validity_days,
             )
             ee_certs[f'ee{i}'] = ee

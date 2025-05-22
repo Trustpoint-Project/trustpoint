@@ -264,16 +264,16 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
     onboarding_and_pki_configuration = forms.ChoiceField(
         choices=[
             ('cmp_shared_secret', _('CMP with shared secret onboarding')),
-            ('cmp_idevid', _('CMP with IDEVID onboarding')),
+            ('cmp_idevid', _('CMP with IDevID onboarding')),
             ('aoki_cmp', _('CMP with AOKI onboarding')),
             ('brski_cmp', _('CMP with BRSKI onboarding')),
             ('est_username_password', _('EST with username and password onboarding')),
-            ('est_idevid', _('EST with IDEVID onboarding')),
+            ('est_idevid', _('EST with IDevID onboarding')),
             ('aoki_est', _('EST with AOKI onboarding')),
             ('brski_est', _('EST with BRSKI onboarding')),
         ],
         widget=DisableSelectOptionsWidget(
-            disabled_values=['aoki_est', 'brski_est', 'aoki_cmp', 'brski_cmp', 'est_idevid']
+            disabled_values=['aoki_est', 'brski_est', 'aoki_cmp', 'brski_cmp']
         ),
         initial='cmp_idevid',
     )
@@ -366,6 +366,16 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
                     instance.pki_protocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE
                     instance.idevid_trust_store = None
                     instance.est_password = secrets.token_urlsafe(16)
+                case 'est_idevid':
+                    idevid_trust_store = cleaned_data.get('idevid_trust_store')
+                    if not idevid_trust_store:
+                        err_msg = 'Must specify an IDevID Trust-Store for IDevID onboarding.'
+                        raise forms.ValidationError(err_msg)
+                    if idevid_trust_store.intended_usage != TruststoreModel.IntendedUsage.IDEVID.value:
+                        err_msg = 'The Trust-Store must have the intended usage IDevID.'
+                        raise forms.ValidationError(err_msg)
+                    instance.onboarding_protocol = DeviceModel.OnboardingProtocol.EST_IDEVID
+                    instance.pki_protocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE
                 case _:
                     err_msg = 'Unknown Onboarding and PKI configuration value found.'
                     raise forms.ValidationError(err_msg)
