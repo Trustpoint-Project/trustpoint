@@ -110,7 +110,7 @@ urlpatterns = [
     ),
     path(
         'help/onboarding/est-idevid-registration/<int:pk>/',
-        views.OnboardingIdevidRegistrationHelpView.as_view(),
+        views.OnboardingEstIdevidRegistrationHelpView.as_view(),
         name='help-onboarding_est-idevid-registration',
     ),
     path(
