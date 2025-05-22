@@ -929,8 +929,14 @@ class OnboardingMethodSelectIdevidHelpView(DeviceContextMixin, DetailView[DevIdR
 
     template_name = 'devices/help/onboarding/idevid_method_select.html'
     context_object_name = 'devid_registration'
-    model = DomainModel
+    model = DevIdRegistration
 
+    def get_context_data(self, **kwargs):
+        """Add the required context for the template."""
+        context = super().get_context_data(**kwargs)
+        context['pk'] = self.object.pk
+
+        return context
 
 class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdRegistration]):
     """Help view for the IDevID Registration, which displays the required OpenSSL commands."""
