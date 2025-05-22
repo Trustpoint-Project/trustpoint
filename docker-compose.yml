@@ -1,6 +1,8 @@
 services:
   trustpoint:
-    build: .
+    build:
+      context: .
+      dockerfile: docker/trustpoint/Dockerfile
     image: trustpointproject/trustpoint:latest
     container_name: trustpoint
     ports:
@@ -22,7 +24,7 @@ services:
   postgres:
     build:
       context: .
-      dockerfile: postgre.Dockerfile
+      dockerfile: docker/db/Dockerfile
     image: trustpointproject/postgres:latest
     container_name: postgres
     ports:
