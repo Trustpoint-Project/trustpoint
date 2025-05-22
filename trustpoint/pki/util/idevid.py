@@ -68,7 +68,7 @@ class IDevIDVerifier(LoggerMixin):
         cls.logger.debug('Certificates in truststore: %s', certificates)
         store = Store(certificates)
         builder = PolicyBuilder().store(store)
-        builder = builder.max_chain_depth(0)
+        builder = builder.max_chain_depth(2)
         builder = builder.extension_policies(
            ca_policy=IDevIDExtensionPolicy.idevid_ca_policy(),
            ee_policy=IDevIDExtensionPolicy.idevid_ee_policy(),

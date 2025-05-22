@@ -38,8 +38,6 @@ def test_tls_client_cert_verification_not_in_truststore() -> None:
 @pytest.mark.parametrize('client_includes_root_ca', [True, False])
 def test_tls_client_cert_verification_chain(client_includes_root_ca: bool) -> None:  # noqa: FBT001
     """Tests the TLS client certificate verification with an intermediate CA."""
-    # TODO(Air): This test will only work once the cryptography 44 hack is removed.
-    return
     certs, _keys = CertificateGenerator.create_test_pki(2)
     truststore = get_mock_truststore([certs[0]])
     intermediates = [certs[1], certs[0]] if client_includes_root_ca else [certs[1]]
