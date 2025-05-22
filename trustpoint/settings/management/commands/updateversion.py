@@ -4,7 +4,8 @@ from typing import Any
 
 from django.conf import settings as django_settings
 from django.core.management.base import BaseCommand
-from django.db.utils import ProgrammingError
+from django.db.models.signals import post_migrate
+from django.db.utils import OperationalError, ProgrammingError
 from settings.models import AppVersion
 
 from trustpoint.settings import DOCKER_CONTAINER
@@ -48,4 +49,10 @@ class Command(BaseCommand):
                         self.stdout.write(self.style.SUCCESS(msg))
             except ProgrammingError:
                 self.stdout.write(self.style.ERROR('appversion table not found. DB probably not initalized'))
+                return
+            except OperationalError:
+                # Pytest creates a testdatabase, connects to the db and than executes migrations.
+                # During the connection to the db (no migrations executed yet), The singal already tries to set up the version. (No tables initated yet).
+                # So when the OperationalError gets thrown -> do it again after migrations.
+                post_migrate.connect(self.update_app_version, sender=self)
                 return
