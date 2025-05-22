@@ -75,7 +75,7 @@ urlpatterns = [
     ),
     path(
         'help/onboarding/cmp-idevid-registration/<int:pk>/',
-        views.OnboardingIdevidRegistrationHelpView.as_view(),
+        views.OnboardingCmpIdevidRegistrationHelpView.as_view(),
         name='help-onboarding_cmp-idevid-registration',
     ),
     path(
@@ -102,6 +102,21 @@ urlpatterns = [
         'help/onboarding/ldevid/<int:pk>/',
         views.OnboardingEstApplicationCredentialsHelpView.as_view(),
         name='help-onboarding_est-ldevid',
+    ),
+    path(
+        'help/onboarding/est-idevid/<int:pk>/',
+        views.OnboardingEstIdevidHelpView.as_view(),
+        name='help-onboarding_est-idevid',
+    ),
+    path(
+        'help/onboarding/est-idevid-registration/<int:pk>/',
+        views.OnboardingIdevidRegistrationHelpView.as_view(),
+        name='help-onboarding_est-idevid-registration',
+    ),
+    path(
+        'help/onboarding/method-select-idevid/<int:pk>/',
+        views.OnboardingMethodSelectIdevidHelpView.as_view(),
+        name='help-onboarding_method_select-idevid',
     ),
     path(
         'help/no-onboarding/opc-ua-gds/est-username-password/<int:pk>/',
