@@ -13,6 +13,10 @@ from django.core.management import call_command
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.views.generic import ListView, View
+from pki.models.credential import CredentialModel
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TrustpointTlsServerCredentialModel
+from setup_wizard import SetupWizardState
+from setup_wizard.views import APACHE_CERT_CHAIN_PATH, APACHE_CERT_PATH, APACHE_KEY_PATH
 
 from trustpoint.views.base import SortableTableMixin
 
@@ -243,12 +247,14 @@ class BackupRestoreView(View):
         temp_dir = settings.BACKUP_FILE_PATH
         temp_path = temp_dir / backup_file.name
         # save upload
+
         with open(temp_path, 'wb+') as f:
             for chunk in backup_file.chunks():
                 f.write(chunk)
 
         try:
             call_command('dbrestore',  '-z', '--noinput', '-I', str(temp_path))
+            self.recreate_tls()
             messages.success(request, f'Database restored from {backup_file.name}')
         except Exception as e:
             messages.error(request, 'Error restoring database: Please make sure to upload valid .dump.gz file.')
@@ -256,3 +262,23 @@ class BackupRestoreView(View):
             logger.exception(msg)
 
         return redirect('settings:backups')
+
+    def recreate_tls(self) -> None:
+        trustpoint_tls_server_credential_model = CredentialModel.objects.get(
+            credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
+        )
+
+        # For maybe later se if we switch the TrustpointTlsServerCredentialModel to CredentialModel in ActiveTrustpointTlsServerCredentialModel
+        # active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+        # cred: TrustpointTlsServerCredentialModel = active_tls.credential
+
+        private_key_pem = trustpoint_tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
+        certificate_pem = trustpoint_tls_server_credential_model.get_certificate_serializer().as_pem().decode()
+        trust_store_pem = trustpoint_tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
+
+        APACHE_KEY_PATH.write_text(private_key_pem)
+        APACHE_CERT_PATH.write_text(certificate_pem)
+        APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+
+    # def recreate_apache_config() -> None:
+    #     pass
