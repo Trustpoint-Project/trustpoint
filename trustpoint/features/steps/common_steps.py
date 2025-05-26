@@ -157,6 +157,11 @@ def step_when_admin_click_button(context: runner.Context, button_name: str) -> N
         context.response = context.authenticated_client.get("/pki/issuing-cas/add/file-import/pkcs12")
         # Check that page loaded successfully
         assert context.response.status_code == 200, f"Failed to load issuing Add new Issuing CA using pkcs#12 import"
+    elif button_name == "Delete selected Issuing CAs":
+        context.response = context.authenticated_client.post(
+            f"/pki/issuing-cas/delete/{context.issuing_ca.id}/",
+            follow=True
+        )
     elif button_name == "Import From Separate Key and Certificate Files":
         context.response = context.authenticated_client.get("/pki/issuing-cas/add/file-import/separate-files")
         # Check that page loaded successfully

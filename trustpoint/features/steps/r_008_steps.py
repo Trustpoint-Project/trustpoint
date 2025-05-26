@@ -14,6 +14,7 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 from cryptography import x509
+from pki.models import IssuingCaModel
 
 @given('the admin is on the "pki/issuing-cas" webpage')
 def step_given_admin_on_ca_page(context: runner.Context) -> None:  # noqa: ARG001
@@ -102,7 +103,7 @@ def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG0
     if hasattr(context, "pkcs12_file_path"):
         with open(context.pkcs12_file_path, "rb") as f:
             data = {
-                'unique_name': "test",
+                'unique_name': "test_CA",
                 'pkcs12_password': "testing321",
                 'pkcs12_file': f
             }
@@ -116,7 +117,7 @@ def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG0
     else:
         with open(context.key_file_path, "rb") as key_file, open(context.cert_file_path, "rb") as cert_file:
             separate_file_form_data = {
-                'unique_name': "test",
+                'unique_name': "test_CA",
                 'pkcs12_password': "",
                 'private_key_file': key_file,
                 'ca_certificate': cert_file
@@ -129,7 +130,7 @@ def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG0
             )
             assert context.response.status_code == 200, f"Failed to submit the form."
 
-@then('the added issuing CA "{name}" "appears" in the list of available CAs')
+@then('the issuing CA "{name}" "appears" in the list of available CAs')
 def step_then_new_ca_available(context: runner.Context, name: str) -> None:  # noqa: ARG001
     """Verifies new issuing CA is available in the list.
 
@@ -147,17 +148,16 @@ def step_then_new_ca_available(context: runner.Context, name: str) -> None:  # n
 
     assert name in values, f"Issuing CA with name {name} doesn't exist"
 
-@given('the issuing ca with pkcs12 file exist')
-def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG001
+@given('the issuing ca with unique name "{name}" with pkcs12 file exist')
+def step_when_pkcs12_file_import(context: runner.Context, name: str) -> None:  # noqa: ARG001
     """The issuing ca exist.
-
     Args:
         context (runner.Context): Behave context.
     """
     pkcs12_file_path = os.path.abspath("../tests/data/issuing_cas/issuing_ca.p12")
     with open(pkcs12_file_path, "rb") as f:
         data = {
-            'unique_name': "test",
+            'unique_name': name,
             'pkcs12_password': "testing321",
             'pkcs12_file': f
         }
@@ -177,9 +177,8 @@ def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG0
         # Get their text content (unescaped and stripped)
         values = [td.get_text(strip=True) for td in tds]
 
-        assert "test" in values, f"Issuing CA test doesn't exist"
-
-
+        assert "test_CA" in values, f"Issuing CA test doesn't exist"
+        context.issuing_ca = IssuingCaModel.objects.get(unique_name=name)
 
 @when('the admin uploads a broken PKCS12 issuing CA file')
 def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG001
@@ -193,7 +192,7 @@ def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG0
     assert os.path.exists(pkcs12_file_path), f"File not found: {pkcs12_file_path}"
     context.pkcs12_file_path = pkcs12_file_path
 
-@then('the added issuing CA "{name}" "does not appear" in the list of available CAs')
+@then('the issuing CA "{name}" "does not appear" in the list of available CAs')
 def step_then_new_ca_not_available(context: runner.Context, name: str) -> None:  # noqa: ARG001
     """Verifies new issuing CA is not available in the list.
 
@@ -257,18 +256,6 @@ def step_when_cert_file_ca(context: runner.Context, type: str) -> None:  # noqa:
         else:
             raise AssertionError("no valid type given")
 
-# @when('the certificate file is "an end entity certificate"')
-# def step_when_cert_file_ca(context: runner.Context) -> None:  # noqa: ARG001
-#     """Ensures that certificate file is a CA certificate.
-
-#     Args:
-#         context (runner.Context): Behave context.
-#     """
-#     with open(context.cert_file_path, "rb") as cert_file:
-#         certificate_serializer = CertificateSerializer.from_bytes(cert_file.read())
-#         is_ca = is_ca_cert(certificate_serializer._certificate)
-#         assert not is_ca, "the certificate is not end-entity certificate"
-
 @when('the certificate chain of type {cert_chain} is "{status}"')
 @when('the certificate chain of type "{cert_chain}" is "{status}"')
 def step_when_cert_chain_file_import(context: runner.Context, cert_chain: str, status: str) -> None:  # noqa: ARG001
@@ -282,6 +269,69 @@ def step_when_cert_chain_file_import(context: runner.Context, cert_chain: str, s
     assert os.path.exists(file_path), f"File not found: {file_path}"
     context.cert_chain_path = file_path
 
+@when('the key and the certificate file are not matching')
+def step_when_cert_chain_file_import(context: runner.Context) -> None:  # noqa: ARG001
+    """The key and the certificate file are not matching.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
+    # Ensure the file path is absolute and exists
+    context.cert_file_path = os.path.abspath(f"../tests/data/issuing_cas/ee1.pem")
+
 def is_ca_cert(cert: any) -> bool:
     basic_constraints = cert.extensions.get_extension_for_class(x509.BasicConstraints).value
     return basic_constraints.ca is True
+
+@given('the issuing CA with the unique name "{name}" has no associated certificates')
+def step_given_ca_no_cert(context: runner.Context, name: str) -> None:  # noqa: ARG001
+    """Verifies new issuing CA is available in the list.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
+    print("issuing ca", context.issuing_ca)
+
+@given('the issuing CA with the unique name "{name}" has no associated domains')
+def step_given_ca_no_domain(context: runner.Context, name: str) -> None:  # noqa: ARG001
+    """Verifies new issuing CA is available in the list.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
+    print("issuing ca", context.issuing_ca)
+
+@when('the admin select the issuing CA with the unique name "{name}"')
+def step_when_admin_select_ca(context: runner.Context, name: str) -> None:  # noqa: ARG001
+    """Verifies new issuing CA is available in the list.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
+    print("issuing ca", context.issuing_ca)
+
+
+@when('the admin clicks on Delete Selected')
+def step_when_admin_select_ca(context: runner.Context) -> None:  # noqa: ARG001
+    """Verifies new issuing CA is available in the list.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
+    context.response = context.authenticated_client.get(f"/pki/issuing-cas/delete/{context.issuing_ca.id}/")
+    # Check that page loaded successfully
+    assert context.response.status_code == 200, f"Failed to load issuing Add new Issuing CA using pkcs#12 import"
+
+@then('the system should display a confirmation dialog page')
+def step_then_display_confirmation(context: runner.Context) -> None:  # noqa: ARG001
+    """Verifies new issuing CA is available in the list.
+
+    Args:
+        context (runner.Context): Behave context.
+    """
+    assert b"Confirm Issuing CA Deletion" in context.response.content, f"Issuing CA deletion confirmation dialog is missing"
+
+
+
+
+
