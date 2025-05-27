@@ -302,15 +302,15 @@ class EstRequestedCertTemplateExtractorMixin:
     """Mixin to extract and validate the certificate template from request parameters."""
 
     requested_cert_template_str: str
-    allowed_cert_templates: ClassVar[list[str]] = ['tlsserver',
-                                                   'tlsclient',
+    allowed_cert_templates: ClassVar[list[str]] = ['tls-server',
+                                                   'tls-client',
                                                    'opcua-client',
                                                    'opcua-server',
                                                    'domaincredential']
 
     cert_template_classes: ClassVar[dict[str, type[object]]] = {
-        'tlsserver': LocalTlsServerCredentialIssuer,
-        'tlsclient': LocalTlsClientCredentialIssuer,
+        'tls-server': LocalTlsServerCredentialIssuer,
+        'tls-client': LocalTlsClientCredentialIssuer,
         'opcua-server': LocalTlsServerCredentialIssuer,
         'opcua-client': LocalTlsClientCredentialIssuer,
         'domaincredential': LocalDomainCredentialIssuer,
@@ -544,21 +544,21 @@ class CredentialIssuanceMixin:
 
     Required inputs for the `issue_credential` method:
       - cert_template_str: A string indicating the certificate template type.
-          Supported values: 'tlsserver', 'tlsclient', or 'domaincredential'.
+          Supported values: 'tls-server', 'tls-client', or 'domaincredential'.
       - cert_template_class: The class responsible for issuing the credential.
       - device: The device instance for which the credential is issued.
       - domain: The domain instance used during credential issuance.
       - csr: The certificate signing request (used only for 'domaincredential').
 
     Additional parameters are used by the specific issuance methods:
-      - common_name: Used for 'tlsclient' and 'tlsserver' credentials.
-      - validity_days: Used for 'tlsclient' and 'tlsserver' credentials.
-      - ipv4_addresses, ipv6_addresses, domain_names: Used for 'tlsserver' credentials.
+      - common_name: Used for 'tls-client' and 'tls-server' credentials.
+      - validity_days: Used for 'tls-client' and 'tls-server' credentials.
+      - ipv4_addresses, ipv6_addresses, domain_names: Used for 'tls-server' credentials.
     """
 
     cert_template_classes: ClassVar[dict[str, type]] = {
-        'tlsserver': LocalTlsServerCredentialIssuer,
-        'tlsclient': LocalTlsClientCredentialIssuer,
+        'tls-server': LocalTlsServerCredentialIssuer,
+        'tls-client': LocalTlsClientCredentialIssuer,
         'opcua-server': OpcUaServerCredentialIssuer,
         'opcua-client': OpcUaClientCredentialIssuer,
         'domaincredential': LocalDomainCredentialIssuer,
@@ -585,7 +585,7 @@ class CredentialIssuanceMixin:
 
         Args:
             cert_template_str (str): The certificate template string indicating the type
-                                      of certificate to issue (e.g., 'tlsserver', 'tlsclient', etc.).
+                                      of certificate to issue (e.g., 'tls-server', 'tls-client', etc.).
             device (DeviceModel): The device for which the certificate is being issued.
             domain (DomainModel): The domain associated with the certificate issuance.
             credential_request (CredentialRequest): A CredentialRequest object containing processed information
@@ -652,13 +652,13 @@ class CredentialIssuanceMixin:
             domain_credential = LocalDomainCredentialIssuer(device=device, domain=domain)
             return domain_credential.issue_domain_credential_certificate(public_key=credential_request.public_key)
 
-        if cert_template_str == 'tlsclient':
+        if cert_template_str == 'tls-client':
             tls_client_credential = LocalTlsClientCredentialIssuer(device=device, domain=domain)
 
             return tls_client_credential.issue_tls_client_certificate(
                 common_name=credential_request.common_name, public_key=credential_request.public_key, validity_days=365
             )
-        if cert_template_str == 'tlsserver':
+        if cert_template_str == 'tls-server':
             tls_server_credential = LocalTlsServerCredentialIssuer(device=device, domain=domain)
             return tls_server_credential.issue_tls_server_certificate(
                 common_name=credential_request.common_name,
