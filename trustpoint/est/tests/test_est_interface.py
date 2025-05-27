@@ -22,7 +22,7 @@ def est_simple_enrollment_view():
     view = EstSimpleEnrollmentView()
     view.request = MagicMock()
     view.requested_domain = MagicMock()
-    view.requested_cert_template_str = 'tlsclient'
+    view.requested_cert_template_str = 'tls-client'
     return view
 
 
@@ -82,7 +82,7 @@ def test_post_authentication_failure(
     request = request_factory.post('/')
     mock_auth.return_value = (None, LoggedHttpResponse('Authentication failed', status=400))
     mock_extract_domain.return_value = (MagicMock(), None)
-    response = est_simple_enrollment_view.post(request, domain=MagicMock(), certtemplate="tlsclient")
+    response = est_simple_enrollment_view.post(request, domain=MagicMock(), certtemplate="tls-client")
     assert response.status_code == 400
     assert b'Authentication failed' in response.content
 

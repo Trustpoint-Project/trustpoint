@@ -5,20 +5,20 @@
     <script src="{% static 'js/copy_clipboard.js' %}"></script>
 {% endblock head %}
 
-{% block est_application_credentials_capabilities_block %}
-    <h3 class="mt-5">{% trans 'Application Certificates' %}</h3>
+{% block est_curl_cacert %}
+        <h3 class="mt-5">{% trans 'CA Certificate Chain' %}</h3>
     <hr>
+
     <ul class="tp-kvp-list">
         <li>
-            <div>{% trans 'Enroll Certificate' %}</div>
+            <div>{% trans 'curl Command' %}</div>
             <div class="copy-container" style="position: relative;">
                 <code class="command-text language-bash">
-                    curl --cert domain_credential_cert.pem --key domain_credential_key.pem \<br>
+                    curl -X GET \<br>
+                    "https://{{ host }}/.well-known/est/{{ device.domain }}/cacerts/" \<br>
                     --cacert server_cert.pem \<br>
-                    --header "Content-Type: application/pkcs10" \<br>
-                    --data-binary "@csr.der" \<br>
-                    -o certificate.der \<br>
-                    https://{{ host }}/.well-known/est/{{ device.domain }}/{{ certificate_template }}/simpleenroll/
+                    -H "Accept: application/pkcs7-mime" \<br>
+                    | base64 --decode > cacerts.p7b
                 </code>
                 <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
                         aria-label="Copy to clipboard">
@@ -29,13 +29,14 @@
             </div>
         </li>
         <li>
-            <div>{% trans 'Convert DER to PEM' %}</div>
+            <div>{% trans 'Convert PKCS7 to PEM' %}</div>
             <div class="copy-container" style="position: relative;">
                 <code class="command-text language-bash">
-                    openssl x509 \<br>
-                    -inform der \<br>
-                    -in certificate.der \<br>
-                    -out certificate.pem
+                    openssl pkcs7 \<br>
+                    -print_certs \<br>
+                    -inform DER \<br>
+                    -in cacerts.p7b \<br>
+                    -out cacerts.pem
                 </code>
                 <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
                         aria-label="Copy to clipboard">
@@ -47,4 +48,4 @@
         </li>
     </ul>
 
-{% endblock est_application_credentials_capabilities_block %}
+{% endblock est_curl_cacert %}

@@ -59,7 +59,12 @@ urlpatterns = [
         name='help_dispatch_application',
     ),
     path(
-        'help/no-onboarding/cmp-shared-secret/<int:pk>/',
+        'help/dispatchApplication/<int:pk>/<str:certificate_template>/',
+        views.HelpDispatchApplicationCredentialTemplateView.as_view(),
+        name='help_dispatch_application_template',
+    ),
+    path(
+        'help/no-onboarding/cmp-shared-secret/<int:pk>/<str:certificate_template>/',
         views.NoOnboardingCmpSharedSecretHelpView.as_view(),
         name='help_no-onboarding_cmp-shared-secret',
     ),
@@ -79,12 +84,12 @@ urlpatterns = [
         name='help-onboarding_cmp-idevid-registration',
     ),
     path(
-        'help/onboarding/cmp-application-credentials/<int:pk>/',
+        'help/onboarding/cmp-application-credentials/<int:pk>/<str:certificate_template>/',
         views.OnboardingCmpApplicationCredentialsHelpView.as_view(),
         name='help-onboarding_cmp-application-credentials',
     ),
     path(
-        'help/no-onboarding/est-username-password/<int:pk>/',
+        'help/no-onboarding/est-username-password/<int:pk>/<str:certificate_template>/',
         views.NoOnboardingEstUsernamePasswordHelpView.as_view(),
         name='help-no-onboarding_est-username-password',
     ),
@@ -94,7 +99,7 @@ urlpatterns = [
         name='help-onboarding_est-username-password',
     ),
     path(
-        'help/onboarding/est-application-credentials/<int:pk>/',
+        'help/onboarding/est-application-credentials/<int:pk>/<str:certificate_template>/',
         views.OnboardingEstApplicationCredentialsHelpView.as_view(),
         name='help-onboarding_est-application-credentials',
     ),
@@ -106,7 +111,7 @@ urlpatterns = [
     path(
         'help/no-onboarding/opc-ua-gds/est-username-password/<int:pk>/',
         views.NoOnboardingEstOpcUaGdsUsernamePasswordHelpView.as_view(),
-        name='help-no-onboarding_est-opcua-gds-username-password'
+        name='help-no-onboarding_est-opcua-gds-username-password',
     ),
     # Certificate Lifecycle Management - Downloads
     path('download/<int:pk>/', views.DownloadPageDispatcherView.as_view(), name='download'),

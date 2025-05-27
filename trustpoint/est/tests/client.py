@@ -191,7 +191,7 @@ if __name__ == '__main__':
         est_url='https://localhost:443/.well-known/est',
         auth_type='both',
         domain='arburg',
-        cert_template='tlsserver',
+        cert_template='tls-server',
         username='admin',
         password='testing321',
         cert_path='cert.pem',

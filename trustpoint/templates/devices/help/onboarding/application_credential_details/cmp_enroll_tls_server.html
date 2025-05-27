@@ -5,50 +5,7 @@
     <script src="{% static 'js/copy_clipboard.js' %}"></script>
 {% endblock head %}
 
-{% block cmp_enroll_application_credential_block %}
-    <ul class="tp-kvp-list">
-        <li>
-            <h2 class="mt-5">{% trans 'TLS-Client Certificate' %}</h2>
-            <hr>
-            <div>{% trans 'OpenSSL Command' %}</div>
-            <div class="copy-container" style="position: relative;">
-                <code class="command-text language-bash">
-                    openssl cmp \<br>
-                    -cmd cr \<br>
-                    -implicit_confirm \<br>
-                    -server https://{{ host }}/.well-known/cmp/certification/{{ device.domain }}/tls-client/
-                    \<br>
-                    -tls_used \<br>
-                    -cert domain_credential_cert.pem \<br>
-                    -key domain_credential_key.pem \<br>
-                    -subject "/CN={{ cn_entry }}" \<br>
-                    -days 10 \<br>
-                    -newkey key.pem \<br>
-                    -certout cert.pem \<br>
-                    -chainout chain_without_root.pem \<br>
-                    -extracertsout full_chain.pem \<br>
-                    -srvcert issuing_ca_cert.pem
-                </code>
-
-                <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
-                        aria-label="Copy to clipboard">
-                    <svg class="icon icon-copy" width="40" height="40" fill="currentColor">
-                        <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
-                    </svg>
-                </button>
-            </div>
-        </li>
-        <li>
-            <h3 class="mt-3">{% trans 'Mutable Parameters' %}</h3>
-            <hr>
-            <div>{% trans 'Common Name' %}</div>
-            <div>{{ cn_entry }}</div>
-        </li>
-        <li>
-            <div>{% trans 'Validity (days)' %}</div>
-            <div>-days 10</div>
-        </li>
-    </ul>
+{% block cmp_enroll_tls_server %}
     <ul class="tp-kvp-list">
         <li>
             <h2 class="mt-5">{% trans 'TLS-Server Certificate' %}</h2>
@@ -101,4 +58,4 @@
         </li>
     </ul>
 
-{% endblock cmp_enroll_application_credential_block %}
+{% endblock cmp_enroll_tls_server %}
