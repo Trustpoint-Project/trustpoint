@@ -44,6 +44,8 @@ dev = [
     "werkzeug >= 3.1.3, < 4",
     "beautifulsoup4 >= 4.13.4",
     "ruff>=0.11.9",
+    "allure-behave>=2.14.2",
+    "allure-pytest>=2.14.2",
 ]
 # For building docs
 docs = [
@@ -111,11 +113,6 @@ pythonpath = ["trustpoint"]
 python_files = 'test_*.py'
 md_report = true
 md_report_output = 'md-report.md'
-
-[tool.behave]
-default_format = 'behave_html_pretty_formatter:PrettyHTMLFormatter'
-outfiles = ['behave-report.html']
-paths = ['trustpoint/features/']
 
 [tool.behave.userdata]
 'behave.formatter.html-pretty.title_string' = 'TrustPoint Test Report'
