@@ -1,0 +1,168 @@
+{
+  "uid" : "46dfd96045e435e4",
+  "name" : "Unauthorized device attempts to access the EST endpoint",
+  "fullName" : "R_011 EST Endpoint for Onboarded Devices: Unauthorized device attempts to access the EST endpoint",
+  "historyId" : "2fe3375b7eae7e15066f9b35088014a8",
+  "time" : {
+    "start" : 1748328278108,
+    "stop" : 1748328278140,
+    "duration" : 32
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: Given the endpoint is available\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_010_r_11_steps.py\", line 19, in step_given_endpoint_available\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: Given the endpoint is available\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_010_r_11_steps.py\", line 19, in step_given_endpoint_available\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the EST endpoint is available",
+      "time" : {
+        "start" : 1748328278111,
+        "stop" : 1748328278111,
+        "duration" : 0
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: Given the endpoint is available\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_010_r_11_steps.py\", line 19, in step_given_endpoint_available\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "Given a device with invalid credentials",
+      "time" : {
+        "start" : 1748328278140,
+        "stop" : 1748328278140,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the device sends a EST request",
+      "time" : {
+        "start" : 1748328278140,
+        "stop" : 1748328278140,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then the system should reject the request with an \"Unauthorized\" error",
+      "time" : {
+        "start" : 1748328278140,
+        "stop" : 1748328278140,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "epic",
+    "value" : "Features"
+  }, {
+    "name" : "owner",
+    "value" : "Aircoookie"
+  }, {
+    "name" : "package",
+    "value" : "R_011_EST_Endpoint_for_Onboarded_Devices"
+  }, {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "suite",
+    "value" : "R_011_EST_Endpoint_for_Onboarded_Devices"
+  }, {
+    "name" : "feature",
+    "value" : "R_011 EST Endpoint for Onboarded Devices"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "owner" : "Aircoookie",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 3,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 3
+      },
+      "items" : [ {
+        "uid" : "c277b80910dad351",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/24/#testresult/c277b80910dad351",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+        "time" : {
+          "start" : 1747122030395,
+          "stop" : 1747122030427,
+          "duration" : 32
+        }
+      }, {
+        "uid" : "6209d79a468926a2",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/23/#testresult/6209d79a468926a2",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+        "time" : {
+          "start" : 1746713369225,
+          "stop" : 1746713369260,
+          "duration" : 35
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "46dfd96045e435e4.json",
+  "parameterValues" : [ ]
+}

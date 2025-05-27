@@ -1,0 +1,2 @@
+INFO     pki.util.x509:x509.py:167 Issuing CA 'test_local_ca' saved successfully.
+INFO     devices.models:models.py:127 Deleting all issued credentials for device test_device

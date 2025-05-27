@@ -1,0 +1,2 @@
+2025-05-27 06:44:21 - pki.util.x509 - INFO - Issuing CA 'test_local_ca' saved successfully.
+2025-05-27 06:44:22 - devices.models - INFO - Correct OTP entered for browser credential download for device test_device(credential id=1)

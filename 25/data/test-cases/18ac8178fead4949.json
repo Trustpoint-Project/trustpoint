@@ -1,0 +1,200 @@
+{
+  "uid" : "18ac8178fead4949",
+  "name" : "Authorized user accesses certificate templates -- @1.2 ",
+  "fullName" : "Certificate Template Security: Authorized user accesses certificate templates",
+  "historyId" : "e091d13d5c7812154d29af0175c16998",
+  "time" : {
+    "start" : 1748328286876,
+    "stop" : 1748328287454,
+    "duration" : 578
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: Given the user has role User\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_102_steps.py\", line 15, in step_given_user_role\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: Given the user has role User\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_102_steps.py\", line 15, in step_given_user_role\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the admin user is logged into TPC_Web",
+      "time" : {
+        "start" : 1748328286878,
+        "stop" : 1748328287422,
+        "duration" : 544
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given the user has role User",
+      "time" : {
+        "start" : 1748328287422,
+        "stop" : 1748328287423,
+        "duration" : 1
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: Given the user has role User\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_102_steps.py\", line 15, in step_given_user_role\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "When the user attempts to access certificate templates",
+      "time" : {
+        "start" : 1748328287454,
+        "stop" : 1748328287454,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then access should be denied",
+      "time" : {
+        "start" : 1748328287454,
+        "stop" : 1748328287454,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "epic",
+    "value" : "Features"
+  }, {
+    "name" : "package",
+    "value" : "R_102_Certificate_Template_Security"
+  }, {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "suite",
+    "value" : "R_102_Certificate_Template_Security"
+  }, {
+    "name" : "feature",
+    "value" : "Certificate Template Security"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ {
+    "name" : "access_outcome",
+    "value" : "denied"
+  }, {
+    "name" : "role",
+    "value" : "User"
+  } ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 6,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 6
+      },
+      "items" : [ {
+        "uid" : "9d19d19fa5144450",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/24/#testresult/9d19d19fa5144450",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the user has role User\n",
+        "time" : {
+          "start" : 1747122038856,
+          "stop" : 1747122039434,
+          "duration" : 578
+        }
+      }, {
+        "uid" : "62bd2e51ce06771",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/23/#testresult/62bd2e51ce06771",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the user has role User\n",
+        "time" : {
+          "start" : 1746713377922,
+          "stop" : 1746713378503,
+          "duration" : 581
+        }
+      }, {
+        "uid" : "1988f7f9c93a8e3f",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/22/#testresult/1988f7f9c93a8e3f",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the user has role User\n",
+        "time" : {
+          "start" : 1746711085395,
+          "stop" : 1746711085986,
+          "duration" : 591
+        }
+      }, {
+        "uid" : "3b46ce0cb9f6c593",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/3b46ce0cb9f6c593",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the user has role User\n",
+        "time" : {
+          "start" : 1746710251063,
+          "stop" : 1746710251641,
+          "duration" : 578
+        }
+      }, {
+        "uid" : "91cfd6c613ffcf83",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/91cfd6c613ffcf83",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the user has role User\n",
+        "time" : {
+          "start" : 1746709797081,
+          "stop" : 1746709797657,
+          "duration" : 576
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "18ac8178fead4949.json",
+  "parameterValues" : [ "denied", "User" ]
+}

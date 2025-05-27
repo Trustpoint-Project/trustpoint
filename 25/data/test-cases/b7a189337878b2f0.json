@@ -1,0 +1,186 @@
+{
+  "uid" : "b7a189337878b2f0",
+  "name" : "User enters one time password incorrectly",
+  "fullName" : "R_013 Remote Credential Download: User enters one time password incorrectly",
+  "historyId" : "12a02e589d4d468b7d7e8439988d6a0d",
+  "time" : {
+    "start" : 1748328280563,
+    "stop" : 1748328280612,
+    "duration" : 49
+  },
+  "status" : "passed",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "passed",
+    "steps" : [ {
+      "name" : "Given the TPC_Web application is running",
+      "time" : {
+        "start" : 1748328280566,
+        "stop" : 1748328280571,
+        "duration" : 5
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given an incorrect one-time password",
+      "time" : {
+        "start" : 1748328280572,
+        "stop" : 1748328280572,
+        "duration" : 0
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the user visits the \"/devices/browser\" endpoint and enters the OTP",
+      "time" : {
+        "start" : 1748328280572,
+        "stop" : 1748328280579,
+        "duration" : 7
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then they will receive a warning saying the OTP is incorrect",
+      "time" : {
+        "start" : 1748328280579,
+        "stop" : 1748328280580,
+        "duration" : 1
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 4,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "epic",
+    "value" : "Features"
+  }, {
+    "name" : "owner",
+    "value" : "Aircoookie"
+  }, {
+    "name" : "package",
+    "value" : "R_013_Remote_Credential_Download"
+  }, {
+    "name" : "severity",
+    "value" : "minor"
+  }, {
+    "name" : "suite",
+    "value" : "R_013_Remote_Credential_Download"
+  }, {
+    "name" : "tag",
+    "value" : "fixture.r013.setup"
+  }, {
+    "name" : "feature",
+    "value" : "R_013 Remote Credential Download"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "minor",
+    "owner" : "Aircoookie",
+    "retries" : [ ],
+    "categories" : [ ],
+    "history" : {
+      "statistic" : {
+        "failed" : 0,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 6,
+        "unknown" : 0,
+        "total" : 6
+      },
+      "items" : [ {
+        "uid" : "5ae8201c5785e4bf",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/24/#testresult/5ae8201c5785e4bf",
+        "status" : "passed",
+        "time" : {
+          "start" : 1747122032739,
+          "stop" : 1747122032785,
+          "duration" : 46
+        }
+      }, {
+        "uid" : "836f9934974a3700",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/23/#testresult/836f9934974a3700",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746713371703,
+          "stop" : 1746713371751,
+          "duration" : 48
+        }
+      }, {
+        "uid" : "c5bd1f983394b1ad",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/22/#testresult/c5bd1f983394b1ad",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746711079173,
+          "stop" : 1746711079221,
+          "duration" : 48
+        }
+      }, {
+        "uid" : "aa9d5cec81fc74f3",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/aa9d5cec81fc74f3",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746710244750,
+          "stop" : 1746710244796,
+          "duration" : 46
+        }
+      }, {
+        "uid" : "1003403a8a0d65ef",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/1003403a8a0d65ef",
+        "status" : "passed",
+        "time" : {
+          "start" : 1746709790947,
+          "stop" : 1746709790991,
+          "duration" : 44
+        }
+      } ]
+    },
+    "tags" : [ "fixture.r013.setup" ]
+  },
+  "source" : "b7a189337878b2f0.json",
+  "parameterValues" : [ ]
+}

@@ -1,0 +1,15 @@
+{
+  "total" : 57,
+  "items" : [ {
+    "uid" : "fa311bbfa2ffc3c19333ddcb76c4114c",
+    "name" : "Features",
+    "statistic" : {
+      "failed" : 12,
+      "broken" : 0,
+      "skipped" : 0,
+      "passed" : 1,
+      "unknown" : 0,
+      "total" : 13
+    }
+  } ]
+}

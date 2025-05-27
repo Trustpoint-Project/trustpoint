@@ -1,0 +1,4 @@
+INFO     pki.util.x509:x509.py:167 Issuing CA 'root_ca' saved successfully.
+INFO     trustpoint.pki.models.issuing_ca.IssuingCaModel:issuing_ca.py:218 All 2 certificates issued by CA root_ca have been revoked.
+INFO     trustpoint.pki.models.issuing_ca.IssuingCaModel:issuing_ca.py:176 CRL generation for CA root_ca finished.
+INFO     trustpoint.pki.models.issuing_ca.IssuingCaModel:issuing_ca.py:176 CRL generation for CA root_ca finished.

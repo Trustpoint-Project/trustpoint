@@ -1,0 +1,209 @@
+{
+  "uid" : "d083853fc4d6c5a1",
+  "name" : "NTEU initiates device onboarding using a zero-touch protocol",
+  "fullName" : "NTEU Identity Management and Zero-Touch Onboarding: NTEU initiates device onboarding using a zero-touch protocol",
+  "historyId" : "1f3f1b7e80415fa1a764d833f5466b5d",
+  "time" : {
+    "start" : 1748328256237,
+    "stop" : 1748328256271,
+    "duration" : 34
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: Given the NTEU is logged in\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/f_001_steps.py\", line 62, in step_given_nteu_logged_in\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: Given the NTEU is logged in\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/f_001_steps.py\", line 62, in step_given_nteu_logged_in\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the TPC_Web application is running",
+      "time" : {
+        "start" : 1748328256239,
+        "stop" : 1748328256243,
+        "duration" : 4
+      },
+      "status" : "passed",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Given the NTEU is logged in",
+      "time" : {
+        "start" : 1748328256243,
+        "stop" : 1748328256243,
+        "duration" : 0
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: Given the NTEU is logged in\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/f_001_steps.py\", line 62, in step_given_nteu_logged_in\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "When the NTEU starts the device onboarding process",
+      "time" : {
+        "start" : 1748328256270,
+        "stop" : 1748328256270,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then the system should automatically use a zero-touch onboarding protocol",
+      "time" : {
+        "start" : 1748328256270,
+        "stop" : 1748328256270,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And the onboarding process should complete successfully",
+      "time" : {
+        "start" : 1748328256270,
+        "stop" : 1748328256271,
+        "duration" : 1
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 5,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "epic",
+    "value" : "Features"
+  }, {
+    "name" : "package",
+    "value" : "F_001_NTEU_Identity_Management_and_Zero-Touch_Onboarding"
+  }, {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "suite",
+    "value" : "F_001_NTEU_Identity_Management_and_Zero-Touch_Onboarding"
+  }, {
+    "name" : "feature",
+    "value" : "NTEU Identity Management and Zero-Touch Onboarding"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 6,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 6
+      },
+      "items" : [ {
+        "uid" : "843d38a3519d3021",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/24/#testresult/843d38a3519d3021",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the NTEU is logged in\n",
+        "time" : {
+          "start" : 1747122008487,
+          "stop" : 1747122008518,
+          "duration" : 31
+        }
+      }, {
+        "uid" : "2508f68d1fe0b00c",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/23/#testresult/2508f68d1fe0b00c",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the NTEU is logged in\n",
+        "time" : {
+          "start" : 1746713346976,
+          "stop" : 1746713347010,
+          "duration" : 34
+        }
+      }, {
+        "uid" : "9164e83f0bdf8a40",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/22/#testresult/9164e83f0bdf8a40",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the NTEU is logged in\n",
+        "time" : {
+          "start" : 1746711054690,
+          "stop" : 1746711054722,
+          "duration" : 32
+        }
+      }, {
+        "uid" : "97a3c21f0f62f9c1",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/97a3c21f0f62f9c1",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the NTEU is logged in\n",
+        "time" : {
+          "start" : 1746710220550,
+          "stop" : 1746710220582,
+          "duration" : 32
+        }
+      }, {
+        "uid" : "b0157edc1cefe104",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/b0157edc1cefe104",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the NTEU is logged in\n",
+        "time" : {
+          "start" : 1746709766600,
+          "stop" : 1746709766631,
+          "duration" : 31
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "d083853fc4d6c5a1.json",
+  "parameterValues" : [ ]
+}

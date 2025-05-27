@@ -1,0 +1,3 @@
+INFO     pki.util.x509:x509.py:167 Issuing CA 'root_ca' saved successfully.
+INFO     trustpoint.pki.models.issuing_ca.IssuingCaModel:issuing_ca.py:223 Deleting Issuing CA root_ca
+INFO     trustpoint.pki.models.issuing_ca.IssuingCaModel:issuing_ca.py:223 Deleting Issuing CA root_ca

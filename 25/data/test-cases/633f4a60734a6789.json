@@ -1,0 +1,209 @@
+{
+  "uid" : "633f4a60734a6789",
+  "name" : "A device successfully requests a certificate",
+  "fullName" : "CMP Endpoint for Onboarded Devices: A device successfully requests a certificate",
+  "historyId" : "7c4367fcd969321cf76897989ab5f00d",
+  "time" : {
+    "start" : 1748328277863,
+    "stop" : 1748328277894,
+    "duration" : 31
+  },
+  "status" : "failed",
+  "statusMessage" : "AssertionError: STEP: Given the endpoint is available\n",
+  "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_010_r_11_steps.py\", line 19, in step_given_endpoint_available\n    raise AssertionError(msg)\n",
+  "flaky" : false,
+  "newFailed" : false,
+  "beforeStages" : [ ],
+  "testStage" : {
+    "status" : "failed",
+    "statusMessage" : "AssertionError: STEP: Given the endpoint is available\n",
+    "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_010_r_11_steps.py\", line 19, in step_given_endpoint_available\n    raise AssertionError(msg)\n",
+    "steps" : [ {
+      "name" : "Given the CMP endpoint is available",
+      "time" : {
+        "start" : 1748328277865,
+        "stop" : 1748328277866,
+        "duration" : 1
+      },
+      "status" : "failed",
+      "statusMessage" : "AssertionError: STEP: Given the endpoint is available\n",
+      "statusTrace" : "  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/model.py\", line 1909, in run\n    match.run(runner.context)\n  File \"/home/runner/work/trustpoint/trustpoint/.venv/lib/python3.12/site-packages/behave/matchers.py\", line 104, in run\n    self.func(context, *args, **kwargs)\n  File \"trustpoint/features/steps/r_010_r_11_steps.py\", line 19, in step_given_endpoint_available\n    raise AssertionError(msg)\n",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : true,
+      "hasContent" : true
+    }, {
+      "name" : "Given a new device with identifier \"Device123\"",
+      "time" : {
+        "start" : 1748328277894,
+        "stop" : 1748328277894,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "When the device sends a CMP request for a new certificate",
+      "time" : {
+        "start" : 1748328277894,
+        "stop" : 1748328277894,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "Then the system should issue a new certificate for \"Device123\"",
+      "time" : {
+        "start" : 1748328277894,
+        "stop" : 1748328277894,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    }, {
+      "name" : "And the device should store the issued certificate",
+      "time" : {
+        "start" : 1748328277894,
+        "stop" : 1748328277894,
+        "duration" : 0
+      },
+      "status" : "skipped",
+      "steps" : [ ],
+      "attachments" : [ ],
+      "parameters" : [ ],
+      "stepsCount" : 0,
+      "attachmentsCount" : 0,
+      "shouldDisplayMessage" : false,
+      "hasContent" : false
+    } ],
+    "attachments" : [ ],
+    "parameters" : [ ],
+    "stepsCount" : 5,
+    "attachmentsCount" : 0,
+    "shouldDisplayMessage" : false,
+    "hasContent" : true
+  },
+  "afterStages" : [ ],
+  "labels" : [ {
+    "name" : "epic",
+    "value" : "Features"
+  }, {
+    "name" : "package",
+    "value" : "R_010_CMP_Endpoint"
+  }, {
+    "name" : "severity",
+    "value" : "normal"
+  }, {
+    "name" : "suite",
+    "value" : "R_010_CMP_Endpoint"
+  }, {
+    "name" : "feature",
+    "value" : "CMP Endpoint for Onboarded Devices"
+  }, {
+    "name" : "framework",
+    "value" : "behave"
+  }, {
+    "name" : "language",
+    "value" : "cpython3"
+  }, {
+    "name" : "resultFormat",
+    "value" : "allure2"
+  } ],
+  "parameters" : [ ],
+  "links" : [ ],
+  "hidden" : false,
+  "retry" : false,
+  "extra" : {
+    "severity" : "normal",
+    "retries" : [ ],
+    "categories" : [ {
+      "name" : "Product defects",
+      "matchedStatuses" : [ ],
+      "flaky" : false
+    } ],
+    "history" : {
+      "statistic" : {
+        "failed" : 6,
+        "broken" : 0,
+        "skipped" : 0,
+        "passed" : 0,
+        "unknown" : 0,
+        "total" : 6
+      },
+      "items" : [ {
+        "uid" : "1e07c32f499fc22a",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/24/#testresult/1e07c32f499fc22a",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+        "time" : {
+          "start" : 1747122030099,
+          "stop" : 1747122030130,
+          "duration" : 31
+        }
+      }, {
+        "uid" : "e8c0d5e6df1637f1",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/23/#testresult/e8c0d5e6df1637f1",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+        "time" : {
+          "start" : 1746713368905,
+          "stop" : 1746713368936,
+          "duration" : 31
+        }
+      }, {
+        "uid" : "61d0d291d8d81734",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/22/#testresult/61d0d291d8d81734",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+        "time" : {
+          "start" : 1746711076321,
+          "stop" : 1746711076351,
+          "duration" : 30
+        }
+      }, {
+        "uid" : "26e42942fc669486",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/21/#testresult/26e42942fc669486",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+        "time" : {
+          "start" : 1746710242043,
+          "stop" : 1746710242073,
+          "duration" : 30
+        }
+      }, {
+        "uid" : "e744a1790e85e309",
+        "reportUrl" : "https://Trustpoint-Project.github.io/trustpoint/20/#testresult/e744a1790e85e309",
+        "status" : "failed",
+        "statusDetails" : "AssertionError: STEP: Given the endpoint is available\n",
+        "time" : {
+          "start" : 1746709788177,
+          "stop" : 1746709788207,
+          "duration" : 30
+        }
+      } ]
+    },
+    "tags" : [ ]
+  },
+  "source" : "633f4a60734a6789.json",
+  "parameterValues" : [ ]
+}

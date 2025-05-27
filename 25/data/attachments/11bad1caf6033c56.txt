@@ -1,0 +1,2 @@
+INFO     pki.util.x509:x509.py:167 Issuing CA 'test_local_ca' saved successfully.
+INFO     trustpoint.pki.models.issuing_ca.IssuingCaModel:issuing_ca.py:223 Deleting Issuing CA test_local_ca
