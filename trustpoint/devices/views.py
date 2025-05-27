@@ -21,6 +21,7 @@ from django.utils.decorators import method_decorator
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
+from django.views.generic import TemplateView
 from django.views.generic.base import RedirectView, View
 from django.views.generic.detail import DetailView, SingleObjectMixin
 from django.views.generic.edit import CreateView, FormMixin, FormView
@@ -600,7 +601,6 @@ class HelpDispatchDomainCredentialView(DeviceContextMixin, SingleObjectMixin[Dev
             The redirection URL.
         """
         del args
-        del kwargs
 
         device: DeviceModel = self.get_object()
 
@@ -618,8 +618,30 @@ class HelpDispatchDomainCredentialView(DeviceContextMixin, SingleObjectMixin[Dev
 
         return f'{reverse("devices:devices")}'
 
+class HelpDispatchApplicationCredentialView(TemplateView):
+    """Renders the application credential selection page for the given device."""
 
-class HelpDispatchApplicationCredentialView(DeviceContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
+    template_name = "devices/help/generic_details/application_credential_selection.html"
+
+    def get_context_data(self, **kwargs):
+        """
+        Adds device-related context to the template.
+
+        Args:
+            **kwargs: Keyword arguments containing the device's primary key (`pk`).
+
+        Returns:
+            A dictionary with context variables for the template.
+        """
+        context = super().get_context_data(**kwargs)
+
+        device = get_object_or_404(DeviceModel, pk=kwargs.get('pk'))
+        context["device"] = device
+
+        return context
+
+
+class HelpDispatchApplicationCredentialTemplateView(DeviceContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
     """Redirects to the required help pages depending on PKI protocol.
 
     If no help page could be determined, it will redirect to the devices page.
@@ -641,41 +663,45 @@ class HelpDispatchApplicationCredentialView(DeviceContextMixin, SingleObjectMixi
             The redirection URL.
         """
         del args
-        del kwargs
 
         device: DeviceModel = self.get_object()
+        certificate_template = kwargs.get('certificate_template')
 
         if (
             not device.domain_credential_onboarding
             and device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value
         ):
-            return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
+            return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", 
+                              kwargs={"pk": device.id, "certificate_template": certificate_template})}'
 
         if device.onboarding_protocol in {
             device.OnboardingProtocol.CMP_SHARED_SECRET.value,
             device.OnboardingProtocol.CMP_IDEVID.value,
         }:
-            return f'{reverse("devices:help-onboarding_cmp-application-credentials", kwargs={"pk": device.id})}'
-
+            return f'{reverse("devices:help-onboarding_cmp-application-credentials", 
+                              kwargs={"pk": device.id, "certificate_template": certificate_template})}'
 
         if (
                 not device.domain_credential_onboarding
                 and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value
                 and device.device_type == DeviceModel.DeviceType.OPC_UA_GDS.value
         ):
-            return f'{reverse("devices:help-no-onboarding_est-opcua-gds-username-password", kwargs={"pk": device.id})}'
+            return f'{reverse("devices:help-no-onboarding_est-opcua-gds-username-password", 
+                              kwargs={"pk": device.id, "certificate_template": certificate_template})}'
 
         if (
                 not device.domain_credential_onboarding
                 and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value
                 and device.device_type == DeviceModel.DeviceType.GENERIC_DEVICE.value
         ):
-            return f'{reverse("devices:help-no-onboarding_est-username-password", kwargs={"pk": device.id})}'
+            return f'{reverse("devices:help-no-onboarding_est-username-password", 
+                              kwargs={"pk": device.id, "certificate_template": certificate_template})}'
 
         if device.onboarding_protocol in {
             device.OnboardingProtocol.EST_PASSWORD.value,
         }:
-            return f'{reverse("devices:help-onboarding_est-application-credentials", kwargs={"pk": device.id})}'
+            return f'{reverse("devices:help-onboarding_est-application-credentials", 
+                              kwargs={"pk": device.id, "certificate_template": certificate_template})}'
 
         return f'{reverse("devices:devices")}'
 
@@ -699,10 +725,18 @@ class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceMo
         """
         context = super().get_context_data(**kwargs)
         device: DeviceModel = self.object
+        certificate_template = self.kwargs.get('certificate_template')
+        context['certificate_template'] = certificate_template
         context['host'] = (
             f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:{self.request.META.get("SERVER_PORT", "443")}'
         )
         context.update(self._get_domain_credential_cmp_context(device=device))
+
+        if certificate_template is not None:
+            number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
+            camelcase_template = ''.join(word.capitalize() for word in certificate_template.split('-'))
+            context['cn_entry'] = f'Trustpoint-{camelcase_template}-Credential-{number_of_issued_device_certificates}'
+
         return context
 
     @staticmethod
@@ -741,10 +775,6 @@ class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceMo
             .public_bytes(encoding=serialization.Encoding.PEM)
             .decode()
         )
-        number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
-        context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
-        context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
-
         return context
 
 
@@ -767,11 +797,19 @@ class HelpDomainCredentialEstContextView(DeviceContextMixin, DetailView[DeviceMo
         """
         context = super().get_context_data(**kwargs)
         device: DeviceModel = self.object
+        certificate_template = self.kwargs.get('certificate_template')
+        context['certificate_template'] = certificate_template
         context['host'] = (
             f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:{self.request.META.get("SERVER_PORT", "443")}'
         )
 
         context.update(self._get_domain_credential_est_context(device=device))
+
+        if certificate_template is not None:
+            number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
+            camelcase_template = ''.join(word.capitalize() for word in certificate_template.split('-'))
+            context['cn_entry'] = f'Trustpoint-{camelcase_template}-Credential-{number_of_issued_device_certificates}'
+
         return context
 
     @staticmethod
@@ -821,9 +859,6 @@ class HelpDomainCredentialEstContextView(DeviceContextMixin, DetailView[DeviceMo
             }
         )
 
-        number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
-        context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
-        context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
         context['domain_credential_cn'] = 'Trustpoint Domain Credential'
 
         return context
@@ -872,6 +907,8 @@ class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, DetailView[DeviceM
         """
         context = super().get_context_data(**kwargs)
         device: DeviceModel = self.object
+        certificate_template = self.kwargs.get('certificate_template')
+        context['certificate_template'] = certificate_template
 
         if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
             key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
@@ -889,8 +926,8 @@ class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, DetailView[DeviceM
         )
         context['key_gen_command'] = key_gen_command
         number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
-        context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
-        context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
+        camelcase_template = ''.join(word.capitalize() for word in certificate_template.split('-'))
+        context['cn_entry'] = f'Trustpoint-{camelcase_template}-Credential-{number_of_issued_device_certificates}'
         return context
 
 
@@ -960,9 +997,6 @@ class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdR
             .public_bytes(encoding=serialization.Encoding.PEM)
             .decode()
         )
-        number_of_issued_device_certificates = 0
-        context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
-        context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
         context['public_key_info'] = devid_registration.domain.public_key_info
         context['domain'] = devid_registration.domain
         return context
