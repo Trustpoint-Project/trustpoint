@@ -1,3 +1,6 @@
+@allure.label.epic:Features
+@allure.label.suite:R_010_CMP_Endpoint
+@allure.label.package:R_010_CMP_Endpoint
 Feature: CMP Endpoint for Onboarded Devices
   The system must provide a CMP endpoint to securely onboard devices.
 
