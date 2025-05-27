@@ -5,14 +5,20 @@
     <script src="{% static 'js/copy_clipboard.js' %}"></script>
 {% endblock head %}
 
-{% block cmp_application_credential_summary_block %}
+{% block opcua_server_csr_generation %}
     <ul class="tp-kvp-list">
-
         <li>
-            <div>{% trans 'Certificate Request URL' %}</div>
+            <div>{% trans 'CSR Generation' %}</div>
+
             <div class="copy-container" style="position: relative;">
                 <code class="command-text language-bash">
-                    https://{{ host }}/.well-known/cmp/certification/{{ device.domain }}/{{ certificate_template }}/
+                    openssl req \<br>
+                    -new \<br>
+                    -key key.pem \<br>
+                    -outform der \<br>
+                    -out csr.der \<br>
+                    -subj "/CN={{ cn_entry }}" \<br>
+                    -addext "subjectAltName=URI:urn:OPCUA:ServerApplication,DNS:example.com,IP:192.168.1.2"
                 </code>
 
                 <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
@@ -21,17 +27,9 @@
                         <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
                     </svg>
                 </button>
+
             </div>
         </li>
-        <li>
-            <div>{% trans 'Key Identifier (KID)' %}</div>
-            <div>{{ device.id }}</div>
-        </li>
-        <li>
-            <div>{% trans 'Required Public Key Type' %}</div>
-            <div>{{ device.public_key_info }}</div>
-        </li>
-
     </ul>
 
-{% endblock cmp_application_credential_summary_block %}
+{% endblock opcua_server_csr_generation %}
