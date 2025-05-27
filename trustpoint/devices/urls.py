@@ -51,7 +51,9 @@ urlpatterns = [
     ),
     # Certificate Lifecycle Management - Help Pages
     path(
-        'help/dispatchDomain/<int:pk>/', views.HelpDispatchDomainCredentialView.as_view(), name='help_dispatch_domain'
+        'help/dispatchDomain/<int:pk>/',
+        views.HelpDispatchDomainCredentialView.as_view(),
+        name='help_dispatch_domain'
     ),
     path(
         'help/dispatchApplication/<int:pk>/',
@@ -59,7 +61,12 @@ urlpatterns = [
         name='help_dispatch_application',
     ),
     path(
-        'help/no-onboarding/cmp-shared-secret/<int:pk>/',
+        'help/dispatchApplication/<int:pk>/<str:certificate_template>/',
+        views.HelpDispatchApplicationCredentialTemplateView.as_view(),
+        name='help_dispatch_application_template',
+    ),
+    path(
+        'help/no-onboarding/cmp-shared-secret/<int:pk>/<str:certificate_template>/',
         views.NoOnboardingCmpSharedSecretHelpView.as_view(),
         name='help_no-onboarding_cmp-shared-secret',
     ),
@@ -79,12 +86,12 @@ urlpatterns = [
         name='help-onboarding_cmp-idevid-registration',
     ),
     path(
-        'help/onboarding/cmp-application-credentials/<int:pk>/',
+        'help/onboarding/cmp-application-credentials/<int:pk>/<str:certificate_template>/',
         views.OnboardingCmpApplicationCredentialsHelpView.as_view(),
         name='help-onboarding_cmp-application-credentials',
     ),
     path(
-        'help/no-onboarding/est-username-password/<int:pk>/',
+        'help/no-onboarding/est-username-password/<int:pk>/<str:certificate_template>/',
         views.NoOnboardingEstUsernamePasswordHelpView.as_view(),
         name='help-no-onboarding_est-username-password',
     ),
@@ -94,7 +101,7 @@ urlpatterns = [
         name='help-onboarding_est-username-password',
     ),
     path(
-        'help/onboarding/est-application-credentials/<int:pk>/',
+        'help/onboarding/est-application-credentials/<int:pk>/<str:certificate_template>/',
         views.OnboardingEstApplicationCredentialsHelpView.as_view(),
         name='help-onboarding_est-application-credentials',
     ),
