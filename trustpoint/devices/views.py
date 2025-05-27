@@ -8,6 +8,7 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
 from cryptography.hazmat.primitives import serialization
+from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.exceptions import ValidationError
@@ -31,20 +32,19 @@ from pki.models.credential import CredentialModel
 from pki.models.devid_registration import DevIdRegistration
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from trustpoint_core import oid
-from trustpoint_core.serializer import CredentialFileFormat
 from trustpoint_core.archiver import Archiver
-from django import forms
+from trustpoint_core.serializer import CredentialFileFormat
 
 from devices.forms import (
     BrowserLoginForm,
     CreateDeviceForm,
+    CreateOpcUaGdsForm,
     CredentialDownloadForm,
     CredentialRevocationForm,
     IssueOpcUaClientCredentialForm,
     IssueOpcUaServerCredentialForm,
     IssueTlsClientCredentialForm,
     IssueTlsServerCredentialForm,
-    CreateOpcUaGdsForm,
 )
 from devices.issuer import (
     LocalTlsClientCredentialIssuer,
@@ -54,9 +54,9 @@ from devices.issuer import (
 )
 from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
 from devices.revocation import DeviceCredentialRevocation
+from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import BulkDeleteView, ListInDetailView, SortableTableMixin
-from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     import ipaddress
@@ -297,12 +297,12 @@ class DeviceCertificateLifecycleManagementSummaryView(DeviceContextMixin, Sortab
 
         for cred in context['domain_credentials']:
             cred.expires_in = self._get_expires_in(cred)
-            cred.expiration_date = cast(datetime.datetime, cred.credential.certificate.not_valid_after)
+            cred.expiration_date = cast('datetime.datetime', cred.credential.certificate.not_valid_after)
             cred.revoke = self._get_revoke_button_html(cred)
 
         for cred in context['application_credentials']:
             cred.expires_in = self._get_expires_in(cred)
-            cred.expiration_date = cast(datetime.datetime, cred.credential.certificate.not_valid_after)
+            cred.expiration_date = cast('datetime.datetime', cred.credential.certificate.not_valid_after)
             cred.revoke = self._get_revoke_button_html(cred)
 
         return context
@@ -393,7 +393,8 @@ class DeviceIssueCredentialView(
         Returns:
             The success url to redirect to after successful processing of the POST data following a form submit.
         """
-        return cast(str, reverse_lazy('devices:certificate_lifecycle_management', kwargs={'pk': self.get_object().id}))
+        return cast('str', reverse_lazy('devices:certificate_lifecycle_management',
+                                        kwargs={'pk': self.get_object().id}))
 
     def form_valid(self, form: CredentialFormClass) -> HttpResponse:
         """This method is executed if the form submit data was valid.
@@ -470,8 +471,8 @@ class DeviceIssueTlsClientCredential(
         Returns:
             The IssuedCredentialModel object that was created and saved.
         """
-        common_name = cast(str, cleaned_data.get('common_name'))
-        validity = cast(int, cleaned_data.get('validity'))
+        common_name = cast('str', cleaned_data.get('common_name'))
+        validity = cast('int', cleaned_data.get('validity'))
         issuer = self.issuer_class(device=device, domain=device.domain)
 
         return issuer.issue_tls_client_credential(common_name=common_name, validity_days=validity)
@@ -496,7 +497,7 @@ class DeviceIssueTlsServerCredential(
         Returns:
             The IssuedCredentialModel object that was created and saved.
         """
-        common_name = cast(str, cleaned_data.get('common_name'))
+        common_name = cast('str', cleaned_data.get('common_name'))
         if not common_name:
             raise Http404
         issuer = self.issuer_class(device=device, domain=device.domain)
@@ -504,9 +505,9 @@ class DeviceIssueTlsServerCredential(
             common_name=common_name,
             ipv4_addresses=cast('list[ipaddress.IPv4Address]', cleaned_data.get('ipv4_addresses')),
             ipv6_addresses=cast('list[ipaddress.IPv6Address]', cleaned_data.get('ipv6_addresses')),
-            domain_names=cast(list[str], cleaned_data.get('domain_names')),
+            domain_names=cast('list[str]', cleaned_data.get('domain_names')),
             san_critical=False,
-            validity_days=cast(int, cleaned_data.get('validity')),
+            validity_days=cast('int', cleaned_data.get('validity')),
         )
 
 
@@ -531,9 +532,9 @@ class DeviceIssueOpcUaClientCredential(
         """
         issuer = self.issuer_class(device=device, domain=device.domain)
         return issuer.issue_opcua_client_credential(
-            common_name=cast(str, cleaned_data.get('common_name')),
-            application_uri=cast(str, cleaned_data.get('application_uri')),
-            validity_days=cast(int, cleaned_data.get('validity')),
+            common_name=cast('str', cleaned_data.get('common_name')),
+            application_uri=cast('str', cleaned_data.get('application_uri')),
+            validity_days=cast('int', cleaned_data.get('validity')),
         )
 
 
@@ -556,7 +557,7 @@ class DeviceIssueOpcUaServerCredential(
         Returns:
             The IssuedCredentialModel object that was created and saved.
         """
-        common_name = cast(str, cleaned_data.get('common_name'))
+        common_name = cast('str', cleaned_data.get('common_name'))
         if not common_name:
             raise Http404
         issuer = self.issuer_class(device=device, domain=device.domain)
@@ -568,7 +569,7 @@ class DeviceIssueOpcUaServerCredential(
 
         return issuer.issue_opcua_server_credential(
             common_name=common_name,
-            application_uri=cast(str, cleaned_data.get('application_uri')),
+            application_uri=cast('str', cleaned_data.get('application_uri')),
             ipv4_addresses=ipv4_addresses,
             ipv6_addresses=ipv6_addresses,
             domain_names=domain_names,
@@ -601,6 +602,7 @@ class HelpDispatchDomainCredentialView(DeviceContextMixin, SingleObjectMixin[Dev
             The redirection URL.
         """
         del args
+        del kwargs
 
         device: DeviceModel = self.get_object()
 
@@ -621,11 +623,10 @@ class HelpDispatchDomainCredentialView(DeviceContextMixin, SingleObjectMixin[Dev
 class HelpDispatchApplicationCredentialView(TemplateView):
     """Renders the application credential selection page for the given device."""
 
-    template_name = "devices/help/generic_details/application_credential_selection.html"
+    template_name = 'devices/help/generic_details/application_credential_selection.html'
 
-    def get_context_data(self, **kwargs):
-        """
-        Adds device-related context to the template.
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds device-related context to the template.
 
         Args:
             **kwargs: Keyword arguments containing the device's primary key (`pk`).
@@ -636,7 +637,7 @@ class HelpDispatchApplicationCredentialView(TemplateView):
         context = super().get_context_data(**kwargs)
 
         device = get_object_or_404(DeviceModel, pk=kwargs.get('pk'))
-        context["device"] = device
+        context['device'] = device
 
         return context
 
@@ -671,14 +672,14 @@ class HelpDispatchApplicationCredentialTemplateView(DeviceContextMixin, SingleOb
             not device.domain_credential_onboarding
             and device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value
         ):
-            return f'{reverse("devices:help_no-onboarding_cmp-shared-secret", 
+            return f'{reverse("devices:help_no-onboarding_cmp-shared-secret",
                               kwargs={"pk": device.id, "certificate_template": certificate_template})}'
 
         if device.onboarding_protocol in {
             device.OnboardingProtocol.CMP_SHARED_SECRET.value,
             device.OnboardingProtocol.CMP_IDEVID.value,
         }:
-            return f'{reverse("devices:help-onboarding_cmp-application-credentials", 
+            return f'{reverse("devices:help-onboarding_cmp-application-credentials",
                               kwargs={"pk": device.id, "certificate_template": certificate_template})}'
 
         if (
@@ -686,7 +687,7 @@ class HelpDispatchApplicationCredentialTemplateView(DeviceContextMixin, SingleOb
                 and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value
                 and device.device_type == DeviceModel.DeviceType.OPC_UA_GDS.value
         ):
-            return f'{reverse("devices:help-no-onboarding_est-opcua-gds-username-password", 
+            return f'{reverse("devices:help-no-onboarding_est-opcua-gds-username-password",
                               kwargs={"pk": device.id, "certificate_template": certificate_template})}'
 
         if (
@@ -694,13 +695,13 @@ class HelpDispatchApplicationCredentialTemplateView(DeviceContextMixin, SingleOb
                 and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value
                 and device.device_type == DeviceModel.DeviceType.GENERIC_DEVICE.value
         ):
-            return f'{reverse("devices:help-no-onboarding_est-username-password", 
+            return f'{reverse("devices:help-no-onboarding_est-username-password",
                               kwargs={"pk": device.id, "certificate_template": certificate_template})}'
 
         if device.onboarding_protocol in {
             device.OnboardingProtocol.EST_PASSWORD.value,
         }:
-            return f'{reverse("devices:help-onboarding_est-application-credentials", 
+            return f'{reverse("devices:help-onboarding_est-application-credentials",
                               kwargs={"pk": device.id, "certificate_template": certificate_template})}'
 
         return f'{reverse("devices:devices")}'
@@ -1133,11 +1134,11 @@ class DeviceBaseCredentialDownloadView(
         elif file_format == CredentialFileFormat.PEM_ZIP:
             file_data = Archiver.archive_zip(
                 data_to_archive = {
-                    "private_key.pem": credential_serializer.get_private_key_serializer().as_pkcs8_pem(
+                    'private_key.pem': credential_serializer.get_private_key_serializer().as_pkcs8_pem(
                         password=password
                     ),
-                    "certificate.pem": credential_serializer.get_certificate_serializer().as_pem(),
-                    "certificate_chain.pem": credential_serializer.get_additional_certificates_serializer().as_pem(),
+                    'certificate.pem': credential_serializer.get_certificate_serializer().as_pem(),
+                    'certificate_chain.pem': credential_serializer.get_additional_certificates_serializer().as_pem(),
                 }
             )
             file_stream_data = io.BytesIO(file_data)
@@ -1145,11 +1146,11 @@ class DeviceBaseCredentialDownloadView(
         elif file_format == CredentialFileFormat.PEM_TAR_GZ:
             file_data = Archiver.archive_tar_gz(
                 data_to_archive={
-                    "private_key.pem": credential_serializer.get_private_key_serializer().as_pkcs8_pem(
+                    'private_key.pem': credential_serializer.get_private_key_serializer().as_pkcs8_pem(
                         password=password
                     ),
-                    "certificate.pem": credential_serializer.get_certificate_serializer().as_pem(),
-                    "certificate_chain.pem": credential_serializer.get_additional_certificates_serializer().as_pem(),
+                    'certificate.pem': credential_serializer.get_certificate_serializer().as_pem(),
+                    'certificate_chain.pem': credential_serializer.get_additional_certificates_serializer().as_pem(),
                 }
             )
             file_stream_data = io.BytesIO(file_data)
@@ -1233,8 +1234,8 @@ class DeviceOnboardingBrowserLoginView(FormView[BrowserLoginForm]):
         Returns:
             The success url to redirect to after successful processing of the POST data following a form submit.
         """
-        credential_id = cast(int, self.cleaned_data.get('credential_id'))
-        credential_download = cast(RemoteDeviceCredentialDownloadModel, self.cleaned_data.get('credential_download'))
+        credential_id = cast('int', self.cleaned_data.get('credential_id'))
+        credential_download = cast('RemoteDeviceCredentialDownloadModel', self.cleaned_data.get('credential_download'))
         token: str = credential_download.download_token
         return (
             f'{reverse_lazy("devices:browser_domain_credential_download", kwargs={"pk": credential_id})}?token={token}'

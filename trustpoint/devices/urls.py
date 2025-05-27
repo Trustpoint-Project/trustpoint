@@ -51,9 +51,7 @@ urlpatterns = [
     ),
     # Certificate Lifecycle Management - Help Pages
     path(
-        'help/dispatchDomain/<int:pk>/',
-        views.HelpDispatchDomainCredentialView.as_view(),
-        name='help_dispatch_domain'
+        'help/dispatchDomain/<int:pk>/', views.HelpDispatchDomainCredentialView.as_view(), name='help_dispatch_domain'
     ),
     path(
         'help/dispatchApplication/<int:pk>/',
@@ -113,7 +111,7 @@ urlpatterns = [
     path(
         'help/no-onboarding/opc-ua-gds/est-username-password/<int:pk>/',
         views.NoOnboardingEstOpcUaGdsUsernamePasswordHelpView.as_view(),
-        name='help-no-onboarding_est-opcua-gds-username-password'
+        name='help-no-onboarding_est-opcua-gds-username-password',
     ),
     # Certificate Lifecycle Management - Downloads
     path('download/<int:pk>/', views.DownloadPageDispatcherView.as_view(), name='download'),
