@@ -9,8 +9,8 @@ from django.urls import reverse_lazy
 from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
-from trustpoint_core.file_builder.certificate import CertificateArchiveFileBuilder, CertificateFileBuilder
-from trustpoint_core.file_builder.enum import ArchiveFormat, CertificateFileFormat
+from trustpoint_core.serializer import CertificateFormat
+from trustpoint_core.archiver import ArchiveFormat, Archiver
 
 from pki.models import CertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -84,9 +84,9 @@ class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, DetailView[C
             raise Http404
 
         certificate_serializer = CertificateModel.objects.get(pk=pk).get_certificate_serializer()
-        file_bytes = CertificateFileBuilder.build(certificate_serializer, file_format=CertificateFileFormat.PEM)
+        file_bytes = certificate_serializer.as_pem()
 
-        response = HttpResponse(file_bytes, content_type=CertificateFileFormat.PEM.mime_type)
+        response = HttpResponse(file_bytes, content_type=CertificateFormat.PEM.mime_type)
         response['Content-Disposition'] = 'attachment; filename="issuing_ca_cert.pem"'
 
         return response
@@ -136,12 +136,12 @@ class CertificateDownloadView(CertificatesContextMixin, DetailView[CertificateMo
             return super().get(request, *args, **kwargs)
 
         try:
-            file_format_enum = CertificateFileFormat(value=self.kwargs.get('file_format'))
+            file_format_enum = CertificateFormat(value=self.kwargs.get('file_format'))
         except Exception as exception:
             raise Http404 from exception
 
         certificate_serializer = CertificateModel.objects.get(pk=pk).get_certificate_serializer()
-        file_bytes = CertificateFileBuilder.build(certificate_serializer, file_format=file_format_enum)
+        file_bytes = certificate_serializer.as_format(file_format_enum)
 
         response = HttpResponse(file_bytes, content_type=file_format_enum.mime_type)
         response['Content-Disposition'] = f'attachment; filename="certificate{file_format_enum.file_extension}"'
@@ -219,7 +219,7 @@ class CertificateMultipleDownloadView(
             return super().get(request, *args, **kwargs)
 
         try:
-            file_format_enum = CertificateFileFormat(value=file_format)
+            file_format_enum = CertificateFormat(value=file_format)
         except Exception as exception:
             raise Http404 from exception
 
@@ -228,13 +228,12 @@ class CertificateMultipleDownloadView(
         except Exception as exception:
             raise Http404 from exception
 
-        file_bytes = CertificateArchiveFileBuilder.build(
-            certificate_serializers=[
-                certificate_model.get_certificate_serializer() for certificate_model in self.queryset
-            ],
-            file_format=file_format_enum,
-            archive_format=archive_format_enum,
-        )
+        data_to_archive = {
+            f'certificate-{i}': certificate_model.get_certificate_serializer().as_format(file_format_enum)
+            for i, certificate_model in enumerate(self.queryset)
+        }
+
+        file_bytes = Archiver.archive(data_to_archive, archive_format_enum)
 
         response = HttpResponse(file_bytes, content_type=archive_format_enum.mime_type)
         response['Content-Disposition'] = f'attachment; filename="certificates{archive_format_enum.file_extension}"'
@@ -256,9 +255,9 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
 
         tls_server_certificate = tls_cert.credential.certificate.get_certificate_serializer()
 
-        file_bytes = CertificateFileBuilder.build(tls_server_certificate, file_format=CertificateFileFormat.PEM)
+        file_bytes = tls_server_certificate.as_pem()
 
-        response = HttpResponse(file_bytes, content_type=CertificateFileFormat.PEM.mime_type)
+        response = HttpResponse(file_bytes, content_type=CertificateFormat.PEM.mime_type)
         response['Content-Disposition'] = 'attachment; filename="server_cert.pem"'
 
         return response

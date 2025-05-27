@@ -19,7 +19,8 @@ from django.views.generic.base import RedirectView
 from django.views.generic.list import ListView
 
 from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH, UIConfig
-from trustpoint.views.base import LoggerMixin, SortableTableMixin
+from trustpoint.logger import LoggerMixin
+from trustpoint.views.base import SortableTableMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -63,7 +64,6 @@ class LoggingFilesTableView(LoggerMixin, LoggingContextMixin, SortableTableMixin
     paginate_by = UIConfig.paginate_by
 
     @staticmethod
-    @LoggerMixin.log_exceptions
     def _get_first_and_last_entry_date(
         log_file_path: Path,
     ) -> tuple[None | datetime.datetime, None | datetime.datetime]:
@@ -81,7 +81,6 @@ class LoggingFilesTableView(LoggerMixin, LoggingContextMixin, SortableTableMixin
         return first_date, last_date
 
     @classmethod
-    @LoggerMixin.log_exceptions
     def _get_log_file_data(cls, log_filename: str) -> dict[str, str]:
         log_file_path = LOG_DIR_PATH / Path(log_filename)
         if not log_file_path.exists() or not log_file_path.is_file():
@@ -100,7 +99,6 @@ class LoggingFilesTableView(LoggerMixin, LoggingContextMixin, SortableTableMixin
 
         return {'filename': log_filename, 'created_at': created_at, 'updated_at': updated_at}
 
-    @LoggerMixin.log_exceptions
     def get_queryset(self) -> list[dict[str, str]]:
         """Gets a queryset of all valid Trustpoint log files in the log directory."""
         all_files = os.listdir(LOG_DIR_PATH)
@@ -118,7 +116,6 @@ class LoggingFilesDetailsView(LoggerMixin, LoggingContextMixin, TemplateView):
     template_name = 'settings/logging/logging_files_details.html'
     log_directory = LOG_DIR_PATH
 
-    @LoggerMixin.log_exceptions
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Get the context data for the view."""
         context = super().get_context_data(**kwargs)
@@ -139,7 +136,6 @@ class LoggingFilesDownloadView(LoggerMixin, LoggingContextMixin, TemplateView):
 
     http_method_names = ('get',)
 
-    @LoggerMixin.log_exceptions
     def get(self, *_args: Any, **kwargs: Any) -> HttpResponse:
         """The HTTP GET method for the view."""
         filename = kwargs.get('filename')
@@ -162,7 +158,6 @@ class LoggingFilesDownloadMultipleView(LoggerMixin, LoggingContextMixin, View):
     http_method_names = ('get',)
 
     @classmethod
-    @LoggerMixin.log_exceptions
     def get(cls, *_args: Any, **kwargs: Any) -> HttpResponse:
         """The HTTP GET method for the view."""
         archive_format = kwargs.get('archive_format')

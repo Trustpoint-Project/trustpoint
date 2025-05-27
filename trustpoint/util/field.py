@@ -1,3 +1,5 @@
+"""This module contains validators that are used in several different apps in the trustpoint project."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -10,11 +12,23 @@ if TYPE_CHECKING:
 
 
 class UniqueNameValidator(RegexValidator):
+    """Validates unique names used in the trustpoint."""
+
     form_label = _('(Must start with a letter. Can only contain letters, digits, underscores and hyphens)')
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes a UniqueNameValidator object.
+
+        Args:
+            args: Positional arguments are discarded.
+            kwargs: Keyword arguments are discarded._
+        """
+        del args
+        del kwargs
+        msg = f'Enter a valid unique name. {self.form_label}.'
+        trans_msg = _(msg)
         super().__init__(
             regex=r'^[a-zA-Z]+[a-zA-Z0-9_-]+$',
-            message=_(f'Enter a valid unique name. {self.form_label}.'),
+            message=trans_msg,
             code='invalid_unique_name',
         )

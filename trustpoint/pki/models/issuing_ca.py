@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
@@ -18,11 +18,12 @@ from util.field import UniqueNameValidator
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
 from cryptography.hazmat.primitives import hashes
-from trustpoint.views.base import LoggerMixin
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet
     from trustpoint_core.serializer import CredentialSerializer
+    from util.db import CustomDeleteActionManager
 
 
 class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
@@ -30,6 +31,8 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
 
     This model contains the configurations of all Issuing CAs available within the Trustpoint.
     """
+
+    objects: CustomDeleteActionManager[IssuingCaModel]
 
     class IssuingCaTypeChoice(models.IntegerChoices):
         """The IssuingCaTypeChoice defines the type of Issuing CA.
@@ -83,7 +86,6 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
         return self.credential.certificate.common_name
 
     @classmethod
-    @LoggerMixin.log_exceptions
     def create_new_issuing_ca(
         cls,
         unique_name: str,

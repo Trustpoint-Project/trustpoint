@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.db.models import QuerySet
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core import oid
 from trustpoint_core.serializer import (
@@ -18,7 +17,7 @@ from trustpoint_core.serializer import (
 from util.db import CustomDeleteActionModel
 
 from pki.models import CertificateModel
-from trustpoint.views.base import LoggerMixin
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -26,7 +25,8 @@ if TYPE_CHECKING:
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes
     from django.db.models import QuerySet
-    from trustpoint_core.types import PrivateKey
+    from trustpoint_core.key_types import PrivateKey
+    from util.db import CustomDeleteActionManager
 
 
 __all__ = ['CertificateChainOrderModel', 'CredentialAlreadyExistsError', 'CredentialModel']
@@ -48,6 +48,8 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
 
     PKCS#11 credentials are not yet supported.
     """
+
+    objects: CustomDeleteActionManager[CredentialModel]
 
     class CredentialTypeChoice(models.IntegerChoices):
         """The CredentialTypeChoice defines the type of the credential and thus implicitly restricts its usage.
@@ -141,20 +143,20 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         Returns:
             CredentialModel: The stored credential model.
         """
-        certificate = CertificateModel.save_certificate(normalized_credential_serializer.credential_certificate)
+        certificate = CertificateModel.save_certificate(normalized_credential_serializer.certificate)
         # TODO(AlexHx8472): Verify that the credential is valid in respect to the credential_type!!!
 
         credential_model = cls.objects.create(
             certificate=certificate,
             credential_type=credential_type,
-            private_key=normalized_credential_serializer.credential_private_key.as_pkcs8_pem().decode(),
+            private_key=normalized_credential_serializer.get_private_key_serializer().as_pkcs8_pem().decode(),
         )
 
         PrimaryCredentialCertificate.objects.create(
             certificate=certificate, credential=credential_model, is_primary=True
         )
 
-        for order, certificate in enumerate(normalized_credential_serializer.additional_certificates.as_crypto()):
+        for order, certificate in enumerate(normalized_credential_serializer.additional_certificates):
             certificate_model = CertificateModel.save_certificate(certificate)
             CertificateChainOrderModel.objects.create(
                 certificate=certificate_model, credential=credential_model, order=order
@@ -218,7 +220,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             PrivateKey: The credential private key abstraction.
         """
         if self.private_key:
-            return PrivateKeySerializer(self.private_key).as_crypto()
+            return PrivateKeySerializer.from_pem(self.private_key.encode()).as_crypto()
 
         err_msg = 'Failed to get private key information.'
         raise RuntimeError(err_msg)
@@ -230,7 +232,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             PrivateKey: The credential private key abstraction.
         """
         if self.private_key:
-            return PrivateKeySerializer(self.private_key)
+            return PrivateKeySerializer.from_pem(self.private_key.encode())
 
         err_msg = 'Failed to get private key information.'
         raise RuntimeError(err_msg)
@@ -244,7 +246,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return self.get_certificate_serializer().as_crypto()
 
     def get_certificate_chain(self) -> list[x509.Certificate]:
-        """Gets the credential certificate chain as list of x509.Certificate instances.
+        """Gets the credential certificate chain as a list of x509.Certificate instances.
 
         Returns:
             list[x509.Certificate]: The credential certificate chain as list of x509.Certificate instances.
@@ -252,7 +254,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return self.get_certificate_chain_serializer().as_crypto()
 
     def get_certificate_serializer(self) -> CertificateSerializer:
-        """Gets the credential certificate as CertificateSerializer instance.
+        """Gets the credential certificate as a CertificateSerializer instance.
 
         Returns:
             CertificateSerializer: The credential certificate.
@@ -260,7 +262,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return self.certificate.get_certificate_serializer()
 
     def get_certificate_chain_serializer(self) -> CertificateCollectionSerializer:
-        """Gets the credential certificate chain as CertificateCollectionSerializer instance.
+        """Gets the credential certificate chain as a CertificateCollectionSerializer instance.
 
         Returns:
             CertificateCollectionSerializer: The credential certificate chain.
@@ -268,9 +270,9 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         certificate_chain_order_models = self.certificatechainordermodel_set.order_by('order')
         return CertificateCollectionSerializer(
             [
-                certificate_chain_order_model.certificate.get_certificate_serializer()
+                certificate_chain_order_model.certificate.get_certificate_serializer().as_crypto()
                 for certificate_chain_order_model in certificate_chain_order_models
-            ],
+            ]
         )
 
     def get_root_ca_certificate(self) -> None | x509.Certificate:
@@ -290,11 +292,9 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     def get_credential_serializer(self) -> CredentialSerializer:
         """Gets the serializer for this credential."""
         return CredentialSerializer(
-            (
-                self.get_private_key_serializer(),
-                self.get_certificate_serializer(),
-                self.get_certificate_chain_serializer(),
-            )
+            private_key=self.get_private_key_serializer().as_crypto(),
+            certificate=self.get_certificate_serializer().as_crypto(),
+            additional_certificates=self.get_certificate_chain_serializer().as_crypto()
         )
 
     @property
