@@ -2,7 +2,7 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, language, logging, security
+from .views import IndexView, language, logging, security, network
 
 app_name = 'settings'
 urlpatterns = [
@@ -25,4 +25,6 @@ urlpatterns = [
         name='logging-files-download-multiple',
     ),
     path('security/', security.SecurityView.as_view(), name='security'),
+    path("network/", network.NetworkView.as_view(), name="network"),
+
 ]
