@@ -40,9 +40,11 @@
                 {% trans 'Import TLS-Server Credential From File' %}
             </a>
         </div>
+
         
         <div class="card-body pt-3 pb-4">
-            <a href="{% url 'setup_wizard:restore_backup' %}" class="btn btn-primary d-flex justify-content-center">{% trans 'Restore from backup' %}</a>
+            <hr class="mb-4">
+            <a href="{% url 'setup_wizard:options' %}" class="btn btn-primary d-flex justify-content-center">{% trans 'Options' %}</a>
         </div>
     </div>
 

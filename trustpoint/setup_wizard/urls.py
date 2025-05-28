@@ -3,12 +3,13 @@
 from django.urls import path
 
 from setup_wizard.views import (
+    BackupRestoreView,
     SetupWizardCreateSuperUserView,
     SetupWizardDemoDataView,
     SetupWizardGenerateTlsServerCredentialView,
     SetupWizardImportTlsServerCredentialView,
     SetupWizardInitialView,
-    SetupWizardRestoreView,
+    SetupWizardOptionsView,
     SetupWizardTlsServerCredentialApplyCancelView,
     SetupWizardTlsServerCredentialApplyView,
 )
@@ -27,9 +28,9 @@ urlpatterns = [
         name='import_tls_server_credential',
     ),
     path(
-        'restore-backup/',
-        SetupWizardRestoreView.as_view(),
-        name='restore_backup',
+        'options/',
+        SetupWizardOptionsView.as_view(),
+        name='options',
     ),
     path(
         'tls-server-credential-apply/',
@@ -48,4 +49,5 @@ urlpatterns = [
     ),
     path('demo-data/', SetupWizardDemoDataView.as_view(), name='demo_data'),
     path('create-super-user', SetupWizardCreateSuperUserView.as_view(), name='create_super_user'),
+    path('restore/', BackupRestoreView.as_view(), name='restore'),
 ]

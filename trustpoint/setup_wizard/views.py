@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
@@ -40,6 +42,11 @@ SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY = STATE_FILE_DIR / Path('wizard_tls_se
 SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY_CANCEL = STATE_FILE_DIR / Path('wizard_tls_server_credential_apply_cancel.sh')
 SCRIPT_WIZARD_DEMO_DATA = STATE_FILE_DIR / Path('wizard_demo_data.sh')
 SCRIPT_WIZARD_CREATE_SUPER_USER = STATE_FILE_DIR / Path('wizard_create_super_user.sh')
+SCRIPT_WIZARD_RESTORE = STATE_FILE_DIR / Path('wizard_restore.sh')
+
+
+logger = logging.getLogger(__name__)
+
 
 
 class TrustpointWizardError(Exception):
@@ -170,7 +177,7 @@ class SetupWizardInitialView(TemplateView):
 
 
 
-class SetupWizardRestoreView(TemplateView):
+class SetupWizardOptionsView(TemplateView):
     """View for the restore option during initialization.
 
     Attributes:
@@ -179,7 +186,7 @@ class SetupWizardRestoreView(TemplateView):
     """
 
     http_method_names = ('get',)
-    template_name = 'setup_wizard/restore_backup.html'
+    template_name = 'setup_wizard/options.html'
 
     def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests for the initial setup wizard page.
@@ -196,51 +203,66 @@ class SetupWizardRestoreView(TemplateView):
             HttpResponse: A redirect response to the appropriate setup wizard page
                           or the login page if the setup is not in a Docker container.
         """
-        # if not DOCKER_CONTAINER:
-        #     return redirect('users:login', permanent=False)
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
 
-        # wizard_state = SetupWizardState.get_current_state()
-        # if wizard_state != SetupWizardState.WIZARD_INITIAL:
-        #     return StartupWizardRedirect.redirect_by_state(wizard_state)
-
-        return super().get(*args, **kwargs)
-
-
-
-class SetupWizardRestoreView(TemplateView):
-    """View for the restore option during initialization.
-
-    Attributes:
-        http_method_names (ClassVar[list[str]]): List of HTTP methods allowed for this view.
-        template_name (str): Path to the template used for rendering the initial page.
-    """
-
-    http_method_names = ('get',)
-    template_name = 'setup_wizard/restore_backup.html'
-
-    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle GET requests for the initial setup wizard page.
-
-        This method validates the current state of the setup wizard and redirects
-        the user to the appropriate page. If the application is not running in a
-        Docker container, the user is redirected to the login page.
-
-        Args:
-            *args (Any): Additional positional arguments.
-            **kwargs (Any): Additional keyword arguments.
-
-        Returns:
-            HttpResponse: A redirect response to the appropriate setup wizard page
-                          or the login page if the setup is not in a Docker container.
-        """
-        # if not DOCKER_CONTAINER:
-        #     return redirect('users:login', permanent=False)
-
-        # wizard_state = SetupWizardState.get_current_state()
-        # if wizard_state != SetupWizardState.WIZARD_INITIAL:
-        #     return StartupWizardRedirect.redirect_by_state(wizard_state)
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_INITIAL:
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().get(*args, **kwargs)
+
+
+class BackupRestoreView(View):
+    """Upload a dump file and restore the database from it."""
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        backup_file = request.FILES.get('backup_file')
+        if not backup_file:
+            messages.error(request, 'No file uploaded for restore.')
+            return redirect('setup_wizard:options')
+        if not isinstance(backup_file.name, str):
+            messages.error(request, 'File corrupt, please provide valid name.')
+            return redirect('setup_wizard:options')
+
+        temp_dir = settings.BACKUP_FILE_PATH
+        temp_path = temp_dir / backup_file.name
+        # save upload
+
+        with open(temp_path, 'wb+') as f:
+            for chunk in backup_file.chunks():
+                f.write(chunk)
+
+        try:
+            call_command('dbrestore',  '-z', '--noinput', '-I', str(temp_path))
+            self.recreate_tls()
+            messages.success(request, f'Trustpoint restored from {backup_file.name}')
+        except Exception as e:
+            messages.error(request, 'Error restoring.')
+            msg = f'Exception restoring database: {e}'
+            logger.exception(msg)
+
+        return redirect('users:login')
+
+    def recreate_tls(self) -> None:
+        trustpoint_tls_server_credential_model = CredentialModel.objects.get(
+            credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
+        )
+
+        # For maybe later se if we switch the TrustpointTlsServerCredentialModel to CredentialModel in ActiveTrustpointTlsServerCredentialModel
+        # active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+        # cred: TrustpointTlsServerCredentialModel = active_tls.credential
+
+        private_key_pem = trustpoint_tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
+        certificate_pem = trustpoint_tls_server_credential_model.get_certificate_serializer().as_pem().decode()
+        trust_store_pem = trustpoint_tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
+
+        APACHE_KEY_PATH.write_text(private_key_pem)
+        APACHE_CERT_PATH.write_text(certificate_pem)
+        APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+
+        logger.info('STARTING WIZARD_RESTORE.sh')
+        execute_shell_script(SCRIPT_WIZARD_RESTORE)
 
 
 class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWizardTlsCertificateForm]):

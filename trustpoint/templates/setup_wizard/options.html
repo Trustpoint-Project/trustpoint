@@ -31,9 +31,11 @@
             <h1>{% trans "Trustpoint - Setup Wizard" %}</h1>
         </div>
         <div class="card-body pt-3 pb-4">
-            <h2>{% trans 'Restore from backup' %}</h2>
+            <h2>{% trans 'Options' %}</h2>
             <hr class="mb-4">
-            
+
+            <a href="" class="btn btn-secondary primary d-flex justify-content-center disabled">{% trans 'Trustpoint update' %}</a>
+            <br>
             <a class="btn btn-primary d-flex justify-content-center"
                 data-bs-toggle="modal"
                 data-bs-target="#restoreModal">
@@ -48,9 +50,22 @@
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Close' %}"></button>
                         </div>
                         <div class="modal-body">
-                            {% block additional %}
-                            {% include 'settings/backups/restore.html' %}
-                            {% endblock %}
+                            <form method="post"
+                                action="{% url 'setup_wizard:restore' %}"
+                                enctype="multipart/form-data"
+                                class="d-flex align-items-center">
+                                {% csrf_token %}
+                                <div class="me-2">
+                                    <input type="file"
+                                        name="backup_file"
+                                        accept=".dump,.gz"
+                                        required
+                                        class="form-control"/>
+                                </div>
+                                <button type="submit" class="btn btn-warning">
+                                    {% trans "restore backup" %}
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>

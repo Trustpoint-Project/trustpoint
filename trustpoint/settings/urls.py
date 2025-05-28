@@ -29,5 +29,4 @@ urlpatterns = [
     path('backups/download/<str:filename>/', backup.BackupFileDownloadView.as_view(), name='backup-download'),
     path('backups/download-multiple/<str:archive_format>/', backup.BackupFilesDownloadMultipleView.as_view(), name='backup-download-multiple'),
     path('backups/delete-multiple/', backup.BackupFilesDeleteMultipleView.as_view(), name='backup-delete-multiple'),
-    path('backups/restore/', backup.BackupRestoreView.as_view(), name='backup-restore'),
 ]
