@@ -1,23 +1,80 @@
 {% extends 'trustpoint/base.html' %}
-{% load i18n %}
 {% load crispy_forms_filters %}
+{% load i18n %}
+
 {% block content %}
+
 <div class="card">
     <div class="card-header">
-        <h1>{% trans "Network Configuration" %}</h1>
+        <h1>{% trans "Network Settings" %}</h1>
     </div>
-    <div class="card-body pt-4 pb-4">
-        <form method="POST" class="text-start" enctype="multipart/form-data" id="network_configuration">
-            {% csrf_token %}
-            <fieldset class="form-group tp-form-group">
-                {{ network_config_form|crispy }}
-            </fieldset>
-        </form>
+    <div class="card-body">
+        <div class="tp-card-centered-content">
+            {% if certificate %}
+                <h3>{% trans "Certificate Information" %}</h3>
+                <p><strong>{% trans "Common Name (CN):" %}</strong> {{ certificate.common_name }}</p>
+                <p><strong>{% trans "Issuer:" %}</strong> {{ certificate.issuer_public_bytes }}</p>
+                <p><strong>{% trans "Validity:" %}</strong> {{ certificate.not_valid_before }} - {{ certificate.not_valid_after }}</p>
+                <p>
+                    <strong>{% trans "Critical:" %}</strong> {{ certificate.subject_alternative_name_extension.critical }}
+                </p>
+
+                <h4>{% trans "Subject Alternative Names (SANs)" %}</h4>
+                <ul>
+                    <li>
+                        <strong>{% trans "IP Addresses:" %}</strong>
+                        {% if san_ips %}
+                            <ul>
+                                {% for ip in san_ips %}
+                                    <li>{{ ip }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <em>{% trans "No IP addresses listed in SAN." %}</em>
+                        {% endif %}
+                    </li>
+                    <li>
+                        <strong>{% trans "DNS Names:" %}</strong>
+                        {% if san_dns_names %}
+                            <ul>
+                                {% for dns in san_dns_names %}
+                                    <li>{{ dns }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <em>{% trans "No DNS names listed in SAN." %}</em>
+                        {% endif %}
+                    </li>
+                </ul>
+
+                <div class="mt-4">
+                    <h3>{% trans 'Download TLS Server Certificate' %}</h3>
+                    <a class="btn btn-primary"
+                       href="{% url 'pki:trustpoint-tls-server-download' %}">{% trans "Download Server Certificate" %}</a>
+                </div>
+
+                <hr class="mt-4">
+                <!-- Form for selecting and saving an IPv4 address -->
+                <h3>{% trans "Update Preferred IPv4 address" %}</h3>
+                <form method="post" action="{% url 'settings:network' %}" id="preferred_ipv4_configuration" class="mt-3">
+                    {% csrf_token %}
+                    <div class="form-group">
+                        {{ form.ipv4_address.label_tag }}
+                        {{ form.ipv4_address }}
+                    </div>
+                </form>
+            {% else %}
+                <p>{% trans "No active certificate available to display." %}</p>
+            {% endif %}
+        </div>
     </div>
-    <div class="card-footer text-body-secondary">
-        <button class="btn btn-primary ms-3 float-end" type="submit" form="network_configuration">
-            {% trans "Save" %}
-        </button>
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <button class="btn btn-primary" type="submit" form="preferred_ipv4_configuration">
+                {% trans "Save" %}
+            </button>
+        </div>
     </div>
 </div>
-{% endblock content %}
+
+{% endblock %}
