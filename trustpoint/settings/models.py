@@ -27,3 +27,8 @@ class SecurityConfig(models.Model):
     def __str__(self) -> str:
         """Output as string"""
         return f'{self.security_mode}'
+
+
+class NetworkSettings(models.Model):
+    ipv4_address = models.GenericIPAddressField(protocol="IPv4", null=True, blank=True)
+
