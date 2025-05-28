@@ -21,8 +21,17 @@ RUN apt-get update && \
         apache2-utils \
         gettext \
         apache2-dev \
+        locales \
         postgresql-client && \
     rm -rf /var/lib/apt/lists/*
+
+# Set locale Settings
+RUN sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen && \
+    locale-gen en_US.UTF-8 && \
+    update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+
+ENV LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8
 
 # Sets the current WORKDIR for the following commands
 WORKDIR /var/www/html/trustpoint/
