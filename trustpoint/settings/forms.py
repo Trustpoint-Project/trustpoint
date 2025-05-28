@@ -8,6 +8,8 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Fieldset, Layout
 from django import forms
 from django.utils.translation import gettext_lazy as _
+
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 from settings.models import SecurityConfig
@@ -94,3 +96,19 @@ class SecurityConfigForm(forms.ModelForm):
         if form_value is None:
             return self.instance.auto_gen_pki_key_algorithm if self.instance else AutoGenPkiKeyAlgorithm.RSA2048
         return form_value
+
+
+class IPv4AddressForm(forms.Form):
+    ipv4_address = forms.ChoiceField(
+        label="IPv4 Address",
+        required=True,
+        widget=forms.Select(),
+    )
+
+    def __init__(self, *args, **kwargs):
+        san_ips = kwargs.pop("san_ips", [])
+        super().__init__(*args, **kwargs)
+        self.fields["ipv4_address"].choices = [(ip, ip) for ip in san_ips]
+
+
+
