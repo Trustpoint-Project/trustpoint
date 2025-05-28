@@ -16,7 +16,13 @@ from django.views.generic import ListView, View
 from pki.models.credential import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TrustpointTlsServerCredentialModel
 from setup_wizard import SetupWizardState
-from setup_wizard.views import APACHE_CERT_CHAIN_PATH, APACHE_CERT_PATH, APACHE_KEY_PATH
+from setup_wizard.views import (
+    APACHE_CERT_CHAIN_PATH,
+    APACHE_CERT_PATH,
+    APACHE_KEY_PATH,
+    SCRIPT_WIZARD_RESTORE,
+    execute_shell_script,
+)
 
 from trustpoint.views.base import SortableTableMixin
 
@@ -255,6 +261,7 @@ class BackupRestoreView(View):
         try:
             call_command('dbrestore',  '-z', '--noinput', '-I', str(temp_path))
             self.recreate_tls()
+            self.recreate_apache_config()
             messages.success(request, f'Database restored from {backup_file.name}')
         except Exception as e:
             messages.error(request, 'Error restoring database: Please make sure to upload valid .dump.gz file.')
@@ -280,5 +287,15 @@ class BackupRestoreView(View):
         APACHE_CERT_PATH.write_text(certificate_pem)
         APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
 
-    # def recreate_apache_config() -> None:
-    #     pass
+    def recreate_apache_config(self) -> None:
+        logger.info('STARTING APACHE RESTORE')
+        if SetupWizardState.get_current_state() == SetupWizardState.WIZARD_COMPLETED:
+            logger.info('STARTING APACHE based on WIZZARD')
+            logger.info(SCRIPT_WIZARD_RESTORE)
+            execute_shell_script(SCRIPT_WIZARD_RESTORE)
+            logger.info(SCRIPT_WIZARD_RESTORE)
+            logger.info('FINISHED APACHE RESTORE')
+        else:
+            logger.exception(RuntimeError, 'Trustpoint is not in the correct State for Restoration')
+            msg = f'Current State: {SetupWizardState.get_current_state()}'
+            logger.exception(msg)
