@@ -1,3 +1,6 @@
+@allure.label.epic:Features
+@allure.label.suite:R_102_Certificate_Template_Security
+@allure.label.package:R_102_Certificate_Template_Security
 Feature: Certificate Template Security
   Enforce access control and secure handling for certificate templates.
 

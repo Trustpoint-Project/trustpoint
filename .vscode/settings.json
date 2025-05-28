@@ -6,4 +6,5 @@
     // Interpreter configuration for Windows
     //"python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
     //"ruff.interpreter": ["${workspaceFolder}/.venv/Scripts/python.exe"]
+
 }

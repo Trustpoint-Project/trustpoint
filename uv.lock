@@ -12,6 +12,45 @@ wheels = [
 ]
 
 [[package]]
+name = "allure-behave"
+version = "2.14.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "allure-python-commons" },
+    { name = "behave" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/98/40/70cd8c95edfbdff9acd243df59512805f4dfa21291ae3df259319e7169a8/allure_behave-2.14.2.tar.gz", hash = "sha256:b145a838150cd2cdf6288b1922a855e4c6fb11ad0c950cd0f17146d1ea83adf4", size = 11563, upload-time = "2025-05-06T17:03:58.924Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3c/27/696764b87750dacc92fd8736805e735fbe086a583c3f8afc27cb707784a4/allure_behave-2.14.2-py3-none-any.whl", hash = "sha256:159a54eee88e6117017160a565af18fd1c2c46fa5d0da993aa75e97a47d3d352", size = 8040, upload-time = "2025-05-06T17:03:57.639Z" },
+]
+
+[[package]]
+name = "allure-pytest"
+version = "2.14.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "allure-python-commons" },
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d6/f4/59d3d3ca7cbcdb5efae990072f6b4aafebff524237fa277c14daac8b84f8/allure_pytest-2.14.2.tar.gz", hash = "sha256:d387492178d27805863d95350bdc38b7feca3ed7165841997630fd4073cc9101", size = 17153, upload-time = "2025-05-06T17:04:07.395Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f3/bb/d6b28ee5cced087a171715945e578bd6f2c0a32e6bbbd3578fe701f7ae4c/allure_pytest-2.14.2-py3-none-any.whl", hash = "sha256:18f3baa9ebd1b6148223cfa898bacfc2794bb9446221adac1be71deeb26ed79a", size = 11673, upload-time = "2025-05-06T17:04:06.406Z" },
+]
+
+[[package]]
+name = "allure-python-commons"
+version = "2.14.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "pluggy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d0/79/53fe62ff56fa1f972b9fcbc46d04687786907cecc40b412421c4554d3734/allure_python_commons-2.14.2.tar.gz", hash = "sha256:7acdc4fe3efbe709604895e2393f082b2659d8e5653e77ff6367682e6e4a41bc", size = 15186, upload-time = "2025-05-06T17:03:55.04Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d5/b7/41b4323f65911b216a616087c37a8fd337d2cd92f7b8fa89bc35cb91cd1d/allure_python_commons-2.14.2-py3-none-any.whl", hash = "sha256:ad50385a4c601ec31c86eed773d8ccfdcc687fecbb6535c9768af3bf03b50a19", size = 16191, upload-time = "2025-05-06T17:03:53.564Z" },
+]
+
+[[package]]
 name = "asgiref"
 version = "3.8.1"
 source = { registry = "https://pypi.org/simple" }
@@ -39,6 +78,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/45/1d/f03bcb60c4a3212e15f99a56085d93093a497718adf828d050b9d675da81/asttokens-2.4.1.tar.gz", hash = "sha256:b03869718ba9a6eb027e134bfdf69f38a236d681c83c160d510768af11254ba0", size = 62284, upload-time = "2023-10-26T10:03:05.06Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/45/86/4736ac618d82a20d87d2f92ae19441ebc7ac9e7a581d7e58bbe79233b24a/asttokens-2.4.1-py2.py3-none-any.whl", hash = "sha256:051ed49c3dcae8913ea7cd08e46a606dba30b79993209636c4875bc1d637bc24", size = 27764, upload-time = "2023-10-26T10:03:01.789Z" },
+]
+
+[[package]]
+name = "attrs"
+version = "25.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/b0/1367933a8532ee6ff8d63537de4f1177af4bff9f3e829baf7331f595bb24/attrs-25.3.0.tar.gz", hash = "sha256:75d7cefc7fb576747b2c81b4442d4d4a1ce0900973527c011d1030fd3bf4af1b", size = 812032, upload-time = "2025-03-13T11:10:22.779Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/77/06/bb80f5f86020c4551da315d78b3ab75e8228f89f0162f2c3a819e407941a/attrs-25.3.0-py3-none-any.whl", hash = "sha256:427318ce031701fea540783410126f03899a97ffc6f61596ad581ac2e40e3bc3", size = 63815, upload-time = "2025-03-13T11:10:21.14Z" },
 ]
 
 [[package]]
@@ -368,6 +416,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/87/79/7e7ad8b4bac545c8e608fa8db0bd061977f93035a112be78a7f3ffc6ff66/django_stubs-5.2.0.tar.gz", hash = "sha256:07e25c2d3cbff5be540227ff37719cc89f215dfaaaa5eb038a75b01bbfbb2722", size = 276297, upload-time = "2025-04-26T10:49:04.974Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9a/01/5913ba5514337f3896c7bcbff6075808184dd303cd0fc3ecc289ec7e0c96/django_stubs-5.2.0-py3-none-any.whl", hash = "sha256:cd52da033489afc1357d6245f49e3cc57bf49015877253fb8efc6722ea3d2d2b", size = 481836, upload-time = "2025-04-26T10:49:02.97Z" },
+]
+
+[package.optional-dependencies]
+compatible-mypy = [
+    { name = "mypy" },
 ]
 
 [[package]]
@@ -1154,8 +1207,7 @@ dependencies = [
     { name = "django-crispy-forms" },
     { name = "django-dbbackup" },
     { name = "django-filter" },
-    { name = "django-stubs" },
-    { name = "django-stubs-ext" },
+    { name = "django-stubs", extra = ["compatible-mypy"] },
     { name = "django-taggit" },
     { name = "psycopg" },
     { name = "psycopg-binary" },
@@ -1167,6 +1219,8 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "allure-behave" },
+    { name = "allure-pytest" },
     { name = "beautifulsoup4" },
     { name = "behave" },
     { name = "behave-django" },
@@ -1174,7 +1228,6 @@ dev = [
     { name = "devtools" },
     { name = "django-extensions" },
     { name = "docutils-stubs" },
-    { name = "mypy" },
     { name = "pyopenssl" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -1202,8 +1255,7 @@ requires-dist = [
     { name = "django-crispy-forms", specifier = "~=2.3" },
     { name = "django-dbbackup", specifier = ">=4.2.1" },
     { name = "django-filter", specifier = "~=25.1" },
-    { name = "django-stubs", specifier = ">=5.2.0" },
-    { name = "django-stubs-ext", specifier = ">=5.2.0" },
+    { name = "django-stubs", extras = ["compatible-mypy"], specifier = ">=5.2.0" },
     { name = "django-taggit", specifier = ">=6.1.0,<7" },
     { name = "psycopg", specifier = ">=3.2.6" },
     { name = "psycopg-binary", specifier = ">=3.2.6" },
@@ -1215,6 +1267,8 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "allure-behave", specifier = ">=2.14.2" },
+    { name = "allure-pytest", specifier = ">=2.14.2" },
     { name = "beautifulsoup4", specifier = ">=4.13.4" },
     { name = "behave", specifier = ">=1.2.7.dev6" },
     { name = "behave-django", specifier = ">=1.5.0" },
@@ -1222,7 +1276,6 @@ dev = [
     { name = "devtools", specifier = ">=0.12.2,<0.13" },
     { name = "django-extensions", specifier = ">=4.1" },
     { name = "docutils-stubs", specifier = ">=0.0.22,<0.0.23" },
-    { name = "mypy", specifier = ">=1.15.0" },
     { name = "pyopenssl", specifier = ">=25,<26" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-cov", specifier = ">=6.1.1" },
@@ -1276,11 +1329,11 @@ datetime = [
 
 [[package]]
 name = "types-pyyaml"
-version = "6.0.12.20250402"
+version = "6.0.12.20250516"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/2d/68/609eed7402f87c9874af39d35942744e39646d1ea9011765ec87b01b2a3c/types_pyyaml-6.0.12.20250402.tar.gz", hash = "sha256:d7c13c3e6d335b6af4b0122a01ff1d270aba84ab96d1a1a1063ecba3e13ec075", size = 17282, upload-time = "2025-04-02T02:56:00.235Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/22/59e2aeb48ceeee1f7cd4537db9568df80d62bdb44a7f9e743502ea8aab9c/types_pyyaml-6.0.12.20250516.tar.gz", hash = "sha256:9f21a70216fc0fa1b216a8176db5f9e0af6eb35d2f2932acb87689d03a5bf6ba", size = 17378, upload-time = "2025-05-16T03:08:04.897Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ed/56/1fe61db05685fbb512c07ea9323f06ea727125951f1eb4dff110b3311da3/types_pyyaml-6.0.12.20250402-py3-none-any.whl", hash = "sha256:652348fa9e7a203d4b0d21066dfb00760d3cbd5a15ebb7cf8d33c88a49546681", size = 20329, upload-time = "2025-04-02T02:55:59.382Z" },
+    { url = "https://files.pythonhosted.org/packages/99/5f/e0af6f7f6a260d9af67e1db4f54d732abad514252a7a378a6c4d17dd1036/types_pyyaml-6.0.12.20250516-py3-none-any.whl", hash = "sha256:8478208feaeb53a34cb5d970c56a7cd76b72659442e733e268a94dc72b2d0530", size = 20312, upload-time = "2025-05-16T03:08:04.019Z" },
 ]
 
 [[package]]

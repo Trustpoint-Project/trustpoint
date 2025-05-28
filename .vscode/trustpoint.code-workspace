@@ -10,9 +10,11 @@
         "ruff.importStrategy": "fromEnvironment",
 
         "mypy-type-checker.importStrategy": "fromEnvironment",
+        "mypy.runUsingActiveInterpreter": true,
         
         "ruff.interpreter": ["${workspaceFolder}/.venv/bin/python"],
         "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+        "mypy.dmypyExecutable": "${workspaceFolder}/.venv/bin/dmypy",
 
         "python.terminal.activateEnvironment": true
     }
