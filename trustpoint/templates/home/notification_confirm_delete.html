@@ -1,0 +1,23 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1>{% trans "Delete Notification" %}</h1>
+    </div>
+    <div class="card-body">
+        <p>{% trans "Are you sure you want to delete this notification?" %}</p>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="card-footer d-flex">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'home:dashboard' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
+                    <button type="submit" class="btn btn-danger">{% trans "Delete" %}</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

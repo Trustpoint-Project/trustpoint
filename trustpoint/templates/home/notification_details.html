@@ -59,7 +59,7 @@
                 {% if notification.certificate %}
                     <div class="mb-3">
                         <strong>{% trans "Certificate:" %}</strong>
-                        <a href="/pki/certificates/detail/{{ notification.certificate.id }}/" class="btn-link">
+                        <a href="/pki/certificates/details/{{ notification.certificate.id }}/" class="btn-link">
                             {{ notification.certificate }}
                             <svg class="bi" width="16" height="16" fill="currentColor">
                                 <use xlink:href="{% static 'img/icons.svg' %}#icon-arrow-up-right-square"/>
