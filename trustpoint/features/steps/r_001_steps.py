@@ -21,43 +21,6 @@ def step_device_exists(context: runner.Context, name: str, serial_number: str) -
     assert created, f" Device creation failed"
     assert context.device.common_name == name, f"Device {name} with serial number {serial_number} doesn't exist"
 
-
-@when('the admin navigates to the device list page')
-def step_navigate_device_list(context: runner.Context) -> None:  # noqa: ARG001
-    """The admin user navigates to the device list page.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    context.response = context.authenticated_client.get("/devices/")
-
-
-@then('the system should display the correct details for {name} and {serial_number}')
-def step_display_device_details(context: runner.Context, name: str, serial_number: str) -> None:  # noqa: ARG001
-    """Verifies that the correct device details are displayed.
-
-    Args:
-        context (runner.Context): Behave context.
-        name (str): The name of the device.
-        serial_number (str): The Serial number of the device.
-    """
-    msg = f'STEP: Then the system should display the correct details for {name} and {serial_number}'
-    raise AssertionError(msg)
-
-
-@when('the admin navigates to the "Add Device" page')
-def step_navigate_add_device(context: runner.Context) -> None:  # noqa: ARG001
-    """Navigates to the "Add Device" page.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    #Navigate (GET request) to the Add Device page
-    context.response = context.authenticated_client.get("/devices/add/")
-
-    # Check that page loaded successfully
-    assert context.response.status_code == 200, f"Failed to load Add Device page"
-
 @when('the admin fills in the device details with {name}, {serial_number} and {domain_name}')
 def step_fill_device_details(context: runner.Context, name: str, serial_number: str, domain_name: str) -> None:  # noqa: ARG001
     """Fills in the device creation form.
@@ -84,16 +47,6 @@ def step_fill_device_details(context: runner.Context, name: str, serial_number: 
         'pki_configuration': 'manual_download',
         '_save': 'Save',
     }
-
-@when('the admin submits the form')
-def step_submit_form(context: runner.Context) -> None:  # noqa: ARG001
-    """Submits the device creation form.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    # Submit the form
-    context.response = context.authenticated_client.post('/devices/add/', context.device_add_form_data, follow=True)
 
 @then('the system should display a confirmation page')
 def step_device_list(context: runner.Context) -> None:  # noqa: ARG001
@@ -150,15 +103,6 @@ def step_delete_device(context: runner.Context, name: str) -> None:  # noqa: ARG
     assert context.response.status_code == 200, "Device deletion response"
     assert not DeviceModel.objects.filter(id=context.device.id).exists(), "Device deletion failed"
 
-@then('the system should display a device delete confirmation message')
-def step_device_list(context: runner.Context) -> None:  # noqa: ARG001
-    """Verifies that the new device appears in the device list.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    assert b"Successfully deleted 1 devices." in context.response.content, "Device delete confirmation message doesn't exist"
-
 @then('the device {name} should no longer appear in the device list')
 def step_verify_device_deletion(context: runner.Context, name: str) -> None:  # noqa: ARG001
     """Verifies that the device no longer appears in the list.
@@ -188,5 +132,4 @@ def step_device_list(context: runner.Context) -> None:  # noqa: ARG001
     Args:
         context (runner.Context): Behave context.
     """
-
     assert context.response.status_code == 404,  f"Expected 404 Not Found, but got {context.response.status_code}"

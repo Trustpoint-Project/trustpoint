@@ -14,7 +14,7 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 from cryptography import x509
-from pki.models import IssuingCaModel
+from pki.models import CertificateModel, IssuingCaModel
 
 @given('the admin is on the "pki/issuing-cas" webpage')
 def step_given_admin_on_ca_page(context: runner.Context) -> None:  # noqa: ARG001
@@ -265,7 +265,7 @@ def step_when_cert_chain_file_import(context: runner.Context, cert_chain: str, s
         context (runner.Context): Behave context.
     """
     # Ensure the file path is absolute and exists
-    file_path = os.path.abspath(f"../tests/data/issuing_cas/ee0_{status}{cert_chain}")
+    file_path = os.path.abspath(f"../tests/data/issuing_cas/ee0_cert_chain_{status}{cert_chain}")
     assert os.path.exists(file_path), f"File not found: {file_path}"
     context.cert_chain_path = file_path
 
@@ -285,30 +285,34 @@ def is_ca_cert(cert: any) -> bool:
 
 @given('the issuing CA with the unique name "{name}" has no associated certificates')
 def step_given_ca_no_cert(context: runner.Context, name: str) -> None:  # noqa: ARG001
-    """Verifies new issuing CA is available in the list.
+    """Verifies issuing CA has no associated certificates.
 
     Args:
         context (runner.Context): Behave context.
     """
-    print("issuing ca", context.issuing_ca)
+    ca_subject_public_bytes = context.issuing_ca.credential.certificate.subject_public_bytes
+    queryset = CertificateModel.objects.filter(issuer_public_bytes=ca_subject_public_bytes).exclude (subject_public_bytes=ca_subject_public_bytes)
+    assert not queryset.exists(), f"Issuing CA {name} has associated certificates"
 
 @given('the issuing CA with the unique name "{name}" has no associated domains')
 def step_given_ca_no_domain(context: runner.Context, name: str) -> None:  # noqa: ARG001
-    """Verifies new issuing CA is available in the list.
+    """Verifies issuing CA has no associated domains.
 
     Args:
         context (runner.Context): Behave context.
     """
-    print("issuing ca", context.issuing_ca)
+    print
+    has_domains = context.issuing_ca.domains.exists()
+    assert not has_domains, f"Issuing CA {name} has associated domains."
 
 @when('the admin select the issuing CA with the unique name "{name}"')
 def step_when_admin_select_ca(context: runner.Context, name: str) -> None:  # noqa: ARG001
-    """Verifies new issuing CA is available in the list.
+    """Select the issuing CA.
 
     Args:
         context (runner.Context): Behave context.
     """
-    print("issuing ca", context.issuing_ca)
+    assert name == context.issuing_ca.unique_name, f"Issuing CA {name} does not exist."
 
 
 @when('the admin clicks on Delete Selected')

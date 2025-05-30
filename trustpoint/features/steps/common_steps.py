@@ -90,8 +90,8 @@ def step_confirmation_message(context: runner.Context, confirm_message: str) -> 
         context: the behave context
     """
     html = context.response.content
-    assert confirm_message.encode() in html, \
-       f"Missing error message, {confirm_message}"
+    #print("html", html)
+    assert confirm_message.encode() in html, f"Missing confirmation message, {confirm_message}"
 
 
 @then('the system should display an error message stating {error_message}')
@@ -166,7 +166,38 @@ def step_when_admin_click_button(context: runner.Context, button_name: str) -> N
         context.response = context.authenticated_client.get("/pki/issuing-cas/add/file-import/separate-files")
         # Check that page loaded successfully
         assert context.response.status_code == 200, f"Failed to load issuing Add new Issuing CA using import from separate files"
+    elif button_name == "Add new Domain":
+        context.response = context.authenticated_client.post('/pki/domains/add/', context.domain_add_form_data, follow=True)
+        assert context.response.status_code == 200, f"Failed to add new domain."
+    elif button_name == "Create Device":
+        context.response = context.authenticated_client.post('/devices/add/', context.device_add_form_data, follow=True)
+        assert context.response.status_code == 200, f"Failed to add new device."
     else:
         msg = 'Step not implemented: Verify API response status code.'
         raise AssertionError(msg)
+
+
+@when('the admin navigates to the "{page_name}" page')
+def step_navigate_add_device(context: runner.Context, page_name: str) -> None:  # noqa: ARG001
+    """Navigates to the given page.
+
+    Args:
+        context (runner.Context): Behave context.
+        page_name (str): Page name.
+    """
+    if page_name == "Add Device":
+        context.response = context.authenticated_client.get("/devices/add/")
+    elif page_name == "device list":
+        context.response = context.authenticated_client.get("/devices/")
+    elif page_name == "Add new Domain":
+        context.response = context.authenticated_client.get("/pki/domains/add/")
+    elif page_name == "domain list":
+        context.response = context.authenticated_client.get("/pki/domains/")
+    else:
+        msg = 'Page name is not valid.'
+        raise AssertionError(msg)
+    assert context.response.status_code == 200, f"Failed to load {page_name} page"
+
+        
+    
 

@@ -1,6 +1,6 @@
-Feature: Manage digital devices via TPC_Web
+Feature: Manage devices via TPC_Web
   As an admin user
-  I want to create, view, edit, and delete digital devices
+  I want to create, view, edit, and delete devices
   So that I can manage trusted devices effectively through the web interface.
 
   Background:
@@ -10,7 +10,7 @@ Feature: Manage digital devices via TPC_Web
   Scenario Outline: Add a new device without domain credential onboarding
     When the admin navigates to the "Add Device" page
     And the admin fills in the device details with <name>, <serial_number> and "trustpoint_test"
-    And the admin submits the form
+    And the admin clicks on "Create Device"
     Then the system should display a confirmation page
     And the new device with <name>, <serial_number> and domain name "trustpoint_test" should appear in the device list
 
@@ -21,9 +21,9 @@ Feature: Manage digital devices via TPC_Web
 
   Scenario Outline: Delete an existing device
     Given the device <name> with <serial_number> exists
-    When the admin navigates to the device list page
+    When the admin navigates to the "device list" page
     And the admin deletes the device with the name <name>
-    Then the system should display a device delete confirmation message
+    Then the system should display a confirmation message stating "Successfully deleted"
     And the device <name> should no longer appear in the device list
 
     Examples:
