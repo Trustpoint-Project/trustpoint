@@ -29,6 +29,6 @@ class SecurityConfig(models.Model):
         return f'{self.security_mode}'
 
 
-class NetworkSettings(models.Model):
+class TlsSettings(models.Model):
     ipv4_address = models.GenericIPAddressField(protocol="IPv4", null=True, blank=True)
 
