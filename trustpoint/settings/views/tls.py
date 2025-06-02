@@ -8,31 +8,39 @@ from django import forms
 from pki.models import GeneralNameIpAddress
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from settings.forms import IPv4AddressForm
-from settings.models import NetworkSettings
+from settings.models import TlsSettings
 
 
-class NetworkView(FormView):
+class TlsView(FormView):
     """
     View to display certificate details, including Subject Alternative Name (SAN) and associated IP addresses.
     """
-    template_name = "settings/network.html"
+    template_name = "settings/tls.html"
     form_class = IPv4AddressForm
-    success_url = reverse_lazy('settings:network')
+    success_url = reverse_lazy('settings:tls')
 
     def get_form_kwargs(self):
         """
         Pass additional arguments (e.g., SAN IPs) to the form.
         """
         kwargs = super().get_form_kwargs()
+
+        try:
+            network_settings = TlsSettings.objects.get(id=1)
+            saved_ipv4_address = network_settings.ipv4_address
+        except TlsSettings.DoesNotExist:
+            saved_ipv4_address = None
+
         san_ips = self.get_san_ips()
+
         kwargs["data"] = self.request.POST or None
-        kwargs["initial"] = {"ipv4_address": san_ips[0] if san_ips else ""}
+        kwargs["initial"] = {"ipv4_address": saved_ipv4_address or (san_ips[0] if san_ips else "")}
         kwargs["san_ips"] = san_ips
         return kwargs
 
     def get_context_data(self, **kwargs):
         """
-        Add certificate information, including SAN data, to the context for display.
+        Add certificate information, including SAN data and issuer details, to the context for display.
         """
         context = super().get_context_data(**kwargs)
 
@@ -42,19 +50,36 @@ class NetworkView(FormView):
 
             san_ips = []
             san_dns_names = []
+            issuer_details = {
+                "country": None,
+                "organization": None,
+                "common_name": None,
+            }
 
             if certificate and certificate.subject_alternative_name_extension:
                 san_model = certificate.subject_alternative_name_extension.subject_alt_name
 
                 if san_model:
                     san_ips = [str(ip_entry.value) for ip_entry in san_model.ip_addresses.all()]
-
                     san_dns_names = [dns_entry.value for dns_entry in san_model.dns_names.all()]
+
+            if certificate.issuer.exists():
+                issuer_mapping = {
+                    "2.5.4.6": "country",
+                    "2.5.4.10": "organization",
+                    "2.5.4.3": "common_name",
+                }
+
+                for attribute in certificate.issuer.all():
+                    if attribute.oid in issuer_mapping:
+                        field = issuer_mapping[attribute.oid]
+                        issuer_details[field] = attribute.value
 
             context.update({
                 "certificate": certificate,
                 "san_ips": san_ips,
                 "san_dns_names": san_dns_names,
+                "issuer_details": issuer_details,  # Pass issuer information to the template
             })
 
         except ActiveTrustpointTlsServerCredentialModel.DoesNotExist:
@@ -63,6 +88,7 @@ class NetworkView(FormView):
                 "certificate": None,
                 "san_ips": [],
                 "san_dns_names": [],
+                "issuer_details": None,
             })
 
         return context
@@ -70,7 +96,7 @@ class NetworkView(FormView):
     def form_valid(self, form):
         """Handle valid form submissions."""
         ipv4_address = form.cleaned_data.get("ipv4_address")
-        NetworkSettings.objects.update_or_create(
+        TlsSettings.objects.update_or_create(
             id=1,
             defaults={"ipv4_address": ipv4_address},
         )
