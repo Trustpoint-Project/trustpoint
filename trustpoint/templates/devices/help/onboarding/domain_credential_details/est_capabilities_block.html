@@ -52,43 +52,6 @@
     </ul>
     <h3 class="mt-5">{% trans 'CA Certificate Chain' %}</h3>
     <hr>
-    <ul class="tp-kvp-list">
-        <li>
-            <div>{% trans 'curl Command' %}</div>
-            <div class="copy-container" style="position: relative;">
-                <code class="command-text language-bash">
-                    curl -X GET \<br>
-                    "https://{{ host }}/.well-known/est/{{ device.domain }}/cacerts/" \<br>
-                    --cacert server_cert.pem \<br>
-                    -H "Accept: application/pkcs7-mime" \<br>
-                    | base64 --decode > cacerts.p7b
-                </code>
-                <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
-                        aria-label="Copy to clipboard">
-                    <svg class="icon icon-copy" width="40" height="40" fill="currentColor">
-                        <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
-                    </svg>
-                </button>
-            </div>
-        </li>
-        <li>
-            <div>{% trans 'Convert PKCS7 to PEM' %}</div>
-            <div class="copy-container" style="position: relative;">
-                <code class="command-text language-bash">
-                    openssl pkcs7 \<br>
-                    -print_certs \<br>
-                    -inform DER \<br>
-                    -in cacerts.p7b \<br>
-                    -out cacerts.pem
-                </code>
-                <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
-                        aria-label="Copy to clipboard">
-                    <svg class="icon icon-copy" width="40" height="40" fill="currentColor">
-                        <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
-                    </svg>
-                </button>
-            </div>
-        </li>
-    </ul>
+    {% include 'devices/help/generic_details/est_ca_chain_block.html' %}
 
 {% endblock est_capabilities_block %}

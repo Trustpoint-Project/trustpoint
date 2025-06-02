@@ -1,4 +1,4 @@
-"""Forms definition"""
+"""Forms definition."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 class SecurityConfigForm(forms.ModelForm):
-    """Security configuration model form"""
+    """Security configuration model form."""
 
     FEATURE_TO_FIELDS: dict[type[SecurityFeature], list[str]] = {
         AutoGenPkiFeature: ['auto_gen_pki', 'auto_gen_pki_key_algorithm'],

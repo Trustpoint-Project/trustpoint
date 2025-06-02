@@ -58,7 +58,7 @@ class DomainModel(models.Model):
 
     allow_idevid_registration = models.BooleanField(
         _('Allow IDevID Enrollment'),
-        default=False,
+        default=True,
         help_text=_('Allow registration of a new device using the IDevID of the Device.'),
     )
 

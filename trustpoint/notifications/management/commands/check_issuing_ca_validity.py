@@ -7,7 +7,7 @@ from typing import Any, cast
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from home.models import NotificationModel, NotificationStatus
+from notifications.models import NotificationConfig, NotificationModel, NotificationStatus
 from pki.models import IssuingCaModel
 
 
@@ -36,7 +36,8 @@ class Command(BaseCommand):
 
         Expiring CAs trigger a WARNING notification, while expired CAs trigger a CRITICAL notification.
         """
-        expiring_threshold = timezone.now() + timedelta(days=30)
+        config = NotificationConfig.get()
+        expiring_threshold = timezone.now() + timedelta(days=config.issuing_ca_expiry_warning_days)
         current_time = timezone.now()
 
         expiring_cas = IssuingCaModel.objects.filter(
@@ -51,7 +52,7 @@ class Command(BaseCommand):
         # Handle expiring Issuing CAs
         for ca in expiring_cas:
             self._create_notification(
-                issuing_ca=ca,
+                issuing_ca=cast(IssuingCaModel, ca),
                 event='ISSUING_CA_EXPIRING',
                 notification_type=cast(
                     'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.WARNING
@@ -65,7 +66,7 @@ class Command(BaseCommand):
         # Handle expired Issuing CAs
         for ca in expired_cas:
             self._create_notification(
-                issuing_ca=ca,
+                issuing_ca=cast(IssuingCaModel, ca),
                 event='ISSUING_CA_EXPIRED',
                 notification_type=cast(
                     'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.CRITICAL
