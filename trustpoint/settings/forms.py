@@ -100,15 +100,20 @@ class SecurityConfigForm(forms.ModelForm):
 
 class IPv4AddressForm(forms.Form):
     ipv4_address = forms.ChoiceField(
-        label="IPv4 Address",
-        required=True,
-        widget=forms.Select(),
+        label="Update IPv4 Address"
     )
 
     def __init__(self, *args, **kwargs):
         san_ips = kwargs.pop("san_ips", [])
+        saved_ipv4_address = kwargs.get("initial", {}).get("ipv4_address")
+
+        if saved_ipv4_address and saved_ipv4_address not in san_ips:
+            san_ips.insert(0, saved_ipv4_address)
+
         super().__init__(*args, **kwargs)
+
         self.fields["ipv4_address"].choices = [(ip, ip) for ip in san_ips]
+
 
 
 
