@@ -658,6 +658,18 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         PolicyConstraintsExtension.delete_if_orphaned(self._related_objects['policy_constraints_extension'])
         FreshestCrlExtension.delete_if_orphaned(self._related_objects['freshest_crl_extension'])
 
+    # ---------------------------------------------- Utility ---------------------------------------------
+    def subjects_match(self, other_subject: x509.Name) -> bool:
+        """Check if the provided subject is identical to the one of this certificate.
+
+        Args:
+            other_subject (x509.Name): The subject to compare to.
+
+        Returns:
+            bool: True if the subjects match, False otherwise.
+        """
+        return self.subject_public_bytes == other_subject.public_bytes().hex().upper()
+
 
 class RevokedCertificateModel(models.Model):
     """Model to store revoked certificates."""
