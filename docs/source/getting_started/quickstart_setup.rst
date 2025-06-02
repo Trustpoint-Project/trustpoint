@@ -35,9 +35,10 @@ Step-by-Step Setup (Load from Dockerhub) ⬇️
 
    .. code-block:: bash
 
-       docker run -d --name postgres -v postgres_data:/var/lib/postgresql/data -p 5432:5432 trustpointproject/postgres:latest
-       docker run -d --name trustpoint -p 80:80 -p 443:443 trustpointproject/trustpoint:latest
+       docker run -d --name postgres<version> -v postgres_data<version>:/var/lib/postgresql/data -p 5432:5432 trustpointproject/postgres:latest
+       docker run -d --name trustpoint<version> -p 80:80 -p 443:443 trustpointproject/trustpoint:latest
 
+   ``E.g.: docker run -d --name postgres-v2.0.0 -v postgres-v2.0.0:/var/lib/postgresql/data -p 5432:5432 trustpointproject/postgres:latest``
 
    - **-d**: Runs the container in detached mode.
    - **--name trustpoint**: Names the Trustpoint container `trustpoint`.
@@ -65,36 +66,40 @@ Step-by-Step Setup (Build container) 🔧
 
    This command downloads the Trustpoint source code to your local machine and navigates into the project directory.
 
-2. **Build the Trustpoint and Postgres Docker Images**
+2. **Build the Postgres and Trustpoint Docker Images**
 
-   Use Docker to build the Trustpoint and Postgres images from the source:
+   Use Docker to build the Postgres and Trustpoint images:
 
    .. code-block:: bash
 
-       docker build -t trustpoint .
-       docker build -f postgre.Dockerfile -t postgres .
+       docker build -t trustpointproject/postgres:latest -f docker/db/Dockerfile .
+       docker build -t trustpointproject/trustpoint:latest -f docker/trustpoint/Dockerfile .
 
-   - **-t trustpoint**: Tags the image with the name `trustpoint`.
-   - **-t postgres**: Tags the postgres image with the name `postgres`.
+   - **-t**: Tags the image with the name `trustpoint` / `postgres`.
+   - **-f**: specifies the filepath of the `dockerfile`.`
    - **.**: Specifies the current directory as the build context.
 
 3. **Run the Trustpoint Container with a Custom Name and Port Mappings** 🚀
 
-   Start the Trustpoint container using the image you just built, with a custom name and both port mappings:
+   Start the database and Trustpoint container using the images you just built, with custom names and both port mappings:
 
    .. code-block:: bash
 
-       docker run -d --name postgres -v postgres_data:/var/lib/postgresql/data -p 5432:5432 postgres
-       docker run -d --name trustpoint -p 80:80 -p 443:443 trustpoint
+       docker run -d --name postgres<version> -p5432:5432 -vpostgres_data<version>:/var/lib/postgresql/data -ePOSTGRES_USER=admin -ePOSTGRES_PASSWORD=testing321 -ePOSTGRES_DB=trustpoint_db trustpointproject/postgres:latest
+       docker run -d --name trustpoint<version> --link postgres<version> -p80:80 -p443:443 -ePOSTGRES_DB=trustpoint_db -eDATABASE_USER=admin -eDATABASE_PASSWORD=testing321 -eDATABASE_HOST=postgres<version> -eDATABASE_PORT=5432 trustpointproject/trustpoint:latest
 
+   **E.g.:**
+
+   .. code-block:: bash
+
+       docker run -d --name postgres-v2.0.0 -p5432:5432 -vpostgres_data-v2.0.0:/var/lib/postgresql/data -ePOSTGRES_USER=admin -ePOSTGRES_PASSWORD=testing321 -ePOSTGRES_DB=trustpoint_db trustpointproject/postgres:latest
+       docker run -d --name trustpoint-v2.0.0 --link postgres-v2.0.0 -p80:80 -p443:443 -ePOSTGRES_DB=trustpoint_db -eDATABASE_USER=admin -eDATABASE_PASSWORD=testing321 -eDATABASE_HOST=postgres-v2.0.0 -eDATABASE_PORT=5432 trustpointproject/trustpoint:latest
 
    - **-d**: Runs the container in detached mode.
-   - **--name trustpoint**: Names the Trustpoint container `trustpoint`.
-   - **--name postgres**: Names the postgres container `postgres`.
-   - **-p 80:80**: Maps the Trustpoint container's HTTP port to your local machine's port 80.
-   - **-p 443:443**: Maps the Trustpoint container's HTTPs port to your local machine's port 443.
-   - **-p 5432:5432**: Maps the postgres container's TCP port to your local machine's port 5432.
-   - **-v postgres_data:/var/lib/postgresql/data**: Creates a volume for Postgres to persist data.
+   - **--name**: Names the Trustpoint container `trustpoint` / `postgres`.
+   - **-p**: Maps the container's port to your local machine's port.
+   - **-v**: Creates a volume to persist data.
+   - **-e**: Sets environment variables.
 
 Getting Started with Docker Compose 🐙
 --------------------------------------
@@ -222,6 +227,9 @@ Tips and Troubleshooting 🧰
       docker stop trustpoint-container postgres && docker rm trustpoint-container postgres
       docker compose down -v
 
+      
+ - **-v**: Removes the volume.
+
 
 What to Do Next ➡️
 ------------------
@@ -236,5 +244,3 @@ After setting up and Trustpoint, here are some recommended next steps to explore
 
 3. **Issue your first certificate for an end device** 🛡️:
    To do this, you need an Issuing CA certificate, a domain and a device that you must define in Trustpoint. Therefore follow the steps described in :ref:`quickstart-operation-guide`
-
-

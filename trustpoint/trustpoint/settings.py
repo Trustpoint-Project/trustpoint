@@ -85,7 +85,7 @@ def is_postgre_available() -> bool:
     port = int(os.environ.get('DATABASE_PORT', DATABASE_PORT))
     user = os.environ.get('DATABASE_USER', DATABASE_USER)
     password = os.environ.get('DATABASE_PASSWORD', DATABASE_PASSWORD)
-    db_name = os.environ.get('DATABASE_NAME', DATABASE_NAME)
+    db_name = os.environ.get('POSTGRES_DB', POSTGRES_DB)
 
     try:
         print(f'Trying to connect to {host}:{port}...')
@@ -144,7 +144,7 @@ POSTGRESQL = True
 DATABASE_ENGINE = 'django.db.backends.postgresql'
 DATABASE_HOST = 'localhost'
 DATABASE_PORT = '5432'
-DATABASE_NAME = 'trustpoint_db'
+POSTGRES_DB = 'trustpoint_db'
 DATABASE_USER = 'admin'
 DATABASE_PASSWORD = 'testing321'  # noqa: S105
 
@@ -258,8 +258,8 @@ AUTH_PASSWORD_VALIDATORS = [
 if is_postgre_available():
     DATABASES = {
         'default': {
-            'ENGINE': os.environ.get('DATABASE_ENGINE', DATABASE_ENGINE),
-            'NAME': os.environ.get('DATABASE_NAME', DATABASE_NAME),
+            'ENGINE': DATABASE_ENGINE,
+            'NAME': os.environ.get('POSTGRES_DB', POSTGRES_DB),
             'USER': os.environ.get('DATABASE_USER', DATABASE_USER),
             'PASSWORD': os.environ.get('DATABASE_PASSWORD', DATABASE_PASSWORD),
             'HOST': os.environ.get('DATABASE_HOST', DATABASE_HOST),

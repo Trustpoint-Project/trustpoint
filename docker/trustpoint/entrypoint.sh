@@ -5,14 +5,12 @@ run_as_www_data() {
   su -s /bin/bash www-data -c "$1"
 }
 
-# Wait for the database to be ready (only for PostgreSQL)
-if [ "$DATABASE_ENGINE" == "django.db.backends.postgresql" ]; then
-  echo "Waiting for PostgreSQL database..."
-  while ! (echo > /dev/tcp/"$DATABASE_HOST"/"$DATABASE_PORT") &>/dev/null; do
-    sleep 1
-  done
-  echo "PostgreSQL database is available!"
-fi
+# Wait for the database to be ready
+echo "Waiting for PostgreSQL database..."
+until pg_isready -h "$DATABASE_HOST" -p "$DATABASE_PORT" &>/dev/null; do
+  sleep 1
+done
+echo "PostgreSQL database is available!"
 
 # Reset the database if the RESET_DB file exists
 RESET_DB_FILE="/etc/trustpoint/RESET_DB"
