@@ -1,4 +1,4 @@
-"""Routing configuration"""
+"""URL configuration for the settings application."""
 
 from django.urls import path, re_path
 
@@ -25,6 +25,6 @@ urlpatterns = [
         name='logging-files-download-multiple',
     ),
     path('security/', security.SecurityView.as_view(), name='security'),
-    path("tls/", tls.TlsView.as_view(), name="tls"),
+    path('tls/', tls.TlsView.as_view(), name='tls'),
 
 ]
