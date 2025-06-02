@@ -1,3 +1,6 @@
+@allure.label.epic:Features
+@allure.label.suite:R_007_Logging_capabilities
+@allure.label.package:R_007_Logging_capabilities
 Feature: Logging Capabilities
   The system must provide detailed and configurable logging for system events and actions.
 
