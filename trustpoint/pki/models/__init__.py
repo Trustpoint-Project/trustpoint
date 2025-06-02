@@ -36,4 +36,5 @@ __all__ = [
     'RevokedCertificateModel',
     'TruststoreModel',
     'TruststoreOrderModel',
+    'GeneralNameIpAddress',
 ]
