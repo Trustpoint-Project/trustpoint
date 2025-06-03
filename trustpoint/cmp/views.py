@@ -245,7 +245,7 @@ class CmpInitializationRequestView(
             err_msg = 'pvno fail'
             raise ValueError(err_msg)
 
-        protection_algorithm = AlgorithmIdentifier(
+        protection_algorithm = AlgorithmIdentifier.from_dotted_string(
             self.serialized_pyasn1_message['header']['protectionAlg']['algorithm'].prettyPrint()
         )
         if protection_algorithm == AlgorithmIdentifier.PASSWORD_BASED_MAC:
@@ -360,7 +360,7 @@ class CmpInitializationRequestView(
 
                 salt = decoded_pbm['salt'].asOctets()
                 try:
-                    owf = HashAlgorithm(decoded_pbm['owf']['algorithm'].prettyPrint())
+                    owf = HashAlgorithm.from_dotted_string(decoded_pbm['owf']['algorithm'].prettyPrint())
                 except Exception as exception:
                     err_msg = 'owf algorithm not supported.'
                     raise ValueError(err_msg) from exception
@@ -381,7 +381,7 @@ class CmpInitializationRequestView(
 
                 hmac_algorithm_oid = decoded_pbm['mac']['algorithm'].prettyPrint()
                 try:
-                    hmac_algorithm = HmacAlgorithm(hmac_algorithm_oid)
+                    hmac_algorithm = HmacAlgorithm.from_dotted_string(hmac_algorithm_oid)
                 except Exception as exception:
                     err_msg = 'hmac algorithm not supported.'
                     raise ValueError(err_msg) from exception
@@ -652,7 +652,7 @@ class CmpInitializationRequestView(
 
                 salt = decoded_pbm['salt'].asOctets()
                 try:
-                    owf = HashAlgorithm(decoded_pbm['owf']['algorithm'].prettyPrint())
+                    owf = HashAlgorithm.from_dotted_string(decoded_pbm['owf']['algorithm'].prettyPrint())
                 except Exception as exception:
                     err_msg = 'owf algorithm not supported.'
                     raise ValueError(err_msg) from exception
@@ -672,7 +672,7 @@ class CmpInitializationRequestView(
 
                 hmac_algorithm_oid = decoded_pbm['mac']['algorithm'].prettyPrint()
                 try:
-                    hmac_algorithm = HmacAlgorithm(hmac_algorithm_oid)
+                    hmac_algorithm = HmacAlgorithm.from_dotted_string(hmac_algorithm_oid)
                 except Exception as exception:
                     err_msg = 'hmac algorithm not supported.'
                     raise ValueError(err_msg) from exception
@@ -1184,7 +1184,7 @@ class CmpCertificationRequestView(
             err_msg = 'pvno fail'
             raise ValueError(err_msg)
 
-        protection_algorithm = AlgorithmIdentifier(
+        protection_algorithm = AlgorithmIdentifier.from_dotted_string(
             self.serialized_pyasn1_message['header']['protectionAlg']['algorithm'].prettyPrint()
         )
         if protection_algorithm == AlgorithmIdentifier.PASSWORD_BASED_MAC:
@@ -1301,7 +1301,7 @@ class CmpCertificationRequestView(
 
             salt = decoded_pbm['salt'].asOctets()
             try:
-                owf = HashAlgorithm(decoded_pbm['owf']['algorithm'].prettyPrint())
+                owf = HashAlgorithm.from_dotted_string(decoded_pbm['owf']['algorithm'].prettyPrint())
             except Exception as exception:
                 err_msg = 'owf algorithm not supported.'
                 raise ValueError(err_msg) from exception
@@ -1322,7 +1322,7 @@ class CmpCertificationRequestView(
 
             hmac_algorithm_oid = decoded_pbm['mac']['algorithm'].prettyPrint()
             try:
-                hmac_algorithm = HmacAlgorithm(hmac_algorithm_oid)
+                hmac_algorithm = HmacAlgorithm.from_dotted_string(hmac_algorithm_oid)
             except Exception as exception:
                 err_msg = 'hmac algorithm not supported.'
                 raise ValueError(err_msg) from exception
