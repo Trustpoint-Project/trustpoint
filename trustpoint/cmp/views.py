@@ -7,7 +7,7 @@ import enum
 import ipaddress
 import re
 import secrets
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast, get_args
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -32,13 +32,15 @@ from pki.models.domain import DomainModel
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
+from trustpoint_core.key_types import PublicKey
 from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
 
 from cmp.util import NameParser
 
 if TYPE_CHECKING:
-    from typing import Any
+    from typing import Any, TypeGuard
 
+    from cryptography.hazmat.primitives.asymmetric.types import PublicKeyTypes
     from django.http import HttpRequest
 
 
@@ -49,6 +51,45 @@ DEFAULT_VALIDITY_DAYS = 10
 CMP_MESSAGE_VERSION = 2
 SENDER_NONCE_LENGTH = 16
 TRANSACTION_ID_LENGTH = 16
+
+
+def is_supported_public_key(public_key: PublicKeyTypes) -> TypeGuard[PublicKey]:
+    """TypeGuard function that narrows down the public key type.
+
+    Args:
+        public_key: The loaded public key to check if it is supported.
+
+    Returns:
+        True if it is supported, False otherwise.
+    """
+    return isinstance(public_key, get_args(PublicKey))
+
+
+def load_supported_public_key_type(der_bytes: bytes) -> PublicKey:
+    """Tries to load the public key from bytes and checks if it is a supported key.
+
+    Args:
+        der_bytes: The bytes containing the key.
+
+    Raises:
+        ValueError: If loading of the public key failed.
+        TypeError: If the loaded public key is of an unsupported type.
+
+    Returns:
+        The loaded public key.
+    """
+    try:
+        loaded_key = load_der_public_key(der_bytes)
+
+    except Exception as exception:
+        err_msg = 'Failed to load private key.'
+        raise ValueError(err_msg) from exception
+
+    if not is_supported_public_key(loaded_key):
+        err_msg = f'Key of type {type(loaded_key)} found, but expected one of {PublicKey}.'
+        raise TypeError(err_msg)
+
+    return loaded_key
 
 
 class ApplicationCertificateTemplateNames(enum.Enum):
@@ -310,7 +351,7 @@ class CmpInitializationRequestView(
                 spki = rfc2511.SubjectPublicKeyInfo()
                 spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
                 spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
-                loaded_public_key = load_der_public_key(encoder.encode(spki))
+                loaded_public_key = load_supported_public_key_type(encoder.encode(spki))
 
                 # TODO(AlexHx8472): verify popo / process popo: popo = ir_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
@@ -361,7 +402,8 @@ class CmpInitializationRequestView(
                     raise ValueError(err_msg) from exception
 
                 # Checks regarding contained public key and corresponding signature suite of the issuing CA
-                issuing_ca_certificate = self.requested_domain.issuing_ca.credential.get_certificate()
+                issuing_ca = self.requested_domain.get_issuing_ca_or_value_error()
+                issuing_ca_certificate = issuing_ca.credential.get_certificate()
                 signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
                 if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
                     err_msg = 'Contained public key type does not match the signature suite.'
@@ -422,7 +464,7 @@ class CmpInitializationRequestView(
 
                 ip_header['pvno'] = CMP_MESSAGE_VERSION
 
-                issuing_ca_cert = self.requested_domain.issuing_ca.credential.get_certificate()
+                issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
                 raw_issuing_ca_subject = issuing_ca_cert.subject.public_bytes()
                 name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
                 sender = rfc2459.GeneralName()
@@ -455,8 +497,8 @@ class CmpInitializationRequestView(
                 ip_extra_certs = univ.SequenceOf()
 
                 certificate_chain = [
-                    self.requested_domain.issuing_ca.credential.get_certificate(),
-                    *self.requested_domain.issuing_ca.credential.get_certificate_chain(),
+                    self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate(),
+                    *self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate_chain(),
                 ]
                 for certificate in certificate_chain:
                     der_bytes = certificate.public_bytes(encoding=Encoding.DER)
@@ -601,7 +643,7 @@ class CmpInitializationRequestView(
                 spki = rfc2511.SubjectPublicKeyInfo()
                 spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
                 spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
-                loaded_public_key = load_der_public_key(encoder.encode(spki))
+                loaded_public_key = load_supported_public_key_type(encoder.encode(spki))
 
                 # TODO(AlexHx8472): verify popo / process popo: popo = ir_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
@@ -651,7 +693,8 @@ class CmpInitializationRequestView(
                     raise ValueError(err_msg) from exception
 
                 # Checks regarding contained public key and corresponding signature suite of the issuing CA
-                issuing_ca_certificate = self.requested_domain.issuing_ca.credential.get_certificate()
+                issuing_ca = self.requested_domain.get_issuing_ca_or_value_error()
+                issuing_ca_certificate = issuing_ca.credential.get_certificate()
                 signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
                 if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
                     err_msg = 'Contained public key type does not match the signature suite.'
@@ -666,7 +709,7 @@ class CmpInitializationRequestView(
 
                 ip_header['pvno'] = CMP_MESSAGE_VERSION
 
-                issuing_ca_cert = self.requested_domain.issuing_ca.credential.get_certificate()
+                issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
                 raw_issuing_ca_subject = issuing_ca_cert.subject.public_bytes()
                 name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
                 sender = rfc2459.GeneralName()
@@ -699,8 +742,8 @@ class CmpInitializationRequestView(
                 ip_extra_certs = univ.SequenceOf()
 
                 certificate_chain = [
-                    self.requested_domain.issuing_ca.credential.get_certificate(),
-                    *self.requested_domain.issuing_ca.credential.get_certificate_chain(),
+                    self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate(),
+                    *self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate_chain(),
                 ]
                 for certificate in certificate_chain:
                     der_bytes = certificate.public_bytes(encoding=Encoding.DER)
@@ -791,7 +834,9 @@ class CmpInitializationRequestView(
                 err_msg = 'CMP signer certificate missing in extra certs.'
                 raise ValueError(err_msg)
 
-            device_serial_number = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
+            raw_device_serial = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
+            device_serial_number = raw_device_serial.decode() \
+                if isinstance(raw_device_serial, bytes) else raw_device_serial
 
             device_candidates = DeviceModel.objects.filter(
                 serial_number=device_serial_number, domain=self.requested_domain
@@ -943,7 +988,7 @@ class CmpInitializationRequestView(
             spki = rfc2511.SubjectPublicKeyInfo()
             spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
             spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
-            loaded_public_key = load_der_public_key(encoder.encode(spki))
+            loaded_public_key = load_supported_public_key_type(encoder.encode(spki))
 
             # TODO(AlexHx8472): verify popo / process popo: popo = ir_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
@@ -954,29 +999,34 @@ class CmpInitializationRequestView(
             encoded_protected_part = encoder.encode(protected_part)
             signature_suite = SignatureSuite.from_certificate(cmp_signer_cert)
 
+            hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
+            if hash_algorithm is None:
+                err_msg = 'Failed to get the corresponding hash algorithm.'
+                raise ValueError(err_msg)
+
             public_key = cmp_signer_cert.public_key()
             if isinstance(public_key, rsa.RSAPublicKey):
                 public_key.verify(
                     signature=protection_value,
                     data=encoded_protected_part,
                     padding=padding.PKCS1v15(),
-                    algorithm=signature_suite.algorithm_identifier.hash_algorithm.hash_algorithm(),
+                    algorithm=hash_algorithm.hash_algorithm(),
                 )
             elif isinstance(public_key, ec.EllipticCurvePublicKey):
                 public_key.verify(
                     signature=protection_value,
                     data=encoded_protected_part,
-                    signature_algorithm=ec.ECDSA(signature_suite.algorithm_identifier.hash_algorithm.hash_algorithm()),
+                    signature_algorithm=ec.ECDSA(hash_algorithm.hash_algorithm()),
                 )
 
             # Checks regarding contained public key and corresponding signature suite of the issuing CA
-            issuing_ca_certificate = self.requested_domain.issuing_ca.credential.get_certificate()
+            issuing_ca_certificate = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
             signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
             if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
                 err_msg = 'Contained public key type does not match the signature suite.'
                 raise ValueError(err_msg)
 
-            issuer_domain_credential = LocalDomainCredentialIssuer(device=self.device, domain=self.device.domain)
+            issuer_domain_credential = LocalDomainCredentialIssuer(device=self.device, domain=self.requested_domain)
             issued_domain_credential = issuer_domain_credential.issue_domain_credential_certificate(
                 public_key=loaded_public_key
             )
@@ -985,7 +1035,7 @@ class CmpInitializationRequestView(
 
             ip_header['pvno'] = CMP_MESSAGE_VERSION
 
-            issuing_ca_cert = self.requested_domain.issuing_ca.credential.get_certificate()
+            issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
             raw_issuing_ca_subject = issuing_ca_cert.subject.public_bytes()
             name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
             sender = rfc2459.GeneralName()
@@ -1021,8 +1071,8 @@ class CmpInitializationRequestView(
             ip_extra_certs = univ.SequenceOf()
 
             certificate_chain = [
-                self.requested_domain.issuing_ca.credential.get_certificate(),
-                *self.requested_domain.issuing_ca.credential.get_certificate_chain(),
+                self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate(),
+                *self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate_chain(),
             ]
             for certificate in certificate_chain:
                 der_bytes = certificate.public_bytes(encoding=Encoding.DER)
@@ -1075,20 +1125,23 @@ class CmpInitializationRequestView(
             encoded_protected_part = encoder.encode(protected_part)
             signature_suite = SignatureSuite.from_certificate(cmp_signer_cert)
             private_key = load_pem_private_key(
-                self.device.domain.issuing_ca.credential.private_key.encode(), password=None
+                self.requested_domain.get_issuing_ca_or_value_error().credential.private_key.encode(), password=None
             )
-            # TODO(AlexHx8472): Algo support    # noqa: FIX002
+            hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
+            if hash_algorithm is None:
+                err_msg = 'Failed to get the corresponding hash algorithm.'
+                raise ValueError(err_msg)
 
             if isinstance(private_key, rsa.RSAPrivateKey):
                 signature = private_key.sign(
                     encoded_protected_part,
                     padding.PKCS1v15(),
-                    signature_suite.algorithm_identifier.hash_algorithm.hash_algorithm(),
+                    hash_algorithm.hash_algorithm(),
                 )
             elif isinstance(private_key, ec.EllipticCurvePrivateKey):
                 signature = private_key.sign(
                     encoded_protected_part,
-                    ec.ECDSA(signature_suite.algorithm_identifier.hash_algorithm.hash_algorithm()),
+                    ec.ECDSA(hash_algorithm.hash_algorithm()),
                 )
             else:
                 raise TypeError
@@ -1238,7 +1291,7 @@ class CmpCertificationRequestView(
             spki = rfc2511.SubjectPublicKeyInfo()
             spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
             spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
-            loaded_public_key = load_der_public_key(encoder.encode(spki))
+            loaded_public_key = load_supported_public_key_type(encoder.encode(spki))
 
             # TODO(AlexHx8472): verify popo / process popo: popo = cr_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
@@ -1289,7 +1342,7 @@ class CmpCertificationRequestView(
                 raise ValueError(err_msg) from exception
 
             # Checks regarding contained public key and corresponding signature suite of the issuing CA
-            issuing_ca_certificate = self.requested_domain.issuing_ca.credential.get_certificate()
+            issuing_ca_certificate = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
             signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
             if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
                 err_msg = 'Contained public key type does not match the signature suite.'
@@ -1448,7 +1501,7 @@ class CmpCertificationRequestView(
 
             cp_header['pvno'] = CMP_MESSAGE_VERSION
 
-            issuing_ca_cert = self.requested_domain.issuing_ca.credential.get_certificate()
+            issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
             raw_issuing_ca_subject = issuing_ca_cert.subject.public_bytes()
             name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
             sender = rfc2459.GeneralName()
@@ -1481,8 +1534,8 @@ class CmpCertificationRequestView(
             cp_extra_certs = univ.SequenceOf()
 
             certificate_chain = [
-                self.requested_domain.issuing_ca.credential.get_certificate(),
-                *self.requested_domain.issuing_ca.credential.get_certificate_chain(),
+                self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate(),
+                *self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate_chain(),
             ]
             for certificate in certificate_chain:
                 der_bytes = certificate.public_bytes(encoding=Encoding.DER)
@@ -1586,11 +1639,15 @@ class CmpCertificationRequestView(
                 err_msg = 'SN mismatch'
                 raise ValueError(err_msg)
 
+            if not self.device.domain:
+                err_msg = 'The device is not part of any domain.'
+                raise ValueError(err_msg)
+
             if domain_name != self.device.domain.unique_name:
                 err_msg = 'Domain mismatch.'
                 raise ValueError(err_msg)
 
-            issuing_ca_certificate = self.device.domain.issuing_ca.credential.get_certificate()
+            issuing_ca_certificate = self.device.domain.get_issuing_ca_or_value_error().credential.get_certificate()
 
             # verifies the domain credential signature
             cmp_signer_cert.verify_directly_issued_by(issuing_ca_certificate)
@@ -1677,7 +1734,7 @@ class CmpCertificationRequestView(
             spki = rfc2511.SubjectPublicKeyInfo()
             spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
             spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
-            loaded_public_key = load_der_public_key(encoder.encode(spki))
+            loaded_public_key = load_supported_public_key_type(encoder.encode(spki))
 
             # TODO(AlexHx8472): verify popo / process popo: popo = cr_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
@@ -1688,23 +1745,28 @@ class CmpCertificationRequestView(
             encoded_protected_part = encoder.encode(protected_part)
             signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
 
+            hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
+            if hash_algorithm is None:
+                err_msg = 'Failed to get the corresponding hash algorithm.'
+                raise ValueError(err_msg)
+
             public_key = cmp_signer_cert.public_key()
             if isinstance(public_key, rsa.RSAPublicKey):
                 public_key.verify(
                     signature=protection_value,
                     data=encoded_protected_part,
                     padding=padding.PKCS1v15(),
-                    algorithm=signature_suite.algorithm_identifier.hash_algorithm.hash_algorithm(),
+                    algorithm=hash_algorithm.hash_algorithm(),
                 )
             elif isinstance(public_key, ec.EllipticCurvePublicKey):
                 public_key.verify(
                     signature=protection_value,
                     data=encoded_protected_part,
-                    signature_algorithm=ec.ECDSA(signature_suite.algorithm_identifier.hash_algorithm.hash_algorithm()),
+                    signature_algorithm=ec.ECDSA(hash_algorithm.hash_algorithm()),
                 )
 
             # Checks regarding contained public key and corresponding signature suite of the issuing CA
-            issuing_ca_certificate = self.requested_domain.issuing_ca.credential.get_certificate()
+            issuing_ca_certificate = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
             signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
             if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
                 err_msg = 'Contained public key type does not match the signature suite.'
@@ -1861,7 +1923,7 @@ class CmpCertificationRequestView(
 
             cp_header['pvno'] = CMP_MESSAGE_VERSION
 
-            issuing_ca_cert = self.requested_domain.issuing_ca.credential.get_certificate()
+            issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
             raw_issuing_ca_subject = issuing_ca_cert.subject.public_bytes()
             name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
             sender = rfc2459.GeneralName()
@@ -1897,8 +1959,8 @@ class CmpCertificationRequestView(
             cp_extra_certs = univ.SequenceOf()
 
             certificate_chain = [
-                self.requested_domain.issuing_ca.credential.get_certificate(),
-                *self.requested_domain.issuing_ca.credential.get_certificate_chain(),
+                self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate(),
+                *self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate_chain(),
             ]
             for certificate in certificate_chain:
                 der_bytes = certificate.public_bytes(encoding=Encoding.DER)
@@ -1951,20 +2013,23 @@ class CmpCertificationRequestView(
             encoded_protected_part = encoder.encode(protected_part)
 
             private_key = load_pem_private_key(
-                self.device.domain.issuing_ca.credential.private_key.encode(), password=None
+                self.device.domain.get_issuing_ca_or_value_error().credential.private_key.encode(), password=None
             )
-            # TODO(AlexHx8472): Algo support    # noqa: FIX002
+            hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
+            if hash_algorithm is None:
+                err_msg = 'Failed to get the corresponding hash algorithm.'
+                raise ValueError(err_msg)
 
             if isinstance(private_key, rsa.RSAPrivateKey):
                 signature = private_key.sign(
                     encoded_protected_part,
                     padding.PKCS1v15(),
-                    signature_suite.algorithm_identifier.hash_algorithm.hash_algorithm(),
+                    hash_algorithm.hash_algorithm(),
                 )
             elif isinstance(private_key, ec.EllipticCurvePrivateKey):
                 signature = private_key.sign(
                     encoded_protected_part,
-                    ec.ECDSA(signature_suite.algorithm_identifier.hash_algorithm.hash_algorithm()),
+                    ec.ECDSA(hash_algorithm.hash_algorithm()),
                 )
             else:
                 raise TypeError
