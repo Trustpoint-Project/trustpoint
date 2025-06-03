@@ -29,6 +29,7 @@ jobs:
           mkdir -p reports
           uv run pytest \
           --md-report-flavor github \
+          --md-report-color never \
           --html=reports/pytest-report.html \
           --junitxml=reports/junit-report.xml \
           trustpoint/ 
