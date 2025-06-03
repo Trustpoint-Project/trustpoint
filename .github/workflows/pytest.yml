@@ -28,7 +28,7 @@ jobs:
         run: |
           mkdir -p reports
           uv run pytest \
-          --md-report-flavor gfm \
+          --md-report-flavor github \
           --html=reports/pytest-report.html \
           --junitxml=reports/junit-report.xml \
           trustpoint/ 
