@@ -51,15 +51,15 @@ urlpatterns = [
     ),
     # Certificate Lifecycle Management - Help Pages
     path(
-        'help/dispatchDomain/<int:pk>/', views.HelpDispatchDomainCredentialView.as_view(), name='help_dispatch_domain'
+        'help/dispatch-domain/<int:pk>/', views.HelpDispatchDomainCredentialView.as_view(), name='help_dispatch_domain'
     ),
     path(
-        'help/dispatchApplication/<int:pk>/',
+        'help/dispatch-application/<int:pk>/',
         views.HelpDispatchApplicationCredentialView.as_view(),
         name='help_dispatch_application',
     ),
     path(
-        'help/dispatchApplication/<int:pk>/<str:certificate_template>/',
+        'help/dispatch-application/<int:pk>/<str:certificate_template>/',
         views.HelpDispatchApplicationCredentialTemplateView.as_view(),
         name='help_dispatch_application_template',
     ),
