@@ -315,7 +315,8 @@ class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
             validity_days,
             [
                 (x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False),
-                # TODO(Air): This is a workaround for cryptography < 45.0.0 requiring a SAN to verify the (IDevID) cert.
+                # TODO(Air): This is a workaround for cryptography < 45.0.0 requiring # noqa: FIX002
+                #  a SAN to verify the (IDevID) cert.
                 (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(san_uri)]), False),
             ],
         )
@@ -354,7 +355,8 @@ class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
             validity_days,
             [
                 (x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False),
-                # TODO (Air): This is a workaround for cryptography < 45.0.0 requiring a SAN to verify the certificate.
+                # TODO (Air): This is a workaround for cryptography < 45.0.0 requiring # noqa: FIX002
+                #  a SAN to verify the certificate.
                 (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(san_uri)]), False),
             ],
         )
