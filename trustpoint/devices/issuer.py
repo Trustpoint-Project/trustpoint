@@ -609,13 +609,14 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
         raise ValueError(err_msg)
 
     def _validate_application_uri(self, application_uri: str | list[str]) -> None:
-        """Validates the Uniform resource identifier according to OPC UA specification"""
-
+        """Validates the Uniform resource identifier according to OPC UA specification."""
         if isinstance(application_uri, list) and len(application_uri) == 0:
-            raise ValueError('Application URI cannot be empty')
+            error_message = 'Application URI cannot be empty'
+            raise ValueError(error_message)
 
         if isinstance(application_uri, list) and len(application_uri) > 1:
-            raise ValueError('Application URI cannot be longer than 1 item')
+            errror_message = 'Application URI cannot be longer than 1 item'
+            raise ValueError(errror_message)
 
     def issue_opcua_server_credential(  # noqa: PLR0913
         self,
@@ -627,7 +628,6 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
         validity_days: int = 365,
     ) -> IssuedCredentialModel:
         """Issues an OPC UA server credential (certificate + private key) following OPC UA security standards."""
-
         self._validate_application_uri(application_uri)
 
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
@@ -752,19 +752,20 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
         raise ValueError(err_msg)
 
     def _validate_application_uri(self, application_uri: str | list[str]) -> None:
-        """Validates the Uniform resource identifier according to OPC UA specification"""
-
+        """Validates the Uniform resource identifier according to OPC UA specification."""
         if isinstance(application_uri, list) and len(application_uri) == 0:
-            raise ValueError('Application URI cannot be empty')
+            error_message = 'Application URI cannot be empty'
+            raise ValueError(error_message)
 
         if isinstance(application_uri, list) and len(application_uri) > 1:
-            raise ValueError('Application URI cannot be longer than 1 item')
+            error_message = 'Application URI cannot be longer than 1 item'
+            raise ValueError(error_message)
+
 
     def issue_opcua_client_credential(
-        self, common_name: str, application_uri: str | list[str], validity_days: int = 365
-    ) -> IssuedCredentialModel:
+            self, common_name: str, application_uri: str | list[str], validity_days: int = 365
+        ) -> IssuedCredentialModel:
         """Issues an OPC UA client credential (certificate + private key) following OPC UA security standards."""
-
         self._validate_application_uri(application_uri)
         if isinstance(application_uri, list):
             application_uri = application_uri[0]
@@ -804,7 +805,6 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
         self, common_name: str, application_uri: str | list[str], validity_days: int, public_key: oid.PublicKey
     ) -> IssuedCredentialModel:
         """Issues an OPC UA client certificate (no private key) following OPC UA security standards."""
-
         self._validate_application_uri(application_uri)
         if isinstance(application_uri, list):
             application_uri = application_uri[0]
