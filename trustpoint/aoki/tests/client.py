@@ -14,7 +14,7 @@ import urllib3
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
-from cryptography.x509.verification import ExtensionPolicy, PolicyBuilder, Store, VerificationError
+from cryptography.x509.verification import Criticality, ExtensionPolicy, PolicyBuilder, Store, VerificationError
 from est.tests.client import ESTClient
 from requests import Response
 
@@ -117,9 +117,13 @@ class AokiClient:
         store = Store(truststore)
         builder = PolicyBuilder().store(store)
         builder = builder.max_chain_depth(2)
+        devownerid_ca_policy = ExtensionPolicy.permit_all()
+        devownerid_ca_policy = devownerid_ca_policy.require_present(
+            x509.BasicConstraints, Criticality.CRITICAL, None
+        )
         builder = builder.extension_policies(
-           ExtensionPolicy.permit_all(),
-           ExtensionPolicy.permit_all(),
+           ca_policy=devownerid_ca_policy,
+           ee_policy=ExtensionPolicy.permit_all(),
         )
         verifier = builder.build_client_verifier()
         try:
