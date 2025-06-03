@@ -8,7 +8,6 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
 from cryptography.hazmat.primitives import serialization
-from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.exceptions import ValidationError
@@ -27,12 +26,11 @@ from django.views.generic.base import RedirectView, View
 from django.views.generic.detail import DetailView, SingleObjectMixin
 from django.views.generic.edit import CreateView, FormMixin, FormView
 from django.views.generic.list import ListView
-
-from pki.models import DomainModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.devid_registration import DevIdRegistration
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from settings.models import TlsSettings
 from trustpoint_core import oid
 from trustpoint_core.archiver import Archiver
 from trustpoint_core.serializer import CredentialFileFormat
@@ -56,14 +54,15 @@ from devices.issuer import (
 )
 from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
 from devices.revocation import DeviceCredentialRevocation
+from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import BulkDeleteView, ListInDetailView, SortableTableMixin
-from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     import ipaddress
     from typing import Any, ClassVar
 
+    from django import forms
     from django.http.request import HttpRequest
     from django.utils.safestring import SafeString
 
@@ -107,7 +106,7 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
     paginate_by = UIConfig.paginate_by
     default_sort_param = '-created_at'
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[DeviceModel]:
         """Filter queryset to only include devices where opc_ua_gds is False."""
         return super().get_queryset().filter(device_type=DeviceModel.DeviceType.GENERIC_DEVICE.value)
 
@@ -186,9 +185,9 @@ class OpcUaGdsTableView(DeviceTableView):
     """Table View for devices where opc_ua_gds is True."""
 
     template_name = 'devices/opc_ua_gds.html'
-    extra_context = {'page_category': 'devices', 'page_name': 'opc_ua_gds'}
+    extra_context: ClassVar[dict] = {'page_category': 'devices', 'page_name': 'opc_ua_gds'}
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[DeviceModel]:
         """Filter queryset to only include devices where opc_ua_gds is True."""
         return DeviceModel.objects.filter(device_type=DeviceModel.DeviceType.OPC_UA_GDS.value)
 
@@ -225,9 +224,9 @@ class CreateOpcUaGdsView(CreateDeviceView):
     model = DeviceModel
     form_class = CreateOpcUaGdsForm
     template_name = 'devices/add.html'
-    extra_context = {'page_category': 'devices', 'page_name': 'opc_ua_gds'}
+    extra_context: ClassVar[dict] = {'page_category': 'devices', 'page_name': 'opc_ua_gds'}
 
-    def form_valid(self, form):
+    def form_valid(self, form: CreateOpcUaGdsForm) -> HttpResponse:
         """Set opc_ua_gds to True before saving the device."""
         device = form.save(commit=False)
         device.device_type = DeviceModel.DeviceType.OPC_UA_GDS.value
@@ -733,9 +732,15 @@ class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceMo
         device: DeviceModel = self.object
         certificate_template = self.kwargs.get('certificate_template')
         context['certificate_template'] = certificate_template
-        context['host'] = (
-            f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:{self.request.META.get("SERVER_PORT", "443")}'
-        )
+
+        try:
+            network_settings = TlsSettings.objects.get(id=1)
+            ipv4_address = network_settings.ipv4_address
+        except TlsSettings.DoesNotExist:
+            ipv4_address = '127.0.0.1'
+
+        context['host'] = (f'{ipv4_address}:'
+                           f'{self.request.META.get("SERVER_PORT", "443")}')
         context['domain'] = device.domain
         context.update(self._get_domain_credential_cmp_context(device=device))
 
@@ -806,9 +811,15 @@ class HelpDomainCredentialEstContextView(DeviceContextMixin, DetailView[DeviceMo
         device: DeviceModel = self.object
         certificate_template = self.kwargs.get('certificate_template')
         context['certificate_template'] = certificate_template
-        context['host'] = (
-            f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:{self.request.META.get("SERVER_PORT", "443")}'
-        )
+        try:
+            network_settings = TlsSettings.objects.get(id=1)
+            ipv4_address = network_settings.ipv4_address
+        except TlsSettings.DoesNotExist:
+            ipv4_address = '127.0.0.1'
+
+        context['host'] = (f'{ipv4_address}:'
+                           f'{self.request.META.get("SERVER_PORT", "443")}')
+
         context['domain'] = device.domain
 
         context.update(self._get_domain_credential_est_context(device=device))
@@ -934,9 +945,14 @@ class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, DetailView[DeviceM
             err_msg = _('Unsupported public key algorithm')
             raise ValueError(err_msg)
 
-        context['host'] = (
-            f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:{self.request.META.get("SERVER_PORT", "443")}'
-        )
+        try:
+            network_settings = TlsSettings.objects.get(id=1)
+            ipv4_address = network_settings.ipv4_address
+        except TlsSettings.DoesNotExist:
+            ipv4_address = '127.0.0.1'
+
+        context['host'] = (f'{ipv4_address}:'
+                           f'{self.request.META.get("SERVER_PORT", "443")}')
         context['domain'] = device.domain
         context['key_gen_command'] = key_gen_command
         number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
@@ -969,7 +985,7 @@ class OnboardingMethodSelectIdevidHelpView(DeviceContextMixin, DetailView[DevIdR
     context_object_name = 'devid_registration'
     model = DevIdRegistration
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add the required context for the template."""
         context = super().get_context_data(**kwargs)
         context['pk'] = self.object.pk
@@ -1014,9 +1030,14 @@ class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdR
         else:
             err_msg = 'Unsupported public key algorithm'
             raise ValueError(err_msg)
-        context['host'] = (
-            f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:{self.request.META.get("SERVER_PORT", "443")}'
-        )
+        try:
+            network_settings = TlsSettings.objects.get(id=1)
+            ipv4_address = network_settings.ipv4_address
+        except TlsSettings.DoesNotExist:
+            ipv4_address = '127.0.0.1'
+
+        context['host'] = (f'{ipv4_address}:'
+                           f'{self.request.META.get("SERVER_PORT", "443")}')
         context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
         context['key_gen_command'] = key_gen_command
         context['issuing_ca_pem'] = (
