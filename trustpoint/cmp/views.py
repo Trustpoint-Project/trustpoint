@@ -835,8 +835,9 @@ class CmpInitializationRequestView(
                 raise ValueError(err_msg)
 
             raw_device_serial = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
-            device_serial_number = raw_device_serial.decode() \
-                if isinstance(raw_device_serial, bytes) else raw_device_serial
+            device_serial_number = (
+                raw_device_serial.decode() if isinstance(raw_device_serial, bytes) else raw_device_serial
+            )
 
             device_candidates = DeviceModel.objects.filter(
                 serial_number=device_serial_number, domain=self.requested_domain
@@ -920,7 +921,7 @@ class CmpInitializationRequestView(
                 if not self.device.onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_IDEVID:  # noqa: SIM201
                     return HttpResponse('Wrong onboarding protocol.')
 
-                if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE.value:
+                if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE:
                     return HttpResponse('PKI protocol CMP client certificate expected, but got something else.')
 
             message_body_name = self.serialized_pyasn1_message['body'].getName()
@@ -1207,7 +1208,7 @@ class CmpCertificationRequestView(
                     status=404,
                 )
 
-            if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_SHARED_SECRET.value:
+            if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_SHARED_SECRET:
                 return HttpResponse(
                     'Received a password based MAC protected CMP message for a device that does not use the '
                     f'pki-protocol {DeviceModel.PkiProtocol.CMP_SHARED_SECRET.label}, but instead uses'
@@ -1442,8 +1443,8 @@ class CmpCertificationRequestView(
                     err_msg = 'SAN extension is required for OPC UA Server Certificates'
                     raise ValueError(err_msg)
 
-                issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
-                issued_app_cred = issuer.issue_opcua_server_certificate(
+                opc_ua_server_issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
+                issued_app_cred = opc_ua_server_issuer.issue_opcua_server_certificate(
                     common_name=common_name_value,
                     application_uri=application_uri,
                     ipv4_addresses=ipv4_addresses,
@@ -1487,8 +1488,8 @@ class CmpCertificationRequestView(
                     err_msg = 'SAN extension is required for OPC UA Client Certificates'
                     raise ValueError(err_msg)
 
-                issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
-                issued_app_cred = issuer.issue_opcua_client_certificate(
+                opc_ua_client_issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
+                issued_app_cred = opc_ua_client_issuer.issue_opcua_client_certificate(
                     common_name=common_name_value,
                     application_uri=application_uri,
                     validity_days=validity_in_days,
@@ -1657,7 +1658,7 @@ class CmpCertificationRequestView(
                     'The corresponding device is not configured to use the onboarding mechanism.', status=404
                 )
 
-            if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE.value:
+            if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE:
                 return HttpResponse('PKI protocol CMP client certificate expected, but got something else.')
 
             message_body_name = self.serialized_pyasn1_message['body'].getName()
@@ -1865,8 +1866,8 @@ class CmpCertificationRequestView(
                     err_msg = 'SAN extension is required for OPC UA Server Certificates'
                     raise ValueError(err_msg)
 
-                issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
-                issued_app_cred = issuer.issue_opcua_server_certificate(
+                opc_ua_server_cred_issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
+                issued_app_cred = opc_ua_server_cred_issuer.issue_opcua_server_certificate(
                     common_name=common_name_value,
                     application_uri=application_uri,
                     ipv4_addresses=ipv4_addresses,
@@ -1909,8 +1910,8 @@ class CmpCertificationRequestView(
                     err_msg = 'SAN extension is required for OPC UA Client Certificates'
                     raise ValueError(err_msg)
 
-                issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
-                issued_app_cred = issuer.issue_opcua_client_certificate(
+                opc_ua_client_cred_issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
+                issued_app_cred = opc_ua_client_cred_issuer.issue_opcua_client_certificate(
                     common_name=common_name_value,
                     application_uri=application_uri,
                     validity_days=validity_in_days,
