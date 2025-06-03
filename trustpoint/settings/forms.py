@@ -63,7 +63,7 @@ class SecurityConfigForm(forms.ModelForm):
         )
 
     security_mode = forms.ChoiceField(
-        choices=SecurityConfig.SecurityModeChoices.choices, widget=forms.RadioSelect(), label=''
+        choices=SecurityConfig.SecurityModeChoices, widget=forms.RadioSelect(), label=''
     )
 
     auto_gen_pki = forms.BooleanField(
@@ -79,7 +79,7 @@ class SecurityConfigForm(forms.ModelForm):
     )
 
     auto_gen_pki_key_algorithm = forms.ChoiceField(
-        choices=AutoGenPkiKeyAlgorithm.choices,
+        choices=AutoGenPkiKeyAlgorithm,
         label=_('Key Algorithm for auto-generated PKI'),
         required=False,
         widget=forms.Select(attrs={'data-hide-at-sl': '[false, false, true, true, true]'}),

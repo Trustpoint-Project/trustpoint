@@ -32,7 +32,7 @@ class PkiMessageType(enum.Enum):
 
 
 class GeneralNameType(enum.Enum):
-    """General Name Type Enum,"""
+    """General Name Type Enum."""
 
     RFC822_NAME = 'rfc822Name'
     DNS_NAME = 'dNSName'
