@@ -131,3 +131,8 @@ class SecurityConfig(models.Model):
 
             self.notification_config.save()
 
+class TlsSettings(models.Model):
+    """TLS settings model"""
+
+    ipv4_address = models.GenericIPAddressField(protocol="IPv4", null=True, blank=True)
+
