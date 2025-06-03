@@ -733,11 +733,7 @@ class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceMo
         certificate_template = self.kwargs.get('certificate_template')
         context['certificate_template'] = certificate_template
 
-        try:
-            network_settings = TlsSettings.objects.get(id=1)
-            ipv4_address = network_settings.ipv4_address
-        except TlsSettings.DoesNotExist:
-            ipv4_address = '127.0.0.1'
+        ipv4_address = TlsSettings.get_first_ipv4_address()
 
         context['host'] = (f'{ipv4_address}:'
                            f'{self.request.META.get("SERVER_PORT", "443")}')
@@ -811,11 +807,7 @@ class HelpDomainCredentialEstContextView(DeviceContextMixin, DetailView[DeviceMo
         device: DeviceModel = self.object
         certificate_template = self.kwargs.get('certificate_template')
         context['certificate_template'] = certificate_template
-        try:
-            network_settings = TlsSettings.objects.get(id=1)
-            ipv4_address = network_settings.ipv4_address
-        except TlsSettings.DoesNotExist:
-            ipv4_address = '127.0.0.1'
+        ipv4_address = TlsSettings.get_first_ipv4_address()
 
         context['host'] = (f'{ipv4_address}:'
                            f'{self.request.META.get("SERVER_PORT", "443")}')
@@ -945,11 +937,7 @@ class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, DetailView[DeviceM
             err_msg = _('Unsupported public key algorithm')
             raise ValueError(err_msg)
 
-        try:
-            network_settings = TlsSettings.objects.get(id=1)
-            ipv4_address = network_settings.ipv4_address
-        except TlsSettings.DoesNotExist:
-            ipv4_address = '127.0.0.1'
+        ipv4_address = TlsSettings.get_first_ipv4_address()
 
         context['host'] = (f'{ipv4_address}:'
                            f'{self.request.META.get("SERVER_PORT", "443")}')
@@ -1030,11 +1018,8 @@ class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdR
         else:
             err_msg = 'Unsupported public key algorithm'
             raise ValueError(err_msg)
-        try:
-            network_settings = TlsSettings.objects.get(id=1)
-            ipv4_address = network_settings.ipv4_address
-        except TlsSettings.DoesNotExist:
-            ipv4_address = '127.0.0.1'
+
+        ipv4_address = TlsSettings.get_first_ipv4_address()
 
         context['host'] = (f'{ipv4_address}:'
                            f'{self.request.META.get("SERVER_PORT", "443")}')
