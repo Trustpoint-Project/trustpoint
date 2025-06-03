@@ -11,7 +11,6 @@ from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import HTML, Div, Layout
 from django import forms
-from django.forms import models
 from django.utils.translation import gettext_lazy as _
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.domain import DomainModel
@@ -24,6 +23,7 @@ from trustpoint.forms import CleanedDataNotNoneMixin
 
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet
+    from django.forms import models
 
 PASSWORD_MIN_LENGTH = 12
 OTP_SPLIT_PARTS = 2
@@ -82,7 +82,7 @@ class BaseCredentialForm(forms.Form):
 
     def clean_common_name(self) -> str:
         """Checks the common name."""
-        common_name = cast(str, self.cleaned_data['common_name'])
+        common_name = cast('str', self.cleaned_data['common_name'])
         if IssuedCredentialModel.objects.filter(common_name=common_name, device=self.device).exists():
             err_msg = _('Credential with common name %s already exists for device %s.') % (
                 common_name,
@@ -93,7 +93,7 @@ class BaseCredentialForm(forms.Form):
 
     def clean_validity(self) -> int:
         """Checks the validity."""
-        validity = cast(int, self.cleaned_data['validity'])
+        validity = cast('int', self.cleaned_data['validity'])
         if validity <= 0:
             err_msg = _('Validity must be a positive integer.')
             raise forms.ValidationError(err_msg)
@@ -293,7 +293,7 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
         """Initializes the CreateDeviceForm."""
         super().__init__(*args, **kwargs)
 
-        idevid_trust_store_field = cast(models.ModelChoiceField[TruststoreModel], self.fields['idevid_trust_store'])
+        idevid_trust_store_field = cast('models.ModelChoiceField[TruststoreModel]', self.fields['idevid_trust_store'])
         idevid_trust_store_field.queryset = TruststoreModel.objects.filter(
             intended_usage=TruststoreModel.IntendedUsage.IDEVID
         )
@@ -446,7 +446,7 @@ class CreateOpcUaGdsForm(CreateDeviceForm):
         try:
             super().__init__(*args, **kwargs)
         except KeyError as e:
-            if "idevid_trust_store" in str(e):
+            if 'idevid_trust_store' in str(e):
                 pass
             else:
                 raise
