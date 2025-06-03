@@ -18,8 +18,8 @@ from django.views.generic import TemplateView, View
 from django.views.generic.base import RedirectView
 from django.views.generic.list import ListView
 
-from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH, UIConfig
 from trustpoint.logger import LoggerMixin
+from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH, UIConfig
 from trustpoint.views.base import SortableTableMixin
 
 if TYPE_CHECKING:
