@@ -34,7 +34,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Settings for postgreql database
 POSTGRESQL = True
 DATABASE_ENGINE = 'django.db.backends.postgresql'
-DATABASE_HOST = 'localhost'
+DATABASE_HOST = 'postgres'
 DATABASE_PORT = '5432'
 DATABASE_NAME = 'trustpoint_db'
 DATABASE_USER = 'admin'
@@ -122,6 +122,7 @@ INSTALLED_APPS = [
     'est.apps.EstConfig',
     'aoki.apps.AokiConfig',
     'settings.apps.SettingsConfig',
+    'notifications.apps.NotificationsConfig',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

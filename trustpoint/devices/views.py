@@ -25,6 +25,8 @@ from django.views.generic.base import RedirectView, View
 from django.views.generic.detail import DetailView, SingleObjectMixin
 from django.views.generic.edit import CreateView, FormMixin, FormView
 from django.views.generic.list import ListView
+
+from pki.models import DomainModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.devid_registration import DevIdRegistration
@@ -616,6 +618,9 @@ class HelpDispatchDomainCredentialView(DeviceContextMixin, SingleObjectMixin[Dev
         if device.onboarding_protocol == device.OnboardingProtocol.EST_PASSWORD.value:
             return f'{reverse("devices:help-onboarding_est-username-password", kwargs={"pk": device.id})}'
 
+        if device.onboarding_protocol == device.OnboardingProtocol.EST_IDEVID.value:
+            return f'{reverse("devices:help-onboarding_est-idevid", kwargs={"pk": device.id})}'
+
         return f'{reverse("devices:devices")}'
 
 
@@ -702,6 +707,7 @@ class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceMo
         context['host'] = (
             f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:{self.request.META.get("SERVER_PORT", "443")}'
         )
+        context['domain'] = device.domain
         context.update(self._get_domain_credential_cmp_context(device=device))
         return context
 
@@ -770,6 +776,7 @@ class HelpDomainCredentialEstContextView(DeviceContextMixin, DetailView[DeviceMo
         context['host'] = (
             f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:{self.request.META.get("SERVER_PORT", "443")}'
         )
+        context['domain'] = device.domain
 
         context.update(self._get_domain_credential_est_context(device=device))
         return context
@@ -851,6 +858,11 @@ class OnboardingEstApplicationCredentialsHelpView(HelpDomainCredentialEstContext
 
     template_name = 'devices/help/onboarding/est_application_credentials.html'
 
+class OnboardingEstIdevidHelpView(HelpDomainCredentialEstContextView):
+    """View to provide help information for EST IDevID enrollment."""
+
+    template_name = 'devices/help/onboarding/est_idevid.html'
+
 
 class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, DetailView[DeviceModel]):
     """Help view for the case of no onboarding using CMP shared-secret."""
@@ -887,6 +899,7 @@ class NoOnboardingCmpSharedSecretHelpView(DeviceContextMixin, DetailView[DeviceM
         context['host'] = (
             f'{self.request.META.get("REMOTE_ADDR", "127.0.0.1")}:{self.request.META.get("SERVER_PORT", "443")}'
         )
+        context['domain'] = device.domain
         context['key_gen_command'] = key_gen_command
         number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
         context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
@@ -911,6 +924,19 @@ class OnboardingCmpApplicationCredentialsHelpView(HelpDomainCredentialCmpContext
 
     template_name = 'devices/help/onboarding/cmp_application_credentials.html'
 
+class OnboardingMethodSelectIdevidHelpView(DeviceContextMixin, DetailView[DevIdRegistration]):
+    """View to select the protocol for IDevID enrollment."""
+
+    template_name = 'devices/help/onboarding/idevid_method_select.html'
+    context_object_name = 'devid_registration'
+    model = DevIdRegistration
+
+    def get_context_data(self, **kwargs):
+        """Add the required context for the template."""
+        context = super().get_context_data(**kwargs)
+        context['pk'] = self.object.pk
+
+        return context
 
 class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdRegistration]):
     """Help view for the IDevID Registration, which displays the required OpenSSL commands."""
@@ -918,7 +944,6 @@ class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdR
     http_method_names = ('get',)
 
     model = DevIdRegistration
-    template_name = 'devices/help/onboarding/cmp_idevid_registration.html'
     context_object_name = 'devid_registration'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -931,6 +956,7 @@ class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdR
             The context to render the page.
         """
         context = super().get_context_data(**kwargs)
+        context['pk'] = self.kwargs.get('pk')
         devid_registration: DevIdRegistration = self.object
 
         if devid_registration.domain.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
@@ -960,13 +986,25 @@ class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdR
             .public_bytes(encoding=serialization.Encoding.PEM)
             .decode()
         )
-        number_of_issued_device_certificates = 0
-        context['tls_client_cn'] = f'Trustpoint-TLS-Client-Credential-{number_of_issued_device_certificates}'
-        context['tls_server_cn'] = f'Trustpoint-TLS-Server-Credential-{number_of_issued_device_certificates}'
+        tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
+        if tls_cert:
+            context['trustpoint_server_certificate'] = (
+                tls_cert.credential.certificate.get_certificate_serializer().as_pem().decode('utf-8')
+            )
         context['public_key_info'] = devid_registration.domain.public_key_info
         context['domain'] = devid_registration.domain
         return context
 
+class OnboardingCmpIdevidRegistrationHelpView(OnboardingIdevidRegistrationHelpView):
+    """Help view for the CMP IDevID Registration, which displays the required OpenSSL commands."""
+
+    template_name = 'devices/help/onboarding/cmp_idevid.html'
+
+
+class OnboardingEstIdevidRegistrationHelpView(OnboardingIdevidRegistrationHelpView):
+    """Help view for the EST IDevID Registration, which displays the required OpenSSL commands."""
+
+    template_name = 'devices/help/onboarding/est_idevid.html'
 
 #  ----------------------------------- Certificate Lifecycle Management - Downloads ------------------------------------
 

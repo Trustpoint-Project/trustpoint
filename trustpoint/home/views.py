@@ -6,6 +6,8 @@ from collections import Counter
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from django.urls import reverse
+
 from devices.models import DeviceModel, IssuedCredentialModel
 from django.contrib import messages
 from django.core.management import call_command
@@ -27,7 +29,7 @@ from trustpoint.settings import UIConfig
 from trustpoint.views.base import SortableTableMixin
 
 from .filters import NotificationFilter
-from .models import NotificationModel, NotificationStatus
+from notifications.models import NotificationModel, NotificationStatus
 
 if TYPE_CHECKING:
     from django.utils.safestring import SafeString

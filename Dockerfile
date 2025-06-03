@@ -20,6 +20,7 @@ RUN apt-get update && \
         apache2 \
         apache2-utils \
         gettext \
+        cron \
         apache2-dev && \
     rm -rf /var/lib/apt/lists/*
 
@@ -59,6 +60,13 @@ RUN mkdir -p /etc/trustpoint/ && \
     cp -r /var/www/html/trustpoint/docker/* /etc/trustpoint/ && \
     chown -R root:root /etc/trustpoint/ && \
     chmod -R 755 /etc/trustpoint/
+
+# Add cron setup
+RUN chmod +x /etc/trustpoint/notifications/execute_notifications.sh && \
+    cp /etc/trustpoint/notifications/crontab.txt /etc/cron.d/execute_notifications && \
+    chmod 0644 /etc/cron.d/execute_notifications && \
+    crontab /etc/cron.d/execute_notifications && \
+    touch /var/log/cron.log
 
 # Add sudoers file and configure user and restart sudo service
 RUN cp ./docker/wizard/sudoers /etc/sudoers && \

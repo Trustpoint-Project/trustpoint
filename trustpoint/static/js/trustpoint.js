@@ -254,9 +254,9 @@ onboardingAndPkiConfigurationSelect?.addEventListener('change', function(event) 
         case 'cmp_shared_secret':
         case 'aoki_est':
         case 'aoki_cmp':
+        case 'est_idevid':
             addClassIfNotPresent(idevidTrustStoreSelectWrapper, 'd-none');
             break;
-        case 'est_idevid':
         case 'cmp_idevid':
             removeClassIfPresent(idevidTrustStoreSelectWrapper, 'd-none');
             break;

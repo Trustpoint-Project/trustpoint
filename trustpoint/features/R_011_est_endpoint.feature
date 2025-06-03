@@ -1,4 +1,8 @@
-Feature: EST Endpoint for Onboarded Devices
+@allure.label.owner:Aircoookie
+@allure.label.epic:Features
+@allure.label.suite:R_011_EST_Endpoint_for_Onboarded_Devices
+@allure.label.package:R_011_EST_Endpoint_for_Onboarded_Devices
+Feature: R_011 EST Endpoint for Onboarded Devices
   The system must provide an EST endpoint to securely onboard devices.
 
   Background:

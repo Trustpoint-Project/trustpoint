@@ -256,6 +256,7 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
         ]
         labels: typing.ClassVar = {
             'domain_credential_onboarding': _('Domain Credential Onboarding'),
+            'onboarding_and_pki_configuration': _('Onboarding and PKI configuration'),
         }
 
     domain_queryset: QuerySet[DomainModel] = DomainModel.objects.filter(is_active=True)
@@ -366,6 +367,10 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
                     instance.pki_protocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE
                     instance.idevid_trust_store = None
                     instance.est_password = secrets.token_urlsafe(16)
+                case 'est_idevid':
+                    instance.onboarding_protocol = DeviceModel.OnboardingProtocol.EST_IDEVID
+                    instance.pki_protocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE
+                    instance.idevid_trust_store = None # Truststore association via DevID registration
                 case _:
                     err_msg = 'Unknown Onboarding and PKI configuration value found.'
                     raise forms.ValidationError(err_msg)
@@ -409,6 +414,7 @@ class CreateOpcUaGdsForm(CreateDeviceForm):
         ]
         labels: typing.ClassVar = {
             'domain_credential_onboarding': _('Domain Credential Onboarding'),
+            'onboarding_and_pki_configuration': _('Onboarding and PKI configuration'),
         }
 
     onboarding_and_pki_configuration = forms.ChoiceField(

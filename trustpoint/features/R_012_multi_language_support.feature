@@ -1,3 +1,6 @@
+@allure.label.epic:Features
+@allure.label.suite:R_012_Multi_language_support
+@allure.label.package:R_012_Multi_language_support
 Feature: Language Selection and Translation
   The system should support multi-language UI options for global usability.
 

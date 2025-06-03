@@ -24,11 +24,17 @@
                     <hr>
                     {% include 'devices/help/onboarding/domain_credential_details/cmp_domain_credential_summary_block.html' %}
 
-                    <h2 class="mt-5">{% trans 'Enroll Domain Credential' %}</h2>
+                    <h2 class="mt-5">{% trans 'Download or Copy the Issuing CA certificate' %}</h2>
                     <hr>
                     {% include 'devices/help/onboarding/domain_credential_details/cmp_issuing_ca_block.html' %}
+
+                    <h2 class="mt-5">{% trans 'Prepare IDevID' %}</h2>
+                    <hr>
                     {% include 'devices/help/onboarding/domain_credential_details/generic_domain_credential_key_gen_block.html' %}
-                    {% include 'devices/help/onboarding/domain_credential_details/cmp_idev_p12_extraction_block.html' %}
+                    {% include 'devices/help/onboarding/domain_credential_details/idev_p12_extraction_block.html' %}
+
+                    <h2 class="mt-5">{% trans 'Enroll Domain Credential' %}</h2>
+                    <hr>
                     {% include 'devices/help/onboarding/domain_credential_details/cmp_enroll_domain_credential_idevid_block.html' %}
                     <hr>
                 </div>
@@ -37,8 +43,10 @@
             <div class="card-footer d-flex justify-content-between align-items-center">
                 <div class="tp-card-btn-footer m-1">
                     <a href="{% url 'devices:devices' %}" class="btn btn-secondary">{% trans "Back" %}</a>
-                    <a href="{% url 'devices:certificate_lifecycle_management' pk=device.pk %}"
-                       class="btn btn-primary">{% trans "Lifecycle Management" %}</a>
+                    {% if device.pk %}
+                        <a href="{% url 'devices:certificate_lifecycle_management' pk=device.pk %}"
+                           class="btn btn-primary">{% trans "Lifecycle Management" %}</a>
+                    {% endif %}
                 </div>
             </div>
         </div>

@@ -11,7 +11,7 @@
             <div>{% trans 'Download Issuing CA Certificate' %}</div>
             <div>
                 <a class="btn btn-primary min-width-15 mb-3"
-                   href="{% url 'pki:certificate-issuing-ca-download' pk=device.domain.issuing_ca.credential.certificate.id %}">Download
+                   href="{% url 'pki:certificate-issuing-ca-download' pk=domain.issuing_ca.credential.certificate.id %}">Download
                     Issuing CA</a>
             </div>
         </li>
