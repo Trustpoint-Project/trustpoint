@@ -173,7 +173,7 @@ def step_when_admin_click_button(context: runner.Context, button_name: str) -> N
         with open(context.truststore_add_form_data['trust_store_file'], 'rb') as f:
           context.truststore_add_form_data['trust_store_file'] = f
           context.response = context.authenticated_client.post('/pki/truststores/add/', context.truststore_add_form_data, follow=True)
-          assert context.response.status_code == 200, f"Failed to add new domain."
+          assert context.response.status_code == 200, f"Failed to add new truststore."
     elif button_name == "Create Device":
         context.response = context.authenticated_client.post('/devices/add/', context.device_add_form_data, follow=True)
         assert context.response.status_code == 200, f"Failed to add new device."
