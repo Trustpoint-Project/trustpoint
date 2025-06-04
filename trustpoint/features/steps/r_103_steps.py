@@ -30,12 +30,12 @@ def step_domain_exists(context: runner.Context, domain_name: str, ca_name: str) 
 
 @when('the admin fills in the domain details with {name} and issuing CA "{ca_name}"')
 def step_fill_domain_details(context: runner.Context, name: str, ca_name: str) -> None:  # noqa: ARG001
-    """Fills in the device creation form.
+    """Fills in the domain creation form.
 
     Args:
         context (runner.Context): Behave context.
-        name (str): The name of the device.
-        serial_number (str): The Serial number of the device.
+        name (str): The name of the domain.
+        serial_number (str): The Serial number of the domain.
     """
     ca = IssuingCaModel.objects.get(unique_name=ca_name)
 
@@ -54,12 +54,12 @@ def step_fill_domain_details(context: runner.Context, name: str, ca_name: str) -
     }
 
 @then('the new domain with {name} and issuing CA "{ca_name}" should appear in the domain list')
-def step_device_list(context: runner.Context, name: str, ca_name: str) -> None:  # noqa: ARG001
-    """Verifies that the new device appears in the device list.
+def step_domain_list(context: runner.Context, name: str, ca_name: str) -> None:  # noqa: ARG001
+    """Verifies that the new domain appears in the domain list.
 
     Args:
         context (runner.Context): Behave context.
-        name (str): The name of the device.
+        name (str): The name of the domain.
         ca_name (str): The name of the issuing ca.
     """
     soup = BeautifulSoup(context.response.content, "html.parser")
@@ -98,7 +98,7 @@ def step_delete_domain(context: runner.Context, name: str) -> None:  # noqa: ARG
 
 @then('the domain {name} should no longer appear in the domain list')
 def step_verify_domain_deletion(context: runner.Context, name: str) -> None:  # noqa: ARG001
-    """Verifies that the device no longer appears in the list.
+    """Verifies that the domain no longer appears in the list.
 
     Args:
         context (runner.Context): Behave context.
@@ -109,11 +109,11 @@ def step_verify_domain_deletion(context: runner.Context, name: str) -> None:  # 
 
 @when('the admin attempts to view the details of a non-existent domain {non_existent_device_id}')
 def step_attempt_view_nonexistent(context: runner.Context, non_existent_device_id: str) -> None:  # noqa: ARG001
-    """Attempts to view details of a non-existent device.
+    """Attempts to view details of a non-existent domain.
 
     Args:
         context (runner.Context): Behave context.
-        non_existent_device_id (str): The id a non-existent device.
+        non_existent_device_id (str): The id a non-existent domain.
     """
-    #Navigate (GET request) to the device detailed page
+    #Navigate (GET request) to the domain detailed page
     context.response = context.authenticated_client.get(f"/pki/domains/config/{non_existent_device_id}")
