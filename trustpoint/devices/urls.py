@@ -54,6 +54,16 @@ urlpatterns = [
         'help/dispatch-domain/<int:pk>/', views.HelpDispatchDomainCredentialView.as_view(), name='help_dispatch_domain'
     ),
     path(
+        'help/dispatch-device-type-redirect/<int:pk>/',
+        views.HelpDispatchDeviceTypeRedirectView.as_view(),
+        name='help_dispatch_device_type_redirect',
+    ),
+    path(
+        'help/dispatch-opcua_gds/<int:pk>/',
+        views.HelpDispatchOpcUaGdsView.as_view(),
+        name='help_dispatch_opcua_gds',
+    ),
+    path(
         'help/dispatch-application/<int:pk>/',
         views.HelpDispatchApplicationCredentialView.as_view(),
         name='help_dispatch_application',
