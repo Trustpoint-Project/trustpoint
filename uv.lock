@@ -392,7 +392,7 @@ wheels = [
 
 [[package]]
 name = "django-stubs"
-version = "5.2.0"
+version = "5.1.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "asgiref" },
@@ -401,9 +401,9 @@ dependencies = [
     { name = "types-pyyaml" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/87/79/7e7ad8b4bac545c8e608fa8db0bd061977f93035a112be78a7f3ffc6ff66/django_stubs-5.2.0.tar.gz", hash = "sha256:07e25c2d3cbff5be540227ff37719cc89f215dfaaaa5eb038a75b01bbfbb2722", size = 276297, upload-time = "2025-04-26T10:49:04.974Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/dd/48/e733ceff94ed3c4ccba4c2f0708739974bbcdbcfb69efefb87b10780937f/django_stubs-5.1.3.tar.gz", hash = "sha256:8c230bc5bebee6da282ba8a27ad1503c84a0c4cd2f46e63d149e76d2a63e639a", size = 267390, upload-time = "2025-02-07T09:56:59.773Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9a/01/5913ba5514337f3896c7bcbff6075808184dd303cd0fc3ecc289ec7e0c96/django_stubs-5.2.0-py3-none-any.whl", hash = "sha256:cd52da033489afc1357d6245f49e3cc57bf49015877253fb8efc6722ea3d2d2b", size = 481836, upload-time = "2025-04-26T10:49:02.97Z" },
+    { url = "https://files.pythonhosted.org/packages/74/94/3551a181faf44a63a4ef1ab8e0eb7f27f6af168c2f719ea482e54b39d237/django_stubs-5.1.3-py3-none-any.whl", hash = "sha256:716758ced158b439213062e52de6df3cff7c586f9f9ad7ab59210efbea5dfe78", size = 472753, upload-time = "2025-02-07T09:56:57.291Z" },
 ]
 
 [package.optional-dependencies]
@@ -1243,13 +1243,13 @@ requires-dist = [
     { name = "django", specifier = "~=5.1.8" },
     { name = "django-crispy-forms", specifier = "~=2.3" },
     { name = "django-filter", specifier = "~=25.1" },
-    { name = "django-stubs", extras = ["compatible-mypy"], specifier = ">=5.2.0" },
+    { name = "django-stubs", extras = ["compatible-mypy"], specifier = "==5.1.3" },
     { name = "django-taggit", specifier = ">=6.1.0,<7" },
     { name = "psycopg", specifier = ">=3.2.6" },
     { name = "psycopg-binary", specifier = ">=3.2.6" },
     { name = "pyasn1", specifier = ">=0.6.1,<0.7" },
     { name = "pyasn1-modules", specifier = ">=0.4.1,<0.5" },
-    { name = "trustpoint-core", specifier = "==0.2.2" },
+    { name = "trustpoint-core", specifier = "==0.2.5" },
     { name = "zeroconf", specifier = ">=0.147,<0.148" },
 ]
 
@@ -1286,15 +1286,15 @@ docs = [
 
 [[package]]
 name = "trustpoint-core"
-version = "0.2.2"
+version = "0.2.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "hatchling" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6f/a6/43d2124603f82b70d1ab5cdf760785c87375b2eb85fbc0053d928da7c4c5/trustpoint_core-0.2.2.tar.gz", hash = "sha256:1050e605ccecbd8ef476058b722aa0b53e69ef7d178de8f6f2227b5a3e941ca0", size = 59988, upload-time = "2025-06-02T12:55:46.173Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cb/bb/414adc97e58e6488a9c64ea434eae7521527730cc8a58941ac4720cf85ee/trustpoint_core-0.2.5.tar.gz", hash = "sha256:53a5c36e1da5def86bfe36d124e1aeee147e695eac75e4b20ac984e28d78a6d0", size = 59612, upload-time = "2025-06-04T09:57:50.671Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8b/72/e464a2f035e1c01526006d76fa1775c4c489bb77b7cea4fe9b1e0c0c2b92/trustpoint_core-0.2.2-py3-none-any.whl", hash = "sha256:80c91a60f5a0fc3ca488fa55038a088794a985a09fc8129c62b1ee7ea0def43e", size = 20973, upload-time = "2025-06-02T12:55:44.969Z" },
+    { url = "https://files.pythonhosted.org/packages/ed/e7/a8eb02bf3b06b2b96bb1007f23e74f1bfa0e810f150cac1569e98759d4af/trustpoint_core-0.2.5-py3-none-any.whl", hash = "sha256:c89b54fc6763d2595ec95a074cfcaec7687c13a404b689bc9c525e9216a29e9e", size = 21061, upload-time = "2025-06-04T09:57:49.839Z" },
 ]
 
 [[package]]

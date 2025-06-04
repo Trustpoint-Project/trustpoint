@@ -39,9 +39,7 @@ class DeviceModel(CustomDeleteActionModel):
     """The DeviceModel."""
 
     id = models.AutoField(primary_key=True)
-    common_name = models.CharField(
-        _('Device'), max_length=100, default='New-Device'
-    )
+    common_name = models.CharField(_('Device'), max_length=100, default='New-Device')
     serial_number = models.CharField(_('Serial-Number'), max_length=100, default='', blank=True, null=False)
     domain = models.ForeignKey(
         DomainModel, verbose_name=_('Domain'), related_name='devices', blank=True, null=True, on_delete=models.PROTECT
@@ -109,6 +107,7 @@ class DeviceModel(CustomDeleteActionModel):
 
     class DeviceType(models.IntegerChoices):
         """Enum for device type."""
+
         GENERIC_DEVICE = 0, _('Generic Device')
         OPC_UA_GDS = 1, _('OPC UA GDS')
 
@@ -126,7 +125,7 @@ class DeviceModel(CustomDeleteActionModel):
 
     def pre_delete(self) -> None:
         """Delete all issued credentials for this device before deleting the device itself."""
-        logger.info(f'Deleting all issued credentials for device {self.common_name}') # noqa: G004
+        logger.info(f'Deleting all issued credentials for device {self.common_name}')  # noqa: G004
         self.issued_credentials.all().delete()
 
     @property
@@ -205,22 +204,20 @@ class IssuedCredentialModel(CustomDeleteActionModel):
             if status in (CertificateModel.CertificateStatus.REVOKED, CertificateModel.CertificateStatus.EXPIRED):
                 continue
             try:
-                ca = IssuingCaModel.objects.get(
-                    credential__certificate__subject_public_bytes = cert.issuer_public_bytes
-                )
+                ca = IssuingCaModel.objects.get(credential__certificate__subject_public_bytes=cert.issuer_public_bytes)
             except IssuingCaModel.DoesNotExist:
                 logger.exception(
-                    f'Cannot revoke certificate {cert} because its corresponding Issuing CA was not found.')  # noqa: G004
+                    'Cannot revoke certificate %s because its corresponding Issuing CA was not found.', cert
+                )
                 continue
             except IssuingCaModel.MultipleObjectsReturned:
                 logger.exception(
-                    f'Cannot revoke certificate {cert} because multiple CAs were found with the same subject bytes.')  # noqa: G004
+                    'Cannot revoke certificate %s because multiple CAs were found with the same subject bytes.', cert
+                )
                 continue
 
             RevokedCertificateModel.objects.create(
-                certificate=cert,
-                revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION,
-                ca=ca
+                certificate=cert, revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION, ca=ca
             )
 
     def pre_delete(self) -> None:
@@ -325,9 +322,10 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
         if not matches:
             self.attempts += 1
             logger.warning(
-                'Incorrect OTP attempt %s for browser credential download '
-                'for device %s (credential id=%i)',
-                self.attempts, self.device.common_name, self.issued_credential_model.id
+                'Incorrect OTP attempt %s for browser credential download for device %s (credential id=%i)',
+                self.attempts,
+                self.device.common_name,
+                self.issued_credential_model.id,
             )
 
             if self.attempts >= self.BROWSER_MAX_OTP_ATTEMPTS:
@@ -339,9 +337,9 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
             return False
 
         logger.info(
-            'Correct OTP entered for browser credential download for device %s'
-            '(credential id=%i)',
-            self.device.common_name, self.issued_credential_model.id
+            'Correct OTP entered for browser credential download for device %s(credential id=%i)',
+            self.device.common_name,
+            self.issued_credential_model.id,
         )
         self.otp = '-'
         self.download_token = secrets.token_urlsafe(32)
