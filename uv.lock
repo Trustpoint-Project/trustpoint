@@ -1249,7 +1249,7 @@ requires-dist = [
     { name = "psycopg-binary", specifier = ">=3.2.6" },
     { name = "pyasn1", specifier = ">=0.6.1,<0.7" },
     { name = "pyasn1-modules", specifier = ">=0.4.1,<0.5" },
-    { name = "trustpoint-core", specifier = ">=0.2.2" },
+    { name = "trustpoint-core", specifier = "==0.2.2" },
     { name = "zeroconf", specifier = ">=0.147,<0.148" },
 ]
 
