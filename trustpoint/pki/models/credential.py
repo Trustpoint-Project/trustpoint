@@ -49,8 +49,6 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     PKCS#11 credentials are not yet supported.
     """
 
-    objects: CustomDeleteActionManager[CredentialModel]
-
     class CredentialTypeChoice(models.IntegerChoices):
         """The CredentialTypeChoice defines the type of the credential and thus implicitly restricts its usage.
 
@@ -385,8 +383,6 @@ class PrimaryCredentialCertificate(models.Model):
     certificate = models.OneToOneField(CertificateModel, on_delete=models.CASCADE)
     is_primary = models.BooleanField(default=False)
 
-    objects: models.Manager[PrimaryCredentialCertificate]
-
     def __repr__(self) -> str:
         """Returns a string representation of this PrimaryCredentialCertificate entry."""
         return (
@@ -418,8 +414,6 @@ class CertificateChainOrderModel(models.Model):
         CertificateModel, on_delete=models.PROTECT, null=False, blank=False, editable=False,
         related_name = 'primary_certificate_set'
     )
-
-    objects: models.Manager[CertificateChainOrderModel]
 
     class Meta:
         """This Meta class add some configuration to the CertificateChainOrderModel.

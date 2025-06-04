@@ -119,8 +119,6 @@ class OrphanDeletionMixin(_ModelBase):
         (by adding it to the "check_references_on_delete" class attribute tuple in the model class).
     """
 
-    objects: models.Manager[Self]
-
     check_references_on_delete: tuple[str, ...] | None = None
 
     @classmethod
