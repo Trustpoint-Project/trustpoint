@@ -272,18 +272,56 @@ class DeviceDetailsView(DeviceContextMixin, DetailView[DeviceModel]):
 
 # ------------------------------------------ Certificate Lifecycle Management ------------------------------------------
 
-
-class DeviceCertificateLifecycleManagementSummaryView(DeviceContextMixin, SortableTableMixin, ListInDetailView):
+class DeviceCertificateLifecycleManagementSummaryView(DeviceContextMixin, DetailView[DeviceModel]):
     """This is the CLM summary view in the devices section."""
 
     http_method_names = ('get',)
 
-    detail_model = DeviceModel
+    model = DeviceModel
     template_name = 'devices/credentials/certificate_lifecycle_management.html'
-    detail_context_object_name = 'device'
-    model = IssuedCredentialModel
-    context_object_name = 'issued_credentials'
+    context_object_name = 'device'
+
     default_sort_param = 'common_name'
+    issued_creds_qs: QuerySet[IssuedCredentialModel]
+    domain_credentials_qs: QuerySet[IssuedCredentialModel]
+    application_credentials_qs: QuerySet[IssuedCredentialModel]
+
+    def get_issued_creds_qs(self) -> QuerySet[IssuedCredentialModel]:
+        """Gets a sorted queryset of all IssuedCredentialModels.
+
+        Returns:
+            Sorted queryset of all IssuedCredentialModels.
+        """
+        issued_creds_qs = IssuedCredentialModel.objects.all()
+
+        # Get sort parameter (e.g., "name" or "-name")
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+        return issued_creds_qs.order_by(sort_param)
+
+    def get_domain_credentials_qs(self) -> QuerySet[IssuedCredentialModel]:
+        """Gets a sorted queryset of all IssuedCredentialModels that are domain credentials.
+
+        self.get_issued_creds_qs() must be called first!
+
+        Returns:
+            Sorted queryset of all IssuedCredentialModels that are domain credentials
+        """
+        return self.issued_creds_qs.filter(
+            Q(device=self.object)
+            & Q(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL.value)
+        )
+
+    def get_application_credentials_qs(self) -> QuerySet[IssuedCredentialModel]:
+        """Gets a sorted queryset of all IssuedCredentialModels that are application credentials.
+
+            self.get_issued_creds_qs() must be called first!
+        Returns:
+            Sorted queryset of all IssuedCredentialModels that are application credentials.
+        """
+        return self.issued_creds_qs.filter(
+            Q(device=self.object)
+            & Q(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL.value)
+        )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the paginator and credential details to the context.
@@ -294,30 +332,20 @@ class DeviceCertificateLifecycleManagementSummaryView(DeviceContextMixin, Sortab
         Returns:
             The context to use for rendering the clm summary page.
         """
+        self.issued_creds_qs = self.get_issued_creds_qs()
+        self.domain_credentials_qs = self.get_domain_credentials_qs()
+        self.application_credentials_qs = self.get_application_credentials_qs()
         context = super().get_context_data(**kwargs)
 
-        device = self.get_object()
-        qs = super().get_queryset()  # inherited from SortableTableMixin, sorted query
+        context['domain_credentials'] = self.domain_credentials_qs
+        context['application_credentials'] = self.application_credentials_qs
 
-        domain_credentials = qs.filter(
-            Q(device=device)
-            & Q(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL.value)
-        )
-
-        application_credentials = qs.filter(
-            Q(device=device)
-            & Q(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL.value)
-        )
-
-        context['domain_credentials'] = domain_credentials
-        context['application_credentials'] = application_credentials
-
-        paginator_domain = Paginator(domain_credentials, UIConfig.paginate_by)
+        paginator_domain = Paginator(self.domain_credentials_qs, UIConfig.paginate_by)
         page_number_domain = self.request.GET.get('page', 1)
         context['domain_credentials'] = paginator_domain.get_page(page_number_domain)
         context['is_paginated'] = paginator_domain.num_pages > 1
 
-        paginator_application = Paginator(application_credentials, UIConfig.paginate_by)
+        paginator_application = Paginator(self.application_credentials_qs, UIConfig.paginate_by)
         page_number_application = self.request.GET.get('page-a', 1)
         context['application_credentials'] = paginator_application.get_page(page_number_application)
         context['is_paginated_a'] = paginator_application.num_pages > 1
