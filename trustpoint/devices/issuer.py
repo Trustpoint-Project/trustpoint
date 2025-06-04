@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import datetime
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from pki.models.credential import CredentialModel
 from pki.util.keys import KeyGenerator
+from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
 
@@ -223,13 +224,15 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
         """
         issuing_credential = self.domain.get_issuing_ca_or_value_error().credential
         issuer_certificate = issuing_credential.get_certificate()
-        hash_algorithm_enum = SignatureSuite.from_certificate(
-            issuer_certificate
-        ).algorithm_identifier.hash_algorithm
+        hash_algorithm_enum = SignatureSuite.from_certificate(issuer_certificate).algorithm_identifier.hash_algorithm
         if hash_algorithm_enum is None:
             err_msg = 'Failed to get hash algorithm.'
             raise ValueError(err_msg)
         hash_algorithm = hash_algorithm_enum.hash_algorithm()
+
+        if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
+            err_msg = f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
+            raise TypeError(err_msg)
 
         one_day = datetime.timedelta(days=1)
 
@@ -324,7 +327,7 @@ class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
             ],
         )
         credential = CredentialSerializer(
-            private_key=private_key,
+            private_key=private_key.as_crypto(),
             certificate=certificate,
             additional_certificates=[
                 self.domain.get_issuing_ca_or_value_error().credential.get_certificate(),
@@ -430,9 +433,13 @@ class LocalTlsServerCredentialIssuer(BaseTlsCredentialIssuer):
             validity_days,
             [(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), False), (san_extension, san_critical)],
         )
-        cert_chain = self.domain.get_issuing_ca_or_value_error().credential.get_credential_serializer().get_full_chain_as_crypto()
+        cert_chain = (
+            self.domain.get_issuing_ca_or_value_error()
+            .credential.get_credential_serializer()
+            .get_full_chain_as_crypto()
+        )
         credential = CredentialSerializer(
-            private_key=private_key, certificate=certificate, additional_certificates=cert_chain
+            private_key=private_key.as_crypto(), certificate=certificate, additional_certificates=cert_chain
         )
         return self._save(
             credential,
@@ -506,9 +513,13 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             extra_extensions=[(x509.BasicConstraints(ca=False, path_length=None), True)],
         )
 
-        cert_chain = self.domain.get_issuing_ca_or_value_error().credential.get_credential_serializer().get_full_chain_as_crypto()
+        cert_chain = (
+            self.domain.get_issuing_ca_or_value_error()
+            .credential.get_credential_serializer()
+            .get_full_chain_as_crypto()
+        )
         credential = CredentialSerializer(
-            private_key=private_key, certificate=certificate, additional_certificates=cert_chain
+            private_key=private_key.as_crypto(), certificate=certificate, additional_certificates=cert_chain
         )
 
         issued_domain_credential = self._save(
@@ -622,7 +633,7 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
     def issue_opcua_server_credential(  # noqa: PLR0913
         self,
         common_name: str,
-        application_uri: str | list[str],
+        application_uri: str,
         ipv4_addresses: list[ipaddress.IPv4Address],
         ipv6_addresses: list[ipaddress.IPv6Address],
         domain_names: list[str],
@@ -653,9 +664,13 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
             ],
         )
 
-        cert_chain = self.domain.get_issuing_ca_or_value_error().credential.get_credential_serializer().get_full_chain_as_crypto()
+        cert_chain = (
+            self.domain.get_issuing_ca_or_value_error()
+            .credential.get_credential_serializer()
+            .get_full_chain_as_crypto()
+        )
         credential = CredentialSerializer(
-            private_key=private_key, certificate=certificate, additional_certificates=cert_chain
+            private_key=private_key.as_crypto(), certificate=certificate, additional_certificates=cert_chain
         )
 
         return self._save(
@@ -791,7 +806,7 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
             .get_full_chain_as_crypto()
         )
         credential = CredentialSerializer(
-            private_key=private_key, certificate=certificate, additional_certificates=cert_chain
+            private_key=private_key.as_crypto(), certificate=certificate, additional_certificates=cert_chain
         )
 
         return self._save(

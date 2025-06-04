@@ -18,7 +18,7 @@ from pki.models.domain import DomainModel
 from pki.models.issuing_ca import IssuingCaModel
 from pki.models.truststore import TruststoreModel
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
-from trustpoint_core import oid  # type: ignore[import-untyped]
+from trustpoint_core import oid
 from util.db import CustomDeleteActionModel
 
 if TYPE_CHECKING:
@@ -134,15 +134,19 @@ class DeviceModel(CustomDeleteActionModel):
         return self.common_name
 
     @property
-    def signature_suite(self) -> oid.SignatureSuite:
+    def signature_suite(self) -> oid.SignatureSuite | None:
         """Gets the corresponding SignatureSuite object."""
+        if self.domain is None:
+            return None
         return oid.SignatureSuite.from_certificate(
-            self.domain.issuing_ca.credential.get_certificate_serializer().as_crypto()
+            self.domain.get_issuing_ca_or_value_error().credential.get_certificate_serializer().as_crypto()
         )
 
     @property
-    def public_key_info(self) -> oid.PublicKeyInfo:
+    def public_key_info(self) -> oid.PublicKeyInfo | None:
         """Gets the corresponding PublicKeyInfo object."""
+        if self.signature_suite is None:
+            return None
         return self.signature_suite.public_key_info
 
 
