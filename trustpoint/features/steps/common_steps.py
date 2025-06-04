@@ -169,6 +169,11 @@ def step_when_admin_click_button(context: runner.Context, button_name: str) -> N
     elif button_name == "Add new Domain":
         context.response = context.authenticated_client.post('/pki/domains/add/', context.domain_add_form_data, follow=True)
         assert context.response.status_code == 200, f"Failed to add new domain."
+    elif button_name == "Add new Truststore":
+        with open(context.truststore_add_form_data['trust_store_file'], 'rb') as f:
+          context.truststore_add_form_data['trust_store_file'] = f
+          context.response = context.authenticated_client.post('/pki/truststores/add/', context.truststore_add_form_data, follow=True)
+          assert context.response.status_code == 200, f"Failed to add new domain."
     elif button_name == "Create Device":
         context.response = context.authenticated_client.post('/devices/add/', context.device_add_form_data, follow=True)
         assert context.response.status_code == 200, f"Failed to add new device."
@@ -189,10 +194,14 @@ def step_navigate_add_device(context: runner.Context, page_name: str) -> None:  
         context.response = context.authenticated_client.get("/devices/add/")
     elif page_name == "device list":
         context.response = context.authenticated_client.get("/devices/")
+    elif page_name == "truststore list":
+        context.response = context.authenticated_client.get("/pki/truststores/")
     elif page_name == "Add new Domain":
         context.response = context.authenticated_client.get("/pki/domains/add/")
     elif page_name == "domain list":
         context.response = context.authenticated_client.get("/pki/domains/")
+    elif page_name == "Add new Truststore":
+        context.response = context.authenticated_client.get("/pki/truststores/add/")
     else:
         msg = 'Page name is not valid.'
         raise AssertionError(msg)
