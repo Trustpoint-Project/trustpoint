@@ -105,7 +105,7 @@ exclude = "^(tests/|.*/tests/|migrations/|.*/migrations/)"
 
 [[tool.mypy.overrides]]
 module = ["crispy_bootstrap5.*", "crispy_forms.*"]
-ignore_missing_imports = true
+ignore_missing_imports = false
 
 [tool.django-stubs]
 django_settings_module = "trustpoint.settings"
