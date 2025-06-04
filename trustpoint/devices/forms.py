@@ -11,7 +11,6 @@ from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import HTML, Div, Layout
 from django import forms
-from django.forms import models
 from django.utils.translation import gettext_lazy as _
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.domain import DomainModel
@@ -24,6 +23,7 @@ from trustpoint.forms import CleanedDataNotNoneMixin
 
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet
+    from django.forms import models
 
 PASSWORD_MIN_LENGTH = 12
 OTP_SPLIT_PARTS = 2
@@ -82,7 +82,7 @@ class BaseCredentialForm(forms.Form):
 
     def clean_common_name(self) -> str:
         """Checks the common name."""
-        common_name = cast(str, self.cleaned_data['common_name'])
+        common_name = cast('str', self.cleaned_data['common_name'])
         if IssuedCredentialModel.objects.filter(common_name=common_name, device=self.device).exists():
             err_msg = _('Credential with common name %s already exists for device %s.') % (
                 common_name,
@@ -93,7 +93,7 @@ class BaseCredentialForm(forms.Form):
 
     def clean_validity(self) -> int:
         """Checks the validity."""
-        validity = cast(int, self.cleaned_data['validity'])
+        validity = cast('int', self.cleaned_data['validity'])
         if validity <= 0:
             err_msg = _('Validity must be a positive integer.')
             raise forms.ValidationError(err_msg)
@@ -293,7 +293,7 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
         """Initializes the CreateDeviceForm."""
         super().__init__(*args, **kwargs)
 
-        idevid_trust_store_field = cast(models.ModelChoiceField[TruststoreModel], self.fields['idevid_trust_store'])
+        idevid_trust_store_field = cast('models.ModelChoiceField[TruststoreModel]', self.fields['idevid_trust_store'])
         idevid_trust_store_field.queryset = TruststoreModel.objects.filter(
             intended_usage=TruststoreModel.IntendedUsage.IDEVID
         )
@@ -339,63 +339,73 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
         """
         cleaned_data = super().clean()
         instance: DeviceModel = super().save(commit=False)
-        domain_credential_onboarding = cleaned_data.get('domain_credential_onboarding')
-        if domain_credential_onboarding:
-            instance.onboarding_status = DeviceModel.OnboardingStatus.PENDING
-            onboarding_and_pki_configuration = cleaned_data.get('onboarding_and_pki_configuration')
-
-            # TODO(AlexHx8472): Integrate EST   # noqa: FIX002
-            match onboarding_and_pki_configuration:
-                case 'cmp_shared_secret':
-                    instance.onboarding_protocol = DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET
-                    instance.pki_protocol = DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE
-                    instance.idevid_trust_store = None
-                    # 16 * 8 = 128 random bits
-                    instance.cmp_shared_secret = secrets.token_urlsafe(16)
-                case 'cmp_idevid':
-                    idevid_trust_store = cleaned_data.get('idevid_trust_store')
-                    if not idevid_trust_store:
-                        err_msg = 'Must specify an IDevID Trust-Store for IDevID onboarding.'
-                        raise forms.ValidationError(err_msg)
-                    if idevid_trust_store.intended_usage != TruststoreModel.IntendedUsage.IDEVID.value:
-                        err_msg = 'The Trust-Store must have the intended usage IDevID.'
-                        raise forms.ValidationError(err_msg)
-                    instance.onboarding_protocol = DeviceModel.OnboardingProtocol.CMP_IDEVID
-                    instance.pki_protocol = DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE
-                case 'est_username_password':
-                    instance.onboarding_protocol = DeviceModel.OnboardingProtocol.EST_PASSWORD
-                    instance.pki_protocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE
-                    instance.idevid_trust_store = None
-                    instance.est_password = secrets.token_urlsafe(16)
-                case 'est_idevid':
-                    instance.onboarding_protocol = DeviceModel.OnboardingProtocol.EST_IDEVID
-                    instance.pki_protocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE
-                    instance.idevid_trust_store = None # Truststore association via DevID registration
-                case _:
-                    err_msg = 'Unknown Onboarding and PKI configuration value found.'
-                    raise forms.ValidationError(err_msg)
+        if cleaned_data.get('domain_credential_onboarding'):
+            self._handle_domain_credential_onboarding(cleaned_data, instance)
         else:
-            instance.onboarding_status = DeviceModel.OnboardingStatus.NO_ONBOARDING
-            instance.onboarding_protocol = DeviceModel.OnboardingProtocol.NO_ONBOARDING
-            instance.idevid_trust_store = None
-            pki_configuration = cleaned_data.get('pki_configuration')
-
-            # TODO(AlexHx8472): Integrate EST   # noqa: FIX002
-            match pki_configuration:
-                case 'manual_download':
-                    instance.pki_protocol = DeviceModel.PkiProtocol.MANUAL
-                case 'cmp_shared_secret':
-                    instance.pki_protocol = DeviceModel.PkiProtocol.CMP_SHARED_SECRET
-                    # 16 * 8 = 128 random bits
-                    instance.cmp_shared_secret = secrets.token_urlsafe(16)
-                case 'est_username_password':
-                    instance.pki_protocol = DeviceModel.PkiProtocol.EST_PASSWORD
-                    instance.est_password = secrets.token_urlsafe(16)
-                case _:
-                    err_msg = 'Unknown PKI configuration value found.'
-                    raise forms.ValidationError(err_msg)
+            self._handle_no_onboarding(cleaned_data, instance)
 
         return cleaned_data
+
+    def _handle_no_onboarding(self, cleaned_data: dict[str, Any], instance: DeviceModel) -> None:
+        """Handles cleaning non-onboarding-related data."""
+        instance.onboarding_status = DeviceModel.OnboardingStatus.NO_ONBOARDING
+        instance.onboarding_protocol = DeviceModel.OnboardingProtocol.NO_ONBOARDING
+        instance.idevid_trust_store = None
+
+        pki_configuration = cleaned_data.get('pki_configuration')
+        match pki_configuration:
+            case 'manual_download':
+                instance.pki_protocol = DeviceModel.PkiProtocol.MANUAL
+            case 'cmp_shared_secret':
+                instance.pki_protocol = DeviceModel.PkiProtocol.CMP_SHARED_SECRET
+                instance.cmp_shared_secret = secrets.token_urlsafe(16)
+            case 'est_username_password':
+                instance.pki_protocol = DeviceModel.PkiProtocol.EST_PASSWORD
+                instance.est_password = secrets.token_urlsafe(16)
+            case _:
+                error_message = 'Unknown PKI configuration value found.'
+                raise forms.ValidationError(error_message)
+
+    def _validate_cmp_idevid(self, cleaned_data: dict[str, Any], instance: DeviceModel) -> None:
+        """Validates CMP IDevID onboarding."""
+        idevid_trust_store = cleaned_data.get('idevid_trust_store')
+        if not idevid_trust_store:
+            error_message = 'Must specify an IDevID Trust-Store for IDevID onboarding.'
+            raise forms.ValidationError(error_message)
+        if idevid_trust_store.intended_usage != TruststoreModel.IntendedUsage.IDEVID.value:
+            error_message = 'The Trust-Store must have the intended usage IDevID.'
+            raise forms.ValidationError(error_message)
+
+        instance.onboarding_protocol = DeviceModel.OnboardingProtocol.CMP_IDEVID
+        instance.pki_protocol = DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE
+
+    def _handle_domain_credential_onboarding(self, cleaned_data: dict[str, Any], instance: DeviceModel) -> None:
+        """Handles cleaning domain credential onboarding-related data."""
+        instance.onboarding_status = DeviceModel.OnboardingStatus.PENDING
+        onboarding_and_pki_configuration = cleaned_data.get('onboarding_and_pki_configuration')
+
+        # TODO(AlexHx8472): Integrate EST   # noqa: FIX002
+        match onboarding_and_pki_configuration:
+            case 'cmp_shared_secret':
+                instance.onboarding_protocol = DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET
+                instance.pki_protocol = DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE
+                instance.idevid_trust_store = None
+                # 16 * 8 = 128 random bits
+                instance.cmp_shared_secret = secrets.token_urlsafe(16)
+            case 'cmp_idevid':
+                self._validate_cmp_idevid(cleaned_data, instance)
+            case 'est_username_password':
+                instance.onboarding_protocol = DeviceModel.OnboardingProtocol.EST_PASSWORD
+                instance.pki_protocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE
+                instance.idevid_trust_store = None
+                instance.est_password = secrets.token_urlsafe(16)
+            case 'est_idevid':
+                instance.onboarding_protocol = DeviceModel.OnboardingProtocol.EST_IDEVID
+                instance.pki_protocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE
+                instance.idevid_trust_store = None  # Truststore association via DevID registration
+            case _:
+                err_msg = 'Unknown Onboarding and PKI configuration value found.'
+                raise forms.ValidationError(err_msg)
 
 
 class CreateOpcUaGdsForm(CreateDeviceForm):
@@ -446,7 +456,7 @@ class CreateOpcUaGdsForm(CreateDeviceForm):
         try:
             super().__init__(*args, **kwargs)
         except KeyError as e:
-            if "idevid_trust_store" in str(e):
+            if 'idevid_trust_store' in str(e):
                 pass
             else:
                 raise

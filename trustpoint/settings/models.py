@@ -136,3 +136,16 @@ class TlsSettings(models.Model):
 
     ipv4_address = models.GenericIPAddressField(protocol="IPv4", null=True, blank=True)
 
+    @classmethod
+    def get_first_ipv4_address(cls) -> str:
+        """Get the first IPv4 address or a default value."""
+
+        try:
+            network_settings = cls.objects.get(id=1)
+            ipv4_address = network_settings.ipv4_address
+        except cls.DoesNotExist:
+            ipv4_address = '127.0.0.1'
+
+        return ipv4_address
+
+

@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, get_args
+from typing import TYPE_CHECKING
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509 import NameOID
-from trustpoint_core.key_types import PrivateKey
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeySerializer
 
 if TYPE_CHECKING:
@@ -103,7 +102,5 @@ class TlsServerCredentialGenerator:
         )
 
         return CredentialSerializer(
-            private_key=private_key,
-            certificate=certificate,
-            additional_certificates=[certificate]
+            private_key=private_key, certificate=certificate, additional_certificates=[certificate]
         )

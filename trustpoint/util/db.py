@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Self, final
+from typing import TYPE_CHECKING, Any, final
 
 from django.db import models, transaction
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+
+    from django.db.models import Manager
 
     _ModelBase = models.Model
 else:
@@ -120,6 +122,7 @@ class OrphanDeletionMixin(_ModelBase):
     """
 
     check_references_on_delete: tuple[str, ...] | None = None
+    objects: Manager[OrphanDeletionMixin]
 
     @classmethod
     def delete_if_orphaned(cls, instance: OrphanDeletionMixin | None) -> None:
