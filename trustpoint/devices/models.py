@@ -113,7 +113,7 @@ class DeviceModel(CustomDeleteActionModel):
         OPC_UA_GDS = 1, _('OPC UA GDS')
 
     device_type = models.IntegerField(
-        choices=DeviceType.choices,
+        choices=DeviceType,
         verbose_name=_('Device Type'),
         default=DeviceType.GENERIC_DEVICE,
     )
@@ -276,8 +276,6 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
 class RemoteDeviceCredentialDownloadModel(models.Model):
     """Model to associate a credential model with an OTP and token for unauthenticated remoted download."""
-
-    objects: models.Manager[RemoteDeviceCredentialDownloadModel]
 
     BROWSER_MAX_OTP_ATTEMPTS = 3
     TOKEN_VALIDITY = datetime.timedelta(minutes=3)

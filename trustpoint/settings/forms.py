@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Fieldset, Layout
@@ -15,7 +15,7 @@ from settings.security import manager
 from settings.security.features import AutoGenPkiFeature, SecurityFeature
 
 if TYPE_CHECKING:
-    from typing import ClassVar
+    from typing import Any, ClassVar
 
 
 class SecurityConfigForm(forms.ModelForm):
@@ -25,7 +25,8 @@ class SecurityConfigForm(forms.ModelForm):
         AutoGenPkiFeature: ['auto_gen_pki', 'auto_gen_pki_key_algorithm'],
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
+        """Initialize the SecurityConfigForm."""
         super().__init__(*args, **kwargs)
 
         # Determine the 'current_mode' from form data or instance
@@ -62,7 +63,7 @@ class SecurityConfigForm(forms.ModelForm):
         )
 
     security_mode = forms.ChoiceField(
-        choices=SecurityConfig.SecurityModeChoices.choices, widget=forms.RadioSelect(), label=''
+        choices=SecurityConfig.SecurityModeChoices, widget=forms.RadioSelect(), label=''
     )
 
     auto_gen_pki = forms.BooleanField(
@@ -78,7 +79,7 @@ class SecurityConfigForm(forms.ModelForm):
     )
 
     auto_gen_pki_key_algorithm = forms.ChoiceField(
-        choices=AutoGenPkiKeyAlgorithm.choices,
+        choices=AutoGenPkiKeyAlgorithm,
         label=_('Key Algorithm for auto-generated PKI'),
         required=False,
         widget=forms.Select(attrs={'data-hide-at-sl': '[false, false, true, true, true]'}),
@@ -94,3 +95,37 @@ class SecurityConfigForm(forms.ModelForm):
         if form_value is None:
             return self.instance.auto_gen_pki_key_algorithm if self.instance else AutoGenPkiKeyAlgorithm.RSA2048
         return form_value
+
+
+class IPv4AddressForm(forms.Form):
+    """A form for selecting and updating an IPv4 address.
+
+    This form provides an interface for selecting an IPv4 address from
+    a list of Subject Alternative Names (SANs).
+
+    Attributes:
+        ipv4_address: A choice field for selecting the IPv4 address.
+    """
+
+    ipv4_address = forms.ChoiceField(
+        label='Update IPv4 Address'
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the IPv4AddressForm."""
+        san_ips = kwargs.pop('san_ips', [])
+        saved_ipv4_address = kwargs.get('initial', {}).get('ipv4_address')
+
+        if saved_ipv4_address and saved_ipv4_address not in san_ips:
+            san_ips.insert(0, saved_ipv4_address)
+
+        super().__init__(*args, **kwargs)
+
+        ipv4_field = cast(forms.ChoiceField, self.fields['ipv4_address'])
+        ipv4_field.choices = [(ip, ip) for ip in san_ips]
+
+
+
+
+
+
