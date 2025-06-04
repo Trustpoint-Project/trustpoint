@@ -214,7 +214,7 @@ class CreateDeviceView(DeviceContextMixin, CreateView[DeviceModel, BaseModelForm
         if self.object.domain_credential_onboarding:
             return str(reverse_lazy('devices:help_dispatch_domain', kwargs={'pk': self.object.id}))
 
-        return str(reverse_lazy('devices:help_dispatch_application', kwargs={'pk': self.object.id}))
+        return str(reverse_lazy('devices:help_dispatch_device_type_redirect', kwargs={'pk': self.object.id}))
 
 class CreateOpcUaGdsView(CreateDeviceView):
     """OPC UA GDS Create View."""
@@ -624,6 +624,32 @@ class HelpDispatchDomainCredentialView(DeviceContextMixin, SingleObjectMixin[Dev
 
         return f'{reverse("devices:devices")}'
 
+class HelpDispatchDeviceTypeRedirectView(DeviceContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
+    """Redirects based on the device type: OPC UA GDS or standard device."""
+
+    http_method_names = ('get',)
+
+    model: type[DeviceModel] = DeviceModel
+    permanent = False
+
+    def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
+        """Determines the redirect URL based on the device type.
+
+        Args:
+            *args: Ignored positional arguments.
+            **kwargs: Should include 'pk' of the device to identify it.
+
+        Returns:
+            str: The URL to redirect to.
+        """
+        device = get_object_or_404(DeviceModel, pk=kwargs.get('pk'))
+
+        if device.device_type == DeviceModel.DeviceType.OPC_UA_GDS.value:
+            return reverse("devices:help_dispatch_opcua_gds", kwargs={"pk": device.id})
+
+        return reverse("devices:help_dispatch_application", kwargs={"pk": device.id})
+
+
 class HelpDispatchApplicationCredentialView(TemplateView):
     """Renders the application credential selection page for the given device."""
 
@@ -644,6 +670,47 @@ class HelpDispatchApplicationCredentialView(TemplateView):
         context['device'] = device
 
         return context
+
+
+class HelpDispatchOpcUaGdsView(RedirectView):
+    """Redirects to the required help page for OPC UA GDS devices."""
+
+    http_method_names = ('get',)
+
+    model: type[DeviceModel] = DeviceModel
+    permanent = False
+
+    def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
+        """Gets the redirection URL for OPC UA GDS-specific help pages.
+
+        Args:
+            *args: Ignored positional arguments.
+            **kwargs: Keyword arguments containing the device's primary key ('pk').
+
+        Returns:
+            str: The URL for the appropriate help page.
+
+        Raises:
+            Http404: If the device is not an OPC UA GDS device.
+        """
+        del args
+
+        device = get_object_or_404(DeviceModel, pk=kwargs.get('pk'))
+
+        if device.device_type != DeviceModel.DeviceType.OPC_UA_GDS.value:
+            raise Http404("This view only handles OPC UA GDS devices.")
+
+        if (
+                not device.domain_credential_onboarding
+                and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value
+                and device.device_type == DeviceModel.DeviceType.OPC_UA_GDS.value
+        ):
+            return f'{reverse("devices:help-no-onboarding_est-opcua-gds-username-password",
+                              kwargs={"pk": device.id})}'
+
+        return f'{reverse("devices:devices")}'
+
+
 
 
 class HelpDispatchApplicationCredentialTemplateView(DeviceContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
@@ -684,14 +751,6 @@ class HelpDispatchApplicationCredentialTemplateView(DeviceContextMixin, SingleOb
             device.OnboardingProtocol.CMP_IDEVID.value,
         }:
             return f'{reverse("devices:help-onboarding_cmp-application-credentials",
-                              kwargs={"pk": device.id, "certificate_template": certificate_template})}'
-
-        if (
-                not device.domain_credential_onboarding
-                and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value
-                and device.device_type == DeviceModel.DeviceType.OPC_UA_GDS.value
-        ):
-            return f'{reverse("devices:help-no-onboarding_est-opcua-gds-username-password",
                               kwargs={"pk": device.id, "certificate_template": certificate_template})}'
 
         if (
