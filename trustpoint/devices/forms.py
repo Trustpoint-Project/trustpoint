@@ -429,7 +429,6 @@ class CreateOpcUaGdsForm(CreateDeviceForm):
 
     onboarding_and_pki_configuration = forms.ChoiceField(
         choices=[
-            ('cmp_shared_secret', _('CMP with shared secret onboarding')),
             ('est_username_password', _('EST with username and password onboarding')),
         ],
         widget=DisableSelectOptionsWidget(
@@ -441,7 +440,6 @@ class CreateOpcUaGdsForm(CreateDeviceForm):
 
     pki_configuration = forms.ChoiceField(
         choices=[
-            ('cmp_shared_secret', _('CMP with shared secret authentication')),
             ('est_username_password', _('EST with username and password authentication')),
         ],
         widget=DisableSelectOptionsWidget(
