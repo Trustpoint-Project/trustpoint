@@ -32,7 +32,7 @@ from pki.models.domain import DomainModel
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
-from trustpoint_core.key_types import PublicKey
+from trustpoint_core.crypto_types import PublicKey
 from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
 
 from cmp.util import NameParser

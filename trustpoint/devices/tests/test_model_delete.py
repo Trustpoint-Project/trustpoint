@@ -39,6 +39,7 @@ def test_device_delete_revocation(mock_models: dict[str, Any]) -> None:
         'Certificate should be revoked after delete.'
     )
 
+
 def test_multi_device_delete(mock_models: dict[str, Any]) -> None:
     """Tests that multiple devices can be deleted and pre_delete is called even on a QuerySet of DeviceModels."""
     mock_domain = mock_models['domain']

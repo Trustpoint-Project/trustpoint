@@ -11,7 +11,7 @@ from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithm
 from trustpoint_core.serializer import PrivateKeySerializer
 
 if TYPE_CHECKING:
-    from trustpoint_core.key_types import PrivateKey
+    from trustpoint_core.crypto_types import PrivateKey
 
     from pki.models.domain import DomainModel
 
