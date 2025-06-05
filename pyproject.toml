@@ -101,7 +101,7 @@ strict = true
 plugins = ["mypy_django_plugin.main"]
 mypy_path = ["trustpoint"]
 # TODO(AlexHx8472): Are we sure to exclude the tests?
-exclude = "^(trustpoint/manage\\.py$|tests/|.*/tests/|migrations/|.*/migrations/)"
+exclude = "^(trustpoint/manage\\.py$|tests/(?!devices/tests/)|migrations/|.*/migrations/)"
 
 [[tool.mypy.overrides]]
 module = ["crispy_bootstrap5.*", "crispy_forms.*"]
