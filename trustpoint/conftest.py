@@ -6,14 +6,13 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
-from trustpoint_core.serializer import CredentialSerializer
-
 from devices.issuer import LocalTlsClientCredentialIssuer
-from devices.models import DeviceModel, RemoteDeviceCredentialDownloadModel
+from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
 from pki.models import CertificateModel, CredentialModel
 from pki.models.domain import DomainModel
 from pki.models.issuing_ca import IssuingCaModel
 from pki.util.x509 import CertificateGenerator
+from trustpoint_core.serializer import CredentialSerializer
 
 
 @pytest.fixture(autouse=True)
@@ -85,53 +84,62 @@ def domain_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
     return issuing_ca_instance
 
 @pytest.fixture
-def test_device(domain_instance: dict[str, Any]) -> DeviceModel:
+def device_instance(domain_instance: dict[str, Any]) -> dict[str, Any]:
     """Fixture to create a test device linked with a domain."""
-    test_domain: DomainModel = domain_instance["domain"]
+    domain: DomainModel = domain_instance['domain']
     device = DeviceModel.objects.create(
-        common_name="test-device-1",
-        serial_number="TEST123456",
-        domain=test_domain,
+        common_name='test-device-1',
+        serial_number='TEST123456',
+        domain=domain,
         onboarding_status=DeviceModel.OnboardingStatus.NO_ONBOARDING,
         onboarding_protocol=DeviceModel.OnboardingProtocol.EST_PASSWORD,
         pki_protocol=DeviceModel.PkiProtocol.EST_PASSWORD,
     )
-    return device
+    domain_instance.update({'device': device})
+    return domain_instance
 
 @pytest.fixture
-def tls_client_credential(test_device):
+def tls_client_credential_instance(device_instance: dict[str, Any]) -> dict[str, Any]:
     """Fixture to issue a TLS client credential for a specific device."""
-    issuer = LocalTlsClientCredentialIssuer(device=test_device, domain=test_device.domain)
-    common_name = "Fixture TLS Client Credential"
+    device: DeviceModel = device_instance['device']
+
+    if device.domain is None:
+        error_message = "Device's associated domain cannot be None"
+        raise ValueError(error_message)
+
+    issuer = LocalTlsClientCredentialIssuer(device=device, domain=device.domain)
+    common_name = 'Fixture TLS Client Credential'
     validity_days = 365
     issued_credential = issuer.issue_tls_client_credential(common_name=common_name, validity_days=validity_days)
-
-    return issued_credential
+    device_instance.update({'issued_credential': issued_credential})
+    return device_instance
 
 @pytest.fixture
-def remote_device_credential_download(tls_client_credential, test_device):
-    """Fixture to create a RemoteDeviceCredentialDownloadModel"""
-    otp_token = "example-otp"
-    otp_formatted = f"{tls_client_credential.pk}.{otp_token}"
+def remote_device_credential_download_instance(
+        tls_client_credential_instance: dict[str, Any]
+) -> dict[str, Any]:
+    """Fixture to create a RemoteDeviceCredentialDownloadModel."""
+    tls_client_credential: IssuedCredentialModel = tls_client_credential_instance['issued_credential']
+    device: DeviceModel = tls_client_credential_instance['device']
 
-    remote_download = RemoteDeviceCredentialDownloadModel.objects.create(
+    otp_token = 'example-otp'   # noqa: S105
+
+    remote_credential = RemoteDeviceCredentialDownloadModel.objects.create(
         issued_credential_model=tls_client_credential,
         otp=otp_token,
-        device=test_device,
+        device=device,
     )
+    tls_client_credential_instance.update({'remote_credential': remote_credential})
 
-    return remote_download
+    return tls_client_credential_instance
 
 @pytest.fixture
-def credential_instance(issuing_ca_instance):
-    """
-    Fixture to create a CredentialModel instance linked to a valid end-entity certificate.
-    """
-    issuing_ca = issuing_ca_instance["issuing_ca"]
-    issuing_ca_cert = issuing_ca_instance["cert"]
-    issuing_ca_priv_key = issuing_ca_instance["priv_key"]
+def credential_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
+    """Fixture to create a CredentialModel instance linked to a valid end-entity certificate."""
+    issuing_ca_cert = issuing_ca_instance['cert']
+    issuing_ca_priv_key = issuing_ca_instance['priv_key']
 
-    subject_cn = "Test End-Entity Certificate"
+    subject_cn = 'Test End-Entity Certificate'
     ee_cert, ee_private_key = CertificateGenerator.create_ee(
         issuer_private_key=issuing_ca_priv_key,
         issuer_cn=issuing_ca_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value,
@@ -152,7 +160,9 @@ def credential_instance(issuing_ca_instance):
         credential_type=CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
     )
 
-    return credential
+    issuing_ca_instance.update({'credential': credential})
+
+    return issuing_ca_instance
 
 
 
