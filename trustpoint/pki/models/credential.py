@@ -15,6 +15,7 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 from util.db import CustomDeleteActionModel
+from util.field import UniqueNameValidator
 
 from pki.models import CertificateModel
 from trustpoint.logger import LoggerMixin
@@ -61,6 +62,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         ROOT_CA = 1, _('Root CA')
         ISSUING_CA = 2, _('Issuing CA')
         ISSUED_CREDENTIAL = 3, _('Issued Credential')
+        DEV_OWNER_ID = 4, _('DevOwnerID')
 
     credential_type = models.IntegerField(verbose_name=_('Credential Type'), choices=CredentialTypeChoice)
     private_key = models.CharField(verbose_name='Private key (PEM)', max_length=65536, default='', blank=True)
@@ -511,3 +513,106 @@ class CertificateChainOrderModel(models.Model):
             'order', flat=True
         )
         return max(existing_orders, default=-1)
+    
+
+class IDevIDReferenceModel(models.Model):
+    """Model to store the string referencing an IDevID certificate.
+
+    Obtained from the SAN of the DevOwnerID certificate.
+    """
+    dev_owner_id = models.ForeignKey(
+        'OwnerCredentialModel', related_name='idevid_ref_set', on_delete=models.CASCADE
+    )
+    idevid_ref = models.CharField(max_length=255, verbose_name=_('IDevID Identifier'))
+
+    def __str__(self) -> str:
+        """Returns a human-readable string that represents this IDevIDRefSanModel entry."""
+        return f'{self.dev_owner_id.unique_name} - {self.idevid_ref}'
+
+
+class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
+    """Device owner credential model.
+
+    This model is a wrapper to store a DevOwnerID Credential for use by devices to trust the Trustpoint.
+    """
+
+    unique_name = models.CharField(
+        verbose_name=_('Unique Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
+    )
+    credential: CredentialModel = models.OneToOneField(CredentialModel, related_name='dev_owner_ids', on_delete=models.PROTECT)
+
+    created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
+
+
+    def __str__(self) -> str:
+        """Returns a human-readable string that represents this OwnerCredentialModel entry.
+
+        Returns:
+            str: Human-readable string that represents this OwnerCredentialModel entry.
+        """
+        return self.unique_name
+
+    def __repr__(self) -> str:
+        """Returns a string representation of the OwnerCredentialModel instance."""
+        return f'OwnerCredentialModel(unique_name={self.unique_name})'
+
+    @classmethod
+    def create_new_owner_credential(
+        cls,
+        unique_name: str,
+        credential_serializer: CredentialSerializer,
+    ) -> OwnerCredentialModel:
+        """Creates a new owner credential model and returns it.
+
+        Args:
+            unique_name: The unique name that will be used to identify the Owner Credential.
+            credential_serializer:
+                The credential as CredentialSerializer instance.
+
+        Returns:
+            IssuingCaModel: The newly created Issuing CA model.
+        """
+        # Extract the IDevID references from the SAN of the DevOwnerID certificate
+        # Reference URI format: '<IDevID_Subj_SN>.dev-owner.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>.alt'
+        idevid_refs: set[str] = set()
+        owner_cert = credential_serializer.certificate
+        if not owner_cert:
+            raise ValidationError(_('The provided credential is not a valid DevOwnerID; it does not contain a certificate.'))
+        try:
+            san_extension = owner_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        except x509.ExtensionNotFound:
+            raise ValidationError(_('The provided certificate is not a valid DevOwnerID; it does not contain a Subject Alternative Name extension.'))
+
+        for san in san_extension.value:
+            if isinstance(san, x509.UniformResourceIdentifier):
+                san_uri_str = san.value
+                san_parts = san_uri_str.split('.')
+                if len(san_parts) == 5 and san_parts[1] == 'dev-owner' and san_parts[-1] == 'alt':
+                    idevid_refs.add(san_uri_str)
+        if not idevid_refs:
+            raise ValidationError(_('The provided certificate is not a valid DevOwnerID; it does not contain a valid IDevID reference in the SAN.'))
+
+        credential_type = CredentialModel.CredentialTypeChoice.DEV_OWNER_ID
+
+        credential_model = CredentialModel.save_credential_serializer(
+            credential_serializer=credential_serializer, credential_type=credential_type
+        )
+
+        owner_credential = cls(
+            unique_name=unique_name,
+            credential=credential_model,
+        )
+        owner_credential.save()
+        for idevid_ref in idevid_refs:
+            IDevIDReferenceModel.objects.create(
+                dev_owner_id=owner_credential,
+                idevid_ref=idevid_ref
+            )
+
+        return owner_credential
+
+    def post_delete(self) -> None:
+        """Deletes the credential of this owner credential after deleting it."""
+        self.logger.debug('Deleting credential of owner credential %s', self)
+        self.credential.delete()
+

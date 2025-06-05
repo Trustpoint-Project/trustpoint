@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
     from trustpoint_core.key_types import PrivateKey
 
-TEST_SERIAL_NUMBER = '4211'
+TEST_SERIAL_NUMBER = '4212'
 
 CURRENT_DIR = Path(__file__).parent.resolve()
 CERTS_DIR = (CURRENT_DIR / '../../tests/certs/').resolve()
@@ -106,9 +106,9 @@ class AokiTestCertGenerator:
 
         idevid_x509_sn = hex(idevid_cert.serial_number)[2:].zfill(16)
         idevid_sha256_fingerprint = idevid_cert.fingerprint(hashes.SHA256()).hex()
-        # Build URI string "aoki.<idevid_subj_sn>.owner.<idevid_x509_sn>.<idevid_sha256_fingerprint>.alt"
+        # Build URI string "<idevid_subj_sn>.dev-owner.<idevid_x509_sn>.<idevid_sha256_fingerprint>.alt"
         # If the IDevID Subject Serial Number is not present, '_' shall be used as a placeholder
-        idevid_san_uri = f'{TEST_SERIAL_NUMBER}.aoki.owner.{idevid_x509_sn}.{idevid_sha256_fingerprint}.alt'
+        idevid_san_uri = f'{TEST_SERIAL_NUMBER}.dev-owner.{idevid_x509_sn}.{idevid_sha256_fingerprint}.alt'
         print(f'DeviceOwnerID SAN URI: {idevid_san_uri}')
         ownerid_cert, ownerid_key = CertificateGenerator.create_ee(
             issuer_private_key=owner_ca_key,
