@@ -1,11 +1,12 @@
-# test_urls.py
+"""Tests for the devices urls."""
 
 import pytest
-from django.urls import reverse, resolve
+from django.urls import resolve, reverse
+
 from devices import views
 
 
-@pytest.mark.parametrize("url_name,kwargs,view_class", [
+@pytest.mark.parametrize(('url_name', 'kwargs', 'view_class'), [
     # Main Pages
     ('devices:devices', {}, views.DeviceTableView),
     ('devices:add', {}, views.CreateDeviceView),
@@ -70,10 +71,17 @@ from devices import views
     ('devices:device_revocation', {'pk': 1}, views.DeviceRevocationView),
     ('devices:device_delete', {'pks': '1/2/3'}, views.DeviceBulkDeleteView),
 ])
-def test_url_resolves(url_name, kwargs, view_class):
-    """
-    Test that each URL resolves to the correct view.
-    """
+def test_url_resolves(
+    url_name: str,
+    kwargs: dict[str, str],
+    view_class: type
+) -> None:
+    """Test that each URL resolves to the correct view."""
     url = reverse(url_name, kwargs=kwargs)
     resolver = resolve(url)
-    assert resolver.func.view_class == view_class, f"Failed on {url_name}"
+
+    assert resolver.func.view_class == view_class, f'Failed on {url_name}'  # type: ignore[attr-defined]
+
+
+
+
