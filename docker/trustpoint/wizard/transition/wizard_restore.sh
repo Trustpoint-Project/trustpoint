@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-#
-# wizard_restore.sh — with clean timestamped logging
-#
 
 # 1) Pipe all output (stdout+stderr) into your trustpoint log and to the console
 LOGFILE=/var/www/html/trustpoint/trustpoint/media/log/trustpoint.log
