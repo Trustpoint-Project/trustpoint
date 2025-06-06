@@ -144,7 +144,7 @@ class SftpClient:
             if transport and transport.is_active():
                 transport.close()
 
-    def upload_file(self, local_filepath: Path, remote_path: str) -> None:
+    def upload_file(self, local_filepath: Path, remote_path: str) -> None:  # noqa: C901
         """Upload a single local file to the remote_path via SFTP.
 
         Args:
@@ -178,6 +178,9 @@ class SftpClient:
                         try:
                             sftp.mkdir(str(path_accum))
                         except paramiko.SSHException as e:
+                            msg = f'Failed to create remote directory {path_accum}: {e}'
+                            raise SftpError(msg) from e
+                        except PermissionError as e:
                             msg = f'Failed to create remote directory {path_accum}: {e}'
                             raise SftpError(msg) from e
 
