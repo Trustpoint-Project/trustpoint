@@ -2,6 +2,7 @@
 """Wrapper around Paramiko SFTP functionality and related exceptions."""
 
 import io
+import socket
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -124,6 +125,9 @@ class SftpClient:
             raise SftpError(msg) from e
         except paramiko.SSHException as e:
             msg = f'SSH error: {e}'
+            raise SftpError(msg) from e
+        except (socket.gaierror, OSError) as e:
+            msg = f'Could not connect to {self.host}:{self.port} – {e}'
             raise SftpError(msg) from e
 
     def test_connection(self) -> None:

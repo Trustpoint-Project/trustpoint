@@ -191,9 +191,6 @@ class BackupManageView(SortableTableMixin, ListView[Any]):
         if not client.store_locally:
             try:
                 local_file.unlink()
-                messages.info(
-                    request, f'Deleted local copy of {filename} per settings.'
-                )
             except OSError:
                 messages.warning(request, f'Could not delete local file {filename}.')
 
