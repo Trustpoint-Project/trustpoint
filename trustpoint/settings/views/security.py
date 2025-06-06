@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 from django.contrib import messages
 from django.urls import reverse_lazy
+from django.utils.encoding import force_str
 from django.utils.translation import gettext as _
 from django.views.generic.edit import FormView
+from notifications.models import NotificationConfig, WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 from settings.forms import SecurityConfigForm
@@ -29,7 +32,9 @@ class SecurityView(SecurityLevelMixin, FormView):
         try:
             security_config = SecurityConfig.objects.get(id=1)
         except SecurityConfig.DoesNotExist:
-            security_config = SecurityConfig()
+            security_config = SecurityConfig.objects.create(
+                notification_config=NotificationConfig.objects.create()
+            )
         kwargs['instance'] = security_config
         return kwargs
 
@@ -47,6 +52,8 @@ class SecurityView(SecurityLevelMixin, FormView):
 
             if new_int > old_int:
                 self.sec.reset_settings(new_value)
+
+            form.instance.apply_security_settings()
 
         if 'auto_gen_pki' in form.changed_data:
             old_auto = getattr(old_conf, 'auto_gen_pki', None) if old_conf else None
@@ -72,4 +79,20 @@ class SecurityView(SecurityLevelMixin, FormView):
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'settings'
         context['page_name'] = 'security'
+        notification_configurations = SecurityConfig.NOTIFICATION_CONFIGURATIONS
+
+        for settings in notification_configurations.values():
+            ecc_choices = dict(WeakECCCurve.ECCCurveChoices.choices)
+            signature_choices = dict(WeakSignatureAlgorithm.SignatureChoices.choices)
+
+            settings['weak_ecc_curves'] = [
+                force_str(ecc_choices.get(oid, oid)) for oid in settings.get('weak_ecc_curves', [])
+            ]
+
+            settings['weak_signature_algorithms'] = [
+                force_str(signature_choices.get(oid, oid)) for oid in settings.get('weak_signature_algorithms', [])
+            ]
+
+        context['notification_configurations_json'] = json.dumps(notification_configurations)
+
         return context

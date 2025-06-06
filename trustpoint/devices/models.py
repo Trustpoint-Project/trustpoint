@@ -5,10 +5,10 @@ from __future__ import annotations
 import datetime
 import logging
 import secrets
-import typing
 from typing import TYPE_CHECKING
 
-from django.db import models, transaction
+from cryptography.hazmat.primitives import hashes
+from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
@@ -23,6 +23,8 @@ from util.db import CustomDeleteActionModel
 
 if TYPE_CHECKING:
     from typing import Any
+
+    from cryptography import x509
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +113,7 @@ class DeviceModel(CustomDeleteActionModel):
         OPC_UA_GDS = 1, _('OPC UA GDS')
 
     device_type = models.IntegerField(
-        choices=DeviceType.choices,
+        choices=DeviceType,
         verbose_name=_('Device Type'),
         default=DeviceType.GENERIC_DEVICE,
     )
@@ -226,11 +228,54 @@ class IssuedCredentialModel(CustomDeleteActionModel):
         self.revoke()
         self.credential.delete()  # this will also delete the IssuedCredentialModel via cascade
 
+    def is_valid_domain_credential(self) -> tuple[bool, str]:
+        """Determines if this issued credential is valid for enrolling new application credentials.
+
+        This method performs the following checks:
+          1. The IssuedCredentialModel type must be of type DOMAIN_CREDENTIAL.
+          2. The credential must be of type ISSUED_CREDENTIAL.
+          3. A primary certificate must exist.
+          4. The certificate's status must be 'OK'.
+
+        Returns:
+            tuple[bool, str]: A tuple where:
+                          - The first value is True if the credential meets all criteria, False otherwise.
+                          - The second value is a reason string explaining why the credential is invalid.
+        """
+        if self.issued_credential_type != IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL:
+            return False, 'Invalid issued credential type: Must be DOMAIN_CREDENTIAL.'
+
+        result, reason = self.credential.is_valid_issued_credential()
+        if not result:
+            return False, reason
+
+        return True, 'Valid domain credential.'
+
+    @staticmethod
+    def get_credential_for_certificate(cert: x509.Certificate) -> IssuedCredentialModel:
+        """Retrieve an IssuedCredentialModel instance for the given certificate.
+
+        :param cert: x509.Certificate to search for.
+        :return: The corresponding IssuedCredentialModel instance.
+        :raises ClientCertificateAuthenticationError: if no matching issued credential is found.
+        """
+        cert_fingerprint = cert.fingerprint(hashes.SHA256()).hex().upper()
+        credential = CredentialModel.objects.filter(certificates__sha256_fingerprint=cert_fingerprint).first()
+        if not credential:
+            error_message = f'No credential found for certificate with fingerprint {cert_fingerprint}'
+            raise IssuedCredentialModel.DoesNotExist(error_message)
+
+        try:
+            issued_credential = IssuedCredentialModel.objects.get(credential=credential)
+        except IssuedCredentialModel.DoesNotExist:
+            error_message = f'No issued credential found for certificate with fingerprint {cert_fingerprint}'
+            raise IssuedCredentialModel.DoesNotExist(error_message) from None
+
+        return issued_credential
+
 
 class RemoteDeviceCredentialDownloadModel(models.Model):
     """Model to associate a credential model with an OTP and token for unauthenticated remoted download."""
-
-    objects: models.Manager[RemoteDeviceCredentialDownloadModel]
 
     BROWSER_MAX_OTP_ATTEMPTS = 3
     TOKEN_VALIDITY = datetime.timedelta(minutes=3)

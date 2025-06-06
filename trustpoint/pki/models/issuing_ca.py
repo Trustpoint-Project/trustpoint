@@ -32,8 +32,6 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
     This model contains the configurations of all Issuing CAs available within the Trustpoint.
     """
 
-    objects: CustomDeleteActionManager[IssuingCaModel]
-
     class IssuingCaTypeChoice(models.IntegerChoices):
         """The IssuingCaTypeChoice defines the type of Issuing CA.
 
@@ -104,6 +102,16 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
         Returns:
             IssuingCaModel: The newly created Issuing CA model.
         """
+        ca_cert = credential_serializer.certificate
+        if not ca_cert:
+            raise ValidationError(_('The provided credential is not a valid CA; it does not contain a certificate.'))
+        try:
+            bc_extension = ca_cert.extensions.get_extension_for_class(x509.BasicConstraints)
+        except x509.ExtensionNotFound:
+            raise ValidationError(_('The provided certificate is not a valid CA certificate; it does not contain a Basic Constraints extension.'))
+        if not bc_extension.value.ca:
+            raise ValidationError(_('The provided certificate is not a valid CA certificate; it is an End Entity certificate.'))
+
         issuing_ca_types = (
             cls.IssuingCaTypeChoice.AUTOGEN_ROOT,
             cls.IssuingCaTypeChoice.AUTOGEN,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import re
 from typing import TYPE_CHECKING
 
 from cryptography import x509
@@ -77,6 +78,24 @@ class SaveCredentialToDbMixin:
         issued_credential_type: IssuedCredentialModel.IssuedCredentialType,
         issued_credential_purpose: IssuedCredentialModel.IssuedCredentialPurpose,
     ) -> IssuedCredentialModel:
+        # check for existing issued credentials
+        existing_credentials = IssuedCredentialModel.objects.filter(
+            device=self.device,
+            domain=self.domain,
+            issued_credential_type=issued_credential_type,
+            issued_credential_purpose=issued_credential_purpose,
+            common_name=common_name,
+        )
+        for issued_credential in existing_credentials:
+            cred_model: CredentialModel = issued_credential.credential
+            if cred_model.certificate.subjects_match(certificate.subject):
+                # if the certificate already exists, we need to update the certificate (e.g. reenroll)
+                cred_model.update_keyless_credential(
+                    certificate, certificate_chain
+                )
+                cred_model.save()
+                return issued_credential
+
         credential_model = CredentialModel.save_keyless_credential(
             certificate=certificate,
             certificate_chain=certificate_chain,
@@ -226,7 +245,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
         certificate_builder = certificate_builder.issuer_name(
             self.domain.issuing_ca.credential.get_certificate().subject
         )
-        certificate_builder = certificate_builder.not_valid_before(datetime.datetime.now(datetime.UTC))
+        certificate_builder = certificate_builder.not_valid_before(datetime.datetime.now(datetime.UTC) - one_day)
         certificate_builder = certificate_builder.not_valid_after(
             datetime.datetime.now(datetime.UTC) + (one_day * validity_days)
         )
@@ -289,11 +308,17 @@ class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
         """
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
 
+        san_uri = re.sub(r'[^a-zA-Z0-9_.-]', '', common_name) + '.alt'
         certificate = self._build_certificate(
             common_name,
             private_key.public_key_serializer.as_crypto(),
             validity_days,
-            [(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False)],
+            [
+                (x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False),
+                # TODO(Air): This is a workaround for cryptography < 45.0.0 requiring # noqa: FIX002
+                #  a SAN to verify the (IDevID) cert.
+                (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(san_uri)]), False),
+            ],
         )
         credential = CredentialSerializer(
             private_key=private_key,
@@ -323,11 +348,17 @@ class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
         Returns:
             IssuedCredentialModel: The issued TLS client certificate.
         """
+        san_uri = re.sub(r'[^a-zA-Z0-9_.-]', '', common_name) + '.alt'
         certificate = self._build_certificate(
             common_name,
             public_key,
             validity_days,
-            [(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False)],
+            [
+                (x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False),
+                # TODO (Air): This is a workaround for cryptography < 45.0.0 requiring # noqa: FIX002
+                #  a SAN to verify the certificate.
+                (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(san_uri)]), False),
+            ],
         )
         return self._save_keyless_credential(
             certificate,
@@ -580,13 +611,14 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
         raise ValueError(err_msg)
 
     def _validate_application_uri(self, application_uri: str | list[str]) -> None:
-        """Validates the Uniform resource identifier according to OPC UA specification"""
-
+        """Validates the Uniform resource identifier according to OPC UA specification."""
         if isinstance(application_uri, list) and len(application_uri) == 0:
-            raise ValueError('Application URI cannot be empty')
+            error_message = 'Application URI cannot be empty'
+            raise ValueError(error_message)
 
         if isinstance(application_uri, list) and len(application_uri) > 1:
-            raise ValueError('Application URI cannot be longer than 1 item')
+            errror_message = 'Application URI cannot be longer than 1 item'
+            raise ValueError(errror_message)
 
     def issue_opcua_server_credential(  # noqa: PLR0913
         self,
@@ -598,7 +630,6 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
         validity_days: int = 365,
     ) -> IssuedCredentialModel:
         """Issues an OPC UA server credential (certificate + private key) following OPC UA security standards."""
-
         self._validate_application_uri(application_uri)
 
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
@@ -723,19 +754,20 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
         raise ValueError(err_msg)
 
     def _validate_application_uri(self, application_uri: str | list[str]) -> None:
-        """Validates the Uniform resource identifier according to OPC UA specification"""
-
+        """Validates the Uniform resource identifier according to OPC UA specification."""
         if isinstance(application_uri, list) and len(application_uri) == 0:
-            raise ValueError('Application URI cannot be empty')
+            error_message = 'Application URI cannot be empty'
+            raise ValueError(error_message)
 
         if isinstance(application_uri, list) and len(application_uri) > 1:
-            raise ValueError('Application URI cannot be longer than 1 item')
+            error_message = 'Application URI cannot be longer than 1 item'
+            raise ValueError(error_message)
+
 
     def issue_opcua_client_credential(
-        self, common_name: str, application_uri: str | list[str], validity_days: int = 365
-    ) -> IssuedCredentialModel:
+            self, common_name: str, application_uri: str | list[str], validity_days: int = 365
+        ) -> IssuedCredentialModel:
         """Issues an OPC UA client credential (certificate + private key) following OPC UA security standards."""
-
         self._validate_application_uri(application_uri)
         if isinstance(application_uri, list):
             application_uri = application_uri[0]
@@ -775,7 +807,6 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
         self, common_name: str, application_uri: str | list[str], validity_days: int, public_key: oid.PublicKey
     ) -> IssuedCredentialModel:
         """Issues an OPC UA client certificate (no private key) following OPC UA security standards."""
-
         self._validate_application_uri(application_uri)
         if isinstance(application_uri, list):
             application_uri = application_uri[0]

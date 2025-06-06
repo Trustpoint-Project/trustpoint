@@ -85,7 +85,7 @@
                 <div class="tp-menu-collapse {% if page_category == 'settings' %}show{% endif %}">
                     <a href="{% url 'settings:language' %}" class="tp-menu-item {% if page_name == 'language' %}tp-menu-active{% endif %}">{% trans "Language" %}</a>
                     <a href="{% url 'settings:logging-files' %}" class="tp-menu-item {% if page_name == 'logging' %}tp-menu-active{% endif %}">{% trans "Logging" %}</a>
-{#                    <a href="{% url 'settings:network' %}" class="tp-menu-item {% if page_name == 'network' %}tp-menu-active{% endif %}">{% trans "Network" %}</a>#}
+                    <a href="{% url 'settings:tls' %}" class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}">{% trans "TLS" %}</a>
 {#                    <a href="{% url 'settings:ntp' %}" class="tp-menu-item {% if page_name == 'ntp' %}tp-menu-active{% endif %}">{% trans "NTP" %}</a>#}
                     <a href="{% url 'settings:security' %}" class="tp-menu-item {% if page_name == 'security' %}tp-menu-active{% endif %}">{% trans "Security" %}</a>
                     <a href="{% url 'settings:backups' %}" class="tp-menu-item {% if page_name == 'backup' %}tp-menu-active{% endif %}">{% trans "Backup" %}</a>

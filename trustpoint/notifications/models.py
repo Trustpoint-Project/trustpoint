@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from devices.models import DeviceModel
 from django.db import models
@@ -22,8 +22,6 @@ log = logging.getLogger('tp.home')
 
 class NotificationStatus(models.Model):
     """Model representing a status a notification can have."""
-
-    objects: models.Manager[NotificationStatus]
 
     class StatusChoices(models.TextChoices):
         """Status Types."""
@@ -68,8 +66,6 @@ class NotificationStatus(models.Model):
 
 class NotificationMessageModel(models.Model):
     """Message Model for Notifications with Short and Optional Long Descriptions."""
-
-    objects: models.Manager[NotificationMessageModel]
 
     short_description = models.CharField(max_length=255)
     long_description = models.CharField(max_length=65536, default='No description provided')
@@ -132,8 +128,6 @@ class NotificationMessage:
 
 class NotificationModel(models.Model):
     """Notifications Model."""
-
-    objects: models.Manager[NotificationModel]
 
     class NotificationTypes(models.TextChoices):
         """Supported Notification Types."""
@@ -366,9 +360,12 @@ class NotificationModel(models.Model):
         """Returns a human-readable string.
 
         Returns:
-            The notification type to display.
+            The notification type to display with message description if available.
         """
-        return f'{self.get_notification_type_display()} - {self.message.short_description[:20]}'
+        message_text = 'No message'
+        if self.message and hasattr(self.message, 'short_description'):
+            message_text = self.message.short_description[:20]
+        return f'{self.get_notification_type_display()} - {message_text}'
 
     @property
     def short_translated(self) -> Any:
@@ -399,3 +396,97 @@ class NotificationModel(models.Model):
         except ValueError:
             return _('Guess we messed up. Type of this notification is %(type)s') % {'type': self.message_type}
         return message_string.long.format(**self.message_data)
+
+class WeakECCCurve(models.Model):
+    """Represents a weak or deprecated ECC curve."""
+
+    objects: models.Manager['WeakECCCurve']
+
+    class ECCCurveChoices(models.TextChoices):
+        """Enumeration of weak or deprecated ECC curve OIDs."""
+        SECP160R1 = '1.3.132.0.8', _('SECP160R1')
+        SECP192R1 = '1.2.840.10045.3.1.1', _('SECP192R1')
+        SECP224R1 = '1.3.132.0.33', _('SECP224R1')
+        SECP256K1 = '1.3.132.0.10', _('SECP256K1')
+        SECT163K1 = '1.3.132.0.1', _('SECT163K1')
+        SECT163R2 = '1.3.132.0.15', _('SECT163R2')
+        SECT233K1 = '1.3.132.0.26', _('SECT233K1')
+        SECT233R1 = '1.3.132.0.27', _('SECT233R1')
+        SECT283K1 = '1.3.132.0.16', _('SECT283K1')
+
+    oid = models.CharField(
+        max_length=64,
+        choices=ECCCurveChoices.choices,
+        unique=True
+    )
+
+    def __str__(self) -> str:
+        """Return the human-readable name for the ECC curve."""
+        return str(dict(self.ECCCurveChoices.choices).get(self.oid, self.oid)) # type: ignore[misc]
+
+
+class WeakSignatureAlgorithm(models.Model):
+    """Represents a weak or deprecated signature algorithm."""
+
+    objects: models.Manager[WeakSignatureAlgorithm]
+
+    class SignatureChoices(models.TextChoices):
+        """Enumeration of weak or deprecated signature algorithm OIDs."""
+        MD5 = '1.2.840.113549.2.5', _('MD5')
+        SHA1 = '1.3.14.3.2.26', _('SHA-1')
+        SHA224 = '2.16.840.1.101.3.4.2.4', _('SHA-224')
+
+    oid = models.CharField(
+        max_length=64,
+        choices=SignatureChoices.choices,
+        unique=True
+    )
+
+    def __str__(self) -> str:
+        """Return the human-readable name for the weak signature algorithm."""
+        return str(dict(self.SignatureChoices.choices).get(self.oid, self.oid)) # type: ignore[misc]
+
+class NotificationConfig(models.Model):
+    """Stores global configuration for notification thresholds and behaviors."""
+
+    objects: models.Manager[NotificationConfig]
+
+    cert_expiry_warning_days = models.PositiveIntegerField(
+        default=30,
+        help_text=_("Number of days before a certificate's expiration to trigger a 'Certificate Expiring' warning.")
+    )
+
+    issuing_ca_expiry_warning_days = models.PositiveIntegerField(
+        default=30,
+        help_text=_("Number of days before an issuing CA's certificate expiration to trigger a warning.")
+    )
+
+    rsa_minimum_key_size = models.PositiveIntegerField(
+        default=2048,
+        help_text=_('Minimum RSA key size (in bits) that certificates must meet to avoid being flagged as insecure.')
+    )
+
+    weak_ecc_curves = models.ManyToManyField(
+        WeakECCCurve,
+        blank=True,
+        help_text=_('Select ECC curves considered weak or deprecated.')
+    )
+
+    weak_signature_algorithms = models.ManyToManyField(
+        WeakSignatureAlgorithm,
+        blank=True,
+        help_text=_('Select signature algorithms considered weak or deprecated.')
+    ) # type: ignore
+
+    class Meta:
+        """Meta class configuration."""
+        verbose_name = _('Notification Configuration')
+
+    def __str__(self) -> str:
+        """Return the human-readable name for the notification configuration."""
+        return 'Notification Settings'
+
+    @classmethod
+    def get(cls) -> NotificationConfig:
+        """Ensure there's always one settings object to use."""
+        return cls.objects.first() or cls.objects.create()

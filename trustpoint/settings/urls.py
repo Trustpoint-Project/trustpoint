@@ -1,8 +1,8 @@
-"""Routing configuration"""
+"""URL configuration for the settings application."""
 
 from django.urls import path, re_path
 
-from .views import IndexView, backup, language, logging, security
+from .views import IndexView, backup, language, logging, security, tls
 
 app_name = 'settings'
 urlpatterns = [
@@ -25,8 +25,17 @@ urlpatterns = [
         name='logging-files-download-multiple',
     ),
     path('security/', security.SecurityView.as_view(), name='security'),
-    path('backups/', backup.BackupManageView.as_view(extra_context={'page_category': 'settings', 'page_name': 'backup'}), name='backups'),
+    path('tls/', tls.TlsView.as_view(), name='tls'),
+    path(
+        'backups/',
+        backup.BackupManageView.as_view(extra_context={'page_category': 'settings', 'page_name': 'backup'}),
+        name='backups'
+    ),
     path('backups/download/<str:filename>/', backup.BackupFileDownloadView.as_view(), name='backup-download'),
-    path('backups/download-multiple/<str:archive_format>/', backup.BackupFilesDownloadMultipleView.as_view(), name='backup-download-multiple'),
+    path(
+        'backups/download-multiple/<str:archive_format>/',
+        backup.BackupFilesDownloadMultipleView.as_view(),
+        name='backup-download-multiple'
+    ),
     path('backups/delete-multiple/', backup.BackupFilesDeleteMultipleView.as_view(), name='backup-delete-multiple'),
 ]

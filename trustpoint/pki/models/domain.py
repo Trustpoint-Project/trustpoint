@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core import oid
 from util.field import UniqueNameValidator
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Any
@@ -20,8 +20,6 @@ __all__ = ['DomainModel']
 
 class DomainModel(models.Model):
     """Domain Model."""
-
-    objects: models.Manager[DomainModel]
 
     unique_name = models.CharField(_('Domain Name'), max_length=100, unique=True, validators=[UniqueNameValidator()])
 
@@ -58,7 +56,7 @@ class DomainModel(models.Model):
 
     allow_idevid_registration = models.BooleanField(
         _('Allow IDevID Enrollment'),
-        default=False,
+        default=True,
         help_text=_('Allow registration of a new device using the IDevID of the Device.'),
     )
 
@@ -80,7 +78,13 @@ class DomainModel(models.Model):
         help_text=_('Allow issuance of application certificates without a domain credential.'),
     )
 
-    def __repr(self) -> str:
+    def __repr__(self) -> str:
+        """Machine-readable representation of the Domain model instance.
+
+        Returns:
+            str:
+                Machine-readable representation of the Domain model model instance.
+        """
         return f'DomainModel(unique_name={self.unique_name})'
 
     def __str__(self) -> str:
@@ -88,9 +92,10 @@ class DomainModel(models.Model):
 
         Returns:
             str:
-                Human-readable representation of the EndpointProfile model instance.
+                Human-readable representation of the Domain model model instance.
         """
         return self.unique_name
+
 
     def save(self, **kwargs: Any) -> None:
         """Save the Domain model instance."""
@@ -100,7 +105,8 @@ class DomainModel(models.Model):
     @property
     def signature_suite(self) -> oid.SignatureSuite:
         """Get the signature suite for the domain (based on its Issuing CA)."""
-        return oid.SignatureSuite.from_certificate(self.issuing_ca.credential.get_certificate_serializer().as_crypto())
+        return oid.SignatureSuite.from_certificate(
+            self.get_issuing_ca_or_value_error().credential.get_certificate_serializer().as_crypto())
 
     @property
     def public_key_info(self) -> oid.PublicKeyInfo:
@@ -112,3 +118,17 @@ class DomainModel(models.Model):
         if self.issuing_ca and self.issuing_ca.issuing_ca_type == IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT:
             exc_msg = 'The issuing CA associated with the domain cannot be an auto-generated root CA.'
             raise ValidationError(exc_msg)
+
+    def get_issuing_ca_or_value_error(self) -> IssuingCaModel:
+        """Gets the corresponding Issuing CA.
+
+        Returns:
+            The corresponding Issuing CA.
+
+        Raises:
+            ValueError: If no Issuing CA is set.
+        """
+        if not self.issuing_ca:
+            err_msg = f'Domain {self.unique_name} does not have a corresponding Issuing CA configured.'
+            raise ValueError(err_msg)
+        return self.issuing_ca

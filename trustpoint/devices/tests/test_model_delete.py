@@ -9,7 +9,6 @@ from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
 
-
 from devices.models import DeviceModel, IssuedCredentialModel
 
 

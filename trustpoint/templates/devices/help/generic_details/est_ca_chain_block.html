@@ -5,54 +5,44 @@
     <script src="{% static 'js/copy_clipboard.js' %}"></script>
 {% endblock head %}
 
-{% block cmp_enroll_application_credential_block %}
+{% block est_ca_chain_block %}
     <ul class="tp-kvp-list">
-
         <li>
-            <div>{% trans 'TLS-Client CSR Generation' %}</div>
+            <div>{% trans 'Retrieve CA chain' %}</div>
             <div class="copy-container" style="position: relative;">
                 <code class="command-text language-bash">
-                    openssl req \<br>
-                    -new \<br>
-                    -key key.pem \<br>
-                    -outform der \<br>
-                    -out my_csr.der \<br>
-                    -subj "/CN={{ tls_client_cn }}"
+                    curl -X GET \<br>
+                    "https://{{ host }}/.well-known/est/{{ domain }}/cacerts/" \<br>
+                    --cacert server_cert.pem \<br>
+                    -H "Accept: application/pkcs7-mime" \<br>
+                    | base64 --decode > cacerts.p7b
                 </code>
-
                 <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
                         aria-label="Copy to clipboard">
                     <svg class="icon icon-copy" width="40" height="40" fill="currentColor">
                         <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
                     </svg>
                 </button>
-
             </div>
         </li>
-    </ul>
-    <ul class="tp-kvp-list">
         <li>
-            <div>{% trans 'TLS-Server CSR Generation' %}</div>
-
+            <div>{% trans 'Convert PKCS7 to PEM' %}</div>
             <div class="copy-container" style="position: relative;">
                 <code class="command-text language-bash">
-                    openssl req \<br>
-                    -new \<br>
-                    -key key.pem \<br>
-                    -outform der \<br>
-                    -out application_credential_csr.der \<br>
-                    -subj "/CN={{ tls_server_cn }}"
+                    openssl pkcs7 \<br>
+                    -print_certs \<br>
+                    -inform DER \<br>
+                    -in cacerts.p7b \<br>
+                    -out cacerts.pem
                 </code>
-
                 <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
                         aria-label="Copy to clipboard">
                     <svg class="icon icon-copy" width="40" height="40" fill="currentColor">
                         <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
                     </svg>
                 </button>
-
             </div>
         </li>
     </ul>
 
-{% endblock cmp_enroll_application_credential_block %}
+{% endblock est_ca_chain_block %}
