@@ -1,8 +1,8 @@
 # util/sftp.py
+"""Wrapper around Paramiko SFTP functionality and related exceptions."""
 
 import io
-import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import paramiko
@@ -41,19 +41,19 @@ class SftpClient:
             return default
 
         self.host: str = _get('host', '') or ''
-        self.port: int = _get('port', 22) or 22
+        self.port: int = _get('port', default=2222) or 2222
         self.username: str = _get('user', '') or ''
         self.auth_method: str = _get('auth_method', '') or ''
         self.password: str | None = _get('password', '') or None
         self.private_key_text: str | None = _get('private_key', '') or None
         self.passphrase: str | None = _get('key_passphrase', '') or None
 
-        self.store_locally: bool = bool(_get('local_storage', False))
-
+        self.store_locally: bool = bool(_get('local_storage', default=False))
         self.remote_directory: str = (_get('remote_directory', '') or '').strip()
 
         if self.auth_method:
-            if self.auth_method not in BackupOptions.AuthMethod.values:
+            valid_methods = BackupOptions.AuthMethod.values
+            if self.auth_method not in valid_methods:
                 msg = f'Invalid auth_method: {self.auth_method}'
                 raise SftpError(msg)
             if (
@@ -81,24 +81,29 @@ class SftpClient:
         if not self.private_key_text:
             msg = 'No private key provided.'
             raise SftpError(msg)
+
         try:
             key_stream = io.StringIO(self.private_key_text)
-            return paramiko.RSAKey.from_private_key(key_stream, password=self.passphrase or None)
-        except Exception as e:
+            return paramiko.RSAKey.from_private_key(
+                key_stream, password=self.passphrase or None
+            )
+        except paramiko.SSHException as e:
             msg = f'Failed to load private key: {e}'
-            raise SftpError(msg)
+            raise SftpError(msg) from e
 
-    def test_connection(self) -> None:
-        """Attempt an SFTP connection with the current settings.
+    def _connect_sftp(self) -> tuple[paramiko.Transport, paramiko.SFTPClient]:
+        """Establish an SFTP connection and return the Transport and SFTPClient.
+
+        Returns:
+            A tuple of (Transport, SFTPClient).
 
         Raises:
-            SftpError: If no auth_method, authentication fails, or any SSH error.
+            SftpError: If no auth_method is set or authentication/SSH errors occur.
         """
         if not self.auth_method:
-            msg = 'No SFTP configured; cannot test connection.'
+            msg = 'No SFTP configured; cannot connect.'
             raise SftpError(msg)
 
-        transport: paramiko.Transport | None = None
         try:
             transport = paramiko.Transport((self.host, self.port))
             if self.auth_method == BackupOptions.AuthMethod.PASSWORD:
@@ -109,18 +114,28 @@ class SftpClient:
 
             sftp = paramiko.SFTPClient.from_transport(transport)
             if sftp is None:
+                transport.close()
                 msg = 'Authentication failed.'
                 raise SftpError(msg)
-            sftp.close()
-        except paramiko.AuthenticationException:
+            return transport, sftp  # noqa: TRY300
+
+        except paramiko.AuthenticationException as e:
             msg = 'Authentication failed.'
-            raise SftpError(msg)
+            raise SftpError(msg) from e
         except paramiko.SSHException as e:
             msg = f'SSH error: {e}'
-            raise SftpError(msg)
-        except Exception as e:
-            msg = f'Connection test failed: {e}'
-            raise SftpError(msg)
+            raise SftpError(msg) from e
+
+    def test_connection(self) -> None:
+        """Attempt an SFTP connection with the current settings.
+
+        Raises:
+            SftpError: If no auth_method, authentication fails, or any SSH error.
+        """
+        transport: paramiko.Transport | None = None
+        try:
+            transport, sftp = self._connect_sftp()
+            sftp.close()
         finally:
             if transport and transport.is_active():
                 transport.close()
@@ -136,53 +151,42 @@ class SftpClient:
             SftpError: If no auth_method, local file missing, or any SSH/SFTP error.
         """
         if not self.auth_method:
-            raise SftpError('No SFTP configured; cannot upload.')
+            msg = 'No SFTP configured; cannot upload.'
+            raise SftpError(msg)
 
         if not local_filepath.exists() or not local_filepath.is_file():
-            raise SftpError(f'Local file does not exist: {local_filepath}')
+            msg = f'Local file does not exist: {local_filepath}'
+            raise SftpError(msg)
 
         transport: paramiko.Transport | None = None
         try:
-            transport = paramiko.Transport((self.host, self.port))
-            if self.auth_method == BackupOptions.AuthMethod.PASSWORD:
-                transport.connect(username=self.username, password=self.password)
-            else:
-                pkey = self._load_private_key()
-                transport.connect(username=self.username, pkey=pkey)
+            transport, sftp = self._connect_sftp()
 
-            sftp = paramiko.SFTPClient.from_transport(transport)
-            if sftp is None:
-                msg = 'Authentication failed.'
-                raise SftpError(msg)
-
-            # Ensure remote directory exists (mkdir -p)
-            remote_dir = os.path.dirname(self.remote_directory)
-            if remote_dir:
-                try:
-                    sftp.stat(remote_dir)
-                except OSError:
-                    parts = remote_dir.split('/')
-                    cwd = ''
-                    for part in parts:
-                        if not part:
-                            continue
-                        cwd = f'{cwd}/{part}'
+            # Ensure remote directory exists (mkdir -p behavior)
+            remote_dir = PurePosixPath(remote_path).parent
+            if str(remote_dir) not in ('', '.'):
+                path_accum = PurePosixPath(remote_dir.parts[0])
+                for part in remote_dir.parts[1:]:
+                    path_accum /= part
+                    try:
+                        sftp.stat(str(path_accum))
+                    except OSError:
                         try:
-                            sftp.stat(cwd)
-                        except OSError:
-                            sftp.mkdir(cwd)
+                            sftp.mkdir(str(path_accum))
+                        except paramiko.SSHException as e:
+                            msg = f'Failed to create remote directory {path_accum}: {e}'
+                            raise SftpError(msg) from e
 
-            sftp.put(str(local_filepath), remote_path)
+            try:
+                sftp.put(str(local_filepath), remote_path)
+            except paramiko.SSHException as e:
+                msg = f'SSH error during upload: {e}'
+                raise SftpError(msg) from e
+
             sftp.close()
-        except paramiko.AuthenticationException:
-            msg = 'Authentication failed.'
-            raise SftpError(msg)
         except paramiko.SSHException as e:
-            msg = f'SSH error during upload: {e}'
-            raise SftpError(msg)
-        except Exception as e:
             msg = f'Upload failed: {e}'
-            raise SftpError(msg)
+            raise SftpError(msg) from e
         finally:
             if transport and transport.is_active():
                 transport.close()

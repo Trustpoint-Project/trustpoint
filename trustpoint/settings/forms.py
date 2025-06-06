@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Fieldset, Layout
@@ -96,10 +96,13 @@ class SecurityConfigForm(forms.ModelForm):
         return form_value
 
 
-class BackupOptionsForm(forms.ModelForm):
+class BackupOptionsForm(forms.ModelForm[BackupOptions]):
+    """Form for editing BackupOptions settings."""
+
     class Meta:
+        """ModelForm Meta configuration for BackupOptions."""
         model = BackupOptions
-        fields = [
+        fields: ClassVar[list[str]] = [
             'host',
             'port',
             'user',
@@ -110,29 +113,33 @@ class BackupOptionsForm(forms.ModelForm):
             'key_passphrase',
             'remote_directory',
         ]
-        widgets = {
+        widgets: ClassVar[dict[str, Any]] = {
             'host': forms.TextInput(attrs={'class': 'form-control'}),
             'port': forms.NumberInput(attrs={'class': 'form-control'}),
             'user': forms.TextInput(attrs={'class': 'form-control'}),
             'local_storage': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'auth_method': forms.Select(attrs={'class': 'form-select'}),
-            'password': forms.PasswordInput(attrs={'class': 'form-control'}, render_value=True),
+            'password': forms.PasswordInput(
+                attrs={'class': 'form-control'}, render_value=True
+            ),
             'private_key': forms.Textarea(attrs={'class': 'form-control', 'rows': 5}),
-            'key_passphrase': forms.PasswordInput(attrs={'class': 'form-control'}, render_value=True),
+            'key_passphrase': forms.PasswordInput(
+                attrs={'class': 'form-control'}, render_value=True
+            ),
             'remote_directory': forms.TextInput(attrs={'class': 'form-control'}),
         }
 
-
-    def clean(self):
-        cleaned = super().clean()
+    def clean(self) -> dict[str, Any]:
+        """Validate required fields based on selected authentication method."""
+        cleaned: dict[str, Any] = super().clean() or {}
         auth = cleaned.get('auth_method')
         if auth:
             pwd = cleaned.get('password', '').strip()
             key = cleaned.get('private_key', '').strip()
-            rd  = (cleaned.get('remote_directory') or "").strip()
 
-        if auth == BackupOptions.AuthMethod.PASSWORD and not pwd:
-            self.add_error('password', 'Password is required when using password authentication.')
-        if auth == BackupOptions.AuthMethod.SSH_KEY and not key:
-            self.add_error('private_key', 'Private key is required when using SSH Key authentication.')
+            if auth == BackupOptions.AuthMethod.PASSWORD and not pwd:
+                self.add_error('password', 'Password is required when using password authentication.')
+            if auth == BackupOptions.AuthMethod.SSH_KEY and not key:
+                self.add_error('private_key', 'Private key is required when using SSH Key authentication.')
+
         return cleaned
