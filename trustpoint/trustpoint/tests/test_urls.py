@@ -1,8 +1,9 @@
-import pytest
-from django.urls import resolve, reverse
+"""Tests for the url module."""
+
 from django.contrib import admin
-from pki.views.issuing_cas import CrlDownloadView
+from django.urls import resolve, reverse
 from home.views import IndexView
+from pki.views.issuing_cas import CrlDownloadView
 
 
 class TestUrls:
@@ -42,14 +43,15 @@ class TestUrls:
         url = reverse('devices:devices')
         assert resolve(url).namespace == 'devices'
 
+
     def test_est_url_included(self):
         """Test that the 'est/' URL pattern is included and resolves correctly."""
-        url = reverse('est:ca-certs-post', kwargs={"domain": "test-domain", "certtemplate": "template"})
+        url = reverse('est:ca-certs-post', kwargs={'domain': 'test-domain', 'certtemplate': 'template'})
         assert resolve(url).namespace == 'est'
 
     def test_cmp_url_included(self):
         """Test that the 'cmp/' URL pattern is included and resolves to the correct namespace."""
-        url = reverse('cmp:initialization', kwargs={"domain": "test-domain"})
+        url = reverse('cmp:initialization', kwargs={'domain': 'test-domain'})
         assert resolve(url).namespace == 'cmp'
 
     def test_jsi18n_url_resolves(self):
