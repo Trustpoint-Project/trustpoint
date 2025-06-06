@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from cryptography import x509
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
@@ -23,14 +24,13 @@ from trustpoint.logger import LoggerMixin
 if TYPE_CHECKING:
     from typing import Any, ClassVar
 
-    from cryptography import x509
     from cryptography.hazmat.primitives import hashes
     from django.db.models import QuerySet
     from trustpoint_core.key_types import PrivateKey
     from util.db import CustomDeleteActionManager
 
 
-__all__ = ['CertificateChainOrderModel', 'CredentialAlreadyExistsError', 'CredentialModel']
+__all__ = ['CertificateChainOrderModel', 'CredentialAlreadyExistsError', 'CredentialModel', 'IDevIDReferenceModel', 'OwnerCredentialModel',]
 
 
 class CredentialAlreadyExistsError(ValidationError):
@@ -528,6 +528,31 @@ class IDevIDReferenceModel(models.Model):
     def __str__(self) -> str:
         """Returns a human-readable string that represents this IDevIDRefSanModel entry."""
         return f'{self.dev_owner_id.unique_name} - {self.idevid_ref}'
+    
+    @property
+    def idevid_subject_serial_number(self) -> str:
+        """Returns the IDevID Subject Serial Number from the SAN of the DevOwnerID certificate."""
+        try:
+            return self.idevid_ref.split('.')[0]
+        except IndexError:
+            return ''
+        
+    @property
+    def idevid_x509_serial_number(self) -> str:
+        """Returns the IDevID X.509 Serial Number from the SAN of the DevOwnerID certificate."""
+        try:
+            return self.idevid_ref.split('.')[2]
+        except IndexError:
+            return ''
+        
+    @property
+    def idevid_sha256_fingerprint(self) -> str:
+        """Returns the IDevID SHA256 Fingerprint from the SAN of the DevOwnerID certificate."""
+        try:
+            return self.idevid_ref.split('.')[3]
+        except IndexError:
+            return ''
+        
 
 
 class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
@@ -570,7 +595,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
                 The credential as CredentialSerializer instance.
 
         Returns:
-            IssuingCaModel: The newly created Issuing CA model.
+            OwnerCredentialModel: The newly created owner credential model.
         """
         # Extract the IDevID references from the SAN of the DevOwnerID certificate
         # Reference URI format: '<IDevID_Subj_SN>.dev-owner.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>.alt'

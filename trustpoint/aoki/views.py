@@ -26,10 +26,6 @@ if TYPE_CHECKING:
     from django.http import HttpRequest
 
 
-class AokiNoOwnerIdError(Exception):
-    """Exception raised when no owner ID is found in the database for the device IDevID in the AOKI request."""
-
-
 class AokiServiceMixin:
     """Mixin for AOKI functionality."""
     @staticmethod
@@ -47,32 +43,6 @@ class AokiServiceMixin:
         idevid_sha256_fingerprint = idevid_cert.fingerprint(hashes.SHA256()).hex()
         return f'{idevid_subj_sn}.dev-owner.{idevid_x509_sn}.{idevid_sha256_fingerprint}.alt'
 
-    def get_owner_cert(self, idevid_cert: x509.Certificate) -> CertificateModel:
-        """Get the ownership certificate for the given IDevID."""
-        # This method should be implemented to retrieve the ownership certificate
-        # based on the provided IDevID subject serial number.
-
-        # Build URI string '<IDevID_Subj_SN>.dev-owner.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>.alt'
-        # Check SAN extension in DB for owner cert
-        # if present, check that the certificate is in truststore with usage "Device Owner ID"
-        idevid_san_uri = self._get_idevid_owner_san_uri(idevid_cert)
-        gn_uri_query = GeneralNameUniformResourceIdentifier.objects.filter(value=idevid_san_uri)
-        if not gn_uri_query.exists():
-            exc_msg = f'No Owner ID SAN URI found for IDevID with owner SAN URI {idevid_san_uri}.'
-            raise AokiNoOwnerIdError(exc_msg)
-        gn = gn_uri_query.first().general_names_set.first()
-        san_ext = SubjectAlternativeNameExtension.objects.filter(subject_alt_name=gn).first()
-        if not san_ext:
-            exc_msg = f'No SAN extension found for IDevID with owner SAN URI {idevid_san_uri}.'
-            raise AokiNoOwnerIdError(exc_msg)
-        cert = CertificateModel.objects.filter(subject_alternative_name_extension=san_ext).first()
-        if not cert:
-            exc_msg = f'No certificate found for IDevID with owner SAN URI {idevid_san_uri}.'
-            raise AokiNoOwnerIdError(exc_msg)
-        # Check that the certificate is in a truststore with usage "Device Owner ID"
-
-
-        return cert
 
 class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
     """View for handling AOKI initialization requests."""
@@ -101,13 +71,6 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
             return LoggedHttpResponse(
                 f'IDevID authentication failed: {e}', status = 403
             )
-
-        # try:
-        #     owner_id_cert = self.get_owner_cert(client_cert)
-        # except AokiNoOwnerIdError:
-        #     return LoggedHttpResponse(
-        #         'No DevOwnerID present for this IDevID.', status = 422
-        #     )
 
         idevid_san_uri = self._get_idevid_owner_san_uri(client_cert)
         owner_cred_ref = IDevIDReferenceModel.objects.filter(idevid_ref=idevid_san_uri).first()
@@ -158,16 +121,3 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
         self.logger.info(resp.content)
 
         return resp
-        # Verify Device IDevID against Truststores
-        # (need to figure out how to do this efficiently as we have no domain here)
-        # Maybe first look for ownership certs and reference the truststore there?
-
-        # extract SN from client cert
-        # go through all registration patterns and check for truststore
-
-        # Check we have a valid ownership certificate for this device
-
-        # Send the device a response of the form:
-        # (OwnershipCert as PEM || TLS Truststore as PEM || enrollment_info) signed by owner private key
-        # enrollment_info =
-        #   {protocols: [{"protocol": "EST", "url": "/.well-known/est/domain/domaincredential/simpleenroll"}]}
