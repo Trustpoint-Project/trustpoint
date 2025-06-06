@@ -13,14 +13,17 @@ dependencies = [
     "cryptography>=45.0.2",
     "django~=5.1.8",
     "django-crispy-forms~=2.3",
+    "django-dbbackup>=4.2.1",
     "django-filter~=25.1",
     "django-stubs[compatible-mypy]>=5.2.0",
     "django-taggit>=6.1.0,<7",
+    "paramiko>=3.5.1",
     "psycopg>=3.2.6",
     "psycopg-binary>=3.2.6",
     "pyasn1>=0.6.1,<0.7",
     "pyasn1-modules>=0.4.1,<0.5",
     "trustpoint-core==0.2.2",
+    "types-paramiko>=3.5.0.20250516",
     "zeroconf>=0.147,<0.148",
 ]
 
