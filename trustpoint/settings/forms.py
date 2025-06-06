@@ -10,7 +10,7 @@ from django import forms
 from django.utils.translation import gettext_lazy as _
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
-from settings.models import SecurityConfig
+from settings.models import BackupOptions, SecurityConfig
 from settings.security import manager
 from settings.security.features import AutoGenPkiFeature, SecurityFeature
 
@@ -94,3 +94,45 @@ class SecurityConfigForm(forms.ModelForm):
         if form_value is None:
             return self.instance.auto_gen_pki_key_algorithm if self.instance else AutoGenPkiKeyAlgorithm.RSA2048
         return form_value
+
+
+class BackupOptionsForm(forms.ModelForm):
+    class Meta:
+        model = BackupOptions
+        fields = [
+            'host',
+            'port',
+            'user',
+            'local_storage',
+            'auth_method',
+            'password',
+            'private_key',
+            'key_passphrase',
+            'remote_directory',
+        ]
+        widgets = {
+            'host': forms.TextInput(attrs={'class': 'form-control'}),
+            'port': forms.NumberInput(attrs={'class': 'form-control'}),
+            'user': forms.TextInput(attrs={'class': 'form-control'}),
+            'local_storage': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'auth_method': forms.Select(attrs={'class': 'form-select'}),
+            'password': forms.PasswordInput(attrs={'class': 'form-control'}, render_value=True),
+            'private_key': forms.Textarea(attrs={'class': 'form-control', 'rows': 5}),
+            'key_passphrase': forms.PasswordInput(attrs={'class': 'form-control'}, render_value=True),
+            'remote_directory': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+
+    def clean(self):
+        cleaned = super().clean()
+        auth = cleaned.get('auth_method')
+        if auth:
+            pwd = cleaned.get('password', '').strip()
+            key = cleaned.get('private_key', '').strip()
+            rd  = (cleaned.get('remote_directory') or "").strip()
+
+        if auth == BackupOptions.AuthMethod.PASSWORD and not pwd:
+            self.add_error('password', 'Password is required when using password authentication.')
+        if auth == BackupOptions.AuthMethod.SSH_KEY and not key:
+            self.add_error('private_key', 'Private key is required when using SSH Key authentication.')
+        return cleaned

@@ -2,105 +2,214 @@
 {% load i18n static %}
 
 {% block content %}
-<div class="card mb-4">
-  <div class="card-header d-flex justify-content-between align-items-center">
-    <h1 class="m-0">{% trans "Backup management" %}</h1>
-    <form method="post" class="m-0">
+  {# ────────────────────────────────────────────── #}
+  {#       TOP CARD: Backup Settings Form         #}
+  {# ────────────────────────────────────────────── #}
+  <div class="card mb-4">
+    <div class="card-header">
+      <h2 class="h5 mb-0">{% trans "Backup Settings" %}</h2>
+    </div>
+    <div class="card-body">
+      <form method="post">
+        {% csrf_token %}
+        {{ backup_options_form.non_field_errors }}
+
+        <div class="mb-3">
+          {{ backup_options_form.host.label_tag }}
+          {{ backup_options_form.host }}
+          {{ backup_options_form.host.errors }}
+        </div>
+
+        <div class="mb-3">
+          {{ backup_options_form.port.label_tag }}
+          {{ backup_options_form.port }}
+          {{ backup_options_form.port.errors }}
+        </div>
+
+        <div class="mb-3">
+          {{ backup_options_form.user.label_tag }}
+          {{ backup_options_form.user }}
+          {{ backup_options_form.user.errors }}
+        </div>
+
+        <div class="form-check mb-3">
+          {{ backup_options_form.local_storage }}
+          {{ backup_options_form.local_storage.label_tag }}
+          {{ backup_options_form.local_storage.errors }}
+        </div>
+
+        <hr>
+
+        <div class="mb-3">
+          {{ backup_options_form.auth_method.label_tag }}
+          {{ backup_options_form.auth_method }}
+          {{ backup_options_form.auth_method.errors }}
+        </div>
+
+        <div class="mb-3 password-fields"
+             style="{% if backup_options_form.initial.auth_method != 'password' %}display:none;{% endif %}">
+          {{ backup_options_form.password.label_tag }}
+          {{ backup_options_form.password }}
+          {{ backup_options_form.password.errors }}
+        </div>
+
+        <div class="mb-3 ssh-key-fields"
+             style="{% if backup_options_form.initial.auth_method != 'ssh_key' %}display:none;{% endif %}">
+          {{ backup_options_form.private_key.label_tag }}
+          {{ backup_options_form.private_key }}
+          {{ backup_options_form.private_key.errors }}
+        </div>
+
+        <div class="mb-3 ssh-key-fields"
+             style="{% if backup_options_form.initial.auth_method != 'ssh_key' %}display:none;{% endif %}">
+          {{ backup_options_form.key_passphrase.label_tag }}
+          {{ backup_options_form.key_passphrase }}
+          {{ backup_options_form.key_passphrase.errors }}
+        </div>
+
+        <hr>
+
+        <div class="mb-3">
+          {{ backup_options_form.remote_directory.label_tag }}
+          {{ backup_options_form.remote_directory }}
+          {{ backup_options_form.remote_directory.errors }}
+          <small class="form-text text-muted">
+            {% trans "Remote directory on SFTP server (e.g. /backups/). Required if using SFTP." %}
+          </small>
+        </div>
+
+        <div class="d-flex">
+          <button type="submit" name="save_backup_settings" class="btn btn-success me-2">
+            {% trans "Save Settings" %}
+          </button>
+          <button type="submit" name="test_sftp_connection" class="btn btn-outline-primary me-2">
+            {% trans "Test Connection" %}
+          </button>
+          <button type="submit" name="reset_backup_settings" class="btn btn-danger">
+            {% trans "Reset Settings" %}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <hr>
+
+  {# ────────────────────────────────────────────── #}
+  {#       SECOND CARD: Backup Management Table    #}
+  {# ────────────────────────────────────────────── #}
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h1 class="m-0">{% trans "Backup management" %}</h1>
+      <form method="post" class="m-0">
+        {% csrf_token %}
+        <button type="submit" name="create_backup" class="btn btn-primary">
+          {% trans "Create new backup" %}
+        </button>
+      </form>
+    </div>
+
+    <form id="batch-form" method="post" action="">
       {% csrf_token %}
-      <button type="submit" class="btn btn-primary">
-        {% trans "Create new backup" %}
-      </button>
+      <div class="card-body p-0">
+        <table class="table table-striped mb-0">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="select-all" /></th>
+              <th>
+                <a href="?sort={% if current_sort == 'filename' %}-{% endif %}filename">
+                  {% trans "File name" %}
+                </a>
+              </th>
+              <th>
+                <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
+                  {% trans "Created at" %}
+                </a>
+              </th>
+              <th>
+                <a href="?sort={% if current_sort == 'modified_at' %}-{% endif %}modified_at">
+                  {% trans "Last modified" %}
+                </a>
+              </th>
+              <th class="text-end">
+                <a href="?sort={% if current_sort == 'size_kb' %}-{% endif %}size_kb">
+                  {% trans "Size (KB)" %}
+                </a>
+              </th>
+              <th>{% trans "Download" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for backup in backup_files %}
+              <tr>
+                <td>
+                  <input type="checkbox" name="selected" value="{{ backup.filename }}" class="row-checkbox" />
+                </td>
+                <td>{{ backup.filename }}</td>
+                <td>{{ backup.created_at }}</td>
+                <td>{{ backup.modified_at }}</td>
+                <td class="text-end">{{ backup.size_kb }}</td>
+                <td>
+                  <a href="{% url 'settings:backup-download' filename=backup.filename %}"
+                     class="btn btn-sm btn-outline-primary">
+                    {% trans "Download" %}
+                  </a>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="6" class="text-center">
+                  {% trans "No backups found." %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card-footer d-flex justify-content-between">
+        <div>
+          <button formaction="{% url 'settings:backup-download-multiple' archive_format='tar.gz' %}"
+                  formmethod="post"
+                  class="btn btn-secondary">
+            {% trans "Download (tar.gz)" %}
+          </button>
+          <button formaction="{% url 'settings:backup-download-multiple' archive_format='zip' %}"
+                  formmethod="post"
+                  class="btn btn-secondary">
+            {% trans "Download (zip)" %}
+          </button>
+        </div>
+        <div>
+          <button formaction="{% url 'settings:backup-delete-multiple' %}"
+                  formmethod="post"
+                  class="btn btn-danger">
+            {% trans "Delete" %}
+          </button>
+        </div>
+        {% include "trustpoint/pagination.html" %}
+      </div>
     </form>
   </div>
 
-  <form id="batch-form" method="post" action="">
-    {% csrf_token %}
-    <div class="card-body p-0">
-      <table class="table table-striped mb-0">
-        <thead>
-          <tr>
-            <th><input type="checkbox" id="select-all" /></th>
-            <th>
-              <a href="?sort={% if current_sort == 'filename' %}-{% endif %}filename">
-                {% trans "File name" %}
-              </a>
-            </th>
-            <th>
-              <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
-                {% trans "Created at" %}
-              </a>
-            </th>
-            <th>
-              <a href="?sort={% if current_sort == 'modified_at' %}-{% endif %}modified_at">
-                {% trans "Last modified" %}
-              </a>
-            </th>
-            <th class="text-end">
-              <a href="?sort={% if current_sort == 'size_kb' %}-{% endif %}size_kb">
-                {% trans "Size (KB)" %}
-              </a>
-            </th>
-            <th>{% trans "Download" %}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for backup in backup_files %}
-          <tr>
-            <td>
-              <input type="checkbox" name="selected" value="{{ backup.filename }}" class="row-checkbox" />
-            </td>
-            <td>{{ backup.filename }}</td>
-            <td>{{ backup.created_at }}</td>
-            <td>{{ backup.modified_at }}</td>
-            <td class="text-end">{{ backup.size_kb }}</td>
-            <td>
-              <a href="{% url 'settings:backup-download' filename=backup.filename %}"
-                 class="btn btn-sm btn-outline-primary">
-                {% trans "Download" %}
-              </a>
-            </td>
-          </tr>
-          {% empty %}
-          <tr>
-            <td colspan="6" class="text-center">
-              {% trans "No backups found." %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+  <script>
+    // “Select All” checkbox behavior:
+    document.getElementById('select-all').addEventListener('change', function(e) {
+      document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = e.target.checked);
+    });
 
-    <div class="card-footer d-flex justify-content-between">
-      <div>
-        <button formaction="{% url 'settings:backup-download-multiple' archive_format='tar.gz' %}"
-                formmethod="post"
-                class="btn btn-secondary">
-          {% trans "Download (tar.gz)" %}
-        </button>
-        <button formaction="{% url 'settings:backup-download-multiple' archive_format='zip' %}"
-                formmethod="post"
-                class="btn btn-secondary">
-          {% trans "Download (zip)" %}
-        </button>
-      </div>
-      <div>
-        <button formaction="{% url 'settings:backup-delete-multiple' %}"
-                formmethod="post"
-                class="btn btn-danger">
-          {% trans "Delete" %}
-        </button>
-      </div>
-      {% include "trustpoint/pagination.html" %}
-    </div>
-  </form>
-
- 
-</div>
-
-<script>
-  document.getElementById('select-all').addEventListener('change', function(e) {
-    document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = e.target.checked);
-  });
-</script>
+    // Toggle password vs. SSH‐key fields:
+    document.addEventListener('DOMContentLoaded', function() {
+      const select = document.querySelector('select[name="auth_method"]');
+      function toggleFields() {
+        const val = select.value;
+        document.querySelectorAll('.password-fields')
+                .forEach(el => el.style.display = (val === 'password' ? 'block' : 'none'));
+        document.querySelectorAll('.ssh-key-fields')
+                .forEach(el => el.style.display = (val === 'ssh_key' ? 'block' : 'none'));
+      }
+      select.addEventListener('change', toggleFields);
+      toggleFields();
+    });
+  </script>
 {% endblock %}
