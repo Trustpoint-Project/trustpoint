@@ -12,18 +12,13 @@ until pg_isready -h "$DATABASE_HOST" -p "$DATABASE_PORT" &>/dev/null; do
 done
 echo "PostgreSQL database is available!"
 
-# Reset the database if the RESET_DB file exists
-RESET_DB_FILE="/etc/trustpoint/RESET_DB"
 
-if [ -f "$RESET_DB_FILE" ]; then
-  # Reset the database
-  echo "Resetting the database..."
-  run_as_www_data "uv run trustpoint/manage.py reset_db --no-user --force"
-  echo "Database reset."
-  rm -f "$RESET_DB_FILE"
-else
-  echo "Skipping database reset."
-fi
+# Running migraitons on the database
+echo "Creating Migrationfiles..."
+run_as_www_data "uv run trustpoint/manage.py makemigrations"
+echo "Running migrations on the database..."
+run_as_www_data "uv run trustpoint/manage.py migrate"
+echo "Finnished makemigrations and migrate."
 
 # Collect static files
 echo "Collecting static files..."

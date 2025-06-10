@@ -1,11 +1,10 @@
 """Django Settings apps."""
 
 import logging
-from typing import Any
+import sys
 
 from django.apps import AppConfig
 from django.core.management import call_command
-from django.db.backends.signals import connection_created
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +16,7 @@ class SettingsConfig(AppConfig):
 
     def ready(self) -> None:
         """Settings app initialization."""
-        # if 'makemigrations' in sys.argv or 'reset_db' in sys.argv or 'migrate' in sys.argv:
-        #     return
-        # Signal to run after database connection is established
-        connection_created.connect(self.on_connection_created)
-
-    def on_connection_created(self, sender: Any, connection: Any, **_kwargs: Any) -> None:
-        """Execute update_app_version after a database connection is created."""
+        # Only call updateversion if we are not doing:
+        if any(cmd in sys.argv for cmd in ['makemigrations', 'migrate', 'reset_db']):
+            return
         call_command('updateversion')
