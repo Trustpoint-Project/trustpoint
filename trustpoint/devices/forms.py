@@ -273,9 +273,7 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             ('aoki_est', _('EST with AOKI onboarding')),
             ('brski_est', _('EST with BRSKI onboarding')),
         ],
-        widget=DisableSelectOptionsWidget(
-            disabled_values=['aoki_est', 'brski_est', 'aoki_cmp', 'brski_cmp']
-        ),
+        widget=DisableSelectOptionsWidget(disabled_values=['aoki_est', 'brski_est', 'aoki_cmp', 'brski_cmp']),
         initial='cmp_idevid',
     )
 
@@ -429,26 +427,18 @@ class CreateOpcUaGdsForm(CreateDeviceForm):
 
     onboarding_and_pki_configuration = forms.ChoiceField(
         choices=[
-            ('cmp_shared_secret', _('CMP with shared secret onboarding')),
             ('est_username_password', _('EST with username and password onboarding')),
         ],
-        widget=DisableSelectOptionsWidget(
-            disabled_values=[
-            ]
-        ),
+        widget=DisableSelectOptionsWidget(disabled_values=[]),
         initial='est_username_password',
     )
 
     pki_configuration = forms.ChoiceField(
         choices=[
-            ('cmp_shared_secret', _('CMP with shared secret authentication')),
             ('est_username_password', _('EST with username and password authentication')),
         ],
-        widget=DisableSelectOptionsWidget(
-            disabled_values=[
-            ]
-        ),
-        initial='est_username_password'
+        widget=DisableSelectOptionsWidget(disabled_values=[]),
+        initial='est_username_password',
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -479,6 +469,4 @@ class CreateOpcUaGdsForm(CreateDeviceForm):
             Div(Field('pki_configuration'), css_class='d-none', id='id_pki_configuration_wrapper'),
             HTML('<div class="mb-4"></div>'),
         )
-        self.fields['domain'].widget.attrs.update({
-            'required': 'True'
-        })
+        self.fields['domain'].widget.attrs.update({'required': 'True'})
