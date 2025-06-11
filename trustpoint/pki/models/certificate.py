@@ -10,6 +10,7 @@ from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from django.contrib import admin
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
@@ -55,8 +56,6 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     See RFC5280 for more information.
     """
 
-    objects: models.Manager[CertificateModel]
-
     class CertificateStatus(models.TextChoices):
         """CertificateModel status."""
 
@@ -73,23 +72,73 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         # We only allow version 3 or later if any are available in the future.
         V3 = 2, _('Version 3')
 
-    SignatureAlgorithmOidChoices = models.TextChoices(
-        'SIGNATURE_ALGORITHM_OID', [(x.dotted_string, x.dotted_string) for x in AlgorithmIdentifier]
-    )
+    # We are explicitly and statically defining the types we want to allow to be stored to the database.
+    # This has the nice effect, that it is also mypy compliant without any additions.
 
-    PublicKeyAlgorithmOidChoices = models.TextChoices(
-        'PUBLIC_KEY_ALGORITHM_OID', [(x.dotted_string, x.dotted_string) for x in PublicKeyAlgorithmOid]
-    )
+    class SignatureAlgorithmOidChoices(models.TextChoices):
+        """Signature Algorithm OIDs."""
 
-    PublicKeyEcCurveOidChoices = models.TextChoices(
-        'PUBLIC_KEY_EC_CURVE_OID', [(x.dotted_string, x.dotted_string) for x in NamedCurve]
-    )
+        RSA_MD5 = AlgorithmIdentifier.RSA_MD5.dotted_string
+        RSA_SHA1 = AlgorithmIdentifier.RSA_SHA1.dotted_string
+        RSA_SHA1_ALT = AlgorithmIdentifier.RSA_SHA1_ALT.dotted_string
+        RSA_SHA224 = AlgorithmIdentifier.RSA_SHA224.dotted_string
+        RSA_SHA256 = AlgorithmIdentifier.RSA_SHA256.dotted_string
+        RSA_SHA384 = AlgorithmIdentifier.RSA_SHA384.dotted_string
+        RSA_SHA512 = AlgorithmIdentifier.RSA_SHA512.dotted_string
+        RSA_SHA3_224 = AlgorithmIdentifier.RSA_SHA3_224.dotted_string
+        RSA_SHA3_256 = AlgorithmIdentifier.RSA_SHA3_256.dotted_string
+        RSA_SHA3_384 = AlgorithmIdentifier.RSA_SHA3_384.dotted_string
+        RSA_SHA3_512 = AlgorithmIdentifier.RSA_SHA3_512.dotted_string
+
+        ECDSA_SHA1 = AlgorithmIdentifier.ECDSA_SHA1.dotted_string
+        ECDSA_SHA224 = AlgorithmIdentifier.ECDSA_SHA224.dotted_string
+        ECDSA_SHA256 = AlgorithmIdentifier.ECDSA_SHA256.dotted_string
+        ECDSA_SHA384 = AlgorithmIdentifier.ECDSA_SHA384.dotted_string
+        ECDSA_SHA512 = AlgorithmIdentifier.ECDSA_SHA512.dotted_string
+        ECDSA_SHA3_224 = AlgorithmIdentifier.ECDSA_SHA3_224.dotted_string
+        ECDSA_SHA3_256 = AlgorithmIdentifier.ECDSA_SHA3_256.dotted_string
+        ECDSA_SHA3_384 = AlgorithmIdentifier.ECDSA_SHA3_384.dotted_string
+        ECDSA_SHA3_512 = AlgorithmIdentifier.ECDSA_SHA3_512.dotted_string
+
+        PASSWORD_BASED_MAC = AlgorithmIdentifier.PASSWORD_BASED_MAC.dotted_string
+
+    class PublicKeyAlgorithmOidChoices(models.TextChoices):
+        """Public Key Algorithm OIDs."""
+
+        ECC = PublicKeyAlgorithmOid.ECC.dotted_string
+        RSA = PublicKeyAlgorithmOid.RSA.dotted_string
+
+    class PublicKeyEcCurveOidChoices(models.TextChoices):
+        """Public Key EC Curve OIDs."""
+
+        NONE = ''
+        SECP192R1 = NamedCurve.SECP192R1.dotted_string
+        SECP224R1 = NamedCurve.SECP224R1.dotted_string
+        SECP256K1 = NamedCurve.SECP256K1.dotted_string
+        SECP256R1 = NamedCurve.SECP256R1.dotted_string
+        SECP384R1 = NamedCurve.SECP384R1.dotted_string
+        SECP521R1 = NamedCurve.SECP521R1.dotted_string
+
+        BRAINPOOLP256R1 = NamedCurve.BRAINPOOLP256R1.dotted_string
+        BRAINPOOLP384R1 = NamedCurve.BRAINPOOLP384R1.dotted_string
+        BRAINPOOLP512R1 = NamedCurve.BRAINPOOLP512R1.dotted_string
+
+        SECT163K1 = NamedCurve.SECT163K1.dotted_string
+        SECT163R2 = NamedCurve.SECT163R2.dotted_string
+        SECT233K1 = NamedCurve.SECT233K1.dotted_string
+        SECT233R1 = NamedCurve.SECT233R1.dotted_string
+        SECT283K1 = NamedCurve.SECT283K1.dotted_string
+        SECT283R1 = NamedCurve.SECT283R1.dotted_string
+        SECT409K1 = NamedCurve.SECT409K1.dotted_string
+        SECT409R1 = NamedCurve.SECT409R1.dotted_string
+        SECT571K1 = NamedCurve.SECT571K1.dotted_string
+        SECT571R1 = NamedCurve.SECT571R1.dotted_string
 
     # ----------------------------------------------- Custom Data Fields -----------------------------------------------
 
     is_self_signed = models.BooleanField(verbose_name=_('Self-Signed'), null=False, blank=False)
 
-    # TODO(Alex): This is kind of a hack.
+    # TODO(AlexHx8472): This is kind of a hack. # noqa: FIX002
     # This information is already available through the subject relation
     # Property would not be sortable.
     # We may want to resolve this later by modifying the queryset within the view
@@ -157,7 +206,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         max_length=256,
         editable=False,
         choices=PublicKeyEcCurveOidChoices,
-        default=None,
+        default=PublicKeyEcCurveOidChoices.NONE,
     )
 
     # Subject Public Key Info - Curve Name if ECC, None otherwise
@@ -347,18 +396,19 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     # --------------------------------------------------- Properties ---------------------------------------------------
 
     @property
+    @admin.display(description=_('Signature Algorithm'))
     def signature_algorithm(self) -> str:
         """Name of the signature algorithm."""
-        return AlgorithmIdentifier(self.signature_algorithm_oid).verbose_name
-
-    signature_algorithm.fget.short_description = _('Signature Algorithm')
+        return AlgorithmIdentifier.from_dotted_string(self.signature_algorithm_oid).verbose_name
 
     @property
+    @admin.display(description=_('Signature Padding Scheme'))
     def signature_algorithm_padding_scheme(self) -> str:
         """Padding scheme if RSA is used, otherwise None."""
-        return AlgorithmIdentifier(self.signature_algorithm_oid).padding_scheme.verbose_name
-
-    signature_algorithm_padding_scheme.fget.short_description = _('Signature Padding Scheme')
+        padding_scheme = AlgorithmIdentifier.from_dotted_string(self.signature_algorithm_oid).padding_scheme
+        if padding_scheme is None:
+            return ''
+        return padding_scheme.name
 
     @property
     def signature_suite(self) -> SignatureSuite:
@@ -406,18 +456,24 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     def _get_subject(cert: x509.Certificate) -> list[tuple[str, str]]:
         subject: list[tuple[str, str]] = []
         for rdn in cert.subject.rdns:
-            subject.extend(
-                [attr_type_and_value.oid.dotted_string, attr_type_and_value.value] for attr_type_and_value in rdn
-            )
+            for attr_type_and_value in rdn:
+                if isinstance(attr_type_and_value.value, bytes):
+                    value = attr_type_and_value.value.hex()
+                else:
+                    value = attr_type_and_value.value
+                subject.append((attr_type_and_value.oid.dotted_string, value))
         return subject
 
     @staticmethod
     def _get_issuer(cert: x509.Certificate) -> list[tuple[str, str]]:
         issuer: list[tuple[str, str]] = []
         for rdn in cert.issuer.rdns:
-            issuer.extend(
-                [attr_type_and_value.oid.dotted_string, attr_type_and_value.value] for attr_type_and_value in rdn
-            )
+            for attr_type_and_value in rdn:
+                if isinstance(attr_type_and_value.value, bytes):
+                    value = attr_type_and_value.value.hex()
+                else:
+                    value = attr_type_and_value.value
+            issuer.append((attr_type_and_value.oid.dotted_string, value))
         return issuer
 
     @staticmethod
@@ -593,7 +649,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         subject: list[tuple[str, str]],
         issuer: list[tuple[str, str]],
     ) -> CertificateModel:
-        cert_model._save()  # noqa: SLF001
+        cert_model._save()
         for oid, value in subject:
             if oid == NameOid.COMMON_NAME.dotted_string:
                 cert_model.common_name = value
@@ -601,7 +657,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         cls._save_issuer(cert_model, issuer)
         cls._save_extensions(cert_model, certificate)
 
-        cert_model._save()  # noqa: SLF001
+        cert_model._save()
         return cert_model
 
     # ---------------------------------------------- Public save methods -----------------------------------------------
@@ -658,11 +714,21 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         PolicyConstraintsExtension.delete_if_orphaned(self._related_objects['policy_constraints_extension'])
         FreshestCrlExtension.delete_if_orphaned(self._related_objects['freshest_crl_extension'])
 
+    # ---------------------------------------------- Utility ---------------------------------------------
+    def subjects_match(self, other_subject: x509.Name) -> bool:
+        """Check if the provided subject is identical to the one of this certificate.
+
+        Args:
+            other_subject (x509.Name): The subject to compare to.
+
+        Returns:
+            bool: True if the subjects match, False otherwise.
+        """
+        return self.subject_public_bytes == other_subject.public_bytes().hex().upper()
+
 
 class RevokedCertificateModel(models.Model):
     """Model to store revoked certificates."""
-
-    objects: models.Manager[RevokedCertificateModel]
 
     class ReasonCode(models.TextChoices):
         """Revocation reasons per RFC 5280."""

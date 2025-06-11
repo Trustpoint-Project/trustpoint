@@ -6,6 +6,8 @@ from collections import Counter
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from django.urls import reverse
+
 from devices.models import DeviceModel, IssuedCredentialModel
 from django.contrib import messages
 from django.core.management import call_command
@@ -22,12 +24,12 @@ from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
 from pki.models import CertificateModel, IssuingCaModel
 
-from trustpoint.settings import UIConfig
 from trustpoint.logger import LoggerMixin
+from trustpoint.settings import UIConfig
 from trustpoint.views.base import SortableTableMixin
 
 from .filters import NotificationFilter
-from .models import NotificationModel, NotificationStatus
+from notifications.models import NotificationModel, NotificationStatus
 
 if TYPE_CHECKING:
     from django.utils.safestring import SafeString
@@ -446,7 +448,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         cert_status_counts = {str(status): 0 for _, status in CertificateModel.CertificateStatus.choices}
         try:
             cert_status_qr = CertificateModel.objects.filter(created_at__gt=start_date)
-            status_counts = Counter(str(cert.certificate_status.value) for cert in cert_status_qr)
+            status_counts = Counter(str(cert.certificate_status.label) for cert in cert_status_qr)
 
             status_mapping = {key: str(value) for key, value in CertificateModel.CertificateStatus.choices}
             cert_status_counts = {status_mapping[key]: value for key, value in status_counts.items()}

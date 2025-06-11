@@ -25,7 +25,8 @@ if TYPE_CHECKING:
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes
     from django.db.models import QuerySet
-    from trustpoint_core.key_types import PrivateKey
+    from trustpoint_core.crypto_types import PrivateKey
+    from util.db import CustomDeleteActionManager
 
 
 __all__ = ['CertificateChainOrderModel', 'CredentialAlreadyExistsError', 'CredentialModel']
@@ -72,7 +73,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         CertificateModel, through='PrimaryCredentialCertificate', blank=False, related_name='credential'
     )
     certificate_chain = models.ManyToManyField(
-        CertificateModel, blank=True, through='CertificateChainOrderModel', related_name='credential_certificate_chains'
+        CertificateModel, blank=True,
+        through='CertificateChainOrderModel',
+        through_fields=('credential', 'certificate'),
+        related_name='credential_certificate_chains'
     )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
@@ -82,10 +86,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return f'CredentialModel(credential_type={self.credential_type}, certificate=)'
 
     def __str__(self) -> str:
-        """Returns a human-readable string that represents this CertificateChainOrderModel entry.
+        """Returns a human-readable string that represents this CredentialModel entry.
 
         Returns:
-            str: Human-readable string that represents this CertificateChainOrderModel entry.
+            str: Human-readable string that represents this CredentialModel entry.
         """
         return self.__repr__()
 
@@ -156,7 +160,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         for order, certificate in enumerate(normalized_credential_serializer.additional_certificates):
             certificate_model = CertificateModel.save_certificate(certificate)
             CertificateChainOrderModel.objects.create(
-                certificate=certificate_model, credential=credential_model, order=order
+                certificate=certificate_model,
+                credential=credential_model,
+                order=order,
+                primary_certificate=credential_model.certificate
             )
 
         return credential_model
@@ -183,10 +190,41 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         for order, certificate_in_chain in enumerate(certificate_chain):
             certificate_model = CertificateModel.save_certificate(certificate_in_chain)
             CertificateChainOrderModel.objects.create(
-                certificate=certificate_model, credential=credential_model, order=order
+                certificate=certificate_model,
+                credential=credential_model,
+                order=order,
+                primary_certificate=credential_model.certificate
             )
 
         return credential_model
+
+    @transaction.atomic
+    def update_keyless_credential(
+        self,
+        certificate: x509.Certificate,
+        certificate_chain: list[x509.Certificate],
+    ) -> None:
+        """Updates the primary certificate and certificate chain of the credential.
+
+        Previous certificates are kept as part of the credential.
+        """
+        certificate_model = CertificateModel.save_certificate(certificate)
+        self.certificate = certificate_model
+
+        # Consider adding private key update logic here if needed
+
+        _, _ = PrimaryCredentialCertificate.objects.get_or_create(
+            certificate=certificate_model, credential=self, is_primary=True
+        )
+
+        # Store the complete chain for each new primary certificate
+        for order, certificate_in_chain in enumerate(certificate_chain):
+            certificate_model = CertificateModel.save_certificate(certificate_in_chain)
+            _, _ = CertificateChainOrderModel.objects.get_or_create(
+                certificate=certificate_model, credential=self, order=order, primary_certificate=self.certificate
+            )
+
+        self.save()
 
     def pre_delete(self) -> None:
         """Deletes related models, only allow deletion if there are no more active certificates."""
@@ -309,8 +347,8 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         """Returns the hash algorithm used by the current credential."""
         return self.get_certificate().signature_hash_algorithm
 
-    def is_valid_domain_credential(self) -> tuple[bool, str]:
-        """Determines if this credential is valid for domain usage.
+    def is_valid_issued_credential(self) -> tuple[bool, str]:
+        """Determines if this issued credential is valid.
 
         This method performs the following checks:
           1. The credential must be of type ISSUED_CREDENTIAL.
@@ -332,7 +370,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         if primary_cert.certificate_status != primary_cert.CertificateStatus.OK:
             return False, f'Invalid certificate status: {primary_cert.certificate_status} (Must be OK).'
 
-        return True, 'Valid domain credential.'
+        return True, 'Valid issued credential.'
 
 
 class PrimaryCredentialCertificate(models.Model):
@@ -344,8 +382,6 @@ class PrimaryCredentialCertificate(models.Model):
     credential = models.ForeignKey(CredentialModel, on_delete=models.CASCADE)
     certificate = models.OneToOneField(CertificateModel, on_delete=models.CASCADE)
     is_primary = models.BooleanField(default=False)
-
-    objects: models.Manager[PrimaryCredentialCertificate]
 
     def __repr__(self) -> str:
         """Returns a string representation of this PrimaryCredentialCertificate entry."""
@@ -374,8 +410,10 @@ class CertificateChainOrderModel(models.Model):
     certificate = models.ForeignKey(CertificateModel, on_delete=models.PROTECT, null=False, blank=False, editable=False)
     credential = models.ForeignKey(CredentialModel, on_delete=models.CASCADE, null=False, blank=False, editable=False)
     order = models.PositiveIntegerField(null=False, blank=False, editable=False)
-
-    objects: models.Manager[CertificateChainOrderModel]
+    primary_certificate = models.ForeignKey(
+        CertificateModel, on_delete=models.PROTECT, null=False, blank=False, editable=False,
+        related_name = 'primary_certificate_set'
+    )
 
     class Meta:
         """This Meta class add some configuration to the CertificateChainOrderModel.
@@ -385,13 +423,16 @@ class CertificateChainOrderModel(models.Model):
         """
 
         ordering: ClassVar = ['order']
-        constraints: ClassVar = [models.UniqueConstraint(fields=['credential', 'order'], name='unique_group_order')]
+        constraints: ClassVar = [models.UniqueConstraint(
+            fields=['credential', 'primary_certificate', 'order'], name='unique_group_order'
+        )]
 
     def __repr__(self) -> str:
         """Returns a string representation of this CertificateChainOrderModel entry."""
         return (
             f'CertificateChainOrderModel(credential={self.credential}, '
             f'certificate={self.certificate}, '
+            f'primary_certificate={self.primary_certificate}, '
             f'order={self.order})'
         )
 
@@ -464,7 +505,9 @@ class CertificateChainOrderModel(models.Model):
         Returns:
             int: The highest order of a certificate of a credential certificate chain.
         """
-        existing_orders = CertificateChainOrderModel.objects.filter(credential=self.credential).values_list(
+        existing_orders = CertificateChainOrderModel.objects.filter(
+            credential=self.credential, primary_certificate=self.primary_certificate
+        ).values_list(
             'order', flat=True
         )
         return max(existing_orders, default=-1)

@@ -17,7 +17,6 @@ from django.urls import reverse_lazy
 from django.views.generic import FormView, TemplateView, View
 from pki.models import CertificateModel, CredentialModel, IssuingCaModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TrustpointTlsServerCredentialModel
-from util.db import get_objects_manager
 
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import EmptyForm, StartupWizardTlsCertificateForm
@@ -246,12 +245,12 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
             )
 
-            trustpoint_tls_server_credential, _ = get_objects_manager(TrustpointTlsServerCredentialModel).get_or_create(
+            trustpoint_tls_server_credential, _ = TrustpointTlsServerCredentialModel.objects.get_or_create(
                 certificate=tls_server_credential_model.certificate,
                 defaults={'private_key_pem': tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem()},
             )
 
-            active_tls, _ = get_objects_manager(ActiveTrustpointTlsServerCredentialModel).get_or_create(id=1)
+            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
             active_tls.credential = trustpoint_tls_server_credential
             active_tls.save()
 
@@ -381,7 +380,7 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
             HttpResponseRedirect: Redirect to the next step or an error page based on the outcome.
         """
         try:
-            trustpoint_tls_server_credential_model = get_objects_manager(CredentialModel).get(
+            trustpoint_tls_server_credential_model = CredentialModel.objects.get(
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
             )
             if not trustpoint_tls_server_credential_model:
@@ -454,7 +453,7 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
             HttpResponse: A response with the trust store content or an error message.
         """
         try:
-            trustpoint_tls_server_credential_model = get_objects_manager(CredentialModel).get(
+            trustpoint_tls_server_credential_model = CredentialModel.objects.get(
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
             )
         except CredentialModel.DoesNotExist:
@@ -603,10 +602,10 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
 
     def _clear_credential_and_certificate_data(self) -> None:
         """Clears all credential and certificate data if canceled in the 'WIZARD_TLS_SERVER_CREDENTIAL_APPLY' state."""
-        get_objects_manager(IssuingCaModel).all().delete()
-        get_objects_manager(CredentialModel).all().delete()
-        get_objects_manager(TrustpointTlsServerCredentialModel).all().delete()
-        get_objects_manager(CertificateModel).all().delete()
+        IssuingCaModel.objects.all().delete()
+        CredentialModel.objects.all().delete()
+        TrustpointTlsServerCredentialModel.objects.all().delete()
+        CertificateModel.objects.all().delete()
 
     def _map_exit_code_to_message(self, return_code: int) -> str:
         """Maps shell script exit codes to user-friendly error messages."""
@@ -764,7 +763,7 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User
             password = form.cleaned_data['password1']
             call_command('createsuperuser', interactive=False, username=username, email='')
 
-            user = get_objects_manager(User).get(username=username)
+            user = User.objects.get(username=username)
             user.set_password(password)
             user.save()
             messages.add_message(self.request, messages.SUCCESS, 'Successfully created super-user.')

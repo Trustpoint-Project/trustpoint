@@ -1,7 +1,11 @@
 name: Pytest
 
 # Trigger this workflow on pull requests to ensure tests are executed before merging.
-on: [pull_request]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
   pytest:
@@ -24,7 +28,8 @@ jobs:
         run: |
           mkdir -p reports
           uv run pytest \
-          --md-report-flavor gfm \
+          --md-report-flavor github \
+          --md-report-color never \
           --html=reports/pytest-report.html \
           --junitxml=reports/junit-report.xml \
           trustpoint/ 

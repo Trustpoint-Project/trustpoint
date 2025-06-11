@@ -1,3 +1,6 @@
+@allure.label.epic:Features
+@allure.label.suite:F_001_NTEU_Identity_Management_and_Zero-Touch_Onboarding
+@allure.label.package:F_001_NTEU_Identity_Management_and_Zero-Touch_Onboarding
 Feature: NTEU Identity Management and Zero-Touch Onboarding
   NTEU must be able to log in to the TPC_Web app and perform identity management (R_001) and zero-touch onboarding (R_002).
 

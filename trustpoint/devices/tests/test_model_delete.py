@@ -9,7 +9,6 @@ from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
 
-
 from devices.models import DeviceModel, IssuedCredentialModel
 
 
@@ -39,6 +38,7 @@ def test_device_delete_revocation(mock_models: dict[str, Any]) -> None:
     assert cert.certificate_status == CertificateModel.CertificateStatus.REVOKED, (
         'Certificate should be revoked after delete.'
     )
+
 
 def test_multi_device_delete(mock_models: dict[str, Any]) -> None:
     """Tests that multiple devices can be deleted and pre_delete is called even on a QuerySet of DeviceModels."""
