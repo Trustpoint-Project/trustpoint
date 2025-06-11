@@ -13,7 +13,7 @@ from pki.util.x509 import CertificateGenerator
 if TYPE_CHECKING:
     from typing import Any
 
-    from trustpoint_core.key_types import PrivateKey
+    from trustpoint_core.crypto_types import PrivateKey
 
 TEST_SERIAL_NUMBER = '4212'
 
