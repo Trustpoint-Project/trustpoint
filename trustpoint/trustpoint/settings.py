@@ -173,10 +173,18 @@ DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 ROOT_URLCONF = 'trustpoint.urls'
 
 
+# Internationalization
+LANGUAGE_CODE = 'en-us'
+
 LANGUAGES = [
     ('de', _('German')),
     ('en', _('English')),
 ]
+
+USE_I18N = True
+
+USE_TZ = True
+TIME_ZONE = 'UTC'
 
 # Application definition
 INSTALLED_APPS = [

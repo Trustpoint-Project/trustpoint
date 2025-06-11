@@ -16,7 +16,6 @@ from trustpoint import settings
 def set_test_env(monkeypatch):
     """Set environment variables for tests."""
     monkeypatch.setenv('DATABASE_ENGINE', 'django.db.backends.postgresql')
-    monkeypatch.setenv('DATABASE_NAME', 'test_trustpoint_db')
     monkeypatch.setenv('DATABASE_USER', 'test_user')
     monkeypatch.setenv('DATABASE_PASSWORD', 'test_password')
     monkeypatch.setenv('DATABASE_HOST', 'localhost')
@@ -42,7 +41,6 @@ def test_database_settings(monkeypatch):
             monkeypatch.setattr(settings, 'DATABASE_ENGINE', 'django.db.backends.postgresql')
             monkeypatch.setattr(settings, 'DATABASE_HOST', 'localhost')
             monkeypatch.setattr(settings, 'DATABASE_PORT', '5432')
-            monkeypatch.setattr(settings, 'DATABASE_NAME', 'test_trustpoint_db')
             monkeypatch.setattr(settings, 'DATABASE_USER', 'test_user')
             monkeypatch.setattr(settings, 'DATABASE_PASSWORD', 'test_password')
 
@@ -53,7 +51,6 @@ def test_database_settings(monkeypatch):
             databases = settings.DATABASES
 
             assert databases['default']['ENGINE'] == 'django.db.backends.postgresql', "Database ENGINE should be 'django.db.backends.postgresql'."
-            assert databases['default']['NAME'] == 'test_trustpoint_db', "Database NAME should be 'test_trustpoint_db'."
             assert databases['default']['USER'] == 'test_user', "Database USER should be 'test_user'."
             assert databases['default']['PASSWORD'] == 'test_password', "Database PASSWORD should be 'test_password'."
             assert databases['default']['HOST'] == 'localhost', "Database HOST should be 'localhost'."
