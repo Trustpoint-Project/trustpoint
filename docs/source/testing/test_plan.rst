@@ -82,6 +82,8 @@ Functional Requirements
    _`R_011`, ":term:`EST` Endpoint for Onboarded Devices", "Provide an :term:`EST` endpoint for device onboarding.", "All components", "High"
    _`R_012`, "Language Selection and Translation", "Support multi-language UI options for global usability.", "TPC_Web, TP_Client", "Medium"
    _`R_013`, "Remote Credential Download", "Enable credential downloads from a remote device using a one-time password.", "TPC_Web", "High"
+   _`R_103`, "Create, view, and delete a domain", "TPC_Web must provide a way to create, view, and delete a domain.", "TPC_Web, Admin", "High"
+   _`R_104`, "Create, view, revoke and delete a truststore", "TPC_Web must provide a way to create, view, and delete a device.", "TPC_Web, Admin", "High"
 
 ^^^^^^^^^^^^^^^^^^^^^
 Security Requirements
@@ -1034,6 +1036,65 @@ Feature File
 """"""""""""
 
 .. literalinclude:: ../../../trustpoint/features/R_102_certificate_template_security.feature
+   :language: gherkin
+
+^^^^^
+R_103
+^^^^^
+
+This testcase is related to requirement `R_103`_.
+
+"""""""""
+Test Idea
+"""""""""
+To test the requirement of creating, viewing, editing, and deleting :term:`Domain` using the TPC_Web interface,
+the focus will be on validating the complete lifecycle of domain management through the web platform.
+
+The test would start with an admin user creating a new domain through the web interface.
+This process involves navigating to the appropriate page, filling out the required fields (e.g., name, issuing ca),
+and submitting the form. Once the domain is created,
+the test would verify that it appears in the list of domains and that all details are accurately displayed on its details page.
+
+Finally, the test would validate the deletion process,
+where the admin removes the domain through the web interface.
+Once deleted, the system should ensure that the domain is no longer accessible or visible in any lists or details pages.
+Additional negative tests could confirm appropriate handling when attempting to access or manipulate a non-existent or already-deleted domain.
+
+""""""""""""
+Feature File
+""""""""""""
+
+.. literalinclude:: ../../../trustpoint/features/R_103_domain_management.feature
+   :language: gherkin
+
+^^^^^
+R_104
+^^^^^
+
+This testcase is related to requirement `R_104`_.
+
+"""""""""
+Test Idea
+"""""""""
+
+To test the requirement of creating, viewing, editing, and deleting :term:`Trust-Store` using the TPC_Web interface,
+the focus will be on validating the complete lifecycle of truststore management through the web platform.
+
+The test would start with an admin user creating a new truststore through the web interface.
+This process involves navigating to the appropriate page, filling out the required fields (e.g., name, issuing ca),
+and submitting the form. Once the truststore is created,
+the test would verify that it appears in the list of truststores and that all details are accurately displayed on its details page.
+
+Finally, the test would validate the deletion process,
+where the admin removes the truststore through the web interface.
+Once deleted, the system should ensure that the truststore is no longer accessible or visible in any lists or details pages.
+Additional negative tests could confirm appropriate handling when attempting to access or manipulate a non-existent or already-deleted truststore.
+
+""""""""""""
+Feature File
+""""""""""""
+
+.. literalinclude:: ../../../trustpoint/features/R_104_truststore_management.feature
    :language: gherkin
 
 --------------------
