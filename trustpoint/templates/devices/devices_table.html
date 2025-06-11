@@ -43,8 +43,6 @@
             </th>
             <th>{% trans 'Certificate Management' %}</th>
             <th>{% trans 'Details' %}</th>
-            {#            <th>{% trans 'Configure' %}</th>#}
-            <th>{% trans 'Revoke' %}</th>
         </tr>
         </thead>
         <tbody>
@@ -72,7 +70,6 @@
                 <td>{{ device.get_pki_protocol_display }}</td>
                 <td>{{ device.clm_button| safe }}</td>
                 <td>{{ device.detail_button| safe }}</td>
-                <td>{{ device.revoke_button| safe }}</td>
             </tr>
         {% empty %}
             <tr>

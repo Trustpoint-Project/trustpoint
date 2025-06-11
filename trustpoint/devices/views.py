@@ -10,11 +10,10 @@ from typing import TYPE_CHECKING, Generic, TypeVar, cast
 from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
-from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.db.models import ProtectedError, Q, QuerySet
+from django.db.models import Q, QuerySet
 from django.forms import BaseModelForm
-from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.decorators import method_decorator
@@ -24,7 +23,7 @@ from django.utils.translation import ngettext
 from django.views.generic import TemplateView
 from django.views.generic.base import RedirectView, View
 from django.views.generic.detail import DetailView, SingleObjectMixin
-from django.views.generic.edit import CreateView, FormMixin, FormView
+from django.views.generic.edit import CreateView, FormView
 from django.views.generic.list import ListView
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
@@ -34,17 +33,20 @@ from settings.models import TlsSettings
 from trustpoint_core import oid
 from trustpoint_core.archiver import Archiver
 from trustpoint_core.serializer import CredentialFileFormat
+from util.mult_obj_views import get_primary_keys_from_str_as_list_of_ints
 
 from devices.forms import (
     BrowserLoginForm,
     CreateDeviceForm,
     CreateOpcUaGdsForm,
     CredentialDownloadForm,
-    CredentialRevocationForm,
+    DeleteDevicesForm,
     IssueOpcUaClientCredentialForm,
     IssueOpcUaServerCredentialForm,
     IssueTlsClientCredentialForm,
     IssueTlsServerCredentialForm,
+    RevokeDevicesForm,
+    RevokeIssuedCredentialForm,
 )
 from devices.issuer import (
     LocalTlsClientCredentialIssuer,
@@ -56,13 +58,12 @@ from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCrede
 from devices.revocation import DeviceCredentialRevocation
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import BulkDeleteView, ListInDetailView, SortableTableMixin
+from trustpoint.views.base import SortableTableMixin
 
 if TYPE_CHECKING:
     import ipaddress
     from typing import Any, ClassVar
 
-    from django import forms
     from django.http.request import HttpRequest
     from django.utils.safestring import SafeString
 
@@ -110,7 +111,11 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
     default_sort_param = '-created_at'
 
     def get_queryset(self) -> QuerySet[DeviceModel]:
-        """Filter queryset to only include devices where opc_ua_gds is False."""
+        """Filter queryset to only include devices where opc_ua_gds is False.
+
+        Returns:
+            Returns a queryset of all DeviceModels that have opc_us_gds set to False.
+        """
         return super().get_queryset().filter(device_type=DeviceModel.DeviceType.GENERIC_DEVICE.value)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -126,7 +131,6 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
         context['page_name'] = 'devices'
         for device in context['devices']:
             device.clm_button = self._get_clm_button_html(device)
-            device.revoke_button = self._get_revoke_button_html(device)
             device.detail_button = self._get_details_button_html(device)
 
         return context
@@ -143,29 +147,7 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
         """
         clm_url = reverse('devices:certificate_lifecycle_management', kwargs={'pk': record.pk})
 
-        # noinspection PyDeprecation
         return format_html('<a href="{}" class="btn btn-primary tp-table-btn w-100">{}</a>', clm_url, _('Manage'))
-
-    @staticmethod
-    def _get_revoke_button_html(record: DeviceModel) -> SafeString:
-        """Gets the HTML for the revoke button in the devices table.
-
-        Args:
-            record: The corresponding DeviceModel.
-
-        Returns:
-            the HTML of the hyperlink for the revoke button.
-        """
-        qs = IssuedCredentialModel.objects.filter(device=record)
-        for credential in qs:
-            if credential.credential.certificate.certificate_status == CertificateModel.CertificateStatus.OK:
-                revoke_url = reverse('devices:device_revocation', kwargs={'pk': record.pk})
-                # noinspection PyDeprecation
-                return format_html(
-                    '<a href="{}" class="btn btn-danger tp-table-btn w-100">{}</a>', revoke_url, _('Revoke')
-                )
-        # noinspection PyDeprecation
-        return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', _('Revoke'))
 
     @staticmethod
     def _get_details_button_html(record: DeviceModel) -> SafeString:
@@ -178,7 +160,6 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
             the HTML of the hyperlink for the detail button.
         """
         details_url = reverse('devices:details', kwargs={'pk': record.pk})
-        # noinspection PyDeprecation
         return format_html('<a href="{}" class="btn btn-primary tp-table-btn w-100">{}</a>', details_url, _('Details'))
 
 
@@ -231,12 +212,15 @@ class AbstractCreateDeviceView[T: BaseModelForm[DeviceModel]](DeviceContextMixin
 
 class CreateDeviceView(AbstractCreateDeviceView[CreateDeviceForm]):
     """Device Create View."""
+
     form_class = CreateDeviceForm
 
 
 class CreateOpcUaGdsView(AbstractCreateDeviceView[CreateOpcUaGdsForm]):
     """OPC UA GDS Create View."""
+
     form_class = CreateOpcUaGdsForm
+
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the page name to the context.
@@ -252,7 +236,14 @@ class CreateOpcUaGdsView(AbstractCreateDeviceView[CreateOpcUaGdsForm]):
         return context
 
     def form_valid(self, form: CreateOpcUaGdsForm) -> HttpResponse:
-        """Set opc_ua_gds to True before saving the device."""
+        """Set opc_ua_gds to True before saving the device.
+
+        Args:
+            form: The CreateOocUaGdsForm to create a OPC UA GDS.
+
+        Returns:
+            The HttpResponse from super().form_valid(form).
+        """
         device = form.save(commit=False)
         device.device_type = DeviceModel.DeviceType.OPC_UA_GDS.value
         device.save()
@@ -271,6 +262,7 @@ class DeviceDetailsView(DeviceContextMixin, DetailView[DeviceModel]):
 
 
 # ------------------------------------------ Certificate Lifecycle Management ------------------------------------------
+
 
 class DeviceCertificateLifecycleManagementSummaryView(DeviceContextMixin, DetailView[DeviceModel]):
     """This is the CLM summary view in the devices section."""
@@ -392,12 +384,9 @@ class DeviceCertificateLifecycleManagementSummaryView(DeviceContextMixin, Detail
             the HTML of the hyperlink for the revoke button.
         """
         if record.credential.certificate.certificate_status == CertificateModel.CertificateStatus.REVOKED:
-            # noinspection PyDeprecation
             return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', _('Revoked'))
-        # noinspection PyDeprecation
-        return format_html(
-            '<a href="revoke/{}/" class="btn btn-danger tp-table-btn w-100">{}</a>', record.pk, _('Revoke')
-        )
+        url = reverse('devices:credential_revocation', kwargs={'pk': record.pk})
+        return format_html('<a href="{}" class="btn btn-danger tp-table-btn w-100">{}</a>', url, _('Revoke'))
 
 
 #  ------------------------------ Certificate Lifecycle Management - Credential Issuance -------------------------------
@@ -419,7 +408,6 @@ class DeviceIssueCredentialView(
     form_class: type[CredentialFormClass]
     issuer_class: type[TlsCredentialIssuerClass]
     friendly_name: str
-    object: DeviceModel
 
     def get_initial(self) -> dict[str, Any]:
         """Gets the initial data for the corresponding form.
@@ -927,7 +915,8 @@ class HelpDomainCredentialCmpContextView(DeviceContextMixin, DetailView[DeviceMo
         context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
         context['key_gen_command'] = key_gen_command
         context['issuing_ca_pem'] = (
-            device.domain.get_issuing_ca_or_value_error().credential.get_certificate()
+            device.domain.get_issuing_ca_or_value_error()
+            .credential.get_certificate()
             .public_bytes(encoding=serialization.Encoding.PEM)
             .decode()
         )
@@ -1187,7 +1176,8 @@ class OnboardingIdevidRegistrationHelpView(DeviceContextMixin, DetailView[DevIdR
         context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
         context['key_gen_command'] = key_gen_command
         context['issuing_ca_pem'] = (
-            devid_registration.domain.get_issuing_ca_or_value_error().credential.get_certificate()
+            devid_registration.domain.get_issuing_ca_or_value_error()
+            .credential.get_certificate()
             .public_bytes(encoding=serialization.Encoding.PEM)
             .decode()
         )
@@ -1339,7 +1329,7 @@ class DeviceBaseCredentialDownloadView(
         certificate_serializer = credential_serializer.get_certificate_serializer()
         cert_collection_serializer = credential_serializer.get_additional_certificates_serializer()
         if not private_key_serializer or not certificate_serializer or not cert_collection_serializer:
-            raise Http404 # TODO
+            raise Http404
 
         credential_purpose = IssuedCredentialModel.IssuedCredentialPurpose(
             issued_credential_model.issued_credential_purpose
@@ -1352,9 +1342,7 @@ class DeviceBaseCredentialDownloadView(
         elif file_format == CredentialFileFormat.PEM_ZIP:
             file_data = Archiver.archive_zip(
                 data_to_archive={
-                    'private_key.pem': private_key_serializer.as_pkcs8_pem(
-                        password=password
-                    ),
+                    'private_key.pem': private_key_serializer.as_pkcs8_pem(password=password),
                     'certificate.pem': certificate_serializer.as_pem(),
                     'certificate_chain.pem': cert_collection_serializer.as_pem(),
                 }
@@ -1364,9 +1352,7 @@ class DeviceBaseCredentialDownloadView(
         elif file_format == CredentialFileFormat.PEM_TAR_GZ:
             file_data = Archiver.archive_tar_gz(
                 data_to_archive={
-                    'private_key.pem': private_key_serializer.as_pkcs8_pem(
-                        password=password
-                    ),
+                    'private_key.pem': private_key_serializer.as_pkcs8_pem(password=password),
                     'certificate.pem': certificate_serializer.as_pem(),
                     'certificate_chain.pem': cert_collection_serializer.as_pem(),
                 }
@@ -1531,7 +1517,6 @@ class DeviceBrowserOnboardingCancelView(DeviceContextMixin, SingleObjectMixin[Is
 
     model = IssuedCredentialModel
     context_object_name = 'credential'
-    object: IssuedCredentialModel
     permanent = False
 
     def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
@@ -1576,150 +1561,348 @@ class DeviceBrowserOnboardingCancelView(DeviceContextMixin, SingleObjectMixin[Is
 #  ---------------------------------------- Revocation Views ----------------------------------------
 
 
-class DeviceRevocationView(DeviceContextMixin, FormMixin[CredentialRevocationForm], ListView[IssuedCredentialModel]):
-    """Revokes all active credentials for a given device."""
-
-    http_method_names = ('get', 'post')
-
-    model = IssuedCredentialModel
-    template_name = 'devices/revoke.html'
-    context_object_name = 'credentials'
-    form_class = CredentialRevocationForm
-    success_url = reverse_lazy('devices:devices')
-    device: DeviceModel
-
-    def get_queryset(self) -> QuerySet[IssuedCredentialModel]:
-        """Gets the queryset of all active credentials for the device."""
-        self.device = get_object_or_404(DeviceModel, id=self.kwargs['pk'])
-        qs = IssuedCredentialModel.objects.filter(device=self.device)
-        for credential in qs:
-            if credential.credential.certificate.certificate_status != CertificateModel.CertificateStatus.OK:
-                qs = qs.exclude(pk=credential.pk)
-        return qs
-
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle POST request on form submission."""
-        del args, kwargs, request
-        form = self.get_form()
-        if form.is_valid():
-            return self.form_valid(form)
-        return self.form_invalid(form)
-
-    def form_valid(self, form: CredentialRevocationForm) -> HttpResponse:
-        """Performed if the form was validated successfully and revokes the credentials.
-
-        Args:
-            form: The corresponding form object.
-
-        Returns:
-            The Django HttpResponse object.
-        """
-        n_revoked = 0
-        credentials = self.get_queryset()
-        for credential in credentials:
-            revoked_successfully, _msg = DeviceCredentialRevocation.revoke_certificate(
-                credential.id, form.cleaned_data['revocation_reason']
-            )
-            if revoked_successfully:
-                n_revoked += 1
-
-        if n_revoked > 0:
-            msg = ngettext(
-                'Successfully revoked one active credential.',
-                'Successfully revoked %(count)d active credentials.',
-                n_revoked,
-            ) % {'count': n_revoked}
-
-            messages.success(self.request, msg)
-        else:
-            messages.error(self.request, _('No credentials were revoked.'))
-
-        return super().form_valid(form)
-
-
-class DeviceCredentialRevocationView(
-    DeviceContextMixin,
-    DetailView[IssuedCredentialModel],
-    FormView[CredentialRevocationForm],
-):
+class IssuedCredentialRevocationView(LoggerMixin, DeviceContextMixin, DetailView[IssuedCredentialModel]):
     """Revokes a specific issued credential."""
 
     http_method_names = ('get', 'post')
 
     model = IssuedCredentialModel
-    template_name = 'devices/revoke.html'
-    context_object_name = 'credential'
-    pk_url_kwarg = 'credential_pk'
-    form_class = CredentialRevocationForm
+    template_name = 'devices/confirm_revoke.html'
+    context_object_name = 'issued_credential'
+    pk_url_kwarg = 'pk'
+    form_class = RevokeIssuedCredentialForm
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds the credential information to be revoked to the context.
+        """Adds the primary keys to the context.
 
         Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
+            kwargs: Keyword arguments are passed to super().get_context_data(**kwargs).
 
         Returns:
-            The context to render the page.
+            The context data.
         """
         context = super().get_context_data(**kwargs)
-        context['credentials'] = [context['credential']]
+        context['revoke_form'] = self.form_class()
+        context['cert'] = self.object.credential.certificate
         return context
 
-    def get_success_url(self) -> str:
-        """Gets the success url to redirect to after successful processing of the POST data following a form submit.
-
-        Returns:
-            The success url to redirect to after successful processing of the POST data following a form submit.
-        """
-        return str(reverse_lazy('devices:certificate_lifecycle_management', kwargs={'pk': self.get_object().device.id}))
-
-    def form_valid(self, form: CredentialRevocationForm) -> HttpResponse:
-        """Performed if the form was validated successfully and revokes the credential.
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """HTTP GET processing.
 
         Args:
-            form: The corresponding form object.
+            request: The Django request object.
+            *args: Positional arguments passed to super().get().
+            **kwargs: Keyword arguments passed to super().get().
 
         Returns:
-            The Django HttpResponse object.
+            The issued credential revocation view or a redirect to the devices view if one or more pks were not found.
         """
-        revoked_successfully, revocation_msg = DeviceCredentialRevocation.revoke_certificate(
-            self.get_object().id, form.cleaned_data['revocation_reason']
-        )
+        try:
+            self.object = self.get_object()
+        except Exception:
+            err_msg = f'Failed to get issued credential with pk: {self.pk_url_kwarg}.'
+            self.logger.exception(err_msg)
+            messages.error(request, err_msg)
+            return redirect('devices:devices')
 
-        if revoked_successfully:
-            messages.success(self.request, revocation_msg)
-        else:
-            messages.error(self.request, revocation_msg)
+        return super().get(request, *args, **kwargs)
 
-        return super().form_valid(form)
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Will try to revoke the requested issued credential.
+
+        Args:
+            request: The Django request object.
+            *args: Positional arguments passed to super().get().
+            **kwargs: Keyword arguments passed to super().get().
+
+        Returns:
+            Redirect to the devices summary.
+        """
+        del args, kwargs
+
+        try:
+            self.object = self.get_object()
+        except Exception:
+            err_msg = f'Failed to get issued credential with pk: {self.pk_url_kwarg}.'
+            self.logger.exception(err_msg)
+            messages.error(request, err_msg)
+            return redirect('devices:devices')
+
+        revoke_form = self.form_class(self.request.POST)
+        if revoke_form.is_valid():
+            revocation_reason = revoke_form.cleaned_data['revocation_reason']
+
+            status = self.object.credential.certificate.certificate_status
+            if status == CertificateModel.CertificateStatus.EXPIRED:
+                msg = _('Credential is already expired. Cannot revoke expired certificates.')
+                messages.error(self.request, msg)
+                return redirect('devices:devices')
+            if status == CertificateModel.CertificateStatus.REVOKED:
+                msg = _('Certificate is already revoked. Cannot revoke a revoked certificate again.')
+                return redirect('devices:devices')
+            revoked_successfully, __ = DeviceCredentialRevocation.revoke_certificate(self.object.id, revocation_reason)
+            if revoked_successfully:
+                msg = _('Successfully revoked one active credential.')
+                messages.success(self.request, msg)
+            else:
+                messages.error(self.request, _('Failed to revoke certificate. See logs for more information.'))
+
+        return redirect('devices:devices')
 
 
-class DeviceBulkDeleteView(LoggerMixin, DeviceContextMixin, BulkDeleteView):
-    """View to confirm the deletion of multiple Domains."""
+class DeviceBulkRevokeView(LoggerMixin, DeviceContextMixin, ListView[DeviceModel]):
+    """View to confirm the deletion of multiple Devices."""
 
     model = DeviceModel
-    success_url = reverse_lazy('devices:devices')
-    ignore_url = reverse_lazy('devices:devices')
+    template_name = 'devices/confirm_bulk_evoke.html'
+    context_object_name = 'devices'
+
+    missing: str = ''
+    pks: str = ''
+    queryset: QuerySet[DeviceModel]
+    form_class = RevokeDevicesForm
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the primary keys to the context.
+
+        Args:
+            kwargs: Keyword arguments are passed to super().get_context_data(**kwargs).
+
+        Returns:
+            The context data.
+        """
+        context = super().get_context_data(**kwargs)
+        context['pks'] = self.pks
+        context['revoke_form'] = self.form_class(initial={'pks': self.pks})
+        return context
+
+    def get_queryset(self) -> QuerySet[DeviceModel]:
+        """Gets the queryset of DeviceModel objects that are requested to be revoked.
+
+        Returns:
+            The queryset of DeviceModel objects that are requested to be revoked.
+        """
+        if not self.pks:
+            self.pks = self.kwargs.get('pks', '')
+        pks_list = get_primary_keys_from_str_as_list_of_ints(pks=self.pks)
+        qs = DeviceModel.objects.filter(pk__in=pks_list)
+
+        found_pks = set(qs.values_list('pk', flat=True))
+        missing = set(pks_list) - found_pks
+
+        self.missing = ', '.join(str(pk) for pk in missing)
+
+        return qs
+
+    def _set_queryset(self, request: HttpRequest) -> str | None:
+        try:
+            self.queryset = self.get_queryset()
+        except ValueError:
+            err_msg_template = _('Please select the devices you would like to revoke.')
+            err_msg = err_msg_template.format(pks=self.pks)
+            messages.error(request, err_msg)
+            return 'devices:devices'
+        except Exception:
+            err_msg_template = _('Failed to retrieve the queryset for primary keys: {pks}.See logs for more details.')
+            err_msg = err_msg_template.format(pks=self.pks)
+            self.logger.exception(err_msg)
+            messages.error(request, err_msg)
+            return 'devices:devices'
+
+        if self.missing:
+            err_msg_template = _('Devices for the following primary keys were not found: {pks}.')
+            err_msg = err_msg_template.format(pks=self.missing)
+            messages.error(request, err_msg)
+            return 'devices:devices'
+
+        return None
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """HTTP GET processing.
+
+        Args:
+            request: The Django request object.
+            *args: Positional arguments passed to super().get().
+            **kwargs: Keyword arguments passed to super().get().
+
+        Returns:
+            The device deletion view or a redirect to the devices view if one or more pks were not found.
+        """
+        redirect_name = self._set_queryset(request)
+        if redirect_name:
+            return redirect(redirect_name)
+        messages.warning(
+            request, _('This operation will revoke ALL certificates associated with the selected devices.')
+        )
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Will try to revoke all certificate assiciated with the requested DeviceModel records.
+
+        Args:
+            request: The Django request object.
+            *args: Positional arguments passed to super().get().
+            **kwargs: Keyword arguments passed to super().get().
+
+        Returns:
+            Redirect to the devices summary.
+        """
+        del args, kwargs
+
+        revoke_form = self.form_class(self.request.POST)
+        if revoke_form.is_valid():
+            self.pks = revoke_form.cleaned_data['pks']
+            revocation_reason = revoke_form.cleaned_data['revocation_reason']
+            redirect_name = self._set_queryset(request)
+            if redirect_name:
+                return redirect(redirect_name)
+
+            now = datetime.datetime.now(datetime.UTC)
+
+            issued_credentials_to_revoke_qs = IssuedCredentialModel.objects.filter(
+                device__in=self.queryset,
+                credential__certificate__revoked_certificate__isnull=True,
+                credential__certificate__not_valid_after__gte=now,
+            )
+
+            n_revoked = 0
+            for credential in issued_credentials_to_revoke_qs:
+                revoked_successfully, __ = DeviceCredentialRevocation.revoke_certificate(
+                    credential.id, revocation_reason
+                )
+                if revoked_successfully:
+                    n_revoked += 1
+
+            if n_revoked > 0:
+                msg = ngettext(
+                    'Successfully revoked one active credential.',
+                    'Successfully revoked %(count)d active credentials.',
+                    n_revoked,
+                ) % {'count': n_revoked}
+
+                messages.success(self.request, msg)
+            else:
+                messages.error(self.request, _('No credentials were revoked.'))
+
+        return redirect('devices:devices')
+
+
+class DeviceBulkDeleteView(LoggerMixin, DeviceContextMixin, ListView[DeviceModel]):
+    """View to confirm the deletion of multiple Devices."""
+
+    model = DeviceModel
     template_name = 'devices/confirm_delete.html'
     context_object_name = 'devices'
 
-    def form_valid(self, form: forms.Form) -> HttpResponse:
-        """Attempt to delete devices if the form is valid."""
-        queryset = self.get_queryset()
-        deleted_count = queryset.count()
+    missing: str = ''
+    pks: str = ''
+    queryset: QuerySet[DeviceModel]
+    form_class = DeleteDevicesForm
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the primary keys to the context.
+
+        Args:
+            kwargs: Keyword arguments are passed to super().get_context_data(**kwargs).
+
+        Returns:
+            The context data.
+        """
+        context = super().get_context_data(**kwargs)
+        context['pks'] = self.pks
+        context['delete_form'] = self.form_class(initial={'pks': self.pks})
+        return context
+
+    def get_queryset(self) -> QuerySet[DeviceModel]:
+        """Gets the queryset of DeviceModel objects that are requested to be deleted.
+
+        Returns:
+            The queryset of DeviceModel objects that are requested to be deleted.
+        """
+        if not self.pks:
+            self.pks = self.kwargs.get('pks', '')
+        pks_list = get_primary_keys_from_str_as_list_of_ints(pks=self.pks)
+        qs = DeviceModel.objects.filter(pk__in=pks_list)
+
+        found_pks = set(qs.values_list('pk', flat=True))
+        missing = set(pks_list) - found_pks
+
+        self.missing = ', '.join(str(pk) for pk in missing)
+
+        return qs
+
+    def _set_queryset(self, request: HttpRequest) -> str | None:
+        try:
+            self.queryset = self.get_queryset()
+        except ValueError:
+            err_msg_template = _('Please select the devices you would like to delete.')
+            err_msg = err_msg_template.format(pks=self.pks)
+            messages.error(request, err_msg)
+            return 'devices:devices'
+        except Exception:
+            err_msg_template = _('Failed to retrieve the queryset for primary keys: {pks}.See logs for more details.')
+            err_msg = err_msg_template.format(pks=self.pks)
+            self.logger.exception(err_msg)
+            messages.error(request, err_msg)
+            return 'devices:devices'
+
+        if self.missing:
+            err_msg_template = _('Devices for the following primary keys were not found: {pks}.')
+            err_msg = err_msg_template.format(pks=self.missing)
+            messages.error(request, err_msg)
+            return 'devices:devices'
+
+        return None
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """HTTP GET processing.
+
+        Args:
+            request: The Django request object.
+            *args: Positional arguments passed to super().get().
+            **kwargs: Keyword arguments passed to super().get().
+
+        Returns:
+            The device deletion view or a redirect to the devices view if one or more pks were not found.
+        """
+        redirect_name = self._set_queryset(request)
+        if redirect_name:
+            return redirect(redirect_name)
+        messages.warning(
+            request, _('This operation will revoke ALL certificates associated with the selected devices.')
+        )
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """HTTP POST processing which will try to delete all requested DeviceModel records.
+
+        Args:
+            request: The Django request object.
+            *args: Positional arguments passed to super().get().
+            **kwargs: Keyword arguments passed to super().get().
+
+        Returns:
+            Redirect to the devices summary.
+        """
+        del args, kwargs
+
+        delete_form = self.form_class(self.request.POST)
+        if delete_form.is_valid():
+            self.pks = delete_form.cleaned_data['pks']
+            redirect_name = self._set_queryset(request)
+            if redirect_name:
+                return redirect(redirect_name)
 
         try:
-            response = super().form_valid(form)
-        except ProtectedError as e:
-            self.logger.exception('References prevent deletion:', exc_info=e)
-            messages.error(
-                self.request, _('Cannot delete the selected device(s) because they are referenced by other objects.')
+            count, __ = self.queryset.delete()
+            success_msg_template = _(
+                'Successfully deleted {count} devices. All corresponding certificates have been revoked.'
             )
-            return HttpResponseRedirect(self.success_url)
-        except ValidationError as exc:
-            messages.error(self.request, exc.message)
-            return HttpResponseRedirect(self.success_url)
+            success_msg = success_msg_template.format(count=count)
+            messages.success(request, success_msg)
+        except Exception:
+            err_msg = 'Failed to delete DeviceModel records.'
+            self.logger.exception(err_msg)
+            messages.error(request, _('Failed to delete DeviceModel records. See logs for more information.'))
 
-        messages.success(self.request, _('Successfully deleted {count} devices.').format(count=deleted_count))
-
-        return response
+        return redirect('devices:devices')

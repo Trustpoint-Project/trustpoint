@@ -6,7 +6,7 @@ which can be used within the apps.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django import forms as dj_forms
 from django.core.exceptions import ImproperlyConfigured
@@ -215,4 +215,3 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
 
 class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFromUrlMixin, BaseBulkDeleteView):
     pass
-
