@@ -1,5 +1,8 @@
 # SFTP Server (Docker)
 
+> [!CAUTION]
+> The SFTP server is for testing use only. Do NOT use it in a production deployment. Instead, use a properly configured SFTP server on a different machine than Trustpoint.
+
 This document explains how to build, start, and log in to a Docker-based SFTP server. Follow these instructions from within the `docker/sftp-server/` directory.
 
 ---
@@ -52,13 +55,19 @@ docker/sftp-server/
    cd docker/sftp-server
    ```
 
-2. (Optional) You can override two build-time arguments:
+2. Generate a new SSH keypair - the key will be authorized to access the SFTP server:
+
+    ```bash
+    ssh-keygen -f ssh/sftp_ssh
+    ```
+
+3. (Optional) You can override two build-time arguments:
 
     SFTP_USER – username inside the container (default: admin)
 
     UID – numeric user ID inside the container (default: 1001)
 
-3. Run the build command. Use the -f flag to point to the lowercase dockerfile:
+4. Run the build command. Use the -f flag to point to the lowercase dockerfile:
     ```bash
     docker build -t custom-sftp -f dockerfile .
     ```
@@ -70,7 +79,7 @@ docker/sftp-server/
     -t custom-sftp \
     -f dockerfile .
     ```
-4. After a successful build, you will have a Docker image named custom-sftp.
+5. After a successful build, you will have a Docker image named custom-sftp.
 
 # Run Instructions
 1. Create or choose a directory on the host where uploaded files will be stored. For example:

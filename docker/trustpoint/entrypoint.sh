@@ -13,8 +13,8 @@ done
 echo "PostgreSQL database is available!"
 
 
-# Running migraitons on the database
-echo "Creating Migrationfiles..."
+# Running migrations on the database
+echo "Creating Migration files..."
 run_as_www_data "uv run trustpoint/manage.py makemigrations"
 echo "Running migrations on the database..."
 run_as_www_data "uv run trustpoint/manage.py migrate"

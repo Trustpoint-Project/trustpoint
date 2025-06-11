@@ -37,7 +37,10 @@ class Command(BaseCommand):
         self.tls_cred()
 
     def tls_cred(self) -> None:
-            """Update app version if pyproject.toml is different than verison in db."""
+            """Generate a new TLS Server Credential and set it as the active credential in Trustpoint.
+            
+            For use in the non-Apache development environment.
+            """
             try:
                 # Generate the TLS Server Credential
                 generator = TlsServerCredentialGenerator(
