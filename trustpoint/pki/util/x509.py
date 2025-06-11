@@ -18,7 +18,7 @@ from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
-    from trustpoint_core.key_types import PrivateKey
+    from trustpoint_core.crypto_types import PrivateKey
 
 logger = logging.getLogger(__name__)
 

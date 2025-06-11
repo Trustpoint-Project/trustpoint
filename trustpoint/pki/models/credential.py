@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
     from cryptography.hazmat.primitives import hashes
     from django.db.models import QuerySet
-    from trustpoint_core.key_types import PrivateKey
+    from trustpoint_core.crypto_types import PrivateKey
     from util.db import CustomDeleteActionManager
 
 

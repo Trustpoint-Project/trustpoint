@@ -14,13 +14,13 @@ dependencies = [
     "django~=5.1.8",
     "django-crispy-forms~=2.3",
     "django-filter~=25.1",
-    "django-stubs[compatible-mypy]>=5.2.0",
+    "django-stubs[compatible-mypy]==5.1.3",
     "django-taggit>=6.1.0,<7",
     "psycopg>=3.2.6",
     "psycopg-binary>=3.2.6",
     "pyasn1>=0.6.1,<0.7",
     "pyasn1-modules>=0.4.1,<0.5",
-    "trustpoint-core==0.2.2",
+    "trustpoint-core==0.2.5",
     "zeroconf>=0.147,<0.148",
 ]
 
@@ -96,19 +96,6 @@ docstring-code-format = true
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
-[tool.mypy]
-strict = true
-plugins = ["mypy_django_plugin.main"]
-mypy_path = ["trustpoint"]
-# TODO(AlexHx8472): Are we sure to exclude the tests?
-exclude = "^(trustpoint/manage\\.py$|tests/|.*/tests/|migrations/|.*/migrations/)"
-
-[[tool.mypy.overrides]]
-module = ["crispy_bootstrap5.*", "crispy_forms.*"]
-ignore_missing_imports = false
-
-[tool.django-stubs]
-django_settings_module = "trustpoint.settings"
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = 'trustpoint.settings'
