@@ -1,3 +1,6 @@
+@allure.label.epic:Features
+@allure.label.suite:R_104_Truststore_Management
+@allure.label.package:R_104_Truststore_Management
 Feature: Manage truststores via TPC_Web
   As an admin user
   I want to create, view, edit, and delete truststores

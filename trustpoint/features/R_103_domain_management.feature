@@ -1,3 +1,6 @@
+@allure.label.epic:Features
+@allure.label.suite:R_103_Domain_Management
+@allure.label.package:R_103_Domain_Management
 Feature: Manage domains via TPC_Web
   As an admin user
   I want to create, view, edit, and delete domains
@@ -20,7 +23,7 @@ Feature: Manage domains via TPC_Web
       | homag   |
 
   Scenario Outline: Delete an existing domain
-    Given a domain "trustpoint_test" with issuing ca "test_CA" exist
+    Given a domain <name> with issuing ca "test_CA" exist
     When the admin navigates to the "domain list" page
     And the admin deletes the domain with the name <name>
     Then the system should display a confirmation message stating "Successfully deleted"

@@ -1,8 +1,7 @@
 """Python steps file for R_001."""
 
 from behave import given, runner, then, when
-from django.middleware.csrf import get_token
-from pki.models import TruststoreModel, DomainModel
+from pki.models import TruststoreModel
 from bs4 import BeautifulSoup
 import os
 
@@ -12,8 +11,9 @@ def step_truststore_exists(context: runner.Context, truststore_name: str, intend
     """.
 
     Args:
-        context: the behave context
-        truststore_name: a truststore name
+        context: Behave context.
+        truststore_name (str): The name of the truststore.
+        intended_usage (str): The intended usage of the truststore.
     """
     truststore_file_path = os.path.abspath(f"../tests/data/trust-store/trust_store.pem")
     usage = 0
@@ -39,7 +39,8 @@ def step_fill_truststore_details(context: runner.Context, name: str, intended_us
     Args:
         context (runner.Context): Behave context.
         name (str): The name of the truststore.
-        serial_number (str): The Serial number of the truststore.
+        intended_usage (str): The intended usage of the truststore.
+        file_type (str): The file type of the truststore.
     """
     truststore_file_path = os.path.abspath(f"../tests/data/trust-store/trust_store{file_type}")
     usage = 0
@@ -61,7 +62,7 @@ def step_truststore_list(context: runner.Context, name: str, intended_usage: str
     Args:
         context (runner.Context): Behave context.
         name (str): The name of the truststore.
-        intended_usage (str): The intended usage.
+        intended_usage (str): The intended usage of the truststore.
     """
     soup = BeautifulSoup(context.response.content, "html.parser")
 
@@ -94,7 +95,7 @@ def step_delete_truststore(context: runner.Context, name: str) -> None:  # noqa:
     assert b"Confirm Truststore Deletion" in context.response.content
     context.response = context.authenticated_client.post(f"/pki/truststores/delete/{context.truststore.id}/", data={}, follow=True)
     assert context.response.status_code == 200, "Truststore deletion response"
-    assert not TruststoreModel.objects.filter(id=context.truststore.id).exists(), "Truststore deletion failed"
+    assert not TruststoreModel.objects.filter(id=context.truststore.id).exists(), f"Deletion of Truststore with name {name} failed"
 
 
 @then('the truststore {name} should no longer appear in the truststore list')
@@ -105,7 +106,7 @@ def step_verify_truststore_deletion(context: runner.Context, name: str) -> None:
         context (runner.Context): Behave context.
         name (str): The name of the truststore.
     """
-    assert name not in context.response, "Truststore still exist in the list"
+    assert name not in context.response, f"Truststore with name {name} still exist in the list"
 
 
 @when('the admin attempts to view the details of a non-existent truststore {non_existent_truststore_id}')

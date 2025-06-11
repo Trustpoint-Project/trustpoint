@@ -1,20 +1,18 @@
-"""Python steps file for R_001."""
+"""Python steps file for R_103."""
 
 from behave import given, runner, then, when
-from django.middleware.csrf import get_token
 from pki.models import IssuingCaModel, DomainModel
-from devices.models import DeviceModel
 from bs4 import BeautifulSoup
-import os
 
 
-@given('a domain "{domain_name}" with issuing ca "{ca_name}" exist')
+@given('a domain {domain_name} with issuing ca "{ca_name}" exist')
 def step_domain_exists(context: runner.Context, domain_name: str, ca_name: str) -> None:  # noqa: ARG001
     """.
 
     Args:
-        context: the behave context
-        domain_name: a domain name
+        context: the behave context.
+        domain_name: The name of the domain.
+        ca_name: The name of the issuing ca.
     """
     issuing_ca = IssuingCaModel.objects.get(unique_name=ca_name)
     assert issuing_ca.unique_name == ca_name, f"Issuing CA with name {ca_name} not found"
@@ -35,11 +33,11 @@ def step_fill_domain_details(context: runner.Context, name: str, ca_name: str) -
     Args:
         context (runner.Context): Behave context.
         name (str): The name of the domain.
-        serial_number (str): The Serial number of the domain.
+        ca_name (str): The name of the issuing ca.
     """
     ca = IssuingCaModel.objects.get(unique_name=ca_name)
 
-    assert ca.unique_name == ca_name, f"Issuing CA {ca_name} doesn't exist"
+    assert ca.unique_name == ca_name, f"Issuing CA {ca_name} doesn't exist."
     # Prepare POST data
     context.domain_add_form_data = {
         'unique_name': name,
@@ -70,8 +68,8 @@ def step_domain_list(context: runner.Context, name: str, ca_name: str) -> None: 
     # Get their text content (unescaped and stripped)
     values = [td.get_text(strip=True) for td in tds]
 
-    assert name in values, f"Domain {name} doesn't exist"
-    assert ca_name in values, f"Issuing CA {ca_name} doesn't exist"
+    assert name in values, f"Domain {name} doesn't exist."
+    assert ca_name in values, f"Issuing CA {ca_name} doesn't exist."
 
 
 @when('the admin deletes the domain with the name {name}')
@@ -93,7 +91,7 @@ def step_delete_domain(context: runner.Context, name: str) -> None:  # noqa: ARG
     assert b"Confirm Domain Deletion" in context.response.content
     context.response = context.authenticated_client.post(f"/pki/domains/delete/{context.domain.id}/", data={}, follow=True)
     assert context.response.status_code == 200, "Domain deletion response"
-    assert not DomainModel.objects.filter(id=context.domain.id).exists(), "Domain deletion failed"
+    assert not DomainModel.objects.filter(id=context.domain.id).exists(), f"Deletion of the domain with name {name} failed."
 
 
 @then('the domain {name} should no longer appear in the domain list')
@@ -104,16 +102,16 @@ def step_verify_domain_deletion(context: runner.Context, name: str) -> None:  # 
         context (runner.Context): Behave context.
         name (str): The name of the domain.
     """
-    assert name not in context.response, "Domain still exist in the list"
+    assert name not in context.response, f"Domain with name {name} still exist in the list"
 
 
-@when('the admin attempts to view the details of a non-existent domain {non_existent_device_id}')
-def step_attempt_view_nonexistent(context: runner.Context, non_existent_device_id: str) -> None:  # noqa: ARG001
+@when('the admin attempts to view the details of a non-existent domain {non_existent_domain_id}')
+def step_attempt_view_nonexistent(context: runner.Context, non_existent_domain_id: str) -> None:  # noqa: ARG001
     """Attempts to view details of a non-existent domain.
 
     Args:
         context (runner.Context): Behave context.
-        non_existent_device_id (str): The id a non-existent domain.
+        non_existent_domain_id (str): The id a non-existent domain.
     """
     #Navigate (GET request) to the domain detailed page
-    context.response = context.authenticated_client.get(f"/pki/domains/config/{non_existent_device_id}")
+    context.response = context.authenticated_client.get(f"/pki/domains/config/{non_existent_domain_id}")
