@@ -496,7 +496,7 @@ Additional negative tests could confirm appropriate handling when attempting to 
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_001_CRUD.feature
+.. literalinclude:: ../../../trustpoint/features/R_001_device_management.feature
    :language: gherkin
 
 ^^^^^
