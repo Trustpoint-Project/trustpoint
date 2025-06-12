@@ -10,4 +10,4 @@ jobs:
   test:
     uses: ./.github/workflows/behave-test-template.yml
     with:
-      feature_file: R_001_CRUD
+      feature_file: R_001_device_management
