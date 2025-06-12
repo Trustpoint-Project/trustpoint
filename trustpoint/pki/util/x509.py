@@ -11,13 +11,13 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509.oid import NameOID
-from django.http import HttpRequest
 from trustpoint_core.serializer import CredentialSerializer
 
 from pki.models import IssuingCaModel
 from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
+    from django.http import HttpRequest
     from trustpoint_core.crypto_types import PrivateKey
 
 logger = logging.getLogger(__name__)
@@ -96,7 +96,7 @@ class CertificateGenerator:
     def create_ee(  # noqa: PLR0913
         issuer_private_key: PrivateKey,
         issuer_cn: str,
-        subject_cn: str,
+        subject_name: str | x509.Name,
         private_key: None | PrivateKey = None,
         extensions: list[tuple[x509.ExtensionType, bool]] | None = None,
         validity_days: int = 365,
@@ -111,13 +111,20 @@ class CertificateGenerator:
 
         public_key = private_key.public_key()
         builder = x509.CertificateBuilder()
-        builder = builder.subject_name(
-            x509.Name(
-                [
-                    x509.NameAttribute(NameOID.COMMON_NAME, subject_cn),
-                ]
+        if isinstance(subject_name, str):
+            builder = builder.subject_name(
+                x509.Name(
+                    [
+                        x509.NameAttribute(NameOID.COMMON_NAME, subject_name),
+                    ]
+                )
             )
-        )
+        elif isinstance(subject_name, x509.Name):
+            builder = builder.subject_name(subject_name)
+        else:
+            exc_msg = 'subject_name must be a string or x509.Name'
+            raise TypeError(exc_msg)
+
         builder = builder.issuer_name(
             x509.Name(
                 [
@@ -125,6 +132,7 @@ class CertificateGenerator:
                 ]
             )
         )
+
         builder = builder.not_valid_before(not_valid_before)
         builder = builder.not_valid_after(not_valid_after)
         builder = builder.serial_number(x509.random_serial_number())
@@ -217,13 +225,10 @@ class CertificateGenerator:
         logger.info("Issuing CA '%s' saved successfully.", unique_name)
 
         return cast(IssuingCaModel, issuing_ca)
-    
+
 
 class ClientCertificateAuthenticationError(Exception):
     """Exception raised for general client certificate authentication failures."""
-
-class IDevIDAuthenticationError(Exception):
-    """Exception raised for IDevID authentication failures."""
 
 
 class ApacheTLSClientCertExtractor:

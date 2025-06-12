@@ -19,7 +19,7 @@ from .extension import (
 )
 from .certificate import CertificateModel, RevokedCertificateModel
 from .issuing_ca import IssuingCaModel
-from .credential import CredentialAlreadyExistsError, CredentialModel, CertificateChainOrderModel
+from .credential import CredentialAlreadyExistsError, CredentialModel, CertificateChainOrderModel, OwnerCredentialModel
 from .domain import DomainModel
 from .devid_registration import DevIdRegistration
 from .truststore import TruststoreModel, TruststoreOrderModel
@@ -37,4 +37,5 @@ __all__ = [
     'TruststoreModel',
     'TruststoreOrderModel',
     'GeneralNameIpAddress',
+    'OwnerCredentialModel',
 ]

@@ -1,0 +1,63 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+
+<div class="card">
+
+    <div class="card-header">
+        <div class="">
+            <h1>{% trans "DevOwnerID Details" %}</h1>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="tp-card-centered-content">
+            <h2>{% trans 'General' %}</h2>
+            <hr class="hr-m">
+            <div class="tp-kvp-list">
+                <div>
+                    <div>{% trans 'Unique Name' %}</div>
+                    <div>{{ issuing_ca.unique_name }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Serial Number' %}</div>
+                    <div>{{ owner_credential.credential.certificate.serial_number }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Fingerprint (SHA256)' %}</div>
+                    <div>{{ owner_credential.credential.certificate.sha256_fingerprint }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Valid for number of IDevIDs' %}</div>
+                    <div>{{ owner_credential.idevid_ref_set.count }}</div>
+                </div>
+            </div>
+            <h2>{% trans 'Associated IDevIDs' %}</h2>
+            <hr class="hr-m">
+            {% for idevid_ref in idevid_refs %}
+                <div class="tp-kvp-list">
+                    <div>
+                        <div>{% trans 'Serial Number (Subject)' %}</div>
+                        <div>{{ idevid_ref.idevid_subj_sn }}</div>
+                    </div>
+                    <div>
+                        <div>{% trans 'X.509 Serial Number' %}</div>
+                        <div>{{ idevid_ref.idevid_x509_sn }}</div>
+                    </div>
+                    <div>
+                        <div>{% trans 'Fingerprint (SHA256)' %}</div>
+                        <div>{{ idevid_ref.idevid_sha256_fingerprint }}</div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="card-footer d-flex">
+        <div class="tp-card-btn-footer m-1">
+            <a href="{% url 'pki:owner_credentials' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}
