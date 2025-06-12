@@ -194,9 +194,7 @@ class OpcUaGdsTableView(DeviceTableView):
         Returns:
             Returns a queryset of all DeviceModels which are of OPC-UA GDS type.
         """
-        return super(ListView, self).get_queryset().filter(
-            device_type=DeviceModel.DeviceType.OPC_UA_GDS.value
-        )
+        return super(ListView, self).get_queryset().filter(device_type=DeviceModel.DeviceType.OPC_UA_GDS.value)
 
 
 class AbstractCreateDeviceView[T: BaseModelForm[DeviceModel]](DeviceContextMixin, CreateView[DeviceModel, T]):
