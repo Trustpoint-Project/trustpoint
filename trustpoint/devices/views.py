@@ -111,10 +111,10 @@ class DeviceTableView(DeviceContextMixin, ListView[DeviceModel]):
     default_sort_param = 'common_name'
 
     def get_queryset(self) -> QuerySet[DeviceModel]:
-        """Filter queryset to only include devices where opc_ua_gds is False.
+        """Filter queryset to only include devices which are of generic type.
 
         Returns:
-            Returns a queryset of all DeviceModels that have opc_us_gds set to False.
+            Returns a queryset of all DeviceModels which are of generic type.
         """
         return super().get_queryset().filter(device_type=DeviceModel.DeviceType.GENERIC_DEVICE.value)
 
@@ -189,8 +189,14 @@ class OpcUaGdsTableView(DeviceTableView):
         return context
 
     def get_queryset(self) -> QuerySet[DeviceModel]:
-        """Filter queryset to only include devices where opc_ua_gds is True."""
-        return DeviceModel.objects.filter(device_type=DeviceModel.DeviceType.OPC_UA_GDS.value)
+        """Filter queryset to only include devices which are of OPC-UA GDS type.
+
+        Returns:
+            Returns a queryset of all DeviceModels which are of OPC-UA GDS type.
+        """
+        return super(ListView, self).get_queryset().filter(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS.value
+        )
 
 
 class AbstractCreateDeviceView[T: BaseModelForm[DeviceModel]](DeviceContextMixin, CreateView[DeviceModel, T]):
