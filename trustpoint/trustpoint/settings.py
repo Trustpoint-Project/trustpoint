@@ -113,6 +113,7 @@ ADVERTISED_PORT = 443
 # Application definition
 
 INSTALLED_APPS = [
+    'shared.apps.SharedConfig',
     'setup_wizard.apps.SetupWizardConfig',
     'users.apps.UsersConfig',
     'home.apps.HomeConfig',

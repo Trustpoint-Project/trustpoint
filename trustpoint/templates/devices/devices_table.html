@@ -1,44 +1,45 @@
 {% load i18n %}
+{% load sort_tags %}
 {% block devices_table %}
     <table class="table">
         <thead>
         <tr>
             <th id="checkbox-column"><input type="checkbox"/></th>
             <th>
-                <a href="?sort={% if current_sort == 'common_name' %}-{% endif %}common_name">
-                    {% trans 'Name' %}
+                <a href="{% url_sort 'common_name' %}">
+                    {% trans 'Name' %} {{ request|sort_icon:'common_name' }}
                 </a>
             </th>
             <th>
-                <a href="?sort={% if current_sort == 'domain' %}-{% endif %}domain">
-                    {% trans 'Domain' %}
+                <a href="{% url_sort 'domain' %}">
+                    {% trans 'Domain' %} {{ request|sort_icon:'domain' }}
                 </a>
             </th>
             {% if page_name != 'opc_ua_gds' %}
             <th>
-                <a href="?sort={% if current_sort == 'serial_number' %}-{% endif %}serial_number">
-                    {% trans 'Serial Number' %}
+                <a href="{% url_sort 'serial_number' %}">
+                    {% trans 'Serial Number' %} {{ request|sort_icon:'serial_number' }}
                 </a>
             </th>
             {% endif %}
             <th>
-                <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
-                    {% trans 'Created at' %}
+                <a href="{% url_sort 'created_at' %}">
+                    {% trans 'Created at' %} {{ request|sort_icon:'created_at' }}
                 </a>
             </th>
             <th>
-                <a href="?sort={% if current_sort == 'onboarding_status' %}-{% endif %}onboarding_status">
-                    {% trans 'Onboarding Status' %}
+                <a href="{% url_sort 'onboarding_status' %}">
+                    {% trans 'Onboarding Status' %} {{ request|sort_icon:'onboarding_status' }}
                 </a>
             </th>
             <th>
-                <a href="?sort={% if current_sort == 'onboarding_protocol' %}-{% endif %}onboarding_protocol">
-                    {% trans 'Onboarding Protocol' %}
+                <a href="{% url_sort 'onboarding_protocol' %}">
+                    {% trans 'Onboarding Protocol' %} {{ request|sort_icon:'onboarding_protocol' }}
                 </a>
             </th>
             <th>
-                <a href="?sort={% if current_sort == 'pki_protocol' %}-{% endif %}pki_protocol">
-                    {% trans 'PKI Protocol' %}
+                <a href="{% url_sort 'pki_protocol' %}">
+                    {% trans 'PKI Protocol' %} {{ request|sort_icon:'pki_protocol' }}
                 </a>
             </th>
             <th>{% trans 'Certificate Management' %}</th>

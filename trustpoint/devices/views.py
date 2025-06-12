@@ -58,10 +58,10 @@ from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCrede
 from devices.revocation import DeviceCredentialRevocation
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import SortableTableMixin
 
 if TYPE_CHECKING:
     import ipaddress
+    from collections.abc import Sequence
     from typing import Any, ClassVar
 
     from django.http.request import HttpRequest
@@ -99,7 +99,7 @@ class DeviceContextMixin:
 # ----------------------------------------------------- Main Pages -----------------------------------------------------
 
 
-class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceModel]):
+class DeviceTableView(DeviceContextMixin, ListView[DeviceModel]):
     """Device Table View."""
 
     http_method_names = ('get',)
@@ -108,7 +108,7 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
     template_name = 'devices/devices.html'
     context_object_name = 'devices'
     paginate_by = UIConfig.paginate_by
-    default_sort_param = '-created_at'
+    default_sort_param = 'common_name'
 
     def get_queryset(self) -> QuerySet[DeviceModel]:
         """Filter queryset to only include devices where opc_ua_gds is False.
@@ -132,8 +132,15 @@ class DeviceTableView(DeviceContextMixin, SortableTableMixin, ListView[DeviceMod
         for device in context['devices']:
             device.clm_button = self._get_clm_button_html(device)
             device.detail_button = self._get_details_button_html(device)
-
         return context
+
+    def get_ordering(self) -> str | Sequence[str] | None:
+        """Returns the sort parameters as a list.
+
+        Returns:
+           The sort parameters, if any. Otherwise the default sort parameter.
+        """
+        return self.request.GET.getlist('sort', [self.default_sort_param])
 
     @staticmethod
     def _get_clm_button_html(record: DeviceModel) -> SafeString:
@@ -220,7 +227,6 @@ class CreateOpcUaGdsView(AbstractCreateDeviceView[CreateOpcUaGdsForm]):
     """OPC UA GDS Create View."""
 
     form_class = CreateOpcUaGdsForm
-
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the page name to the context.
