@@ -95,16 +95,13 @@ if (checkboxColumn) {
     tableSelectButtons.forEach(function(el) {
         el.addEventListener('click', function(event) {
             let url_path = event.target.getAttribute('data-tp-url') + '/';
-            let at_least_one_checked = false;
             checkboxes.forEach(function(el) {
                 if (el.checked) {
                     url_path += el.value + '/';
                     at_least_one_checked = true;
                 }
             });
-            if (at_least_one_checked === true) {
-                window.location.href = url_path;
-            }
+            window.location.href = url_path;
         })
     });
 }

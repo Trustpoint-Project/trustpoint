@@ -1,0 +1,55 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+{% load static %}
+
+{% block content %}
+    <form action="{% url 'devices:credential_revocation' pk=issued_credential.pk %}" method="post" style="display: inline;">
+        {% csrf_token %}
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h1>{% trans 'Confirm Credential Revokation' %}</h1>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="tp-card-centered-content">
+                    <h2>{% trans 'Revoke Credential' %}</h2>
+                    <hr class="hr-m">
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>Common Name</div>
+                            <div><a href="{% url 'pki:certificate-detail' pk=issued_credential.credential.certificate.pk %}">{{ issued_credential.common_name }}</a></div>
+                        </div>
+                    </div>
+                    
+ 
+                </div>
+
+                {% include 'pki/certificates/components/subject_and_names.html' %}
+
+                {% include 'pki/certificates/components/hierarchy.html' %}
+
+                {% include 'pki/certificates/components/validity.html' %}
+
+                {% include 'pki/certificates/components/subject_public_key_info.html' %}
+
+                {% include 'pki/certificates/components/signature.html' %}
+
+                <hr>
+                {{ revoke_form.revocation_reason | as_crispy_field }}
+
+            </div>
+            <div class="card-footer d-flex">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'devices:devices' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                        <button type="submit" class="btn btn-danger">
+                            {% trans 'Revokes selected devices' %}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </form>
+{% endblock content %}

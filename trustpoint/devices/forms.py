@@ -228,14 +228,32 @@ class BrowserLoginForm(CleanedDataNotNoneMixin, forms.Form):
         return cleaned_data
 
 
-class CredentialRevocationForm(forms.ModelForm[RevokedCertificateModel]):
-    """Form to revoke a device credential."""
+class RevokeIssuedCredentialForm(forms.ModelForm[RevokedCertificateModel]):
+    """Form to revoke a specific issued credential."""
 
     class Meta:
         """Meta class configuration."""
 
         model = RevokedCertificateModel
-        fields: typing.ClassVar = ['revocation_reason']
+        fields = ('revocation_reason',)
+
+
+class RevokeDevicesForm(forms.ModelForm[RevokedCertificateModel]):
+    """Form to revoke a issued credentials associated with a specific device."""
+
+    class Meta:
+        """Meta class configuration."""
+
+        model = RevokedCertificateModel
+        fields = ('revocation_reason',)
+
+    pks = forms.CharField(widget=forms.HiddenInput)
+
+
+class DeleteDevicesForm(forms.Form):
+    """Form to delete the requested devices."""
+
+    pks = forms.CharField(widget=forms.HiddenInput)
 
 
 class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):

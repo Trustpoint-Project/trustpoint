@@ -161,13 +161,17 @@ urlpatterns = [
         name='browser_cancel',
     ),
     path(
-        'certificate-lifecycle-management/<int:pk>/revoke/<int:credential_pk>/',
-        views.DeviceCredentialRevocationView.as_view(),
+        'revoke/<int:pk>/',
+        views.IssuedCredentialRevocationView.as_view(),
         name='credential_revocation',
     ),
-    path('revoke/<int:pk>/', views.DeviceRevocationView.as_view(), name='device_revocation'),
     re_path(
-        r'^delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        r'^revoke-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
+        views.DeviceBulkRevokeView.as_view(),
+        name='device_revocation',
+    ),
+    re_path(
+        r'^delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
         views.DeviceBulkDeleteView.as_view(),
         name='device_delete',
     ),
