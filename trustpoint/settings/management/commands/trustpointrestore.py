@@ -11,6 +11,7 @@ from django.utils.translation import gettext as _
 from pki.models import CredentialModel
 from settings.models import AppVersion
 from setup_wizard.views import APACHE_CERT_CHAIN_PATH, APACHE_CERT_PATH, APACHE_KEY_PATH, SCRIPT_WIZARD_RESTORE
+from django.core.exceptions import ObjectDoesNotExist
 
 if TYPE_CHECKING:
     from typing import Any
@@ -81,4 +82,8 @@ class Command(BaseCommand):
 
         except (ProgrammingError, OperationalError):
             error_msg = _('Appversion table not found. DB probably not initialized')
+            self.stdout.write(self.style.ERROR(error_msg))
+        
+        except ObjectDoesNotExist:
+            error_msg = _('Not TLS cert found in DB')
             self.stdout.write(self.style.ERROR(error_msg))
