@@ -235,7 +235,7 @@ class BackupRestoreView(View):
 
         try:
             call_command('dbrestore',  '-z', '--noinput', '-I', str(temp_path))
-            self.recreate_tls()
+            call_command('trustpointrestore')
             messages.success(request, f'Trustpoint restored from {backup_file.name}')
         except Exception as e:
             messages.error(request, 'Error restoring.')
@@ -243,26 +243,6 @@ class BackupRestoreView(View):
             logger.exception(msg)
 
         return redirect('users:login')
-
-    def recreate_tls(self) -> None:
-        trustpoint_tls_server_credential_model = CredentialModel.objects.get(
-            credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
-        )
-
-        # For maybe later se if we switch the TrustpointTlsServerCredentialModel to CredentialModel in ActiveTrustpointTlsServerCredentialModel
-        # active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
-        # cred: TrustpointTlsServerCredentialModel = active_tls.credential
-
-        private_key_pem = trustpoint_tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
-        certificate_pem = trustpoint_tls_server_credential_model.get_certificate_serializer().as_pem().decode()
-        trust_store_pem = trustpoint_tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
-
-        APACHE_KEY_PATH.write_text(private_key_pem)
-        APACHE_CERT_PATH.write_text(certificate_pem)
-        APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
-
-        logger.info('STARTING WIZARD_RESTORE.sh')
-        execute_shell_script(SCRIPT_WIZARD_RESTORE)
 
 
 class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWizardTlsCertificateForm]):

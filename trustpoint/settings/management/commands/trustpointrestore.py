@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from django.conf import settings as django_settings
+from django.core.management.base import BaseCommand
+from django.db.utils import OperationalError, ProgrammingError
+from django.utils.translation import gettext as _
+from pki.models import CredentialModel
+from settings.models import AppVersion
+from setup_wizard.views import APACHE_CERT_CHAIN_PATH, APACHE_CERT_PATH, APACHE_KEY_PATH, SCRIPT_WIZARD_RESTORE
+
+if TYPE_CHECKING:
+    from typing import Any
+
+    from trustpoint_core.serializer import CertificateSerializer
+
+
+class Command(BaseCommand):
+    """A Django management command to check and update the Trustpoint version."""
+
+    help = 'Updates app version'
+
+    def handle(self, **_options: Any) -> None:
+        """Entrypoint for the command."""
+        self.restore_trustpoint()
+
+    def restore_trustpoint(self) -> None:
+        """Restore trustpoint if DB is there."""
+        current = django_settings.APP_VERSION
+        try:
+            self.stdout.write('Starting with restoration')
+            app_version = AppVersion.objects.first()
+            if not app_version:
+                error_msg = _('Appversion table not found. DB probably not initialized')
+                self.stdout.write(self.style.ERROR(error_msg))
+                return
+
+            if app_version.version == current:
+                self.stdout.write('Matching version in database found.')
+                self.stdout.write('Extrating tls cert and preparing for restoration of apache config...')
+                trustpoint_tls_server_credential_model = CredentialModel.objects.get(
+                    credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
+                )
+
+                # For maybe later se if we switch the TrustpointTlsServerCredentialModel to CredentialModel in ActiveTrustpointTlsServerCredentialModel
+                # active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+                # cred: TrustpointTlsServerCredentialModel = active_tls.credential
+
+                private_key_pem = trustpoint_tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
+                certificate_pem = trustpoint_tls_server_credential_model.get_certificate_serializer().as_pem().decode()
+                trust_store_pem = trustpoint_tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
+
+                APACHE_KEY_PATH.write_text(private_key_pem)
+                APACHE_CERT_PATH.write_text(certificate_pem)
+                APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+
+                self.stdout.write('Finished with preparation.')
+
+                script = SCRIPT_WIZARD_RESTORE
+
+                script_path = Path(script).resolve()
+
+                if not script_path.exists():
+                    err_msg = f'State bump script not found: {script_path}'
+                    raise FileNotFoundError(err_msg)
+                if not script_path.is_file():
+                    err_msg = f'The script path {script_path} is not a valid file.'
+                    raise ValueError(err_msg)
+
+                command = ['sudo', str(script_path)]
+
+                result = subprocess.run(command, capture_output=True, text=True, check=True)  # noqa: S603
+
+                if result.returncode != 0:
+                    raise subprocess.CalledProcessError(result.returncode, str(script_path))
+
+                self.stdout.write('Restoration successful.')
+
+        except (ProgrammingError, OperationalError):
+            error_msg = _('Appversion table not found. DB probably not initialized')
+            self.stdout.write(self.style.ERROR(error_msg))

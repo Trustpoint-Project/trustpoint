@@ -39,7 +39,7 @@ fi
 log INFO "Ensuring TLS directory exists: $APACHE_TLS_DIR"
 mkdir -p "$APACHE_TLS_DIR"
 
-log INFO "Removing old TLS files from $APACHE_TLS_DIR"
+log INFO "Removing may exisiting old TLS files from $APACHE_TLS_DIR"
 rm -f "$APACHE_TLS_DIR"/*
 
 # 7) Copy new TLS certs
@@ -47,7 +47,7 @@ log INFO "Copying new TLS files"
 cp /var/www/html/trustpoint/docker/trustpoint/apache/tls/* "$APACHE_TLS_DIR"/
 
 # 8) Remove existing Apache sites
-log INFO "Removing enabled Apache sites"
+log INFO "Removing standard enabled Apache sites"
 rm -f /etc/apache2/sites-enabled/*
 
 # 9) Install HTTP config
@@ -69,10 +69,6 @@ log INFO "Enabling Apache modules: ssl & rewrite"
 a2enmod ssl
 a2enmod rewrite
 
-# 12) Restart Apache gracefully
-log INFO "Restarting Apache (graceful)"
-apache2ctl graceful
-
 # Removes the current WIZARD_INITIAL state file.
 if ! rm "$WIZARD_INITIAL"
 then
@@ -85,6 +81,12 @@ if ! touch "$WIZARD_COMPLETED"
 then
     log "ERROR: Failed to create the WIZARD_COMPLETED state file."
     exit 4
+fi
+
+# 12) gracefully restart Apache if already running
+if pgrep apache2 >/dev/null; then
+   log INFO "Restarting Apache (graceful)"
+   apache2ctl graceful
 fi
 
 log INFO "RESTORE SCRIPT COMPLETED SUCCESSFULLY"
