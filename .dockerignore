@@ -6,3 +6,4 @@
 **/*.log
 **/*.log.*
 **/db.sqlite3
+**/*.dump.gz

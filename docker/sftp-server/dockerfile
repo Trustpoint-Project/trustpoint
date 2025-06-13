@@ -1,0 +1,22 @@
+FROM atmoz/sftp
+
+# Define build args
+ARG SFTP_USER=admin
+ARG UID=1001
+
+# Add SSH key and configure user at build time
+COPY ssh/sftp_ssh.pub /home/${SFTP_USER}/.ssh/authorized_keys
+
+# Declare user in image with home dir and UID
+RUN mkdir -p /home/${SFTP_USER}/.ssh && \
+    chmod 700 /home/${SFTP_USER}/.ssh && \
+    chmod 600 /home/${SFTP_USER}/.ssh/authorized_keys && \
+    chown -R ${UID}:${UID} /home/${SFTP_USER}/.ssh
+
+# Create upload directory
+RUN mkdir -p /home/${SFTP_USER}/upload && \
+    chown ${UID}:${UID} /home/${SFTP_USER}/upload
+
+# Declare user at runtime (syntax: user:password:uid)
+# If password is empty, key-only login is enforced
+CMD ["admin:testing321:1001"]
