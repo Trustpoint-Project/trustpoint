@@ -20,16 +20,19 @@ if TYPE_CHECKING:
 
 
 class Command(BaseCommand):
-    """A Django management command to check and update the Trustpoint version."""
+    """A Django management command to restore the Trustpoint container.
+    
+    This restores the Apache TLS certificate and the wizard state.
+    It is unrelated to the restore of a database backup."""
 
-    help = 'Updates app version'
+    help = 'Restores Trustpoint container.'
 
     def handle(self, **_options: Any) -> None:
         """Entrypoint for the command."""
         self.restore_trustpoint()
 
     def restore_trustpoint(self) -> None:
-        """Restore trustpoint if DB is there."""
+        """Restore trustpoint (Apache TLS and wizard state) if DB is there."""
         current = django_settings.APP_VERSION
         try:
             self.stdout.write('Starting with restoration')
@@ -85,5 +88,5 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(error_msg))
         
         except ObjectDoesNotExist:
-            error_msg = _('Not TLS cert found in DB')
+            error_msg = _('TLS cert not found in DB')
             self.stdout.write(self.style.ERROR(error_msg))

@@ -8,9 +8,11 @@ from settings.models import AppVersion
 
 
 class Command(BaseCommand):
-    """A Django management command to check and update the Trustpoint version."""
+    """A Django management command to initialize the Trustpoint.
+    
+    Called by the 'managestartup' command"""
 
-    help = 'Updates app version'
+    help = 'Initializes the Trustpoint on container startup.'
 
     def add_arguments(self, parser: CommandParser) -> None:
         """Adds command arguments/options."""
@@ -21,24 +23,27 @@ class Command(BaseCommand):
         self.init_trustpoint(**options)
 
     def init_trustpoint(self, **options: dict[str, str]) -> None:
-        """Update app version if pyproject.toml is different than version in db."""
+        """Run migrations (if enabled) and preparatory Django management cmds."""
         self.stdout.write('Start initializing the trustpoint...')
         current = django_settings.APP_VERSION
         if not options.get('nomigrations'):
-            db_error_msg: str = _('Appversion table not found. DB probably not initialized')
+            db_error_msg: str = _('AppVersion table not found. DB probably not initialized')
             self.stdout.write(self.style.ERROR(db_error_msg))
 
             setup_msg: str = _('Starting setup script...')
             self.stdout.write(self.style.NOTICE(_(setup_msg)))
 
+            # TODO(Air): makemigrations will be removed when migrations are committed to git.
             self.stdout.write('Running makemigrations...')
             call_command('makemigrations')
             self.stdout.write('Running migrate...')
             call_command('migrate')
 
-            AppVersion.objects.create(version=current)
+            ver, _created = AppVersion.objects.get_or_create(pk=1)
+            ver.version = current
+            ver.save()
         self.stdout.write('Collecting static files...')
         call_command('collectstatic', '--noinput')
         self.stdout.write('Compiling Messages...')
         call_command('compilemessages', '-l', 'de', '-l', 'en')
-        self.stdout.write(f'Initialization of version {current} successfully.')
+        self.stdout.write(f'Initialization of version {current} successful.')
