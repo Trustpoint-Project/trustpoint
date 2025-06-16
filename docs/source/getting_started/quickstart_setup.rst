@@ -35,10 +35,10 @@ Step-by-Step Setup (Load from Dockerhub) ⬇️
 
    .. code-block:: bash
 
-       docker run -d --name postgres<version> -v postgres_data<version>:/var/lib/postgresql/data -p 5432:5432 trustpointproject/postgres:latest
+       docker run -d --name postgres<version> -v "postgres_data<version>":/var/lib/postgresql/data -p 5432:5432 trustpointproject/postgres:latest
        docker run -d --name trustpoint<version> -p 80:80 -p 443:443 trustpointproject/trustpoint:latest
 
-   ``E.g.: docker run -d --name postgres-v2.0.0 -v postgres-v2.0.0:/var/lib/postgresql/data -p 5432:5432 trustpointproject/postgres:latest``
+   ``E.g.: docker run -d --name postgres-v2.0.0 -v "postgres-v2.0.0":/var/lib/postgresql/data -p 5432:5432 trustpointproject/postgres:latest``
 
    - **-d**: Runs the container in detached mode.
    - **--name trustpoint**: Names the Trustpoint container `trustpoint`.
@@ -85,8 +85,8 @@ Step-by-Step Setup (Build container) 🔧
 
    .. code-block:: bash
 
-       docker run -d --name postgres<version> -p5432:5432 -vpostgres_data<version>:/var/lib/postgresql/data -ePOSTGRES_USER=admin -ePOSTGRES_PASSWORD=testing321 -ePOSTGRES_DB=trustpoint_db trustpointproject/postgres:latest
-       docker run -d --name trustpoint<version> --link postgres<version> -p80:80 -p443:443 -ePOSTGRES_DB=trustpoint_db -eDATABASE_USER=admin -eDATABASE_PASSWORD=testing321 -eDATABASE_HOST=postgres<version> -eDATABASE_PORT=5432 trustpointproject/trustpoint:latest
+       docker run -d --name postgres<version> -p5432:5432 -v"postgres_data<version>":/var/lib/postgresql/data -ePOSTGRES_USER=admin -ePOSTGRES_PASSWORD=testing321 -ePOSTGRES_DB=trustpoint_db trustpointproject/postgres:latest
+       docker run -d --name trustpoint<version> --link postgres<version> -p80:80 -p443:443 -ePOSTGRES_DB=trustpoint_db -eDATABASE_USER=admin -eDATABASE_PASSWORD=testing321 -eDATABASE_HOST="postgres<version>" -eDATABASE_PORT=5432 trustpointproject/trustpoint:latest
 
    **E.g.:**
 
