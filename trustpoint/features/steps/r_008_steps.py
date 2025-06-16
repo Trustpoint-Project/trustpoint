@@ -16,6 +16,8 @@ from trustpoint_core.serializer import (
 from cryptography import x509
 from pki.models import CertificateModel, IssuingCaModel
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 @given('the admin is on the "pki/issuing-cas" webpage')
 def step_given_admin_on_ca_page(context: runner.Context) -> None:  # noqa: ARG001
     """The admin navigates to the pki/issuing-cas webpage.
@@ -77,7 +79,7 @@ def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG0
         context (runner.Context): Behave context.
     """
     # Ensure the file path is absolute and exists
-    pkcs12_file_path = os.path.abspath("../tests/data/issuing_cas/issuing_ca.p12")
+    pkcs12_file_path = os.path.abspath(f"{CURRENT_DIR}/../../../tests/data/issuing_cas/issuing_ca.p12")
     assert os.path.exists(pkcs12_file_path), f"File not found: {pkcs12_file_path}"
     context.pkcs12_file_path = pkcs12_file_path
 
@@ -89,7 +91,7 @@ def step_when_duplicate_pkcs12_file_import(context: runner.Context) -> None:  # 
         context (runner.Context): Behave context.
     """
     # Ensure the file path is absolute and exists
-    pkcs12_file_path = os.path.abspath("../tests/data/issuing_cas/issuing_ca.p12")
+    pkcs12_file_path = os.path.abspath(f"{CURRENT_DIR}/../../../tests/data/issuing_cas/issuing_ca.p12")
     assert os.path.exists(pkcs12_file_path), f"File not found: {pkcs12_file_path}"
     context.pkcs12_file_path = pkcs12_file_path
 
@@ -154,7 +156,8 @@ def step_when_pkcs12_file_import(context: runner.Context, name: str) -> None:  #
     Args:
         context (runner.Context): Behave context.
     """
-    pkcs12_file_path = os.path.abspath("../tests/data/issuing_cas/issuing_ca.p12")
+    
+    pkcs12_file_path = os.path.abspath(f"{CURRENT_DIR}/../../../tests/data/issuing_cas/issuing_ca.p12")
     with open(pkcs12_file_path, "rb") as f:
         data = {
             'unique_name': name,
@@ -188,7 +191,7 @@ def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG0
         context (runner.Context): Behave context.
     """
     # Ensure the file path is absolute and exists
-    pkcs12_file_path = os.path.abspath("../tests/data/issuing_cas/issuing_ca_broken.p12")
+    pkcs12_file_path = os.path.abspath(f"{CURRENT_DIR}/../../../tests/data/issuing_cas/issuing_ca_broken.p12")
     assert os.path.exists(pkcs12_file_path), f"File not found: {pkcs12_file_path}"
     context.pkcs12_file_path = pkcs12_file_path
 
@@ -219,7 +222,7 @@ def step_when_key_file_import(context: runner.Context, key_type: str, status: st
         context (runner.Context): Behave context.
     """
     # Ensure the file path is absolute and exists
-    file_path = os.path.abspath(f"../tests/data/issuing_cas/key0_{status}{key_type}")
+    file_path = os.path.abspath(f"{CURRENT_DIR}/../../../tests/data/issuing_cas/key0_{status}{key_type}")
     assert os.path.exists(file_path), f"Key file not found: {file_path}"
     context.key_file_path = file_path
     with open(context.key_file_path, "rb") as key_file:
@@ -235,7 +238,7 @@ def step_when_cert_file_import(context: runner.Context, cert_type: str, status: 
         context (runner.Context): Behave context.
     """
     # Ensure the file path is absolute and exists
-    file_path = os.path.abspath(f"../tests/data/issuing_cas/ee0_{status}{cert_type}")
+    file_path = os.path.abspath(f"{CURRENT_DIR}/../../../tests/data/issuing_cas/ee0_{status}{cert_type}")
     assert os.path.exists(file_path), f"Certificate file not found: {file_path}"
     context.cert_file_path = file_path
 
@@ -265,7 +268,7 @@ def step_when_cert_chain_file_import(context: runner.Context, cert_chain: str, s
         context (runner.Context): Behave context.
     """
     # Ensure the file path is absolute and exists
-    file_path = os.path.abspath(f"../tests/data/issuing_cas/ee0_cert_chain_{status}{cert_chain}")
+    file_path = os.path.abspath(f"{CURRENT_DIR}/../../../tests/data/issuing_cas/ee0_cert_chain_{status}{cert_chain}")
     assert os.path.exists(file_path), f"File not found: {file_path}"
     context.cert_chain_path = file_path
 
@@ -277,7 +280,7 @@ def step_when_cert_chain_file_import(context: runner.Context) -> None:  # noqa: 
         context (runner.Context): Behave context.
     """
     # Ensure the file path is absolute and exists
-    context.cert_file_path = os.path.abspath(f"../tests/data/issuing_cas/ee1.pem")
+    context.cert_file_path = os.path.abspath(f"{CURRENT_DIR}/../../../tests/data/issuing_cas/ee1.pem")
 
 def is_ca_cert(cert: any) -> bool:
     basic_constraints = cert.extensions.get_extension_for_class(x509.BasicConstraints).value

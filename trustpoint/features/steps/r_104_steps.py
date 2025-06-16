@@ -5,6 +5,7 @@ from pki.models import TruststoreModel
 from bs4 import BeautifulSoup
 import os
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @given('a truststore {truststore_name} with {intended_usage} exist')
 def step_truststore_exists(context: runner.Context, truststore_name: str, intended_usage: str) -> None:  # noqa: ARG001
@@ -15,8 +16,7 @@ def step_truststore_exists(context: runner.Context, truststore_name: str, intend
         truststore_name (str): The name of the truststore.
         intended_usage (str): The intended usage of the truststore.
     """
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    truststore_file_path = os.path.abspath(f"{current_dir}/../../../tests/data/trust-store/trust_store.pem")
+    truststore_file_path = os.path.abspath(f"{CURRENT_DIR}/../../../tests/data/trust-store/trust_store.pem")
     usage = 0
     if intended_usage == "TLS":
         usage = 1
@@ -43,7 +43,7 @@ def step_fill_truststore_details(context: runner.Context, name: str, intended_us
         intended_usage (str): The intended usage of the truststore.
         file_type (str): The file type of the truststore.
     """
-    truststore_file_path = os.path.abspath(f"../tests/data/trust-store/trust_store{file_type}")
+    truststore_file_path = os.path.abspath(f"{CURRENT_DIR}/../../../tests/data/trust-store/trust_store{file_type}")
     usage = 0
     if intended_usage == "TLS":
         usage = 1
