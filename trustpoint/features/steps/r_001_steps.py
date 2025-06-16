@@ -21,7 +21,7 @@ def step_device_exists(context: runner.Context, name: str, serial_number: str) -
     assert created, f" Device creation failed"
     assert context.device.common_name == name, f"Device {name} with serial number {serial_number} doesn't exist"
 
-@when('the admin fills in the device details with {name}, {serial_number} and {domain_name}')
+@when('the admin fills in the device details with {name}, {serial_number} and domain "{domain_name}"')
 def step_fill_device_details(context: runner.Context, name: str, serial_number: str, domain_name: str) -> None:  # noqa: ARG001
     """Fills in the device creation form.
 
@@ -42,9 +42,9 @@ def step_fill_device_details(context: runner.Context, name: str, serial_number: 
         'common_name': name,
         'serial_number': serial_number,
         'domain': domain.id,
-        'domain_credential_onboarding': 'false',
+        'domain_credential_onboarding': 'off',
         'onboarding_and_pki_configuration': 'cmp_shared_secret' ,
-        'pki_configuration': 'manual_download',
+        'pki_configuration': 'cmp_shared_secret',
         '_save': 'Save',
     }
 
@@ -60,7 +60,7 @@ def step_device_list(context: runner.Context) -> None:  # noqa: ARG001
     assert context.response.status_code == 200, "Device add form submission failed"
 
 
-@then('the new device with {name}, {serial_number} and domain name {domain_name} should appear in the device list')
+@then('the new device with {name}, {serial_number} and domain name "{domain_name}" should appear in the device list')
 def step_device_list(context: runner.Context, name: str, serial_number: str, domain_name: str) -> None:  # noqa: ARG001
     """Verifies that the new device appears in the device list.
 
@@ -69,8 +69,8 @@ def step_device_list(context: runner.Context, name: str, serial_number: str, dom
         name (str): The name of the device.
         serial_number (str): The Serial number of the device.
     """
+    context.response = context.authenticated_client.get("/devices/")
     soup = BeautifulSoup(context.response.content, "html.parser")
-
     # Find all <td> elements
     tds = soup.find_all("td")
 

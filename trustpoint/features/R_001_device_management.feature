@@ -13,7 +13,7 @@ Feature: Manage devices via TPC_Web
 
   Scenario Outline: Add a new device without domain credential onboarding
     When the admin navigates to the "Add Device" page
-    And the admin fills in the device details with <name>, <serial_number> and "trustpoint_test"
+    And the admin fills in the device details with <name>, <serial_number> and domain "trustpoint_test"
     And the admin clicks on "Create Device"
     Then the system should display a confirmation page
     And the new device with <name>, <serial_number> and domain name "trustpoint_test" should appear in the device list
