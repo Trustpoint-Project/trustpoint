@@ -10,4 +10,4 @@ jobs:
   test:
     uses: ./.github/workflows/behave-test-template.yml
     with:
-      feature_file: R_008_auto_issuing_ca
+      feature_file: R_008_issuing_ca_management
