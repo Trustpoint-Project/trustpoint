@@ -1,3 +1,6 @@
+@allure.label.epic:Features
+@allure.label.suite:R_008_Issuing_CA_Management
+@allure.label.package:R_008_Issuing_CA_Management
 Feature: Add and delete new Issuing CAs
   The system must provide a way to add and delete new issuing CAs.
 
