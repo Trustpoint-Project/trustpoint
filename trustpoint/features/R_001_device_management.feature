@@ -8,7 +8,8 @@ Feature: Manage devices via TPC_Web
 
   Background:
     Given the admin user is logged into TPC_Web
-    And a domain with a name "trustpoint_test" exist
+    And the issuing ca with unique name "test_CA" with pkcs12 file exist
+    And a domain trustpoint_test with issuing ca "test_CA" exist
 
   Scenario Outline: Add a new device without domain credential onboarding
     When the admin navigates to the "Add Device" page
