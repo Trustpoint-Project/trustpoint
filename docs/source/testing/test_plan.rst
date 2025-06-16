@@ -69,19 +69,21 @@ Functional Requirements
    :header: "Name (Identifier)", "Title", "Description", "Component(s)", "Importance"
    :widths: 10, 25, 60, 30, 10
 
-   _`R_001`, "Create, view, edit and delete an identity", "TPC_Web must provide a way to create, view, edit and delete a digital identity.", "TPC_Web, Admin", "High"
+   _`R_001`, "Create, view, revoke and delete a device", "TPC_Web must provide a way to create, view, revoke and delete a device.", "TPC_Web, Admin", "High"
    _`R_002`, "Usage of any zero touch onboarding protocol", "Any zero touch onboarding protocol should be used, preferably the Bootstrapping Remote Secure Key Infrastructure (BRSKI) process, while connecting a new device to the network.", "TP_Client", "High"
    _`R_003`, "Certificate Lifecycle Management", "Enable complete lifecycle management for certificates, including renewal and revocation.", "All components", "High"
    _`R_004`, "REST API", "Provide a REST API for interacting with Trustpoint programmatically.", "TPC_Web", "High"
    _`R_005`, "Docker Container Support", "Distribute Trustpoint within a fully-configured Docker container for deployment.", "TPC_Web", "Medium"
    _`R_006`, "Backup, Restore, and Update Mechanisms", "Implement backup, restoration, and update features to ensure data and system resilience.", "TPC_Web, Admin", "High"
    _`R_007`, "Logging Capabilities", "Provide detailed and configurable logging for system events and actions.", "TPC_Web, TP_Client", "High"
-   _`R_008`, "Auto-Generated :term:`Issuing CA`'s", "Automatically generate Issuing Certificate Authorities based on configuration.", "TPC_Web", "High"
+   _`R_008`, "Add, delete new :term:`Issuing CA`'s", "The admin should be able to add and delete new :term:`Issuing CA`'s.", "TPC_Web", "High"
    _`R_009`, "High Availability", "Ensure system availability using redundancy or failover mechanisms.", "TPC_Web, TP_Client", "High"
    _`R_010`, ":term:`CMP` Endpoint for Onboarded Devices", "Provide a :term:`CMP` endpoint for device onboarding.", "All components", "High"
    _`R_011`, ":term:`EST` Endpoint for Onboarded Devices", "Provide an :term:`EST` endpoint for device onboarding.", "All components", "High"
    _`R_012`, "Language Selection and Translation", "Support multi-language UI options for global usability.", "TPC_Web, TP_Client", "Medium"
    _`R_013`, "Remote Credential Download", "Enable credential downloads from a remote device using a one-time password.", "TPC_Web", "High"
+   _`R_103`, "Create, view, and delete a domain", "TPC_Web must provide a way to create, view, and delete a domain.", "TPC_Web, Admin", "High"
+   _`R_104`, "Create, view, revoke and delete a truststore", "TPC_Web must provide a way to create, view, and delete a device.", "TPC_Web, Admin", "High"
 
 ^^^^^^^^^^^^^^^^^^^^^
 Security Requirements
@@ -477,28 +479,24 @@ This testcase is related to requirement `R_001`_.
 Test Idea
 """""""""
 
-To test the requirement of creating, viewing, editing, and deleting digital identities using the TPC_Web interface,
-the focus will be on validating the complete lifecycle of identity management through the web platform.
+To test the requirement of creating, viewing, editing, and deleting devices using the TPC_Web interface,
+the focus will be on validating the complete lifecycle of device management through the web platform.
 
-The test would start with an admin user creating a new digital identity through the web interface.
-This process involves navigating to the appropriate page, filling out the required fields (e.g., name and identifier),
-and submitting the form. Once the identity is created,
-the test would verify that it appears in the list of identities and that all details are accurately displayed on its details page.
-
-Following the creation, the admin user would edit the identity's details,
-such as updating the name or identifier, and save the changes.
-The test should confirm that the modifications are reflected immediately and correctly in both the details view and any listings.
+The test would start with an admin user creating a new device through the web interface.
+This process involves navigating to the appropriate page, filling out the required fields (e.g., name, serial number and domain),
+and submitting the form. Once the device is created,
+the test would verify that it appears in the list of devices and that all details are accurately displayed on its details page.
 
 Finally, the test would validate the deletion process,
-where the admin removes the identity through the web interface.
-Once deleted, the system should ensure that the identity is no longer accessible or visible in any lists or details pages.
-Additional negative tests could confirm appropriate handling when attempting to access or manipulate a non-existent or already-deleted identity.
+where the admin removes the device through the web interface.
+Once deleted, the system should ensure that the device is no longer accessible or visible in any lists or details pages.
+Additional negative tests could confirm appropriate handling when attempting to access or manipulate a non-existent or already-deleted device.
 
 """"""""""""
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_001_CRUD.feature
+.. literalinclude:: ../../../trustpoint/features/R_001_device_management.feature
    :language: gherkin
 
 ^^^^^
@@ -705,36 +703,19 @@ This testcase is related to requirement `R_008`_.
 Test Idea
 """""""""
 
-To verify that the system automatically generates Issuing CAs based on configuration, we will test the following scenarios:
+To verify that the admin is allowed to add or delete new :term:`Issuing CA`'s, there are the following steps needed.
 
-#. Successful Auto-Generation of an :term:`Issuing CA`
-    - The admin configures the system with predefined settings for an :term:`Issuing CA`.
-    - The system automatically generates the CA without manual intervention.
-    - The CA appears in the list of available CAs.
-
-#. Auto-Generation with Different Configurations
-    - The admin sets different parameters for CA generation (e.g., key size, validity period).
-    - The system creates the CA using the specified configuration.
-    - The generated CA matches the given settings.
-
-#. Failure Handling in CA Generation
-    - The system prevents generation if required parameters are missing.
-    - The system logs errors when CA generation fails.
-
-#. Verification of Generated CA Details
-    - The generated CA contains the expected attributes (issuer name, serial number, key usage, etc.).
-    - The CA is functional and can issue end-entity certificates.
-
-Edge cases:
-
-- Attempting to generate a CA with invalid parameters.
-- Generating multiple CAs in quick succession.
+- Admin is logged in
+- Admin navigates to the page "pki-issuing ca's"
+- Admin can click on "add new issuing ca"
+- Admin is able to either upload a pkcs12 file or upload separate key and certificate file
+- The system should display the newly added :term:`Issuing CA`
 
 """"""""""""
 Feature File
 """"""""""""
 
-.. literalinclude:: ../../../trustpoint/features/R_008_auto_issuing_ca.feature
+.. literalinclude:: ../../../trustpoint/features/R_008_issuing_ca_management.feature
    :language: gherkin
 
 ^^^^^
@@ -1055,6 +1036,65 @@ Feature File
 """"""""""""
 
 .. literalinclude:: ../../../trustpoint/features/R_102_certificate_template_security.feature
+   :language: gherkin
+
+^^^^^
+R_103
+^^^^^
+
+This testcase is related to requirement `R_103`_.
+
+"""""""""
+Test Idea
+"""""""""
+To test the requirement of creating, viewing, editing, and deleting :term:`Domain` using the TPC_Web interface,
+the focus will be on validating the complete lifecycle of domain management through the web platform.
+
+The test would start with an admin user creating a new domain through the web interface.
+This process involves navigating to the appropriate page, filling out the required fields (e.g., name, issuing ca),
+and submitting the form. Once the domain is created,
+the test would verify that it appears in the list of domains and that all details are accurately displayed on its details page.
+
+Finally, the test would validate the deletion process,
+where the admin removes the domain through the web interface.
+Once deleted, the system should ensure that the domain is no longer accessible or visible in any lists or details pages.
+Additional negative tests could confirm appropriate handling when attempting to access or manipulate a non-existent or already-deleted domain.
+
+""""""""""""
+Feature File
+""""""""""""
+
+.. literalinclude:: ../../../trustpoint/features/R_103_domain_management.feature
+   :language: gherkin
+
+^^^^^
+R_104
+^^^^^
+
+This testcase is related to requirement `R_104`_.
+
+"""""""""
+Test Idea
+"""""""""
+
+To test the requirement of creating, viewing, editing, and deleting :term:`Trust-Store` using the TPC_Web interface,
+the focus will be on validating the complete lifecycle of truststore management through the web platform.
+
+The test would start with an admin user creating a new truststore through the web interface.
+This process involves navigating to the appropriate page, filling out the required fields (e.g., name, issuing ca),
+and submitting the form. Once the truststore is created,
+the test would verify that it appears in the list of truststores and that all details are accurately displayed on its details page.
+
+Finally, the test would validate the deletion process,
+where the admin removes the truststore through the web interface.
+Once deleted, the system should ensure that the truststore is no longer accessible or visible in any lists or details pages.
+Additional negative tests could confirm appropriate handling when attempting to access or manipulate a non-existent or already-deleted truststore.
+
+""""""""""""
+Feature File
+""""""""""""
+
+.. literalinclude:: ../../../trustpoint/features/R_104_truststore_management.feature
    :language: gherkin
 
 --------------------
