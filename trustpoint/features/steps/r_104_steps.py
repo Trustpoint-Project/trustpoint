@@ -15,7 +15,8 @@ def step_truststore_exists(context: runner.Context, truststore_name: str, intend
         truststore_name (str): The name of the truststore.
         intended_usage (str): The intended usage of the truststore.
     """
-    truststore_file_path = os.path.abspath(f"../tests/data/trust-store/trust_store.pem")
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    truststore_file_path = os.path.abspath(f"{current_dir}/../../../tests/data/trust-store/trust_store.pem")
     usage = 0
     if intended_usage == "TLS":
         usage = 1
