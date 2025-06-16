@@ -1,4 +1,4 @@
-from typing import Any
+"""Management command to initialize the Trustpoint on container startup."""
 
 from django.conf import settings as django_settings
 from django.core.management import call_command
@@ -9,8 +9,9 @@ from settings.models import AppVersion
 
 class Command(BaseCommand):
     """A Django management command to initialize the Trustpoint.
-    
-    Called by the 'managestartup' command"""
+
+    Called by the 'managestartup' command
+    """
 
     help = 'Initializes the Trustpoint on container startup.'
 
@@ -27,9 +28,6 @@ class Command(BaseCommand):
         self.stdout.write('Start initializing the trustpoint...')
         current = django_settings.APP_VERSION
         if not options.get('nomigrations'):
-            db_error_msg: str = _('AppVersion table not found. DB probably not initialized')
-            self.stdout.write(self.style.ERROR(db_error_msg))
-
             setup_msg: str = _('Starting setup script...')
             self.stdout.write(self.style.NOTICE(_(setup_msg)))
 
