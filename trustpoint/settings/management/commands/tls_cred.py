@@ -1,20 +1,12 @@
-"""This module defines a Django management command to delete all existing notifications."""
+"""This module defines a Django management command to generate a TLS credential for use in the dev environment."""
 
 import ipaddress
 from pathlib import Path
 from typing import Any
 
-from django.conf import settings as django_settings
-from django.core.management import call_command
 from django.core.management.base import BaseCommand
-from django.db.models.signals import post_migrate
-from django.db.utils import OperationalError, ProgrammingError
 from pki.models.credential import CredentialModel
-from pki.models.truststore import (
-    ActiveTrustpointTlsServerCredentialModel,
-    TrustpointTlsServerCredentialModel,
-)
-from settings.models import AppVersion
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 
 APACHE_PATH = Path(__file__).parent.parent.parent / 'docker/trustpoint/apache/tls'
@@ -38,7 +30,7 @@ class Command(BaseCommand):
 
     def tls_cred(self) -> None:
             """Generate a new TLS Server Credential and set it as the active credential in Trustpoint.
-            
+
             For use in the non-Apache development environment.
             """
             try:
@@ -50,14 +42,9 @@ class Command(BaseCommand):
                 )
                 tls_server_credential = generator.generate_tls_server_credential()
 
-                tls_server_credential_model = CredentialModel.save_credential_serializer(
+                trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
                     credential_serializer=tls_server_credential,
                     credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
-                )
-
-                trustpoint_tls_server_credential, _ = TrustpointTlsServerCredentialModel.objects.get_or_create(
-                    certificate=tls_server_credential_model.certificate,
-                    defaults={'private_key_pem': tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem()},
                 )
 
                 active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
