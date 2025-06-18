@@ -88,6 +88,7 @@ class TruststoreModel(models.Model):
         IDEVID = 0, _('IDevID')
         TLS = 1, _('TLS')
         GENERIC = 2, _('Generic')
+        DEVICE_OWNER_ID = 3, _('Device Owner ID')
 
     unique_name = models.CharField(
         verbose_name=_('Unique Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
