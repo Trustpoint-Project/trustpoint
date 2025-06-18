@@ -453,6 +453,8 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
         validators=[UniqueNameValidator()],
     )
+    ca_certificate = forms.FileField(label=_('Issuing CA Certificate (.cer, .der, .pem, .p7b, .p7c)'), required=True)
+    ca_certificate_chain = forms.FileField(label=_('[Optional] Certificate Chain (.pem, .p7b, .p7c).'), required=False)
     private_key_file = forms.FileField(label=_('Private Key File (.key, .pem)'), required=True)
     private_key_file_password = forms.CharField(
         # hack, force autocomplete off in chrome with: one-time-code
@@ -460,8 +462,6 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         label=_('[Optional] Private Key File Password'),
         required=False,
     )
-    ca_certificate = forms.FileField(label=_('Issuing CA Certificate (.cer, .der, .pem, .p7b, .p7c)'), required=True)
-    ca_certificate_chain = forms.FileField(label=_('[Optional] Certificate Chain (.pem, .p7b, .p7c).'), required=False)
 
     def clean_unique_name(self) -> str:
         """Validates the unique name to ensure it does not already exist in the database.
@@ -653,6 +653,8 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
         validators=[UniqueNameValidator()],
     )
+    certificate = forms.FileField(label=_('DevOwnerID Certificate (.cer, .der, .pem, .p7b, .p7c)'), required=True)
+    certificate_chain = forms.FileField(label=_('[Optional] Certificate Chain (.pem, .p7b, .p7c).'), required=False)
     private_key_file = forms.FileField(label=_('Private Key File (.key, .pem)'), required=True)
     private_key_file_password = forms.CharField(
         # hack, force autocomplete off in chrome with: one-time-code
@@ -660,8 +662,6 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
         label=_('[Optional] Private Key File Password'),
         required=False,
     )
-    certificate = forms.FileField(label=_('DevOwnerID Certificate (.cer, .der, .pem, .p7b, .p7c)'), required=True)
-    certificate_chain = forms.FileField(label=_('[Optional] Certificate Chain (.pem, .p7b, .p7c).'), required=False)
 
     def clean_unique_name(self) -> str:
         """Validates the unique name to ensure it does not already exist in the database.

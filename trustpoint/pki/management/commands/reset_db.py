@@ -92,7 +92,9 @@ class Command(BaseCommand):
             if 'migrations' in root:
                 for file in files:
                     if (file.endswith('.py') and file != '__init__.py') or file.endswith('.pyc'):
-                        if (keep_established and '_tp_v' in file and current_version_py_id not in file):
+                        if (keep_established and
+                            (('_tp_v' in file and current_version_py_id not in file) or '0001_initial' in file)
+                        ):
                             continue
                         try:
                             Path(Path(root) / file).unlink()
