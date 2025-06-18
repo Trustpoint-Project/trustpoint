@@ -2,7 +2,7 @@
 
 from django.urls import path, re_path
 
-from pki.views import certificates, domains, issuing_cas, truststores
+from pki.views import certificates, domains, issuing_cas, owner_credentials, truststores
 from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
 from pki.views.issuing_cas import IssuedCertificatesListView
 
@@ -139,6 +139,22 @@ urlpatterns = [
     ),
     path(
         'devid-registration/delete/<int:pk>/', DevIdRegistrationDeleteView.as_view(), name='devid_registration_delete'
+    ),
+    path('owner-credentials/', owner_credentials.OwnerCredentialTableView.as_view(), name='owner_credentials'),
+    path(
+        'owner-credentials/details/<int:pk>/',
+        owner_credentials.OwnerCredentialDetailView.as_view(),
+        name='owner_credentials-details',
+    ),
+    path(
+        'owner-credentials/add/',
+        owner_credentials.OwnerCredentialAddView.as_view(),
+        name='owner_credentials-add',
+    ),
+    re_path(
+        r'^owner-credentials/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        owner_credentials.OwnerCredentialBulkDeleteConfirmView.as_view(),
+        name='owner_credentials-delete_confirm',
     ),
     path(
         'trustpoint/download/tls-server/',

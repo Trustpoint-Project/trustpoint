@@ -32,6 +32,7 @@ Welcome to Trustpoint's documentation!
    :caption: 📟 Devices
 
    devices/onboarding
+   devices/aoki
 
 
 .. toctree::

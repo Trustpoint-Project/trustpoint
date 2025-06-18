@@ -17,6 +17,8 @@ from django.views.generic.base import RedirectView
 from django.views.generic.edit import FormMixin
 from django.views.generic.list import BaseListView, ListView, MultipleObjectTemplateResponseMixin
 
+from trustpoint.logger import LoggerMixin
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -215,4 +217,28 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
 
 class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFromUrlMixin, BaseBulkDeleteView):
     pass
+
+
+THRESHOLD_LOGGER_HTTP_STATUS: int = 400
+
+class LoggedHttpResponse(HttpResponse, LoggerMixin):
+    """Custom HttpResponse that logs and prints error messages automatically."""
+
+    def __init__(self, content: str | bytes = b'', status: int | None = None, *args: Any, **kwargs: Any) -> None:
+        """Initialize the LoggedHttpResponse instance.
+
+        Args:
+            content (Any): The content of the response.
+            status (Optional[int], optional): The HTTP status code of the response. Defaults to None.
+            *args (Any): Additional positional arguments passed to HttpResponse.
+            **kwargs (Any): Additional keyword arguments passed to HttpResponse.
+        """
+        if status and status >= THRESHOLD_LOGGER_HTTP_STATUS:
+            if isinstance(content, bytes):
+                content = content.decode('utf-8')
+            self.logger.error('ERROR (%s): %s', status, content)
+        else:
+            self.logger.info('SUCCESS (%s)', status)
+
+        super().__init__(content, *args, status=status, **kwargs)
 
