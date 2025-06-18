@@ -230,14 +230,13 @@ class AokiClient:
             verify=False, # intentionally provisionally trusted  # noqa: S501
             timeout=5,
         )
+        # Step 2: Check server response, we are expecting a 200 OK response
         if response.status_code != HTTP_STATUS_OK:
             log.error('AOKI init request failed (%s): %s', response.status_code, response.text)
             return
-        # Step 2: Parse server response
-        # We are expecting a 200 OK response with a JSON body containing the aoki initialization data.
 
-        # Step 3: Parse the JSON body
-        # We are expecting a JSON body with the following structure:
+        # Step 3: Parse the response as JSON body containing the aoki initialization data
+        # We are expecting the response to contain a JSON body with the following structure:
         # {
         #   "aoki-init": {
         #     "version": "1.0",
