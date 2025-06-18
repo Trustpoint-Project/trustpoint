@@ -1,3 +1,5 @@
+"""Management command to restore the Trustpoint container (Apache TLS + wizard)."""
+
 from __future__ import annotations
 
 import subprocess
@@ -9,15 +11,14 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.management.base import BaseCommand
 from django.db.utils import OperationalError, ProgrammingError
 from django.utils.translation import gettext as _
-from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from settings.models import AppVersion
 from setup_wizard.views import APACHE_CERT_CHAIN_PATH, APACHE_CERT_PATH, APACHE_KEY_PATH, SCRIPT_WIZARD_RESTORE
+
+from settings.models import AppVersion
 
 if TYPE_CHECKING:
     from typing import Any
 
-    from trustpoint_core.serializer import CertificateSerializer
 
 
 class Command(BaseCommand):

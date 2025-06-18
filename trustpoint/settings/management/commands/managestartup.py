@@ -5,6 +5,7 @@ from django.core.management import CommandError, call_command
 from django.core.management.base import BaseCommand
 from django.db.utils import OperationalError, ProgrammingError
 from packaging.version import InvalidVersion, Version
+
 from settings.models import AppVersion
 
 
@@ -38,8 +39,7 @@ class Command(BaseCommand):
         db_version, current_version = self._parse_versions(app_version.version, current)
 
         if db_version == current_version:
-            # Consider always running migrations
-            call_command('inittrustpoint', '--nomigrations')
+            call_command('inittrustpoint')
             call_command('trustpointrestore')
         elif current_version < db_version:
             error_msg = (

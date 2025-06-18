@@ -174,9 +174,6 @@ media/
 trustpoint/media/*
 !trustpoint/media/log/.gitkeep
 
-**/migrations/*
-!**/migrations/__init__.py
-
 .python-version
 
 tests/data/issuing_ca

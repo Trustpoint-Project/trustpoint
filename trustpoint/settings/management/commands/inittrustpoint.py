@@ -4,6 +4,7 @@ from django.conf import settings as django_settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandParser
 from django.utils.translation import gettext as _
+
 from settings.models import AppVersion
 
 
@@ -31,9 +32,6 @@ class Command(BaseCommand):
             setup_msg: str = _('Starting setup script...')
             self.stdout.write(self.style.NOTICE(_(setup_msg)))
 
-            # TODO(Air): makemigrations will be removed when migrations are committed to git.
-            self.stdout.write('Running makemigrations...')
-            call_command('makemigrations')
             self.stdout.write('Running migrate...')
             call_command('migrate')
 
