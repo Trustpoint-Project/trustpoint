@@ -35,7 +35,7 @@ then
 fi
 
 # Copies the TLS-Server credentials into the apache2 TLS directory.
-if ! cp /var/www/html/trustpoint/docker/apache/tls/* "$APACHE_TLS_DIRECTORY"
+if ! cp /var/www/html/trustpoint/docker/trustpoint/apache/tls/* "$APACHE_TLS_DIRECTORY"
 then
     echo "ERROR: Failed to copy Trustpoint TLS files to $APACHE_TLS_DIRECTORY."
     exit 5
@@ -49,28 +49,28 @@ then
 fi
 
 # Copies the apache http (80) config into site-available.
-if ! cp /var/www/html/trustpoint/docker/apache/trustpoint-apache-http.conf /etc/apache2/sites-available/trustpoint-apache-http.conf
+if ! cp /var/www/html/trustpoint/docker/trustpoint/apache/trustpoint-apache-http.conf /etc/apache2/sites-available/trustpoint-apache-http.conf
 then
     echo "ERROR: Failed to copy trustpoint-apache-http.conf to /etc/apache2/sites-available."
     exit 7
 fi
 
 # Copies the apache http (80) config into site-enabled.
-if ! cp /var/www/html/trustpoint/docker/apache/trustpoint-apache-http.conf /etc/apache2/sites-enabled/trustpoint-apache-http.conf
+if ! cp /var/www/html/trustpoint/docker/trustpoint/apache/trustpoint-apache-http.conf /etc/apache2/sites-enabled/trustpoint-apache-http.conf
 then
     echo "ERROR: Failed to copy trustpoint-apache-http.conf to /etc/apache2/sites-enabled."
     exit 8
 fi
 
 # Copies the apache https (443) config into site-available.
-if ! cp /var/www/html/trustpoint/docker/apache/trustpoint-apache-https.conf /etc/apache2/sites-available/trustpoint-apache-https.conf
+if ! cp /var/www/html/trustpoint/docker/trustpoint/apache/trustpoint-apache-https.conf /etc/apache2/sites-available/trustpoint-apache-https.conf
 then
     echo "ERROR: Failed to copy trustpoint-apache-https.conf to /etc/apache2/sites-available."
     exit 9
 fi
 
 # Copies the apache https (443) config into site-enabled.
-if ! cp /var/www/html/trustpoint/docker/apache/trustpoint-apache-https.conf /etc/apache2/sites-enabled/trustpoint-apache-https.conf
+if ! cp /var/www/html/trustpoint/docker/trustpoint/apache/trustpoint-apache-https.conf /etc/apache2/sites-enabled/trustpoint-apache-https.conf
 then
     echo "ERROR: Failed to copy trustpoint-apache-https.conf to /etc/apache2/sites-enabled."
     exit 10

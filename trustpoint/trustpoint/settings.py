@@ -15,6 +15,7 @@ import logging
 import os
 import socket
 import time
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import ClassVar
 
@@ -22,24 +23,51 @@ import django_stubs_ext
 import psycopg
 from django.utils.translation import gettext_lazy as _
 
+try:
+    APP_VERSION = version('trustpoint')
+except PackageNotFoundError:
+    APP_VERSION = 'Version not found'
+
+def app_version(request):
+    return {'APP_VERSION': APP_VERSION}
+
 # Monkeypatching Django, so stubs will work for all generics,
 # see: https://github.com/typeddjango/django-stubs
 django_stubs_ext.monkeypatch()
 
-DOCKER_CONTAINER = False
+# ------------- Paths --------------
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Settings for postgreql database
-POSTGRESQL = True
-DATABASE_ENGINE = 'django.db.backends.postgresql'
-DATABASE_HOST = 'postgres'
-DATABASE_PORT = '5432'
-DATABASE_NAME = 'trustpoint_db'
-DATABASE_USER = 'admin'
-DATABASE_PASSWORD = 'testing321'  # noqa: S105
+LOCALE_PATHS = [BASE_DIR / Path('trustpoint/locale')]
 
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/5.0/howto/static-files/
+STATIC_URL = 'static/'
+
+MEDIA_ROOT = BASE_DIR / Path('media')
+MEDIA_URL = '/media/'
+
+STATICFILES_DIRS = [BASE_DIR / Path('static')]
+
+STATIC_ROOT = Path(__file__).parent.parent / Path('collected_static')
+
+LOG_DIR_PATH = BASE_DIR / Path('media/log/')
+LOG_DIR_PATH.mkdir(parents=True, exist_ok=True)
+LOG_FILE_PATH = LOG_DIR_PATH / Path('trustpoint.log')
+
+BACKUP_FILE_PATH = MEDIA_ROOT / Path('backups')
+
+PUBLIC_PATHS = [
+    '/setup-wizard',
+    '/.well-known/cmp',
+    '/.well-known/est',
+    '/aoki',
+    '/crl',
+]
+
+# ------------- Functions --------------
 
 def is_postgre_available() -> bool:
     """Checks whether PostgreSQL is available and issues differentiated error messages.
@@ -58,7 +86,7 @@ def is_postgre_available() -> bool:
     port = int(os.environ.get('DATABASE_PORT', DATABASE_PORT))
     user = os.environ.get('DATABASE_USER', DATABASE_USER)
     password = os.environ.get('DATABASE_PASSWORD', DATABASE_PASSWORD)
-    db_name = os.environ.get('DATABASE_NAME', DATABASE_NAME)
+    db_name = os.environ.get('POSTGRES_DB', POSTGRES_DB)
 
     try:
         print(f'Trying to connect to {host}:{port}...')
@@ -89,6 +117,20 @@ def is_postgre_available() -> bool:
     return True
 
 
+# ------------- Variables --------------
+
+ALLOWED_HOSTS = ['*']
+WSGI_APPLICATION = 'trustpoint.wsgi.application'
+
+
+# mDNS service discovery advertisement
+ADVERTISED_HOST = '127.0.0.1'
+ADVERTISED_PORT = 443
+
+
+DOCKER_CONTAINER = False
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
@@ -97,21 +139,55 @@ DEBUG = True
 ADMIN_ENABLED = bool(DEBUG)
 DEVELOPMENT_ENV = True
 
-# SECURITY WARNING: keep the secret key used in production secret!
-if DEBUG:
-    SECRET_KEY = 'DEV-ENVIRON-SECRET-KEY-lh2rw0b0z$s9e=!4see)@_8ta_up&ad&m01$i+g5z@nz5u$0wi'  # noqa: S105
-else:
-    # TODO(AlexHx8472): Use proper docker secrets handling.
-    SECRET_KEY = Path('/etc/trustpoint/secrets/django_secret_key.env').read_text()
 
-ALLOWED_HOSTS = ['*']
+# Settings for postgreql database
+POSTGRESQL = True
+DATABASE_ENGINE = 'django.db.backends.postgresql'
+DATABASE_HOST = 'postgres'
+DATABASE_PORT = '5432'
+POSTGRES_DB = 'trustpoint_db'
+DATABASE_USER = 'admin'
+DATABASE_PASSWORD = 'testing321'  # noqa: S105
 
-# mDNS service discovery advertisement
-ADVERTISED_HOST = '127.0.0.1'
-ADVERTISED_PORT = 443
+
+DBBACKUP_STORAGE = 'django.core.files.storage.FileSystemStorage'
+DBBACKUP_STORAGE_OPTIONS = {'location': BACKUP_FILE_PATH}
+
+
+# Default primary key field type
+# https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
+
+CRISPY_TEMPLATE_PACK = 'bootstrap5'
+
+LOGIN_REDIRECT_URL = 'home:dashboard'
+LOGIN_URL = 'users:login'
+
+DJANGO_LOG_LEVEL = 'INFO'
+
+TAGGIT_CASE_INSENSITIVE = True
+
+DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+
+ROOT_URLCONF = 'trustpoint.urls'
+
+
+# Internationalization
+LANGUAGE_CODE = 'en-us'
+
+LANGUAGES = [
+    ('de', _('German')),
+    ('en', _('English')),
+]
+
+USE_I18N = True
+
+USE_TZ = True
+TIME_ZONE = 'UTC'
 
 # Application definition
-
 INSTALLED_APPS = [
     'setup_wizard.apps.SetupWizardConfig',
     'users.apps.UsersConfig',
@@ -131,6 +207,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'crispy_forms',
     'crispy_bootstrap5',
+    'dbbackup',
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
@@ -150,7 +227,6 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'trustpoint.urls'
 
 TEMPLATES = [
     {
@@ -163,42 +239,15 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'trustpoint.settings.app_version',
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'trustpoint.wsgi.application'
-
-
-# Database
-# https://docs.djangoproject.com/en/5.0/ref/settings/#databases
-
-
-if is_postgre_available():
-    DATABASES = {
-        'default': {
-            'ENGINE': os.environ.get('DATABASE_ENGINE', DATABASE_ENGINE),
-            'NAME': os.environ.get('DATABASE_NAME', DATABASE_NAME),
-            'USER': os.environ.get('DATABASE_USER', DATABASE_USER),
-            'PASSWORD': os.environ.get('DATABASE_PASSWORD', DATABASE_PASSWORD),
-            'HOST': os.environ.get('DATABASE_HOST', DATABASE_HOST),
-            'PORT': os.environ.get('DATABASE_PORT', DATABASE_PORT),
-        }
-    }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-            'OPTIONS': {'timeout': 20},
-        },
-    }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -215,59 +264,35 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# Internationalization
-# https://docs.djangoproject.com/en/5.0/topics/i18n/
-
-LANGUAGE_CODE = 'en-us'
-
-LANGUAGES = [
-    ('de', _('German')),
-    ('en', _('English')),
-]
-
-
-USE_I18N = True
-
-USE_TZ = True
-TIME_ZONE = 'UTC'
-
-LOCALE_PATHS = [BASE_DIR / Path('trustpoint/locale')]
-
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.0/howto/static-files/
-
-STATIC_URL = 'static/'
-
-MEDIA_ROOT = BASE_DIR / Path('media')
-MEDIA_URL = '/media/'
-
-STATICFILES_DIRS = [BASE_DIR / Path('static')]
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
-
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# Database
+# https://docs.djangoproject.com/en/5.0/ref/settings/#databases
+if is_postgre_available():
+    DATABASES = {
+        'default': {
+            'ENGINE': DATABASE_ENGINE,
+            'NAME': os.environ.get('POSTGRES_DB', POSTGRES_DB),
+            'USER': os.environ.get('DATABASE_USER', DATABASE_USER),
+            'PASSWORD': os.environ.get('DATABASE_PASSWORD', DATABASE_PASSWORD),
+            'HOST': os.environ.get('DATABASE_HOST', DATABASE_HOST),
+            'PORT': os.environ.get('DATABASE_PORT', DATABASE_PORT),
+        }
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+            'OPTIONS': {'timeout': 20},
+        },
+    }
 
 
-CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
-
-CRISPY_TEMPLATE_PACK = 'bootstrap5'
-
-LOGIN_REDIRECT_URL = 'home:dashboard'
-LOGIN_URL = 'users:login'
-
-DJANGO_LOG_LEVEL = 'INFO'
-
-TAGGIT_CASE_INSENSITIVE = True
-
-STATIC_ROOT = Path(__file__).parent.parent / Path('collected_static')
-
-LOG_DIR_PATH = BASE_DIR / Path('media/log/')
-LOG_DIR_PATH.mkdir(parents=True, exist_ok=True)
-LOG_FILE_PATH = LOG_DIR_PATH / Path('trustpoint.log')
-
-DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+# SECURITY WARNING: keep the secret key used in production secret!
+if DEBUG:
+    SECRET_KEY = 'DEV-ENVIRON-SECRET-KEY-lh2rw0b0z$s9e=!4see)@_8ta_up&ad&m01$i+g5z@nz5u$0wi'  # noqa: S105
+else:
+    # TODO(AlexHx8472): Use proper docker secrets handling.
+    SECRET_KEY = Path('/etc/trustpoint/secrets/django_secret_key.env').read_text()
 
 
 class UTCFormatter(logging.Formatter):
@@ -317,12 +342,3 @@ class UIConfig:
 
     paginate_by: ClassVar[int] = 50
     notifications_paginate_by: ClassVar[int] = 5
-
-
-PUBLIC_PATHS = [
-    '/setup-wizard',
-    '/.well-known/cmp',
-    '/.well-known/est',
-    '/aoki',
-    '/crl',
-]

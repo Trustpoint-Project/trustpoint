@@ -21,8 +21,18 @@ RUN apt-get update && \
         apache2-utils \
         gettext \
         cron \
-        apache2-dev && \
+        apache2-dev \
+        locales \
+        postgresql-client && \
     rm -rf /var/lib/apt/lists/*
+
+# Set locale Settings
+RUN sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen && \
+    locale-gen en_US.UTF-8 && \
+    update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+
+ENV LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8
 
 # Sets the current WORKDIR for the following commands
 WORKDIR /var/www/html/trustpoint/
@@ -57,7 +67,7 @@ RUN sed -i '/DEBUG = True/s/True/False/' trustpoint/trustpoint/settings.py && \
 
 # Create and setup the /etc/trustpoint/ directory
 RUN mkdir -p /etc/trustpoint/ && \
-    cp -r /var/www/html/trustpoint/docker/* /etc/trustpoint/ && \
+    cp -r /var/www/html/trustpoint/docker/trustpoint/* /etc/trustpoint/ && \
     chown -R root:root /etc/trustpoint/ && \
     chmod -R 755 /etc/trustpoint/
 
@@ -69,7 +79,7 @@ RUN chmod +x /etc/trustpoint/notifications/execute_notifications.sh && \
     touch /var/log/cron.log
 
 # Add sudoers file and configure user and restart sudo service
-RUN cp ./docker/wizard/sudoers /etc/sudoers && \
+RUN cp ./docker/trustpoint/wizard/sudoers /etc/sudoers && \
     chown root:root /etc/sudoers && \
     chmod 440 /etc/sudoers && \
     service sudo restart
@@ -82,11 +92,11 @@ RUN mkdir -p /etc/trustpoint/secrets && \
 
 # Remove any enabled Apache sites and add new Apache configuration
 RUN rm -f /etc/apache2/sites-enabled/* && \
-    cp ./docker/apache/trustpoint-http-init.conf /etc/apache2/sites-available/trustpoint-http-init.conf && \
+    cp ./docker/trustpoint/apache/trustpoint-http-init.conf /etc/apache2/sites-available/trustpoint-http-init.conf && \
     a2ensite trustpoint-http-init.conf
 
 # Make entrypoint script executable
-RUN chmod +x ./docker/entrypoint.sh
+RUN chmod +x ./docker/trustpoint/entrypoint.sh
 
 # Set entrypoint
-ENTRYPOINT ["docker/entrypoint.sh"]
+ENTRYPOINT ["docker/trustpoint/entrypoint.sh"]

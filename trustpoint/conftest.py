@@ -143,7 +143,7 @@ def credential_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
     ee_cert, ee_private_key = CertificateGenerator.create_ee(
         issuer_private_key=issuing_ca_priv_key,
         issuer_cn=issuing_ca_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value,
-        subject_cn=subject_cn,
+        subject_name=subject_cn,
         validity_days=365,
     )
 
