@@ -136,6 +136,7 @@ def test_public_paths():
         '/setup-wizard',
         '/.well-known/cmp',
         '/.well-known/est',
+        '/aoki',
         '/crl'
     ]
     assert isinstance(public_paths, list), 'PUBLIC_PATHS should be a list.'
