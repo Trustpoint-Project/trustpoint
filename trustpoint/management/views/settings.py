@@ -20,12 +20,20 @@ from management.security.mixins import SecurityLevelMixin
 
 if TYPE_CHECKING:
     from typing import Any
+    from django.http import HttpRequest, HttpResponse
 
 
-class SecurityView(SecurityLevelMixin, FormView):
-    template_name = 'management/security.html'
+def settings(request: HttpRequest, ) -> HttpResponse:
+    """Handle settings Configuration
+
+    Returns: HTTPResponse
+    """
+    context = {'page_category': 'management', 'page_name': 'settings'}
+
+class SettingsView(SecurityLevelMixin, FormView):
+    template_name = 'management/settings.html'
     form_class = SecurityConfigForm
-    success_url = reverse_lazy('management:security')
+    success_url = reverse_lazy('management:settings')
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -78,7 +86,7 @@ class SecurityView(SecurityLevelMixin, FormView):
     def get_context_data(self, **kwargs: dict) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'management'
-        context['page_name'] = 'security'
+        context['page_name'] = 'settings'
         notification_configurations = SecurityConfig.NOTIFICATION_CONFIGURATIONS
 
         for settings in notification_configurations.values():
@@ -94,5 +102,4 @@ class SecurityView(SecurityLevelMixin, FormView):
             ]
 
         context['notification_configurations_json'] = json.dumps(notification_configurations)
-
         return context

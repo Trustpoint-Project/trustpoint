@@ -2,12 +2,14 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, language, logging, security, tls
+from .views import settings
+
+from .views import IndexView, logging, settings, tls
 
 app_name = 'management'
 urlpatterns = [
     path('', IndexView.as_view(), name='index'),
-    path('language/', language.language, name='language'),
+    # path('settings/', settings.settings, name='settings'),
     path('logging/files/', logging.LoggingFilesTableView.as_view(), name='logging-files'),
     re_path(
         r'^logging/files/details/(?P<filename>trustpoint\.log(?:\.\d{1,5})?)/?$',
@@ -24,7 +26,7 @@ urlpatterns = [
         logging.LoggingFilesDownloadMultipleView.as_view(),
         name='logging-files-download-multiple',
     ),
-    path('security/', security.SecurityView.as_view(), name='security'),
+    path('settings/', settings.SettingsView.as_view(), name='settings'),
     path('tls/', tls.TlsView.as_view(), name='tls'),
 
 ]

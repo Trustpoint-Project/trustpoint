@@ -1,0 +1,187 @@
+{% extends 'trustpoint/base.html' %}
+{% load static %}
+{% load crispy_forms_filters %}
+{% load i18n %}
+{% block head %}
+    <script src="{% url 'javascript-catalog' %}"></script>
+{% endblock head %}
+{% block content %}
+<div class="accordion" id="accordionExample">
+  <div class="accordion-item">
+    <h2 class="accordion-header">
+      <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+        {% trans "Language Configuration" %}
+      </button>
+    </h2>
+    <div id="collapseOne" class="accordion-collapse collapse show" data-bs-parent="#accordionExample">
+      <div class="accordion-body">
+        <div class="card">
+          {% comment %} <div class="card-header">
+              <h1>{% trans "Language Configuration" %}</h1>
+          </div> {% endcomment %}
+          <div class="card-body pt-4 pb-4">
+              <form method="POST" action="{% url 'set_language' %}" enctype="multipart/form-data" id="language_configuration">
+                  {% csrf_token %}
+                  <fieldset class="form-group tp-form-group">
+                      <input name="next" type="hidden" value="{{ redirect_to }}">
+                      <select name="language" class="select form-select">
+                          {% get_current_language as LANGUAGE_CODE %}
+                          {% get_available_languages as LANGUAGES %}
+                          {% get_language_info_list for LANGUAGES as languages %}
+                          {% for language in languages %}
+                              <option value="{{ language.code }}"{% if language.code == LANGUAGE_CODE %} selected{% endif %}>
+                                  {{ language.name_local }} ({{ language.code }})
+                              </option>
+                          {% endfor %}
+                      </select>
+                  </fieldset>
+              </form>
+          </div>
+          <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+              <div class="tp-card-btn-footer m-1">
+                  <button class="btn btn-primary " type="submit" form="language_configuration">
+                      {% trans "Save" %}
+                  </button>
+              </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="accordion-item">
+    <h2 class="accordion-header">
+      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
+        {% trans 'Security Configuration' %}
+      </button>
+    </h2>
+    <div id="collapseTwo" class="accordion-collapse collapse" data-bs-parent="#accordionExample">
+      <div class="accordion-body">
+        <div class="card">
+          {% comment %} <div class="card-header d-flex justify-content-between align-items-center">
+              <h1 class="h4 mb-0">{% trans 'Security Configuration' %}</h1>
+          </div> {% endcomment %}
+
+          <div class="card-body pt-4 pb-4">
+              <form method="POST" enctype="multipart/form-data" id="security_configuration">
+                  {% csrf_token %}
+                  <fieldset class="form-group tp-form-group">
+                      {% crispy form %}
+                  </fieldset>
+
+                  <div id="hidden_input_note" class="tp-d-none text-start mt-3">
+                      <i>{% trans 'Some settings are hidden as they are unavailable for the selected security level.' %}</i>
+                      <ul id="hidden_input_list"></ul>
+                  </div>
+
+                  <div id="auto_gen_pki_disable_warning" class="alert alert-danger tp-d-none mt-4" role="alert">
+                      <div class="d-flex align-items-center">
+                          <svg class="bi flex-shrink-0 me-2" width="24" height="24" fill="currentColor" role="img"
+                              aria-label="State: ">
+                              <use xlink:href="{% static 'img/icons.svg' %}#icon-warning"/>
+                          </svg>
+                          <div>
+                              <strong>{% trans 'WARNING!' %}</strong>
+                              {% trans 'By saving, you will disable the local auto-generated PKI. This revokes all certificates issued by the local auto-generated PKI.' %}
+                              <br>
+                              <strong>{% trans 'This action is irreversible.' %}</strong>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div>
+                      <h4>{% trans 'Notifications Settings' %}</h4>
+                      <div class="alert alert-info mt-3" role="alert">
+                          {% trans "Notifications are automatically refreshed every two minutes." %}
+                      </div>
+
+                      <table id="security-settings-table" class="table">
+                          <colgroup>
+                              <col style="width: 40%;">
+                              <col style="width: 60%;">
+                          </colgroup>
+                          <thead>
+                          <tr>
+                              <th>{% trans 'Setting' %}</th>
+                              <th>{% trans 'Value' %}</th>
+                          </tr>
+                          </thead>
+                          <tbody>
+                          </tbody>
+                      </table>
+                  </div>
+
+
+                  <div id="mismatch_warning" class="alert alert-warning tp-d-none mt-3" role="alert">
+                      <div class="d-flex align-items-center">
+                          <svg class="bi flex-shrink-0 me-2" width="24" height="24" fill="currentColor" role="img"
+                              aria-label="State: ">
+                              <use xlink:href="{% static 'img/icons.svg' %}#icon-warning"/>
+                          </svg>
+                          <div id="mismatch_warning_text" class="flex-grow-1 text-start"></div>
+                      </div>
+                  </div>
+              </form>
+          </div>
+
+          <div class="card-footer d-flex justify-content-between">
+              <div class="tp-card-btn-footer m-1">
+                  <button class="btn btn-primary" type="submit" form="security_configuration">
+                      {% trans 'Save' %}
+                  </button>
+              </div>
+          </div>
+        </div>
+        <script src="{% static 'js/settings.js' %}"></script>
+        <script type="text/javascript">
+            const securityConfigurations = {{ notification_configurations_json|safe }};
+
+            function updateSettingsTable(securityLevel) {
+                console.log("Updating table for:", securityLevel);
+                const settings = securityConfigurations[securityLevel] || {};
+                const tableBody = document.querySelector("#security-settings-table tbody");
+                tableBody.innerHTML = "";
+
+                for (const [key, value] of Object.entries(settings)) {
+                    const row = document.createElement("tr");
+
+                    const settingCell = document.createElement("td");
+                    settingCell.textContent = key.replace(/_/g, " ").replace(/\b\w/g, char => char.toUpperCase());
+                    row.appendChild(settingCell);
+
+                    const valueCell = document.createElement("td");
+                    if (Array.isArray(value)) {
+                        valueCell.textContent = value.join(", ");
+                    } else {
+                        valueCell.textContent = value;
+                    }
+                    row.appendChild(valueCell);
+
+                    tableBody.appendChild(row);
+                }
+            }
+
+
+            document.addEventListener('DOMContentLoaded', function () {
+                const securityModeRadios = document.querySelectorAll('input[name="security_mode"]');
+
+                if (securityModeRadios) {
+                    securityModeRadios.forEach(function (radio) {
+                        radio.addEventListener('change', function () {
+                            updateSettingsTable(this.value);
+                        });
+                    });
+
+                    const checkedRadio = document.querySelector('input[name="security_mode"]:checked');
+                    if (checkedRadio) {
+                        updateSettingsTable(checkedRadio.value);
+                    }
+                } else {
+                }
+            });
+
+        </script>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock content %}
