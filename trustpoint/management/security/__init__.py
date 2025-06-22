@@ -1,5 +1,5 @@
-from settings.models import SecurityConfig
-from settings.security.features import AutoGenPkiFeature
+from management.models import SecurityConfig
+from management.security.features import AutoGenPkiFeature
 
 # 1) Minimal set: HIGHEST
 HIGHEST_FEATURES = {None}

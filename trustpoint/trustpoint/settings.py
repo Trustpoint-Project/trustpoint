@@ -120,7 +120,7 @@ INSTALLED_APPS = [
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
     'est.apps.EstConfig',
-    'settings.apps.SettingsConfig',
+    'management.apps.ManagementConfig',
     'notifications.apps.NotificationsConfig',
     'django.contrib.admin',
     'django.contrib.auth',

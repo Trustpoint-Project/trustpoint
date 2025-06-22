@@ -13,19 +13,19 @@ from django.views.generic.edit import FormView
 from notifications.models import NotificationConfig, WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
-from settings.forms import SecurityConfigForm
-from settings.models import SecurityConfig
-from settings.security.features import AutoGenPkiFeature
-from settings.security.mixins import SecurityLevelMixin
+from management.forms import SecurityConfigForm
+from management.models import SecurityConfig
+from management.security.features import AutoGenPkiFeature
+from management.security.mixins import SecurityLevelMixin
 
 if TYPE_CHECKING:
     from typing import Any
 
 
 class SecurityView(SecurityLevelMixin, FormView):
-    template_name = 'settings/security.html'
+    template_name = 'management/security.html'
     form_class = SecurityConfigForm
-    success_url = reverse_lazy('settings:security')
+    success_url = reverse_lazy('management:security')
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -77,7 +77,7 @@ class SecurityView(SecurityLevelMixin, FormView):
 
     def get_context_data(self, **kwargs: dict) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        context['page_category'] = 'settings'
+        context['page_category'] = 'management'
         context['page_name'] = 'security'
         notification_configurations = SecurityConfig.NOTIFICATION_CONFIGURATIONS
 

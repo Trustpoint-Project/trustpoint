@@ -120,7 +120,7 @@
                         <div>
                             <div>{% trans "Preferred IPv4 Address" %}</div>
                             <div>
-                                <form method="post" action="{% url 'settings:tls' %}" id="preferred_ipv4_configuration">
+                                <form method="post" action="{% url 'management:tls' %}" id="preferred_ipv4_configuration">
                                     {% csrf_token %}
                                     <div>
                                         <div class="btn-group" role="group" aria-label="IPv4 Address Selection">

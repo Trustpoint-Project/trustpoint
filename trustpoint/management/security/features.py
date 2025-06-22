@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from pki.auto_gen_pki import AutoGenPki
 
-from settings.models import SecurityConfig
+from management.models import SecurityConfig
 
 if TYPE_CHECKING:
     from pki.util.keys import AutoGenPkiKeyAlgorithm

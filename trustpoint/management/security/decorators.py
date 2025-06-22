@@ -2,8 +2,8 @@ from functools import wraps
 
 from django.core.exceptions import PermissionDenied
 
-from settings.security import SecurityFeature
-from settings.security.manager import SecurityManager
+from management.security import SecurityFeature
+from management.security.manager import SecurityManager
 
 
 def security_level(feature_name: SecurityFeature):

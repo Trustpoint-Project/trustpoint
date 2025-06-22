@@ -10,9 +10,9 @@ from django import forms
 from django.utils.translation import gettext_lazy as _
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
-from settings.models import SecurityConfig
-from settings.security import manager
-from settings.security.features import AutoGenPkiFeature, SecurityFeature
+from management.models import SecurityConfig
+from management.security import manager
+from management.security.features import AutoGenPkiFeature, SecurityFeature
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar

@@ -16,5 +16,5 @@ def language(request: HttpRequest) -> HttpResponse:
 
     Returns: HTTPResponse
     """
-    context = {'page_category': 'settings', 'page_name': 'language'}
-    return render(request, 'settings/language.html', context=context)
+    context = {'page_category': 'management', 'page_name': 'language'}
+    return render(request, 'management/language.html', context=context)

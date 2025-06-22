@@ -11,7 +11,7 @@
         <div class="card-footer d-flex justify-content-between tp-sticky-footer">
             <div class="tp-card-btn-footer m-1">
                 <button type="button" value="Back" class="btn btn-secondary" onClick="history.back()">{% trans 'Back' %}</button>
-                <a href="{% url 'settings:logging-files-download' filename %} " class="btn btn-primary">{% trans 'Download' %}</a>
+                <a href="{% url 'management:logging-files-download' filename %} " class="btn btn-primary">{% trans 'Download' %}</a>
             </div>
         </div>
     </div>

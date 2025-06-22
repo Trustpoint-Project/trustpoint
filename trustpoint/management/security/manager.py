@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from settings.models import SecurityConfig
-from settings.security import LEVEL_FEATURE_MAP
+from management.models import SecurityConfig
+from management.security import LEVEL_FEATURE_MAP
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
-    from settings.security.features import SecurityFeature
+    from management.security.features import SecurityFeature
 
 
 class SecurityManager(LoggerMixin):

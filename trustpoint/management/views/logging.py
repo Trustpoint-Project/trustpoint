@@ -32,7 +32,7 @@ class IndexView(RedirectView):
     """Index view"""
 
     permanent = True
-    pattern_name = 'settings:language'
+    pattern_name = 'management:language'
 
 
 def language(request: HttpRequest) -> HttpResponse:
@@ -40,8 +40,8 @@ def language(request: HttpRequest) -> HttpResponse:
 
     Returns: HTTPResponse
     """
-    context = {'page_category': 'settings', 'page_name': 'language'}
-    return render(request, 'settings/language.html', context=context)
+    context = {'page_category': 'management', 'page_name': 'language'}
+    return render(request, 'management/language.html', context=context)
 
 
 # ------------------------------------------------------- Logging ------------------------------------------------------
@@ -50,7 +50,7 @@ def language(request: HttpRequest) -> HttpResponse:
 class LoggingContextMixin:
     """Mixin which adds extra menu context for the Logging Views."""
 
-    extra_context: ClassVar[dict] = {'page_category': 'settings', 'page_name': 'logging'}
+    extra_context: ClassVar[dict] = {'page_category': 'management', 'page_name': 'logging'}
 
 
 class LoggingFilesTableView(LoggerMixin, LoggingContextMixin, SortableTableMixin, ListView):
@@ -58,7 +58,7 @@ class LoggingFilesTableView(LoggerMixin, LoggingContextMixin, SortableTableMixin
 
     http_method_names = ('get',)
 
-    template_name = 'settings/logging/logging_files.html'
+    template_name = 'management/logging/logging_files.html'
     context_object_name = 'log_files'
     default_sort_param = 'filename'
     paginate_by = UIConfig.paginate_by
@@ -113,7 +113,7 @@ class LoggingFilesDetailsView(LoggerMixin, LoggingContextMixin, TemplateView):
 
     http_method_names = ('get',)
 
-    template_name = 'settings/logging/logging_files_details.html'
+    template_name = 'management/logging/logging_files_details.html'
     log_directory = LOG_DIR_PATH
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:

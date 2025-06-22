@@ -3,7 +3,7 @@
 import pytest
 from django.core.exceptions import ValidationError
 
-from settings.models import TlsSettings
+from management.models import TlsSettings
 
 
 @pytest.mark.django_db

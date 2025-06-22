@@ -47,7 +47,7 @@ urlpatterns += [
     path('.well-known/est/', include('est.urls')),
     path('home/', include('home.urls')),
     path('devices/', include('devices.urls')),
-    path('settings/', include('settings.urls')),
+    path('management/', include('management.urls')),
     path('notifications/', include('notifications.urls')),
     path('i18n/', include('django.conf.urls.i18n')),
     path(

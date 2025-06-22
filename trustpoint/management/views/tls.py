@@ -12,8 +12,8 @@ from django.views.generic import FormView
 from pki.models import GeneralNameIpAddress
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 
-from settings.forms import IPv4AddressForm
-from settings.models import TlsSettings
+from management.forms import IPv4AddressForm
+from management.models import TlsSettings
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -24,14 +24,14 @@ if TYPE_CHECKING:
 class TlsSettingsContextMixin:
     """Mixin which adds data to the context for the TLS settings application."""
 
-    extra_context: ClassVar = {'page_category': 'settings', 'page_name': 'tls'}
+    extra_context: ClassVar = {'page_category': 'management', 'page_name': 'tls'}
 
 
 class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
     """View to display certificate details, including Subject Alternative Name (SAN) and associated IP addresses."""
-    template_name = 'settings/tls.html'
+    template_name = 'management/tls.html'
     form_class = IPv4AddressForm
-    success_url = reverse_lazy('settings:tls')
+    success_url = reverse_lazy('management:tls')
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Pass additional arguments (e.g., SAN IPs) to the form."""

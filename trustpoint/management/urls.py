@@ -1,10 +1,10 @@
-"""URL configuration for the settings application."""
+"""URL configuration for the management application."""
 
 from django.urls import path, re_path
 
 from .views import IndexView, language, logging, security, tls
 
-app_name = 'settings'
+app_name = 'management'
 urlpatterns = [
     path('', IndexView.as_view(), name='index'),
     path('language/', language.language, name='language'),

@@ -38,13 +38,13 @@
                     <td class="row_checkbox">
                       <input type="checkbox" name="row_checkbox" value="{{ logfile.filename }}" />
                     </td>
-                    <td><a href="{% url 'settings:logging-files-details' filename=logfile.filename %}">{{ logfile.filename }}</a></td>
+                    <td><a href="{% url 'management:logging-files-details' filename=logfile.filename %}">{{ logfile.filename }}</a></td>
                     <td>{{ logfile.created_at }}</td>
                     <td>{{ logfile.updated_at }}</td>
-                    <td><a href="{% url 'settings:logging-files-details' filename=logfile.filename %}"
+                    <td><a href="{% url 'management:logging-files-details' filename=logfile.filename %}"
                         class="btn btn-primary tp-table-btn">{% trans 'View' %}</a>
                     </td>
-                    <td><a href="{% url 'settings:logging-files-download' filename=logfile.filename %}"
+                    <td><a href="{% url 'management:logging-files-download' filename=logfile.filename %}"
                         class="btn btn-primary tp-table-btn">{% trans 'Download' %}</a>
                     </td>
                   </tr>

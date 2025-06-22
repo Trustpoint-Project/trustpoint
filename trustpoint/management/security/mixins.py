@@ -6,10 +6,10 @@ from django.contrib import messages
 from django.shortcuts import redirect
 from django.utils.translation import gettext as _
 
-from settings.security.manager import SecurityManager
+from management.security.manager import SecurityManager
 
 if TYPE_CHECKING:
-    from settings.security import SecurityFeature
+    from management.security import SecurityFeature
 
 
 class SecurityLevelMixin:
