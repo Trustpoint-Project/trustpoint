@@ -234,12 +234,7 @@ class CmpInitializationRequestView(
     requested_domain: DomainModel
     device: None | DeviceModel = None
 
-    def _handle_shared_secret_application_cert_request( # noqa: C901, PLR0912, PLR0915
-            self) -> HttpResponse:
-        """Handles CMP IR for application certificates with shared secret protection."""
-        if not self.application_certificate_template:
-                    return HttpResponse('Missing application certificate template.', status=404)
-
+    def _extract_ir_body(self) -> dict:
         message_body_name = self.serialized_pyasn1_message['body'].getName()
         if message_body_name != 'ir':
             return HttpResponse(
@@ -250,8 +245,6 @@ class CmpInitializationRequestView(
             raise ValueError
 
         check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
-
-        protection_value = self.serialized_pyasn1_message['protection'].asOctets()
 
         # ignore extra certs
 
@@ -268,6 +261,9 @@ class CmpInitializationRequestView(
             err_msg = 'no CertReqMessages found for IR.'
             raise ValueError(err_msg)
 
+        return ir_body
+
+    def _extract_cert_req_template(self, ir_body: dict) -> dict:
         cert_req_msg = ir_body[0]['certReq']
 
         if cert_req_msg['certReqId'] != 0:
@@ -278,7 +274,19 @@ class CmpInitializationRequestView(
             err_msg = 'certTemplate must be contained in IR CertReqMessage.'
             raise ValueError(err_msg)
 
-        cert_req_template = cert_req_msg['certTemplate']
+        return cert_req_msg['certTemplate']
+
+    def _handle_shared_secret_application_cert_request( # noqa: C901, PLR0912, PLR0915
+            self) -> HttpResponse:
+        """Handles CMP IR for application certificates with shared secret protection."""
+        if not self.application_certificate_template:
+                    return HttpResponse('Missing application certificate template.', status=404)
+
+        ir_body = self._extract_ir_body()
+
+        cert_req_template = self._extract_cert_req_template(ir_body)
+
+        protection_value = self.serialized_pyasn1_message['protection'].asOctets()
 
         # noinspection PyBroadException
         try:
@@ -543,45 +551,11 @@ class CmpInitializationRequestView(
                 'Found application certificate template for domain credential certificate request.', status=404
             )
 
-        message_body_name = self.serialized_pyasn1_message['body'].getName()
-        if message_body_name != 'ir':
-            return HttpResponse(
-                f'Expected CMP IR body, but got CMP {message_body_name.upper()} body.', status=450
-            )
+        ir_body = self._extract_ir_body()
 
-        if self.device.domain != self.requested_domain:
-            raise ValueError
-
-        check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
+        cert_req_template = self._extract_cert_req_template(ir_body)
 
         protection_value = self.serialized_pyasn1_message['protection'].asOctets()
-
-        # ignore extra certs
-
-        if self.serialized_pyasn1_message['body'].getName() != 'ir':
-            err_msg = 'not ir message'
-            raise ValueError(err_msg)
-
-        ir_body = self.serialized_pyasn1_message['body']['ir']
-        if len(ir_body) > 1:
-            err_msg = 'multiple CertReqMessages found for IR.'
-            raise ValueError(err_msg)
-
-        if len(ir_body) < 1:
-            err_msg = 'no CertReqMessages found for IR.'
-            raise ValueError(err_msg)
-
-        cert_req_msg = ir_body[0]['certReq']
-
-        if cert_req_msg['certReqId'] != 0:
-            err_msg = 'certReqId must be 0.'
-            raise ValueError(err_msg)
-
-        if not cert_req_msg['certTemplate'].hasValue():
-            err_msg = 'certTemplate must be contained in IR CertReqMessage.'
-            raise ValueError(err_msg)
-
-        cert_req_template = cert_req_msg['certTemplate']
 
         # noinspection PyBroadException
         try:
@@ -778,7 +752,7 @@ class CmpInitializationRequestView(
         )
 
         encoded_ip_message = encoder.encode(ip_message)
-        decoded_ip_message, _ = decoder.decode(encoded_ip_message, asn1Spec=rfc4210.PKIMessage())
+        _decoded_ip_message, _ = decoder.decode(encoded_ip_message, asn1Spec=rfc4210.PKIMessage())
 
         return HttpResponse(encoded_ip_message, content_type='application/pkixcmp', status=200)
 
