@@ -194,6 +194,30 @@ class CmpRequestTemplateExtractorMixin:
 
         return parent.dispatch(request, *args, **kwargs)
 
+    def _get_subject_common_name(self, cert_req_template: dict) -> str:
+        """Extracts the common name from the subject in the certificate request template."""
+        if not cert_req_template['subject'].isValue:
+            err_msg = 'subject missing in CertReqMessage.'
+            raise ValueError(err_msg)
+
+        # ignores subject request for now and forces values to set
+        subject = NameParser.parse_name(cert_req_template['subject'])
+
+        common_names = subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+        if len(common_names) != 1:
+            exc_msg = 'Exactly one common name must be present in the subject.'
+            raise ValueError(exc_msg)
+
+        common_name = common_names[0]
+
+        if isinstance(common_name.value, str):
+            return common_name.value
+        if isinstance(common_name.value, bytes):
+            return common_name.value.decode()
+
+        err_msg = 'Failed to parse common name value'
+        raise TypeError(err_msg)
+
 
 def check_header(serialized_pyasn1_message: rfc4210.PKIMessage) -> None:
     """Checks some parts of the header."""
@@ -221,6 +245,14 @@ def check_header(serialized_pyasn1_message: rfc4210.PKIMessage) -> None:
         raise ValueError(err_msg)
 
 
+def get_encoded_protected_part(cmp_message: rfc4210.PKIMessage) -> bytes:
+    """Encode the protected part of the CMP message."""
+    protected_part = rfc4210.ProtectedPart()
+    protected_part['header'] = cmp_message['header']
+    protected_part['infoValue'] = cmp_message['body']
+    return encoder.encode(protected_part)
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 class CmpInitializationRequestView(
     CmpHttpMixin, CmpRequestedDomainExtractorMixin, CmpPkiMessageSerializerMixin, CmpRequestTemplateExtractorMixin, View
@@ -240,9 +272,6 @@ class CmpInitializationRequestView(
             return HttpResponse(
                 f'Expected CMP IR body, but got CMP {message_body_name.upper()} body.', status=450
             )
-
-        if self.device.domain != self.requested_domain:
-            raise ValueError
 
         check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
 
@@ -282,29 +311,17 @@ class CmpInitializationRequestView(
 
         return cert_req_template
 
-    def _get_subject_common_name(self, cert_req_template: dict) -> str:
-        """Extracts the common name from the subject in the certificate request template."""
-        if not cert_req_template['subject'].isValue:
-            err_msg = 'subject missing in CertReqMessage.'
+    def _load_cert_req_public_key(self, cert_req_template: dict) -> PublicKey:
+        # only local key-gen supported currently -> public key must be present
+        asn1_public_key = cert_req_template['publicKey']
+        if not asn1_public_key.hasValue():
+            err_msg = 'Public-missing in CertTemplate.'
             raise ValueError(err_msg)
 
-        # ignores subject request for now and forces values to set
-        subject = NameParser.parse_name(cert_req_template['subject'])
-
-        common_names = subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
-        if len(common_names) != 1:
-            exc_msg = 'Exactly one common name must be present in the subject.'
-            raise ValueError(exc_msg)
-
-        common_name = common_names[0]
-
-        if isinstance(common_name.value, str):
-            return common_name.value
-        if isinstance(common_name.value, bytes):
-            return common_name.value.decode()
-
-        err_msg = 'Failed to parse common name value'
-        raise TypeError(err_msg)
+        spki = rfc2511.SubjectPublicKeyInfo()
+        spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
+        spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
+        return load_supported_public_key_type(encoder.encode(spki))
 
     def _issue_application_credential(
             self, cert_req_template: dict, public_key: PublicKey
@@ -375,93 +392,8 @@ class CmpInitializationRequestView(
         raise ValueError(exc_msg)
 
 
-    def _handle_shared_secret_initialization_request( # noqa: C901, PLR0915
-            self) -> HttpResponse:
-        """Handles IR for initial certificate requests with shared secret protection."""
-        ir_body = self._extract_ir_body()
-
-        cert_req_template = self._extract_cert_req_template(ir_body)
-
-        protection_value = self.serialized_pyasn1_message['protection'].asOctets()
-
-        # only local key-gen supported currently -> public key must be present
-        asn1_public_key = cert_req_template['publicKey']
-        if not asn1_public_key.hasValue():
-            err_msg = 'Public-missing in CertTemplate.'
-            raise ValueError(err_msg)
-
-        spki = rfc2511.SubjectPublicKeyInfo()
-        spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
-        spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
-        loaded_public_key = load_supported_public_key_type(encoder.encode(spki))
-
-        # TODO(AlexHx8472): verify popo / process popo: popo = ir_body[0]['pop'].prettyPrint()  # noqa: FIX002
-
-        pbm_parameters_bitstring = self.serialized_pyasn1_message['header']['protectionAlg']['parameters']
-        decoded_pbm, _ = decoder.decode(pbm_parameters_bitstring, asn1Spec=rfc4210.PBMParameter())
-
-        salt = decoded_pbm['salt'].asOctets()
-        try:
-            owf = HashAlgorithm.from_dotted_string(decoded_pbm['owf']['algorithm'].prettyPrint())
-        except Exception as exception:
-            err_msg = 'owf algorithm not supported.'
-            raise ValueError(err_msg) from exception
-
-        iteration_count = int(decoded_pbm['iterationCount'])
-
-        if self.device.cmp_shared_secret is None:
-            err_msg = 'Device is misconfigured.'
-            raise ValueError(err_msg)
-
-        shared_secret = self.device.cmp_shared_secret.encode()
-        salted_secret = shared_secret + salt
-        hmac_key = salted_secret
-        for _ in range(iteration_count):
-            hasher = hashes.Hash(owf.hash_algorithm())
-            hasher.update(hmac_key)
-            hmac_key = hasher.finalize()
-
-        hmac_algorithm_oid = decoded_pbm['mac']['algorithm'].prettyPrint()
-        try:
-            hmac_algorithm = HmacAlgorithm.from_dotted_string(hmac_algorithm_oid)
-        except Exception as exception:
-            err_msg = 'hmac algorithm not supported.'
-            raise ValueError(err_msg) from exception
-
-        protected_part = rfc4210.ProtectedPart()
-        protected_part['header'] = self.serialized_pyasn1_message['header']
-        protected_part['infoValue'] = self.serialized_pyasn1_message['body']
-
-        encoded_protected_part = encoder.encode(protected_part)
-
-        hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
-        hmac_gen.update(encoded_protected_part)
-
-        try:
-            hmac_gen.verify(protection_value)
-        except InvalidSignature as exception:
-            err_msg = 'hmac verification failed.'
-            raise ValueError(err_msg) from exception
-
-        # Checks regarding contained public key and corresponding signature suite of the issuing CA
-        issuing_ca = self.requested_domain.get_issuing_ca_or_value_error()
-        issuing_ca_certificate = issuing_ca.credential.get_certificate()
-        signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
-        if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
-            err_msg = 'Contained public key type does not match the signature suite.'
-            raise ValueError(err_msg)
-
-        # Issue the credential
-        if self.application_certificate_template: # application credential request
-            issued_cred = self._issue_application_credential(
-                cert_req_template=cert_req_template, public_key=loaded_public_key
-            )
-        else: # domain credential request
-            issuer_domain_credential = LocalDomainCredentialIssuer(device=self.device, domain=self.device.domain)
-            issued_cred = issuer_domain_credential.issue_domain_credential_certificate(
-                public_key=loaded_public_key
-            )
-
+    def _build_ip_header(self, sender_kid: rfc2459.KeyIdentifier) -> rfc4210.PKIHeader:
+        """Builds the IP header for the IP response message."""
         ip_header = rfc4210.PKIHeader()
 
         ip_header['pvno'] = CMP_MESSAGE_VERSION
@@ -482,7 +414,7 @@ class CmpInitializationRequestView(
 
         ip_header['protectionAlg'] = self.serialized_pyasn1_message['header']['protectionAlg']
 
-        ip_header['senderKID'] = self.serialized_pyasn1_message['header']['senderKID']
+        ip_header['senderKID'] = sender_kid
 
         ip_header['transactionID'] = self.serialized_pyasn1_message['header']['transactionID']
 
@@ -490,11 +422,18 @@ class CmpInitializationRequestView(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 5)
         )
 
-        ip_header['recipNonce'] = univ.OctetString(
-            self.serialized_pyasn1_message['header']['senderNonce']
-        ).subtype(explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 6))
+        ip_header['recipNonce'] = univ.OctetString(self.serialized_pyasn1_message['header']['senderNonce']).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 6)
+        )
 
         ip_header['generalInfo'] = self.serialized_pyasn1_message['header']['generalInfo']
+
+        return ip_header
+
+    def _build_base_ip_message(
+            self, issued_cred: IssuedCredentialModel, sender_kid: rfc2459.KeyIdentifier) -> rfc4210.PKIMessage:
+        """Builds the IP response message (without the protection)."""
+        ip_header = self._build_ip_header(sender_kid=sender_kid)
 
         ip_extra_certs = univ.SequenceOf()
 
@@ -546,12 +485,93 @@ class CmpInitializationRequestView(
         for extra_cert in ip_extra_certs:
             ip_message['extraCerts'].append(extra_cert)
 
-        # TODO(AlexHx8472): Use fresh salt! # noqa: FIX002
-        protected_part = rfc4210.ProtectedPart()
-        protected_part['header'] = ip_message['header']
-        protected_part['infoValue'] = ip_message['body']
+        return ip_message
 
-        encoded_protected_part = encoder.encode(protected_part)
+
+    def _handle_shared_secret_initialization_request( # noqa: PLR0915
+            self) -> HttpResponse:
+        """Handles IR for initial certificate requests with shared secret protection."""
+        if self.device.domain != self.requested_domain:
+            exc_msg = 'The device domain does not match the requested domain.'
+            raise ValueError(exc_msg)
+
+        ir_body = self._extract_ir_body()
+
+        cert_req_template = self._extract_cert_req_template(ir_body)
+
+        protection_value = self.serialized_pyasn1_message['protection'].asOctets()
+
+        loaded_public_key = self._load_cert_req_public_key(cert_req_template)
+
+        # TODO(AlexHx8472): verify popo / process popo: popo = ir_body[0]['pop'].prettyPrint()  # noqa: FIX002
+
+        pbm_parameters_bitstring = self.serialized_pyasn1_message['header']['protectionAlg']['parameters']
+        decoded_pbm, _ = decoder.decode(pbm_parameters_bitstring, asn1Spec=rfc4210.PBMParameter())
+
+        salt = decoded_pbm['salt'].asOctets()
+        try:
+            owf = HashAlgorithm.from_dotted_string(decoded_pbm['owf']['algorithm'].prettyPrint())
+        except Exception as exception:
+            err_msg = 'owf algorithm not supported.'
+            raise ValueError(err_msg) from exception
+
+        iteration_count = int(decoded_pbm['iterationCount'])
+
+        if self.device.cmp_shared_secret is None:
+            err_msg = 'Device is misconfigured.'
+            raise ValueError(err_msg)
+
+        shared_secret = self.device.cmp_shared_secret.encode()
+        salted_secret = shared_secret + salt
+        hmac_key = salted_secret
+        for _ in range(iteration_count):
+            hasher = hashes.Hash(owf.hash_algorithm())
+            hasher.update(hmac_key)
+            hmac_key = hasher.finalize()
+
+        hmac_algorithm_oid = decoded_pbm['mac']['algorithm'].prettyPrint()
+        try:
+            hmac_algorithm = HmacAlgorithm.from_dotted_string(hmac_algorithm_oid)
+        except Exception as exception:
+            err_msg = 'hmac algorithm not supported.'
+            raise ValueError(err_msg) from exception
+
+        encoded_protected_part = get_encoded_protected_part(self.serialized_pyasn1_message)
+
+        hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
+        hmac_gen.update(encoded_protected_part)
+
+        try:
+            hmac_gen.verify(protection_value)
+        except InvalidSignature as exception:
+            err_msg = 'hmac verification failed.'
+            raise ValueError(err_msg) from exception
+
+        # Checks regarding contained public key and corresponding signature suite of the issuing CA
+        issuing_ca = self.requested_domain.get_issuing_ca_or_value_error()
+        issuing_ca_certificate = issuing_ca.credential.get_certificate()
+        signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
+        if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
+            err_msg = 'Contained public key type does not match the signature suite.'
+            raise ValueError(err_msg)
+
+        # Issue the credential
+        if self.application_certificate_template: # application credential request
+            issued_cred = self._issue_application_credential(
+                cert_req_template=cert_req_template, public_key=loaded_public_key
+            )
+        else: # domain credential request
+            issuer_domain_credential = LocalDomainCredentialIssuer(device=self.device, domain=self.device.domain)
+            issued_cred = issuer_domain_credential.issue_domain_credential_certificate(
+                public_key=loaded_public_key
+            )
+
+        # Build the IP response message
+        sender_kid = self.serialized_pyasn1_message['header']['senderKID']
+        ip_message = self._build_base_ip_message(issued_cred=issued_cred, sender_kid=sender_kid)
+
+        # TODO(AlexHx8472): Use fresh salt! # noqa: FIX002
+        encoded_protected_part = get_encoded_protected_part(ip_message)
 
         hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
         hmac_gen.update(encoded_protected_part)
@@ -726,80 +746,20 @@ class CmpInitializationRequestView(
             if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE:
                 return HttpResponse('PKI protocol CMP client certificate expected, but got something else.')
 
-        message_body_name = self.serialized_pyasn1_message['body'].getName()
-        if message_body_name != 'ir':
-            return HttpResponse(f'Expected CMP IR body, but got CMP {message_body_name.upper()} body.', status=450)
+        ir_body = self._extract_ir_body()
 
-        check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
+        cert_req_template = self._extract_cert_req_template(ir_body)
 
         protection_value = self.serialized_pyasn1_message['protection'].asOctets()
 
-        if self.serialized_pyasn1_message['body'].getName() != 'ir':
-            err_msg = 'not ir message'
-            raise ValueError(err_msg)
+        # Ensure subject common name is present
+        _common_name = self._get_subject_common_name(cert_req_template)
 
-        ir_body = self.serialized_pyasn1_message['body']['ir']
-        if len(ir_body) > 1:
-            err_msg = 'multiple CertReqMessages found for IR.'
-            raise ValueError(err_msg)
-
-        if len(ir_body) < 1:
-            err_msg = 'no CertReqMessages found for IR.'
-            raise ValueError(err_msg)
-
-        cert_req_msg = ir_body[0]['certReq']
-
-        if cert_req_msg['certReqId'] != 0:
-            err_msg = 'certReqId must be 0.'
-            raise ValueError(err_msg)
-
-        if not cert_req_msg['certTemplate'].hasValue():
-            err_msg = 'certTemplate must be contained in IR CertReqMessage.'
-            raise ValueError(err_msg)
-
-        cert_req_template = cert_req_msg['certTemplate']
-
-        # noinspection PyBroadException
-        try:
-            validity_not_before = convert_rfc2459_time(cert_req_template['validity']['notBefore'])
-            validity_not_after = convert_rfc2459_time(cert_req_template['validity']['notAfter'])
-            validity_in_days = (validity_not_after - validity_not_before).days
-        except Exception:  # noqa: BLE001
-            validity_in_days = DEFAULT_VALIDITY_DAYS
-
-        if cert_req_template['version'].hasValue() and cert_req_template['version'] != CERT_TEMPLATE_VERSION:
-            err_msg = 'Version must be 2 if supplied in certificate request.'
-            raise ValueError(err_msg)
-
-        if not cert_req_template['subject'].isValue:
-            err_msg = 'subject missing in CertReqMessage.'
-            raise ValueError(err_msg)
-
-        # ignores subject request for now and forces values to set
-        subject = NameParser.parse_name(cert_req_template['subject'])
-
-        common_names = subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
-        if len(common_names) != 1:
-            raise ValueError
-
-        # only local key-gen supported currently -> public key must be present
-        asn1_public_key = cert_req_template['publicKey']
-        if not asn1_public_key.hasValue():
-            err_msg = 'Public-missing in CertTemplate.'
-            raise ValueError(err_msg)
-
-        spki = rfc2511.SubjectPublicKeyInfo()
-        spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
-        spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
-        loaded_public_key = load_supported_public_key_type(encoder.encode(spki))
+        loaded_public_key = self._load_cert_req_public_key(cert_req_template)
 
         # TODO(AlexHx8472): verify popo / process popo: popo = ir_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
-        protected_part = rfc4210.ProtectedPart()
-        protected_part['header'] = self.serialized_pyasn1_message['header']
-        protected_part['infoValue'] = self.serialized_pyasn1_message['body']
-
-        encoded_protected_part = encoder.encode(protected_part)
+        encoded_protected_part = get_encoded_protected_part(self.serialized_pyasn1_message)
         signature_suite = SignatureSuite.from_certificate(cmp_signer_cert)
 
         hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
@@ -823,109 +783,28 @@ class CmpInitializationRequestView(
             )
 
         # Checks regarding contained public key and corresponding signature suite of the issuing CA
-        issuing_ca_certificate = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
+        issuing_ca = self.requested_domain.get_issuing_ca_or_value_error()
+        issuing_ca_certificate = issuing_ca.credential.get_certificate()
         signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
         if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
             err_msg = 'Contained public key type does not match the signature suite.'
             raise ValueError(err_msg)
 
         issuer_domain_credential = LocalDomainCredentialIssuer(device=self.device, domain=self.requested_domain)
-        issued_domain_credential = issuer_domain_credential.issue_domain_credential_certificate(
+        issued_cred = issuer_domain_credential.issue_domain_credential_certificate(
             public_key=loaded_public_key
         )
 
-        ip_header = rfc4210.PKIHeader()
-
-        ip_header['pvno'] = CMP_MESSAGE_VERSION
-
         issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
-        raw_issuing_ca_subject = issuing_ca_cert.subject.public_bytes()
-        name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
-        sender = rfc2459.GeneralName()
-        sender['directoryName'][0] = name
-        ip_header['sender'] = sender
-
-        ip_header['recipient'] = self.serialized_pyasn1_message['header']['sender']
-
-        current_time = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d%H%M%SZ')
-        ip_header['messageTime'] = useful.GeneralizedTime(current_time).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
-        )
-
-        ip_header['protectionAlg'] = self.serialized_pyasn1_message['header']['protectionAlg']
-
         ski = x509.SubjectKeyIdentifier.from_public_key(issuing_ca_cert.public_key())
-        ip_header['senderKID'] = rfc2459.KeyIdentifier(ski.digest).subtype(
+        sender_kid = rfc2459.KeyIdentifier(ski.digest).subtype(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2)
         )
 
-        ip_header['transactionID'] = self.serialized_pyasn1_message['header']['transactionID']
+        # Build the IP response message
+        ip_message = self._build_base_ip_message(issued_cred=issued_cred, sender_kid=sender_kid)
 
-        ip_header['senderNonce'] = univ.OctetString(secrets.token_bytes(SENDER_NONCE_LENGTH)).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 5)
-        )
-
-        ip_header['recipNonce'] = univ.OctetString(self.serialized_pyasn1_message['header']['senderNonce']).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 6)
-        )
-
-        ip_header['generalInfo'] = self.serialized_pyasn1_message['header']['generalInfo']
-
-        ip_extra_certs = univ.SequenceOf()
-
-        certificate_chain = [
-            self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate(),
-            *self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate_chain(),
-        ]
-        for certificate in certificate_chain:
-            der_bytes = certificate.public_bytes(encoding=Encoding.DER)
-            asn1_certificate, _ = decoder.decode(der_bytes, asn1Spec=rfc4210.CMPCertificate())
-            ip_extra_certs.append(asn1_certificate)
-
-        ip_body = rfc4210.PKIBody()
-        ip_body['ip'] = rfc4210.CertRepMessage().subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 1)
-        )
-        ip_body['ip']['caPubs'] = univ.SequenceOf().subtype(
-            sizeSpec=rfc4210.constraint.ValueSizeConstraint(1, rfc4210.MAX),
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 1),
-        )
-        # TODO(AlexHx8472): Add TLS Server Certificate Root CA  # noqa: FIX002
-
-        cert_response = rfc4210.CertResponse()
-        cert_response['certReqId'] = 0
-
-        pki_status_info = rfc4210.PKIStatusInfo()
-        pki_status_info['status'] = 0
-        cert_response['status'] = pki_status_info
-
-        cmp_cert = rfc4210.CMPCertificate().subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 0)
-        )
-
-        encoded_cert = issued_domain_credential.credential.get_certificate().public_bytes(encoding=Encoding.DER)
-        der_cert, _ = decoder.decode(encoded_cert, asn1Spec=rfc4210.CMPCertificate())
-        cmp_cert.setComponentByName('tbsCertificate', der_cert['tbsCertificate'])
-        cmp_cert.setComponentByName('signatureValue', der_cert['signatureValue'])
-        cmp_cert.setComponentByName('signatureAlgorithm', der_cert['signatureAlgorithm'])
-        cert_or_enc_cert = rfc4210.CertOrEncCert()
-        cert_or_enc_cert['certificate'] = cmp_cert
-
-        cert_response['certifiedKeyPair']['certOrEncCert'] = cert_or_enc_cert
-
-        ip_body['ip']['response'].append(cert_response)
-
-        ip_message = rfc4210.PKIMessage()
-        ip_message['header'] = ip_header
-        ip_message['body'] = ip_body
-        for extra_cert in ip_extra_certs:
-            ip_message['extraCerts'].append(extra_cert)
-
-        protected_part = rfc4210.ProtectedPart()
-        protected_part['header'] = ip_message['header']
-        protected_part['infoValue'] = ip_message['body']
-
-        encoded_protected_part = encoder.encode(protected_part)
+        encoded_protected_part = get_encoded_protected_part(ip_message)
         signature_suite = SignatureSuite.from_certificate(cmp_signer_cert)
         private_key = load_pem_private_key(
             self.requested_domain.get_issuing_ca_or_value_error().credential.private_key.encode(), password=None
@@ -975,7 +854,7 @@ class CmpCertificationRequestView(
     device: DeviceModel
     application_certificate_template: None | ApplicationCertificateTemplateNames = None
 
-    def _handle_shared_secret_cr(self) -> HttpResponse:
+    def _handle_shared_secret_cr(self) -> HttpResponse:  # noqa: C901, PLR0912, PLR0915
         """Handles CMP CR for application certificates with shared secret protection."""
         if not self.application_certificate_template:
                 return HttpResponse('Missing application certificate template.', status=404)
@@ -1053,25 +932,7 @@ class CmpCertificationRequestView(
             err_msg = 'Version must be 2 if supplied in certificate request.'
             raise ValueError(err_msg)
 
-        if not cert_req_template['subject'].isValue:
-            err_msg = 'subject missing in CertReqMessage.'
-            raise ValueError(err_msg)
-
-        # ignores subject request for now and forces values to set
-        subject = NameParser.parse_name(cert_req_template['subject'])
-
-        common_names = subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
-        if len(common_names) != 1:
-            raise ValueError
-
-        common_name = common_names[0]
-        if isinstance(common_name.value, str):
-            common_name_value = common_name.value
-        elif isinstance(common_name.value, bytes):
-            common_name_value = common_name.value.decode()
-        else:
-            err_msg = 'Failed to parse common name value'
-            raise ValueError(err_msg)
+        common_name = self._get_subject_common_name(cert_req_template)
 
         # only local key-gen supported currently -> public key must be present
         asn1_public_key = cert_req_template['publicKey']
@@ -1117,11 +978,7 @@ class CmpCertificationRequestView(
             err_msg = 'hmac algorithm not supported.'
             raise ValueError(err_msg) from exception
 
-        protected_part = rfc4210.ProtectedPart()
-        protected_part['header'] = self.serialized_pyasn1_message['header']
-        protected_part['infoValue'] = self.serialized_pyasn1_message['body']
-
-        encoded_protected_part = encoder.encode(protected_part)
+        encoded_protected_part = get_encoded_protected_part(self.serialized_pyasn1_message)
 
         hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
         hmac_gen.update(encoded_protected_part)
@@ -1142,7 +999,7 @@ class CmpCertificationRequestView(
         if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_CLIENT:
             issuer = LocalTlsClientCredentialIssuer(device=self.device, domain=self.device.domain)
             issued_app_cred = issuer.issue_tls_client_certificate(
-                common_name=common_name_value, validity_days=validity_in_days, public_key=loaded_public_key
+                common_name=common_name, validity_days=validity_in_days, public_key=loaded_public_key
             )
         elif self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_SERVER:
             if cert_req_template['extensions'].hasValue():
@@ -1179,7 +1036,7 @@ class CmpCertificationRequestView(
 
             issuer_tls_server = LocalTlsServerCredentialIssuer(device=self.device, domain=self.device.domain)
             issued_app_cred = issuer_tls_server.issue_tls_server_certificate(
-                common_name=common_name_value,
+                common_name=common_name,
                 validity_days=validity_in_days,
                 ipv4_addresses=ipv4_addresses,
                 ipv6_addresses=ipv6_addresses,
@@ -1235,7 +1092,7 @@ class CmpCertificationRequestView(
 
             opc_ua_server_issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
             issued_app_cred = opc_ua_server_issuer.issue_opcua_server_certificate(
-                common_name=common_name_value,
+                common_name=common_name,
                 application_uri=application_uri,
                 ipv4_addresses=ipv4_addresses,
                 ipv6_addresses=ipv6_addresses,
@@ -1280,7 +1137,7 @@ class CmpCertificationRequestView(
 
             opc_ua_client_issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
             issued_app_cred = opc_ua_client_issuer.issue_opcua_client_certificate(
-                common_name=common_name_value,
+                common_name=common_name,
                 application_uri=application_uri,
                 validity_days=validity_in_days,
                 public_key=loaded_public_key,
@@ -1373,11 +1230,7 @@ class CmpCertificationRequestView(
             cp_message['extraCerts'].append(extra_cert)
 
         # TODO(AlexHx8472): Use fresh salt! # noqa: FIX002
-        protected_part = rfc4210.ProtectedPart()
-        protected_part['header'] = cp_message['header']
-        protected_part['infoValue'] = cp_message['body']
-
-        encoded_protected_part = encoder.encode(protected_part)
+        encoded_protected_part = get_encoded_protected_part(cp_message)
 
         hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
         hmac_gen.update(encoded_protected_part)
@@ -1550,11 +1403,7 @@ class CmpCertificationRequestView(
 
         # TODO(AlexHx8472): verify popo / process popo: popo = cr_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
-        protected_part = rfc4210.ProtectedPart()
-        protected_part['header'] = self.serialized_pyasn1_message['header']
-        protected_part['infoValue'] = self.serialized_pyasn1_message['body']
-
-        encoded_protected_part = encoder.encode(protected_part)
+        encoded_protected_part = get_encoded_protected_part(self.serialized_pyasn1_message)
         signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
 
         hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
@@ -1576,6 +1425,9 @@ class CmpCertificationRequestView(
                 data=encoded_protected_part,
                 signature_algorithm=ec.ECDSA(hash_algorithm.hash_algorithm()),
             )
+        else:
+            err_msg = 'Cannot verify signature due to unsupported public key type.'
+            raise TypeError(err_msg)
 
         # Checks regarding contained public key and corresponding signature suite of the issuing CA
         issuing_ca_certificate = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
@@ -1818,11 +1670,7 @@ class CmpCertificationRequestView(
         for extra_cert in cp_extra_certs:
             cp_message['extraCerts'].append(extra_cert)
 
-        protected_part = rfc4210.ProtectedPart()
-        protected_part['header'] = cp_message['header']
-        protected_part['infoValue'] = cp_message['body']
-
-        encoded_protected_part = encoder.encode(protected_part)
+        encoded_protected_part = get_encoded_protected_part(cp_message)
 
         private_key = load_pem_private_key(
             self.device.domain.get_issuing_ca_or_value_error().credential.private_key.encode(), password=None
