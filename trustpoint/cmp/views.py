@@ -218,6 +218,18 @@ class CmpRequestTemplateExtractorMixin:
         err_msg = 'Failed to parse common name value'
         raise TypeError(err_msg)
 
+    def _load_cert_req_public_key(self, cert_req_template: dict) -> PublicKey:
+        # only local key-gen supported currently -> public key must be present
+        asn1_public_key = cert_req_template['publicKey']
+        if not asn1_public_key.hasValue():
+            err_msg = 'Public-missing in CertTemplate.'
+            raise ValueError(err_msg)
+
+        spki = rfc2511.SubjectPublicKeyInfo()
+        spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
+        spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
+        return load_supported_public_key_type(encoder.encode(spki))
+
 
 def check_header(serialized_pyasn1_message: rfc4210.PKIMessage) -> None:
     """Checks some parts of the header."""
@@ -266,6 +278,89 @@ class CmpInitializationRequestView(
     requested_domain: DomainModel
     device: None | DeviceModel = None
 
+    def _get_or_create_corresponding_device(  # noqa: PLR0912, C901
+            self, cmp_signer_cert: x509.Certificate) -> None:
+        """Gets or creates the device model corresponding to the CMP signer cert serial number."""
+        raw_device_serial = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
+        device_serial_number = (
+            raw_device_serial.decode() if isinstance(raw_device_serial, bytes) else raw_device_serial
+        )
+        device_candidates = DeviceModel.objects.filter(
+            serial_number=device_serial_number, domain=self.requested_domain
+        )
+        if device_candidates:
+            for device_candidate in device_candidates:
+                if not device_candidate.idevid_trust_store:
+                    continue
+                trust_store = (
+                    device_candidate.idevid_trust_store.get_certificate_collection_serializer().as_crypto()
+                )
+                for cert in trust_store:
+                    try:
+                        cmp_signer_cert.verify_directly_issued_by(cert)
+                        self.device = device_candidate
+                        break
+                    except (ValueError, TypeError, InvalidSignature):
+                        pass
+
+        if self.device is not None:
+            return
+
+        # No suitable device candidate found, so we need to create a new one.
+        dev_reg_model = None
+
+        devid_reg_candidates = DevIdRegistration.objects.all()
+        for devid_reg_candidate in devid_reg_candidates:
+            trust_store = devid_reg_candidate.truststore.get_certificate_collection_serializer().as_crypto()
+
+            for cert in trust_store:
+                try:
+                    cmp_signer_cert.verify_directly_issued_by(cert)
+                    dev_reg_model = devid_reg_candidate
+                    break
+                except (ValueError, TypeError, InvalidSignature):
+                    pass
+
+        if not dev_reg_model:
+            err_msg = 'Neither a device nor a devid registration found.'
+            raise ValueError(err_msg)
+
+        pattern = re.compile(dev_reg_model.serial_number_pattern)
+
+        if not pattern.fullmatch(device_serial_number):
+            err_msg = 'Serial-Number not allowed.'
+            raise ValueError(err_msg)
+
+        common_names = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+        if len(common_names) != 1:
+            exc_msg = 'Exactly one common name must be present in the subject.'
+            raise ValueError(exc_msg)
+
+        common_name = common_names[0]
+
+        if isinstance(common_name.value, str):
+            common_name_value = common_name.value
+        elif isinstance(common_name.value, bytes):
+            common_name_value = common_name.value.decode()
+        else:
+            err_msg = 'Failed to parse common name value'
+            raise TypeError(err_msg)
+
+        device_model = DeviceModel(
+            common_name=common_name_value,
+            domain=dev_reg_model.domain,
+            serial_number=device_serial_number,
+            domain_credential_onboarding=True,
+            onboarding_status=DeviceModel.OnboardingStatus.PENDING,
+            onboarding_protocol=DeviceModel.OnboardingProtocol.CMP_IDEVID,
+            pki_protocol=DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE,
+            idevid_trust_store=dev_reg_model.truststore,
+        )
+
+        self.device = device_model
+        self.device.save()
+
+
     def _extract_ir_body(self) -> dict:
         message_body_name = self.serialized_pyasn1_message['body'].getName()
         if message_body_name != 'ir':
@@ -311,22 +406,10 @@ class CmpInitializationRequestView(
 
         return cert_req_template
 
-    def _load_cert_req_public_key(self, cert_req_template: dict) -> PublicKey:
-        # only local key-gen supported currently -> public key must be present
-        asn1_public_key = cert_req_template['publicKey']
-        if not asn1_public_key.hasValue():
-            err_msg = 'Public-missing in CertTemplate.'
-            raise ValueError(err_msg)
-
-        spki = rfc2511.SubjectPublicKeyInfo()
-        spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
-        spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
-        return load_supported_public_key_type(encoder.encode(spki))
-
     def _issue_application_credential(
             self, cert_req_template: dict, public_key: PublicKey
     ) -> IssuedCredentialModel:
-        """Issues an application certificate."""
+        """Issues an application certificate for CMP IR."""
         common_name = self._get_subject_common_name(cert_req_template)
 
         # noinspection PyBroadException
@@ -588,51 +671,9 @@ class CmpInitializationRequestView(
         return HttpResponse(encoded_ip_message, content_type='application/pkixcmp', status=200)
 
 
-    def post(  # noqa: C901, PLR0911, PLR0912, PLR0915
-        self,
-        request: HttpRequest,
-        *args: Any,
-        **kwargs: Any,
-    ) -> HttpResponse:
-        """Handles the POST requests to the CMP IR endpoint."""
-        del args, kwargs, request  # request not accessed directly
-        if self.serialized_pyasn1_message['header']['pvno'] != CMP_MESSAGE_VERSION:
-            err_msg = 'pvno fail'
-            raise ValueError(err_msg)
-
-        protection_algorithm = AlgorithmIdentifier.from_dotted_string(
-            self.serialized_pyasn1_message['header']['protectionAlg']['algorithm'].prettyPrint()
-        )
-        if protection_algorithm == AlgorithmIdentifier.PASSWORD_BASED_MAC:
-            try:
-                sender_kid = int(self.serialized_pyasn1_message['header']['senderKID'].prettyPrint())
-                self.device = DeviceModel.objects.get(pk=sender_kid)
-            except (DeviceModel.DoesNotExist, Exception):
-                return HttpResponse('Device not found.', status=404)
-
-            if (
-                not self.device.domain_credential_onboarding
-                and self.device.onboarding_protocol == self.device.OnboardingProtocol.NO_ONBOARDING
-                and self.device.pki_protocol == self.device.PkiProtocol.CMP_SHARED_SECRET
-            ):
-                if not self.application_certificate_template:
-                    return HttpResponse('Missing application certificate template.', status=404)
-
-                return self._handle_shared_secret_initialization_request()
-            if (
-                self.device.domain_credential_onboarding
-                and self.device.onboarding_protocol == self.device.OnboardingProtocol.CMP_SHARED_SECRET
-                and self.device.pki_protocol == self.device.PkiProtocol.CMP_CLIENT_CERTIFICATE
-            ):
-                if self.application_certificate_template:
-                    return HttpResponse(
-                        'Found application certificate template for domain credential certificate request.', status=404
-                    )
-
-                return self._handle_shared_secret_initialization_request()
-
-            return HttpResponse('Invalid Request for corresponding device.', status=460)
-
+    def _handle_signature_based_initialization_request( # noqa: PLR0912, PLR0915, C901
+            self) -> HttpResponse:
+        """Handles IR for initial certificate requests with signature-based protection."""
         # different protection algorithm than password-based MAC - certificate-based protection
         extra_certs = self.serialized_pyasn1_message['extraCerts']
         if extra_certs is None or len(extra_certs) == 0:
@@ -652,99 +693,23 @@ class CmpInitializationRequestView(
             if loaded_extra_cert.subject.public_bytes() != loaded_extra_cert.issuer.public_bytes():
                 intermediate_certs.append(loaded_extra_cert)
 
-        if not loaded_extra_cert:
+        if not cmp_signer_cert: # was 'loaded_extra_cert', does that make any sense?
             err_msg = 'CMP signer certificate missing in extra certs.'
             raise ValueError(err_msg)
 
-        raw_device_serial = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
-        device_serial_number = (
-            raw_device_serial.decode() if isinstance(raw_device_serial, bytes) else raw_device_serial
-        )
+        self._get_or_create_corresponding_device(cmp_signer_cert=cmp_signer_cert)
 
-        device_candidates = DeviceModel.objects.filter(
-            serial_number=device_serial_number, domain=self.requested_domain
-        )
-        if device_candidates:
-            for device_candidate in device_candidates:
-                if not device_candidate.idevid_trust_store:
-                    continue
-                trust_store = (
-                    device_candidate.idevid_trust_store.get_certificate_collection_serializer().as_crypto()
-                )
-                for cert in trust_store:
-                    try:
-                        loaded_extra_cert.verify_directly_issued_by(cert)
-                        self.device = device_candidate
-                        break
-                    except (ValueError, TypeError, InvalidSignature):
-                        pass
-
-                if self.device:
-                    break
-
-        dev_reg_model = None
-        if self.device is None:
-            devid_reg_candidates = DevIdRegistration.objects.all()
-            for devid_reg_candidate in devid_reg_candidates:
-                trust_store = devid_reg_candidate.truststore.get_certificate_collection_serializer().as_crypto()
-
-                for cert in trust_store:
-                    try:
-                        loaded_extra_cert.verify_directly_issued_by(cert)
-                        dev_reg_model = devid_reg_candidate
-                        break
-                    except (ValueError, TypeError, InvalidSignature):
-                        pass
-
-            if not dev_reg_model:
-                err_msg = 'Neither a device nor a devid registrations found.'
-                raise ValueError(err_msg)
-
-            pattern = re.compile(dev_reg_model.serial_number_pattern)
-
-            if not pattern.fullmatch(device_serial_number):
-                err_msg = 'Serial-Number not allowed.'
-                raise ValueError(err_msg)
-
-            common_names = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
-            if len(common_names) != 1:
-                raise ValueError
-
-            common_name = common_names[0]
-
-            if isinstance(common_name.value, str):
-                common_name_value = common_name.value
-            elif isinstance(common_name.value, bytes):
-                common_name_value = common_name.value.decode()
-            else:
-                err_msg = 'Failed to parse common name value'
-                raise ValueError(err_msg)
-
-            device_model = DeviceModel(
-                common_name=common_name_value,
-                domain=dev_reg_model.domain,
-                serial_number=device_serial_number,
-                domain_credential_onboarding=True,
-                onboarding_status=DeviceModel.OnboardingStatus.PENDING,
-                onboarding_protocol=DeviceModel.OnboardingProtocol.CMP_IDEVID,
-                pki_protocol=DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE,
-                idevid_trust_store=dev_reg_model.truststore,
+        # device sanity checks
+        if not self.device.domain_credential_onboarding:
+            return HttpResponse(
+                'The corresponding device is not configured to use the onboarding mechanism.', status=404
             )
 
-            self.device = device_model
-            self.device.save()
+        if not self.device.onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_IDEVID:  # noqa: SIM201
+            return HttpResponse('Wrong onboarding protocol.')
 
-        else:
-            if not self.device.domain_credential_onboarding:
-                return HttpResponse(
-                    'The corresponding device is not configured to use the onboarding mechanism.', status=404
-                )
-
-            if not self.device.onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_IDEVID:  # noqa: SIM201
-                return HttpResponse('Wrong onboarding protocol.')
-
-            if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE:
-                return HttpResponse('PKI protocol CMP client certificate expected, but got something else.')
+        if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE:
+            return HttpResponse('PKI protocol CMP client certificate expected, but got something else.')
 
         ir_body = self._extract_ir_body()
 
@@ -781,6 +746,9 @@ class CmpInitializationRequestView(
                 data=encoded_protected_part,
                 signature_algorithm=ec.ECDSA(hash_algorithm.hash_algorithm()),
             )
+        else:
+            err_msg = 'Cannot verify signature due to unsupported public key type.'
+            raise TypeError(err_msg)
 
         # Checks regarding contained public key and corresponding signature suite of the issuing CA
         issuing_ca = self.requested_domain.get_issuing_ca_or_value_error()
@@ -826,7 +794,8 @@ class CmpInitializationRequestView(
                 ec.ECDSA(hash_algorithm.hash_algorithm()),
             )
         else:
-            raise TypeError
+            exc_msg = 'Cannot sign due to unsupported private key type.'
+            raise TypeError(exc_msg)
 
         ip_message['protection'] = rfc4210.PKIProtection(univ.BitString.fromOctetString(signature)).subtype(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
@@ -838,6 +807,54 @@ class CmpInitializationRequestView(
         self.device.save()
 
         return HttpResponse(encoded_ip_message, content_type='application/pkixcmp', status=200)
+
+
+    def post(  # noqa: PLR0911
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        """Handles the POST requests to the CMP IR endpoint."""
+        del args, kwargs, request  # request not accessed directly
+        if self.serialized_pyasn1_message['header']['pvno'] != CMP_MESSAGE_VERSION:
+            err_msg = 'pvno fail'
+            raise ValueError(err_msg)
+
+        protection_algorithm = AlgorithmIdentifier.from_dotted_string(
+            self.serialized_pyasn1_message['header']['protectionAlg']['algorithm'].prettyPrint()
+        )
+        if protection_algorithm == AlgorithmIdentifier.PASSWORD_BASED_MAC:
+            try:
+                sender_kid = int(self.serialized_pyasn1_message['header']['senderKID'].prettyPrint())
+                self.device = DeviceModel.objects.get(pk=sender_kid)
+            except (DeviceModel.DoesNotExist, Exception):
+                return HttpResponse('Device not found.', status=404)
+
+            if (
+                not self.device.domain_credential_onboarding
+                and self.device.onboarding_protocol == self.device.OnboardingProtocol.NO_ONBOARDING
+                and self.device.pki_protocol == self.device.PkiProtocol.CMP_SHARED_SECRET
+            ):
+                if not self.application_certificate_template:
+                    return HttpResponse('Missing application certificate template.', status=404)
+
+                return self._handle_shared_secret_initialization_request()
+            if (
+                self.device.domain_credential_onboarding
+                and self.device.onboarding_protocol == self.device.OnboardingProtocol.CMP_SHARED_SECRET
+                and self.device.pki_protocol == self.device.PkiProtocol.CMP_CLIENT_CERTIFICATE
+            ):
+                if self.application_certificate_template:
+                    return HttpResponse(
+                        'Found application certificate template for domain credential certificate request.', status=404
+                    )
+
+                return self._handle_shared_secret_initialization_request()
+
+            return HttpResponse('Invalid Request for corresponding device.', status=460)
+
+        return self._handle_signature_based_initialization_request()
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -853,6 +870,168 @@ class CmpCertificationRequestView(
     requested_domain: DomainModel
     device: DeviceModel
     application_certificate_template: None | ApplicationCertificateTemplateNames = None
+
+    def _issue_application_credential(  # noqa: PLR0912, PLR0915, C901
+            self, cert_req_template: dict, public_key: PublicKey
+    ) -> IssuedCredentialModel:
+        """Issues an application certificate for CMP CR."""
+        common_name = self._get_subject_common_name(cert_req_template)
+
+        # noinspection PyBroadException
+        try:
+            validity_not_before = convert_rfc2459_time(cert_req_template['validity']['notBefore'])
+            validity_not_after = convert_rfc2459_time(cert_req_template['validity']['notAfter'])
+            validity_in_days = (validity_not_after - validity_not_before).days
+        except Exception:  # noqa: BLE001
+            validity_in_days = DEFAULT_VALIDITY_DAYS
+
+        if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_CLIENT:
+            issuer = LocalTlsClientCredentialIssuer(device=self.device, domain=self.device.domain)
+            return issuer.issue_tls_client_certificate(
+                common_name=common_name, validity_days=validity_in_days, public_key=public_key
+            )
+        if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_SERVER:
+            if cert_req_template['extensions'].hasValue():
+                san_extensions = [
+                    extension
+                    for extension in cert_req_template['extensions']
+                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
+                ]
+                if len(san_extensions) != 1:
+                    raise ValueError
+                san_extension = san_extensions[0]
+                san_critical = str(san_extension['critical']) == 'True'
+                san_extension_bytes = bytes(san_extension['extnValue'])
+                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
+
+                dns_names = []
+                ipv4_addresses = []
+                ipv6_addresses = []
+
+                for general_name in san_asn1:
+                    name_type = general_name.getName()
+                    value = general_name.getComponent()
+
+                    if name_type == 'iPAddress':
+                        try:
+                            ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
+                        except (ValueError, TypeError):
+                            ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
+
+                    elif name_type == 'dNSName':
+                        dns_names.append(str(value))
+            else:
+                raise ValueError
+
+            tls_server_issuer = LocalTlsServerCredentialIssuer(device=self.device, domain=self.device.domain)
+            return tls_server_issuer.issue_tls_server_certificate(
+                common_name=common_name,
+                validity_days=validity_in_days,
+                ipv4_addresses=ipv4_addresses,
+                ipv6_addresses=ipv6_addresses,
+                san_critical=san_critical,
+                domain_names=dns_names,
+                public_key=public_key,
+            )
+        if self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_SERVER:
+            if cert_req_template['extensions'].hasValue():
+                san_extensions = [
+                    extension
+                    for extension in cert_req_template['extensions']
+                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
+                ]
+                if len(san_extensions) != 1:
+                    err_msg = 'Invalid SAN extension count'
+                    raise ValueError(err_msg)
+
+                san_extension = san_extensions[0]
+                # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
+                san_extension_bytes = bytes(san_extension['extnValue'])
+                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
+
+                dns_names = []
+                ipv4_addresses = []
+                ipv6_addresses = []
+                application_uri = None
+
+                for general_name in san_asn1:
+                    name_type = general_name.getName()
+                    value = general_name.getComponent()
+
+                    if name_type == 'iPAddress':
+                        try:
+                            ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
+                        except (ValueError, TypeError):
+                            ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
+
+                    elif name_type == 'dNSName':
+                        dns_names.append(str(value))
+
+                    elif name_type == 'uniformResourceIdentifier':
+                        application_uri = str(value)
+
+                if not application_uri:
+                    err_msg = 'Missing OPC UA Application URI in SAN extension'
+                    raise ValueError(err_msg)
+
+            else:
+                err_msg = 'SAN extension is required for OPC UA Server Certificates'
+                raise ValueError(err_msg)
+
+            opc_ua_server_cred_issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
+            return opc_ua_server_cred_issuer.issue_opcua_server_certificate(
+                common_name=common_name,
+                application_uri=application_uri,
+                ipv4_addresses=ipv4_addresses,
+                ipv6_addresses=ipv6_addresses,
+                domain_names=dns_names,
+                validity_days=validity_in_days,
+                public_key=public_key,
+            )
+
+        if self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_CLIENT:
+            if cert_req_template['extensions'].hasValue():
+                san_extensions = [
+                    extension
+                    for extension in cert_req_template['extensions']
+                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
+                ]
+                if len(san_extensions) != 1:
+                    err_msg = 'Invalid SAN extension count'
+                    raise ValueError(err_msg)
+
+                san_extension = san_extensions[0]
+                # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
+                san_extension_bytes = bytes(san_extension['extnValue'])
+                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
+
+                application_uri = None
+
+                for general_name in san_asn1:
+                    name_type = general_name.getName()
+                    value = general_name.getComponent()
+
+                    if name_type == 'uniformResourceIdentifier':
+                        application_uri = str(value)
+
+                if not application_uri:
+                    err_msg = 'Missing OPC UA Application URI in SAN extension'
+                    raise ValueError(err_msg)
+
+            else:
+                err_msg = 'SAN extension is required for OPC UA Client Certificates'
+                raise ValueError(err_msg)
+
+            opc_ua_client_cred_issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
+            return opc_ua_client_cred_issuer.issue_opcua_client_certificate(
+                common_name=common_name,
+                application_uri=application_uri,
+                validity_days=validity_in_days,
+                public_key=public_key,
+            )
+
+        exc_msg = f'The app cert template {self.application_certificate_template} is not supported.'
+        raise ValueError(exc_msg)
 
     def _handle_shared_secret_cr(self) -> HttpResponse:  # noqa: C901, PLR0912, PLR0915
         """Handles CMP CR for application certificates with shared secret protection."""
@@ -935,15 +1114,7 @@ class CmpCertificationRequestView(
         common_name = self._get_subject_common_name(cert_req_template)
 
         # only local key-gen supported currently -> public key must be present
-        asn1_public_key = cert_req_template['publicKey']
-        if not asn1_public_key.hasValue():
-            err_msg = 'Public-missing in CertTemplate.'
-            raise ValueError(err_msg)
-
-        spki = rfc2511.SubjectPublicKeyInfo()
-        spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
-        spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
-        loaded_public_key = load_supported_public_key_type(encoder.encode(spki))
+        loaded_public_key = self._load_cert_req_public_key(cert_req_template)
 
         # TODO(AlexHx8472): verify popo / process popo: popo = cr_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
@@ -996,154 +1167,9 @@ class CmpCertificationRequestView(
             err_msg = 'Contained public key type does not match the signature suite.'
             raise ValueError(err_msg)
 
-        if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_CLIENT:
-            issuer = LocalTlsClientCredentialIssuer(device=self.device, domain=self.device.domain)
-            issued_app_cred = issuer.issue_tls_client_certificate(
-                common_name=common_name, validity_days=validity_in_days, public_key=loaded_public_key
-            )
-        elif self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_SERVER:
-            if cert_req_template['extensions'].hasValue():
-                san_extensions = [
-                    extension
-                    for extension in cert_req_template['extensions']
-                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-                ]
-                if len(san_extensions) != 1:
-                    raise ValueError
-                san_extension = san_extensions[0]
-                san_critical = str(san_extension['critical']) == 'True'
-                san_extension_bytes = bytes(san_extension['extnValue'])
-                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
-
-                dns_names = []
-                ipv4_addresses = []
-                ipv6_addresses = []
-
-                for general_name in san_asn1:
-                    name_type = general_name.getName()
-                    value = general_name.getComponent()
-
-                    if name_type == 'iPAddress':
-                        try:
-                            ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
-                        except (ValueError, TypeError):
-                            ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
-
-                    elif name_type == 'dNSName':
-                        dns_names.append(str(value))
-            else:
-                raise ValueError
-
-            issuer_tls_server = LocalTlsServerCredentialIssuer(device=self.device, domain=self.device.domain)
-            issued_app_cred = issuer_tls_server.issue_tls_server_certificate(
-                common_name=common_name,
-                validity_days=validity_in_days,
-                ipv4_addresses=ipv4_addresses,
-                ipv6_addresses=ipv6_addresses,
-                san_critical=san_critical,
-                domain_names=dns_names,
-                public_key=loaded_public_key,
-            )
-        elif self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_SERVER:
-            if cert_req_template['extensions'].hasValue():
-                san_extensions = [
-                    extension
-                    for extension in cert_req_template['extensions']
-                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-                ]
-                if len(san_extensions) != 1:
-                    err_msg = 'Invalid SAN extension count'
-                    raise ValueError(err_msg)
-
-                san_extension = san_extensions[0]
-                # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
-                # TODO (FHKatCSW): san_critical not supported in OpcUaServerCredentialIssuer    # noqa: FIX002
-                san_extension_bytes = bytes(san_extension['extnValue'])
-                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
-
-                dns_names = []
-                ipv4_addresses = []
-                ipv6_addresses = []
-                application_uri = None
-
-                for general_name in san_asn1:
-                    name_type = general_name.getName()
-                    value = general_name.getComponent()
-
-                    if name_type == 'iPAddress':
-                        try:
-                            ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
-                        except (ValueError, TypeError):
-                            ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
-
-                    elif name_type == 'dNSName':
-                        dns_names.append(str(value))
-
-                    elif name_type == 'uniformResourceIdentifier':
-                        application_uri = str(value)
-
-                if not application_uri:
-                    err_msg = 'Missing OPC UA Application URI in SAN extension'
-                    raise ValueError(err_msg)
-
-            else:
-                err_msg = 'SAN extension is required for OPC UA Server Certificates'
-                raise ValueError(err_msg)
-
-            opc_ua_server_issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
-            issued_app_cred = opc_ua_server_issuer.issue_opcua_server_certificate(
-                common_name=common_name,
-                application_uri=application_uri,
-                ipv4_addresses=ipv4_addresses,
-                ipv6_addresses=ipv6_addresses,
-                domain_names=dns_names,
-                validity_days=validity_in_days,
-                public_key=loaded_public_key,
-            )
-
-        elif self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_CLIENT:
-            if cert_req_template['extensions'].hasValue():
-                san_extensions = [
-                    extension
-                    for extension in cert_req_template['extensions']
-                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-                ]
-                if len(san_extensions) != 1:
-                    err_msg = 'Invalid SAN extension count'
-                    raise ValueError(err_msg)
-
-                san_extension = san_extensions[0]
-                # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
-                # TODO (FHKatCSW): san_critical not supported in OpcUaClientCredentialIssuer    # noqa: FIX002
-                san_extension_bytes = bytes(san_extension['extnValue'])
-                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
-
-                application_uri = None
-
-                for general_name in san_asn1:
-                    name_type = general_name.getName()
-                    value = general_name.getComponent()
-
-                    if name_type == 'uniformResourceIdentifier':
-                        application_uri = str(value)
-
-                if not application_uri:
-                    err_msg = 'Missing OPC UA Application URI in SAN extension'
-                    raise ValueError(err_msg)
-
-            else:
-                err_msg = 'SAN extension is required for OPC UA Client Certificates'
-                raise ValueError(err_msg)
-
-            opc_ua_client_issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
-            issued_app_cred = opc_ua_client_issuer.issue_opcua_client_certificate(
-                common_name=common_name,
-                application_uri=application_uri,
-                validity_days=validity_in_days,
-                public_key=loaded_public_key,
-            )
-        else:
-            raise ValueError
+        issued_app_cred = self._issue_application_credential(
+            cert_req_template=cert_req_template, public_key=loaded_public_key
+        )
 
         cp_header = rfc4210.PKIHeader()
 
@@ -1289,7 +1315,7 @@ class CmpCertificationRequestView(
             common_name_value = common_name.value.decode()
         else:
             err_msg = 'Failed to parse common name value'
-            raise ValueError(err_msg)
+            raise TypeError(err_msg)
 
         if common_name_value != 'Trustpoint Domain Credential':
             err_msg = 'Not a domain credential.'
@@ -1358,36 +1384,8 @@ class CmpCertificationRequestView(
 
         cert_req_template = cert_req_msg['certTemplate']
 
-        # noinspection PyBroadException
-        try:
-            validity_not_before = convert_rfc2459_time(cert_req_template['validity']['notBefore'])
-            validity_not_after = convert_rfc2459_time(cert_req_template['validity']['notAfter'])
-            validity_in_days = (validity_not_after - validity_not_before).days
-        except Exception:  # noqa: BLE001
-            validity_in_days = DEFAULT_VALIDITY_DAYS
-
         if cert_req_template['version'].hasValue() and cert_req_template['version'] != CERT_TEMPLATE_VERSION:
             err_msg = 'Version must be 2 if supplied in certificate request.'
-            raise ValueError(err_msg)
-
-        if not cert_req_template['subject'].isValue:
-            err_msg = 'subject missing in CertReqMessage.'
-            raise ValueError(err_msg)
-
-        # ignores subject request for now and forces values to set
-        subject = NameParser.parse_name(cert_req_template['subject'])
-
-        common_names = subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
-        if len(common_names) != 1:
-            raise ValueError
-
-        common_name = common_names[0]
-        if isinstance(common_name.value, str):
-            common_name_value = common_name.value
-        elif isinstance(common_name.value, bytes):
-            common_name_value = common_name.value.decode()
-        else:
-            err_msg = 'Failed to parse common name value'
             raise ValueError(err_msg)
 
         # only local key-gen supported currently -> public key must be present
@@ -1436,152 +1434,9 @@ class CmpCertificationRequestView(
             err_msg = 'Contained public key type does not match the signature suite.'
             raise ValueError(err_msg)
 
-        if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_CLIENT:
-            issuer = LocalTlsClientCredentialIssuer(device=self.device, domain=self.device.domain)
-            issued_app_cred = issuer.issue_tls_client_certificate(
-                common_name=common_name_value, validity_days=validity_in_days, public_key=loaded_public_key
-            )
-        elif self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_SERVER:
-            if cert_req_template['extensions'].hasValue():
-                san_extensions = [
-                    extension
-                    for extension in cert_req_template['extensions']
-                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-                ]
-                if len(san_extensions) != 1:
-                    raise ValueError
-                san_extension = san_extensions[0]
-                san_critical = str(san_extension['critical']) == 'True'
-                san_extension_bytes = bytes(san_extension['extnValue'])
-                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
-
-                dns_names = []
-                ipv4_addresses = []
-                ipv6_addresses = []
-
-                for general_name in san_asn1:
-                    name_type = general_name.getName()
-                    value = general_name.getComponent()
-
-                    if name_type == 'iPAddress':
-                        try:
-                            ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
-                        except (ValueError, TypeError):
-                            ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
-
-                    elif name_type == 'dNSName':
-                        dns_names.append(str(value))
-            else:
-                raise ValueError
-
-            tls_server_issuer = LocalTlsServerCredentialIssuer(device=self.device, domain=self.device.domain)
-            issued_app_cred = tls_server_issuer.issue_tls_server_certificate(
-                common_name=common_name_value,
-                validity_days=validity_in_days,
-                ipv4_addresses=ipv4_addresses,
-                ipv6_addresses=ipv6_addresses,
-                san_critical=san_critical,
-                domain_names=dns_names,
-                public_key=loaded_public_key,
-            )
-        elif self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_SERVER:
-            if cert_req_template['extensions'].hasValue():
-                san_extensions = [
-                    extension
-                    for extension in cert_req_template['extensions']
-                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-                ]
-                if len(san_extensions) != 1:
-                    err_msg = 'Invalid SAN extension count'
-                    raise ValueError(err_msg)
-
-                san_extension = san_extensions[0]
-                # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
-                san_extension_bytes = bytes(san_extension['extnValue'])
-                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
-
-                dns_names = []
-                ipv4_addresses = []
-                ipv6_addresses = []
-                application_uri = None
-
-                for general_name in san_asn1:
-                    name_type = general_name.getName()
-                    value = general_name.getComponent()
-
-                    if name_type == 'iPAddress':
-                        try:
-                            ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
-                        except (ValueError, TypeError):
-                            ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
-
-                    elif name_type == 'dNSName':
-                        dns_names.append(str(value))
-
-                    elif name_type == 'uniformResourceIdentifier':
-                        application_uri = str(value)
-
-                if not application_uri:
-                    err_msg = 'Missing OPC UA Application URI in SAN extension'
-                    raise ValueError(err_msg)
-
-            else:
-                err_msg = 'SAN extension is required for OPC UA Server Certificates'
-                raise ValueError(err_msg)
-
-            opc_ua_server_cred_issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
-            issued_app_cred = opc_ua_server_cred_issuer.issue_opcua_server_certificate(
-                common_name=common_name_value,
-                application_uri=application_uri,
-                ipv4_addresses=ipv4_addresses,
-                ipv6_addresses=ipv6_addresses,
-                domain_names=dns_names,
-                validity_days=validity_in_days,
-                public_key=loaded_public_key,
-            )
-
-        elif self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_CLIENT:
-            if cert_req_template['extensions'].hasValue():
-                san_extensions = [
-                    extension
-                    for extension in cert_req_template['extensions']
-                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-                ]
-                if len(san_extensions) != 1:
-                    err_msg = 'Invalid SAN extension count'
-                    raise ValueError(err_msg)
-
-                san_extension = san_extensions[0]
-                # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
-                san_extension_bytes = bytes(san_extension['extnValue'])
-                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
-
-                application_uri = None
-
-                for general_name in san_asn1:
-                    name_type = general_name.getName()
-                    value = general_name.getComponent()
-
-                    if name_type == 'uniformResourceIdentifier':
-                        application_uri = str(value)
-
-                if not application_uri:
-                    err_msg = 'Missing OPC UA Application URI in SAN extension'
-                    raise ValueError(err_msg)
-
-            else:
-                err_msg = 'SAN extension is required for OPC UA Client Certificates'
-                raise ValueError(err_msg)
-
-            opc_ua_client_cred_issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
-            issued_app_cred = opc_ua_client_cred_issuer.issue_opcua_client_certificate(
-                common_name=common_name_value,
-                application_uri=application_uri,
-                validity_days=validity_in_days,
-                public_key=loaded_public_key,
-            )
-        else:
-            raise ValueError
+        issued_app_cred = self._issue_application_credential(
+            cert_req_template=cert_req_template, public_key=loaded_public_key
+        )
 
         cp_header = rfc4210.PKIHeader()
 
@@ -1692,7 +1547,8 @@ class CmpCertificationRequestView(
                 ec.ECDSA(hash_algorithm.hash_algorithm()),
             )
         else:
-            raise TypeError
+            exc_msg = 'Cannot sign due to unsupported private key type.'
+            raise TypeError(exc_msg)
 
         cp_message['protection'] = rfc4210.PKIProtection(univ.BitString.fromOctetString(signature)).subtype(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
