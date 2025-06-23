@@ -1182,13 +1182,433 @@ class CmpCertificationRequestView(
     device: DeviceModel
     application_certificate_template: None | ApplicationCertificateTemplateNames = None
 
+    def _handle_shared_secret_cr(self) -> HttpResponse:
+        """Handles CMP CR for application certificates with shared secret protection."""
+        if not self.application_certificate_template:
+                return HttpResponse('Missing application certificate template.', status=404)
+
+        try:
+            sender_kid = int(self.serialized_pyasn1_message['header']['senderKID'].prettyPrint())
+            self.device = DeviceModel.objects.get(pk=sender_kid)
+        except (DeviceModel.DoesNotExist, Exception):
+            return HttpResponse('Device not found.', status=404)
+
+        if (
+            self.device.domain_credential_onboarding
+            or self.device.onboarding_protocol != self.device.OnboardingProtocol.NO_ONBOARDING
+        ):
+            return HttpResponse(
+                'Password based MAC protected CMP messages while using CMP '
+                'CR message types are not allowed for onboarded devices. '
+                'Use signature based protection utilizing the domain credential',
+                status=404,
+            )
+
+        if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_SHARED_SECRET:
+            return HttpResponse(
+                'Received a password based MAC protected CMP message for a device that does not use the '
+                f'pki-protocol {DeviceModel.PkiProtocol.CMP_SHARED_SECRET.label}, but instead uses'
+                f'{self.device.get_pki_protocol_display()}.'
+            )
+
+        if self.device.domain != self.requested_domain:
+            exc_msg = 'The device domain does not match the requested domain.'
+            raise ValueError(exc_msg)
+
+        message_body_name = self.serialized_pyasn1_message['body'].getName()
+        if message_body_name != 'cr':
+            return HttpResponse(f'Expected CMP CR body, but got CMP {message_body_name.upper()} body.', status=450)
+
+        check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
+
+        protection_value = self.serialized_pyasn1_message['protection'].asOctets()
+
+        if self.serialized_pyasn1_message['body'].getName() != 'cr':
+            err_msg = 'not cr message'
+            raise ValueError(err_msg)
+
+        cr_body = self.serialized_pyasn1_message['body']['cr']
+        if len(cr_body) > 1:
+            err_msg = 'multiple CertReqMessages found for CR.'
+            raise ValueError(err_msg)
+
+        if len(cr_body) < 1:
+            err_msg = 'no CertReqMessages found for CR.'
+            raise ValueError(err_msg)
+
+        cert_req_msg = cr_body[0]['certReq']
+
+        if cert_req_msg['certReqId'] != 0:
+            err_msg = 'certReqId must be 0.'
+            raise ValueError(err_msg)
+
+        if not cert_req_msg['certTemplate'].hasValue():
+            err_msg = 'certTemplate must be contained in CR CertReqMessage.'
+            raise ValueError(err_msg)
+
+        cert_req_template = cert_req_msg['certTemplate']
+
+        # noinspection PyBroadException
+        try:
+            validity_not_before = convert_rfc2459_time(cert_req_template['validity']['notBefore'])
+            validity_not_after = convert_rfc2459_time(cert_req_template['validity']['notAfter'])
+            validity_in_days = (validity_not_after - validity_not_before).days
+        except Exception:  # noqa: BLE001
+            validity_in_days = DEFAULT_VALIDITY_DAYS
+
+        if cert_req_template['version'].hasValue() and cert_req_template['version'] != CERT_TEMPLATE_VERSION:
+            err_msg = 'Version must be 2 if supplied in certificate request.'
+            raise ValueError(err_msg)
+
+        if not cert_req_template['subject'].isValue:
+            err_msg = 'subject missing in CertReqMessage.'
+            raise ValueError(err_msg)
+
+        # ignores subject request for now and forces values to set
+        subject = NameParser.parse_name(cert_req_template['subject'])
+
+        common_names = subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+        if len(common_names) != 1:
+            raise ValueError
+
+        common_name = common_names[0]
+        if isinstance(common_name.value, str):
+            common_name_value = common_name.value
+        elif isinstance(common_name.value, bytes):
+            common_name_value = common_name.value.decode()
+        else:
+            err_msg = 'Failed to parse common name value'
+            raise ValueError(err_msg)
+
+        # only local key-gen supported currently -> public key must be present
+        asn1_public_key = cert_req_template['publicKey']
+        if not asn1_public_key.hasValue():
+            err_msg = 'Public-missing in CertTemplate.'
+            raise ValueError(err_msg)
+
+        spki = rfc2511.SubjectPublicKeyInfo()
+        spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
+        spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
+        loaded_public_key = load_supported_public_key_type(encoder.encode(spki))
+
+        # TODO(AlexHx8472): verify popo / process popo: popo = cr_body[0]['pop'].prettyPrint()  # noqa: FIX002
+
+        pbm_parameters_bitstring = self.serialized_pyasn1_message['header']['protectionAlg']['parameters']
+        decoded_pbm, _ = decoder.decode(pbm_parameters_bitstring, asn1Spec=rfc4210.PBMParameter())
+
+        salt = decoded_pbm['salt'].asOctets()
+        try:
+            owf = HashAlgorithm.from_dotted_string(decoded_pbm['owf']['algorithm'].prettyPrint())
+        except Exception as exception:
+            err_msg = 'owf algorithm not supported.'
+            raise ValueError(err_msg) from exception
+
+        iteration_count = int(decoded_pbm['iterationCount'])
+
+        if self.device.cmp_shared_secret is None:
+            err_msg = 'Device is misconfigured.'
+            raise ValueError(err_msg)
+
+        shared_secret = self.device.cmp_shared_secret.encode()
+        salted_secret = shared_secret + salt
+        hmac_key = salted_secret
+        for _ in range(iteration_count):
+            hasher = hashes.Hash(owf.hash_algorithm())
+            hasher.update(hmac_key)
+            hmac_key = hasher.finalize()
+
+        hmac_algorithm_oid = decoded_pbm['mac']['algorithm'].prettyPrint()
+        try:
+            hmac_algorithm = HmacAlgorithm.from_dotted_string(hmac_algorithm_oid)
+        except Exception as exception:
+            err_msg = 'hmac algorithm not supported.'
+            raise ValueError(err_msg) from exception
+
+        protected_part = rfc4210.ProtectedPart()
+        protected_part['header'] = self.serialized_pyasn1_message['header']
+        protected_part['infoValue'] = self.serialized_pyasn1_message['body']
+
+        encoded_protected_part = encoder.encode(protected_part)
+
+        hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
+        hmac_gen.update(encoded_protected_part)
+
+        try:
+            hmac_gen.verify(protection_value)
+        except InvalidSignature as exception:
+            err_msg = 'hmac verification failed.'
+            raise ValueError(err_msg) from exception
+
+        # Checks regarding contained public key and corresponding signature suite of the issuing CA
+        issuing_ca_certificate = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
+        signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
+        if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
+            err_msg = 'Contained public key type does not match the signature suite.'
+            raise ValueError(err_msg)
+
+        if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_CLIENT:
+            issuer = LocalTlsClientCredentialIssuer(device=self.device, domain=self.device.domain)
+            issued_app_cred = issuer.issue_tls_client_certificate(
+                common_name=common_name_value, validity_days=validity_in_days, public_key=loaded_public_key
+            )
+        elif self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_SERVER:
+            if cert_req_template['extensions'].hasValue():
+                san_extensions = [
+                    extension
+                    for extension in cert_req_template['extensions']
+                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
+                ]
+                if len(san_extensions) != 1:
+                    raise ValueError
+                san_extension = san_extensions[0]
+                san_critical = str(san_extension['critical']) == 'True'
+                san_extension_bytes = bytes(san_extension['extnValue'])
+                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
+
+                dns_names = []
+                ipv4_addresses = []
+                ipv6_addresses = []
+
+                for general_name in san_asn1:
+                    name_type = general_name.getName()
+                    value = general_name.getComponent()
+
+                    if name_type == 'iPAddress':
+                        try:
+                            ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
+                        except (ValueError, TypeError):
+                            ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
+
+                    elif name_type == 'dNSName':
+                        dns_names.append(str(value))
+            else:
+                raise ValueError
+
+            issuer_tls_server = LocalTlsServerCredentialIssuer(device=self.device, domain=self.device.domain)
+            issued_app_cred = issuer_tls_server.issue_tls_server_certificate(
+                common_name=common_name_value,
+                validity_days=validity_in_days,
+                ipv4_addresses=ipv4_addresses,
+                ipv6_addresses=ipv6_addresses,
+                san_critical=san_critical,
+                domain_names=dns_names,
+                public_key=loaded_public_key,
+            )
+        elif self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_SERVER:
+            if cert_req_template['extensions'].hasValue():
+                san_extensions = [
+                    extension
+                    for extension in cert_req_template['extensions']
+                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
+                ]
+                if len(san_extensions) != 1:
+                    err_msg = 'Invalid SAN extension count'
+                    raise ValueError(err_msg)
+
+                san_extension = san_extensions[0]
+                # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
+                # TODO (FHKatCSW): san_critical not supported in OpcUaServerCredentialIssuer    # noqa: FIX002
+                san_extension_bytes = bytes(san_extension['extnValue'])
+                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
+
+                dns_names = []
+                ipv4_addresses = []
+                ipv6_addresses = []
+                application_uri = None
+
+                for general_name in san_asn1:
+                    name_type = general_name.getName()
+                    value = general_name.getComponent()
+
+                    if name_type == 'iPAddress':
+                        try:
+                            ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
+                        except (ValueError, TypeError):
+                            ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
+
+                    elif name_type == 'dNSName':
+                        dns_names.append(str(value))
+
+                    elif name_type == 'uniformResourceIdentifier':
+                        application_uri = str(value)
+
+                if not application_uri:
+                    err_msg = 'Missing OPC UA Application URI in SAN extension'
+                    raise ValueError(err_msg)
+
+            else:
+                err_msg = 'SAN extension is required for OPC UA Server Certificates'
+                raise ValueError(err_msg)
+
+            opc_ua_server_issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
+            issued_app_cred = opc_ua_server_issuer.issue_opcua_server_certificate(
+                common_name=common_name_value,
+                application_uri=application_uri,
+                ipv4_addresses=ipv4_addresses,
+                ipv6_addresses=ipv6_addresses,
+                domain_names=dns_names,
+                validity_days=validity_in_days,
+                public_key=loaded_public_key,
+            )
+
+        elif self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_CLIENT:
+            if cert_req_template['extensions'].hasValue():
+                san_extensions = [
+                    extension
+                    for extension in cert_req_template['extensions']
+                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
+                ]
+                if len(san_extensions) != 1:
+                    err_msg = 'Invalid SAN extension count'
+                    raise ValueError(err_msg)
+
+                san_extension = san_extensions[0]
+                # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
+                # TODO (FHKatCSW): san_critical not supported in OpcUaClientCredentialIssuer    # noqa: FIX002
+                san_extension_bytes = bytes(san_extension['extnValue'])
+                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
+
+                application_uri = None
+
+                for general_name in san_asn1:
+                    name_type = general_name.getName()
+                    value = general_name.getComponent()
+
+                    if name_type == 'uniformResourceIdentifier':
+                        application_uri = str(value)
+
+                if not application_uri:
+                    err_msg = 'Missing OPC UA Application URI in SAN extension'
+                    raise ValueError(err_msg)
+
+            else:
+                err_msg = 'SAN extension is required for OPC UA Client Certificates'
+                raise ValueError(err_msg)
+
+            opc_ua_client_issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
+            issued_app_cred = opc_ua_client_issuer.issue_opcua_client_certificate(
+                common_name=common_name_value,
+                application_uri=application_uri,
+                validity_days=validity_in_days,
+                public_key=loaded_public_key,
+            )
+        else:
+            raise ValueError
+
+        cp_header = rfc4210.PKIHeader()
+
+        cp_header['pvno'] = CMP_MESSAGE_VERSION
+
+        issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
+        raw_issuing_ca_subject = issuing_ca_cert.subject.public_bytes()
+        name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
+        sender = rfc2459.GeneralName()
+        sender['directoryName'][0] = name
+        cp_header['sender'] = sender
+
+        cp_header['recipient'] = self.serialized_pyasn1_message['header']['sender']
+
+        current_time = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d%H%M%SZ')
+        cp_header['messageTime'] = useful.GeneralizedTime(current_time).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
+        )
+
+        cp_header['protectionAlg'] = self.serialized_pyasn1_message['header']['protectionAlg']
+
+        cp_header['senderKID'] = self.serialized_pyasn1_message['header']['senderKID']
+
+        cp_header['transactionID'] = self.serialized_pyasn1_message['header']['transactionID']
+
+        cp_header['senderNonce'] = univ.OctetString(secrets.token_bytes(SENDER_NONCE_LENGTH)).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 5)
+        )
+
+        cp_header['recipNonce'] = univ.OctetString(self.serialized_pyasn1_message['header']['senderNonce']).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 6)
+        )
+
+        cp_header['generalInfo'] = self.serialized_pyasn1_message['header']['generalInfo']
+
+        cp_extra_certs = univ.SequenceOf()
+
+        certificate_chain = [
+            self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate(),
+            *self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate_chain(),
+        ]
+        for certificate in certificate_chain:
+            der_bytes = certificate.public_bytes(encoding=Encoding.DER)
+            asn1_certificate, _ = decoder.decode(der_bytes, asn1Spec=rfc4210.CMPCertificate())
+            cp_extra_certs.append(asn1_certificate)
+
+        cp_body = rfc4210.PKIBody()
+        cp_body['cp'] = rfc4210.CertRepMessage().subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 3)
+        )
+        cp_body['cp']['caPubs'] = univ.SequenceOf().subtype(
+            sizeSpec=rfc4210.constraint.ValueSizeConstraint(1, rfc4210.MAX),
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 1),
+        )
+        # TODO(AlexHx8472): Add TLS Server Certificate Root CA  # noqa: FIX002
+
+        cert_response = rfc4210.CertResponse()
+        cert_response['certReqId'] = 0
+
+        pki_status_info = rfc4210.PKIStatusInfo()
+        pki_status_info['status'] = 0
+        cert_response['status'] = pki_status_info
+
+        cmp_cert = rfc4210.CMPCertificate().subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 0)
+        )
+
+        encoded_cert = issued_app_cred.credential.get_certificate().public_bytes(encoding=Encoding.DER)
+        der_cert, _ = decoder.decode(encoded_cert, asn1Spec=rfc4210.CMPCertificate())
+        cmp_cert.setComponentByName('tbsCertificate', der_cert['tbsCertificate'])
+        cmp_cert.setComponentByName('signatureValue', der_cert['signatureValue'])
+        cmp_cert.setComponentByName('signatureAlgorithm', der_cert['signatureAlgorithm'])
+        cert_or_enc_cert = rfc4210.CertOrEncCert()
+        cert_or_enc_cert['certificate'] = cmp_cert
+
+        cert_response['certifiedKeyPair']['certOrEncCert'] = cert_or_enc_cert
+
+        cp_body['cp']['response'].append(cert_response)
+
+        cp_message = rfc4210.PKIMessage()
+        cp_message['header'] = cp_header
+        cp_message['body'] = cp_body
+        for extra_cert in cp_extra_certs:
+            cp_message['extraCerts'].append(extra_cert)
+
+        # TODO(AlexHx8472): Use fresh salt! # noqa: FIX002
+        protected_part = rfc4210.ProtectedPart()
+        protected_part['header'] = cp_message['header']
+        protected_part['infoValue'] = cp_message['body']
+
+        encoded_protected_part = encoder.encode(protected_part)
+
+        hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
+        hmac_gen.update(encoded_protected_part)
+        hmac_digest = hmac_gen.finalize()
+
+        binary_stuff = bin(int.from_bytes(hmac_digest, byteorder='big'))[2:].zfill(160)
+        cp_message['protection'] = rfc4210.PKIProtection(univ.BitString(binary_stuff)).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
+        )
+
+        encoded_cp_message = encoder.encode(cp_message)
+        decoded_cp_message, _ = decoder.decode(encoded_cp_message, asn1Spec=rfc4210.PKIMessage())
+
+        return HttpResponse(encoded_cp_message, content_type='application/pkixcmp', status=200)
+
+
     def post(  # noqa: C901, PLR0911, PLR0912, PLR0915
         self,
-        request: HttpRequest,  # noqa: ARG002
-        *args: Any,  # noqa: ARG002
-        **kwargs: Any,  # noqa: ARG002
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
     ) -> HttpResponse:
         """Handles the POST requests."""
+        del args, kwargs, request  # request not accessed directly
         if self.serialized_pyasn1_message['header']['pvno'] != CMP_MESSAGE_VERSION:
             err_msg = 'pvno fail'
             raise ValueError(err_msg)
@@ -1197,859 +1617,448 @@ class CmpCertificationRequestView(
             self.serialized_pyasn1_message['header']['protectionAlg']['algorithm'].prettyPrint()
         )
         if protection_algorithm == AlgorithmIdentifier.PASSWORD_BASED_MAC:
-            if not self.application_certificate_template:
-                return HttpResponse('Missing application certificate template.', status=404)
-
-            try:
-                sender_kid = int(self.serialized_pyasn1_message['header']['senderKID'].prettyPrint())
-                self.device = DeviceModel.objects.get(pk=sender_kid)
-            except (DeviceModel.DoesNotExist, Exception):
-                return HttpResponse('Device not found.', status=404)
-
-            if (
-                self.device.domain_credential_onboarding
-                or self.device.onboarding_protocol != self.device.OnboardingProtocol.NO_ONBOARDING
-            ):
-                return HttpResponse(
-                    'Password based MAC protected CMP messages while using CMP '
-                    'CR message types are not allowed for onboarded devices. '
-                    'Use signature based protection utilizing the domain credential',
-                    status=404,
-                )
-
-            if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_SHARED_SECRET:
-                return HttpResponse(
-                    'Received a password based MAC protected CMP message for a device that does not use the '
-                    f'pki-protocol {DeviceModel.PkiProtocol.CMP_SHARED_SECRET.label}, but instead uses'
-                    f'{self.device.get_pki_protocol_display()}.'
-                )
-
-            if self.device.domain != self.requested_domain:
-                raise ValueError
-
-            message_body_name = self.serialized_pyasn1_message['body'].getName()
-            if message_body_name != 'cr':
-                return HttpResponse(f'Expected CMP CR body, but got CMP {message_body_name.upper()} body.', status=450)
-
-            check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
-
-            protection_value = self.serialized_pyasn1_message['protection'].asOctets()
-
-            if self.serialized_pyasn1_message['body'].getName() != 'cr':
-                err_msg = 'not cr message'
-                raise ValueError(err_msg)
-
-            cr_body = self.serialized_pyasn1_message['body']['cr']
-            if len(cr_body) > 1:
-                err_msg = 'multiple CertReqMessages found for CR.'
-                raise ValueError(err_msg)
-
-            if len(cr_body) < 1:
-                err_msg = 'no CertReqMessages found for CR.'
-                raise ValueError(err_msg)
-
-            cert_req_msg = cr_body[0]['certReq']
-
-            if cert_req_msg['certReqId'] != 0:
-                err_msg = 'certReqId must be 0.'
-                raise ValueError(err_msg)
-
-            if not cert_req_msg['certTemplate'].hasValue():
-                err_msg = 'certTemplate must be contained in CR CertReqMessage.'
-                raise ValueError(err_msg)
-
-            cert_req_template = cert_req_msg['certTemplate']
-
-            # noinspection PyBroadException
-            try:
-                validity_not_before = convert_rfc2459_time(cert_req_template['validity']['notBefore'])
-                validity_not_after = convert_rfc2459_time(cert_req_template['validity']['notAfter'])
-                validity_in_days = (validity_not_after - validity_not_before).days
-            except Exception:  # noqa: BLE001
-                validity_in_days = DEFAULT_VALIDITY_DAYS
-
-            if cert_req_template['version'].hasValue() and cert_req_template['version'] != CERT_TEMPLATE_VERSION:
-                err_msg = 'Version must be 2 if supplied in certificate request.'
-                raise ValueError(err_msg)
-
-            if not cert_req_template['subject'].isValue:
-                err_msg = 'subject missing in CertReqMessage.'
-                raise ValueError(err_msg)
-
-            # ignores subject request for now and forces values to set
-            subject = NameParser.parse_name(cert_req_template['subject'])
-
-            common_names = subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
-            if len(common_names) != 1:
-                raise ValueError
-
-            common_name = common_names[0]
-            if isinstance(common_name.value, str):
-                common_name_value = common_name.value
-            elif isinstance(common_name.value, bytes):
-                common_name_value = common_name.value.decode()
-            else:
-                err_msg = 'Failed to parse common name value'
-                raise ValueError(err_msg)
-
-            # only local key-gen supported currently -> public key must be present
-            asn1_public_key = cert_req_template['publicKey']
-            if not asn1_public_key.hasValue():
-                err_msg = 'Public-missing in CertTemplate.'
-                raise ValueError(err_msg)
-
-            spki = rfc2511.SubjectPublicKeyInfo()
-            spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
-            spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
-            loaded_public_key = load_supported_public_key_type(encoder.encode(spki))
-
-            # TODO(AlexHx8472): verify popo / process popo: popo = cr_body[0]['pop'].prettyPrint()  # noqa: FIX002
-
-            pbm_parameters_bitstring = self.serialized_pyasn1_message['header']['protectionAlg']['parameters']
-            decoded_pbm, _ = decoder.decode(pbm_parameters_bitstring, asn1Spec=rfc4210.PBMParameter())
-
-            salt = decoded_pbm['salt'].asOctets()
-            try:
-                owf = HashAlgorithm.from_dotted_string(decoded_pbm['owf']['algorithm'].prettyPrint())
-            except Exception as exception:
-                err_msg = 'owf algorithm not supported.'
-                raise ValueError(err_msg) from exception
-
-            iteration_count = int(decoded_pbm['iterationCount'])
-
-            if self.device.cmp_shared_secret is None:
-                err_msg = 'Device is misconfigured.'
-                raise ValueError(err_msg)
-
-            shared_secret = self.device.cmp_shared_secret.encode()
-            salted_secret = shared_secret + salt
-            hmac_key = salted_secret
-            for _ in range(iteration_count):
-                hasher = hashes.Hash(owf.hash_algorithm())
-                hasher.update(hmac_key)
-                hmac_key = hasher.finalize()
-
-            hmac_algorithm_oid = decoded_pbm['mac']['algorithm'].prettyPrint()
-            try:
-                hmac_algorithm = HmacAlgorithm.from_dotted_string(hmac_algorithm_oid)
-            except Exception as exception:
-                err_msg = 'hmac algorithm not supported.'
-                raise ValueError(err_msg) from exception
-
-            protected_part = rfc4210.ProtectedPart()
-            protected_part['header'] = self.serialized_pyasn1_message['header']
-            protected_part['infoValue'] = self.serialized_pyasn1_message['body']
-
-            encoded_protected_part = encoder.encode(protected_part)
-
-            hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
-            hmac_gen.update(encoded_protected_part)
-
-            try:
-                hmac_gen.verify(protection_value)
-            except InvalidSignature as exception:
-                err_msg = 'hmac verification failed.'
-                raise ValueError(err_msg) from exception
-
-            # Checks regarding contained public key and corresponding signature suite of the issuing CA
-            issuing_ca_certificate = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
-            signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
-            if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
-                err_msg = 'Contained public key type does not match the signature suite.'
-                raise ValueError(err_msg)
-
-            if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_CLIENT:
-                issuer = LocalTlsClientCredentialIssuer(device=self.device, domain=self.device.domain)
-                issued_app_cred = issuer.issue_tls_client_certificate(
-                    common_name=common_name_value, validity_days=validity_in_days, public_key=loaded_public_key
-                )
-            elif self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_SERVER:
-                if cert_req_template['extensions'].hasValue():
-                    san_extensions = [
-                        extension
-                        for extension in cert_req_template['extensions']
-                        if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-                    ]
-                    if len(san_extensions) != 1:
-                        raise ValueError
-                    san_extension = san_extensions[0]
-                    san_critical = str(san_extension['critical']) == 'True'
-                    san_extension_bytes = bytes(san_extension['extnValue'])
-                    san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
-
-                    dns_names = []
-                    ipv4_addresses = []
-                    ipv6_addresses = []
-
-                    for general_name in san_asn1:
-                        name_type = general_name.getName()
-                        value = general_name.getComponent()
-
-                        if name_type == 'iPAddress':
-                            try:
-                                ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
-                            except (ValueError, TypeError):
-                                ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
-
-                        elif name_type == 'dNSName':
-                            dns_names.append(str(value))
-                else:
-                    raise ValueError
-
-                issuer_tls_server = LocalTlsServerCredentialIssuer(device=self.device, domain=self.device.domain)
-                issued_app_cred = issuer_tls_server.issue_tls_server_certificate(
-                    common_name=common_name_value,
-                    validity_days=validity_in_days,
-                    ipv4_addresses=ipv4_addresses,
-                    ipv6_addresses=ipv6_addresses,
-                    san_critical=san_critical,
-                    domain_names=dns_names,
-                    public_key=loaded_public_key,
-                )
-            elif self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_SERVER:
-                if cert_req_template['extensions'].hasValue():
-                    san_extensions = [
-                        extension
-                        for extension in cert_req_template['extensions']
-                        if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-                    ]
-                    if len(san_extensions) != 1:
-                        err_msg = 'Invalid SAN extension count'
-                        raise ValueError(err_msg)
-
-                    san_extension = san_extensions[0]
-                    # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
-                    # TODO (FHKatCSW): san_critical not supported in OpcUaServerCredentialIssuer    # noqa: FIX002
-                    san_extension_bytes = bytes(san_extension['extnValue'])
-                    san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
-
-                    dns_names = []
-                    ipv4_addresses = []
-                    ipv6_addresses = []
-                    application_uri = None
-
-                    for general_name in san_asn1:
-                        name_type = general_name.getName()
-                        value = general_name.getComponent()
-
-                        if name_type == 'iPAddress':
-                            try:
-                                ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
-                            except (ValueError, TypeError):
-                                ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
-
-                        elif name_type == 'dNSName':
-                            dns_names.append(str(value))
-
-                        elif name_type == 'uniformResourceIdentifier':
-                            application_uri = str(value)
-
-                    if not application_uri:
-                        err_msg = 'Missing OPC UA Application URI in SAN extension'
-                        raise ValueError(err_msg)
-
-                else:
-                    err_msg = 'SAN extension is required for OPC UA Server Certificates'
-                    raise ValueError(err_msg)
-
-                opc_ua_server_issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
-                issued_app_cred = opc_ua_server_issuer.issue_opcua_server_certificate(
-                    common_name=common_name_value,
-                    application_uri=application_uri,
-                    ipv4_addresses=ipv4_addresses,
-                    ipv6_addresses=ipv6_addresses,
-                    domain_names=dns_names,
-                    validity_days=validity_in_days,
-                    public_key=loaded_public_key,
-                )
-
-            elif self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_CLIENT:
-                if cert_req_template['extensions'].hasValue():
-                    san_extensions = [
-                        extension
-                        for extension in cert_req_template['extensions']
-                        if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-                    ]
-                    if len(san_extensions) != 1:
-                        err_msg = 'Invalid SAN extension count'
-                        raise ValueError(err_msg)
-
-                    san_extension = san_extensions[0]
-                    # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
-                    # TODO (FHKatCSW): san_critical not supported in OpcUaClientCredentialIssuer    # noqa: FIX002
-                    san_extension_bytes = bytes(san_extension['extnValue'])
-                    san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
-
-                    application_uri = None
-
-                    for general_name in san_asn1:
-                        name_type = general_name.getName()
-                        value = general_name.getComponent()
-
-                        if name_type == 'uniformResourceIdentifier':
-                            application_uri = str(value)
-
-                    if not application_uri:
-                        err_msg = 'Missing OPC UA Application URI in SAN extension'
-                        raise ValueError(err_msg)
-
-                else:
-                    err_msg = 'SAN extension is required for OPC UA Client Certificates'
-                    raise ValueError(err_msg)
-
-                opc_ua_client_issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
-                issued_app_cred = opc_ua_client_issuer.issue_opcua_client_certificate(
-                    common_name=common_name_value,
-                    application_uri=application_uri,
-                    validity_days=validity_in_days,
-                    public_key=loaded_public_key,
-                )
-            else:
-                raise ValueError
-
-            cp_header = rfc4210.PKIHeader()
-
-            cp_header['pvno'] = CMP_MESSAGE_VERSION
-
-            issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
-            raw_issuing_ca_subject = issuing_ca_cert.subject.public_bytes()
-            name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
-            sender = rfc2459.GeneralName()
-            sender['directoryName'][0] = name
-            cp_header['sender'] = sender
-
-            cp_header['recipient'] = self.serialized_pyasn1_message['header']['sender']
-
-            current_time = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d%H%M%SZ')
-            cp_header['messageTime'] = useful.GeneralizedTime(current_time).subtype(
-                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
-            )
-
-            cp_header['protectionAlg'] = self.serialized_pyasn1_message['header']['protectionAlg']
-
-            cp_header['senderKID'] = self.serialized_pyasn1_message['header']['senderKID']
-
-            cp_header['transactionID'] = self.serialized_pyasn1_message['header']['transactionID']
-
-            cp_header['senderNonce'] = univ.OctetString(secrets.token_bytes(SENDER_NONCE_LENGTH)).subtype(
-                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 5)
-            )
-
-            cp_header['recipNonce'] = univ.OctetString(self.serialized_pyasn1_message['header']['senderNonce']).subtype(
-                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 6)
-            )
-
-            cp_header['generalInfo'] = self.serialized_pyasn1_message['header']['generalInfo']
-
-            cp_extra_certs = univ.SequenceOf()
-
-            certificate_chain = [
-                self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate(),
-                *self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate_chain(),
-            ]
-            for certificate in certificate_chain:
-                der_bytes = certificate.public_bytes(encoding=Encoding.DER)
-                asn1_certificate, _ = decoder.decode(der_bytes, asn1Spec=rfc4210.CMPCertificate())
-                cp_extra_certs.append(asn1_certificate)
-
-            cp_body = rfc4210.PKIBody()
-            cp_body['cp'] = rfc4210.CertRepMessage().subtype(
-                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 3)
-            )
-            cp_body['cp']['caPubs'] = univ.SequenceOf().subtype(
-                sizeSpec=rfc4210.constraint.ValueSizeConstraint(1, rfc4210.MAX),
-                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 1),
-            )
-            # TODO(AlexHx8472): Add TLS Server Certificate Root CA  # noqa: FIX002
-
-            cert_response = rfc4210.CertResponse()
-            cert_response['certReqId'] = 0
-
-            pki_status_info = rfc4210.PKIStatusInfo()
-            pki_status_info['status'] = 0
-            cert_response['status'] = pki_status_info
-
-            cmp_cert = rfc4210.CMPCertificate().subtype(
-                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 0)
-            )
-
-            encoded_cert = issued_app_cred.credential.get_certificate().public_bytes(encoding=Encoding.DER)
-            der_cert, _ = decoder.decode(encoded_cert, asn1Spec=rfc4210.CMPCertificate())
-            cmp_cert.setComponentByName('tbsCertificate', der_cert['tbsCertificate'])
-            cmp_cert.setComponentByName('signatureValue', der_cert['signatureValue'])
-            cmp_cert.setComponentByName('signatureAlgorithm', der_cert['signatureAlgorithm'])
-            cert_or_enc_cert = rfc4210.CertOrEncCert()
-            cert_or_enc_cert['certificate'] = cmp_cert
-
-            cert_response['certifiedKeyPair']['certOrEncCert'] = cert_or_enc_cert
-
-            cp_body['cp']['response'].append(cert_response)
-
-            cp_message = rfc4210.PKIMessage()
-            cp_message['header'] = cp_header
-            cp_message['body'] = cp_body
-            for extra_cert in cp_extra_certs:
-                cp_message['extraCerts'].append(extra_cert)
-
-            # TODO(AlexHx8472): Use fresh salt! # noqa: FIX002
-            protected_part = rfc4210.ProtectedPart()
-            protected_part['header'] = cp_message['header']
-            protected_part['infoValue'] = cp_message['body']
-
-            encoded_protected_part = encoder.encode(protected_part)
-
-            hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
-            hmac_gen.update(encoded_protected_part)
-            hmac_digest = hmac_gen.finalize()
-
-            binary_stuff = bin(int.from_bytes(hmac_digest, byteorder='big'))[2:].zfill(160)
-            cp_message['protection'] = rfc4210.PKIProtection(univ.BitString(binary_stuff)).subtype(
-                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
-            )
-
-            encoded_cp_message = encoder.encode(cp_message)
-            decoded_cp_message, _ = decoder.decode(encoded_cp_message, asn1Spec=rfc4210.PKIMessage())
-
+            return self._handle_shared_secret_cr()
+
+        # certificate-based signature protection
+        if not self.application_certificate_template:
+            return HttpResponse('Missing application certificate template.', status=404)
+
+        extra_certs = self.serialized_pyasn1_message['extraCerts']
+        if extra_certs is None or len(extra_certs) == 0:
+            err_msg = 'No extra certificates found in the PKIMessage.'
+            raise ValueError(err_msg)
+
+        cmp_signer_extra_cert = extra_certs[0]
+        der_cmp_signer_cert = encoder.encode(cmp_signer_extra_cert)
+        cmp_signer_cert = x509.load_der_x509_certificate(der_cmp_signer_cert)
+
+        device_id = int(cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.USER_ID)[0].value)
+        device_serial_number = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
+        domain_name = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.DOMAIN_COMPONENT)[0].value
+        common_name = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0]
+
+        if isinstance(common_name.value, str):
+            common_name_value = common_name.value
+        elif isinstance(common_name.value, bytes):
+            common_name_value = common_name.value.decode()
         else:
-            if not self.application_certificate_template:
-                return HttpResponse('Missing application certificate template.', status=404)
+            err_msg = 'Failed to parse common name value'
+            raise ValueError(err_msg)
 
-            extra_certs = self.serialized_pyasn1_message['extraCerts']
-            if extra_certs is None or len(extra_certs) == 0:
-                err_msg = 'No extra certificates found in the PKIMessage.'
-                raise ValueError(err_msg)
+        if common_name_value != 'Trustpoint Domain Credential':
+            err_msg = 'Not a domain credential.'
+            raise ValueError(err_msg)
 
-            cmp_signer_extra_cert = extra_certs[0]
-            der_cmp_signer_cert = encoder.encode(cmp_signer_extra_cert)
-            cmp_signer_cert = x509.load_der_x509_certificate(der_cmp_signer_cert)
+        try:
+            self.device = DeviceModel.objects.get(pk=device_id)
+        except DeviceModel.DoesNotExist:
+            return HttpResponse('Device not found.', status=404)
 
-            device_id = int(cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.USER_ID)[0].value)
-            device_serial_number = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
-            domain_name = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.DOMAIN_COMPONENT)[0].value
-            common_name = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0]
+        if device_serial_number != self.device.serial_number:
+            err_msg = 'SN mismatch'
+            raise ValueError(err_msg)
 
-            if isinstance(common_name.value, str):
-                common_name_value = common_name.value
-            elif isinstance(common_name.value, bytes):
-                common_name_value = common_name.value.decode()
-            else:
-                err_msg = 'Failed to parse common name value'
-                raise ValueError(err_msg)
+        if not self.device.domain:
+            err_msg = 'The device is not part of any domain.'
+            raise ValueError(err_msg)
 
-            if common_name_value != 'Trustpoint Domain Credential':
-                err_msg = 'Not a domain credential.'
-                raise ValueError(err_msg)
+        if domain_name != self.device.domain.unique_name:
+            err_msg = 'Domain mismatch.'
+            raise ValueError(err_msg)
 
-            try:
-                self.device = DeviceModel.objects.get(pk=device_id)
-            except DeviceModel.DoesNotExist:
-                return HttpResponse('Device not found.', status=404)
+        issuing_ca_certificate = self.device.domain.get_issuing_ca_or_value_error().credential.get_certificate()
 
-            if device_serial_number != self.device.serial_number:
-                err_msg = 'SN mismatch'
-                raise ValueError(err_msg)
+        # verifies the domain credential signature
+        cmp_signer_cert.verify_directly_issued_by(issuing_ca_certificate)
 
-            if not self.device.domain:
-                err_msg = 'The device is not part of any domain.'
-                raise ValueError(err_msg)
+        if not self.device.domain_credential_onboarding:
+            return HttpResponse(
+                'The corresponding device is not configured to use the onboarding mechanism.', status=404
+            )
 
-            if domain_name != self.device.domain.unique_name:
-                err_msg = 'Domain mismatch.'
-                raise ValueError(err_msg)
+        if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE:
+            return HttpResponse('PKI protocol CMP client certificate expected, but got something else.')
 
-            issuing_ca_certificate = self.device.domain.get_issuing_ca_or_value_error().credential.get_certificate()
+        message_body_name = self.serialized_pyasn1_message['body'].getName()
+        if message_body_name != 'cr':
+            return HttpResponse(f'Expected CMP CR body, but got CMP {message_body_name.upper()} body.', status=450)
 
-            # verifies the domain credential signature
-            cmp_signer_cert.verify_directly_issued_by(issuing_ca_certificate)
+        check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
 
-            if not self.device.domain_credential_onboarding:
-                return HttpResponse(
-                    'The corresponding device is not configured to use the onboarding mechanism.', status=404
-                )
+        protection_value = self.serialized_pyasn1_message['protection'].asOctets()
 
-            if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE:
-                return HttpResponse('PKI protocol CMP client certificate expected, but got something else.')
+        if self.serialized_pyasn1_message['body'].getName() != 'cr':
+            err_msg = 'not cr message'
+            raise ValueError(err_msg)
 
-            message_body_name = self.serialized_pyasn1_message['body'].getName()
-            if message_body_name != 'cr':
-                return HttpResponse(f'Expected CMP CR body, but got CMP {message_body_name.upper()} body.', status=450)
+        cr_body = self.serialized_pyasn1_message['body']['cr']
+        if len(cr_body) > 1:
+            err_msg = 'multiple CertReqMessages found for CR.'
+            raise ValueError(err_msg)
 
-            check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
+        if len(cr_body) < 1:
+            err_msg = 'no CertReqMessages found for CR.'
+            raise ValueError(err_msg)
 
-            protection_value = self.serialized_pyasn1_message['protection'].asOctets()
+        cert_req_msg = cr_body[0]['certReq']
 
-            if self.serialized_pyasn1_message['body'].getName() != 'cr':
-                err_msg = 'not cr message'
-                raise ValueError(err_msg)
+        if cert_req_msg['certReqId'] != 0:
+            err_msg = 'certReqId must be 0.'
+            raise ValueError(err_msg)
 
-            cr_body = self.serialized_pyasn1_message['body']['cr']
-            if len(cr_body) > 1:
-                err_msg = 'multiple CertReqMessages found for CR.'
-                raise ValueError(err_msg)
+        if not cert_req_msg['certTemplate'].hasValue():
+            err_msg = 'certTemplate must be contained in CR CertReqMessage.'
+            raise ValueError(err_msg)
 
-            if len(cr_body) < 1:
-                err_msg = 'no CertReqMessages found for CR.'
-                raise ValueError(err_msg)
+        cert_req_template = cert_req_msg['certTemplate']
 
-            cert_req_msg = cr_body[0]['certReq']
+        # noinspection PyBroadException
+        try:
+            validity_not_before = convert_rfc2459_time(cert_req_template['validity']['notBefore'])
+            validity_not_after = convert_rfc2459_time(cert_req_template['validity']['notAfter'])
+            validity_in_days = (validity_not_after - validity_not_before).days
+        except Exception:  # noqa: BLE001
+            validity_in_days = DEFAULT_VALIDITY_DAYS
 
-            if cert_req_msg['certReqId'] != 0:
-                err_msg = 'certReqId must be 0.'
-                raise ValueError(err_msg)
+        if cert_req_template['version'].hasValue() and cert_req_template['version'] != CERT_TEMPLATE_VERSION:
+            err_msg = 'Version must be 2 if supplied in certificate request.'
+            raise ValueError(err_msg)
 
-            if not cert_req_msg['certTemplate'].hasValue():
-                err_msg = 'certTemplate must be contained in CR CertReqMessage.'
-                raise ValueError(err_msg)
+        if not cert_req_template['subject'].isValue:
+            err_msg = 'subject missing in CertReqMessage.'
+            raise ValueError(err_msg)
 
-            cert_req_template = cert_req_msg['certTemplate']
+        # ignores subject request for now and forces values to set
+        subject = NameParser.parse_name(cert_req_template['subject'])
 
-            # noinspection PyBroadException
-            try:
-                validity_not_before = convert_rfc2459_time(cert_req_template['validity']['notBefore'])
-                validity_not_after = convert_rfc2459_time(cert_req_template['validity']['notAfter'])
-                validity_in_days = (validity_not_after - validity_not_before).days
-            except Exception:  # noqa: BLE001
-                validity_in_days = DEFAULT_VALIDITY_DAYS
+        common_names = subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+        if len(common_names) != 1:
+            raise ValueError
 
-            if cert_req_template['version'].hasValue() and cert_req_template['version'] != CERT_TEMPLATE_VERSION:
-                err_msg = 'Version must be 2 if supplied in certificate request.'
-                raise ValueError(err_msg)
+        common_name = common_names[0]
+        if isinstance(common_name.value, str):
+            common_name_value = common_name.value
+        elif isinstance(common_name.value, bytes):
+            common_name_value = common_name.value.decode()
+        else:
+            err_msg = 'Failed to parse common name value'
+            raise ValueError(err_msg)
 
-            if not cert_req_template['subject'].isValue:
-                err_msg = 'subject missing in CertReqMessage.'
-                raise ValueError(err_msg)
+        # only local key-gen supported currently -> public key must be present
+        asn1_public_key = cert_req_template['publicKey']
+        if not asn1_public_key.hasValue():
+            err_msg = 'Public-missing in CertTemplate.'
+            raise ValueError(err_msg)
 
-            # ignores subject request for now and forces values to set
-            subject = NameParser.parse_name(cert_req_template['subject'])
+        spki = rfc2511.SubjectPublicKeyInfo()
+        spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
+        spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
+        loaded_public_key = load_supported_public_key_type(encoder.encode(spki))
 
-            common_names = subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
-            if len(common_names) != 1:
-                raise ValueError
+        # TODO(AlexHx8472): verify popo / process popo: popo = cr_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
-            common_name = common_names[0]
-            if isinstance(common_name.value, str):
-                common_name_value = common_name.value
-            elif isinstance(common_name.value, bytes):
-                common_name_value = common_name.value.decode()
-            else:
-                err_msg = 'Failed to parse common name value'
-                raise ValueError(err_msg)
+        protected_part = rfc4210.ProtectedPart()
+        protected_part['header'] = self.serialized_pyasn1_message['header']
+        protected_part['infoValue'] = self.serialized_pyasn1_message['body']
 
-            # only local key-gen supported currently -> public key must be present
-            asn1_public_key = cert_req_template['publicKey']
-            if not asn1_public_key.hasValue():
-                err_msg = 'Public-missing in CertTemplate.'
-                raise ValueError(err_msg)
+        encoded_protected_part = encoder.encode(protected_part)
+        signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
 
-            spki = rfc2511.SubjectPublicKeyInfo()
-            spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
-            spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
-            loaded_public_key = load_supported_public_key_type(encoder.encode(spki))
+        hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
+        if hash_algorithm is None:
+            err_msg = 'Failed to get the corresponding hash algorithm.'
+            raise ValueError(err_msg)
 
-            # TODO(AlexHx8472): verify popo / process popo: popo = cr_body[0]['pop'].prettyPrint()  # noqa: FIX002
+        public_key = cmp_signer_cert.public_key()
+        if isinstance(public_key, rsa.RSAPublicKey):
+            public_key.verify(
+                signature=protection_value,
+                data=encoded_protected_part,
+                padding=padding.PKCS1v15(),
+                algorithm=hash_algorithm.hash_algorithm(),
+            )
+        elif isinstance(public_key, ec.EllipticCurvePublicKey):
+            public_key.verify(
+                signature=protection_value,
+                data=encoded_protected_part,
+                signature_algorithm=ec.ECDSA(hash_algorithm.hash_algorithm()),
+            )
 
-            protected_part = rfc4210.ProtectedPart()
-            protected_part['header'] = self.serialized_pyasn1_message['header']
-            protected_part['infoValue'] = self.serialized_pyasn1_message['body']
+        # Checks regarding contained public key and corresponding signature suite of the issuing CA
+        issuing_ca_certificate = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
+        signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
+        if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
+            err_msg = 'Contained public key type does not match the signature suite.'
+            raise ValueError(err_msg)
 
-            encoded_protected_part = encoder.encode(protected_part)
-            signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
-
-            hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
-            if hash_algorithm is None:
-                err_msg = 'Failed to get the corresponding hash algorithm.'
-                raise ValueError(err_msg)
-
-            public_key = cmp_signer_cert.public_key()
-            if isinstance(public_key, rsa.RSAPublicKey):
-                public_key.verify(
-                    signature=protection_value,
-                    data=encoded_protected_part,
-                    padding=padding.PKCS1v15(),
-                    algorithm=hash_algorithm.hash_algorithm(),
-                )
-            elif isinstance(public_key, ec.EllipticCurvePublicKey):
-                public_key.verify(
-                    signature=protection_value,
-                    data=encoded_protected_part,
-                    signature_algorithm=ec.ECDSA(hash_algorithm.hash_algorithm()),
-                )
-
-            # Checks regarding contained public key and corresponding signature suite of the issuing CA
-            issuing_ca_certificate = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
-            signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
-            if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
-                err_msg = 'Contained public key type does not match the signature suite.'
-                raise ValueError(err_msg)
-
-            if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_CLIENT:
-                issuer = LocalTlsClientCredentialIssuer(device=self.device, domain=self.device.domain)
-                issued_app_cred = issuer.issue_tls_client_certificate(
-                    common_name=common_name_value, validity_days=validity_in_days, public_key=loaded_public_key
-                )
-            elif self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_SERVER:
-                if cert_req_template['extensions'].hasValue():
-                    san_extensions = [
-                        extension
-                        for extension in cert_req_template['extensions']
-                        if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-                    ]
-                    if len(san_extensions) != 1:
-                        raise ValueError
-                    san_extension = san_extensions[0]
-                    san_critical = str(san_extension['critical']) == 'True'
-                    san_extension_bytes = bytes(san_extension['extnValue'])
-                    san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
-
-                    dns_names = []
-                    ipv4_addresses = []
-                    ipv6_addresses = []
-
-                    for general_name in san_asn1:
-                        name_type = general_name.getName()
-                        value = general_name.getComponent()
-
-                        if name_type == 'iPAddress':
-                            try:
-                                ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
-                            except (ValueError, TypeError):
-                                ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
-
-                        elif name_type == 'dNSName':
-                            dns_names.append(str(value))
-                else:
+        if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_CLIENT:
+            issuer = LocalTlsClientCredentialIssuer(device=self.device, domain=self.device.domain)
+            issued_app_cred = issuer.issue_tls_client_certificate(
+                common_name=common_name_value, validity_days=validity_in_days, public_key=loaded_public_key
+            )
+        elif self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_SERVER:
+            if cert_req_template['extensions'].hasValue():
+                san_extensions = [
+                    extension
+                    for extension in cert_req_template['extensions']
+                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
+                ]
+                if len(san_extensions) != 1:
                     raise ValueError
+                san_extension = san_extensions[0]
+                san_critical = str(san_extension['critical']) == 'True'
+                san_extension_bytes = bytes(san_extension['extnValue'])
+                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
 
-                tls_server_issuer = LocalTlsServerCredentialIssuer(device=self.device, domain=self.device.domain)
-                issued_app_cred = tls_server_issuer.issue_tls_server_certificate(
-                    common_name=common_name_value,
-                    validity_days=validity_in_days,
-                    ipv4_addresses=ipv4_addresses,
-                    ipv6_addresses=ipv6_addresses,
-                    san_critical=san_critical,
-                    domain_names=dns_names,
-                    public_key=loaded_public_key,
-                )
-            elif self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_SERVER:
-                if cert_req_template['extensions'].hasValue():
-                    san_extensions = [
-                        extension
-                        for extension in cert_req_template['extensions']
-                        if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-                    ]
-                    if len(san_extensions) != 1:
-                        err_msg = 'Invalid SAN extension count'
-                        raise ValueError(err_msg)
+                dns_names = []
+                ipv4_addresses = []
+                ipv6_addresses = []
 
-                    san_extension = san_extensions[0]
-                    # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
-                    san_extension_bytes = bytes(san_extension['extnValue'])
-                    san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
+                for general_name in san_asn1:
+                    name_type = general_name.getName()
+                    value = general_name.getComponent()
 
-                    dns_names = []
-                    ipv4_addresses = []
-                    ipv6_addresses = []
-                    application_uri = None
+                    if name_type == 'iPAddress':
+                        try:
+                            ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
+                        except (ValueError, TypeError):
+                            ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
 
-                    for general_name in san_asn1:
-                        name_type = general_name.getName()
-                        value = general_name.getComponent()
-
-                        if name_type == 'iPAddress':
-                            try:
-                                ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
-                            except (ValueError, TypeError):
-                                ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
-
-                        elif name_type == 'dNSName':
-                            dns_names.append(str(value))
-
-                        elif name_type == 'uniformResourceIdentifier':
-                            application_uri = str(value)
-
-                    if not application_uri:
-                        err_msg = 'Missing OPC UA Application URI in SAN extension'
-                        raise ValueError(err_msg)
-
-                else:
-                    err_msg = 'SAN extension is required for OPC UA Server Certificates'
-                    raise ValueError(err_msg)
-
-                opc_ua_server_cred_issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
-                issued_app_cred = opc_ua_server_cred_issuer.issue_opcua_server_certificate(
-                    common_name=common_name_value,
-                    application_uri=application_uri,
-                    ipv4_addresses=ipv4_addresses,
-                    ipv6_addresses=ipv6_addresses,
-                    domain_names=dns_names,
-                    validity_days=validity_in_days,
-                    public_key=loaded_public_key,
-                )
-
-            elif self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_CLIENT:
-                if cert_req_template['extensions'].hasValue():
-                    san_extensions = [
-                        extension
-                        for extension in cert_req_template['extensions']
-                        if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-                    ]
-                    if len(san_extensions) != 1:
-                        err_msg = 'Invalid SAN extension count'
-                        raise ValueError(err_msg)
-
-                    san_extension = san_extensions[0]
-                    # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
-                    san_extension_bytes = bytes(san_extension['extnValue'])
-                    san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
-
-                    application_uri = None
-
-                    for general_name in san_asn1:
-                        name_type = general_name.getName()
-                        value = general_name.getComponent()
-
-                        if name_type == 'uniformResourceIdentifier':
-                            application_uri = str(value)
-
-                    if not application_uri:
-                        err_msg = 'Missing OPC UA Application URI in SAN extension'
-                        raise ValueError(err_msg)
-
-                else:
-                    err_msg = 'SAN extension is required for OPC UA Client Certificates'
-                    raise ValueError(err_msg)
-
-                opc_ua_client_cred_issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
-                issued_app_cred = opc_ua_client_cred_issuer.issue_opcua_client_certificate(
-                    common_name=common_name_value,
-                    application_uri=application_uri,
-                    validity_days=validity_in_days,
-                    public_key=loaded_public_key,
-                )
+                    elif name_type == 'dNSName':
+                        dns_names.append(str(value))
             else:
                 raise ValueError
 
-            cp_header = rfc4210.PKIHeader()
-
-            cp_header['pvno'] = CMP_MESSAGE_VERSION
-
-            issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
-            raw_issuing_ca_subject = issuing_ca_cert.subject.public_bytes()
-            name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
-            sender = rfc2459.GeneralName()
-            sender['directoryName'][0] = name
-            cp_header['sender'] = sender
-
-            cp_header['recipient'] = self.serialized_pyasn1_message['header']['sender']
-
-            current_time = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d%H%M%SZ')
-            cp_header['messageTime'] = useful.GeneralizedTime(current_time).subtype(
-                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
+            tls_server_issuer = LocalTlsServerCredentialIssuer(device=self.device, domain=self.device.domain)
+            issued_app_cred = tls_server_issuer.issue_tls_server_certificate(
+                common_name=common_name_value,
+                validity_days=validity_in_days,
+                ipv4_addresses=ipv4_addresses,
+                ipv6_addresses=ipv6_addresses,
+                san_critical=san_critical,
+                domain_names=dns_names,
+                public_key=loaded_public_key,
             )
+        elif self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_SERVER:
+            if cert_req_template['extensions'].hasValue():
+                san_extensions = [
+                    extension
+                    for extension in cert_req_template['extensions']
+                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
+                ]
+                if len(san_extensions) != 1:
+                    err_msg = 'Invalid SAN extension count'
+                    raise ValueError(err_msg)
 
-            cp_header['protectionAlg'] = self.serialized_pyasn1_message['header']['protectionAlg']
+                san_extension = san_extensions[0]
+                # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
+                san_extension_bytes = bytes(san_extension['extnValue'])
+                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
 
-            ski = x509.SubjectKeyIdentifier.from_public_key(issuing_ca_cert.public_key())
-            cp_header['senderKID'] = rfc2459.KeyIdentifier(ski.digest).subtype(
-                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2)
-            )
+                dns_names = []
+                ipv4_addresses = []
+                ipv6_addresses = []
+                application_uri = None
 
-            cp_header['transactionID'] = self.serialized_pyasn1_message['header']['transactionID']
+                for general_name in san_asn1:
+                    name_type = general_name.getName()
+                    value = general_name.getComponent()
 
-            cp_header['senderNonce'] = univ.OctetString(secrets.token_bytes(SENDER_NONCE_LENGTH)).subtype(
-                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 5)
-            )
+                    if name_type == 'iPAddress':
+                        try:
+                            ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
+                        except (ValueError, TypeError):
+                            ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
 
-            cp_header['recipNonce'] = univ.OctetString(self.serialized_pyasn1_message['header']['senderNonce']).subtype(
-                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 6)
-            )
+                    elif name_type == 'dNSName':
+                        dns_names.append(str(value))
 
-            cp_header['generalInfo'] = self.serialized_pyasn1_message['header']['generalInfo']
+                    elif name_type == 'uniformResourceIdentifier':
+                        application_uri = str(value)
 
-            cp_extra_certs = univ.SequenceOf()
+                if not application_uri:
+                    err_msg = 'Missing OPC UA Application URI in SAN extension'
+                    raise ValueError(err_msg)
 
-            certificate_chain = [
-                self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate(),
-                *self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate_chain(),
-            ]
-            for certificate in certificate_chain:
-                der_bytes = certificate.public_bytes(encoding=Encoding.DER)
-                asn1_certificate, _ = decoder.decode(der_bytes, asn1Spec=rfc4210.CMPCertificate())
-                cp_extra_certs.append(asn1_certificate)
-
-            cp_body = rfc4210.PKIBody()
-            cp_body['cp'] = rfc4210.CertRepMessage().subtype(
-                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 3)
-            )
-            cp_body['cp']['caPubs'] = univ.SequenceOf().subtype(
-                sizeSpec=rfc4210.constraint.ValueSizeConstraint(1, rfc4210.MAX),
-                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 1),
-            )
-            # TODO(AlexHx8472): Add TLS Server Certificate Root CA      # noqa: FIX002
-
-            cert_response = rfc4210.CertResponse()
-            cert_response['certReqId'] = 0
-
-            pki_status_info = rfc4210.PKIStatusInfo()
-            pki_status_info['status'] = 0
-            cert_response['status'] = pki_status_info
-
-            cmp_cert = rfc4210.CMPCertificate().subtype(
-                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 0)
-            )
-
-            encoded_cert = issued_app_cred.credential.get_certificate().public_bytes(encoding=Encoding.DER)
-            der_cert, _ = decoder.decode(encoded_cert, asn1Spec=rfc4210.CMPCertificate())
-            cmp_cert.setComponentByName('tbsCertificate', der_cert['tbsCertificate'])
-            cmp_cert.setComponentByName('signatureValue', der_cert['signatureValue'])
-            cmp_cert.setComponentByName('signatureAlgorithm', der_cert['signatureAlgorithm'])
-            cert_or_enc_cert = rfc4210.CertOrEncCert()
-            cert_or_enc_cert['certificate'] = cmp_cert
-
-            cert_response['certifiedKeyPair']['certOrEncCert'] = cert_or_enc_cert
-
-            cp_body['cp']['response'].append(cert_response)
-
-            cp_message = rfc4210.PKIMessage()
-            cp_message['header'] = cp_header
-            cp_message['body'] = cp_body
-            for extra_cert in cp_extra_certs:
-                cp_message['extraCerts'].append(extra_cert)
-
-            protected_part = rfc4210.ProtectedPart()
-            protected_part['header'] = cp_message['header']
-            protected_part['infoValue'] = cp_message['body']
-
-            encoded_protected_part = encoder.encode(protected_part)
-
-            private_key = load_pem_private_key(
-                self.device.domain.get_issuing_ca_or_value_error().credential.private_key.encode(), password=None
-            )
-            hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
-            if hash_algorithm is None:
-                err_msg = 'Failed to get the corresponding hash algorithm.'
+            else:
+                err_msg = 'SAN extension is required for OPC UA Server Certificates'
                 raise ValueError(err_msg)
 
-            if isinstance(private_key, rsa.RSAPrivateKey):
-                signature = private_key.sign(
-                    encoded_protected_part,
-                    padding.PKCS1v15(),
-                    hash_algorithm.hash_algorithm(),
-                )
-            elif isinstance(private_key, ec.EllipticCurvePrivateKey):
-                signature = private_key.sign(
-                    encoded_protected_part,
-                    ec.ECDSA(hash_algorithm.hash_algorithm()),
-                )
-            else:
-                raise TypeError
-
-            cp_message['protection'] = rfc4210.PKIProtection(univ.BitString.fromOctetString(signature)).subtype(
-                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
+            opc_ua_server_cred_issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
+            issued_app_cred = opc_ua_server_cred_issuer.issue_opcua_server_certificate(
+                common_name=common_name_value,
+                application_uri=application_uri,
+                ipv4_addresses=ipv4_addresses,
+                ipv6_addresses=ipv6_addresses,
+                domain_names=dns_names,
+                validity_days=validity_in_days,
+                public_key=loaded_public_key,
             )
 
-            encoded_cp_message = encoder.encode(cp_message)
-            decoded_cp_message, _ = decoder.decode(encoded_cp_message, asn1Spec=rfc4210.PKIMessage())
+        elif self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_CLIENT:
+            if cert_req_template['extensions'].hasValue():
+                san_extensions = [
+                    extension
+                    for extension in cert_req_template['extensions']
+                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
+                ]
+                if len(san_extensions) != 1:
+                    err_msg = 'Invalid SAN extension count'
+                    raise ValueError(err_msg)
+
+                san_extension = san_extensions[0]
+                # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
+                san_extension_bytes = bytes(san_extension['extnValue'])
+                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
+
+                application_uri = None
+
+                for general_name in san_asn1:
+                    name_type = general_name.getName()
+                    value = general_name.getComponent()
+
+                    if name_type == 'uniformResourceIdentifier':
+                        application_uri = str(value)
+
+                if not application_uri:
+                    err_msg = 'Missing OPC UA Application URI in SAN extension'
+                    raise ValueError(err_msg)
+
+            else:
+                err_msg = 'SAN extension is required for OPC UA Client Certificates'
+                raise ValueError(err_msg)
+
+            opc_ua_client_cred_issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
+            issued_app_cred = opc_ua_client_cred_issuer.issue_opcua_client_certificate(
+                common_name=common_name_value,
+                application_uri=application_uri,
+                validity_days=validity_in_days,
+                public_key=loaded_public_key,
+            )
+        else:
+            raise ValueError
+
+        cp_header = rfc4210.PKIHeader()
+
+        cp_header['pvno'] = CMP_MESSAGE_VERSION
+
+        issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
+        raw_issuing_ca_subject = issuing_ca_cert.subject.public_bytes()
+        name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
+        sender = rfc2459.GeneralName()
+        sender['directoryName'][0] = name
+        cp_header['sender'] = sender
+
+        cp_header['recipient'] = self.serialized_pyasn1_message['header']['sender']
+
+        current_time = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d%H%M%SZ')
+        cp_header['messageTime'] = useful.GeneralizedTime(current_time).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
+        )
+
+        cp_header['protectionAlg'] = self.serialized_pyasn1_message['header']['protectionAlg']
+
+        ski = x509.SubjectKeyIdentifier.from_public_key(issuing_ca_cert.public_key())
+        cp_header['senderKID'] = rfc2459.KeyIdentifier(ski.digest).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2)
+        )
+
+        cp_header['transactionID'] = self.serialized_pyasn1_message['header']['transactionID']
+
+        cp_header['senderNonce'] = univ.OctetString(secrets.token_bytes(SENDER_NONCE_LENGTH)).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 5)
+        )
+
+        cp_header['recipNonce'] = univ.OctetString(self.serialized_pyasn1_message['header']['senderNonce']).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 6)
+        )
+
+        cp_header['generalInfo'] = self.serialized_pyasn1_message['header']['generalInfo']
+
+        cp_extra_certs = univ.SequenceOf()
+
+        certificate_chain = [
+            self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate(),
+            *self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate_chain(),
+        ]
+        for certificate in certificate_chain:
+            der_bytes = certificate.public_bytes(encoding=Encoding.DER)
+            asn1_certificate, _ = decoder.decode(der_bytes, asn1Spec=rfc4210.CMPCertificate())
+            cp_extra_certs.append(asn1_certificate)
+
+        cp_body = rfc4210.PKIBody()
+        cp_body['cp'] = rfc4210.CertRepMessage().subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 3)
+        )
+        cp_body['cp']['caPubs'] = univ.SequenceOf().subtype(
+            sizeSpec=rfc4210.constraint.ValueSizeConstraint(1, rfc4210.MAX),
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 1),
+        )
+        # TODO(AlexHx8472): Add TLS Server Certificate Root CA      # noqa: FIX002
+
+        cert_response = rfc4210.CertResponse()
+        cert_response['certReqId'] = 0
+
+        pki_status_info = rfc4210.PKIStatusInfo()
+        pki_status_info['status'] = 0
+        cert_response['status'] = pki_status_info
+
+        cmp_cert = rfc4210.CMPCertificate().subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 0)
+        )
+
+        encoded_cert = issued_app_cred.credential.get_certificate().public_bytes(encoding=Encoding.DER)
+        der_cert, _ = decoder.decode(encoded_cert, asn1Spec=rfc4210.CMPCertificate())
+        cmp_cert.setComponentByName('tbsCertificate', der_cert['tbsCertificate'])
+        cmp_cert.setComponentByName('signatureValue', der_cert['signatureValue'])
+        cmp_cert.setComponentByName('signatureAlgorithm', der_cert['signatureAlgorithm'])
+        cert_or_enc_cert = rfc4210.CertOrEncCert()
+        cert_or_enc_cert['certificate'] = cmp_cert
+
+        cert_response['certifiedKeyPair']['certOrEncCert'] = cert_or_enc_cert
+
+        cp_body['cp']['response'].append(cert_response)
+
+        cp_message = rfc4210.PKIMessage()
+        cp_message['header'] = cp_header
+        cp_message['body'] = cp_body
+        for extra_cert in cp_extra_certs:
+            cp_message['extraCerts'].append(extra_cert)
+
+        protected_part = rfc4210.ProtectedPart()
+        protected_part['header'] = cp_message['header']
+        protected_part['infoValue'] = cp_message['body']
+
+        encoded_protected_part = encoder.encode(protected_part)
+
+        private_key = load_pem_private_key(
+            self.device.domain.get_issuing_ca_or_value_error().credential.private_key.encode(), password=None
+        )
+        hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
+        if hash_algorithm is None:
+            err_msg = 'Failed to get the corresponding hash algorithm.'
+            raise ValueError(err_msg)
+
+        if isinstance(private_key, rsa.RSAPrivateKey):
+            signature = private_key.sign(
+                encoded_protected_part,
+                padding.PKCS1v15(),
+                hash_algorithm.hash_algorithm(),
+            )
+        elif isinstance(private_key, ec.EllipticCurvePrivateKey):
+            signature = private_key.sign(
+                encoded_protected_part,
+                ec.ECDSA(hash_algorithm.hash_algorithm()),
+            )
+        else:
+            raise TypeError
+
+        cp_message['protection'] = rfc4210.PKIProtection(univ.BitString.fromOctetString(signature)).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
+        )
+
+        encoded_cp_message = encoder.encode(cp_message)
+        decoded_cp_message, _ = decoder.decode(encoded_cp_message, asn1Spec=rfc4210.PKIMessage())
 
         return HttpResponse(encoded_cp_message, content_type='application/pkixcmp', status=200)
 
