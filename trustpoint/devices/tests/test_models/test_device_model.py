@@ -1,4 +1,5 @@
 """Tests for the DeviceModel model."""
+
 from typing import Any
 
 import pytest
@@ -19,7 +20,7 @@ def test_no_onboarding_with_est_password(domain_instance: dict[str, Any]) -> Non
         onboarding_status=DeviceModel.OnboardingStatus.NO_ONBOARDING,
         onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
         pki_protocol=DeviceModel.PkiProtocol.EST_PASSWORD,
-        est_password='test_est_password',   # noqa: S106
+        est_password='test_est_password',  # noqa: S106
     )
 
     # Assertions
@@ -28,7 +29,7 @@ def test_no_onboarding_with_est_password(domain_instance: dict[str, Any]) -> Non
     assert device.onboarding_status == DeviceModel.OnboardingStatus.NO_ONBOARDING
     assert device.onboarding_protocol == DeviceModel.OnboardingProtocol.NO_ONBOARDING
     assert device.pki_protocol == DeviceModel.PkiProtocol.EST_PASSWORD
-    assert device.est_password == 'test_est_password'   # noqa: S105
+    assert device.est_password == 'test_est_password'  # noqa: S105
 
 
 @pytest.mark.django_db
@@ -43,7 +44,7 @@ def test_no_onboarding_with_cmp_shared_secret(domain_instance: dict[str, Any]) -
         onboarding_status=DeviceModel.OnboardingStatus.NO_ONBOARDING,
         onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
         pki_protocol=DeviceModel.PkiProtocol.CMP_SHARED_SECRET,
-        cmp_shared_secret='test_cmp_secret',    # noqa: S106
+        cmp_shared_secret='test_cmp_secret',  # noqa: S106
     )
 
     # Assertions
@@ -52,7 +53,7 @@ def test_no_onboarding_with_cmp_shared_secret(domain_instance: dict[str, Any]) -
     assert device.onboarding_status == DeviceModel.OnboardingStatus.NO_ONBOARDING
     assert device.onboarding_protocol == DeviceModel.OnboardingProtocol.NO_ONBOARDING
     assert device.pki_protocol == DeviceModel.PkiProtocol.CMP_SHARED_SECRET
-    assert device.cmp_shared_secret == 'test_cmp_secret'    # noqa: S105
+    assert device.cmp_shared_secret == 'test_cmp_secret'  # noqa: S105
 
 
 @pytest.mark.django_db
@@ -98,6 +99,7 @@ def test_cmp_onboarding_with_client_certificate(domain_instance: dict[str, Any])
     assert device.onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET
     assert device.pki_protocol == DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE
 
+
 @pytest.mark.django_db
 def test_generic_device_no_onboarding(domain_instance: dict[str, Any]) -> None:
     """Test for a generic device with no onboarding configurations."""
@@ -118,6 +120,7 @@ def test_generic_device_no_onboarding(domain_instance: dict[str, Any]) -> None:
     assert device.onboarding_status == DeviceModel.OnboardingStatus.NO_ONBOARDING
     assert device.onboarding_protocol == DeviceModel.OnboardingProtocol.NO_ONBOARDING
     assert device.pki_protocol == DeviceModel.PkiProtocol.MANUAL
+
 
 @pytest.mark.django_db
 def test_device_opcua_gds(domain_instance: dict[str, Any]) -> None:
@@ -163,6 +166,7 @@ def test_device_without_domain() -> None:
     assert device.pki_protocol == DeviceModel.PkiProtocol.MANUAL
     assert device.domain is None
 
+
 @pytest.mark.django_db
 def test_device_creation_without_common_name(domain_instance: dict[str, Any]) -> None:
     """Test for device creation without a common name."""
@@ -170,11 +174,10 @@ def test_device_creation_without_common_name(domain_instance: dict[str, Any]) ->
 
     with pytest.raises(IntegrityError, match='NOT NULL constraint failed: devices_devicemodel.common_name'):
         DeviceModel.objects.create(
-            common_name=None,   # type: ignore[misc]
+            common_name=None,  # type: ignore[misc]
             serial_number='MISSING_COMMON_NAME',
             domain=domain,
             onboarding_status=DeviceModel.OnboardingStatus.NO_ONBOARDING,
             onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
             pki_protocol=DeviceModel.PkiProtocol.MANUAL,
         )
-

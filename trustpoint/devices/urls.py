@@ -1,6 +1,7 @@
 """URL configuration for the devices' application."""
 
 from django.urls import path, re_path
+from help_pages import devices_help_views
 
 from . import views
 
@@ -9,9 +10,15 @@ app_name = 'devices'
 urlpatterns = [
     # Main Pages
     path('', views.DeviceTableView.as_view(), name='devices'),
-    path('add/', views.CreateDeviceView.as_view(), name='add'),
-    path('details/<int:pk>/', views.DeviceDetailsView.as_view(), name='details'),
+
+    path('details/<int:pk>/', views.DeviceDetailsView.as_view(), name='devices_details'),
+    path('create/', views.CreateDeviceView.as_view(), name='devices_create'),
+
+    path('opc-ua-gds/details/<int:pk>/', views.OpcUaDeviceDetailsView.as_view(), name='opc_ua_gds_details'),
+    path('opc-ua-gds/create/', views.CreateOpcUaGdsView.as_view(), name='opc_ua_gds_create'),
+
     # Certificate Lifecycle Management
+
     path(
         'certificate-lifecycle-management/<int:pk>/',
         views.DeviceCertificateLifecycleManagementSummaryView.as_view(),
@@ -51,91 +58,93 @@ urlpatterns = [
     ),
     # Certificate Lifecycle Management - Help Pages
     path(
-        'help/dispatch-domain/<int:pk>/', views.HelpDispatchDomainCredentialView.as_view(), name='help_dispatch_domain'
+        'help/dispatch-domain/<int:pk>/',
+        devices_help_views.HelpDispatchDomainCredentialView.as_view(),
+        name='help_dispatch_domain',
     ),
     path(
         'help/dispatch-device-type-redirect/<int:pk>/',
-        views.HelpDispatchDeviceTypeRedirectView.as_view(),
+        devices_help_views.HelpDispatchDeviceTypeRedirectView.as_view(),
         name='help_dispatch_device_type_redirect',
     ),
     path(
         'help/dispatch-opcua_gds/<int:pk>/',
-        views.HelpDispatchOpcUaGdsView.as_view(),
+        devices_help_views.HelpDispatchOpcUaGdsView.as_view(),
         name='help_dispatch_opcua_gds',
     ),
     path(
         'help/dispatch-application/<int:pk>/',
-        views.HelpDispatchApplicationCredentialView.as_view(),
+        devices_help_views.HelpDispatchApplicationCredentialView.as_view(),
         name='help_dispatch_application',
     ),
     path(
         'help/dispatch-application/<int:pk>/<str:certificate_template>/',
-        views.HelpDispatchApplicationCredentialTemplateView.as_view(),
+        devices_help_views.HelpDispatchApplicationCredentialTemplateView.as_view(),
         name='help_dispatch_application_template',
     ),
     path(
         'help/no-onboarding/cmp-shared-secret/<int:pk>/<str:certificate_template>/',
-        views.NoOnboardingCmpSharedSecretHelpView.as_view(),
+        devices_help_views.NoOnboardingCmpSharedSecretHelpView.as_view(),
         name='help_no-onboarding_cmp-shared-secret',
     ),
     path(
         'help/onboarding/cmp-shared-secret/<int:pk>/',
-        views.OnboardingCmpSharedSecretHelpView.as_view(),
+        devices_help_views.OnboardingCmpSharedSecretHelpView.as_view(),
         name='help-onboarding_cmp-shared-secret',
     ),
     path(
         'help/onboarding/cmp-idevid/<int:pk>/',
-        views.OnboardingCmpIdevidHelpView.as_view(),
+        devices_help_views.OnboardingCmpIdevidHelpView.as_view(),
         name='help-onboarding_cmp-idevid',
     ),
     path(
         'help/onboarding/cmp-idevid-registration/<int:pk>/',
-        views.OnboardingCmpIdevidRegistrationHelpView.as_view(),
+        devices_help_views.OnboardingCmpIdevidRegistrationHelpView.as_view(),
         name='help-onboarding_cmp-idevid-registration',
     ),
     path(
         'help/onboarding/cmp-application-credentials/<int:pk>/<str:certificate_template>/',
-        views.OnboardingCmpApplicationCredentialsHelpView.as_view(),
+        devices_help_views.OnboardingCmpApplicationCredentialsHelpView.as_view(),
         name='help-onboarding_cmp-application-credentials',
     ),
     path(
         'help/no-onboarding/est-username-password/<int:pk>/<str:certificate_template>/',
-        views.NoOnboardingEstUsernamePasswordHelpView.as_view(),
+        devices_help_views.NoOnboardingEstUsernamePasswordHelpView.as_view(),
         name='help-no-onboarding_est-username-password',
     ),
     path(
         'help/onboarding/est-username-password/<int:pk>/',
-        views.OnboardingEstUsernamePasswordHelpView.as_view(),
+        devices_help_views.OnboardingEstUsernamePasswordHelpView.as_view(),
         name='help-onboarding_est-username-password',
     ),
     path(
         'help/onboarding/est-application-credentials/<int:pk>/<str:certificate_template>/',
-        views.OnboardingEstApplicationCredentialsHelpView.as_view(),
+        devices_help_views.OnboardingEstApplicationCredentialsHelpView.as_view(),
         name='help-onboarding_est-application-credentials',
     ),
     path(
         'help/onboarding/ldevid/<int:pk>/',
-        views.OnboardingEstApplicationCredentialsHelpView.as_view(),
+        devices_help_views.OnboardingEstApplicationCredentialsHelpView.as_view(),
         name='help-onboarding_est-ldevid',
     ),
     path(
         'help/onboarding/est-idevid/<int:pk>/',
-        views.OnboardingEstIdevidHelpView.as_view(),
+        devices_help_views.OnboardingEstIdevidHelpView.as_view(),
         name='help-onboarding_est-idevid',
     ),
     path(
         'help/onboarding/est-idevid-registration/<int:pk>/',
-        views.OnboardingEstIdevidRegistrationHelpView.as_view(),
+        devices_help_views.OnboardingEstIdevidRegistrationHelpView.as_view(),
         name='help-onboarding_est-idevid-registration',
     ),
     path(
         'help/onboarding/method-select-idevid/<int:pk>/',
-        views.OnboardingMethodSelectIdevidHelpView.as_view(),
+        devices_help_views.OnboardingMethodSelectIdevidHelpView.as_view(),
         name='help-onboarding_method_select-idevid',
     ),
     path(
         'help/no-onboarding/opc-ua-gds/est-username-password/<int:pk>/',
-        views.NoOnboardingEstOpcUaGdsUsernamePasswordHelpView.as_view(),
+        devices_help_views.NoOnboardingEstOpcUaGdsUsernamePasswordHelpView.as_view(),
         name='help-no-onboarding_est-opcua-gds-username-password',
     ),
     # Certificate Lifecycle Management - Downloads
