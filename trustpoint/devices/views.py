@@ -12,7 +12,7 @@ from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
 from django.db.models import Q, QuerySet
 from django.forms import BaseModelForm
-from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.decorators import method_decorator
@@ -104,6 +104,33 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
 
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Adds the object model to the instance and forwards to super().get().
+
+        Args:
+            request: The Django request object.
+            *args: Positional arguments passed to super().get().
+            **kwargs: Keyword arguments passed to super().get().
+
+        Returns:
+            The HttpResponse object returned by super().get().
+        """
+        sort_params = request.GET.getlist('sort', [self.default_sort_param])
+
+        if len(sort_params) > 1:
+            first_sort_parameter = sort_params[0]
+
+            query_dict = request.GET.copy()
+            query_dict.setlist('sort', [first_sort_parameter])
+
+            new_url = f'{request.path}?{query_dict.urlencode()}'
+            return HttpResponseRedirect(new_url)
+
+        self.ordering = sort_params[0]
+
+        return super().get(request, *args, **kwargs)
+ 
+
     @abc.abstractmethod
     def get_queryset(self) -> QuerySet[DeviceModel]:
         """Filter queryset to only include devices which are of generic type.
@@ -137,6 +164,7 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
            The sort parameters, if any. Otherwise the default sort parameter.
         """
         return self.request.GET.getlist('sort', [self.default_sort_param])
+
 
     @classmethod
     def _get_clm_button_html(cls, record: DeviceModel) -> SafeString:
@@ -557,7 +585,7 @@ class DeviceIssueCredentialView(
             **kwargs: Keyword arguments passed to super().get().
 
         Returns:
-            The HttpResponseBase object returned by super().get().
+            The HttpResponse object returned by super().get().
         """
         self.object = self.get_object()
         return super().get(request, *args, **kwargs)
