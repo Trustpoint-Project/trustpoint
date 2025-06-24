@@ -5,45 +5,45 @@
         <thead>
         <tr>
             <th id="checkbox-column"><input type="checkbox"/></th>
-            <th>
+            <th class="text-nowrap">
                 <a href="{% url_sort 'common_name' %}">
                     {% trans 'Name' %} {{ request|sort_icon:'common_name' }}
                 </a>
             </th>
-            <th>
+            <th class="text-nowrap">
                 <a href="{% url_sort 'domain' %}">
                     {% trans 'Domain' %} {{ request|sort_icon:'domain' }}
                 </a>
             </th>
             {% if page_name != 'opc_ua_gds' %}
-            <th>
+            <th class="text-nowrap">
                 <a href="{% url_sort 'serial_number' %}">
                     {% trans 'Serial Number' %} {{ request|sort_icon:'serial_number' }}
                 </a>
             </th>
             {% endif %}
-            <th>
+            <th class="text-nowrap">
                 <a href="{% url_sort 'created_at' %}">
                     {% trans 'Created at' %} {{ request|sort_icon:'created_at' }}
                 </a>
             </th>
-            <th>
+            <th class="text-nowrap">
                 <a href="{% url_sort 'onboarding_status' %}">
                     {% trans 'Onboarding Status' %} {{ request|sort_icon:'onboarding_status' }}
                 </a>
             </th>
-            <th>
+            <th class="text-nowrap">
                 <a href="{% url_sort 'onboarding_protocol' %}">
                     {% trans 'Onboarding Protocol' %} {{ request|sort_icon:'onboarding_protocol' }}
                 </a>
             </th>
-            <th>
+            <th class="text-nowrap">
                 <a href="{% url_sort 'pki_protocol' %}">
                     {% trans 'PKI Protocol' %} {{ request|sort_icon:'pki_protocol' }}
                 </a>
             </th>
-            <th>{% trans 'Certificate Management' %}</th>
-            <th>{% trans 'Details' %}</th>
+            <th class="text-nowrap">{% trans 'Certificate Management' %}</th>
+            <th class="text-nowrap">{% trans 'Details' %}</th>
         </tr>
         </thead>
         <tbody>
