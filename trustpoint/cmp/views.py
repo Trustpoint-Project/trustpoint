@@ -230,6 +230,62 @@ class CmpRequestTemplateExtractorMixin:
         spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
         return load_supported_public_key_type(encoder.encode(spki))
 
+    def _parse_san_extension(self, cert_req_template: dict) -> dict:
+        """Parses the (mandatory) SAN extension from the certificate request template.
+
+        Returns a dictionary with the following keys:
+            - 'dns_names': List of DNS/domain names.
+            - 'ipv4_addresses': List of IPv4 addresses.
+            - 'ipv6_addresses': List of IPv6 addresses.
+            - 'uris': List of URIs.
+            - 'san_critical': Boolean indicating if the SAN extension is critical.
+        """
+        if not cert_req_template['extensions'].hasValue():
+            exc_msg = 'No extensions found in the request template.'
+            raise ValueError(exc_msg)
+
+        san_extensions = [
+            extension
+            for extension in cert_req_template['extensions']
+            if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
+        ]
+        if len(san_extensions) != 1:
+            exc_msg = 'Exactly one SAN extension must be present in the request.'
+            raise ValueError(exc_msg)
+        san_extension = san_extensions[0]
+        san_critical = str(san_extension['critical']) == 'True'
+        san_extension_bytes = bytes(san_extension['extnValue'])
+        san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
+
+        dns_names = []
+        ipv4_addresses = []
+        ipv6_addresses = []
+        uris = []
+
+        for general_name in san_asn1:
+            name_type = general_name.getName()
+            value = general_name.getComponent()
+
+            if name_type == 'iPAddress':
+                try:
+                    ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
+                except (ValueError, TypeError):
+                    ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
+
+            elif name_type == 'dNSName':
+                dns_names.append(str(value))
+
+            elif name_type == 'uniformResourceIdentifier':
+                uris.append(str(value))
+
+        return {
+            'dns_names': dns_names,
+            'ipv4_addresses': ipv4_addresses,
+            'ipv6_addresses': ipv6_addresses,
+            'uris': uris,
+            'san_critical': san_critical,
+        }
+
 
 def check_header(serialized_pyasn1_message: rfc4210.PKIMessage) -> None:
     """Checks some parts of the header."""
@@ -426,48 +482,15 @@ class CmpInitializationRequestView(
                 common_name=common_name, validity_days=validity_in_days, public_key=public_key
             )
         if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_SERVER:
-            if not cert_req_template['extensions'].hasValue():
-                exc_msg = 'No extensions found in the request template.'
-                raise ValueError(exc_msg)
-
-            san_extensions = [
-                extension
-                for extension in cert_req_template['extensions']
-                if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-            ]
-            if len(san_extensions) != 1:
-                exc_msg = 'Exactly one SAN extension must be present in the request.'
-                raise ValueError(exc_msg)
-            san_extension = san_extensions[0]
-            san_critical = str(san_extension['critical']) == 'True'
-            san_extension_bytes = bytes(san_extension['extnValue'])
-            san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
-
-            dns_names = []
-            ipv4_addresses = []
-            ipv6_addresses = []
-
-            for general_name in san_asn1:
-                name_type = general_name.getName()
-                value = general_name.getComponent()
-
-                if name_type == 'iPAddress':
-                    try:
-                        ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
-                    except (ValueError, TypeError):
-                        ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
-
-                elif name_type == 'dNSName':
-                    dns_names.append(str(value))
-
+            san = self._parse_san_extension(cert_req_template)
             tls_server_issuer = LocalTlsServerCredentialIssuer(device=self.device, domain=self.device.domain)
             return tls_server_issuer.issue_tls_server_certificate(
                 common_name=common_name,
                 validity_days=validity_in_days,
-                ipv4_addresses=ipv4_addresses,
-                ipv6_addresses=ipv6_addresses,
-                san_critical=san_critical,
-                domain_names=dns_names,
+                ipv4_addresses=san['ipv4_addresses'],
+                ipv6_addresses=san['ipv6_addresses'],
+                san_critical=san['san_critical'],
+                domain_names=san['dns_names'],
                 public_key=public_key,
             )
 
@@ -871,7 +894,7 @@ class CmpCertificationRequestView(
     device: DeviceModel
     application_certificate_template: None | ApplicationCertificateTemplateNames = None
 
-    def _issue_application_credential(  # noqa: PLR0912, PLR0915, C901
+    def _issue_application_credential(
             self, cert_req_template: dict, public_key: PublicKey
     ) -> IssuedCredentialModel:
         """Issues an application certificate for CMP CR."""
@@ -890,142 +913,49 @@ class CmpCertificationRequestView(
             return issuer.issue_tls_client_certificate(
                 common_name=common_name, validity_days=validity_in_days, public_key=public_key
             )
+        # Below certificate templates require the SubjectAltName extension
+        san = self._parse_san_extension(cert_req_template)
         if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_SERVER:
-            if cert_req_template['extensions'].hasValue():
-                san_extensions = [
-                    extension
-                    for extension in cert_req_template['extensions']
-                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-                ]
-                if len(san_extensions) != 1:
-                    raise ValueError
-                san_extension = san_extensions[0]
-                san_critical = str(san_extension['critical']) == 'True'
-                san_extension_bytes = bytes(san_extension['extnValue'])
-                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
-
-                dns_names = []
-                ipv4_addresses = []
-                ipv6_addresses = []
-
-                for general_name in san_asn1:
-                    name_type = general_name.getName()
-                    value = general_name.getComponent()
-
-                    if name_type == 'iPAddress':
-                        try:
-                            ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
-                        except (ValueError, TypeError):
-                            ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
-
-                    elif name_type == 'dNSName':
-                        dns_names.append(str(value))
-            else:
-                raise ValueError
-
             tls_server_issuer = LocalTlsServerCredentialIssuer(device=self.device, domain=self.device.domain)
             return tls_server_issuer.issue_tls_server_certificate(
                 common_name=common_name,
                 validity_days=validity_in_days,
-                ipv4_addresses=ipv4_addresses,
-                ipv6_addresses=ipv6_addresses,
-                san_critical=san_critical,
-                domain_names=dns_names,
+                ipv4_addresses=san['ipv4_addresses'],
+                ipv6_addresses=san['ipv6_addresses'],
+                san_critical=san['san_critical'],
+                domain_names=san['dns_names'],
                 public_key=public_key,
             )
-        if self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_SERVER:
-            if cert_req_template['extensions'].hasValue():
-                san_extensions = [
-                    extension
-                    for extension in cert_req_template['extensions']
-                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-                ]
-                if len(san_extensions) != 1:
-                    err_msg = 'Invalid SAN extension count'
-                    raise ValueError(err_msg)
 
-                san_extension = san_extensions[0]
-                # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
-                san_extension_bytes = bytes(san_extension['extnValue'])
-                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
-
-                dns_names = []
-                ipv4_addresses = []
-                ipv6_addresses = []
-                application_uri = None
-
-                for general_name in san_asn1:
-                    name_type = general_name.getName()
-                    value = general_name.getComponent()
-
-                    if name_type == 'iPAddress':
-                        try:
-                            ipv4_addresses.append(ipaddress.IPv4Address(value.asOctets()))
-                        except (ValueError, TypeError):
-                            ipv6_addresses.append(ipaddress.IPv6Address(value.asOctets()))
-
-                    elif name_type == 'dNSName':
-                        dns_names.append(str(value))
-
-                    elif name_type == 'uniformResourceIdentifier':
-                        application_uri = str(value)
-
-                if not application_uri:
-                    err_msg = 'Missing OPC UA Application URI in SAN extension'
-                    raise ValueError(err_msg)
-
-            else:
-                err_msg = 'SAN extension is required for OPC UA Server Certificates'
+        # OPC UA
+        if (self.application_certificate_template in
+            [ApplicationCertificateTemplateNames.OPCUA_SERVER, ApplicationCertificateTemplateNames.OPCUA_CLIENT]):
+            application_uri = san['uris'][0] if san['uris'] else None
+            if not application_uri:
+                err_msg = 'Missing OPC UA Application URI in SAN extension'
                 raise ValueError(err_msg)
 
+        if self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_SERVER:
             opc_ua_server_cred_issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
             return opc_ua_server_cred_issuer.issue_opcua_server_certificate(
                 common_name=common_name,
                 application_uri=application_uri,
-                ipv4_addresses=ipv4_addresses,
-                ipv6_addresses=ipv6_addresses,
-                domain_names=dns_names,
+                ipv4_addresses=san['ipv4_addresses'],
+                ipv6_addresses=san['ipv6_addresses'],
+                # TODO (FHKatCSW): san_critical not supported in OpcUaServerCredentialIssuer    # noqa: FIX002
+                #san_critical=san['san_critical'],  # noqa: ERA001
+                domain_names=san['dns_names'],
                 validity_days=validity_in_days,
                 public_key=public_key,
             )
 
         if self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_CLIENT:
-            if cert_req_template['extensions'].hasValue():
-                san_extensions = [
-                    extension
-                    for extension in cert_req_template['extensions']
-                    if str(extension['extnID']) == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string
-                ]
-                if len(san_extensions) != 1:
-                    err_msg = 'Invalid SAN extension count'
-                    raise ValueError(err_msg)
-
-                san_extension = san_extensions[0]
-                # san_critical = str(san_extension['critical']) == 'True'   # noqa: ERA001
-                san_extension_bytes = bytes(san_extension['extnValue'])
-                san_asn1, _ = decoder.decode(san_extension_bytes, asn1Spec=rfc2459.SubjectAltName())
-
-                application_uri = None
-
-                for general_name in san_asn1:
-                    name_type = general_name.getName()
-                    value = general_name.getComponent()
-
-                    if name_type == 'uniformResourceIdentifier':
-                        application_uri = str(value)
-
-                if not application_uri:
-                    err_msg = 'Missing OPC UA Application URI in SAN extension'
-                    raise ValueError(err_msg)
-
-            else:
-                err_msg = 'SAN extension is required for OPC UA Client Certificates'
-                raise ValueError(err_msg)
-
             opc_ua_client_cred_issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
             return opc_ua_client_cred_issuer.issue_opcua_client_certificate(
                 common_name=common_name,
                 application_uri=application_uri,
+                # TODO (FHKatCSW): san_critical not supported in OpcUaClientCredentialIssuer    # noqa: FIX002
+                #san_critical=san['san_critical'],  # noqa: ERA001
                 validity_days=validity_in_days,
                 public_key=public_key,
             )
@@ -1099,19 +1029,9 @@ class CmpCertificationRequestView(
 
         cert_req_template = cert_req_msg['certTemplate']
 
-        # noinspection PyBroadException
-        try:
-            validity_not_before = convert_rfc2459_time(cert_req_template['validity']['notBefore'])
-            validity_not_after = convert_rfc2459_time(cert_req_template['validity']['notAfter'])
-            validity_in_days = (validity_not_after - validity_not_before).days
-        except Exception:  # noqa: BLE001
-            validity_in_days = DEFAULT_VALIDITY_DAYS
-
         if cert_req_template['version'].hasValue() and cert_req_template['version'] != CERT_TEMPLATE_VERSION:
             err_msg = 'Version must be 2 if supplied in certificate request.'
             raise ValueError(err_msg)
-
-        common_name = self._get_subject_common_name(cert_req_template)
 
         # only local key-gen supported currently -> public key must be present
         loaded_public_key = self._load_cert_req_public_key(cert_req_template)
