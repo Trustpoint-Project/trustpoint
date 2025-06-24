@@ -33,4 +33,9 @@ class PageContextMixin:
         if self.page_name is not None:
             context['page_name'] = self.page_name
 
+        # make these constants avaialable on all views, so that they can be used in the templates.
+        context['DEVICES_PAGE_CATEGORY'] = DEVICES_PAGE_CATEGORY
+        context['DEVICES_PAGE_DEVICES_SUBCATEGORY'] = DEVICES_PAGE_CATEGORY
+        context['DEVICES_PAGE_OPC_UA_SUBCATEGORY'] = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
         return context

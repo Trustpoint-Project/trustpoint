@@ -3,38 +3,42 @@
 from django.urls import path, re_path
 from help_pages import devices_help_views
 
+from trustpoint.page_context import DEVICES_PAGE_DEVICES_SUBCATEGORY, DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
 from . import views
 
 app_name = 'devices'
 
 urlpatterns = [
     # Main Pages
-    path('', views.DeviceTableView.as_view(), name='devices'),
+    path('', views.DeviceTableView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}'),
+    path('opc-ua-gds/', views.OpcUaGdsTableView.as_view(), name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}'),
 
-    path('details/<int:pk>/', views.DeviceDetailsView.as_view(), name='devices_details'),
-    path('create/', views.CreateDeviceView.as_view(), name='devices_create'),
+    # Details Views
+    path('details/<int:pk>/', views.DeviceDetailsView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_details'),
+    path(
+        'opc-ua-gds/details/<int:pk>/',
+        views.OpcUaDeviceDetailsView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_details'
+    ),
 
-    path('opc-ua-gds/details/<int:pk>/', views.OpcUaDeviceDetailsView.as_view(), name='opc_ua_gds_details'),
-    path('opc-ua-gds/create/', views.CreateOpcUaGdsView.as_view(), name='opc_ua_gds_create'),
+    # Create Views
+    path('create/', views.CreateDeviceView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create'),
+    path('opc-ua-gds/create/', views.CreateOpcUaGdsView.as_view(), name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_create'),
 
-    # Certificate Lifecycle Management
-
+    # Certificate Lifecycle Management Views
     path(
         'certificate-lifecycle-management/<int:pk>/',
         views.DeviceCertificateLifecycleManagementSummaryView.as_view(),
-        name='certificate_lifecycle_management',
-    ),
-    # OPC UA GDS
-    path(
-        'opc-ua-gds/',
-        views.OpcUaGdsTableView.as_view(),
-        name='opc_ua_gds',
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management',
     ),
     path(
-        'opc-ua-gds/add/',
-        views.CreateOpcUaGdsView.as_view(),
-        name='opc_ua_gds-add',
+        'opc-us-gds/certificate-lifecycle-management/<int:pk>/',
+        views.OpcUaGdsCertificateLifecycleManagementSummaryView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management'
     ),
+
+
     # Certificate Lifecycle Management - Credential Issuance
     path(
         'certificate-lifecycle-management/<int:pk>/issue-tls-client-credential/',

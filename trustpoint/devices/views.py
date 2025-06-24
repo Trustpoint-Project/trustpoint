@@ -127,6 +127,7 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
         for device in context['devices']:
             device.clm_button = self._get_clm_button_html(device)
             device.detail_button = self._get_details_button_html(device)
+        context['create_url'] = f'{self.page_category}:{self.page_name}_create'
         return context
 
     def get_ordering(self) -> str | Sequence[str] | None:
@@ -137,8 +138,8 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
         """
         return self.request.GET.getlist('sort', [self.default_sort_param])
 
-    @staticmethod
-    def _get_clm_button_html(record: DeviceModel) -> SafeString:
+    @classmethod
+    def _get_clm_button_html(cls, record: DeviceModel) -> SafeString:
         """Gets the HTML for the CLM button in the devices table.
 
         Args:
@@ -147,11 +148,12 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
         Returns:
             The HTML of the hyperlink for the CLM button.
         """
-        clm_url = reverse('devices:certificate_lifecycle_management', kwargs={'pk': record.pk})
+        clm_url = reverse(f'devices:{cls.page_name}_certificate_lifecycle_management', kwargs={'pk': record.pk})
 
         return format_html('<a href="{}" class="btn btn-primary tp-table-btn w-100">{}</a>', clm_url, _('Manage'))
 
-    def _get_details_button_html(self, record: DeviceModel) -> SafeString:
+    @classmethod
+    def _get_details_button_html(cls, record: DeviceModel) -> SafeString:
         """Gets the HTML for the Details button in the devices table.
 
         Args:
@@ -160,7 +162,7 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
         Returns:
             the HTML of the hyperlink for the detail button.
         """
-        details_url = reverse(f'devices:{self.page_name}_details', kwargs={'pk': record.pk})
+        details_url = reverse(f'devices:{cls.page_name}_details', kwargs={'pk': record.pk})
         return format_html('<a href="{}" class="btn btn-primary tp-table-btn w-100">{}</a>', details_url, _('Details'))
 
 class DeviceTableView(AbstractDeviceTableView):
@@ -204,11 +206,23 @@ class AbstractDeviceDetailsView(PageContextMixin, DetailView[DeviceModel], abc.A
     http_method_names = ('get',)
 
     model = DeviceModel
-    success_url = reverse_lazy('devices:devices')
     template_name = 'devices/details.html'
     context_object_name = 'device'
 
     page_category = DEVICES_PAGE_CATEGORY
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the cancel url href according to the subcategory.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the devices page.
+        """
+        context = super().get_context_data(**kwargs)
+        context['cancel_details_url'] = f'devices:{self.page_name}'
+        return context
 
 class DeviceDetailsView(AbstractDeviceDetailsView):
     """Details view for common devices."""
@@ -232,9 +246,22 @@ class AbstractCreateDeviceView[T: BaseModelForm[DeviceModel]](PageContextMixin, 
 
     model = DeviceModel
     form_class: type[T]
-    template_name = 'devices/add.html'
+    template_name = 'devices/create.html'
 
     page_category = DEVICES_PAGE_CATEGORY
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the cancel url href according to the subcategory.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the devices page.
+        """
+        context = super().get_context_data(**kwargs)
+        context['cancel_create_url'] = f'devices:{self.page_name}'
+        return context
 
     def get_success_url(self) -> str:
         """Gets the success url to redirect to after successful processing of the POST data following a form submit.
@@ -284,7 +311,7 @@ class CreateOpcUaGdsView(AbstractCreateDeviceView[CreateOpcUaGdsForm]):
 # ------------------------------------------ Certificate Lifecycle Management ------------------------------------------
 
 
-class DeviceCertificateLifecycleManagementSummaryView(PageContextMixin, DetailView[DeviceModel]):
+class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, DetailView[DeviceModel], abc.ABC):
     """This is the CLM summary view in the devices section."""
 
     http_method_names = ('get',)
@@ -297,6 +324,9 @@ class DeviceCertificateLifecycleManagementSummaryView(PageContextMixin, DetailVi
     issued_creds_qs: QuerySet[IssuedCredentialModel]
     domain_credentials_qs: QuerySet[IssuedCredentialModel]
     application_credentials_qs: QuerySet[IssuedCredentialModel]
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name: str
 
     def get_issued_creds_qs(self) -> QuerySet[IssuedCredentialModel]:
         """Gets a sorted queryset of all IssuedCredentialModels.
@@ -372,6 +402,9 @@ class DeviceCertificateLifecycleManagementSummaryView(PageContextMixin, DetailVi
             cred.expiration_date = cast('datetime.datetime', cred.credential.certificate.not_valid_after)
             cred.revoke = self._get_revoke_button_html(cred)
 
+        context['details_url'] = f'devices:{self.page_name}_details'
+        context['main_url'] = f'devices:{self.page_name}'
+
         return context
 
     @staticmethod
@@ -401,12 +434,24 @@ class DeviceCertificateLifecycleManagementSummaryView(PageContextMixin, DetailVi
             record: The corresponding DeviceModel.
 
         Returns:
-            the HTML of the hyperlink for the revoke button.
+            The HTML of the hyperlink for the revoke button.
         """
         if record.credential.certificate.certificate_status == CertificateModel.CertificateStatus.REVOKED:
             return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', _('Revoked'))
         url = reverse('devices:credential_revocation', kwargs={'pk': record.pk})
         return format_html('<a href="{}" class="btn btn-danger tp-table-btn w-100">{}</a>', url, _('Revoke'))
+
+
+class DeviceCertificateLifecycleManagementSummaryView(AbstractCertificateLifecycleManagementSummaryView):
+    """Certificate Lifecycle Management Summary View for devices."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class OpcUaGdsCertificateLifecycleManagementSummaryView(AbstractCertificateLifecycleManagementSummaryView):
+    """Certificate Lifecycle Management Summary View for OPC UA Devcies."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 #  ------------------------------ Certificate Lifecycle Management - Credential Issuance -------------------------------
