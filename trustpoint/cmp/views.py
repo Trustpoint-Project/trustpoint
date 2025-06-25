@@ -313,6 +313,48 @@ def check_header(serialized_pyasn1_message: rfc4210.PKIMessage) -> None:
         raise ValueError(err_msg)
 
 
+class CmpResponseBuilderMixin:
+    """Mixin for CMP response message building shared between request types."""
+
+    def _build_response_message_header(self, sender_kid: rfc2459.KeyIdentifier) -> rfc4210.PKIHeader:
+        """Builds the PKI response message header for the IP and CP response messages."""
+        header = rfc4210.PKIHeader()
+
+        header['pvno'] = CMP_MESSAGE_VERSION
+
+        issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
+        raw_issuing_ca_subject = issuing_ca_cert.subject.public_bytes()
+        name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
+        sender = rfc2459.GeneralName()
+        sender['directoryName'][0] = name
+        header['sender'] = sender
+
+        header['recipient'] = self.serialized_pyasn1_message['header']['sender']
+
+        current_time = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d%H%M%SZ')
+        header['messageTime'] = useful.GeneralizedTime(current_time).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
+        )
+
+        header['protectionAlg'] = self.serialized_pyasn1_message['header']['protectionAlg']
+
+        header['senderKID'] = sender_kid
+
+        header['transactionID'] = self.serialized_pyasn1_message['header']['transactionID']
+
+        header['senderNonce'] = univ.OctetString(secrets.token_bytes(SENDER_NONCE_LENGTH)).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 5)
+        )
+
+        header['recipNonce'] = univ.OctetString(self.serialized_pyasn1_message['header']['senderNonce']).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 6)
+        )
+
+        header['generalInfo'] = self.serialized_pyasn1_message['header']['generalInfo']
+
+        return header
+
+
 def get_encoded_protected_part(cmp_message: rfc4210.PKIMessage) -> bytes:
     """Encode the protected part of the CMP message."""
     protected_part = rfc4210.ProtectedPart()
@@ -323,7 +365,12 @@ def get_encoded_protected_part(cmp_message: rfc4210.PKIMessage) -> bytes:
 
 @method_decorator(csrf_exempt, name='dispatch')
 class CmpInitializationRequestView(
-    CmpHttpMixin, CmpRequestedDomainExtractorMixin, CmpPkiMessageSerializerMixin, CmpRequestTemplateExtractorMixin, View
+    CmpHttpMixin,
+    CmpRequestedDomainExtractorMixin,
+    CmpPkiMessageSerializerMixin,
+    CmpRequestTemplateExtractorMixin,
+    CmpResponseBuilderMixin,
+    View
 ):
     """Handles CMP Initialization Request Messages."""
 
@@ -498,48 +545,10 @@ class CmpInitializationRequestView(
         raise ValueError(exc_msg)
 
 
-    def _build_ip_header(self, sender_kid: rfc2459.KeyIdentifier) -> rfc4210.PKIHeader:
-        """Builds the IP header for the IP response message."""
-        ip_header = rfc4210.PKIHeader()
-
-        ip_header['pvno'] = CMP_MESSAGE_VERSION
-
-        issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
-        raw_issuing_ca_subject = issuing_ca_cert.subject.public_bytes()
-        name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
-        sender = rfc2459.GeneralName()
-        sender['directoryName'][0] = name
-        ip_header['sender'] = sender
-
-        ip_header['recipient'] = self.serialized_pyasn1_message['header']['sender']
-
-        current_time = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d%H%M%SZ')
-        ip_header['messageTime'] = useful.GeneralizedTime(current_time).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
-        )
-
-        ip_header['protectionAlg'] = self.serialized_pyasn1_message['header']['protectionAlg']
-
-        ip_header['senderKID'] = sender_kid
-
-        ip_header['transactionID'] = self.serialized_pyasn1_message['header']['transactionID']
-
-        ip_header['senderNonce'] = univ.OctetString(secrets.token_bytes(SENDER_NONCE_LENGTH)).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 5)
-        )
-
-        ip_header['recipNonce'] = univ.OctetString(self.serialized_pyasn1_message['header']['senderNonce']).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 6)
-        )
-
-        ip_header['generalInfo'] = self.serialized_pyasn1_message['header']['generalInfo']
-
-        return ip_header
-
     def _build_base_ip_message(
             self, issued_cred: IssuedCredentialModel, sender_kid: rfc2459.KeyIdentifier) -> rfc4210.PKIMessage:
         """Builds the IP response message (without the protection)."""
-        ip_header = self._build_ip_header(sender_kid=sender_kid)
+        ip_header = self._build_response_message_header(sender_kid=sender_kid)
 
         ip_extra_certs = univ.SequenceOf()
 
@@ -882,7 +891,12 @@ class CmpInitializationRequestView(
 
 @method_decorator(csrf_exempt, name='dispatch')
 class CmpCertificationRequestView(
-    CmpHttpMixin, CmpRequestedDomainExtractorMixin, CmpPkiMessageSerializerMixin, CmpRequestTemplateExtractorMixin, View
+    CmpHttpMixin,
+    CmpRequestedDomainExtractorMixin,
+    CmpPkiMessageSerializerMixin,
+    CmpRequestTemplateExtractorMixin,
+    CmpResponseBuilderMixin,
+    View
 ):
     """Handles CMP Certification Request Messages."""
 
@@ -962,6 +976,66 @@ class CmpCertificationRequestView(
 
         exc_msg = f'The app cert template {self.application_certificate_template} is not supported.'
         raise ValueError(exc_msg)
+
+
+    def _build_base_cp_message(
+            self, issued_cred: IssuedCredentialModel, sender_kid: rfc2459.KeyIdentifier
+    ) -> rfc4210.PKIMessage:
+        """Builds the CR response message (without the protection)."""
+        cp_header = self._build_response_message_header(sender_kid=sender_kid)
+
+        cp_extra_certs = univ.SequenceOf()
+
+        certificate_chain = [
+            self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate(),
+            *self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate_chain(),
+        ]
+        for certificate in certificate_chain:
+            der_bytes = certificate.public_bytes(encoding=Encoding.DER)
+            asn1_certificate, _ = decoder.decode(der_bytes, asn1Spec=rfc4210.CMPCertificate())
+            cp_extra_certs.append(asn1_certificate)
+
+        cp_body = rfc4210.PKIBody()
+        cp_body['cp'] = rfc4210.CertRepMessage().subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 3)
+        )
+        cp_body['cp']['caPubs'] = univ.SequenceOf().subtype(
+            sizeSpec=rfc4210.constraint.ValueSizeConstraint(1, rfc4210.MAX),
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 1),
+        )
+        # TODO(AlexHx8472): Add TLS Server Certificate Root CA  # noqa: FIX002
+
+        cert_response = rfc4210.CertResponse()
+        cert_response['certReqId'] = 0
+
+        pki_status_info = rfc4210.PKIStatusInfo()
+        pki_status_info['status'] = 0
+        cert_response['status'] = pki_status_info
+
+        cmp_cert = rfc4210.CMPCertificate().subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 0)
+        )
+
+        encoded_cert = issued_cred.credential.get_certificate().public_bytes(encoding=Encoding.DER)
+        der_cert, _ = decoder.decode(encoded_cert, asn1Spec=rfc4210.CMPCertificate())
+        cmp_cert.setComponentByName('tbsCertificate', der_cert['tbsCertificate'])
+        cmp_cert.setComponentByName('signatureValue', der_cert['signatureValue'])
+        cmp_cert.setComponentByName('signatureAlgorithm', der_cert['signatureAlgorithm'])
+        cert_or_enc_cert = rfc4210.CertOrEncCert()
+        cert_or_enc_cert['certificate'] = cmp_cert
+
+        cert_response['certifiedKeyPair']['certOrEncCert'] = cert_or_enc_cert
+
+        cp_body['cp']['response'].append(cert_response)
+
+        cp_message = rfc4210.PKIMessage()
+        cp_message['header'] = cp_header
+        cp_message['body'] = cp_body
+        for extra_cert in cp_extra_certs:
+            cp_message['extraCerts'].append(extra_cert)
+
+        return cp_message
+
 
     def _handle_shared_secret_cr(self) -> HttpResponse:  # noqa: C901, PLR0912, PLR0915
         """Handles CMP CR for application certificates with shared secret protection."""
@@ -1091,89 +1165,10 @@ class CmpCertificationRequestView(
             cert_req_template=cert_req_template, public_key=loaded_public_key
         )
 
-        cp_header = rfc4210.PKIHeader()
-
-        cp_header['pvno'] = CMP_MESSAGE_VERSION
-
-        issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
-        raw_issuing_ca_subject = issuing_ca_cert.subject.public_bytes()
-        name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
-        sender = rfc2459.GeneralName()
-        sender['directoryName'][0] = name
-        cp_header['sender'] = sender
-
-        cp_header['recipient'] = self.serialized_pyasn1_message['header']['sender']
-
-        current_time = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d%H%M%SZ')
-        cp_header['messageTime'] = useful.GeneralizedTime(current_time).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
+        cp_message = self._build_base_cp_message(
+            issued_cred=issued_app_cred,
+            sender_kid=self.serialized_pyasn1_message['header']['senderKID']
         )
-
-        cp_header['protectionAlg'] = self.serialized_pyasn1_message['header']['protectionAlg']
-
-        cp_header['senderKID'] = self.serialized_pyasn1_message['header']['senderKID']
-
-        cp_header['transactionID'] = self.serialized_pyasn1_message['header']['transactionID']
-
-        cp_header['senderNonce'] = univ.OctetString(secrets.token_bytes(SENDER_NONCE_LENGTH)).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 5)
-        )
-
-        cp_header['recipNonce'] = univ.OctetString(self.serialized_pyasn1_message['header']['senderNonce']).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 6)
-        )
-
-        cp_header['generalInfo'] = self.serialized_pyasn1_message['header']['generalInfo']
-
-        cp_extra_certs = univ.SequenceOf()
-
-        certificate_chain = [
-            self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate(),
-            *self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate_chain(),
-        ]
-        for certificate in certificate_chain:
-            der_bytes = certificate.public_bytes(encoding=Encoding.DER)
-            asn1_certificate, _ = decoder.decode(der_bytes, asn1Spec=rfc4210.CMPCertificate())
-            cp_extra_certs.append(asn1_certificate)
-
-        cp_body = rfc4210.PKIBody()
-        cp_body['cp'] = rfc4210.CertRepMessage().subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 3)
-        )
-        cp_body['cp']['caPubs'] = univ.SequenceOf().subtype(
-            sizeSpec=rfc4210.constraint.ValueSizeConstraint(1, rfc4210.MAX),
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 1),
-        )
-        # TODO(AlexHx8472): Add TLS Server Certificate Root CA  # noqa: FIX002
-
-        cert_response = rfc4210.CertResponse()
-        cert_response['certReqId'] = 0
-
-        pki_status_info = rfc4210.PKIStatusInfo()
-        pki_status_info['status'] = 0
-        cert_response['status'] = pki_status_info
-
-        cmp_cert = rfc4210.CMPCertificate().subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 0)
-        )
-
-        encoded_cert = issued_app_cred.credential.get_certificate().public_bytes(encoding=Encoding.DER)
-        der_cert, _ = decoder.decode(encoded_cert, asn1Spec=rfc4210.CMPCertificate())
-        cmp_cert.setComponentByName('tbsCertificate', der_cert['tbsCertificate'])
-        cmp_cert.setComponentByName('signatureValue', der_cert['signatureValue'])
-        cmp_cert.setComponentByName('signatureAlgorithm', der_cert['signatureAlgorithm'])
-        cert_or_enc_cert = rfc4210.CertOrEncCert()
-        cert_or_enc_cert['certificate'] = cmp_cert
-
-        cert_response['certifiedKeyPair']['certOrEncCert'] = cert_or_enc_cert
-
-        cp_body['cp']['response'].append(cert_response)
-
-        cp_message = rfc4210.PKIMessage()
-        cp_message['header'] = cp_header
-        cp_message['body'] = cp_body
-        for extra_cert in cp_extra_certs:
-            cp_message['extraCerts'].append(extra_cert)
 
         # TODO(AlexHx8472): Use fresh salt! # noqa: FIX002
         encoded_protected_part = get_encoded_protected_part(cp_message)
@@ -1358,92 +1353,15 @@ class CmpCertificationRequestView(
             cert_req_template=cert_req_template, public_key=loaded_public_key
         )
 
-        cp_header = rfc4210.PKIHeader()
-
-        cp_header['pvno'] = CMP_MESSAGE_VERSION
-
         issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
-        raw_issuing_ca_subject = issuing_ca_cert.subject.public_bytes()
-        name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
-        sender = rfc2459.GeneralName()
-        sender['directoryName'][0] = name
-        cp_header['sender'] = sender
-
-        cp_header['recipient'] = self.serialized_pyasn1_message['header']['sender']
-
-        current_time = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d%H%M%SZ')
-        cp_header['messageTime'] = useful.GeneralizedTime(current_time).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
-        )
-
-        cp_header['protectionAlg'] = self.serialized_pyasn1_message['header']['protectionAlg']
-
         ski = x509.SubjectKeyIdentifier.from_public_key(issuing_ca_cert.public_key())
-        cp_header['senderKID'] = rfc2459.KeyIdentifier(ski.digest).subtype(
+        sender_kid = rfc2459.KeyIdentifier(ski.digest).subtype(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2)
         )
-
-        cp_header['transactionID'] = self.serialized_pyasn1_message['header']['transactionID']
-
-        cp_header['senderNonce'] = univ.OctetString(secrets.token_bytes(SENDER_NONCE_LENGTH)).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 5)
+        cp_message = self._build_base_cp_message(
+            issued_cred=issued_app_cred,
+            sender_kid=sender_kid
         )
-
-        cp_header['recipNonce'] = univ.OctetString(self.serialized_pyasn1_message['header']['senderNonce']).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 6)
-        )
-
-        cp_header['generalInfo'] = self.serialized_pyasn1_message['header']['generalInfo']
-
-        cp_extra_certs = univ.SequenceOf()
-
-        certificate_chain = [
-            self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate(),
-            *self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate_chain(),
-        ]
-        for certificate in certificate_chain:
-            der_bytes = certificate.public_bytes(encoding=Encoding.DER)
-            asn1_certificate, _ = decoder.decode(der_bytes, asn1Spec=rfc4210.CMPCertificate())
-            cp_extra_certs.append(asn1_certificate)
-
-        cp_body = rfc4210.PKIBody()
-        cp_body['cp'] = rfc4210.CertRepMessage().subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 3)
-        )
-        cp_body['cp']['caPubs'] = univ.SequenceOf().subtype(
-            sizeSpec=rfc4210.constraint.ValueSizeConstraint(1, rfc4210.MAX),
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 1),
-        )
-        # TODO(AlexHx8472): Add TLS Server Certificate Root CA      # noqa: FIX002
-
-        cert_response = rfc4210.CertResponse()
-        cert_response['certReqId'] = 0
-
-        pki_status_info = rfc4210.PKIStatusInfo()
-        pki_status_info['status'] = 0
-        cert_response['status'] = pki_status_info
-
-        cmp_cert = rfc4210.CMPCertificate().subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 0)
-        )
-
-        encoded_cert = issued_app_cred.credential.get_certificate().public_bytes(encoding=Encoding.DER)
-        der_cert, _ = decoder.decode(encoded_cert, asn1Spec=rfc4210.CMPCertificate())
-        cmp_cert.setComponentByName('tbsCertificate', der_cert['tbsCertificate'])
-        cmp_cert.setComponentByName('signatureValue', der_cert['signatureValue'])
-        cmp_cert.setComponentByName('signatureAlgorithm', der_cert['signatureAlgorithm'])
-        cert_or_enc_cert = rfc4210.CertOrEncCert()
-        cert_or_enc_cert['certificate'] = cmp_cert
-
-        cert_response['certifiedKeyPair']['certOrEncCert'] = cert_or_enc_cert
-
-        cp_body['cp']['response'].append(cert_response)
-
-        cp_message = rfc4210.PKIMessage()
-        cp_message['header'] = cp_header
-        cp_message['body'] = cp_body
-        for extra_cert in cp_extra_certs:
-            cp_message['extraCerts'].append(extra_cert)
 
         encoded_protected_part = get_encoded_protected_part(cp_message)
 
