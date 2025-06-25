@@ -194,6 +194,26 @@ class CmpRequestTemplateExtractorMixin:
 
         return parent.dispatch(request, *args, **kwargs)
 
+    def _extract_cert_req_template(self, pki_body: dict) -> dict:
+        """Extracts the certificate request template from the PKI (IR/CR) message body."""
+        cert_req_msg = pki_body[0]['certReq']
+
+        if cert_req_msg['certReqId'] != 0:
+            err_msg = 'certReqId must be 0.'
+            raise ValueError(err_msg)
+
+        if not cert_req_msg['certTemplate'].hasValue():
+            err_msg = 'certTemplate must be contained in IR/CR CertReqMessage.'
+            raise ValueError(err_msg)
+
+        cert_req_template = cert_req_msg['certTemplate']
+
+        if cert_req_template['version'].hasValue() and cert_req_template['version'] != CERT_TEMPLATE_VERSION:
+            err_msg = 'Version must be 2 if supplied in certificate request.'
+            raise ValueError(err_msg)
+
+        return cert_req_template
+
     def _get_subject_common_name(self, cert_req_template: dict) -> str:
         """Extracts the common name from the subject in the certificate request template."""
         if not cert_req_template['subject'].isValue:
@@ -229,6 +249,40 @@ class CmpRequestTemplateExtractorMixin:
         spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
         spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
         return load_supported_public_key_type(encoder.encode(spki))
+
+
+def check_header(serialized_pyasn1_message: rfc4210.PKIMessage) -> None:
+    """Checks some parts of the header."""
+    if serialized_pyasn1_message['header']['pvno'] != CMP_MESSAGE_VERSION:
+        err_msg = 'pvno fail'
+        raise ValueError(err_msg)
+
+    transaction_id = serialized_pyasn1_message['header']['transactionID'].asOctets()
+    if len(transaction_id) != TRANSACTION_ID_LENGTH:
+        err_msg = 'transactionID fail'
+        raise ValueError(err_msg)
+
+    sender_nonce = serialized_pyasn1_message['header']['senderNonce'].asOctets()
+    if len(sender_nonce) != SENDER_NONCE_LENGTH:
+        err_msg = 'senderNonce fail'
+        raise ValueError(err_msg)
+
+    implicit_confirm_entry = None
+    for entry in serialized_pyasn1_message['header']['generalInfo']:
+        if entry['infoType'].prettyPrint() == IMPLICIT_CONFIRM_OID:
+            implicit_confirm_entry = entry
+            break
+    if implicit_confirm_entry is None:
+        err_msg = 'implicit confirm missing'
+        raise ValueError(err_msg)
+
+    if implicit_confirm_entry['infoValue'].prettyPrint() != IMPLICIT_CONFIRM_STR_VALUE:
+        err_msg = 'implicit confirm entry fail'
+        raise ValueError(err_msg)
+
+
+class CmpResponseBuilderMixin:
+    """Mixin for CMP response message building shared between request types."""
 
     def _parse_san_extension(self, cert_req_template: dict) -> dict:
         """Parses the (mandatory) SAN extension from the certificate request template.
@@ -286,35 +340,74 @@ class CmpRequestTemplateExtractorMixin:
             'san_critical': san_critical,
         }
 
+    def _issue_application_credential(
+            self, cert_req_template: dict, public_key: PublicKey
+    ) -> IssuedCredentialModel:
+        """Issues an application certificate for CMP CR."""
+        common_name = self._get_subject_common_name(cert_req_template)
 
-def check_header(serialized_pyasn1_message: rfc4210.PKIMessage) -> None:
-    """Checks some parts of the header."""
-    transaction_id = serialized_pyasn1_message['header']['transactionID'].asOctets()
-    if len(transaction_id) != TRANSACTION_ID_LENGTH:
-        err_msg = 'transactionID fail'
-        raise ValueError(err_msg)
+        # noinspection PyBroadException
+        try:
+            validity_not_before = convert_rfc2459_time(cert_req_template['validity']['notBefore'])
+            validity_not_after = convert_rfc2459_time(cert_req_template['validity']['notAfter'])
+            validity_in_days = (validity_not_after - validity_not_before).days
+        except Exception:  # noqa: BLE001
+            validity_in_days = DEFAULT_VALIDITY_DAYS
 
-    sender_nonce = serialized_pyasn1_message['header']['senderNonce'].asOctets()
-    if len(sender_nonce) != SENDER_NONCE_LENGTH:
-        err_msg = 'senderNonce fail'
-        raise ValueError(err_msg)
+        if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_CLIENT:
+            issuer = LocalTlsClientCredentialIssuer(device=self.device, domain=self.device.domain)
+            return issuer.issue_tls_client_certificate(
+                common_name=common_name, validity_days=validity_in_days, public_key=public_key
+            )
+        # Below certificate templates require the SubjectAltName extension
+        san = self._parse_san_extension(cert_req_template)
+        if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_SERVER:
+            tls_server_issuer = LocalTlsServerCredentialIssuer(device=self.device, domain=self.device.domain)
+            return tls_server_issuer.issue_tls_server_certificate(
+                common_name=common_name,
+                validity_days=validity_in_days,
+                ipv4_addresses=san['ipv4_addresses'],
+                ipv6_addresses=san['ipv6_addresses'],
+                san_critical=san['san_critical'],
+                domain_names=san['dns_names'],
+                public_key=public_key,
+            )
 
-    implicit_confirm_entry = None
-    for entry in serialized_pyasn1_message['header']['generalInfo']:
-        if entry['infoType'].prettyPrint() == IMPLICIT_CONFIRM_OID:
-            implicit_confirm_entry = entry
-            break
-    if implicit_confirm_entry is None:
-        err_msg = 'implicit confirm missing'
-        raise ValueError(err_msg)
+        # OPC UA
+        if (self.application_certificate_template in
+            [ApplicationCertificateTemplateNames.OPCUA_SERVER, ApplicationCertificateTemplateNames.OPCUA_CLIENT]):
+            application_uri = san['uris'][0] if san['uris'] else None
+            if not application_uri:
+                err_msg = 'Missing OPC UA Application URI in SAN extension'
+                raise ValueError(err_msg)
 
-    if implicit_confirm_entry['infoValue'].prettyPrint() != IMPLICIT_CONFIRM_STR_VALUE:
-        err_msg = 'implicit confirm entry fail'
-        raise ValueError(err_msg)
+        if self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_SERVER:
+            opc_ua_server_cred_issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
+            return opc_ua_server_cred_issuer.issue_opcua_server_certificate(
+                common_name=common_name,
+                application_uri=application_uri,
+                ipv4_addresses=san['ipv4_addresses'],
+                ipv6_addresses=san['ipv6_addresses'],
+                # TODO (FHKatCSW): san_critical not supported in OpcUaServerCredentialIssuer    # noqa: FIX002
+                #san_critical=san['san_critical'],  # noqa: ERA001
+                domain_names=san['dns_names'],
+                validity_days=validity_in_days,
+                public_key=public_key,
+            )
 
+        if self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_CLIENT:
+            opc_ua_client_cred_issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
+            return opc_ua_client_cred_issuer.issue_opcua_client_certificate(
+                common_name=common_name,
+                application_uri=application_uri,
+                # TODO (FHKatCSW): san_critical not supported in OpcUaClientCredentialIssuer    # noqa: FIX002
+                #san_critical=san['san_critical'],  # noqa: ERA001
+                validity_days=validity_in_days,
+                public_key=public_key,
+            )
 
-class CmpResponseBuilderMixin:
-    """Mixin for CMP response message building shared between request types."""
+        exc_msg = f'The app cert template {self.application_certificate_template} is not supported.'
+        raise ValueError(exc_msg)
 
     def _build_response_message_header(self, sender_kid: rfc2459.KeyIdentifier) -> rfc4210.PKIHeader:
         """Builds the PKI response message header for the IP and CP response messages."""
@@ -471,8 +564,6 @@ class CmpInitializationRequestView(
                 f'Expected CMP IR body, but got CMP {message_body_name.upper()} body.', status=450
             )
 
-        check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
-
         # ignore extra certs
 
         if self.serialized_pyasn1_message['body'].getName() != 'ir':
@@ -489,60 +580,6 @@ class CmpInitializationRequestView(
             raise ValueError(err_msg)
 
         return ir_body
-
-    def _extract_cert_req_template(self, ir_body: dict) -> dict:
-        cert_req_msg = ir_body[0]['certReq']
-
-        if cert_req_msg['certReqId'] != 0:
-            err_msg = 'certReqId must be 0.'
-            raise ValueError(err_msg)
-
-        if not cert_req_msg['certTemplate'].hasValue():
-            err_msg = 'certTemplate must be contained in IR CertReqMessage.'
-            raise ValueError(err_msg)
-
-        cert_req_template = cert_req_msg['certTemplate']
-
-        if cert_req_template['version'].hasValue() and cert_req_template['version'] != CERT_TEMPLATE_VERSION:
-            err_msg = 'Version must be 2 if supplied in certificate request.'
-            raise ValueError(err_msg)
-
-        return cert_req_template
-
-    def _issue_application_credential(
-            self, cert_req_template: dict, public_key: PublicKey
-    ) -> IssuedCredentialModel:
-        """Issues an application certificate for CMP IR."""
-        common_name = self._get_subject_common_name(cert_req_template)
-
-        # noinspection PyBroadException
-        try:
-            validity_not_before = convert_rfc2459_time(cert_req_template['validity']['notBefore'])
-            validity_not_after = convert_rfc2459_time(cert_req_template['validity']['notAfter'])
-            validity_in_days = (validity_not_after - validity_not_before).days
-        except Exception:  # noqa: BLE001
-            validity_in_days = DEFAULT_VALIDITY_DAYS
-
-        if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_CLIENT:
-            issuer = LocalTlsClientCredentialIssuer(device=self.device, domain=self.device.domain)
-            return issuer.issue_tls_client_certificate(
-                common_name=common_name, validity_days=validity_in_days, public_key=public_key
-            )
-        if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_SERVER:
-            san = self._parse_san_extension(cert_req_template)
-            tls_server_issuer = LocalTlsServerCredentialIssuer(device=self.device, domain=self.device.domain)
-            return tls_server_issuer.issue_tls_server_certificate(
-                common_name=common_name,
-                validity_days=validity_in_days,
-                ipv4_addresses=san['ipv4_addresses'],
-                ipv6_addresses=san['ipv6_addresses'],
-                san_critical=san['san_critical'],
-                domain_names=san['dns_names'],
-                public_key=public_key,
-            )
-
-        exc_msg = f'The app cert template {self.application_certificate_template} is not supported.'
-        raise ValueError(exc_msg)
 
 
     def _build_base_ip_message(
@@ -849,9 +886,7 @@ class CmpInitializationRequestView(
     ) -> HttpResponse:
         """Handles the POST requests to the CMP IR endpoint."""
         del args, kwargs, request  # request not accessed directly
-        if self.serialized_pyasn1_message['header']['pvno'] != CMP_MESSAGE_VERSION:
-            err_msg = 'pvno fail'
-            raise ValueError(err_msg)
+        check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
 
         protection_algorithm = AlgorithmIdentifier.from_dotted_string(
             self.serialized_pyasn1_message['header']['protectionAlg']['algorithm'].prettyPrint()
@@ -908,74 +943,25 @@ class CmpCertificationRequestView(
     device: DeviceModel
     application_certificate_template: None | ApplicationCertificateTemplateNames = None
 
-    def _issue_application_credential(
-            self, cert_req_template: dict, public_key: PublicKey
-    ) -> IssuedCredentialModel:
-        """Issues an application certificate for CMP CR."""
-        common_name = self._get_subject_common_name(cert_req_template)
+    def _extract_cr_body(self) -> dict:
+        message_body_name = self.serialized_pyasn1_message['body'].getName()
+        if message_body_name != 'cr':
+            return HttpResponse(f'Expected CMP CR body, but got CMP {message_body_name.upper()} body.', status=450)
 
-        # noinspection PyBroadException
-        try:
-            validity_not_before = convert_rfc2459_time(cert_req_template['validity']['notBefore'])
-            validity_not_after = convert_rfc2459_time(cert_req_template['validity']['notAfter'])
-            validity_in_days = (validity_not_after - validity_not_before).days
-        except Exception:  # noqa: BLE001
-            validity_in_days = DEFAULT_VALIDITY_DAYS
+        if self.serialized_pyasn1_message['body'].getName() != 'cr':
+            err_msg = 'not cr message'
+            raise ValueError(err_msg)
 
-        if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_CLIENT:
-            issuer = LocalTlsClientCredentialIssuer(device=self.device, domain=self.device.domain)
-            return issuer.issue_tls_client_certificate(
-                common_name=common_name, validity_days=validity_in_days, public_key=public_key
-            )
-        # Below certificate templates require the SubjectAltName extension
-        san = self._parse_san_extension(cert_req_template)
-        if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_SERVER:
-            tls_server_issuer = LocalTlsServerCredentialIssuer(device=self.device, domain=self.device.domain)
-            return tls_server_issuer.issue_tls_server_certificate(
-                common_name=common_name,
-                validity_days=validity_in_days,
-                ipv4_addresses=san['ipv4_addresses'],
-                ipv6_addresses=san['ipv6_addresses'],
-                san_critical=san['san_critical'],
-                domain_names=san['dns_names'],
-                public_key=public_key,
-            )
+        cr_body = self.serialized_pyasn1_message['body']['cr']
+        if len(cr_body) > 1:
+            err_msg = 'multiple CertReqMessages found for CR.'
+            raise ValueError(err_msg)
 
-        # OPC UA
-        if (self.application_certificate_template in
-            [ApplicationCertificateTemplateNames.OPCUA_SERVER, ApplicationCertificateTemplateNames.OPCUA_CLIENT]):
-            application_uri = san['uris'][0] if san['uris'] else None
-            if not application_uri:
-                err_msg = 'Missing OPC UA Application URI in SAN extension'
-                raise ValueError(err_msg)
+        if len(cr_body) < 1:
+            err_msg = 'no CertReqMessages found for CR.'
+            raise ValueError(err_msg)
 
-        if self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_SERVER:
-            opc_ua_server_cred_issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
-            return opc_ua_server_cred_issuer.issue_opcua_server_certificate(
-                common_name=common_name,
-                application_uri=application_uri,
-                ipv4_addresses=san['ipv4_addresses'],
-                ipv6_addresses=san['ipv6_addresses'],
-                # TODO (FHKatCSW): san_critical not supported in OpcUaServerCredentialIssuer    # noqa: FIX002
-                #san_critical=san['san_critical'],  # noqa: ERA001
-                domain_names=san['dns_names'],
-                validity_days=validity_in_days,
-                public_key=public_key,
-            )
-
-        if self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_CLIENT:
-            opc_ua_client_cred_issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
-            return opc_ua_client_cred_issuer.issue_opcua_client_certificate(
-                common_name=common_name,
-                application_uri=application_uri,
-                # TODO (FHKatCSW): san_critical not supported in OpcUaClientCredentialIssuer    # noqa: FIX002
-                #san_critical=san['san_critical'],  # noqa: ERA001
-                validity_days=validity_in_days,
-                public_key=public_key,
-            )
-
-        exc_msg = f'The app cert template {self.application_certificate_template} is not supported.'
-        raise ValueError(exc_msg)
+        return cr_body
 
 
     def _build_base_cp_message(
@@ -1037,7 +1023,7 @@ class CmpCertificationRequestView(
         return cp_message
 
 
-    def _handle_shared_secret_cr(self) -> HttpResponse:  # noqa: C901, PLR0912, PLR0915
+    def _handle_shared_secret_certificate_request(self) -> HttpResponse:  # noqa: C901, PLR0915
         """Handles CMP CR for application certificates with shared secret protection."""
         if not self.application_certificate_template:
                 return HttpResponse('Missing application certificate template.', status=404)
@@ -1056,56 +1042,26 @@ class CmpCertificationRequestView(
                 'Password based MAC protected CMP messages while using CMP '
                 'CR message types are not allowed for onboarded devices. '
                 'Use signature based protection utilizing the domain credential',
-                status=404,
+                status=422,
             )
 
         if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_SHARED_SECRET:
             return HttpResponse(
                 'Received a password based MAC protected CMP message for a device that does not use the '
                 f'pki-protocol {DeviceModel.PkiProtocol.CMP_SHARED_SECRET.label}, but instead uses'
-                f'{self.device.get_pki_protocol_display()}.'
+                f'{self.device.get_pki_protocol_display()}.',
+                status=422,
             )
 
         if self.device.domain != self.requested_domain:
             exc_msg = 'The device domain does not match the requested domain.'
             raise ValueError(exc_msg)
 
-        message_body_name = self.serialized_pyasn1_message['body'].getName()
-        if message_body_name != 'cr':
-            return HttpResponse(f'Expected CMP CR body, but got CMP {message_body_name.upper()} body.', status=450)
+        cr_body = self._extract_cr_body()
 
-        check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
+        cert_req_template = self._extract_cert_req_template(cr_body)
 
         protection_value = self.serialized_pyasn1_message['protection'].asOctets()
-
-        if self.serialized_pyasn1_message['body'].getName() != 'cr':
-            err_msg = 'not cr message'
-            raise ValueError(err_msg)
-
-        cr_body = self.serialized_pyasn1_message['body']['cr']
-        if len(cr_body) > 1:
-            err_msg = 'multiple CertReqMessages found for CR.'
-            raise ValueError(err_msg)
-
-        if len(cr_body) < 1:
-            err_msg = 'no CertReqMessages found for CR.'
-            raise ValueError(err_msg)
-
-        cert_req_msg = cr_body[0]['certReq']
-
-        if cert_req_msg['certReqId'] != 0:
-            err_msg = 'certReqId must be 0.'
-            raise ValueError(err_msg)
-
-        if not cert_req_msg['certTemplate'].hasValue():
-            err_msg = 'certTemplate must be contained in CR CertReqMessage.'
-            raise ValueError(err_msg)
-
-        cert_req_template = cert_req_msg['certTemplate']
-
-        if cert_req_template['version'].hasValue() and cert_req_template['version'] != CERT_TEMPLATE_VERSION:
-            err_msg = 'Version must be 2 if supplied in certificate request.'
-            raise ValueError(err_msg)
 
         # only local key-gen supported currently -> public key must be present
         loaded_public_key = self._load_cert_req_public_key(cert_req_template)
@@ -1188,25 +1144,8 @@ class CmpCertificationRequestView(
         return HttpResponse(encoded_cp_message, content_type='application/pkixcmp', status=200)
 
 
-    def post(  # noqa: C901, PLR0911, PLR0912, PLR0915
-        self,
-        request: HttpRequest,
-        *args: Any,
-        **kwargs: Any,
-    ) -> HttpResponse:
-        """Handles the POST requests."""
-        del args, kwargs, request  # request not accessed directly
-        if self.serialized_pyasn1_message['header']['pvno'] != CMP_MESSAGE_VERSION:
-            err_msg = 'pvno fail'
-            raise ValueError(err_msg)
-
-        protection_algorithm = AlgorithmIdentifier.from_dotted_string(
-            self.serialized_pyasn1_message['header']['protectionAlg']['algorithm'].prettyPrint()
-        )
-        if protection_algorithm == AlgorithmIdentifier.PASSWORD_BASED_MAC:
-            return self._handle_shared_secret_cr()
-
-        # certificate-based signature protection
+    def _handle_signature_based_certificate_request( # noqa: PLR0912, PLR0915, C901
+            self) -> HttpResponse:
         if not self.application_certificate_template:
             return HttpResponse('Missing application certificate template.', status=404)
 
@@ -1266,53 +1205,13 @@ class CmpCertificationRequestView(
         if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE:
             return HttpResponse('PKI protocol CMP client certificate expected, but got something else.')
 
-        message_body_name = self.serialized_pyasn1_message['body'].getName()
-        if message_body_name != 'cr':
-            return HttpResponse(f'Expected CMP CR body, but got CMP {message_body_name.upper()} body.', status=450)
+        cr_body = self._extract_cr_body()
 
-        check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
+        cert_req_template = self._extract_cert_req_template(cr_body)
 
         protection_value = self.serialized_pyasn1_message['protection'].asOctets()
 
-        if self.serialized_pyasn1_message['body'].getName() != 'cr':
-            err_msg = 'not cr message'
-            raise ValueError(err_msg)
-
-        cr_body = self.serialized_pyasn1_message['body']['cr']
-        if len(cr_body) > 1:
-            err_msg = 'multiple CertReqMessages found for CR.'
-            raise ValueError(err_msg)
-
-        if len(cr_body) < 1:
-            err_msg = 'no CertReqMessages found for CR.'
-            raise ValueError(err_msg)
-
-        cert_req_msg = cr_body[0]['certReq']
-
-        if cert_req_msg['certReqId'] != 0:
-            err_msg = 'certReqId must be 0.'
-            raise ValueError(err_msg)
-
-        if not cert_req_msg['certTemplate'].hasValue():
-            err_msg = 'certTemplate must be contained in CR CertReqMessage.'
-            raise ValueError(err_msg)
-
-        cert_req_template = cert_req_msg['certTemplate']
-
-        if cert_req_template['version'].hasValue() and cert_req_template['version'] != CERT_TEMPLATE_VERSION:
-            err_msg = 'Version must be 2 if supplied in certificate request.'
-            raise ValueError(err_msg)
-
-        # only local key-gen supported currently -> public key must be present
-        asn1_public_key = cert_req_template['publicKey']
-        if not asn1_public_key.hasValue():
-            err_msg = 'Public-missing in CertTemplate.'
-            raise ValueError(err_msg)
-
-        spki = rfc2511.SubjectPublicKeyInfo()
-        spki.setComponentByName('algorithm', cert_req_template['publicKey']['algorithm'])
-        spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
-        loaded_public_key = load_supported_public_key_type(encoder.encode(spki))
+        loaded_public_key = self._load_cert_req_public_key(cert_req_template)
 
         # TODO(AlexHx8472): verify popo / process popo: popo = cr_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
@@ -1396,6 +1295,25 @@ class CmpCertificationRequestView(
         decoded_cp_message, _ = decoder.decode(encoded_cp_message, asn1Spec=rfc4210.PKIMessage())
 
         return HttpResponse(encoded_cp_message, content_type='application/pkixcmp', status=200)
+
+
+    def post(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        """Handles the POST requests to the CMP CR endpoint."""
+        del args, kwargs, request  # request not accessed directly
+        check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
+
+        protection_algorithm = AlgorithmIdentifier.from_dotted_string(
+            self.serialized_pyasn1_message['header']['protectionAlg']['algorithm'].prettyPrint()
+        )
+        if protection_algorithm == AlgorithmIdentifier.PASSWORD_BASED_MAC:
+            return self._handle_shared_secret_certificate_request()
+
+        return self._handle_signature_based_certificate_request()
 
 
 def convert_rfc2459_time(time_obj: rfc2459.Time) -> datetime.datetime:
