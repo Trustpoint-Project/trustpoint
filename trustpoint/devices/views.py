@@ -433,6 +433,19 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         context['details_url'] = f'devices:{self.page_name}_details'
         context['main_url'] = f'devices:{self.page_name}'
 
+        context['issue_tls_client_cred_url'] = (
+            f'devices:{self.page_name}_certificate_lifecycle_management-issue_tls_client_credential'
+        )
+        context['issue_tls_server_cred_url'] = (
+            f'devices:{self.page_name}_certificate_lifecycle_management-issue_tls_server_credential'
+        )
+        context['issue_opc_ua_client_cred_url'] = (
+            f'devices:{self.page_name}_certificate_lifecycle_management-issue_opc_ua_client_credential'
+        )
+        context['issue_opc_ua_server_cred_url'] = (
+            f'devices:{self.page_name}_certificate_lifecycle_management-issue_opc_ua_server_credential'
+        )
+
         return context
 
     @staticmethod
@@ -483,7 +496,6 @@ class OpcUaGdsCertificateLifecycleManagementSummaryView(AbstractCertificateLifec
 
 
 #  ------------------------------ Certificate Lifecycle Management - Credential Issuance -------------------------------
-
 
 class DeviceIssueCredentialView(
     PageContextMixin,

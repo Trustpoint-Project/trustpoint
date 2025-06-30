@@ -283,6 +283,7 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
     onboarding_and_pki_configuration = forms.ChoiceField(
         choices=[
             ('cmp_shared_secret', _('CMP with shared secret onboarding')),
+            ('manual', _('Manual Onboarding')),
             ('cmp_idevid', _('CMP with IDevID onboarding')),
             ('aoki_cmp', _('CMP with AOKI onboarding')),
             ('brski_cmp', _('CMP with BRSKI onboarding')),

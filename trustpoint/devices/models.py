@@ -67,12 +67,13 @@ class DeviceModel(CustomDeleteActionModel):
         """Choices of onboarding protocols."""
 
         NO_ONBOARDING = 0, _('No Onboarding')
-        EST_PASSWORD = 1, _('EST - Username & Password')
-        EST_IDEVID = 2, _('EST - IDevID')
-        CMP_SHARED_SECRET = 3, _('CMP - Shared Secret')
-        CMP_IDEVID = 4, _('CMP - IDevID')
-        AOKI = 5, _('AOKI')
-        BRSKI = 6, _('BRSKI')
+        MANUAL = 1, _('Manual Onboarding')
+        EST_PASSWORD = 2, _('EST - Username & Password')
+        EST_IDEVID = 3, _('EST - IDevID')
+        CMP_SHARED_SECRET = 4, _('CMP - Shared Secret')
+        CMP_IDEVID = 5, _('CMP - IDevID')
+        AOKI = 6, _('AOKI')
+        BRSKI = 7, _('BRSKI')
 
     onboarding_protocol = models.IntegerField(
         choices=OnboardingProtocol,

@@ -43,23 +43,46 @@ urlpatterns = [
     path(
         'certificate-lifecycle-management/<int:pk>/issue-tls-client-credential/',
         views.DeviceIssueTlsClientCredential.as_view(),
-        name='certificate_lifecycle_management-issue_tls_client_credential',
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management-issue_tls_client_credential',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/issue-tls-server-credential/',
         views.DeviceIssueTlsServerCredential.as_view(),
-        name='certificate_lifecycle_management-issue_tls_server_credential',
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management-issue_tls_server_credential',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/issue-opcua-client-credential/',
         views.DeviceIssueOpcUaClientCredential.as_view(),
-        name='certificate_lifecycle_management-issue_opcua_client_credential',
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management-issue_opc_ua_client_credential',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/issue-opcua-server-credential/',
         views.DeviceIssueOpcUaServerCredential.as_view(),
-        name='certificate_lifecycle_management-issue_opcua_server_credential',
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management-issue_opc_ua_server_credential',
     ),
+
+    path(
+        'opc-us-gds/certificate-lifecycle-management/<int:pk>/issue-tls-client-credential/',
+        views.DeviceIssueTlsClientCredential.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management-issue_tls_client_credential',
+    ),
+    path(
+        'opc-us-gds/certificate-lifecycle-management/<int:pk>/issue-tls-server-credential/',
+        views.DeviceIssueTlsServerCredential.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management-issue_tls_server_credential',
+    ),
+    path(
+        'opc-us-gds/certificate-lifecycle-management/<int:pk>/issue-opcua-client-credential/',
+        views.DeviceIssueOpcUaClientCredential.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management-issue_opc_ua_client_credential',
+    ),
+    path(
+        'opc-us-gds/certificate-lifecycle-management/<int:pk>/issue-opcua-server-credential/',
+        views.DeviceIssueOpcUaServerCredential.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management-issue_opc_ua_server_credential',
+    ),
+
+
     # Certificate Lifecycle Management - Help Pages
     path(
         'help/dispatch-domain/<int:pk>/',
