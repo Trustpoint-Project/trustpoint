@@ -5,7 +5,6 @@ from __future__ import annotations
 import datetime
 import enum
 import ipaddress
-import re
 import secrets
 from typing import TYPE_CHECKING, Protocol, cast, get_args
 
@@ -27,8 +26,8 @@ from django.http import HttpResponse
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic.base import View
-from pki.models.devid_registration import DevIdRegistration
 from pki.models.domain import DomainModel
+from pki.util.idevid import IDevIDAuthenticator
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
@@ -621,90 +620,6 @@ class CmpInitializationRequestView(
     requested_domain: DomainModel
     device: None | DeviceModel = None
 
-    def _get_or_create_corresponding_device(  # noqa: PLR0912, C901
-            self, cmp_signer_cert: x509.Certificate) -> DeviceModel:
-        """Gets or creates the device model corresponding to the CMP signer cert serial number."""
-        raw_device_serial = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
-        device_serial_number = (
-            raw_device_serial.decode() if isinstance(raw_device_serial, bytes) else raw_device_serial
-        )
-        device_candidates = DeviceModel.objects.filter(
-            serial_number=device_serial_number, domain=self.requested_domain
-        )
-        if device_candidates:
-            for device_candidate in device_candidates:
-                if not device_candidate.idevid_trust_store:
-                    continue
-                trust_store = (
-                    device_candidate.idevid_trust_store.get_certificate_collection_serializer().as_crypto()
-                )
-                for cert in trust_store:
-                    try:
-                        cmp_signer_cert.verify_directly_issued_by(cert)
-                        self.device = device_candidate
-                        break
-                    except (ValueError, TypeError, InvalidSignature):
-                        pass
-
-        if self.device is not None:
-            return self.device
-
-        # No suitable device candidate found, so we need to create a new one.
-        dev_reg_model = None
-
-        devid_reg_candidates = DevIdRegistration.objects.all()
-        for devid_reg_candidate in devid_reg_candidates:
-            trust_store = devid_reg_candidate.truststore.get_certificate_collection_serializer().as_crypto()
-
-            for cert in trust_store:
-                try:
-                    cmp_signer_cert.verify_directly_issued_by(cert)
-                    dev_reg_model = devid_reg_candidate
-                    break
-                except (ValueError, TypeError, InvalidSignature):
-                    pass
-
-        if not dev_reg_model:
-            err_msg = 'Neither a device nor a devid registration found.'
-            raise ValueError(err_msg)
-
-        pattern = re.compile(dev_reg_model.serial_number_pattern)
-
-        if not pattern.fullmatch(device_serial_number):
-            err_msg = 'Serial-Number not allowed.'
-            raise ValueError(err_msg)
-
-        common_names = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
-        if len(common_names) != 1:
-            exc_msg = 'Exactly one common name must be present in the subject.'
-            raise ValueError(exc_msg)
-
-        common_name = common_names[0]
-
-        if isinstance(common_name.value, str):
-            common_name_value = common_name.value
-        elif isinstance(common_name.value, bytes):
-            common_name_value = common_name.value.decode()
-        else:
-            err_msg = 'Failed to parse common name value'
-            raise TypeError(err_msg)
-
-        device_model = DeviceModel(
-            common_name=common_name_value,
-            domain=dev_reg_model.domain,
-            serial_number=device_serial_number,
-            domain_credential_onboarding=True,
-            onboarding_status=DeviceModel.OnboardingStatus.PENDING,
-            onboarding_protocol=DeviceModel.OnboardingProtocol.CMP_IDEVID,
-            pki_protocol=DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE,
-            idevid_trust_store=dev_reg_model.truststore,
-        )
-
-        self.device = device_model
-        self.device.save()
-        return self.device
-
-
     def _extract_ir_body(self) -> rfc4210.PKIBody:
         message_body_name = self.serialized_pyasn1_message['body'].getName()
         if message_body_name != 'ir':
@@ -883,7 +798,13 @@ class CmpInitializationRequestView(
             err_msg = 'CMP signer certificate missing in extra certs.'
             raise ValueError(err_msg)
 
-        self.device = self._get_or_create_corresponding_device(cmp_signer_cert=cmp_signer_cert)
+        self.device = IDevIDAuthenticator.authenticate_idevid_from_x509(
+            idevid_cert=cmp_signer_cert,
+            intermediate_cas=intermediate_certs,
+            domain=self.requested_domain,
+            onboarding_protocol=DeviceModel.OnboardingProtocol.CMP_IDEVID,
+            pki_protocol=DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE,
+        )
 
         # device sanity checks
         if not self.device.domain_credential_onboarding:
