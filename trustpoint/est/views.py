@@ -716,35 +716,6 @@ class CredentialIssuanceMixin:
         return None
 
 
-class OnboardingMixin(LoggedHttpResponse):
-    """A mixin that provides onboarding validation logic for issuing credentials."""
-
-    def _validate_onboarding(
-        self, device: DeviceModel, credential_request: CredentialRequest, requested_cert_template_str: str
-    ) -> LoggedHttpResponse | None:
-        """Validates if the device's onboarding status is appropriate for credential issuance."""
-        try:
-            issued_credential = IssuedCredentialModel.objects.get(
-                device=device, common_name=credential_request.common_name
-            )
-        except IssuedCredentialModel.DoesNotExist:
-            issued_credential = None
-
-        if issued_credential:
-            return LoggedHttpResponse(
-                'A credential with the same CN already exists. Not allowed for method /simpleenroll', status=422
-            )
-
-        if requested_cert_template_str == 'domaincredential':
-            if device.onboarding_status == DeviceModel.OnboardingStatus.ONBOARDED:
-                return LoggedHttpResponse('The device is already onboarded.', status=422)
-            if device.onboarding_status == DeviceModel.OnboardingStatus.NO_ONBOARDING:
-                return LoggedHttpResponse(
-                    'Requested domain credential for device which does not require onboarding.', status=422
-                )
-        return None
-
-
 @method_decorator(csrf_exempt, name='dispatch')
 class EstSimpleEnrollmentView(
     EstAuthenticationMixin,
@@ -754,7 +725,6 @@ class EstSimpleEnrollmentView(
     EstPkiMessageSerializerMixin,
     DeviceHandlerMixin,
     CredentialIssuanceMixin,
-    OnboardingMixin,
     LoggerMixin,
     View,
 ):
@@ -777,11 +747,11 @@ class EstSimpleEnrollmentView(
         raw_message, http_response = self.process_http_request(request)
 
         if not http_response and raw_message:
-            domain_name = cast(str, kwargs.get('domain'))
+            domain_name = cast('str', kwargs.get('domain'))
             requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
 
         if not http_response and raw_message and requested_domain:
-            cert_template = cast(str, kwargs.get('certtemplate'))
+            cert_template = cast('str', kwargs.get('certtemplate'))
             requested_cert_template_str, http_response = self.extract_cert_template(cert_template=cert_template)
 
         if (not http_response and
@@ -805,12 +775,8 @@ class EstSimpleEnrollmentView(
                 device=device
             )
 
-        if not http_response and credential_request and device and requested_cert_template_str:
-            http_response = self._validate_onboarding(device=device,
-                                                      credential_request=credential_request,
-                                                      requested_cert_template_str=requested_cert_template_str)
-
         if not http_response and credential_request and device and requested_domain and requested_cert_template_str:
+
             http_response = self._issue_simpleenroll(device=device,
                                                      domain=requested_domain,
                                                      credential_request=credential_request,
@@ -830,7 +796,6 @@ class EstSimpleReEnrollmentView(EstAuthenticationMixin,
                               EstPkiMessageSerializerMixin,
                               DeviceHandlerMixin,
                               CredentialIssuanceMixin,
-                              OnboardingMixin,
                               LoggerMixin,
                               View):
     """Handles simple EST (Enrollment over Secure Transport) reenrollment requests.
@@ -852,11 +817,11 @@ class EstSimpleReEnrollmentView(EstAuthenticationMixin,
         raw_message, http_response = self.process_http_request(request)
 
         if not http_response and raw_message:
-            domain_name = cast(str, kwargs.get('domain'))
+            domain_name = cast('str', kwargs.get('domain'))
             requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
 
         if not http_response and raw_message and requested_domain:
-            cert_template = cast(str, kwargs.get('certtemplate'))
+            cert_template = cast('str', kwargs.get('certtemplate'))
             requested_cert_template_str, http_response = self.extract_cert_template(cert_template=cert_template)
 
         if not http_response:
@@ -905,7 +870,7 @@ class EstCACertsView(EstAuthenticationMixin, EstRequestedDomainExtractorMixin, V
         requested_domain: DomainModel | None
 
         try:
-            domain_name = cast(str, kwargs.get('domain'))
+            domain_name = cast('str', kwargs.get('domain'))
             requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
 
             if not http_response and requested_domain:
