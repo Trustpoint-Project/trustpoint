@@ -195,7 +195,37 @@ class CmpRequestTemplateExtractorMixin:
 
         return parent.dispatch(request, *args, **kwargs)
 
-    def _extract_cert_req_template(self, pki_body: dict) -> dict:
+    @staticmethod
+    def _check_header(serialized_pyasn1_message: rfc4210.PKIMessage) -> None:
+        """Checks some parts of the header."""
+        if serialized_pyasn1_message['header']['pvno'] != CMP_MESSAGE_VERSION:
+            err_msg = 'pvno fail'
+            raise ValueError(err_msg)
+
+        transaction_id = serialized_pyasn1_message['header']['transactionID'].asOctets()
+        if len(transaction_id) != TRANSACTION_ID_LENGTH:
+            err_msg = 'transactionID fail'
+            raise ValueError(err_msg)
+
+        sender_nonce = serialized_pyasn1_message['header']['senderNonce'].asOctets()
+        if len(sender_nonce) != SENDER_NONCE_LENGTH:
+            err_msg = 'senderNonce fail'
+            raise ValueError(err_msg)
+
+        implicit_confirm_entry = None
+        for entry in serialized_pyasn1_message['header']['generalInfo']:
+            if entry['infoType'].prettyPrint() == IMPLICIT_CONFIRM_OID:
+                implicit_confirm_entry = entry
+                break
+        if implicit_confirm_entry is None:
+            err_msg = 'implicit confirm missing'
+            raise ValueError(err_msg)
+
+        if implicit_confirm_entry['infoValue'].prettyPrint() != IMPLICIT_CONFIRM_STR_VALUE:
+            err_msg = 'implicit confirm entry fail'
+            raise ValueError(err_msg)
+
+    def _extract_cert_req_template(self, pki_body: rfc4210.PKIBody) -> rfc2511.CertTemplate:
         """Extracts the certificate request template from the PKI (IR/CR) message body."""
         cert_req_msg = pki_body[0]['certReq']
 
@@ -215,7 +245,7 @@ class CmpRequestTemplateExtractorMixin:
 
         return cert_req_template
 
-    def _get_subject_common_name(self, cert_req_template: dict) -> str:
+    def _get_subject_common_name(self, cert_req_template: rfc2511.CertTemplate) -> str:
         """Extracts the common name from the subject in the certificate request template."""
         if not cert_req_template['subject'].isValue:
             err_msg = 'subject missing in CertReqMessage.'
@@ -239,7 +269,7 @@ class CmpRequestTemplateExtractorMixin:
         err_msg = 'Failed to parse common name value'
         raise TypeError(err_msg)
 
-    def _load_cert_req_public_key(self, cert_req_template: dict) -> PublicKey:
+    def _load_cert_req_public_key(self, cert_req_template: rfc2511.CertTemplate) -> PublicKey:
         # only local key-gen supported currently -> public key must be present
         asn1_public_key = cert_req_template['publicKey']
         if not asn1_public_key.hasValue():
@@ -253,7 +283,7 @@ class CmpRequestTemplateExtractorMixin:
 
     @staticmethod
     def _verify_protection_shared_secret(
-            serialized_pyasn1_message: dict, shared_secret: str) -> None:
+            serialized_pyasn1_message: rfc4210.PKIMessage, shared_secret: str) -> hmac.HMAC:
         """Verifies the HMAC-based protection of a CMP message using a shared secret.
 
         Returns a new HMAC object that can be used to sign the response message.
@@ -270,8 +300,8 @@ class CmpRequestTemplateExtractorMixin:
 
         iteration_count = int(decoded_pbm['iterationCount'])
 
-        shared_secret = shared_secret.encode()
-        salted_secret = shared_secret + salt
+        shared_secret_bytes = shared_secret.encode()
+        salted_secret = shared_secret_bytes + salt
         hmac_key = salted_secret
         for _ in range(iteration_count):
             hasher = hashes.Hash(owf.hash_algorithm())
@@ -330,40 +360,10 @@ class CmpRequestTemplateExtractorMixin:
             raise TypeError(err_msg)
 
 
-def check_header(serialized_pyasn1_message: rfc4210.PKIMessage) -> None:
-    """Checks some parts of the header."""
-    if serialized_pyasn1_message['header']['pvno'] != CMP_MESSAGE_VERSION:
-        err_msg = 'pvno fail'
-        raise ValueError(err_msg)
-
-    transaction_id = serialized_pyasn1_message['header']['transactionID'].asOctets()
-    if len(transaction_id) != TRANSACTION_ID_LENGTH:
-        err_msg = 'transactionID fail'
-        raise ValueError(err_msg)
-
-    sender_nonce = serialized_pyasn1_message['header']['senderNonce'].asOctets()
-    if len(sender_nonce) != SENDER_NONCE_LENGTH:
-        err_msg = 'senderNonce fail'
-        raise ValueError(err_msg)
-
-    implicit_confirm_entry = None
-    for entry in serialized_pyasn1_message['header']['generalInfo']:
-        if entry['infoType'].prettyPrint() == IMPLICIT_CONFIRM_OID:
-            implicit_confirm_entry = entry
-            break
-    if implicit_confirm_entry is None:
-        err_msg = 'implicit confirm missing'
-        raise ValueError(err_msg)
-
-    if implicit_confirm_entry['infoValue'].prettyPrint() != IMPLICIT_CONFIRM_STR_VALUE:
-        err_msg = 'implicit confirm entry fail'
-        raise ValueError(err_msg)
-
-
 class CmpResponseBuilderMixin:
     """Mixin for CMP response message building shared between request types."""
 
-    def _parse_san_extension(self, cert_req_template: dict) -> dict:
+    def _parse_san_extension(self, cert_req_template: rfc2511.CertTemplate) -> dict[str, Any]:
         """Parses the (mandatory) SAN extension from the certificate request template.
 
         Returns a dictionary with the following keys:
@@ -420,7 +420,7 @@ class CmpResponseBuilderMixin:
         }
 
     def _issue_application_credential(
-            self, cert_req_template: dict, public_key: PublicKey
+            self, cert_req_template: rfc2511.CertReq, public_key: PublicKey
     ) -> IssuedCredentialModel:
         """Issues an application certificate for CMP CR."""
         common_name = self._get_subject_common_name(cert_req_template)
@@ -488,8 +488,11 @@ class CmpResponseBuilderMixin:
         exc_msg = f'The app cert template {self.application_certificate_template} is not supported.'
         raise ValueError(exc_msg)
 
+    @staticmethod
     def _build_response_message_header(
-            self, sender_kid: rfc2459.KeyIdentifier, issuer_credential: CredentialModel) -> rfc4210.PKIHeader:
+            serialized_pyasn1_message: rfc4210.PKIMessage,
+            sender_kid: rfc2459.KeyIdentifier,
+            issuer_credential: CredentialModel) -> rfc4210.PKIHeader:
         """Builds the PKI response message header for the IP and CP response messages."""
         header = rfc4210.PKIHeader()
 
@@ -502,35 +505,35 @@ class CmpResponseBuilderMixin:
         sender['directoryName'][0] = name
         header['sender'] = sender
 
-        header['recipient'] = self.serialized_pyasn1_message['header']['sender']
+        header['recipient'] = serialized_pyasn1_message['header']['sender']
 
         current_time = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d%H%M%SZ')
         header['messageTime'] = useful.GeneralizedTime(current_time).subtype(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
         )
 
-        header['protectionAlg'] = self.serialized_pyasn1_message['header']['protectionAlg']
+        header['protectionAlg'] = serialized_pyasn1_message['header']['protectionAlg']
 
         header['senderKID'] = sender_kid
 
-        header['transactionID'] = self.serialized_pyasn1_message['header']['transactionID']
+        header['transactionID'] = serialized_pyasn1_message['header']['transactionID']
 
         header['senderNonce'] = univ.OctetString(secrets.token_bytes(SENDER_NONCE_LENGTH)).subtype(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 5)
         )
 
-        header['recipNonce'] = univ.OctetString(self.serialized_pyasn1_message['header']['senderNonce']).subtype(
+        header['recipNonce'] = univ.OctetString(serialized_pyasn1_message['header']['senderNonce']).subtype(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 6)
         )
 
-        header['generalInfo'] = self.serialized_pyasn1_message['header']['generalInfo']
+        header['generalInfo'] = serialized_pyasn1_message['header']['generalInfo']
 
         return header
 
     @staticmethod
     def _add_protection_shared_secret(
-            pki_message: dict, hmac_gen: hmac.HMAC,
-    ) -> dict:
+            pki_message: rfc4210.PKIMessage, hmac_gen: hmac.HMAC,
+    ) -> rfc4210.PKIMessage:
         """Adds HMAC-based shared-secret protection to the base PKI message."""
         # TODO(AlexHx8472): Use fresh salt! # noqa: FIX002
         encoded_protected_part = get_encoded_protected_part(pki_message)
@@ -546,7 +549,8 @@ class CmpResponseBuilderMixin:
         return pki_message
 
     def _sign_pki_message(
-            self, pki_message: dict, signature_suite: SignatureSuite, signer_credential: IssuedCredentialModel) -> dict:
+            self, pki_message: rfc4210.PKIMessage, signature_suite: SignatureSuite, signer_credential: CredentialModel
+            ) -> rfc4210.PKIMessage:
         """Applies signature-based protection to the base PKI message."""
         encoded_protected_part = get_encoded_protected_part(pki_message)
 
@@ -580,7 +584,7 @@ class CmpResponseBuilderMixin:
         return pki_message
 
 
-def get_encoded_protected_part(cmp_message: rfc4210.PKIMessage) -> bytes:
+def get_encoded_protected_part(cmp_message: rfc4210.PKIMessage) -> Any: # bytes?
     """Encode the protected part of the CMP message."""
     protected_part = rfc4210.ProtectedPart()
     protected_part['header'] = cmp_message['header']
@@ -689,12 +693,11 @@ class CmpInitializationRequestView(
         self.device.save()
 
 
-    def _extract_ir_body(self) -> dict:
+    def _extract_ir_body(self) -> rfc4210.PKIBody:
         message_body_name = self.serialized_pyasn1_message['body'].getName()
         if message_body_name != 'ir':
-            return HttpResponse(
-                f'Expected CMP IR body, but got CMP {message_body_name.upper()} body.', status=450
-            )
+            err_msg = f'Expected CMP IR body, but got CMP {message_body_name.upper()} body.'
+            raise ValueError(err_msg)
 
         if self.serialized_pyasn1_message['body'].getName() != 'ir':
             err_msg = 'not ir message'
@@ -719,7 +722,10 @@ class CmpInitializationRequestView(
             sender_kid: rfc2459.KeyIdentifier
             ) -> rfc4210.PKIMessage:
         """Builds the IP response message (without the protection)."""
-        ip_header = self._build_response_message_header(sender_kid=sender_kid, issuer_credential=issuer_credential)
+        ip_header = self._build_response_message_header(
+            serialized_pyasn1_message=self.serialized_pyasn1_message,
+            sender_kid=sender_kid,
+            issuer_credential=issuer_credential)
 
         ip_extra_certs = univ.SequenceOf()
 
@@ -927,7 +933,7 @@ class CmpInitializationRequestView(
     ) -> HttpResponse:
         """Handles the POST requests to the CMP IR endpoint."""
         del args, kwargs, request  # request not accessed directly
-        check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
+        self._check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
 
         protection_algorithm = AlgorithmIdentifier.from_dotted_string(
             self.serialized_pyasn1_message['header']['protectionAlg']['algorithm'].prettyPrint()
@@ -984,10 +990,11 @@ class CmpCertificationRequestView(
     device: DeviceModel
     application_certificate_template: None | ApplicationCertificateTemplateNames = None
 
-    def _extract_cr_body(self) -> dict:
+    def _extract_cr_body(self) -> rfc4210.PKIBody:
         message_body_name = self.serialized_pyasn1_message['body'].getName()
         if message_body_name != 'cr':
-            return HttpResponse(f'Expected CMP CR body, but got CMP {message_body_name.upper()} body.', status=450)
+            err_msg = f'Expected CMP CR body, but got CMP {message_body_name.upper()} body.'
+            raise ValueError(err_msg)
 
         if self.serialized_pyasn1_message['body'].getName() != 'cr':
             err_msg = 'not cr message'
@@ -1012,7 +1019,10 @@ class CmpCertificationRequestView(
             sender_kid: rfc2459.KeyIdentifier
     ) -> rfc4210.PKIMessage:
         """Builds the CR response message (without the protection)."""
-        cp_header = self._build_response_message_header(sender_kid=sender_kid, issuer_credential=issuer_credential)
+        cp_header = self._build_response_message_header(
+            serialized_pyasn1_message=self.serialized_pyasn1_message,
+            sender_kid=sender_kid,
+            issuer_credential=issuer_credential)
 
         cp_extra_certs = univ.SequenceOf()
 
@@ -1260,7 +1270,7 @@ class CmpCertificationRequestView(
     ) -> HttpResponse:
         """Handles the POST requests to the CMP CR endpoint."""
         del args, kwargs, request  # request not accessed directly
-        check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
+        self._check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
 
         protection_algorithm = AlgorithmIdentifier.from_dotted_string(
             self.serialized_pyasn1_message['header']['protectionAlg']['algorithm'].prettyPrint()
