@@ -245,7 +245,8 @@ class CmpRequestTemplateExtractorMixin:
 
         return cert_req_template
 
-    def _get_subject_common_name(self, cert_req_template: rfc2511.CertTemplate) -> str:
+    @staticmethod
+    def get_subject_common_name(cert_req_template: rfc2511.CertTemplate) -> str:
         """Extracts the common name from the subject in the certificate request template."""
         if not cert_req_template['subject'].isValue:
             err_msg = 'subject missing in CertReqMessage.'
@@ -329,11 +330,12 @@ class CmpRequestTemplateExtractorMixin:
 
         return hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
 
+    @staticmethod
     def _verify_protection_signature(
-            self, cmp_signer_cert: x509.Certificate) -> None:
+            serialized_pyasn1_message: rfc4210.PKIMessage, cmp_signer_cert: x509.Certificate) -> None:
         """Verifies the message signature of a CMP message using signature-based protection."""
-        encoded_protected_part = get_encoded_protected_part(self.serialized_pyasn1_message)
-        protection_value = self.serialized_pyasn1_message['protection'].asOctets()
+        encoded_protected_part = get_encoded_protected_part(serialized_pyasn1_message)
+        protection_value = serialized_pyasn1_message['protection'].asOctets()
         signature_suite = SignatureSuite.from_certificate(cmp_signer_cert)
 
         hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
@@ -363,7 +365,8 @@ class CmpRequestTemplateExtractorMixin:
 class CmpResponseBuilderMixin:
     """Mixin for CMP response message building shared between request types."""
 
-    def _parse_san_extension(self, cert_req_template: rfc2511.CertTemplate) -> dict[str, Any]:
+    @staticmethod
+    def _parse_san_extension(cert_req_template: rfc2511.CertTemplate) -> dict[str, Any]:
         """Parses the (mandatory) SAN extension from the certificate request template.
 
         Returns a dictionary with the following keys:
@@ -419,11 +422,19 @@ class CmpResponseBuilderMixin:
             'san_critical': san_critical,
         }
 
+    @staticmethod
     def _issue_application_credential(
-            self, cert_req_template: rfc2511.CertReq, public_key: PublicKey
+            cert_req_template: rfc2511.CertReq,
+            public_key: PublicKey,
+            device: DeviceModel,
+            application_certificate_template: ApplicationCertificateTemplateNames
     ) -> IssuedCredentialModel:
         """Issues an application certificate for CMP CR."""
-        common_name = self._get_subject_common_name(cert_req_template)
+        common_name = CmpRequestTemplateExtractorMixin.get_subject_common_name(cert_req_template)
+        domain = device.domain
+        if not domain:
+            err_msg = 'Device domain is not set.'
+            raise ValueError(err_msg)
 
         # noinspection PyBroadException
         try:
@@ -433,15 +444,15 @@ class CmpResponseBuilderMixin:
         except Exception:  # noqa: BLE001
             validity_in_days = DEFAULT_VALIDITY_DAYS
 
-        if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_CLIENT:
-            issuer = LocalTlsClientCredentialIssuer(device=self.device, domain=self.device.domain)
+        if application_certificate_template == ApplicationCertificateTemplateNames.TLS_CLIENT:
+            issuer = LocalTlsClientCredentialIssuer(device=device, domain=domain)
             return issuer.issue_tls_client_certificate(
                 common_name=common_name, validity_days=validity_in_days, public_key=public_key
             )
         # Below certificate templates require the SubjectAltName extension
-        san = self._parse_san_extension(cert_req_template)
-        if self.application_certificate_template == ApplicationCertificateTemplateNames.TLS_SERVER:
-            tls_server_issuer = LocalTlsServerCredentialIssuer(device=self.device, domain=self.device.domain)
+        san = CmpResponseBuilderMixin._parse_san_extension(cert_req_template)
+        if application_certificate_template == ApplicationCertificateTemplateNames.TLS_SERVER:
+            tls_server_issuer = LocalTlsServerCredentialIssuer(device=device, domain=domain)
             return tls_server_issuer.issue_tls_server_certificate(
                 common_name=common_name,
                 validity_days=validity_in_days,
@@ -453,39 +464,39 @@ class CmpResponseBuilderMixin:
             )
 
         # OPC UA
-        if (self.application_certificate_template in
+        if (application_certificate_template in
             [ApplicationCertificateTemplateNames.OPCUA_SERVER, ApplicationCertificateTemplateNames.OPCUA_CLIENT]):
-            application_uri = san['uris'][0] if san['uris'] else None
+            application_uri = str(san['uris'][0]) if san['uris'] else None
             if not application_uri:
                 err_msg = 'Missing OPC UA Application URI in SAN extension'
                 raise ValueError(err_msg)
 
-        if self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_SERVER:
-            opc_ua_server_cred_issuer = OpcUaServerCredentialIssuer(device=self.device, domain=self.device.domain)
-            return opc_ua_server_cred_issuer.issue_opcua_server_certificate(
-                common_name=common_name,
-                application_uri=application_uri,
-                ipv4_addresses=san['ipv4_addresses'],
-                ipv6_addresses=san['ipv6_addresses'],
-                # TODO (FHKatCSW): san_critical not supported in OpcUaServerCredentialIssuer    # noqa: FIX002
-                #san_critical=san['san_critical'],  # noqa: ERA001
-                domain_names=san['dns_names'],
-                validity_days=validity_in_days,
-                public_key=public_key,
-            )
+            if application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_SERVER:
+                opc_ua_server_cred_issuer = OpcUaServerCredentialIssuer(device=device, domain=domain)
+                return opc_ua_server_cred_issuer.issue_opcua_server_certificate(
+                    common_name=common_name,
+                    application_uri=application_uri,
+                    ipv4_addresses=san['ipv4_addresses'],
+                    ipv6_addresses=san['ipv6_addresses'],
+                    # TODO (FHKatCSW): san_critical not supported in OpcUaServerCredentialIssuer    # noqa: FIX002
+                    #san_critical=san['san_critical'],  # noqa: ERA001
+                    domain_names=san['dns_names'],
+                    validity_days=validity_in_days,
+                    public_key=public_key,
+                )
 
-        if self.application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_CLIENT:
-            opc_ua_client_cred_issuer = OpcUaClientCredentialIssuer(device=self.device, domain=self.device.domain)
-            return opc_ua_client_cred_issuer.issue_opcua_client_certificate(
-                common_name=common_name,
-                application_uri=application_uri,
-                # TODO (FHKatCSW): san_critical not supported in OpcUaClientCredentialIssuer    # noqa: FIX002
-                #san_critical=san['san_critical'],  # noqa: ERA001
-                validity_days=validity_in_days,
-                public_key=public_key,
-            )
+            if application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_CLIENT:
+                opc_ua_client_cred_issuer = OpcUaClientCredentialIssuer(device=device, domain=domain)
+                return opc_ua_client_cred_issuer.issue_opcua_client_certificate(
+                    common_name=common_name,
+                    application_uri=application_uri,
+                    # TODO (FHKatCSW): san_critical not supported in OpcUaClientCredentialIssuer    # noqa: FIX002
+                    #san_critical=san['san_critical'],  # noqa: ERA001
+                    validity_days=validity_in_days,
+                    public_key=public_key,
+                )
 
-        exc_msg = f'The app cert template {self.application_certificate_template} is not supported.'
+        exc_msg = f'The app cert template {application_certificate_template} is not supported.'
         raise ValueError(exc_msg)
 
     @staticmethod
@@ -611,7 +622,7 @@ class CmpInitializationRequestView(
     device: None | DeviceModel = None
 
     def _get_or_create_corresponding_device(  # noqa: PLR0912, C901
-            self, cmp_signer_cert: x509.Certificate) -> None:
+            self, cmp_signer_cert: x509.Certificate) -> DeviceModel:
         """Gets or creates the device model corresponding to the CMP signer cert serial number."""
         raw_device_serial = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
         device_serial_number = (
@@ -636,7 +647,7 @@ class CmpInitializationRequestView(
                         pass
 
         if self.device is not None:
-            return
+            return self.device
 
         # No suitable device candidate found, so we need to create a new one.
         dev_reg_model = None
@@ -691,6 +702,7 @@ class CmpInitializationRequestView(
 
         self.device = device_model
         self.device.save()
+        return self.device
 
 
     def _extract_ir_body(self) -> rfc4210.PKIBody:
@@ -783,6 +795,9 @@ class CmpInitializationRequestView(
     def _handle_shared_secret_initialization_request(
             self) -> HttpResponse:
         """Handles IR for initial certificate requests with shared secret protection."""
+        if TYPE_CHECKING: # mypy does not know we only get here if self.device is not None
+            assert self.device is not None
+
         if self.device.domain != self.requested_domain:
             exc_msg = 'The device domain does not match the requested domain.'
             raise ValueError(exc_msg)
@@ -815,7 +830,10 @@ class CmpInitializationRequestView(
         # Issue the credential
         if self.application_certificate_template: # application credential request
             issued_cred = self._issue_application_credential(
-                cert_req_template=cert_req_template, public_key=loaded_public_key
+                cert_req_template=cert_req_template,
+                public_key=loaded_public_key,
+                device=self.device,
+                application_certificate_template=self.application_certificate_template
             )
         else: # domain credential request
             issuer_domain_credential = LocalDomainCredentialIssuer(device=self.device, domain=self.device.domain)
@@ -865,7 +883,7 @@ class CmpInitializationRequestView(
             err_msg = 'CMP signer certificate missing in extra certs.'
             raise ValueError(err_msg)
 
-        self._get_or_create_corresponding_device(cmp_signer_cert=cmp_signer_cert)
+        self.device = self._get_or_create_corresponding_device(cmp_signer_cert=cmp_signer_cert)
 
         # device sanity checks
         if not self.device.domain_credential_onboarding:
@@ -884,13 +902,16 @@ class CmpInitializationRequestView(
         cert_req_template = self._extract_cert_req_template(req_message_body)
 
         # Ensure subject common name is present
-        _common_name = self._get_subject_common_name(cert_req_template)
+        _common_name = self.get_subject_common_name(cert_req_template)
 
         loaded_public_key = self._load_cert_req_public_key(cert_req_template)
 
         # TODO(AlexHx8472): verify popo / process popo: popo = req_message_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
-        self._verify_protection_signature(cmp_signer_cert=cmp_signer_cert)
+        self._verify_protection_signature(
+            serialized_pyasn1_message=self.serialized_pyasn1_message,
+            cmp_signer_cert=cmp_signer_cert
+        )
 
         # Checks regarding contained public key and corresponding signature suite of the issuing CA
         issuing_ca_credential = self.requested_domain.get_issuing_ca_or_value_error().credential
@@ -1080,7 +1101,7 @@ class CmpCertificationRequestView(
     def _handle_shared_secret_certificate_request(self) -> HttpResponse:
         """Handles CMP CR for application certificates with shared secret protection."""
         if not self.application_certificate_template:
-                return HttpResponse('Missing application certificate template.', status=404)
+            return HttpResponse('Missing application certificate template.', status=404)
 
         try:
             sender_kid = int(self.serialized_pyasn1_message['header']['senderKID'].prettyPrint())
@@ -1138,7 +1159,10 @@ class CmpCertificationRequestView(
             raise ValueError(err_msg)
 
         issued_app_cred = self._issue_application_credential(
-            cert_req_template=cert_req_template, public_key=loaded_public_key
+            cert_req_template=cert_req_template,
+            public_key=loaded_public_key,
+            device=self.device,
+            application_certificate_template=self.application_certificate_template
         )
 
         cp_message = self._build_base_cp_message(
@@ -1228,6 +1252,7 @@ class CmpCertificationRequestView(
         # TODO(AlexHx8472): verify popo / process popo: popo = req_message_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
         self._verify_protection_signature(
+            serialized_pyasn1_message=self.serialized_pyasn1_message,
             cmp_signer_cert=cmp_signer_cert,
         )
 
@@ -1238,7 +1263,10 @@ class CmpCertificationRequestView(
             raise ValueError(err_msg)
 
         issued_cred = self._issue_application_credential(
-            cert_req_template=cert_req_template, public_key=loaded_public_key
+            cert_req_template=cert_req_template,
+            public_key=loaded_public_key,
+            device=self.device,
+            application_certificate_template=self.application_certificate_template
         )
 
         # Build the response PKI message
