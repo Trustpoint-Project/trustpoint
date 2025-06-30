@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 
     from cryptography.hazmat.primitives.asymmetric.types import PublicKeyTypes
     from django.http import HttpRequest
+    from pki.models.credential import CredentialModel
 
 
 UTC_TIME_THRESHOLD = 2050
@@ -250,6 +251,84 @@ class CmpRequestTemplateExtractorMixin:
         spki.setComponentByName('subjectPublicKey', cert_req_template['publicKey']['subjectPublicKey'])
         return load_supported_public_key_type(encoder.encode(spki))
 
+    @staticmethod
+    def _verify_protection_shared_secret(
+            serialized_pyasn1_message: dict, shared_secret: str) -> None:
+        """Verifies the HMAC-based protection of a CMP message using a shared secret.
+
+        Returns a new HMAC object that can be used to sign the response message.
+        """
+        pbm_parameters_bitstring = serialized_pyasn1_message['header']['protectionAlg']['parameters']
+        decoded_pbm, _ = decoder.decode(pbm_parameters_bitstring, asn1Spec=rfc4210.PBMParameter())
+
+        salt = decoded_pbm['salt'].asOctets()
+        try:
+            owf = HashAlgorithm.from_dotted_string(decoded_pbm['owf']['algorithm'].prettyPrint())
+        except Exception as exception:
+            err_msg = 'owf algorithm not supported.'
+            raise ValueError(err_msg) from exception
+
+        iteration_count = int(decoded_pbm['iterationCount'])
+
+        shared_secret = shared_secret.encode()
+        salted_secret = shared_secret + salt
+        hmac_key = salted_secret
+        for _ in range(iteration_count):
+            hasher = hashes.Hash(owf.hash_algorithm())
+            hasher.update(hmac_key)
+            hmac_key = hasher.finalize()
+
+        hmac_algorithm_oid = decoded_pbm['mac']['algorithm'].prettyPrint()
+        try:
+            hmac_algorithm = HmacAlgorithm.from_dotted_string(hmac_algorithm_oid)
+        except Exception as exception:
+            err_msg = 'hmac algorithm not supported.'
+            raise ValueError(err_msg) from exception
+
+        encoded_protected_part = get_encoded_protected_part(serialized_pyasn1_message)
+        protection_value = serialized_pyasn1_message['protection'].asOctets()
+
+        hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
+        hmac_gen.update(encoded_protected_part)
+
+        try:
+            hmac_gen.verify(protection_value)
+        except InvalidSignature as exception:
+            err_msg = 'hmac verification failed.'
+            raise ValueError(err_msg) from exception
+
+        return hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
+
+    def _verify_protection_signature(
+            self, cmp_signer_cert: x509.Certificate) -> None:
+        """Verifies the message signature of a CMP message using signature-based protection."""
+        encoded_protected_part = get_encoded_protected_part(self.serialized_pyasn1_message)
+        protection_value = self.serialized_pyasn1_message['protection'].asOctets()
+        signature_suite = SignatureSuite.from_certificate(cmp_signer_cert)
+
+        hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
+        if hash_algorithm is None:
+            err_msg = 'Failed to get the corresponding hash algorithm.'
+            raise ValueError(err_msg)
+
+        public_key = cmp_signer_cert.public_key()
+        if isinstance(public_key, rsa.RSAPublicKey):
+            public_key.verify(
+                signature=protection_value,
+                data=encoded_protected_part,
+                padding=padding.PKCS1v15(),
+                algorithm=hash_algorithm.hash_algorithm(),
+            )
+        elif isinstance(public_key, ec.EllipticCurvePublicKey):
+            public_key.verify(
+                signature=protection_value,
+                data=encoded_protected_part,
+                signature_algorithm=ec.ECDSA(hash_algorithm.hash_algorithm()),
+            )
+        else:
+            err_msg = 'Cannot verify signature due to unsupported public key type.'
+            raise TypeError(err_msg)
+
 
 def check_header(serialized_pyasn1_message: rfc4210.PKIMessage) -> None:
     """Checks some parts of the header."""
@@ -409,13 +488,14 @@ class CmpResponseBuilderMixin:
         exc_msg = f'The app cert template {self.application_certificate_template} is not supported.'
         raise ValueError(exc_msg)
 
-    def _build_response_message_header(self, sender_kid: rfc2459.KeyIdentifier) -> rfc4210.PKIHeader:
+    def _build_response_message_header(
+            self, sender_kid: rfc2459.KeyIdentifier, issuer_credential: CredentialModel) -> rfc4210.PKIHeader:
         """Builds the PKI response message header for the IP and CP response messages."""
         header = rfc4210.PKIHeader()
 
         header['pvno'] = CMP_MESSAGE_VERSION
 
-        issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
+        issuing_ca_cert = issuer_credential.get_certificate()
         raw_issuing_ca_subject = issuing_ca_cert.subject.public_bytes()
         name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
         sender = rfc2459.GeneralName()
@@ -446,6 +526,58 @@ class CmpResponseBuilderMixin:
         header['generalInfo'] = self.serialized_pyasn1_message['header']['generalInfo']
 
         return header
+
+    @staticmethod
+    def _add_protection_shared_secret(
+            pki_message: dict, hmac_gen: hmac.HMAC,
+    ) -> dict:
+        """Adds HMAC-based shared-secret protection to the base PKI message."""
+        # TODO(AlexHx8472): Use fresh salt! # noqa: FIX002
+        encoded_protected_part = get_encoded_protected_part(pki_message)
+
+        hmac_gen.update(encoded_protected_part)
+        hmac_digest = hmac_gen.finalize()
+
+        binary_stuff = bin(int.from_bytes(hmac_digest, byteorder='big'))[2:].zfill(160)
+        pki_message['protection'] = rfc4210.PKIProtection(univ.BitString(binary_stuff)).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
+        )
+
+        return pki_message
+
+    def _sign_pki_message(
+            self, pki_message: dict, signature_suite: SignatureSuite, signer_credential: IssuedCredentialModel) -> dict:
+        """Applies signature-based protection to the base PKI message."""
+        encoded_protected_part = get_encoded_protected_part(pki_message)
+
+        private_key = load_pem_private_key(
+            signer_credential.private_key.encode(), password=None
+        )
+        hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
+        if hash_algorithm is None:
+            err_msg = 'Failed to get the corresponding hash algorithm.'
+            raise ValueError(err_msg)
+
+        if isinstance(private_key, rsa.RSAPrivateKey):
+            signature = private_key.sign(
+                encoded_protected_part,
+                padding.PKCS1v15(),
+                hash_algorithm.hash_algorithm(),
+            )
+        elif isinstance(private_key, ec.EllipticCurvePrivateKey):
+            signature = private_key.sign(
+                encoded_protected_part,
+                ec.ECDSA(hash_algorithm.hash_algorithm()),
+            )
+        else:
+            exc_msg = 'Cannot sign due to unsupported private key type.'
+            raise TypeError(exc_msg)
+
+        pki_message['protection'] = rfc4210.PKIProtection(univ.BitString.fromOctetString(signature)).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
+        )
+
+        return pki_message
 
 
 def get_encoded_protected_part(cmp_message: rfc4210.PKIMessage) -> bytes:
@@ -564,8 +696,6 @@ class CmpInitializationRequestView(
                 f'Expected CMP IR body, but got CMP {message_body_name.upper()} body.', status=450
             )
 
-        # ignore extra certs
-
         if self.serialized_pyasn1_message['body'].getName() != 'ir':
             err_msg = 'not ir message'
             raise ValueError(err_msg)
@@ -583,15 +713,19 @@ class CmpInitializationRequestView(
 
 
     def _build_base_ip_message(
-            self, issued_cred: IssuedCredentialModel, sender_kid: rfc2459.KeyIdentifier) -> rfc4210.PKIMessage:
+            self,
+            issued_cred: IssuedCredentialModel,
+            issuer_credential: CredentialModel,
+            sender_kid: rfc2459.KeyIdentifier
+            ) -> rfc4210.PKIMessage:
         """Builds the IP response message (without the protection)."""
-        ip_header = self._build_response_message_header(sender_kid=sender_kid)
+        ip_header = self._build_response_message_header(sender_kid=sender_kid, issuer_credential=issuer_credential)
 
         ip_extra_certs = univ.SequenceOf()
 
         certificate_chain = [
-            self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate(),
-            *self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate_chain(),
+            issuer_credential.get_certificate(),
+            *issuer_credential.get_certificate_chain(),
         ]
         for certificate in certificate_chain:
             der_bytes = certificate.public_bytes(encoding=Encoding.DER)
@@ -640,69 +774,34 @@ class CmpInitializationRequestView(
         return ip_message
 
 
-    def _handle_shared_secret_initialization_request( # noqa: PLR0915
+    def _handle_shared_secret_initialization_request(
             self) -> HttpResponse:
         """Handles IR for initial certificate requests with shared secret protection."""
         if self.device.domain != self.requested_domain:
             exc_msg = 'The device domain does not match the requested domain.'
             raise ValueError(exc_msg)
 
-        ir_body = self._extract_ir_body()
-
-        cert_req_template = self._extract_cert_req_template(ir_body)
-
-        protection_value = self.serialized_pyasn1_message['protection'].asOctets()
-
-        loaded_public_key = self._load_cert_req_public_key(cert_req_template)
-
-        # TODO(AlexHx8472): verify popo / process popo: popo = ir_body[0]['pop'].prettyPrint()  # noqa: FIX002
-
-        pbm_parameters_bitstring = self.serialized_pyasn1_message['header']['protectionAlg']['parameters']
-        decoded_pbm, _ = decoder.decode(pbm_parameters_bitstring, asn1Spec=rfc4210.PBMParameter())
-
-        salt = decoded_pbm['salt'].asOctets()
-        try:
-            owf = HashAlgorithm.from_dotted_string(decoded_pbm['owf']['algorithm'].prettyPrint())
-        except Exception as exception:
-            err_msg = 'owf algorithm not supported.'
-            raise ValueError(err_msg) from exception
-
-        iteration_count = int(decoded_pbm['iterationCount'])
-
         if self.device.cmp_shared_secret is None:
             err_msg = 'Device is misconfigured.'
             raise ValueError(err_msg)
 
-        shared_secret = self.device.cmp_shared_secret.encode()
-        salted_secret = shared_secret + salt
-        hmac_key = salted_secret
-        for _ in range(iteration_count):
-            hasher = hashes.Hash(owf.hash_algorithm())
-            hasher.update(hmac_key)
-            hmac_key = hasher.finalize()
+        req_message_body = self._extract_ir_body()
 
-        hmac_algorithm_oid = decoded_pbm['mac']['algorithm'].prettyPrint()
-        try:
-            hmac_algorithm = HmacAlgorithm.from_dotted_string(hmac_algorithm_oid)
-        except Exception as exception:
-            err_msg = 'hmac algorithm not supported.'
-            raise ValueError(err_msg) from exception
+        cert_req_template = self._extract_cert_req_template(req_message_body)
 
-        encoded_protected_part = get_encoded_protected_part(self.serialized_pyasn1_message)
+        loaded_public_key = self._load_cert_req_public_key(cert_req_template)
 
-        hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
-        hmac_gen.update(encoded_protected_part)
+        # TODO(AlexHx8472): verify popo / process popo: popo = req_message_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
-        try:
-            hmac_gen.verify(protection_value)
-        except InvalidSignature as exception:
-            err_msg = 'hmac verification failed.'
-            raise ValueError(err_msg) from exception
+        hmac_gen = self._verify_protection_shared_secret(
+            serialized_pyasn1_message=self.serialized_pyasn1_message,
+            shared_secret=self.device.cmp_shared_secret,
+        )
 
         # Checks regarding contained public key and corresponding signature suite of the issuing CA
-        issuing_ca = self.requested_domain.get_issuing_ca_or_value_error()
-        issuing_ca_certificate = issuing_ca.credential.get_certificate()
-        signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
+        issuing_ca_credential = self.requested_domain.get_issuing_ca_or_value_error().credential
+        issuing_ca_cert = issuing_ca_credential.get_certificate()
+        signature_suite = SignatureSuite.from_certificate(issuing_ca_cert)
         if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
             err_msg = 'Contained public key type does not match the signature suite.'
             raise ValueError(err_msg)
@@ -720,18 +819,12 @@ class CmpInitializationRequestView(
 
         # Build the IP response message
         sender_kid = self.serialized_pyasn1_message['header']['senderKID']
-        ip_message = self._build_base_ip_message(issued_cred=issued_cred, sender_kid=sender_kid)
+        ip_message = self._build_base_ip_message(
+            issued_cred=issued_cred, sender_kid=sender_kid, issuer_credential=issuing_ca_credential
+        )
 
-        # TODO(AlexHx8472): Use fresh salt! # noqa: FIX002
-        encoded_protected_part = get_encoded_protected_part(ip_message)
-
-        hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
-        hmac_gen.update(encoded_protected_part)
-        hmac_digest = hmac_gen.finalize()
-
-        binary_stuff = bin(int.from_bytes(hmac_digest, byteorder='big'))[2:].zfill(160)
-        ip_message['protection'] = rfc4210.PKIProtection(univ.BitString(binary_stuff)).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
+        ip_message = self._add_protection_shared_secret(
+            pki_message=ip_message, hmac_gen=hmac_gen
         )
 
         encoded_ip_message = encoder.encode(ip_message)
@@ -740,7 +833,7 @@ class CmpInitializationRequestView(
         return HttpResponse(encoded_ip_message, content_type='application/pkixcmp', status=200)
 
 
-    def _handle_signature_based_initialization_request( # noqa: PLR0912, PLR0915, C901
+    def _handle_signature_based_initialization_request(
             self) -> HttpResponse:
         """Handles IR for initial certificate requests with signature-based protection."""
         # different protection algorithm than password-based MAC - certificate-based protection
@@ -774,55 +867,29 @@ class CmpInitializationRequestView(
                 'The corresponding device is not configured to use the onboarding mechanism.', status=404
             )
 
-        if not self.device.onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_IDEVID:  # noqa: SIM201
+        if self.device.onboarding_protocol != DeviceModel.OnboardingProtocol.CMP_IDEVID:
             return HttpResponse('Wrong onboarding protocol.')
 
         if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE:
             return HttpResponse('PKI protocol CMP client certificate expected, but got something else.')
 
-        ir_body = self._extract_ir_body()
+        req_message_body = self._extract_ir_body()
 
-        cert_req_template = self._extract_cert_req_template(ir_body)
-
-        protection_value = self.serialized_pyasn1_message['protection'].asOctets()
+        cert_req_template = self._extract_cert_req_template(req_message_body)
 
         # Ensure subject common name is present
         _common_name = self._get_subject_common_name(cert_req_template)
 
         loaded_public_key = self._load_cert_req_public_key(cert_req_template)
 
-        # TODO(AlexHx8472): verify popo / process popo: popo = ir_body[0]['pop'].prettyPrint()  # noqa: FIX002
+        # TODO(AlexHx8472): verify popo / process popo: popo = req_message_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
-        encoded_protected_part = get_encoded_protected_part(self.serialized_pyasn1_message)
-        signature_suite = SignatureSuite.from_certificate(cmp_signer_cert)
-
-        hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
-        if hash_algorithm is None:
-            err_msg = 'Failed to get the corresponding hash algorithm.'
-            raise ValueError(err_msg)
-
-        public_key = cmp_signer_cert.public_key()
-        if isinstance(public_key, rsa.RSAPublicKey):
-            public_key.verify(
-                signature=protection_value,
-                data=encoded_protected_part,
-                padding=padding.PKCS1v15(),
-                algorithm=hash_algorithm.hash_algorithm(),
-            )
-        elif isinstance(public_key, ec.EllipticCurvePublicKey):
-            public_key.verify(
-                signature=protection_value,
-                data=encoded_protected_part,
-                signature_algorithm=ec.ECDSA(hash_algorithm.hash_algorithm()),
-            )
-        else:
-            err_msg = 'Cannot verify signature due to unsupported public key type.'
-            raise TypeError(err_msg)
+        self._verify_protection_signature(cmp_signer_cert=cmp_signer_cert)
 
         # Checks regarding contained public key and corresponding signature suite of the issuing CA
-        issuing_ca = self.requested_domain.get_issuing_ca_or_value_error()
-        issuing_ca_certificate = issuing_ca.credential.get_certificate()
-        signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
+        issuing_ca_credential = self.requested_domain.get_issuing_ca_or_value_error().credential
+        issuing_ca_cert = issuing_ca_credential.get_certificate()
+        signature_suite = SignatureSuite.from_certificate(issuing_ca_cert)
         if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
             err_msg = 'Contained public key type does not match the signature suite.'
             raise ValueError(err_msg)
@@ -832,50 +899,24 @@ class CmpInitializationRequestView(
             public_key=loaded_public_key
         )
 
-        issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
+        # Build the response PKI message
         ski = x509.SubjectKeyIdentifier.from_public_key(issuing_ca_cert.public_key())
         sender_kid = rfc2459.KeyIdentifier(ski.digest).subtype(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2)
         )
 
-        # Build the IP response message
-        ip_message = self._build_base_ip_message(issued_cred=issued_cred, sender_kid=sender_kid)
+        pki_message = self._build_base_ip_message(
+            issued_cred=issued_cred, sender_kid=sender_kid, issuer_credential=issuing_ca_credential)
+        pki_message = self._sign_pki_message(
+            pki_message=pki_message, signature_suite=signature_suite, signer_credential=issuing_ca_credential)
 
-        encoded_protected_part = get_encoded_protected_part(ip_message)
-        signature_suite = SignatureSuite.from_certificate(cmp_signer_cert)
-        private_key = load_pem_private_key(
-            self.requested_domain.get_issuing_ca_or_value_error().credential.private_key.encode(), password=None
-        )
-        hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
-        if hash_algorithm is None:
-            err_msg = 'Failed to get the corresponding hash algorithm.'
-            raise ValueError(err_msg)
-
-        if isinstance(private_key, rsa.RSAPrivateKey):
-            signature = private_key.sign(
-                encoded_protected_part,
-                padding.PKCS1v15(),
-                hash_algorithm.hash_algorithm(),
-            )
-        elif isinstance(private_key, ec.EllipticCurvePrivateKey):
-            signature = private_key.sign(
-                encoded_protected_part,
-                ec.ECDSA(hash_algorithm.hash_algorithm()),
-            )
-        else:
-            exc_msg = 'Cannot sign due to unsupported private key type.'
-            raise TypeError(exc_msg)
-
-        ip_message['protection'] = rfc4210.PKIProtection(univ.BitString.fromOctetString(signature)).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
-        )
-
-        encoded_ip_message = encoder.encode(ip_message)
+        encoded_message = encoder.encode(pki_message)
+        decoded_message, _ = decoder.decode(encoded_message, asn1Spec=rfc4210.PKIMessage())
 
         self.device.onboarding_status = DeviceModel.OnboardingStatus.ONBOARDED
         self.device.save()
 
-        return HttpResponse(encoded_ip_message, content_type='application/pkixcmp', status=200)
+        return HttpResponse(encoded_message, content_type='application/pkixcmp', status=200)
 
 
     def post(  # noqa: PLR0911
@@ -965,16 +1006,19 @@ class CmpCertificationRequestView(
 
 
     def _build_base_cp_message(
-            self, issued_cred: IssuedCredentialModel, sender_kid: rfc2459.KeyIdentifier
+            self,
+            issued_cred: IssuedCredentialModel,
+            issuer_credential: CredentialModel,
+            sender_kid: rfc2459.KeyIdentifier
     ) -> rfc4210.PKIMessage:
         """Builds the CR response message (without the protection)."""
-        cp_header = self._build_response_message_header(sender_kid=sender_kid)
+        cp_header = self._build_response_message_header(sender_kid=sender_kid, issuer_credential=issuer_credential)
 
         cp_extra_certs = univ.SequenceOf()
 
         certificate_chain = [
-            self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate(),
-            *self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate_chain(),
+            issuer_credential.get_certificate(),
+            *issuer_credential.get_certificate_chain(),
         ]
         for certificate in certificate_chain:
             der_bytes = certificate.public_bytes(encoding=Encoding.DER)
@@ -1023,7 +1067,7 @@ class CmpCertificationRequestView(
         return cp_message
 
 
-    def _handle_shared_secret_certificate_request(self) -> HttpResponse:  # noqa: C901, PLR0915
+    def _handle_shared_secret_certificate_request(self) -> HttpResponse:
         """Handles CMP CR for application certificates with shared secret protection."""
         if not self.application_certificate_template:
                 return HttpResponse('Missing application certificate template.', status=404)
@@ -1057,62 +1101,28 @@ class CmpCertificationRequestView(
             exc_msg = 'The device domain does not match the requested domain.'
             raise ValueError(exc_msg)
 
-        cr_body = self._extract_cr_body()
-
-        cert_req_template = self._extract_cert_req_template(cr_body)
-
-        protection_value = self.serialized_pyasn1_message['protection'].asOctets()
-
-        # only local key-gen supported currently -> public key must be present
-        loaded_public_key = self._load_cert_req_public_key(cert_req_template)
-
-        # TODO(AlexHx8472): verify popo / process popo: popo = cr_body[0]['pop'].prettyPrint()  # noqa: FIX002
-
-        pbm_parameters_bitstring = self.serialized_pyasn1_message['header']['protectionAlg']['parameters']
-        decoded_pbm, _ = decoder.decode(pbm_parameters_bitstring, asn1Spec=rfc4210.PBMParameter())
-
-        salt = decoded_pbm['salt'].asOctets()
-        try:
-            owf = HashAlgorithm.from_dotted_string(decoded_pbm['owf']['algorithm'].prettyPrint())
-        except Exception as exception:
-            err_msg = 'owf algorithm not supported.'
-            raise ValueError(err_msg) from exception
-
-        iteration_count = int(decoded_pbm['iterationCount'])
-
         if self.device.cmp_shared_secret is None:
             err_msg = 'Device is misconfigured.'
             raise ValueError(err_msg)
 
-        shared_secret = self.device.cmp_shared_secret.encode()
-        salted_secret = shared_secret + salt
-        hmac_key = salted_secret
-        for _ in range(iteration_count):
-            hasher = hashes.Hash(owf.hash_algorithm())
-            hasher.update(hmac_key)
-            hmac_key = hasher.finalize()
+        req_message_body = self._extract_cr_body()
 
-        hmac_algorithm_oid = decoded_pbm['mac']['algorithm'].prettyPrint()
-        try:
-            hmac_algorithm = HmacAlgorithm.from_dotted_string(hmac_algorithm_oid)
-        except Exception as exception:
-            err_msg = 'hmac algorithm not supported.'
-            raise ValueError(err_msg) from exception
+        cert_req_template = self._extract_cert_req_template(req_message_body)
 
-        encoded_protected_part = get_encoded_protected_part(self.serialized_pyasn1_message)
+        # only local key-gen supported currently -> public key must be present
+        loaded_public_key = self._load_cert_req_public_key(cert_req_template)
 
-        hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
-        hmac_gen.update(encoded_protected_part)
+        # TODO(AlexHx8472): verify popo / process popo: popo = req_message_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
-        try:
-            hmac_gen.verify(protection_value)
-        except InvalidSignature as exception:
-            err_msg = 'hmac verification failed.'
-            raise ValueError(err_msg) from exception
+        hmac_gen = self._verify_protection_shared_secret(
+            serialized_pyasn1_message=self.serialized_pyasn1_message,
+            shared_secret=self.device.cmp_shared_secret,
+        )
 
         # Checks regarding contained public key and corresponding signature suite of the issuing CA
-        issuing_ca_certificate = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
-        signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
+        issuing_ca_credential = self.requested_domain.get_issuing_ca_or_value_error().credential
+        issuing_ca_cert = issuing_ca_credential.get_certificate()
+        signature_suite = SignatureSuite.from_certificate(issuing_ca_cert)
         if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
             err_msg = 'Contained public key type does not match the signature suite.'
             raise ValueError(err_msg)
@@ -1123,19 +1133,12 @@ class CmpCertificationRequestView(
 
         cp_message = self._build_base_cp_message(
             issued_cred=issued_app_cred,
+            issuer_credential=issuing_ca_credential,
             sender_kid=self.serialized_pyasn1_message['header']['senderKID']
         )
 
-        # TODO(AlexHx8472): Use fresh salt! # noqa: FIX002
-        encoded_protected_part = get_encoded_protected_part(cp_message)
-
-        hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
-        hmac_gen.update(encoded_protected_part)
-        hmac_digest = hmac_gen.finalize()
-
-        binary_stuff = bin(int.from_bytes(hmac_digest, byteorder='big'))[2:].zfill(160)
-        cp_message['protection'] = rfc4210.PKIProtection(univ.BitString(binary_stuff)).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
+        cp_message = self._add_protection_shared_secret(
+            pki_message=cp_message, hmac_gen=hmac_gen,
         )
 
         encoded_cp_message = encoder.encode(cp_message)
@@ -1192,10 +1195,11 @@ class CmpCertificationRequestView(
             err_msg = 'Domain mismatch.'
             raise ValueError(err_msg)
 
-        issuing_ca_certificate = self.device.domain.get_issuing_ca_or_value_error().credential.get_certificate()
+        issuing_ca_credential = self.device.domain.get_issuing_ca_or_value_error().credential
+        issuing_ca_cert = issuing_ca_credential.get_certificate()
 
         # verifies the domain credential signature
-        cmp_signer_cert.verify_directly_issued_by(issuing_ca_certificate)
+        cmp_signer_cert.verify_directly_issued_by(issuing_ca_cert)
 
         if not self.device.domain_credential_onboarding:
             return HttpResponse(
@@ -1205,96 +1209,47 @@ class CmpCertificationRequestView(
         if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE:
             return HttpResponse('PKI protocol CMP client certificate expected, but got something else.')
 
-        cr_body = self._extract_cr_body()
+        req_message_body = self._extract_cr_body()
 
-        cert_req_template = self._extract_cert_req_template(cr_body)
-
-        protection_value = self.serialized_pyasn1_message['protection'].asOctets()
+        cert_req_template = self._extract_cert_req_template(req_message_body)
 
         loaded_public_key = self._load_cert_req_public_key(cert_req_template)
 
-        # TODO(AlexHx8472): verify popo / process popo: popo = cr_body[0]['pop'].prettyPrint()  # noqa: FIX002
+        # TODO(AlexHx8472): verify popo / process popo: popo = req_message_body[0]['pop'].prettyPrint()  # noqa: FIX002
 
-        encoded_protected_part = get_encoded_protected_part(self.serialized_pyasn1_message)
-        signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
-
-        hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
-        if hash_algorithm is None:
-            err_msg = 'Failed to get the corresponding hash algorithm.'
-            raise ValueError(err_msg)
-
-        public_key = cmp_signer_cert.public_key()
-        if isinstance(public_key, rsa.RSAPublicKey):
-            public_key.verify(
-                signature=protection_value,
-                data=encoded_protected_part,
-                padding=padding.PKCS1v15(),
-                algorithm=hash_algorithm.hash_algorithm(),
-            )
-        elif isinstance(public_key, ec.EllipticCurvePublicKey):
-            public_key.verify(
-                signature=protection_value,
-                data=encoded_protected_part,
-                signature_algorithm=ec.ECDSA(hash_algorithm.hash_algorithm()),
-            )
-        else:
-            err_msg = 'Cannot verify signature due to unsupported public key type.'
-            raise TypeError(err_msg)
+        self._verify_protection_signature(
+            cmp_signer_cert=cmp_signer_cert,
+        )
 
         # Checks regarding contained public key and corresponding signature suite of the issuing CA
-        issuing_ca_certificate = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
-        signature_suite = SignatureSuite.from_certificate(issuing_ca_certificate)
+        signature_suite = SignatureSuite.from_certificate(issuing_ca_cert)
         if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
             err_msg = 'Contained public key type does not match the signature suite.'
             raise ValueError(err_msg)
 
-        issued_app_cred = self._issue_application_credential(
+        issued_cred = self._issue_application_credential(
             cert_req_template=cert_req_template, public_key=loaded_public_key
         )
 
-        issuing_ca_cert = self.requested_domain.get_issuing_ca_or_value_error().credential.get_certificate()
+        # Build the response PKI message
         ski = x509.SubjectKeyIdentifier.from_public_key(issuing_ca_cert.public_key())
         sender_kid = rfc2459.KeyIdentifier(ski.digest).subtype(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2)
         )
-        cp_message = self._build_base_cp_message(
-            issued_cred=issued_app_cred,
+
+        pki_message = self._build_base_cp_message(
+            issued_cred=issued_cred,
+            issuer_credential=issuing_ca_credential,
             sender_kid=sender_kid
         )
 
-        encoded_protected_part = get_encoded_protected_part(cp_message)
+        pki_message = self._sign_pki_message(
+            pki_message=pki_message, signature_suite=signature_suite, signer_credential=issuing_ca_credential)
 
-        private_key = load_pem_private_key(
-            self.device.domain.get_issuing_ca_or_value_error().credential.private_key.encode(), password=None
-        )
-        hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
-        if hash_algorithm is None:
-            err_msg = 'Failed to get the corresponding hash algorithm.'
-            raise ValueError(err_msg)
+        encoded_message = encoder.encode(pki_message)
+        decoded_message, _ = decoder.decode(encoded_message, asn1Spec=rfc4210.PKIMessage())
 
-        if isinstance(private_key, rsa.RSAPrivateKey):
-            signature = private_key.sign(
-                encoded_protected_part,
-                padding.PKCS1v15(),
-                hash_algorithm.hash_algorithm(),
-            )
-        elif isinstance(private_key, ec.EllipticCurvePrivateKey):
-            signature = private_key.sign(
-                encoded_protected_part,
-                ec.ECDSA(hash_algorithm.hash_algorithm()),
-            )
-        else:
-            exc_msg = 'Cannot sign due to unsupported private key type.'
-            raise TypeError(exc_msg)
-
-        cp_message['protection'] = rfc4210.PKIProtection(univ.BitString.fromOctetString(signature)).subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
-        )
-
-        encoded_cp_message = encoder.encode(cp_message)
-        decoded_cp_message, _ = decoder.decode(encoded_cp_message, asn1Spec=rfc4210.PKIMessage())
-
-        return HttpResponse(encoded_cp_message, content_type='application/pkixcmp', status=200)
+        return HttpResponse(encoded_message, content_type='application/pkixcmp', status=200)
 
 
     def post(
