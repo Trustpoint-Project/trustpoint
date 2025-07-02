@@ -1,4 +1,4 @@
-"""Django Views"""
+"""Settings views."""
 
 from __future__ import annotations
 

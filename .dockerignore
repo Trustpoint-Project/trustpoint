@@ -6,3 +6,11 @@
 **/*.log
 **/*.log.*
 **/db.sqlite3
+**/*.dump.gz
+docs
+.github
+.pytest_cache
+.ruff_cache
+**/.mypy_cache
+**/behave-report.html
+**/md-report.md

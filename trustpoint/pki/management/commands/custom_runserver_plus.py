@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import os
-
 from typing import Callable
+
 from django_extensions.management.commands.runserver_plus import Command as RunServerPlusCommand
-from pki.models import CertificateModel
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TrustpointTlsServerCredentialModel
-from trustpoint_core.serializer import CertificateSerializer
+from pki.models import CredentialModel
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from trustpoint_core.serializer import CertificateSerializer, CredentialSerializer, PrivateKeySerializer
 
 
 class Command(RunServerPlusCommand):
@@ -29,15 +29,21 @@ class Command(RunServerPlusCommand):
 
         with open(key_file_path) as key_file:
             key_pem = key_file.read()
+        key_serializer = PrivateKeySerializer.from_pem(key_pem)
 
-        stored_tls_cert = CertificateModel.save_certificate(certificate_serializer)
 
-        tls_server_credential, _ = TrustpointTlsServerCredentialModel.objects.get_or_create(
-            certificate=stored_tls_cert, defaults={'private_key_pem': key_pem}
+        tls_server_credential_serializer = CredentialSerializer.from_serializers(
+            private_key_serializer=key_serializer,
+            certificate_serializer=certificate_serializer,
+        )
+
+        trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
+            credential_serializer=tls_server_credential_serializer,
+            credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
         )
 
         active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
-        active_tls.credential = tls_server_credential
+        active_tls.credential = trustpoint_tls_server_credential
         active_tls.save()
 
         print('Updated ActiveTrustpointTlsServerCredentialModel.')

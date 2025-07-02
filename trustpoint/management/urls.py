@@ -2,9 +2,7 @@
 
 from django.urls import path, re_path
 
-from .views import settings
-
-from .views import IndexView, logging, settings, tls
+from .views import IndexView, backup, logging, settings, tls
 
 app_name = 'management'
 urlpatterns = [
@@ -28,5 +26,16 @@ urlpatterns = [
     ),
     path('settings/', settings.SettingsView.as_view(), name='settings'),
     path('tls/', tls.TlsView.as_view(), name='tls'),
-
+    path(
+        'backups/',
+        backup.BackupManageView.as_view(extra_context={'page_category': 'management', 'page_name': 'backup'}),
+        name='backups'
+    ),
+    path('backups/download/<str:filename>/', backup.BackupFileDownloadView.as_view(), name='backup-download'),
+    path(
+        'backups/download-multiple/<str:archive_format>/',
+        backup.BackupFilesDownloadMultipleView.as_view(),
+        name='backup-download-multiple'
+    ),
+    path('backups/delete-multiple/', backup.BackupFilesDeleteMultipleView.as_view(), name='backup-delete-multiple'),
 ]

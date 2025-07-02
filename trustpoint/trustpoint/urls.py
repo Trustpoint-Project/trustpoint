@@ -45,6 +45,7 @@ urlpatterns += [
     path('crl/<int:pk>/', CrlDownloadView.as_view(), name='crl-download'),
     path('.well-known/cmp/', include('cmp.urls')),
     path('.well-known/est/', include('est.urls')),
+    path('aoki/', include('aoki.urls')),
     path('home/', include('home.urls')),
     path('devices/', include('devices.urls')),
     path('management/', include('management.urls')),

@@ -1,4 +1,4 @@
-"""Tests for the settings module."""
+"""Tests for the management module."""
 
 import pytest
 from django.core.exceptions import ValidationError
