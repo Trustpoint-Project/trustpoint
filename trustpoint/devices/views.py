@@ -385,6 +385,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         """Gets a sorted queryset of all IssuedCredentialModels that are application credentials.
 
             self.get_issued_creds_qs() must be called first!
+
         Returns:
             Sorted queryset of all IssuedCredentialModels that are application credentials.
         """

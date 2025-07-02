@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-import django  # Required for Django-based projects
+import django
 
 # -- Path setup -------------------------------------------------------------
 # Ensures Sphinx can find the project's modules for autodoc and autoapi.
