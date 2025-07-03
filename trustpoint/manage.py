@@ -4,7 +4,7 @@
 import os
 import sys
 
-from settings.management import managepy_override
+from management.management import managepy_override
 
 
 def main():

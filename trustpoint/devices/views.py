@@ -30,7 +30,7 @@ from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.devid_registration import DevIdRegistration
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from settings.models import TlsSettings
+from management.models import TlsSettings
 from trustpoint_core import oid
 from trustpoint_core.archiver import Archiver
 from trustpoint_core.serializer import CredentialFileFormat
