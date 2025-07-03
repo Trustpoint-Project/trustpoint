@@ -97,14 +97,6 @@ class DeviceModel(CustomDeleteActionModel):
     est_password = models.CharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
     cmp_shared_secret = models.CharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
 
-    idevid_trust_store = models.ForeignKey(
-        TruststoreModel,
-        verbose_name=_('IDevID Manufacturer Truststore'),
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-    )
-
     class DeviceType(models.IntegerChoices):
         """Enum for device type."""
 

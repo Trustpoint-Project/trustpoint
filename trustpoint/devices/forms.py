@@ -251,7 +251,6 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             'domain',
             'domain_credential_onboarding',
             'onboarding_and_pki_configuration',
-            'idevid_trust_store',
             'pki_configuration',
         ]
         labels: typing.ClassVar = {
@@ -291,11 +290,6 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
         """Initializes the CreateDeviceForm."""
         super().__init__(*args, **kwargs)
 
-        idevid_trust_store_field = cast('models.ModelChoiceField[TruststoreModel]', self.fields['idevid_trust_store'])
-        idevid_trust_store_field.queryset = TruststoreModel.objects.filter(
-            intended_usage=TruststoreModel.IntendedUsage.IDEVID
-        )
-
         self.helper = FormHelper()
         self.helper.form_tag = False
         self.helper.layout = Layout(
@@ -308,7 +302,6 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             HTML('<h2 class="mt-5">PKI Configuration</h2><hr>'),
             Div(
                 Field('onboarding_and_pki_configuration'),
-                Div(Field('idevid_trust_store'), id='id_idevid_trust_store_select_wrapper'),
                 id='id_onboarding_and_pki_configuration_wrapper',
             ),
             Div(Field('pki_configuration'), css_class='d-none', id='id_pki_configuration_wrapper'),
@@ -348,7 +341,6 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
         """Handles cleaning non-onboarding-related data."""
         instance.onboarding_status = DeviceModel.OnboardingStatus.NO_ONBOARDING
         instance.onboarding_protocol = DeviceModel.OnboardingProtocol.NO_ONBOARDING
-        instance.idevid_trust_store = None
 
         pki_configuration = cleaned_data.get('pki_configuration')
         match pki_configuration:
@@ -364,19 +356,6 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
                 error_message = 'Unknown PKI configuration value found.'
                 raise forms.ValidationError(error_message)
 
-    def _validate_cmp_idevid(self, cleaned_data: dict[str, Any], instance: DeviceModel) -> None:
-        """Validates CMP IDevID onboarding."""
-        idevid_trust_store = cleaned_data.get('idevid_trust_store')
-        if not idevid_trust_store:
-            error_message = 'Must specify an IDevID Trust-Store for IDevID onboarding.'
-            raise forms.ValidationError(error_message)
-        if idevid_trust_store.intended_usage != TruststoreModel.IntendedUsage.IDEVID.value:
-            error_message = 'The Trust-Store must have the intended usage IDevID.'
-            raise forms.ValidationError(error_message)
-
-        instance.onboarding_protocol = DeviceModel.OnboardingProtocol.CMP_IDEVID
-        instance.pki_protocol = DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE
-
     def _handle_domain_credential_onboarding(self, cleaned_data: dict[str, Any], instance: DeviceModel) -> None:
         """Handles cleaning domain credential onboarding-related data."""
         instance.onboarding_status = DeviceModel.OnboardingStatus.PENDING
@@ -387,20 +366,18 @@ class CreateDeviceForm(CleanedDataNotNoneMixin, forms.ModelForm[DeviceModel]):
             case 'cmp_shared_secret':
                 instance.onboarding_protocol = DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET
                 instance.pki_protocol = DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE
-                instance.idevid_trust_store = None
                 # 16 * 8 = 128 random bits
                 instance.cmp_shared_secret = secrets.token_urlsafe(16)
             case 'cmp_idevid':
-                self._validate_cmp_idevid(cleaned_data, instance)
+                instance.onboarding_protocol = DeviceModel.OnboardingProtocol.CMP_IDEVID
+                instance.pki_protocol = DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE
             case 'est_username_password':
                 instance.onboarding_protocol = DeviceModel.OnboardingProtocol.EST_PASSWORD
                 instance.pki_protocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE
-                instance.idevid_trust_store = None
                 instance.est_password = secrets.token_urlsafe(16)
             case 'est_idevid':
                 instance.onboarding_protocol = DeviceModel.OnboardingProtocol.EST_IDEVID
                 instance.pki_protocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE
-                instance.idevid_trust_store = None  # Truststore association via DevID registration
             case _:
                 err_msg = 'Unknown Onboarding and PKI configuration value found.'
                 raise forms.ValidationError(err_msg)
@@ -443,15 +420,7 @@ class CreateOpcUaGdsForm(CreateDeviceForm):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the OPC UA GDS form."""
-        try:
-            super().__init__(*args, **kwargs)
-        except KeyError as e:
-            if 'idevid_trust_store' in str(e):
-                pass
-            else:
-                raise
-
-        self.fields.pop('idevid_trust_store', None)
+        super().__init__(*args, **kwargs)
 
         self.helper = FormHelper()
         self.helper.form_tag = False
