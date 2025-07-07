@@ -169,7 +169,8 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
             The HTML of the hyperlink for the CLM button.
         """
         clm_url = reverse(
-            f'{self.page_category}:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': record.pk})
+            f'{self.page_category}:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': record.pk}
+        )
 
         return format_html('<a href="{}" class="btn btn-primary tp-table-btn w-100">{}</a>', clm_url, _('Manage'))
 
@@ -751,6 +752,7 @@ class DeviceIssueOpcUaServerCredentialView(AbstractIssueOpcUaServerCredentialVie
 
 #  -------------------------------- Certificate Lifecycle Management - Token Auth Mixin --------------------------------
 
+
 class DownloadTokenRequiredAuthenticationMixin:
     """Mixin which checks the token included in the URL for browser download views."""
 
@@ -823,8 +825,8 @@ class AbstractDownloadPageDispatcherView(PageContextMixin, RedirectView):
         issued_credential = IssuedCredentialModel.objects.filter(pk=pk).first()
         if issued_credential is None:
             messages.error(
-                self.request,
-                'No credential found for the given primary key. See logs for more information.')
+                self.request, 'No credential found for the given primary key. See logs for more information.'
+            )
             return reverse(f'devices:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': pk})
 
         if issued_credential.credential.private_key:
@@ -835,11 +837,13 @@ class AbstractDownloadPageDispatcherView(PageContextMixin, RedirectView):
 
 class DeviceDownloadPageDispatcherView(AbstractDownloadPageDispatcherView):
     """Download dispatcher view for the device pages."""
+
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
 class OpcUaGdsDownloadPageDispatcherView(AbstractDownloadPageDispatcherView):
     """Download dispatcher view for the OPC UA GDS pages."""
+
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
@@ -857,11 +861,13 @@ class AbstractCertificateDownloadView(PageContextMixin, DetailView[IssuedCredent
 
 class DeviceCertificateDownloadView(AbstractCertificateDownloadView):
     """Certificate download view for the device pages."""
+
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
 class OpcUaGdsCertificateDownloadView(AbstractCertificateDownloadView):
     """Certificate download view for the OPC UA GDS pages."""
+
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
@@ -1013,12 +1019,14 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
 
 class DeviceManualCredentialDownloadView(AbstractDeviceBaseCredentialDownloadView):
     """View to download a password protected domain or application credential in the desired format."""
+
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
 
 @method_decorator(login_not_required, name='dispatch')
 class DeviceBrowserCredentialDownloadView(
-        DownloadTokenRequiredAuthenticationMixin,
-        AbstractDeviceBaseCredentialDownloadView):
+    DownloadTokenRequiredAuthenticationMixin, AbstractDeviceBaseCredentialDownloadView
+):
     """View to download a password protected domain or app credential in the desired format from a remote client."""
 
     is_browser_download = True
@@ -1077,11 +1085,13 @@ class AbstractBrowserOnboardingOTPView(PageContextMixin, DetailView[IssuedCreden
 
 class DeviceBrowserOnboardingOTPView(AbstractBrowserOnboardingOTPView):
     """The browser onboarding OTP view for the devices section."""
+
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
 class OpcUaGdsBrowserOnboardingOTPView(AbstractBrowserOnboardingOTPView):
     """The browser onboarding OTP view for the OPC UA GDS section."""
+
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
@@ -1125,11 +1135,13 @@ class AbstractBrowserOnboardingCancelView(PageContextMixin, DetailView[IssuedCre
 
 class DeviceBrowserOnboardingCancelView(AbstractBrowserOnboardingCancelView):
     """Cancels the browser onboarding for the devices section."""
+
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
 class OpcUaGdsBrowserOnboardingCancelView(AbstractBrowserOnboardingCancelView):
     """Cancels the browser onboarding for the OPC UA GDS section."""
+
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
@@ -1251,11 +1263,13 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
 
 class DeviceIssuedCredentialRevocationView(AbstractIssuedCredentialRevocationView):
     """abc."""
+
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
 class OpcUaGdsIssuedCredentialRevocationView(AbstractIssuedCredentialRevocationView):
     """abc."""
+
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
@@ -1400,11 +1414,13 @@ class AbstractBulkRevokeView(LoggerMixin, PageContextMixin, ListView[DeviceModel
 
 class DeviceBulkRevokeView(AbstractBulkRevokeView):
     """abc."""
+
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
 class OpcUaGdsBulkRevokeView(AbstractBulkRevokeView):
     """abc."""
+
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 

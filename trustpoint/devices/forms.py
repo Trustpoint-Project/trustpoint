@@ -46,8 +46,8 @@ class CredentialDownloadForm(CleanedDataNotNoneMixin, forms.Form):
         help_text=_('Must be at least %d characters long.') % PASSWORD_MIN_LENGTH,
     )
     confirm_password = forms.CharField(
-        label=_('Confirm Password'),
-        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'}))
+        label=_('Confirm Password'), widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'})
+    )
 
     def clean(self) -> dict[str, Any]:
         """Checks if the passwords match and if the password is long enough."""
