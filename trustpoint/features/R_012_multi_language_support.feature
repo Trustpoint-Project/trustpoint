@@ -20,7 +20,7 @@ Feature: Language Selection and Translation
       | German   |
 
   Scenario Outline: User manually selects a different language
-    Given a logged-in user
+    Given the admin user is logged into TPC_Web
     When the user selects <language> from the language settings
     Then the system should display the UI in <language>
 
@@ -30,7 +30,7 @@ Feature: Language Selection and Translation
       | German   |
 
   Scenario Outline: Language setting persists after logout
-    Given a logged-in user
+    Given the admin user is logged into TPC_Web
     When the user selects <language> from the language settings
     and the user logs out and logs back in
     Then the system should display the UI in <language>
@@ -41,7 +41,7 @@ Feature: Language Selection and Translation
       | German   |
 
   Scenario Outline: Verify UI elements are translated correctly
-    Given a logged-in user
+    Given the admin user is logged into TPC_Web
     When the user selects <language> from the language settings
     Then the system should display the UI in <language>
 
