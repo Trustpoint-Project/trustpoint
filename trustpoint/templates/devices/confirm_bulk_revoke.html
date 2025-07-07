@@ -4,7 +4,7 @@
 {% load static %}
 
 {% block content %}
-    <form action="{% url 'devices:device_revocation' %}" method="post" style="display: inline;">
+    <form action="{% url device_revoke_url %}" method="post" style="display: inline;">
         {% csrf_token %}
         {{ revoke_form.pks }}
 

@@ -4,7 +4,7 @@
 {% load static %}
 
 {% block content %}
-    <form action="{% url 'devices:credential_revocation' pk=issued_credential.pk %}" method="post" style="display: inline;">
+    <form action="{% url cred_revoke_url pk=issued_credential.pk %}" method="post" style="display: inline;">
         {% csrf_token %}
 
         <div class="card">

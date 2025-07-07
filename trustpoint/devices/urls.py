@@ -13,19 +13,16 @@ urlpatterns = [
     # Main Pages
     path('', views.DeviceTableView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}'),
     path('opc-ua-gds/', views.OpcUaGdsTableView.as_view(), name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}'),
-
     # Details Views
     path('details/<int:pk>/', views.DeviceDetailsView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_details'),
     path(
         'opc-ua-gds/details/<int:pk>/',
         views.OpcUaDeviceDetailsView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_details'
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_details',
     ),
-
     # Create Views
     path('create/', views.CreateDeviceView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create'),
     path('opc-ua-gds/create/', views.CreateOpcUaGdsView.as_view(), name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_create'),
-
     # Certificate Lifecycle Management Views
     path(
         'certificate-lifecycle-management/<int:pk>/',
@@ -35,52 +32,132 @@ urlpatterns = [
     path(
         'opc-us-gds/certificate-lifecycle-management/<int:pk>/',
         views.OpcUaGdsCertificateLifecycleManagementSummaryView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management'
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management',
     ),
-
-
     # Certificate Lifecycle Management - Credential Issuance
     path(
         'certificate-lifecycle-management/<int:pk>/issue-tls-client-credential/',
-        views.DeviceIssueTlsClientCredential.as_view(),
+        views.DeviceIssueTlsClientCredentialView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management-issue_tls_client_credential',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/issue-tls-server-credential/',
-        views.DeviceIssueTlsServerCredential.as_view(),
+        views.DeviceIssueTlsServerCredentialView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management-issue_tls_server_credential',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/issue-opcua-client-credential/',
-        views.DeviceIssueOpcUaClientCredential.as_view(),
+        views.DeviceIssueOpcUaClientCredentialView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management-issue_opc_ua_client_credential',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/issue-opcua-server-credential/',
-        views.DeviceIssueOpcUaServerCredential.as_view(),
+        views.DeviceIssueOpcUaServerCredentialView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management-issue_opc_ua_server_credential',
     ),
 
+
+    # Certificate Lifecycle Management - Downloads
     path(
-        'opc-us-gds/certificate-lifecycle-management/<int:pk>/issue-tls-client-credential/',
-        views.DeviceIssueTlsClientCredential.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management-issue_tls_client_credential',
+        'download/<int:pk>/',
+        views.DeviceDownloadPageDispatcherView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_download'
     ),
     path(
-        'opc-us-gds/certificate-lifecycle-management/<int:pk>/issue-tls-server-credential/',
-        views.DeviceIssueTlsServerCredential.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management-issue_tls_server_credential',
+        'opc-us-gds/download/<int:pk>/',
+        views.OpcUaGdsDownloadPageDispatcherView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_download'
+    ),
+
+    path(
+        'certificate/download/<int:pk>/',
+        views.DeviceCertificateDownloadView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate-download'
     ),
     path(
-        'opc-us-gds/certificate-lifecycle-management/<int:pk>/issue-opcua-client-credential/',
-        views.DeviceIssueOpcUaClientCredential.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management-issue_opc_ua_client_credential',
+        'opc-us-gds/certificate/download/<int:pk>/',
+        views.OpcUaGdsCertificateDownloadView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate-download'),
+
+    path(
+        'credential/download/<int:pk>/',
+        views.DeviceManualCredentialDownloadView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_credential-download'
     ),
     path(
-        'opc-us-gds/certificate-lifecycle-management/<int:pk>/issue-opcua-server-credential/',
-        views.DeviceIssueOpcUaServerCredential.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management-issue_opc_ua_server_credential',
+        'opc-ua-gds/credential/download/<int:pk>/',
+        views.DeviceManualCredentialDownloadView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_credential-download'
     ),
+
+    path(
+        'credential-download/browser/<int:pk>/',
+        views.DeviceBrowserOnboardingOTPView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_browser_otp_view'
+    ),
+    path(
+        'opc-ua-gds/credential-download/browser/<int:pk>/',
+        views.OpcUaGdsBrowserOnboardingOTPView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_browser_otp_view'
+    ),
+    path(
+        'credential-download/browser/<int:pk>/cancel',
+        views.DeviceBrowserOnboardingCancelView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_browser_cancel',
+    ),
+    path(
+        'credential-download/browser/<int:pk>/cancel',
+        views.OpcUaGdsBrowserOnboardingCancelView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_browser_cancel',
+    ),
+
+    # browser login and download views
+    path(
+        'browser/',
+        views.DeviceOnboardingBrowserLoginView.as_view(),
+        name='browser_login'
+    ),
+    path(
+        'browser/credential-download/<int:pk>/',
+        views.DeviceBrowserCredentialDownloadView.as_view(),
+        name='browser_domain_credential_download',
+    ),
+
+    # Revokation views
+    path(
+        'revoke/<int:pk>/',
+        views.DeviceIssuedCredentialRevocationView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_credential_revoke',
+    ),
+    path(
+        'opc-ua-gds/revoke/<int:pk>/',
+        views.OpcUaGdsIssuedCredentialRevocationView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_credential_revoke',
+    ),
+
+    re_path(
+        r'^revoke-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
+        views.DeviceBulkRevokeView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_revoke',
+    ),
+    re_path(
+        r'^opc-ua-gds/revoke-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
+        views.DeviceBulkRevokeView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_device_revoke',
+    ),
+
+    re_path(
+        r'^delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
+        views.DeviceBulkDeleteView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_delete',
+    ),
+    re_path(
+        r'^opc-ua-gds/delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
+        views.DeviceBulkDeleteView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_device_delete',
+    ),
+
+
 
 
     # Certificate Lifecycle Management - Help Pages
@@ -173,42 +250,5 @@ urlpatterns = [
         'help/no-onboarding/opc-ua-gds/est-username-password/<int:pk>/',
         devices_help_views.NoOnboardingEstOpcUaGdsUsernamePasswordHelpView.as_view(),
         name='help-no-onboarding_est-opcua-gds-username-password',
-    ),
-    # Certificate Lifecycle Management - Downloads
-    path('download/<int:pk>/', views.DownloadPageDispatcherView.as_view(), name='download'),
-    path('certificate/download/<int:pk>/', views.CertificateDownloadView.as_view(), name='certificate-download'),
-    path(
-        'credential/download/<int:pk>/', views.DeviceManualCredentialDownloadView.as_view(), name='credential-download'
-    ),
-    path(
-        'credential-download/browser/<int:pk>/', views.DeviceBrowserOnboardingOTPView.as_view(), name='browser_otp_view'
-    ),
-    path('browser/', views.DeviceOnboardingBrowserLoginView.as_view(), name='browser_login'),
-    # Revoke Views
-    path('browser/', views.DeviceOnboardingBrowserLoginView.as_view(), name='browser_login'),
-    path(
-        'browser/credential-download/<int:pk>/',
-        views.DeviceBrowserCredentialDownloadView.as_view(),
-        name='browser_domain_credential_download',
-    ),
-    path(
-        'credential-download/browser/<int:pk>/cancel',
-        views.DeviceBrowserOnboardingCancelView.as_view(),
-        name='browser_cancel',
-    ),
-    path(
-        'revoke/<int:pk>/',
-        views.IssuedCredentialRevocationView.as_view(),
-        name='credential_revocation',
-    ),
-    re_path(
-        r'^revoke-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
-        views.DeviceBulkRevokeView.as_view(),
-        name='device_revocation',
-    ),
-    re_path(
-        r'^delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
-        views.DeviceBulkDeleteView.as_view(),
-        name='device_delete',
     ),
 ]

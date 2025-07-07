@@ -42,10 +42,12 @@ class CredentialDownloadForm(CleanedDataNotNoneMixin, forms.Form):
 
     password = forms.CharField(
         label=_('Password'),
-        widget=forms.PasswordInput,
+        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'}),
         help_text=_('Must be at least %d characters long.') % PASSWORD_MIN_LENGTH,
     )
-    confirm_password = forms.CharField(label=_('Confirm Password'), widget=forms.PasswordInput)
+    confirm_password = forms.CharField(
+        label=_('Confirm Password'),
+        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'}))
 
     def clean(self) -> dict[str, Any]:
         """Checks if the passwords match and if the password is long enough."""
@@ -57,8 +59,9 @@ class CredentialDownloadForm(CleanedDataNotNoneMixin, forms.Form):
             if password != confirm_password:
                 self.add_error('confirm_password', _('Passwords do not match.'))
 
+            pass_to_short_err_msg = _('Password must be at least %d characters long.') % PASSWORD_MIN_LENGTH
             if len(password) < PASSWORD_MIN_LENGTH:
-                self.add_error('password', _('Password must be at least %d characters long.') % PASSWORD_MIN_LENGTH)
+                self.add_error('password', pass_to_short_err_msg)
 
         return cleaned_data
 
@@ -76,9 +79,6 @@ class BaseCredentialForm(forms.Form):
         """Overwrite the constructor to accept the current device instance."""
         self.device = device
         super().__init__(*args, **kwargs)
-
-        default_cn = device.common_name + '-' + self.__class__.__name__.replace('Form', '').replace('Issue', '')
-        self.fields['common_name'].initial = default_cn
 
     def clean_common_name(self) -> str:
         """Checks the common name."""
