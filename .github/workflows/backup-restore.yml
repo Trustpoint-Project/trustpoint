@@ -2,11 +2,12 @@
 name: Backup & Restore TrustPoint
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       artifact_name:
-        description: 'Base name for your backup (without .dump.gz)'
+        description: 'Basis-Name für das Backup (Suffix .dump.gz wird automatisch angehängt)'
         required: false
+        type: string
         default: 'from_outside'
 
 jobs:
@@ -17,56 +18,53 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
       - name: Start TrustPoint container
-        run: docker compose up -d
+        run: docker compose -f docker-compose.yml up -d
 
-      - name: Apply migrations (inside container)
+      - name: Apply migrations (in-container)
         run: docker compose exec trustpoint \
-              uv run trustpoint/manage.py migrate --noinput
+             uv run trustpoint/manage.py migrate --noinput
 
-      - name: Fill demo data
+      - name: Fill demo data (in-container)
         run: |
           docker compose exec trustpoint \
             uv run trustpoint/manage.py add_domains_and_devices
           docker compose exec trustpoint \
             uv run trustpoint/manage.py tls_cred
 
-      - name: Create backup
+      - name: Create backup (in-container)
         run: docker compose exec trustpoint \
-             uv run trustpoint/manage.py trustpointbackup --filename ${{ github.event.inputs.artifact_name }}
+             uv run trustpoint/manage.py trustpointbackup --filename ${{ inputs.artifact_name }}
 
       - name: Upload backup artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.artifact_name }}.dump.gz
-          path: trustpoint/media/backups/${{ github.event.inputs.artifact_name }}.dump.gz
+          name: ${{ inputs.artifact_name }}.dump.gz
+          path: trustpoint/media/backups/${{ inputs.artifact_name }}.dump.gz
 
       - name: Stop & remove old container
-        run: docker compose down --volumes --remove-orphans
+        run: docker compose -f docker-compose.yml down --volumes --remove-orphans
 
       - name: Start fresh TrustPoint container
-        run: docker compose up -d
+        run: docker compose -f docker-compose.yml up -d
 
       - name: Apply migrations on fresh container
         run: docker compose exec trustpoint \
-              uv run trustpoint/manage.py migrate --noinput
+             uv run trustpoint/manage.py migrate --noinput
 
       - name: Download backup artifact
         uses: actions/download-artifact@v4
         with:
-          name: ${{ github.event.inputs.artifact_name }}.dump.gz
+          name: ${{ inputs.artifact_name }}.dump.gz
           path: trustpoint/media/backups/
 
-      - name: Restore backup (inside container)
+      - name: Restore backup (in-container)
         run: |
           docker compose exec trustpoint \
             uv run trustpoint/manage.py dbrestore -z --noinput \
-            -I trustpoint/media/backups/${{ github.event.inputs.artifact_name }}.dump.gz
+              -I trustpoint/media/backups/${{ inputs.artifact_name }}.dump.gz
           docker compose exec trustpoint \
             uv run trustpoint/manage.py trustpointrestore
 
       - name: Cleanup local backup file
-        run: rm -f trustpoint/media/backups/${{ github.event.inputs.artifact_name }}.dump.gz
+        run: rm -f trustpoint/media/backups/${{ inputs.artifact_name }}.dump.gz
