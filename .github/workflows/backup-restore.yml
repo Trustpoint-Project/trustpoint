@@ -25,15 +25,12 @@ jobs:
         run: docker compose up -d
 
       - name: Apply migrations (in-container)
-        run: docker compose exec -T trustpoint \
-              uv run trustpoint/manage.py migrate --noinput
+        run: uv run trustpoint/manage.py migrate --noinput
 
       - name: Fill demo data (in-container)
         run: |
-          docker compose exec -T trustpoint \
-            uv run trustpoint/manage.py add_domains_and_devices
-          docker compose exec -T trustpoint \
-            uv run trustpoint/manage.py tls_cred
+          uv run trustpoint/manage.py add_domains_and_devices
+          uv run trustpoint/manage.py tls_cred
 
       - name: Create backup (in-container)
         run: docker compose exec -T trustpoint \
