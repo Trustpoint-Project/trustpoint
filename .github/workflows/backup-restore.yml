@@ -5,7 +5,7 @@ on:
   workflow_call:
     inputs:
       artifact_name:
-        description: 'Base name for the backup (".dump.gz" is added automatically)'
+        description: 'Base name for the backup (".dump.gz" will be appended)'
         required: false
         type: string
         default: 'from_outside'
@@ -18,19 +18,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Build TrustPoint image
+        run: docker compose build trustpoint
+
       - name: Start TrustPoint container
         run: docker compose up -d
 
       - name: Apply migrations (in-container)
-        run: docker compose exec trustpoint uv run trustpoint/manage.py migrate --noinput
+        run: docker compose exec -T trustpoint \
+              uv run trustpoint/manage.py migrate --noinput
 
       - name: Fill demo data (in-container)
         run: |
-          docker compose exec trustpoint uv run trustpoint/manage.py add_domains_and_devices
-          docker compose exec trustpoint uv run trustpoint/manage.py tls_cred
+          docker compose exec -T trustpoint \
+            uv run trustpoint/manage.py add_domains_and_devices
+          docker compose exec -T trustpoint \
+            uv run trustpoint/manage.py tls_cred
 
       - name: Create backup (in-container)
-        run: docker compose exec trustpoint uv run trustpoint/manage.py trustpointbackup --filename ${{ inputs.artifact_name }}
+        run: docker compose exec -T trustpoint \
+             uv run trustpoint/manage.py trustpointbackup --filename ${{ inputs.artifact_name }}
 
       - name: Upload backup artifact
         uses: actions/upload-artifact@v4
@@ -45,7 +52,8 @@ jobs:
         run: docker compose up -d
 
       - name: Apply migrations on fresh container
-        run: docker compose exec trustpoint uv run trustpoint/manage.py migrate --noinput
+        run: docker compose exec -T trustpoint \
+              uv run trustpoint/manage.py migrate --noinput
 
       - name: Download backup artifact
         uses: actions/download-artifact@v4
@@ -55,8 +63,11 @@ jobs:
 
       - name: Restore backup (in-container)
         run: |
-          docker compose exec trustpoint uv run trustpoint/manage.py dbrestore -z --noinput -I trustpoint/media/backups/${{ inputs.artifact_name }}.dump.gz
-          docker compose exec trustpoint uv run trustpoint/manage.py trustpointrestore
+          docker compose exec -T trustpoint \
+            uv run trustpoint/manage.py dbrestore -z --noinput \
+              -I trustpoint/media/backups/${{ inputs.artifact_name }}.dump.gz
+          docker compose exec -T trustpoint \
+            uv run trustpoint/manage.py trustpointrestore
 
       - name: Cleanup local backup file
         run: rm -f trustpoint/media/backups/${{ inputs.artifact_name }}.dump.gz
