@@ -1,7 +1,10 @@
-# .github/workflows/ci-backup.yml
-name: CI with Backup & Restore
+name: R_006
 
 on:
+  pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       backup_name:
