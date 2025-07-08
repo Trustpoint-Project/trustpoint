@@ -296,9 +296,11 @@ class AbstractCreateDeviceView[T: BaseModelForm[DeviceModel]](PageContextMixin, 
             err_msg = _('Unexpected error occurred. The object was likely not created and saved.')
             raise Http404(err_msg)
         if self.object.domain_credential_onboarding:
-            return str(reverse_lazy('devices:help_dispatch_domain', kwargs={'pk': self.object.id}))
+            return str(reverse_lazy(
+                f'{self.page_category}:{self.page_name}_help_dispatch_domain', kwargs={'pk': self.object.id}))
 
-        return str(reverse_lazy('devices:help_dispatch_device_type_redirect', kwargs={'pk': self.object.id}))
+        return str(reverse_lazy(
+            f'{self.page_category}:{self.page_name}_help_dispatch_domain', kwargs={'pk': self.object.id}))
 
 
 class CreateDeviceView(AbstractCreateDeviceView[CreateDeviceForm]):
@@ -442,7 +444,10 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             f'devices:{self.page_name}_certificate_lifecycle_management-issue_opc_ua_server_credential'
         )
 
-        context['download_url'] = f'devices:{self.page_name}_download'
+        context['download_url'] = f'{self.page_category}:{self.page_name}_download'
+
+        context['help_dispatch_domain_url'] = f'{self.page_category}:{self.page_name}_help_dispatch_domain'
+        context['help_dispatch_device_type_url'] = f'{self.page_category}:{self.page_name}_help_dispatch_domain'
 
         return context
 

@@ -10,10 +10,9 @@ from devices.views import (
     ActiveTrustpointTlsServerCredentialModelMissingErrorMsg,
     DeviceWithoutDomainErrorMsg,
     NamedCurveMissingForEccErrorMsg,
-    PageContextMixin,
     PublicKeyInfoMissingErrorMsg,
 )
-from django.http import Http404
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -25,13 +24,43 @@ from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from settings.models import TlsSettings
 from trustpoint_core import oid
 
+from trustpoint.page_context import (
+    DEVICES_PAGE_CATEGORY,
+    DEVICES_PAGE_DEVICES_SUBCATEGORY,
+    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
+    PageContextMixin,
+)
+
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from typing import Any
+
+
 
 #  ----------------------------------- Certificate Lifecycle Management - Help Pages -----------------------------------
 
+class GetRedirectMixin:
+    """Provides a get method that redirects to the ULR returned by get_redirect_url."""
 
-class HelpDispatchDomainCredentialView(PageContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
+    get_redirect_url: Callable[..., str]
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Pro.
+
+        Args:
+            request: The django HttpRequest object.
+            *args: Positional arguments are passed to self.get_redirect.url()
+            **kwargs: Keyword arguments are passed to self.get_redirect.url()
+
+        Returns:
+            The corresponding redirect.
+        """
+        _ = request
+
+        return HttpResponseRedirect(self.get_redirect_url(*args, **kwargs))
+
+
+class DeviceHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixin, DetailView[DeviceModel]):
     """Redirects to the required help pages depending on the onboarding protocol.
 
     If no help page could be determined, it will redirect to the devices page.
@@ -42,7 +71,10 @@ class HelpDispatchDomainCredentialView(PageContextMixin, SingleObjectMixin[Devic
     model: type[DeviceModel] = DeviceModel
     permanent = False
 
-    def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def get_redirect_url(self, *_args: Any, **_kwargs: Any) -> str:
         """Gets the redirection URL (Domain Credentials) for the required help page.
 
         Args:
@@ -52,54 +84,244 @@ class HelpDispatchDomainCredentialView(PageContextMixin, SingleObjectMixin[Devic
         Returns:
             The redirection URL.
         """
-        del args
-        del kwargs
-
         device: DeviceModel = self.get_object()
 
         if not device.domain_credential_onboarding and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value:
-            return f'{reverse("devices:help-no-onboarding_est-username-password", kwargs={"pk": device.id})}'
+            return reverse(
+                f'{self.page_category}:{self.page_name}_help-no-onboarding_est-username-password',
+                kwargs={'pk': device.id})
 
         if device.onboarding_protocol == device.OnboardingProtocol.CMP_SHARED_SECRET.value:
-            return f'{reverse("devices:help-onboarding_cmp-shared-secret", kwargs={"pk": device.id})}'
+            return reverse(
+                f'{self.page_category}:{self.page_name}_help-onboarding_cmp-shared-secret',
+                kwargs={'pk': device.id})
 
         if device.onboarding_protocol == device.OnboardingProtocol.CMP_IDEVID.value:
-            return f'{reverse("devices:help-onboarding_cmp-idevid", kwargs={"pk": device.id})}'
+            return reverse(
+                f'{self.page_category}:{self.page_name}_help-onboarding_cmp-idevid',
+                kwargs={'pk': device.id})
 
         if device.onboarding_protocol == device.OnboardingProtocol.EST_PASSWORD.value:
-            return f'{reverse("devices:help-onboarding_est-username-password", kwargs={"pk": device.id})}'
+            return reverse(
+                f'{self.page_category}:{self.page_name}_help-onboarding_est-username-password',
+                kwargs={'pk': device.id})
 
         if device.onboarding_protocol == device.OnboardingProtocol.EST_IDEVID.value:
-            return f'{reverse("devices:help-onboarding_est-idevid", kwargs={"pk": device.id})}'
+            return reverse(
+                f'{self.page_category}:{self.page_name}_help-onboarding_est-idevid',
+                kwargs={'pk': device.id})
 
-        return f'{reverse("devices:devices")}'
+        return reverse(f'{self.page_category}:{self.page_name}')
 
 
-class HelpDispatchDeviceTypeRedirectView(PageContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
-    """Redirects based on the device type: OPC UA GDS or standard device."""
+class OpcUaGdsHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixin, DetailView[DeviceModel]):
+    """Redirects to the required help pages depending on the onboarding protocol.
+
+    If no help page could be determined, it will redirect to the devices page.
+    """
 
     http_method_names = ('get',)
 
     model: type[DeviceModel] = DeviceModel
     permanent = False
 
-    def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
-        """Determines the redirect URL based on the device type.
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+    def get_redirect_url(self, *_args: Any, **_kwargs: Any) -> str:
+        """Gets the redirection URL (Domain Credentials) for the required help page.
 
         Args:
-            *args: Ignored positional arguments.
-            **kwargs: Should include 'pk' of the device to identify it.
+            *args: Positional arguments are discarded.
+            **kwargs: Keyword arguments are discarded.
 
         Returns:
-            str: The URL to redirect to.
+            The redirection URL.
         """
-        del args
-        device = get_object_or_404(DeviceModel, pk=kwargs.get('pk'))
+        device: DeviceModel = self.get_object()
 
-        if device.device_type == DeviceModel.DeviceType.OPC_UA_GDS.value:
-            return reverse('devices:help_dispatch_opcua_gds', kwargs={'pk': device.id})
+        if not device.domain_credential_onboarding and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value:
+            return reverse(
+                f'{self.page_category}:{self.page_name}_help-no-onboarding_est-username-password',
+                kwargs={'pk': device.id})
 
-        return reverse('devices:help_dispatch_application', kwargs={'pk': device.id})
+        if device.onboarding_protocol == device.OnboardingProtocol.EST_PASSWORD.value:
+            return reverse(
+                f'{self.page_category}:{self.page_name}_help-onboarding_est-username-password',
+                kwargs={'pk': device.id})
+
+        return reverse(f'{self.page_category}:{self.page_name}')
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Pro.
+
+        Args:
+            request: The django HttpRequest object.
+            *args: Positional arguments are passed to self.get_redirect.url()
+            **kwargs: Keyword arguments are passed to self.get_redirect.url()
+
+        Returns:
+            The corresponding redirect.
+        """
+        _ = request
+
+        return HttpResponseRedirect(self.get_redirect_url(*args, **kwargs))
+
+class AbstractHelpDomainCredentialEstContextView(PageContextMixin, DetailView[DeviceModel]):
+    """Base view for CMP help views concerning the domain credential, not intended to be used directly."""
+
+    http_method_names = ('get',)
+
+    model = DeviceModel
+    context_object_name = 'device'
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name: str
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds information about the required OpenSSL commands to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to render the page.
+        """
+        context = super().get_context_data(**kwargs)
+        device: DeviceModel = self.object
+        certificate_template = self.kwargs.get('certificate_template')
+        context['certificate_template'] = certificate_template
+        ipv4_address = TlsSettings.get_first_ipv4_address()
+
+        context['host'] = f'{ipv4_address}:{self.request.META.get("SERVER_PORT", "443")}'
+
+        context['domain'] = device.domain
+
+        context.update(self._get_domain_credential_est_context(device=device))
+
+        if certificate_template is not None:
+            number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
+            camelcase_template = ''.join(word.capitalize() for word in certificate_template.split('-'))
+            context['cn_entry'] = f'Trustpoint-{camelcase_template}-Credential-{number_of_issued_device_certificates}'
+
+        return context
+
+    @staticmethod
+    def _get_domain_credential_est_context(device: DeviceModel) -> dict[str, Any]:
+        """Provides the context for est commands using client based authentication.
+
+        Args:
+            device: The corresponding device model.
+
+        Returns:
+            The required context.
+        """
+        if device.domain is None:
+            raise Http404(DeviceWithoutDomainErrorMsg)
+        if not device.public_key_info:
+            raise Http404(DeviceWithoutDomainErrorMsg)
+        context: dict[str, Any] = {}
+        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
+            domain_credential_key_gen_command = (
+                f'openssl genrsa -out domain_credential_key.pem {device.public_key_info.key_size}'
+            )
+            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
+        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
+            if not device.public_key_info.named_curve:
+                raise Http404(NamedCurveMissingForEccErrorMsg)
+            domain_credential_key_gen_command = (
+                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
+                f'-genkey -noout -out domain_credential_key.pem'
+            )
+            key_gen_command = (
+                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
+                f'-genkey -noout -out key.pem'
+            )
+        else:
+            err_msg = _('Unsupported public key algorithm')
+            raise ValueError(err_msg)
+
+        context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
+        context['key_gen_command'] = key_gen_command
+        tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
+        if not tls_cert or not tls_cert.credential:
+            raise Http404(ActiveTrustpointTlsServerCredentialModelMissingErrorMsg)
+        context['trustpoint_server_certificate'] = (
+            tls_cert.credential.certificate.get_certificate_serializer().as_pem().decode('utf-8')
+        )
+
+        domain = device.domain
+        context.update(
+            {
+                'allow_app_certs_without_domain': domain.allow_app_certs_without_domain,
+                'allow_username_password_registration': domain.allow_username_password_registration,
+                'username_password_auth': domain.username_password_auth,
+                'domain_credential_auth': domain.domain_credential_auth,
+            }
+        )
+
+        context['domain_credential_cn'] = 'Trustpoint Domain Credential'
+
+        return context
+
+
+class DeviceNoOnboardingEstUsernamePasswordHelpView(AbstractHelpDomainCredentialEstContextView):
+    """View to provide help information for EST username/password authentication with no onboarding."""
+
+    template_name = 'devices/help/no_onboarding/est_username_password.html'
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class OpcUaGdsNoOnboardingEstUsernamePasswordHelpView(AbstractHelpDomainCredentialEstContextView):
+    """View to provide help information for EST username/password authentication with no onboarding and OPC UA GDS."""
+
+    template_name = 'devices/help/no_onboarding/est_gds_username_password.html'
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class DeviceOnboardingEstUsernamePasswordHelpView(AbstractHelpDomainCredentialEstContextView):
+    """View to provide help information for EST username/password authentication for onboarding."""
+
+    template_name = 'devices/help/onboarding/est_username_password.html'
+
+
+class DeviceOnboardingEstApplicationCredentialsHelpView(AbstractHelpDomainCredentialEstContextView):
+    """View to provide help information for EST domain credential authentication."""
+
+    template_name = 'devices/help/onboarding/est_application_credentials.html'
+
+
+
+
+
+# class AbstractHelpDispatchDeviceTypeRedirectView(PageContextMixin, DetailView[DeviceModel]):
+#     """Redirects based on the device type: OPC UA GDS or standard device."""
+
+#     http_method_names = ('get',)
+
+#     model: type[DeviceModel] = DeviceModel
+#     permanent = False
+
+#     def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
+#         """Determines the redirect URL based on the device type.
+
+#         Args:
+#             *args: Ignored positional arguments.
+#             **kwargs: Should include 'pk' of the device to identify it.
+
+#         Returns:
+#             str: The URL to redirect to.
+#         """
+#         del args
+#         device = get_object_or_404(DeviceModel, pk=kwargs.get('pk'))
+
+#         if device.device_type == DeviceModel.DeviceType.OPC_UA_GDS.value:
+#             return reverse('devices:help_dispatch_opcua_gds', kwargs={'pk': device.id})
+
+#         return reverse('devices:help_dispatch_application', kwargs={'pk': device.id})
+
+
+# class DeviceHelpDispatchDeviceTypeRedirectView(AbstractHelpDispatchDeviceTypeRedirectView):
 
 
 class HelpDispatchApplicationCredentialView(TemplateView):
@@ -318,131 +540,6 @@ class HelpDomainCredentialCmpContextView(PageContextMixin, DetailView[DeviceMode
         return context
 
 
-class HelpDomainCredentialEstContextView(PageContextMixin, DetailView[DeviceModel]):
-    """Base view for CMP help views concerning the domain credential, not intended to be used directly."""
-
-    http_method_names = ('get',)
-
-    model = DeviceModel
-    context_object_name = 'device'
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds information about the required OpenSSL commands to the context.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            The context to render the page.
-        """
-        context = super().get_context_data(**kwargs)
-        device: DeviceModel = self.object
-        certificate_template = self.kwargs.get('certificate_template')
-        context['certificate_template'] = certificate_template
-        ipv4_address = TlsSettings.get_first_ipv4_address()
-
-        context['host'] = f'{ipv4_address}:{self.request.META.get("SERVER_PORT", "443")}'
-
-        context['domain'] = device.domain
-
-        context.update(self._get_domain_credential_est_context(device=device))
-
-        if certificate_template is not None:
-            number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
-            camelcase_template = ''.join(word.capitalize() for word in certificate_template.split('-'))
-            context['cn_entry'] = f'Trustpoint-{camelcase_template}-Credential-{number_of_issued_device_certificates}'
-
-        return context
-
-    @staticmethod
-    def _get_domain_credential_est_context(device: DeviceModel) -> dict[str, Any]:
-        """Provides the context for est commands using client based authentication.
-
-        Args:
-            device: The corresponding device model.
-
-        Returns:
-            The required context.
-        """
-        if device.domain is None:
-            raise Http404(DeviceWithoutDomainErrorMsg)
-        if not device.public_key_info:
-            raise Http404(DeviceWithoutDomainErrorMsg)
-        context: dict[str, Any] = {}
-        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
-            domain_credential_key_gen_command = (
-                f'openssl genrsa -out domain_credential_key.pem {device.public_key_info.key_size}'
-            )
-            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
-        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
-            if not device.public_key_info.named_curve:
-                raise Http404(NamedCurveMissingForEccErrorMsg)
-            domain_credential_key_gen_command = (
-                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out domain_credential_key.pem'
-            )
-            key_gen_command = (
-                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out key.pem'
-            )
-        else:
-            err_msg = _('Unsupported public key algorithm')
-            raise ValueError(err_msg)
-
-        context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
-        context['key_gen_command'] = key_gen_command
-        tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
-        if not tls_cert or not tls_cert.credential:
-            raise Http404(ActiveTrustpointTlsServerCredentialModelMissingErrorMsg)
-        context['trustpoint_server_certificate'] = (
-            tls_cert.credential.certificate.get_certificate_serializer().as_pem().decode('utf-8')
-        )
-
-        domain = device.domain
-        context.update(
-            {
-                'allow_app_certs_without_domain': domain.allow_app_certs_without_domain,
-                'allow_username_password_registration': domain.allow_username_password_registration,
-                'username_password_auth': domain.username_password_auth,
-                'domain_credential_auth': domain.domain_credential_auth,
-            }
-        )
-
-        context['domain_credential_cn'] = 'Trustpoint Domain Credential'
-
-        return context
-
-
-class NoOnboardingEstUsernamePasswordHelpView(HelpDomainCredentialEstContextView):
-    """View to provide help information for EST username/password authentication with no onboarding."""
-
-    template_name = 'devices/help/no_onboarding/est_username_password.html'
-
-
-class NoOnboardingEstOpcUaGdsUsernamePasswordHelpView(HelpDomainCredentialEstContextView):
-    """View to provide help information for EST username/password authentication with no onboarding and OPC UA GDS."""
-
-    template_name = 'devices/help/no_onboarding/est_gds_username_password.html'
-
-
-class OnboardingEstUsernamePasswordHelpView(HelpDomainCredentialEstContextView):
-    """View to provide help information for EST username/password authentication for onboarding."""
-
-    template_name = 'devices/help/onboarding/est_username_password.html'
-
-
-class OnboardingEstApplicationCredentialsHelpView(HelpDomainCredentialEstContextView):
-    """View to provide help information for EST domain credential authentication."""
-
-    template_name = 'devices/help/onboarding/est_application_credentials.html'
-
-
-class OnboardingEstIdevidHelpView(HelpDomainCredentialEstContextView):
-    """View to provide help information for EST IDevID enrollment."""
-
-    template_name = 'devices/help/onboarding/est_idevid.html'
-
-
 class NoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[DeviceModel]):
     """Help view for the case of no onboarding using CMP shared-secret."""
 
@@ -595,5 +692,11 @@ class OnboardingCmpIdevidRegistrationHelpView(OnboardingIdevidRegistrationHelpVi
 
 class OnboardingEstIdevidRegistrationHelpView(OnboardingIdevidRegistrationHelpView):
     """Help view for the EST IDevID Registration, which displays the required OpenSSL commands."""
+
+    template_name = 'devices/help/onboarding/est_idevid.html'
+
+
+class DeviceOnboardingEstIdevidHelpView(AbstractHelpDomainCredentialEstContextView):
+    """View to provide help information for EST IDevID enrollment."""
 
     template_name = 'devices/help/onboarding/est_idevid.html'
