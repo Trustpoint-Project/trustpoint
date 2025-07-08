@@ -6,8 +6,7 @@ on:
     branches:
       - main
 
+      
 jobs:
-  test:
-    uses: ./.github/workflows/behave-test-template.yml
-    with:
-      feature_file: R_006_backup_restore_update
+  backup-and-restore:
+    uses: ./.github/workflows/backup-restore.yml
