@@ -72,8 +72,8 @@ def create_db_backup(path: Path) -> str:
     """
     path.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d_%H-%M-%S')
-    filename = f'backup_{timestamp}.dump.gz'
-    call_command('dbbackup', '-o', filename, '-z')
+    filename = f'backup_{timestamp}'
+    call_command('trustpointbackup', filename=filename)
     return filename
 
 

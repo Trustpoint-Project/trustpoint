@@ -1,0 +1,60 @@
+# .github/workflows/backup-restore.yml
+name: Backup & Restore TrustPoint
+
+on:
+  workflow_call:
+    inputs:
+      artifact_name:
+        description: 'Name des Backup-Artefakts'
+        required: true
+        type: string
+        default: 'trustpoint-backup'
+
+jobs:
+  backup-restore:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Start TrustPoint Container
+        run: |
+          docker compose up -d
+
+      - name: Fill trustpoint with demo data
+        run: |
+          docker exec trustpoint sh -c "uv run trustpoint/manage.py add_domains_and_devices"
+          docker exec trustpoint sh -c "uv run trustpoint/manage.py tls_cred"
+
+      - name: Create Backup inside Container
+        run: |
+          docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointbackup --filename from_outside"
+
+      - name: Upload Backup as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: from_outside.dump.gz
+          path: trustpoint/media/backups/
+
+      - name: Stop and Remove Old Container
+        run: |
+          docker-compose down -v
+
+      - name: Start Fresh TrustPoint Container
+        run: |
+          docker-compose up -d
+
+      - name: Download Backup Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: from_outside.dump.gz
+          path: trustpoint/media/backups/
+
+      - name: Restore Backup inside Container
+        run: |
+          docker exec trustpoint sh -c "uv run trustpoint/manage.py dbrestore -z --noinput -I trustpoint/media/backups/from_outside.dump.gz"
+          docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointrestore"
