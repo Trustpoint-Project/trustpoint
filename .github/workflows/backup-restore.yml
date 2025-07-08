@@ -25,7 +25,7 @@ jobs:
         run: docker compose -f docker-compose.yml up -d
 
       - name: Apply Django Migrations
-        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py migrate --noinput"
+        run: uv run trustpoint/manage.py migrate --noinput
 
       - name: Fill TrustPoint with Demo Data
         run: |
