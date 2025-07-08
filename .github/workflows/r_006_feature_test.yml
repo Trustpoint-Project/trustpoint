@@ -6,7 +6,8 @@ on:
     branches:
       - main
 
-      
 jobs:
   backup-and-restore:
     uses: ./.github/workflows/backup-restore.yml
+    with:
+      artifact_name: 'from_outside.dump.gz'
