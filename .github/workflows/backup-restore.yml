@@ -27,7 +27,6 @@ jobs:
       - name: Fill trustpoint with demo data
         run: |
           docker exec trustpoint sh -c "uv run trustpoint/manage.py add_domains_and_devices"
-          docker exec trustpoint sh -c "uv run trustpoint/manage.py tls_cred"
 
       - name: Create Backup inside Container
         run: |
