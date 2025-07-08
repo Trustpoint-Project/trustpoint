@@ -22,8 +22,7 @@ jobs:
         uses: docker/setup-buildx-action@v2
 
       - name: Start TrustPoint Container
-        run: |
-          docker compose up -d
+        run: docker-compose -f docker/trustpoint/docker-compose.yml up -d
 
       - name: Fill trustpoint with demo data
         run: |
@@ -32,29 +31,27 @@ jobs:
 
       - name: Create Backup inside Container
         run: |
-          docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointbackup --filename from_outside"
+          docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointbackup --filename ${{ inputs.artifact_name }}"
 
       - name: Upload Backup as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: from_outside.dump.gz
+          name: ${{ inputs.artifact_name }}
           path: trustpoint/media/backups/
 
       - name: Stop and Remove Old Container
-        run: |
-          docker-compose down -v
+        run: docker-compose -f docker/trustpoint/docker-compose.yml down -v
 
       - name: Start Fresh TrustPoint Container
-        run: |
-          docker-compose up -d
+        run: docker-compose -f docker/trustpoint/docker-compose.yml up -d
 
       - name: Download Backup Artifact
         uses: actions/download-artifact@v4
         with:
-          name: from_outside.dump.gz
+          name: ${{ inputs.artifact_name }}
           path: trustpoint/media/backups/
 
       - name: Restore Backup inside Container
         run: |
-          docker exec trustpoint sh -c "uv run trustpoint/manage.py dbrestore -z --noinput -I trustpoint/media/backups/from_outside.dump.gz"
+          docker exec trustpoint sh -c "uv run trustpoint/manage.py dbrestore -z --noinput -I trustpoint/media/backups/${{ inputs.artifact_name }}"
           docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointrestore"
