@@ -8,6 +8,7 @@ import ipaddress
 import secrets
 from typing import TYPE_CHECKING, Protocol, cast, get_args
 
+from aoki.views import AokiServiceMixin
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, hmac
@@ -143,15 +144,18 @@ class CmpRequestedDomainExtractorMixin:
     """Domain name extractor."""
 
     requested_domain: DomainModel
+    is_aoki: bool = False
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Dispatch method."""
         domain_name = cast('str', kwargs.get('domain'))
-
-        try:
-            self.requested_domain = DomainModel.objects.get(unique_name=domain_name)
-        except DomainModel.DoesNotExist:
-            return HttpResponse('Domain does not exist.', status=404)
+        if domain_name == '.aoki' and '/initialization/.aoki' in request.path: # basing this on URL is hacky
+            self.is_aoki = True
+        else:
+            try:
+                self.requested_domain = DomainModel.objects.get(unique_name=domain_name)
+            except DomainModel.DoesNotExist:
+                return HttpResponse('Domain does not exist.', status=404)
 
         parent = cast('Dispatchable', super())
         return parent.dispatch(request, *args, **kwargs)
@@ -646,6 +650,7 @@ class CmpInitializationRequestView(
             self,
             issued_cred: IssuedCredentialModel,
             issuer_credential: CredentialModel,
+            signer_credential: CredentialModel,
             sender_kid: rfc2459.KeyIdentifier
             ) -> rfc4210.PKIMessage:
         """Builds the IP response message (without the protection)."""
@@ -660,6 +665,13 @@ class CmpInitializationRequestView(
             issuer_credential.get_certificate(),
             *issuer_credential.get_certificate_chain(),
         ]
+        if issuer_credential.pk != signer_credential.pk:
+            # Include both the DevOwnerID (signer) and the Issuer CA in extraCerts
+            signer_chain = [
+                signer_credential.get_certificate(),
+                *signer_credential.get_certificate_chain(),
+            ]
+            certificate_chain = signer_chain + certificate_chain
         for certificate in certificate_chain:
             der_bytes = certificate.public_bytes(encoding=Encoding.DER)
             asn1_certificate, _ = decoder.decode(der_bytes, asn1Spec=rfc4210.CMPCertificate())
@@ -801,10 +813,15 @@ class CmpInitializationRequestView(
         self.device = IDevIDAuthenticator.authenticate_idevid_from_x509(
             idevid_cert=cmp_signer_cert,
             intermediate_cas=intermediate_certs,
-            domain=self.requested_domain,
+            domain=None if self.is_aoki else self.requested_domain,
             onboarding_protocol=DeviceModel.OnboardingProtocol.CMP_IDEVID,
             pki_protocol=DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE,
         )
+
+        if not self.device.domain:
+            return HttpResponse('Device domain is not set.', status=422)
+
+        self.requested_domain = self.device.domain
 
         # device sanity checks
         if not self.device.domain_credential_onboarding:
@@ -837,6 +854,11 @@ class CmpInitializationRequestView(
         # Checks regarding contained public key and corresponding signature suite of the issuing CA
         issuing_ca_credential = self.requested_domain.get_issuing_ca_or_value_error().credential
         issuing_ca_cert = issuing_ca_credential.get_certificate()
+        signer_credential = issuing_ca_credential
+        if (self.is_aoki):
+            signer_credential = AokiServiceMixin.get_owner_credential(cmp_signer_cert)
+            if not signer_credential:
+                return HttpResponse('No DevOwnerID present for this IDevID.', status=404)
         signature_suite = SignatureSuite.from_certificate(issuing_ca_cert)
         if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
             err_msg = 'Contained public key type does not match the signature suite.'
@@ -854,9 +876,13 @@ class CmpInitializationRequestView(
         )
 
         pki_message = self._build_base_ip_message(
-            issued_cred=issued_cred, sender_kid=sender_kid, issuer_credential=issuing_ca_credential)
+            issued_cred=issued_cred,
+            sender_kid=sender_kid,
+            issuer_credential=issuing_ca_credential,
+            signer_credential=signer_credential
+        )
         pki_message = self._sign_pki_message(
-            pki_message=pki_message, signature_suite=signature_suite, signer_credential=issuing_ca_credential)
+            pki_message=pki_message, signature_suite=signature_suite, signer_credential=signer_credential)
 
         encoded_message = encoder.encode(pki_message)
         decoded_message, _ = decoder.decode(encoded_message, asn1Spec=rfc4210.PKIMessage())
@@ -881,6 +907,8 @@ class CmpInitializationRequestView(
             self.serialized_pyasn1_message['header']['protectionAlg']['algorithm'].prettyPrint()
         )
         if protection_algorithm == AlgorithmIdentifier.PASSWORD_BASED_MAC:
+            if self.is_aoki:
+                return HttpResponse('AOKI only supported with signature-based protection (IDevID).', status=400)
             try:
                 sender_kid = int(self.serialized_pyasn1_message['header']['senderKID'].prettyPrint())
                 self.device = DeviceModel.objects.get(pk=sender_kid)
