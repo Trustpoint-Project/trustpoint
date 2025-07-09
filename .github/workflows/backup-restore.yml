@@ -18,56 +18,54 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build TrustPoint image
-        run: docker compose build trustpoint
+      - name: Build and start database
+        run: |
+          docker build -t trustpointproject/postgres:latest -f docker/db/Dockerfile .
+          docker run -d --name postgres -p 5432:5432 -e POSTGRES_USER=admin   -e POSTGRES_PASSWORD=testing321   -e POSTGRES_DB=trustpoint_db   trustpointproject/postgres:latest
 
-      - name: Start TrustPoint container
-        run: docker compose up -d
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action
 
       - name: Apply migrations (in-container)
-        run: |
-          cd trustpoint
-          uv sync
+        run: 
           uv run trustpoint/manage.py migrate --noinput
 
-      - name: Fill demo data (in-container)
+      - name: Fill DB with test data
         run: |
-          docker exec trustpoint sh -c "uv run trustpoint/manage.py add_domains_and_devices"
-          docker exec trustpoint sh -c "uv run trustpoint/manage.py tls_cred"
+          uv run trustpoint/manage.py add_domains_and_devices
+          uv run trustpoint/manage.py tls_cred
+
+      - name: Build and start trustpoint container
+        run: |
+          docker build -t trustpointproject/trustpoint:latest -f docker/trustpoint/Dockerfile .
+          docker run -d --name trustpoint --link postgres -p80:80 -p443:443 -ePOSTGRES_DB=trustpoint_db -eDATABASE_USER=admin -eDATABASE_PASSWORD=testing321 -eDATABASE_HOST=postgres -eDATABASE_PORT=5432 trustpointproject/trustpoint:latest
+      
+      - name: Test if container implicitly restored from database
+        run: ./tests/scripts/test_successfull_restoration.sh
 
       - name: Create backup (in-container)
-        run: docker compose exec -T trustpoint \
-             uv run trustpoint/manage.py trustpointbackup --filename ${{ inputs.artifact_name }}
+        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointbackup --filename ${{ inputs.artifact_name }}"
 
-      - name: Upload backup artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ inputs.artifact_name }}.dump.gz
-          path: trustpoint/media/backups/${{ inputs.artifact_name }}.dump.gz
+      - name: Download backup
+        run: docker cp trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/from_outside.dump.gz .
 
       - name: Stop & remove old container
-        run: docker compose down --volumes --remove-orphans
+        run: docker rm -f trustpoint
+
+      - name: Reset old DB
+        run: uv run trustpoint/manage.py reset_db --force --no-user 
 
       - name: Start fresh TrustPoint container
-        run: docker compose up -d
+        run: docker run -d --name trustpoint --link postgres -p80:80 -p443:443 -ePOSTGRES_DB=trustpoint_db -eDATABASE_USER=admin -eDATABASE_PASSWORD=testing321 -eDATABASE_HOST=postgres -eDATABASE_PORT=5432 trustpointproject/trustpoint:latest
 
-      - name: Apply migrations on fresh container
-        run: docker compose exec -T trustpoint \
-              uv run trustpoint/manage.py migrate --noinput
+      - name: Upload backup to new trustpoint container
+        run: docker cp from_outside.dump.gz trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/
 
-      - name: Download backup artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ inputs.artifact_name }}.dump.gz
-          path: trustpoint/media/backups/
+      - name: Restore DB
+        run: uv run trustpoint/manage.py dbrestore  -z --noinput -I trustpoint/media/backups/from_outside.dump.gz
 
-      - name: Restore backup (in-container)
-        run: |
-          docker compose exec -T trustpoint \
-            uv run trustpoint/manage.py dbrestore -z --noinput \
-              -I trustpoint/media/backups/${{ inputs.artifact_name }}.dump.gz
-          docker compose exec -T trustpoint \
-            uv run trustpoint/manage.py trustpointrestore
+      - name: Restore trustpoint
+        run: uv run trustpoint/manage.py trustpointrestore
 
-      - name: Cleanup local backup file
-        run: rm -f trustpoint/media/backups/${{ inputs.artifact_name }}.dump.gz
+      - name: Test if container implicitly restored from database
+        run: ./tests/scripts/test_successfull_restoration.sh
