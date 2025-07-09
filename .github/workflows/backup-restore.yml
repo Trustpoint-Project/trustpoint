@@ -40,10 +40,10 @@ jobs:
           docker build -t trustpointproject/trustpoint:latest -f docker/trustpoint/Dockerfile .
           docker run -d --name trustpoint --link postgres -p80:80 -p443:443 -ePOSTGRES_DB=trustpoint_db -eDATABASE_USER=admin -eDATABASE_PASSWORD=testing321 -eDATABASE_HOST=postgres -eDATABASE_PORT=5432 trustpointproject/trustpoint:latest
       
-      - name: Wait for HTTP service
+      - name: Wait for HTTPS service
         run: |
           for i in {1..30}; do
-            if curl --fail -s http://localhost/; then
+            if curl --fail -s https://localhost/; then
               echo "Service is up"; exit 0
             fi
             echo "Waiting for service…"; sleep 2
