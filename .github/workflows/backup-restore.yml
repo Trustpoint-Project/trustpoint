@@ -73,7 +73,7 @@ jobs:
         run: docker exec trustpoint sh -c "uv run trustpoint/manage.py dbrestore  -z --noinput -I trustpoint/media/backups/from_outside.dump.gz"
 
       - name: Restore trustpoint
-        run: uv run trustpoint/manage.py trustpointrestore
+        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointrestore"
 
       - name: Wait for HTTP service
         run: |
