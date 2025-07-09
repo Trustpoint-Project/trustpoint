@@ -143,7 +143,7 @@ DEVELOPMENT_ENV = True
 # Settings for postgreql database
 POSTGRESQL = True
 DATABASE_ENGINE = 'django.db.backends.postgresql'
-DATABASE_HOST = 'postgres'
+DATABASE_HOST = 'localhost'
 DATABASE_PORT = '5432'
 POSTGRES_DB = 'trustpoint_db'
 DATABASE_USER = 'admin'
