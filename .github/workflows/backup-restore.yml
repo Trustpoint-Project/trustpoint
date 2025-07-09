@@ -25,7 +25,10 @@ jobs:
         run: docker compose up -d
 
       - name: Apply migrations (in-container)
-        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py migrate --noinput"
+        run: |
+          cd trustpoint
+          uv sync
+          uv run trustpoint/manage.py migrate --noinput
 
       - name: Fill demo data (in-container)
         run: |
