@@ -52,7 +52,7 @@ jobs:
           exit 1
 
       - name: Create backup (in-container)
-        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointbackup --filename ${{ inputs.artifact_name }}"
+        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointbackup --filename from_outside"
 
       - name: Download backup
         run: docker cp trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/from_outside.dump.gz .
