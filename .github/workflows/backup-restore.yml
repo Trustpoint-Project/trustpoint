@@ -69,7 +69,8 @@ jobs:
       - name: Create backup (in-container)
         run: |
           docker exec trustpoint \
-            sh -c "uv run trustpoint/manage.py trustpointbackup --filename ${{ inputs.artifact_name }}"
+            uv run trustpoint/manage.py trustpointbackup \
+              --filename "${{ inputs.artifact_name }}"
 
       - name: Download backup
         run: |
@@ -106,14 +107,14 @@ jobs:
       - name: Restore DB (in-container)
         run: |
           docker exec trustpoint \
-            sh -c "uv run trustpoint/manage.py dbrestore \
-                     -z --noinput \
-                     -I /var/www/html/trustpoint/trustpoint/media/backups/${{ inputs.artifact_name }}.dump.gz"
+            uv run trustpoint/manage.py dbrestore \
+              -z --noinput \
+              -I /var/www/html/trustpoint/trustpoint/media/backups/${{ inputs.artifact_name }}.dump.gz
 
       - name: Restore TrustPoint (in-container)
         run: |
           docker exec trustpoint \
-            sh -c "uv run trustpoint/manage.py trustpointrestore"
+            uv run trustpoint/manage.py trustpointrestore
 
       - name: Wait for HTTP service after restore
         run: |
