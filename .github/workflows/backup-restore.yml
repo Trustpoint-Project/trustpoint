@@ -70,7 +70,7 @@ jobs:
         run: docker cp from_outside.dump.gz trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/
 
       - name: Restore DB
-        run: uv run trustpoint/manage.py dbrestore  -z --noinput -I /var/www/html/trustpoint/media/backups/from_outside.dump.gz
+        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py dbrestore  -z --noinput -I trustpoint/media/backups/from_outside.dump.gz"
 
       - name: Restore trustpoint
         run: uv run trustpoint/manage.py trustpointrestore
