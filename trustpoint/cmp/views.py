@@ -650,14 +650,14 @@ class CmpInitializationRequestView(
             self,
             issued_cred: IssuedCredentialModel,
             issuer_credential: CredentialModel,
-            signer_credential: CredentialModel,
-            sender_kid: rfc2459.KeyIdentifier
+            sender_kid: rfc2459.KeyIdentifier,
+            signer_credential: CredentialModel | None = None,
             ) -> rfc4210.PKIMessage:
         """Builds the IP response message (without the protection)."""
         ip_header = self._build_response_message_header(
             serialized_pyasn1_message=self.serialized_pyasn1_message,
             sender_kid=sender_kid,
-            issuer_credential=issuer_credential)
+            issuer_credential=signer_credential if signer_credential else issuer_credential)
 
         ip_extra_certs = univ.SequenceOf()
 
@@ -665,7 +665,7 @@ class CmpInitializationRequestView(
             issuer_credential.get_certificate(),
             *issuer_credential.get_certificate_chain(),
         ]
-        if issuer_credential.pk != signer_credential.pk:
+        if signer_credential and issuer_credential.pk != signer_credential.pk:
             # Include both the DevOwnerID (signer) and the Issuer CA in extraCerts
             signer_chain = [
                 signer_credential.get_certificate(),
@@ -856,9 +856,10 @@ class CmpInitializationRequestView(
         issuing_ca_cert = issuing_ca_credential.get_certificate()
         signer_credential = issuing_ca_credential
         if (self.is_aoki):
-            signer_credential = AokiServiceMixin.get_owner_credential(cmp_signer_cert)
-            if not signer_credential:
-                return HttpResponse('No DevOwnerID present for this IDevID.', status=404)
+            owner_credential = AokiServiceMixin.get_owner_credential(cmp_signer_cert)
+            if not owner_credential:
+                return HttpResponse('No DevOwnerID present for this IDevID.', status=403)
+            signer_credential = owner_credential
         signature_suite = SignatureSuite.from_certificate(issuing_ca_cert)
         if not signature_suite.public_key_matches_signature_suite(loaded_public_key):
             err_msg = 'Contained public key type does not match the signature suite.'
@@ -870,7 +871,7 @@ class CmpInitializationRequestView(
         )
 
         # Build the response PKI message
-        ski = x509.SubjectKeyIdentifier.from_public_key(issuing_ca_cert.public_key())
+        ski = x509.SubjectKeyIdentifier.from_public_key(signer_credential.get_certificate().public_key())
         sender_kid = rfc2459.KeyIdentifier(ski.digest).subtype(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2)
         )
