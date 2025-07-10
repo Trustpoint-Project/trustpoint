@@ -33,7 +33,7 @@ docker exec "$CONTAINER" bash -lc '
     echo "  ✓ ssl_module enabled"
   else
     echo "  ✗ ssl_module NOT enabled" >&2
-    # exit 1
+    exit 1
   fi
 
   # 2.2) SSL vhost
@@ -42,7 +42,7 @@ docker exec "$CONTAINER" bash -lc '
     echo "  ✓ vhost file $VHOST present"
   else
     echo "  ✗ vhost file $VHOST missing" >&2
-    # exit 1
+    exit 1
   fi
 
   # 2.3) Certificate files
@@ -55,7 +55,7 @@ docker exec "$CONTAINER" bash -lc '
       echo "  ✓ cert file $f found"
     else
       echo "  ✗ cert file $f missing" >&2
-    #   exit 1
+      exit 1
     fi
   done
 '
@@ -66,7 +66,7 @@ if curl --fail -k -s "$URL" >/dev/null; then
   echo "✅ HTTPS endpoint is reachable"
 else
   echo "❌ HTTPS endpoint is NOT reachable" >&2
-#   exit 1
+  exit 1
 fi
 
 # 4) Database check for devices_devicemodel rows
@@ -84,5 +84,5 @@ if [[ "$has_entries" == "t" ]]; then
   exit 0
 else
   echo "❌ devices_devicemodel is empty" >&2
-#   exit 1
+  exit 1
 fi
