@@ -41,7 +41,7 @@ jobs:
           docker run -d --name trustpoint --link postgres -p80:80 -p443:443 -ePOSTGRES_DB=trustpoint_db -eDATABASE_USER=admin -eDATABASE_PASSWORD=testing321 -eDATABASE_HOST=postgres -eDATABASE_PORT=5432 trustpointproject/trustpoint:latest
       
       - name: Run post-restore validation
-        run: trustpoint/tests/scripts/test_successful_restoration.sh
+        run: ./tests/scripts/test_successfull_restoration.sh
 
       - name: Create backup (in-container)
         run: docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointbackup --filename from_outside"
@@ -68,4 +68,4 @@ jobs:
         run: docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointrestore"
 
       - name: Run post-restore validation
-        run: trustpoint/tests/scripts/test_successful_restoration.sh
+        run: ./tests/scripts/test_successfull_restoration.sh
