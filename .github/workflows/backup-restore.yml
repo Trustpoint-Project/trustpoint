@@ -1,70 +1,74 @@
+# .github/workflows/backup-restore.yml
 name: Backup & Restore TrustPoint
 
 on:
   workflow_call:
+    inputs:
+      artifact_name:
+        description: 'Base name for the backup (".dump.gz" will be appended)'
+        required: false
+        type: string
+        default: 'from_outside'
 
 jobs:
   backup-and-restore:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install gettext tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gettext
-
-      - name: Check out code
+      - name: Install GNU gettext (msgfmt)
+        run: sudo apt-get update && sudo apt-get install -y gettext
+      
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build PostgreSQL image
-        run: docker build -t trustpointproject/postgres:latest -f docker/db/Dockerfile .
+      - name: Build and start database
+        run: |
+          docker build -t trustpointproject/postgres:latest -f docker/db/Dockerfile .
+          docker run -d --name postgres -p 5432:5432 -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=testing321 -e POSTGRES_DB=trustpoint_db trustpointproject/postgres:latest
 
-      - name: Start PostgreSQL
-        run: docker run -d --name postgres -p 5432:5432 -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=testing321 -e POSTGRES_DB=trustpoint_db trustpointproject/postgres:latest
-
-      - name: Set up uv environment
+      - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action
 
-      - name: Initialize TrustPoint
-        run: uv run trustpoint/manage.py inittrustpoint
+      - name: Apply migrations and init tp version
+        run: 
+          uv run trustpoint/manage.py inittrustpoint
 
-      - name: Seed test data
+      - name: Fill DB with test data
         run: |
           uv run trustpoint/manage.py add_domains_and_devices
           uv run trustpoint/manage.py tls_cred
 
-      - name: Build TrustPoint image
-        run: docker build -t trustpointproject/trustpoint:latest -f docker/trustpoint/Dockerfile .
+      - name: Build and start trustpoint container
+        run: |
+          docker build -t trustpointproject/trustpoint:latest -f docker/trustpoint/Dockerfile .
+          docker run -d --name trustpoint --link postgres -p80:80 -p443:443 -ePOSTGRES_DB=trustpoint_db -eDATABASE_USER=admin -eDATABASE_PASSWORD=testing321 -eDATABASE_HOST=postgres -eDATABASE_PORT=5432 trustpointproject/trustpoint:latest
+      
+      - name: Run post-restore validation
+        run: ./tests/scripts/test_successfull_restoration.sh
 
-      - name: Start TrustPoint
-        run: docker run -d --name trustpoint --link postgres -p 80:80 -p 443:443 -e POSTGRES_DB=trustpoint_db -e DATABASE_USER=admin -e DATABASE_PASSWORD=testing321 -e DATABASE_HOST=postgres -e DATABASE_PORT=5432 trustpointproject/trustpoint:latest
-
-      - name: Validate initial deployment
-        run: ./tests/scripts/test_successful_restoration.sh
-
-      - name: Create backup in container
-        run: docker exec trustpoint uv run trustpoint/manage.py trustpointbackup --filename from_outside
+      - name: Create backup (in-container)
+        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointbackup --filename from_outside"
 
       - name: Download backup
         run: docker cp trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/from_outside.dump.gz .
 
-      - name: Remove TrustPoint container
+      - name: Stop & remove old container
         run: docker rm -f trustpoint
 
-      - name: Reset database
-        run: uv run trustpoint/manage.py reset_db --force --no-user
+      - name: Reset old DB
+        run: uv run trustpoint/manage.py reset_db --force --no-user 
 
-      - name: Restart TrustPoint
-        run: docker run -d --name trustpoint --link postgres -p 80:80 -p 443:443 -e POSTGRES_DB=trustpoint_db -e DATABASE_USER=admin -e DATABASE_PASSWORD=testing321 -e DATABASE_HOST=postgres -e DATABASE_PORT=5432 trustpointproject/trustpoint:latest
+      - name: Start fresh TrustPoint container
+        run: docker run -d --name trustpoint --link postgres -p80:80 -p443:443 -ePOSTGRES_DB=trustpoint_db -eDATABASE_USER=admin -eDATABASE_PASSWORD=testing321 -eDATABASE_HOST=postgres -eDATABASE_PORT=5432 trustpointproject/trustpoint:latest
 
-      - name: Upload backup to container
+      - name: Upload backup to new trustpoint container
         run: docker cp from_outside.dump.gz trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/
 
-      - name: Restore database in container
-        run: docker exec trustpoint uv run trustpoint/manage.py dbrestore -z --noinput -I /var/www/html/trustpoint/trustpoint/media/backups/from_outside.dump.gz
+      - name: Restore DB
+        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py dbrestore  -z --noinput -I trustpoint/media/backups/from_outside.dump.gz"
 
-      - name: Restore TrustPoint in container
-        run: docker exec trustpoint uv run trustpoint/manage.py trustpointrestore
+      - name: Restore trustpoint
+        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointrestore"
 
-      - name: Validate post-restore
-        run: ./tests/scripts/test_successful_restoration.sh
+      - name: Run post-restore validation
+        run: ./tests/scripts/test_successfull_restoration.sh
