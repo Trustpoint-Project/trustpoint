@@ -21,14 +21,14 @@ jobs:
       - name: Build and start database
         run: |
           docker build -t trustpointproject/postgres:latest -f docker/db/Dockerfile .
-          docker run -d --name --link postgres -p 5432:5432 -e POSTGRES_USER=admin   -e POSTGRES_PASSWORD=testing321   -e POSTGRES_DB=trustpoint_db   trustpointproject/postgres:latest
+          docker run -d --name postgres -p 5432:5432 -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=testing321 -e POSTGRES_DB=trustpoint_db trustpointproject/postgres:latest
 
       - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action
 
-      - name: Apply migrations (in-container)
+      - name: Apply migrations and init tp version
         run: 
-          uv run trustpoint/manage.py migrate --noinput
+          uv run trustpoint/manage.py inittrustpoint
 
       - name: Fill DB with test data
         run: |
