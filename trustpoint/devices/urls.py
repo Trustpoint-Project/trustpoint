@@ -180,23 +180,23 @@ urlpatterns = [
     # ),
 
     path(
-        'help/no-onboarding/cmp-shared-secret/<int:pk>/<str:certificate_template>/',
+        'help/no-onboarding/cmp-shared-secret/<int:pk>/',
         devices_help_views.NoOnboardingCmpSharedSecretHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help_no-onboarding_cmp-shared-secret',
     ),
     path(
-        'opc-ua-gds/help/no-onboarding/cmp-shared-secret/<int:pk>/<str:certificate_template>/',
+        'opc-ua-gds/help/no-onboarding/cmp-shared-secret/<int:pk>/',
         devices_help_views.NoOnboardingCmpSharedSecretHelpView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help_no-onboarding_cmp-shared-secret',
     ),
 
     path(
-        'help/no-onboarding/est-username-password/<int:pk>/<str:certificate_template>/',
+        'help/no-onboarding/est-username-password/<int:pk>/',
         devices_help_views.DeviceNoOnboardingEstUsernamePasswordHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-no-onboarding_est-username-password',
     ),
     path(
-        'opc-ua-gds/help/no-onboarding/est-username-password/<int:pk>/<str:certificate_template>/',
+        'opc-ua-gds/help/no-onboarding/est-username-password/<int:pk>/',
         devices_help_views.OpcUaGdsNoOnboardingEstUsernamePasswordHelpView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-no-onboarding_est-username-password',
     ),
@@ -204,6 +204,11 @@ urlpatterns = [
     path(
         'help/onboarding/est-username-password/<int:pk>/',
         devices_help_views.DeviceOnboardingEstUsernamePasswordHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_est-username-password',
+    ),
+    path(
+        'opc-ua-gds/help/onboarding/est-username-password/<int:pk>/',
+        devices_help_views.OpcUaGdsOnboardingEstUsernamePasswordHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_est-username-password',
     ),
     path(
@@ -268,15 +273,15 @@ urlpatterns = [
     # ),
 
     path(
-        'help/onboarding/est-idevid-registration/<int:pk>/',
-        devices_help_views.OnboardingEstIdevidRegistrationHelpView.as_view(),
-        name='help-onboarding_est-idevid-registration',
-    ),
-
-    path(
         'help/onboarding/method-select-idevid/<int:pk>/',
         devices_help_views.OnboardingMethodSelectIdevidHelpView.as_view(),
         name='help-onboarding_method_select-idevid',
+    ),
+
+    path(
+        'help/onboarding/est-idevid-registration/<int:pk>/',
+        devices_help_views.OnboardingEstIdevidRegistrationHelpView.as_view(),
+        name='help-onboarding_est-idevid-registration',
     ),
 
     path(

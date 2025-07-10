@@ -108,10 +108,6 @@ class IDevIDAuthenticator(LoggerMixin):
         idevid_cert: x509.Certificate, idevid_subj_sn: str, domain: DomainModel
     ) -> DeviceModel:
         """Auto-create a new DeviceModel from the IDevID certificate."""
-        if not domain.auto_create_new_device:
-            error_message = 'Auto-creating a new device for this domain is not permitted.'
-            raise IDevIDAuthenticationError(error_message)
-
         try:
             cn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
             common_name = cn_b.decode() if isinstance(cn_b, bytes) else cn_b

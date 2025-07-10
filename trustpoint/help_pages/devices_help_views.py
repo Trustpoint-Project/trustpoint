@@ -91,6 +91,11 @@ class DeviceHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixin,
                 f'{self.page_category}:{self.page_name}_help-no-onboarding_est-username-password',
                 kwargs={'pk': device.id})
 
+        if device.onboarding_protocol == device.OnboardingProtocol.EST_PASSWORD.value:
+            return reverse(
+                f'{self.page_category}:{self.page_name}_help-onboarding_est-username-password',
+                kwargs={'pk': device.id})
+
         if device.onboarding_protocol == device.OnboardingProtocol.CMP_SHARED_SECRET.value:
             return reverse(
                 f'{self.page_category}:{self.page_name}_help-onboarding_cmp-shared-secret',
@@ -99,11 +104,6 @@ class DeviceHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixin,
         if device.onboarding_protocol == device.OnboardingProtocol.CMP_IDEVID.value:
             return reverse(
                 f'{self.page_category}:{self.page_name}_help-onboarding_cmp-idevid',
-                kwargs={'pk': device.id})
-
-        if device.onboarding_protocol == device.OnboardingProtocol.EST_PASSWORD.value:
-            return reverse(
-                f'{self.page_category}:{self.page_name}_help-onboarding_est-username-password',
                 kwargs={'pk': device.id})
 
         if device.onboarding_protocol == device.OnboardingProtocol.EST_IDEVID.value:
@@ -204,6 +204,8 @@ class AbstractHelpDomainCredentialEstContextView(PageContextMixin, DetailView[De
             camelcase_template = ''.join(word.capitalize() for word in certificate_template.split('-'))
             context['cn_entry'] = f'Trustpoint-{camelcase_template}-Credential-{number_of_issued_device_certificates}'
 
+        context['clm_url'] = f'{self.page_category}:{self.page_name}_certificate_lifecycle_management'
+
         return context
 
     @staticmethod
@@ -250,16 +252,6 @@ class AbstractHelpDomainCredentialEstContextView(PageContextMixin, DetailView[De
             tls_cert.credential.certificate.get_certificate_serializer().as_pem().decode('utf-8')
         )
 
-        domain = device.domain
-        context.update(
-            {
-                'allow_app_certs_without_domain': domain.allow_app_certs_without_domain,
-                'allow_username_password_registration': domain.allow_username_password_registration,
-                'username_password_auth': domain.username_password_auth,
-                'domain_credential_auth': domain.domain_credential_auth,
-            }
-        )
-
         context['domain_credential_cn'] = 'Trustpoint Domain Credential'
 
         return context
@@ -268,28 +260,36 @@ class AbstractHelpDomainCredentialEstContextView(PageContextMixin, DetailView[De
 class DeviceNoOnboardingEstUsernamePasswordHelpView(AbstractHelpDomainCredentialEstContextView):
     """View to provide help information for EST username/password authentication with no onboarding."""
 
-    template_name = 'devices/help/no_onboarding/est_username_password.html'
+    template_name = 'help/no_onboarding/est_username_password.html'
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
 class OpcUaGdsNoOnboardingEstUsernamePasswordHelpView(AbstractHelpDomainCredentialEstContextView):
     """View to provide help information for EST username/password authentication with no onboarding and OPC UA GDS."""
 
-    template_name = 'devices/help/no_onboarding/est_gds_username_password.html'
+    template_name = 'help/no_onboarding/est_gds_username_password.html'
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class DeviceOnboardingEstUsernamePasswordHelpView(AbstractHelpDomainCredentialEstContextView):
     """View to provide help information for EST username/password authentication for onboarding."""
 
-    template_name = 'devices/help/onboarding/est_username_password.html'
+    template_name = 'help/onboarding/est_username_password.html'
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class OpcUaGdsOnboardingEstUsernamePasswordHelpView(AbstractHelpDomainCredentialEstContextView):
+    """View to provide help information for EST username/password authentication for onboarding."""
+
+    template_name = 'help/onboarding/est_username_password.html'
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class DeviceOnboardingEstApplicationCredentialsHelpView(AbstractHelpDomainCredentialEstContextView):
     """View to provide help information for EST domain credential authentication."""
 
-    template_name = 'devices/help/onboarding/est_application_credentials.html'
-
+    template_name = 'help/onboarding/est_application_credentials.html'
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
 
@@ -327,7 +327,7 @@ class DeviceOnboardingEstApplicationCredentialsHelpView(AbstractHelpDomainCreden
 class HelpDispatchApplicationCredentialView(TemplateView):
     """Renders the application credential selection page for the given device."""
 
-    template_name = 'devices/help/generic_details/application_credential_selection.html'
+    template_name = 'help/generic_details/application_credential_selection.html'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds device-related context to the template.
@@ -546,7 +546,7 @@ class NoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[DeviceMod
     http_method_names = ('get',)
 
     model = DeviceModel
-    template_name = 'devices/help/no_onboarding/cmp_shared_secret.html'
+    template_name = 'help/no_onboarding/cmp_shared_secret.html'
     context_object_name = 'device'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -591,43 +591,43 @@ class NoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[DeviceMod
 class OnboardingCmpSharedSecretHelpView(HelpDomainCredentialCmpContextView):
     """Help view for the onboarding cmp-shared secret case."""
 
-    template_name = 'devices/help/onboarding/cmp_shared_secret.html'
+    template_name = 'help/onboarding/cmp_shared_secret.html'
 
 
 class OnboardingCmpIdevidHelpView(HelpDomainCredentialCmpContextView):
     """Help view for the onboarding IDeviD case."""
 
-    template_name = 'devices/help/onboarding/cmp_idevid.html'
+    template_name = 'help/onboarding/cmp_idevid.html'
 
 
 class OnboardingCmpApplicationCredentialsHelpView(HelpDomainCredentialCmpContextView):
     """Help view for enrolling application credentials via CMP."""
 
-    template_name = 'devices/help/onboarding/cmp_application_credentials.html'
+    template_name = 'help/onboarding/cmp_application_credentials.html'
 
 
 class OnboardingMethodSelectIdevidHelpView(PageContextMixin, DetailView[DevIdRegistration]):
     """View to select the protocol for IDevID enrollment."""
 
-    template_name = 'devices/help/onboarding/idevid_method_select.html'
+    template_name = 'help/onboarding/idevid_method_select.html'
     context_object_name = 'devid_registration'
     model = DevIdRegistration
 
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the required context for the template."""
-        context = super().get_context_data(**kwargs)
-        context['pk'] = self.object.pk
-
-        return context
+    # TODO
+    page_category = 'pki'
+    page_name = 'domains'
 
 
-class OnboardingIdevidRegistrationHelpView(PageContextMixin, DetailView[DevIdRegistration]):
+class AbstractOnboardingIdevidRegistrationHelpView(PageContextMixin, DetailView[DevIdRegistration]):
     """Help view for the IDevID Registration, which displays the required OpenSSL commands."""
 
     http_method_names = ('get',)
 
     model = DevIdRegistration
     context_object_name = 'devid_registration'
+
+    page_category = 'pki'
+    page_name = 'domains'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds information about the required OpenSSL commands to the context.
@@ -684,19 +684,19 @@ class OnboardingIdevidRegistrationHelpView(PageContextMixin, DetailView[DevIdReg
         return context
 
 
-class OnboardingCmpIdevidRegistrationHelpView(OnboardingIdevidRegistrationHelpView):
+class OnboardingCmpIdevidRegistrationHelpView(AbstractOnboardingIdevidRegistrationHelpView):
     """Help view for the CMP IDevID Registration, which displays the required OpenSSL commands."""
 
-    template_name = 'devices/help/onboarding/cmp_idevid.html'
+    template_name = 'help/onboarding/cmp_idevid.html'
 
 
-class OnboardingEstIdevidRegistrationHelpView(OnboardingIdevidRegistrationHelpView):
+class OnboardingEstIdevidRegistrationHelpView(AbstractOnboardingIdevidRegistrationHelpView):
     """Help view for the EST IDevID Registration, which displays the required OpenSSL commands."""
 
-    template_name = 'devices/help/onboarding/est_idevid.html'
+    template_name = 'help/onboarding/est_idevid.html'
 
 
 class DeviceOnboardingEstIdevidHelpView(AbstractHelpDomainCredentialEstContextView):
     """View to provide help information for EST IDevID enrollment."""
 
-    template_name = 'devices/help/onboarding/est_idevid.html'
+    template_name = 'help/onboarding/est_idevid.html'

@@ -852,6 +852,9 @@ class OpcUaGdsDownloadPageDispatcherView(AbstractDownloadPageDispatcherView):
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
+# --------------------------------------------- Certificate Download Help ----------------------------------------------
+
+
 class AbstractCertificateDownloadView(PageContextMixin, DetailView[IssuedCredentialModel]):
     """View for downloading certificates."""
 
@@ -862,6 +865,20 @@ class AbstractCertificateDownloadView(PageContextMixin, DetailView[IssuedCredent
     context_object_name = 'issued_credential'
 
     page_category = DEVICES_PAGE_CATEGORY
+    page_name: str
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the clm_url to the context.
+
+        Args:
+            **kwargs: Keyword arguments are passed to super().get_context_data(**kwargs).
+
+        Returns:
+            The context data for the view.
+        """
+        context = super().get_context_data(**kwargs)
+        context['clm_url'] = f'{self.page_category}:{self.page_name}_certificate_lifecycle_management'
+        return context
 
 
 class DeviceCertificateDownloadView(AbstractCertificateDownloadView):
@@ -874,6 +891,9 @@ class OpcUaGdsCertificateDownloadView(AbstractCertificateDownloadView):
     """Certificate download view for the OPC UA GDS pages."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+# ---------------------------------------------- Credential Download Help ----------------------------------------------
 
 
 class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[IssuedCredentialModel]):

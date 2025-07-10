@@ -4,7 +4,7 @@ import base64
 import ipaddress
 import re
 from dataclasses import dataclass
-from typing import Any, ClassVar, Protocol, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives._serialization import Encoding
@@ -21,16 +21,15 @@ from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-from pki.models.credential import CredentialModel
-from pki.models.devid_registration import DevIdRegistration
 from pki.models.domain import DomainModel
-from pki.models.truststore import TruststoreModel
-from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
+from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
 from pyasn1.type.univ import ObjectIdentifier  # type: ignore[import-untyped]
-from trustpoint_core.serializer import CertificateCollectionSerializer  # type: ignore[import-untyped]
 
 from trustpoint.logger import LoggerMixin
+
+if TYPE_CHECKING:
+    from pki.models.credential import CredentialModel
 
 
 class UsernamePasswordAuthenticationError(Exception):
@@ -85,6 +84,8 @@ class CredentialRequest:
 
 class EstAuthenticationMixin(LoggerMixin):
     """Checks for HTTP Basic Authentication before processing the request."""
+
+    used_onboarding_protocol_auth: DeviceModel.OnboardingProtocol | None = None
 
     @staticmethod
     def authenticate_username_password(request: HttpRequest) -> DeviceModel:
@@ -193,30 +194,24 @@ class EstAuthenticationMixin(LoggerMixin):
         self, request: HttpRequest, domain: DomainModel
     ) -> tuple[DeviceModel | None, LoggedHttpResponse | None]:
         """Authenticate requests for 'domaincredential' certificates and return the associated DeviceModel."""
-        if not (domain.allow_idevid_registration or domain.allow_username_password_registration):
-            return None, LoggedHttpResponse(
-                'Both IDevID registration and username:password registration are disabled', status=403
-            )
+        try:
+            device = self.authenticate_username_password(request)
+            self.used_onboarding_protocol_auth = DeviceModel.OnboardingProtocol.EST_PASSWORD
+        except UsernamePasswordAuthenticationError:
+            pass
+        else:
+            return device, None
 
-        if domain.allow_username_password_registration:
-            try:
-                device = self.authenticate_username_password(request)
-            except UsernamePasswordAuthenticationError:
-                pass
-            else:
-                return device, None
+        try:
+            device_or_none = IDevIDAuthenticator.authenticate_idevid(request, domain)
+            self.used_onboarding_protocol_auth = DeviceModel.OnboardingProtocol.EST_IDEVID
+        except IDevIDAuthenticationError as e:
+            return None, LoggedHttpResponse(f'Error validating the IDevID: {e!s}', status=500)
+        else:
+            return device_or_none, None
 
-        if domain.allow_idevid_registration:
-            try:
-                device_or_none = IDevIDAuthenticator.authenticate_idevid(request, domain)
-            except IDevIDAuthenticationError as e:
-                return None, LoggedHttpResponse(f'Error validating the IDevID: {e!s}', status=500)
-            else:
-                return device_or_none, None
 
-        return None, LoggedHttpResponse('No valid authentication method provided', status=401)
-
-    def _authenticate_application_certificate_request(  # noqa: C901
+    def _authenticate_application_certificate_request(
         self, request: HttpRequest, domain: DomainModel, csr: x509.CertificateSigningRequest | None
     ) -> tuple[DeviceModel | None, LoggedHttpResponse | None]:
         """Authenticate requests for application certificate templates and return the associated DeviceModel."""
@@ -230,28 +225,19 @@ class EstAuthenticationMixin(LoggerMixin):
                 self.logger.info('Reenroll application Client certificate authentication succeeded')
                 return device, None
 
-        if not (domain.username_password_auth or domain.domain_credential_auth):
-            return None, LoggedHttpResponse(
-                'Both username:password and domain credential authentication are disabled', status=403
-            )
+        try:
+            device = self.authenticate_username_password(request)
+        except UsernamePasswordAuthenticationError:
+            pass
+        else:
+            return device, None
 
-        if domain.username_password_auth:
-            try:
-                device = self.authenticate_username_password(request)
-            except UsernamePasswordAuthenticationError:
-                pass
-            else:
-                return device, None
-
-        if domain.domain_credential_auth:
-            try:
-                device = self.authenticate_domain_credential(request)
-            except ClientCertificateAuthenticationError as e:
-                return None, LoggedHttpResponse(f'Error validating the client certificate: {e!s}', status=500)
-            else:
-                return device, None
-
-        return None, LoggedHttpResponse('No valid authentication method provided', status=401)
+        try:
+            device = self.authenticate_domain_credential(request)
+        except ClientCertificateAuthenticationError as e:
+            return None, LoggedHttpResponse(f'Error validating the client certificate: {e!s}', status=500)
+        else:
+            return device, None
 
 
 class EstHttpMixin:
@@ -516,6 +502,8 @@ class DeviceHandlerMixin:
     This mixin assumes the CSR is already deserialized into a cryptography.x509.CertificateSigningRequest object.
     """
 
+    used_onboarding_protocol_auth: DeviceModel.OnboardingProtocol | None = None
+
     def get_or_create_device_from_csr(
         self, credential_request: CredentialRequest, domain: DomainModel, cert_template: str, device: DeviceModel | None
     ) -> tuple[DeviceModel | None, LoggedHttpResponse | None]:
@@ -532,33 +520,26 @@ class DeviceHandlerMixin:
         if device:
             return device, None
 
-        if not domain.auto_create_new_device:
-            return None, LoggedHttpResponse('Creating a new device for this domain is not permitted', status=403)
-
         if cert_template == 'domaincredential':
+            onboarding_protocol = self.used_onboarding_protocol_auth
             onboarding_status = DeviceModel.OnboardingStatus.PENDING
-            if domain.allow_username_password_registration:
-                onboarding_protocol = DeviceModel.OnboardingProtocol.EST_PASSWORD
-            elif domain.allow_idevid_registration:
-                onboarding_protocol = DeviceModel.OnboardingProtocol.EST_IDEVID
-            else:
-                error_message = (
-                    'For registering a new device activate Username:Password registration or IDevid registration'
-                )
-                return None, LoggedHttpResponse(content=error_message, status=401)
 
         else:
             onboarding_protocol = DeviceModel.OnboardingProtocol.NO_ONBOARDING
             onboarding_status = DeviceModel.OnboardingStatus.NO_ONBOARDING
 
-        serial_number = credential_request.serial_number
+        if onboarding_protocol is None:
+                err_msg = 'Used onboarding protocol: failed to determine.'
+                raise ValueError(err_msg)
+
+        serial_number = str(credential_request.serial_number)
         common_name = credential_request.common_name
 
         return DeviceModel.objects.create(
             serial_number=serial_number,
             common_name=common_name,
             domain=domain,
-            onboarding_protocol=onboarding_protocol,
+            onboarding_protocol=onboarding_protocol.value,
             onboarding_status=onboarding_status,
         ), None
 
@@ -777,11 +758,11 @@ class EstSimpleEnrollmentView(
         raw_message, http_response = self.process_http_request(request)
 
         if not http_response and raw_message:
-            domain_name = cast(str, kwargs.get('domain'))
+            domain_name = cast('str', kwargs.get('domain'))
             requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
 
         if not http_response and raw_message and requested_domain:
-            cert_template = cast(str, kwargs.get('certtemplate'))
+            cert_template = cast('str', kwargs.get('certtemplate'))
             requested_cert_template_str, http_response = self.extract_cert_template(cert_template=cert_template)
 
         if (not http_response and
@@ -852,11 +833,11 @@ class EstSimpleReEnrollmentView(EstAuthenticationMixin,
         raw_message, http_response = self.process_http_request(request)
 
         if not http_response and raw_message:
-            domain_name = cast(str, kwargs.get('domain'))
+            domain_name = cast('str', kwargs.get('domain'))
             requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
 
         if not http_response and raw_message and requested_domain:
-            cert_template = cast(str, kwargs.get('certtemplate'))
+            cert_template = cast('str', kwargs.get('certtemplate'))
             requested_cert_template_str, http_response = self.extract_cert_template(cert_template=cert_template)
 
         if not http_response:
@@ -905,7 +886,7 @@ class EstCACertsView(EstAuthenticationMixin, EstRequestedDomainExtractorMixin, V
         requested_domain: DomainModel | None
 
         try:
-            domain_name = cast(str, kwargs.get('domain'))
+            domain_name = cast('str', kwargs.get('domain'))
             requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
 
             if not http_response and requested_domain:
