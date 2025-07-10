@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       backup_name:
-        description: 'Name für das Backup (ohne .dump.gz)'
+        description: 'Name for the backup (without .dump.gz)'
         required: false
         default: 'ci_backup'
 
@@ -16,4 +16,4 @@ jobs:
   backup-and-restore:
     uses: ./.github/workflows/backup-restore.yml
     with:
-      artifact_name: ${{ github.event.inputs.backup_name }}
+      artifact_name: ${{ inputs.backup_name }}
