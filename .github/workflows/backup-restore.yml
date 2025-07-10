@@ -18,13 +18,13 @@ jobs:
       - name: Build and start PostgreSQL
         run: |
           docker build -t trustpointproject/postgres:latest -f docker/db/Dockerfile .
-          docker run -d --name postgres -p 5432:5432 -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=testing321 -e_POSTGRES_DB=trustpoint_db trustpointproject/postgres:latest
+          docker run -d --name postgres -p 5432:5432 -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=testing321 -e POSTGRES_DB=trustpoint_db trustpointproject/postgres:latest
 
       - name: Set up uv environment
         uses: ./.github/actions/setup-uv-action
 
       - name: Initialize database schema
-        run: |
+        run: 
           uv run trustpoint/manage.py inittrustpoint
 
       - name: Populate test data
@@ -35,41 +35,34 @@ jobs:
       - name: Build and start TrustPoint container
         run: |
           docker build -t trustpointproject/trustpoint:latest -f docker/trustpoint/Dockerfile .
-          docker run -d --name trustpoint --link postgres -p 80:80 -p 443:443 -e POSTGRES_DB=trustpoint_db -e_DATABASE_USER=admin -e_DATABASE_PASSWORD=testing321 -e_DATABASE_HOST=postgres -e_DATABASE_PORT=5432 trustpointproject/trustpoint:latest
+          docker run -d --name trustpoint --link postgres -p80:80 -p443:443 -ePOSTGRES_DB=trustpoint_db -eDATABASE_USER=admin -eDATABASE_PASSWORD=testing321 -eDATABASE_HOST=postgres -eDATABASE_PORT=5432 trustpointproject/trustpoint:latest
+      
+      - name: Validate implicit restoration
+        run: ./tests/scripts/test_successfull_restoration.sh
 
-      - name: Validate initial deployment
-        run: ./tests/scripts/test_successful_restoration.sh
-
-      - name: Create backup in container
-        run: |
-          docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointbackup --filename from_outside"
+      - name: Create backup (from inside container)
+        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointbackup --filename from_outside"
 
       - name: Download backup artifact
-        run: |
-          docker cp trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/from_outside.dump.gz .
+        run: docker cp trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/from_outside.dump.gz .
 
       - name: Remove TrustPoint container
         run: docker rm -f trustpoint
 
       - name: Reset database
-        run: |
-          uv run trustpoint/manage.py reset_db --force --no-user
+        run: uv run trustpoint/manage.py reset_db --force --no-user 
 
       - name: Start fresh TrustPoint container
-        run: |
-          docker run -d --name trustpoint --link postgres -p 80:80 -p 443:443 -e POSTGRES_DB=trustpoint_db -e_DATABASE_USER=admin -e_DATABASE_PASSWORD=testing321 -e_DATABASE_HOST=postgres -e_DATABASE_PORT=5432 trustpointproject/trustpoint:latest
+        run: docker run -d --name trustpoint --link postgres -p80:80 -p443:443 -ePOSTGRES_DB=trustpoint_db -eDATABASE_USER=admin -eDATABASE_PASSWORD=testing321 -eDATABASE_HOST=postgres -eDATABASE_PORT=5432 trustpointproject/trustpoint:latest
 
       - name: Upload backup to container
-        run: |
-          docker cp from_outside.dump.gz trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/
+        run: docker cp from_outside.dump.gz trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/
 
       - name: Restore database in container
-        run: |
-          docker exec trustpoint sh -c "uv run trustpoint/manage.py dbrestore -z --noinput -I trustpoint/media/backups/from_outside.dump.gz"
+        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py dbrestore  -z --noinput -I trustpoint/media/backups/from_outside.dump.gz"
 
       - name: Restore TrustPoint in container
-        run: |
-          docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointrestore"
+        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointrestore"
 
       - name: Validate post-restore deployment
-        run: ./tests/scripts/test_successful_restoration.sh
+        run: ./tests/scripts/test_successfull_restoration.sh
