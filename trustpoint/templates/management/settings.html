@@ -193,7 +193,7 @@
       <div class="accordion-body">
         <div class="card">
           <div class="card-body pt-4 pb-4">
-              <form method="POST" action="{% url 'management:set-loglevel' %}" id="loglevel_configuration">
+              <form method="POST" action="{% url 'management:change-loglevel' %}" id="loglevel_configuration">
                   {% csrf_token %}
                   <fieldset class="form-group tp-form-group">
                       <input name="next" type="hidden" value="{{ redirect_to }}">

@@ -34,6 +34,7 @@ def settings(request: HttpRequest, ) -> HttpResponse:
     """
     context = {'page_category': 'management', 'page_name': 'settings'}
 
+LOG_LEVELS=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
 class SettingsView(SecurityLevelMixin, FormView):
     template_name = 'management/settings.html'
     form_class = SecurityConfigForm
@@ -106,7 +107,7 @@ class SettingsView(SecurityLevelMixin, FormView):
             ]
 
         context['notification_configurations_json'] = json.dumps(notification_configurations)
-        context["loglevels"] = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+        context["loglevels"] = LOG_LEVELS
         current_level_num = logging.getLogger().getEffectiveLevel()
         context["current_loglevel"] = logging.getLevelName(current_level_num)
 
@@ -116,8 +117,7 @@ class SettingsView(SecurityLevelMixin, FormView):
 class ChangeLogLevelView(View):
     def post(self, request):
         level = request.POST.get('loglevel', '').upper()
-        valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
-        if level not in valid_levels:
+        if level not in LOG_LEVELS:
             messages.error(request, f"Invalid log level: {level}")
         else:
             logger = logging.getLogger()
