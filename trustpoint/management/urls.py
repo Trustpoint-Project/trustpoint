@@ -24,6 +24,7 @@ urlpatterns = [
         logging.LoggingFilesDownloadMultipleView.as_view(),
         name='logging-files-download-multiple',
     ),
+    path('loglevel/set', settings.ChangeLogLevelView.as_view(), name='set-loglevel'),
     path('settings/', settings.SettingsView.as_view(), name='settings'),
     path('tls/', tls.TlsView.as_view(), name='tls'),
     path(

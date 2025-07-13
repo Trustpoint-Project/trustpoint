@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 import json
 from typing import TYPE_CHECKING
 
 from django.contrib import messages
-from django.urls import reverse_lazy
+from django.shortcuts import redirect, render
+from django.urls import reverse, reverse_lazy
 from django.utils.encoding import force_str
 from django.utils.translation import gettext as _
+from django.views import View
 from django.views.generic.edit import FormView
+from django import forms
 from notifications.models import NotificationConfig, WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
@@ -102,4 +106,22 @@ class SettingsView(SecurityLevelMixin, FormView):
             ]
 
         context['notification_configurations_json'] = json.dumps(notification_configurations)
+        context["loglevels"] = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+        current_level_num = logging.getLogger().getEffectiveLevel()
+        context["current_loglevel"] = logging.getLevelName(current_level_num)
+
         return context
+
+
+class ChangeLogLevelView(View):
+    def post(self, request):
+        level = request.POST.get('loglevel', '').upper()
+        valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+        if level not in valid_levels:
+            messages.error(request, f"Invalid log level: {level}")
+        else:
+            logger = logging.getLogger()
+            logger.setLevel(getattr(logging, level))
+            messages.success(request, f"Log level set to {level}")
+
+        return redirect(reverse('management:settings'))
