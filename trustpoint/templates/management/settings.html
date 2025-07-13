@@ -6,14 +6,14 @@
     <script src="{% url 'javascript-catalog' %}"></script>
 {% endblock head %}
 {% block content %}
-<div class="accordion" id="accordionExample">
+<div class="accordion" id="accordionSettings">
   <div class="accordion-item">
     <h2 class="accordion-header">
       <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
         {% trans "Language Configuration" %}
       </button>
     </h2>
-    <div id="collapseOne" class="accordion-collapse collapse show" data-bs-parent="#accordionExample">
+    <div id="collapseOne" class="accordion-collapse collapse show" data-bs-parent="#accordionSettings">
       <div class="accordion-body">
         <div class="card">
           {% comment %} <div class="card-header">
@@ -54,7 +54,7 @@
         {% trans 'Security Configuration' %}
       </button>
     </h2>
-    <div id="collapseTwo" class="accordion-collapse collapse" data-bs-parent="#accordionExample">
+    <div id="collapseTwo" class="accordion-collapse collapse" data-bs-parent="#accordionSettings">
       <div class="accordion-body">
         <div class="card">
           {% comment %} <div class="card-header d-flex justify-content-between align-items-center">
@@ -180,6 +180,41 @@
             });
 
         </script>
+      </div>
+    </div>
+  </div>
+  <div class="accordion-item">
+    <h2 class="accordion-header">
+      <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree" aria-expanded="true" aria-controls="collapseThree">
+        {% trans "Log Configuration" %}
+      </button>
+    </h2>
+    <div id="collapseThree" class="accordion-collapse collapse show" data-bs-parent="#accordionSettings">
+      <div class="accordion-body">
+        <div class="card">
+          <div class="card-body pt-4 pb-4">
+              <form method="POST" action="{% url 'management:set-loglevel' %}" id="loglevel_configuration">
+                  {% csrf_token %}
+                  <fieldset class="form-group tp-form-group">
+                      <input name="next" type="hidden" value="{{ redirect_to }}">
+                      <select name="loglevel" class="select form-select">
+                          {% for loglevel in loglevels %}
+                              <option value="{{ loglevel }}"{% if loglevel == current_loglevel %} selected{% endif %}>
+                                  {{ loglevel }}
+                              </option>
+                          {% endfor %}
+                      </select>
+                  </fieldset>
+              </form>
+          </div>
+          <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+              <div class="tp-card-btn-footer m-1">
+                  <button class="btn btn-primary " type="submit" form="loglevel_configuration">
+                      {% trans "Save" %}
+                  </button>
+              </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
