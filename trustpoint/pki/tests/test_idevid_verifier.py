@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 from cryptography import x509
 
+from pki.models.truststore import TruststoreModel
 from pki.util.idevid import IDevIDVerifier
 from pki.util.x509 import CertificateGenerator
 
@@ -13,6 +14,7 @@ def get_mock_truststore(certificates: list[x509.Certificate]) -> MagicMock:
     """Get a mock truststore for testing."""
     ts = MagicMock()
     ts.unique_name = 'test_mock_truststore'
+    ts.intended_usage = TruststoreModel.IntendedUsage.IDEVID
     ts.get_certificate_collection_serializer.return_value.as_crypto.return_value = certificates
     return ts
 

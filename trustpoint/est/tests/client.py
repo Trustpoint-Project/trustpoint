@@ -15,7 +15,7 @@ class ESTClient:
         self,
         est_url,
         auth_type,
-        domain,
+        domain=None,
         cert_template=None,
         username=None,
         password=None,
@@ -100,7 +100,10 @@ class ESTClient:
         csr_der = csr.public_bytes(encoding=serialization.Encoding.DER)
         logging.info(f'CSR (DER; hex dump): {csr_der.hex()}')
 
-        url = f'{self.est_url}/{self.domain}/{self.cert_template}/simpleenroll/'
+        if self.domain and self.cert_template:
+            url = f'{self.est_url}/{self.domain}/{self.cert_template}/simpleenroll/'
+        else:
+            url = f'{self.est_url}/simpleenroll/'
         headers = {'Content-Type': 'application/pkcs10'}
         auth, cert = self._get_auth()
 
@@ -163,7 +166,10 @@ class ESTClient:
         csr_der = csr.public_bytes(encoding=serialization.Encoding.DER)
         logging.info(f'CSR (DER; hex dump): {csr_der.hex()}')
 
-        url = f'{self.est_url}/{self.domain}/{self.cert_template}/simplereenroll/'
+        if self.domain and self.cert_template:
+            url = f'{self.est_url}/{self.domain}/{self.cert_template}/simplereenroll/'
+        else:
+            url = f'{self.est_url}/simplereenroll/'
         headers = {'Content-Type': 'application/pkcs10'}
         auth, cert = self._get_auth()
 
