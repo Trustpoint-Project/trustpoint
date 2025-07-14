@@ -1,40 +1,43 @@
-"""Provides the `RequestContext` class for managing key-value data specific to a request."""
+"""This module contains the RequestContext class for managing request-specific named attributes."""
+from dataclasses import asdict, dataclass
+from typing import Any
 
+from cryptography import x509
+from cryptography.x509 import CertificateSigningRequest
+from devices.models import DeviceModel
+from django.http import HttpRequest
+from pki.models import DomainModel
+from pyasn1_modules.rfc4210 import PKIMessage
+
+
+@dataclass
 class RequestContext:
-    """Lightweight container for managing request-specific key-value pairs."""
+    """Container for managing request-specific named attributes."""
+    raw_message: HttpRequest | None = None
+    parsed_message: CertificateSigningRequest | PKIMessage | None = None
+    operation: str | None = None
+    protocol: str | None = None
+    certificate_template: str | None = None
+    response_format: str | None = None
+    est_encoding: str | None = None
 
-    def __init__(self):
-        """Initialize an empty context."""
-        self._data = {}
+    domain_str: str | None = None
+    domain: DomainModel | None = None
+    device: DeviceModel | None = None
 
-    def set(self, key: str, value: any) -> None:
-        """Set a key-value pair in the context."""
-        self._data[key] = value
+    cert_requested: CertificateSigningRequest | None = None
 
-    def get(self, key: str, default=None) -> any:
-        """Get the value for a key, or return a default if not found."""
-        return self._data.get(key, default)
+    est_username: str | None = None
+    est_password: str | None = None
+    cmp_shared_secret: str | None = None
+    client_certificate: x509.Certificate | None = None
+    client_intermediate_certificate: list[x509.Certificate] | None = None
 
-    def has(self, key: str) -> bool:
-        """Check if a key exists in the context."""
-        return key in self._data
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the context to a dictionary."""
+        return asdict(self)
 
-    def remove(self, key: str) -> None:
-        """Remove a key-value pair from the context if it exists."""
-        self._data.pop(key, None)
-
-    def to_dict(self) -> dict:
-        """Return the context as a dictionary."""
-        return dict(self._data)
-
-    def __getitem__(self, key: str) -> any:
-        """Get the value for a key using dictionary-style access."""
-        return self._data[key]
-
-    def __setitem__(self, key: str, value: any) -> None:
-        """Set a key-value pair using dictionary-style access."""
-        self._data[key] = value
-
-    def __contains__(self, key: str) -> bool:
-        """Check if a key exists using the 'in' operator."""
-        return key in self._data
+    def clear(self) -> None:
+        """Reset all attributes to default (None)."""
+        for field in self.__dataclass_fields__:
+            setattr(self, field, None)
