@@ -33,6 +33,7 @@ Welcome to Trustpoint's documentation!
 
    devices/onboarding
    devices/aoki
+   devices/workflow
 
 
 .. toctree::
