@@ -1,54 +1,50 @@
-"""
-Module: est_authentication
----------------------------
-Provides the `EstAuthentication` class using the Composite pattern for modular EST authentication.
-"""
+"""Provides the `EstAuthentication` class using the Composite pattern for modular EST authentication."""
 
 from abc import ABC, abstractmethod
-from typing import Optional
-from django.http import HttpRequest
-from psycopg.pq import error_message
+from typing import TYPE_CHECKING
 
-from pki.models import CredentialModel
-from pki.util.idevid import IDevIDAuthenticator, IDevIDAuthenticationError
-from request.request_context import RequestContext
-from devices.models import DeviceModel, IssuedCredentialModel
-from pki.models.domain import DomainModel
 from cryptography import x509
+from devices.models import DeviceModel, IssuedCredentialModel
+from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
+
+from request.request_context import RequestContext
+
+if TYPE_CHECKING:
+    from pki.models import CredentialModel
+
 
 
 class AuthenticationComponent(ABC):
     """Abstract base class for authentication components."""
 
     @abstractmethod
-    def authenticate(self, request: HttpRequest, context: RequestContext) -> Optional[DeviceModel]:
+    def authenticate(self, context: RequestContext) -> DeviceModel | None:
         """Authenticate a request using specific logic."""
-        pass
 
 
 class UsernamePasswordAuthentication(AuthenticationComponent):
     """Handles authentication via username/password credentials."""
 
-    def authenticate(self, request: HttpRequest, context: RequestContext) -> Optional[None]:
+    def authenticate(self, context: RequestContext) -> None:
         """Authenticate using username and password from the context."""
-        if context.has("username") and context.has("password"):
-            username = context.get("username")
-            password = context.get("password")
+        if context.est_username is not None and context.est_password is not None:
+            username = context.est_username
+            password = context.est_password
             device = DeviceModel.objects.filter(est_password=password, common_name=username).first()
 
             if not device:
-                raise ValueError("Authentication failed: Invalid username or password.")
+                error_message = 'Authentication failed: Invalid username or password.'
+                raise ValueError(error_message)
 
-            context.set("authenticated_device", device)
-
+            context.device = device
 
 class ClientCertificateAuthentication(AuthenticationComponent):
     """Handles authentication via client certificates."""
 
-    def authenticate(self, request: HttpRequest, context: RequestContext) -> Optional[None]:
+    def authenticate(self, context: RequestContext) -> None:
         """Authenticate using the client certificate from the context."""
-        if context.has("client_certificate"):
-            client_certificate = context.get("client_certificate")
+        if context.client_certificate is not None:
+            client_certificate = context.client_certificate
             try:
                 issued_credential = IssuedCredentialModel.get_credential_for_certificate(client_certificate)
             except IssuedCredentialModel.DoesNotExist as e:
@@ -58,30 +54,29 @@ class ClientCertificateAuthentication(AuthenticationComponent):
                 error_message = f'Invalid SSL_CLIENT_CERT header: {reason}'
                 raise ValueError(error_message)
 
-            context.set("authenticated_device", issued_credential.device)
+            context.device = issued_credential.device
 
 
 class ReenrollmentAuthentication(AuthenticationComponent):
     """Handles authentication for EST reenrollment using an Application Credential."""
 
-    def authenticate(self, request: HttpRequest, context: RequestContext) -> Optional[DeviceModel]:
+    def authenticate(self, context: RequestContext) -> None:
         """Authenticate the client for reenrollment."""
-
-        client_cert = context.get("client_certificate")
+        client_cert = context.client_certificate
         if not client_cert:
-            error_message = "Client certificate is missing in the context."
+            error_message = 'Client certificate is missing in the context.'
             raise ValueError(error_message)
 
-        csr = context.get("csr")
+        csr = context.cert_requested
         if not csr:
-            error_message = "CSR is missing in the context."
+            error_message = 'CSR is missing in the context.'
             raise ValueError(error_message)
 
         # Get the issued credential corresponding to the client certificate
         try:
             issued_credential = IssuedCredentialModel.get_credential_for_certificate(client_cert)
         except IssuedCredentialModel.DoesNotExist as e:
-            error_message = "Issued credential not found for client certificate."
+            error_message = 'Issued credential not found for client certificate.'
             raise ValueError(error_message) from e
 
         credential_model: CredentialModel = issued_credential.credential
@@ -89,7 +84,7 @@ class ReenrollmentAuthentication(AuthenticationComponent):
         # Verify the issued credential's validity
         is_valid, reason = credential_model.is_valid_issued_credential()
         if not is_valid:
-            error_message = f"Invalid client certificate: {reason}"
+            error_message = f'Invalid client certificate: {reason}'
             raise ValueError(error_message)
 
 
@@ -118,40 +113,44 @@ class ReenrollmentAuthentication(AuthenticationComponent):
             client_san = None
 
         if (client_san != csr_san or credential_cert_san != csr_san):
-            error_message = "CSR/client SAN does not match the credential certificate SAN."
+            error_message = 'CSR/client SAN does not match the credential certificate SAN.'
             raise ValueError(error_message)
 
-        context.set("authenticated_device", issued_credential.device)
+        context.device = issued_credential.device
 
 class IDevIDAuthentication(AuthenticationComponent):
-    """
-    Handles authentication via IDevID certificates.
-    """
+    """Handles authentication via IDevID certificates."""
 
-    def authenticate(self, request: HttpRequest, context: RequestContext) -> None:
+    def authenticate(self, context: RequestContext) -> None:
         """Authenticate the request using the IDevID mechanism."""
-        # Retrieve the domain from the context
-        domain: DomainModel = context.get("domain")
+        domain = context.domain
 
-        if not domain or not domain.allow_idevid_registration:
-            raise ValueError("IDevID authentication is not allowed for this domain.")
+        if not domain:
+            error_message = 'domain is missing in the context.'
+            raise ValueError(error_message)
+
+        if context.raw_message is None:
+            error_message = 'raw_message is missing in the context.'
+            raise ValueError(error_message)
 
         try:
-            # Perform the IDevID authentication
-            device_or_none = IDevIDAuthenticator.authenticate_idevid(request, domain)
+            device_or_none = IDevIDAuthenticator.authenticate_idevid(context.raw_message, domain)
         except IDevIDAuthenticationError as e:
-            raise ValueError(f"Error validating the IDevID: {str(e)}") from e
+            error_message = f'Error validating the IDevID: {e!s}'
+            raise ValueError(error_message) from e
 
         if device_or_none:
-            context.set("authenticated_device", device_or_none)
+            context.device = device_or_none
         else:
-            raise ValueError("IDevID authentication failed: No device associated.")
+            error_message = 'IDevID authentication failed: No device associated.'
+            raise ValueError(error_message)
 
 
 class CompositeAuthentication(AuthenticationComponent):
     """Composite authenticator for grouping and executing multiple authentication methods."""
 
     def __init__(self) -> None:
+        """Initialize the composite authenticator with a set of authentication components."""
         self.components: list[AuthenticationComponent] = []
 
     def add(self, component: AuthenticationComponent) -> None:
@@ -162,23 +161,25 @@ class CompositeAuthentication(AuthenticationComponent):
         """Remove an authentication component from the composite."""
         self.components.remove(component)
 
-    def authenticate(self, request: HttpRequest, context: RequestContext) -> None:
+    def authenticate(self, context: RequestContext) -> None:
         """Authenticate the request using all registered components."""
         for component in self.components:
             try:
-                component.authenticate(request, context)
-                if context.has("authenticated_device"):
+                component.authenticate(context)
+                if context.device is not None:
                     return
             except ValueError:
                 continue
-
-        raise ValueError("Authentication failed: All authentication methods were unsuccessful.")
+        error_message = 'Authentication failed: All authentication methods were unsuccessful.'
+        raise ValueError(error_message)
 
 class EstAuthentication(CompositeAuthentication):
     """Composite authenticator specifically for EST requests, combining various authentication methods."""
 
     def __init__(self) -> None:
+        """Initialize the EST authenticator with a set of authentication methods."""
         super().__init__()
         self.add(ReenrollmentAuthentication())
         self.add(UsernamePasswordAuthentication())
         self.add(ClientCertificateAuthentication())
+        self.add(IDevIDAuthentication())
