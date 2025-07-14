@@ -219,12 +219,12 @@ urlpatterns = [
 
     path(
         'help/onboarding/cmp-shared-secret/<int:pk>/',
-        devices_help_views.OnboardingCmpSharedSecretHelpView.as_view(),
+        devices_help_views.DeviceOnboardingCmpSharedSecretHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_cmp-shared-secret',
     ),
     path(
         'opc-ua-gds/help/onboarding/cmp-shared-secret/<int:pk>/',
-        devices_help_views.OnboardingCmpSharedSecretHelpView.as_view(),
+        devices_help_views.OpcUaGdsOnboardingCmpSharedSecretHelpView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-onboarding_cmp-shared-secret',
     ),
 

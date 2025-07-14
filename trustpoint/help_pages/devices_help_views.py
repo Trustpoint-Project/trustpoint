@@ -86,16 +86,6 @@ class DeviceHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixin,
         """
         device: DeviceModel = self.get_object()
 
-        if not device.domain_credential_onboarding and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value:
-            return reverse(
-                f'{self.page_category}:{self.page_name}_help-no-onboarding_est-username-password',
-                kwargs={'pk': device.id})
-
-        if device.onboarding_protocol == device.OnboardingProtocol.EST_PASSWORD.value:
-            return reverse(
-                f'{self.page_category}:{self.page_name}_help-onboarding_est-username-password',
-                kwargs={'pk': device.id})
-
         if device.onboarding_protocol == device.OnboardingProtocol.CMP_SHARED_SECRET.value:
             return reverse(
                 f'{self.page_category}:{self.page_name}_help-onboarding_cmp-shared-secret',
@@ -104,6 +94,11 @@ class DeviceHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixin,
         if device.onboarding_protocol == device.OnboardingProtocol.CMP_IDEVID.value:
             return reverse(
                 f'{self.page_category}:{self.page_name}_help-onboarding_cmp-idevid',
+                kwargs={'pk': device.id})
+
+        if device.onboarding_protocol == device.OnboardingProtocol.EST_PASSWORD.value:
+            return reverse(
+                f'{self.page_category}:{self.page_name}_help-onboarding_est-username-password',
                 kwargs={'pk': device.id})
 
         if device.onboarding_protocol == device.OnboardingProtocol.EST_IDEVID.value:
@@ -166,6 +161,126 @@ class OpcUaGdsHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixi
         _ = request
 
         return HttpResponseRedirect(self.get_redirect_url(*args, **kwargs))
+
+
+class AbstractDomainCredentialCmpHelpView(PageContextMixin, DetailView[DeviceModel]):
+    """Base view for CMP help views concerning the domain credential, not intended to be used directly."""
+
+    http_method_names = ('get',)
+
+    model = DeviceModel
+    context_object_name = 'device'
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name: str
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds information about the required OpenSSL commands to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to render the page.
+        """
+        context = super().get_context_data(**kwargs)
+        device: DeviceModel = self.object
+        certificate_template = self.kwargs.get('certificate_template')
+        context['certificate_template'] = certificate_template
+
+        ipv4_address = TlsSettings.get_first_ipv4_address()
+
+        context['host'] = f'{ipv4_address}:{self.request.META.get("SERVER_PORT", "443")}'
+        context['domain'] = device.domain
+        context.update(self._get_domain_credential_cmp_context(device=device))
+
+        if certificate_template is not None:
+            number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
+            camelcase_template = ''.join(word.capitalize() for word in certificate_template.split('-'))
+            context['cn_entry'] = f'Trustpoint-{camelcase_template}-Credential-{number_of_issued_device_certificates}'
+
+        context['clm_url'] = f'{self.page_category}:{self.page_name}_certificate_lifecycle_management'
+
+        return context
+
+    @staticmethod
+    def _get_domain_credential_cmp_context(device: DeviceModel) -> dict[str, Any]:
+        """Provides the context for cmp commands using client based authentication.
+
+        Args:
+            device: The corresponding device model.
+
+        Returns:
+            The required context.
+        """
+        if device.domain is None:
+            raise Http404(DeviceWithoutDomainErrorMsg)
+        if not device.public_key_info:
+            raise Http404(DeviceWithoutDomainErrorMsg)
+        context = {}
+
+        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
+            domain_credential_key_gen_command = (
+                f'openssl genrsa -out domain_credential_key.pem {device.public_key_info.key_size}'
+            )
+            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
+        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
+            if not device.public_key_info.named_curve:
+                raise Http404(NamedCurveMissingForEccErrorMsg)
+            domain_credential_key_gen_command = (
+                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
+                f'-genkey -noout -out domain_credential_key.pem'
+            )
+            key_gen_command = (
+                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
+                f'-genkey -noout -out key.pem'
+            )
+        else:
+            err_msg = _('Unsupported public key algorithm')
+            raise ValueError(err_msg)
+
+        context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
+        context['key_gen_command'] = key_gen_command
+        context['issuing_ca_pem'] = (
+            device.domain.get_issuing_ca_or_value_error()
+            .credential.get_certificate()
+            .public_bytes(encoding=serialization.Encoding.PEM)
+            .decode()
+        )
+        return context
+
+class DeviceOnboardingCmpSharedSecretHelpView(AbstractDomainCredentialCmpHelpView):
+    """Help view for the onboarding cmp-shared secret case."""
+
+    template_name = 'help/onboarding/cmp_shared_secret.html'
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+
+class OpcUaGdsOnboardingCmpSharedSecretHelpView(AbstractDomainCredentialCmpHelpView):
+    """Help view for the onboarding cmp-shared secret case."""
+
+    template_name = 'help/onboarding/cmp_shared_secret.html'
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class OnboardingCmpIdevidHelpView(AbstractDomainCredentialCmpHelpView):
+    """Help view for the onboarding IDeviD case."""
+
+    template_name = 'help/onboarding/cmp_idevid.html'
+
+
+# TODO: wrong inheritance
+class OnboardingCmpApplicationCredentialsHelpView(AbstractDomainCredentialCmpHelpView):
+    """Help view for enrolling application credentials via CMP."""
+
+    template_name = 'help/onboarding/cmp_application_credentials.html'
+
+
+
+
 
 class AbstractHelpDomainCredentialEstContextView(PageContextMixin, DetailView[DeviceModel]):
     """Base view for CMP help views concerning the domain credential, not intended to be used directly."""
@@ -458,86 +573,7 @@ class HelpDispatchApplicationCredentialTemplateView(PageContextMixin, SingleObje
         return f'{reverse("devices:devices")}'
 
 
-class HelpDomainCredentialCmpContextView(PageContextMixin, DetailView[DeviceModel]):
-    """Base view for CMP help views concerning the domain credential, not intended to be used directly."""
 
-    http_method_names = ('get',)
-
-    model = DeviceModel
-    context_object_name = 'device'
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds information about the required OpenSSL commands to the context.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            The context to render the page.
-        """
-        context = super().get_context_data(**kwargs)
-        device: DeviceModel = self.object
-        certificate_template = self.kwargs.get('certificate_template')
-        context['certificate_template'] = certificate_template
-
-        ipv4_address = TlsSettings.get_first_ipv4_address()
-
-        context['host'] = f'{ipv4_address}:{self.request.META.get("SERVER_PORT", "443")}'
-        context['domain'] = device.domain
-        context.update(self._get_domain_credential_cmp_context(device=device))
-
-        if certificate_template is not None:
-            number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
-            camelcase_template = ''.join(word.capitalize() for word in certificate_template.split('-'))
-            context['cn_entry'] = f'Trustpoint-{camelcase_template}-Credential-{number_of_issued_device_certificates}'
-
-        return context
-
-    @staticmethod
-    def _get_domain_credential_cmp_context(device: DeviceModel) -> dict[str, Any]:
-        """Provides the context for cmp commands using client based authentication.
-
-        Args:
-            device: The corresponding device model.
-
-        Returns:
-            The required context.
-        """
-        if device.domain is None:
-            raise Http404(DeviceWithoutDomainErrorMsg)
-        if not device.public_key_info:
-            raise Http404(DeviceWithoutDomainErrorMsg)
-        context = {}
-
-        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
-            domain_credential_key_gen_command = (
-                f'openssl genrsa -out domain_credential_key.pem {device.public_key_info.key_size}'
-            )
-            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
-        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
-            if not device.public_key_info.named_curve:
-                raise Http404(NamedCurveMissingForEccErrorMsg)
-            domain_credential_key_gen_command = (
-                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out domain_credential_key.pem'
-            )
-            key_gen_command = (
-                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out key.pem'
-            )
-        else:
-            err_msg = _('Unsupported public key algorithm')
-            raise ValueError(err_msg)
-
-        context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
-        context['key_gen_command'] = key_gen_command
-        context['issuing_ca_pem'] = (
-            device.domain.get_issuing_ca_or_value_error()
-            .credential.get_certificate()
-            .public_bytes(encoding=serialization.Encoding.PEM)
-            .decode()
-        )
-        return context
 
 
 class NoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[DeviceModel]):
@@ -588,22 +624,7 @@ class NoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[DeviceMod
         return context
 
 
-class OnboardingCmpSharedSecretHelpView(HelpDomainCredentialCmpContextView):
-    """Help view for the onboarding cmp-shared secret case."""
 
-    template_name = 'help/onboarding/cmp_shared_secret.html'
-
-
-class OnboardingCmpIdevidHelpView(HelpDomainCredentialCmpContextView):
-    """Help view for the onboarding IDeviD case."""
-
-    template_name = 'help/onboarding/cmp_idevid.html'
-
-
-class OnboardingCmpApplicationCredentialsHelpView(HelpDomainCredentialCmpContextView):
-    """Help view for enrolling application credentials via CMP."""
-
-    template_name = 'help/onboarding/cmp_application_credentials.html'
 
 
 class OnboardingMethodSelectIdevidHelpView(PageContextMixin, DetailView[DevIdRegistration]):
