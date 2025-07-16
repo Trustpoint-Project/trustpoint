@@ -1,5 +1,6 @@
 """pytest configuration for the tests in the PKI app."""
 import base64
+import secrets
 from typing import Any, Tuple
 
 import pytest
@@ -99,6 +100,7 @@ def device_instance(domain_instance: dict[str, Any]) -> dict[str, Any]:
         onboarding_status=DeviceModel.OnboardingStatus.NO_ONBOARDING,
         onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
         pki_protocol=DeviceModel.PkiProtocol.EST_PASSWORD,
+        est_password=secrets.token_urlsafe(16)
     )
     domain_instance.update({'device': device})
     return domain_instance
@@ -115,6 +117,7 @@ def est_device_without_onboarding(domain_instance: dict[str, Any]) -> dict[str, 
         onboarding_status=DeviceModel.OnboardingStatus.NO_ONBOARDING,
         onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
         pki_protocol=DeviceModel.PkiProtocol.EST_PASSWORD,
+        est_password=secrets.token_urlsafe(16)
     )
     domain_instance.update({'device': device})
     return domain_instance
@@ -131,6 +134,7 @@ def est_device_with_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any
         onboarding_status=DeviceModel.OnboardingStatus.ONBOARDED,
         onboarding_protocol=DeviceModel.OnboardingProtocol.EST_PASSWORD,
         pki_protocol=DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE,
+        est_password=secrets.token_urlsafe(16)
     )
     domain_instance.update({'device': device})
     return domain_instance
@@ -147,6 +151,7 @@ def cmp_device_without_onboarding(domain_instance: dict[str, Any]) -> dict[str, 
         onboarding_status=DeviceModel.OnboardingStatus.NO_ONBOARDING,
         onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
         pki_protocol=DeviceModel.PkiProtocol.CMP_SHARED_SECRET,
+        cmp_shared_secret=secrets.token_urlsafe(16)
     )
     domain_instance.update({'device': device})
     return domain_instance
@@ -163,6 +168,7 @@ def cmp_device_with_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any
         onboarding_status=DeviceModel.OnboardingStatus.ONBOARDED,
         onboarding_protocol=DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET,
         pki_protocol=DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE,
+        cmp_shared_secret=secrets.token_urlsafe(16)
     )
     domain_instance.update({'device': device})
     return domain_instance
@@ -238,7 +244,7 @@ def credential_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
 
 
 @pytest.fixture
-def domain_credential_instance(
+def domain_credential_est_onboarding(
         est_device_with_onboarding: dict[str, Any],
         rsa_private_key: rsa.RSAPrivateKey
 ) -> dict[str, Any]:
@@ -330,68 +336,6 @@ def domain_credential_instance_for_cmp(
 
     cmp_device_with_onboarding.update({'domain_credential': issued_domain_credential})
     return cmp_device_with_onboarding
-
-
-####
-
-def create_simpleenroll_http_request(
-    device: DeviceModel,
-    rsa_private_key: rsa.RSAPrivateKey,
-    certtemplate_str: str
-) -> Tuple[HttpRequest, str, str, str]:
-    """Helper function to create an HttpRequest object for an EST simpleenroll request."""
-    domain: DomainModel = device.domain
-
-    if domain is None:
-        raise ValueError("The associated domain for the device cannot be None")
-
-    csr_builder = x509.CertificateSigningRequestBuilder().subject_name(
-        x509.Name([
-            x509.NameAttribute(x509.NameOID.COMMON_NAME, device.common_name),
-        ])
-    )
-
-    csr = csr_builder.sign(private_key=rsa_private_key, algorithm=hashes.SHA256())
-
-    domain_str = domain.unique_name
-    operation_str = 'simpleenroll'
-    protocol_str = 'est'
-
-    credentials = f"{device.est_username}:{device.est_password}".encode("utf-8")
-    auth_header = base64.b64encode(credentials).decode("utf-8")
-
-
-    request_factory = RequestFactory()
-    request = request_factory.post(
-        path=f"/.well-known/{protocol_str}/{domain_str}/{certtemplate_str}/{operation_str}",
-        data=csr.public_bytes(serialization.Encoding.DER),
-        content_type="application/pkcs10",
-        HTTP_AUTHORIZATION=f"Basic {auth_header}",
-
-    )
-
-    return request, domain_str, operation_str, protocol_str
-
-def est_simpleenroll_http_request_no_onboarding(
-    est_device_without_onboarding: dict[str, Any],
-    rsa_private_key: rsa.RSAPrivateKey
-) -> Tuple[HttpRequest, str, str, str]:
-    """Fixture to create an HttpRequest object for an EST simpleenroll request without onboarding."""
-    device = est_device_without_onboarding['device']
-    certtemplate_str = 'tls-client'
-    return create_simpleenroll_http_request(device, rsa_private_key, certtemplate_str)
-
-
-@pytest.fixture
-def est_simpleenroll_http_request_with_onboarding(
-    est_device_with_onboarding: dict[str, Any],
-    rsa_private_key: rsa.RSAPrivateKey
-) -> Tuple[HttpRequest, str, str, str]:
-    """Fixture to create an HttpRequest object for an EST simpleenroll request with onboarding."""
-    device = est_device_with_onboarding['device']
-    certtemplate_str = 'domaincredential'
-    return create_simpleenroll_http_request(device, rsa_private_key, certtemplate_str)
-
 
 @pytest.fixture
 def tls_client_request_with_client_cert_header(
