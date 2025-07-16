@@ -83,8 +83,7 @@ class AcceptHeaderValidation(ValidationComponent):
 
         accept_header = context.raw_message.headers.get('Accept')
         if not accept_header:
-            error_message = "The 'Accept' header is missing."
-            raise ValueError(error_message)
+            return
 
         accepted_types = [content_type.strip() for content_type in accept_header.split(',')]
         if not any(
@@ -106,6 +105,8 @@ class AuthorizationHeaderValidation(ValidationComponent):
         if not hasattr(context.raw_message, 'headers') or not context.raw_message.headers:
             error_message = 'Raw message is missing headers.'
             raise ValueError(error_message)
+
+        ValueError("test")
 
         auth_header = context.raw_message.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Basic '):
@@ -174,7 +175,7 @@ class IntermediateCertificatesValidation(ValidationComponent):
 
             intermediate_cas.append(ca_cert)
 
-        context.client_intermediate_certificate = intermediate_cas
+        context.client_intermediate_certificate = intermediate_cas if intermediate_cas else None
 
 class ContentTransferEncodingValidation(ValidationComponent):
     """Validate the Content-Transfer-Encoding header and decode base64-encoded messages if required."""
@@ -243,7 +244,7 @@ class EstHttpRequestValidator(CompositeValidation):
         """Initialize the composite validator with the default set of validation components."""
         super().__init__()
         self.add(PayloadSizeValidation(max_payload_size=65536))
-        self.add(ContentTypeValidation(expected_content_type='application/pkcs7-mime'))
+        self.add(ContentTypeValidation(expected_content_type='application/pkcs10'))
         self.add(AcceptHeaderValidation(allowed_content_types=['application/pkcs7-mime']))
         self.add(AuthorizationHeaderValidation())
         self.add(ClientCertificateValidation())
