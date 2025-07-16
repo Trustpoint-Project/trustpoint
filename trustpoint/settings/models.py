@@ -173,17 +173,22 @@ class BackupOptions(models.Model):
         PASSWORD = 'password', 'Password'
         SSH_KEY   = 'ssh_key',  'SSH Key'
 
-    host = models.CharField(max_length=255, verbose_name=_('Host'))
-    port = models.PositiveIntegerField(default=2222, verbose_name=_('Port'))
-    user = models.CharField(max_length=128, verbose_name=_('Username'))
     local_storage = models.BooleanField(default=True, verbose_name=_('Use local storage'))
+
+    sftp_storage = models.BooleanField(default=False, verbose_name=_('Use SFTP storage'))
+
+    host = models.CharField(max_length=255, verbose_name=_('Host'), blank=True)
+    port = models.PositiveIntegerField(default=2222, verbose_name=_('Port'), blank=True)
+    user = models.CharField(max_length=128, verbose_name=_('Username'), blank=True)
 
     auth_method = models.CharField(
         max_length=10,
         choices=AuthMethod.choices,
+        default=AuthMethod.PASSWORD,
         verbose_name=_('Authentication Method')
     )
 
+    # TODO (Dome): Storing passwords in plain text
     password = models.CharField(
         max_length=128,
         blank=True,
@@ -212,6 +217,33 @@ class BackupOptions(models.Model):
         help_text=_('Remote directory (e.g. /backups/) where files should be uploaded. '
                   'Trailing slash is optional.'),
     )
+
+    def clean(self):
+        """Prevent the creation of more than one instance."""
+        if not self.pk and BackupOptions.objects.exists():
+            raise ValidationError(_('Only one instance of BackupOptions is allowed.'))
+
+        if not self.sftp_storage:
+            missing_fields = []
+            if not self.host:
+                missing_fields.append(_('Host'))
+            if not self.user:
+                missing_fields.append(_('Username'))
+            if not self.auth_method:
+                missing_fields.append(_('Authentication Method'))
+
+            if missing_fields:
+                raise ValidationError(
+                    _('The following fields are required when SFTP storage is enabled: %(fields)s.'),
+                    params={'fields': ', '.join(missing_fields)},
+                )
+
+        return super().clean()
+
+    def save(self, *args, **kwargs):
+        """Ensure only one instance exists (singleton pattern)."""
+        self.pk = 1
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return f'{self.user}@{self.host}:{self.port} ({self.auth_method})'
