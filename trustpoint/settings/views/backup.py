@@ -151,6 +151,8 @@ class BackupManageView(SortableTableMixin, ListView[Any]):
             return redirect(self.success_url)
 
         overrides = {
+            'local_storage': opts.local_storage,
+            'sftp_storage': opts.sftp_storage,
             'host': opts.host,
             'port': opts.port,
             'user': opts.user,
@@ -158,7 +160,6 @@ class BackupManageView(SortableTableMixin, ListView[Any]):
             'password': opts.password or '',
             'private_key': opts.private_key or '',
             'key_passphrase': opts.key_passphrase or '',
-            'local_storage': opts.local_storage,
             'remote_directory': opts.remote_directory or '',
         }
 
