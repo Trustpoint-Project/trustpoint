@@ -104,10 +104,11 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
         """ModelForm Meta configuration for BackupOptions."""
         model = BackupOptions
         fields: ClassVar[list[str]] = [
+            'local_storage',
+            'sftp_storage',
             'host',
             'port',
             'user',
-            'local_storage',
             'auth_method',
             'password',
             'private_key',
@@ -115,10 +116,11 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
             'remote_directory',
         ]
         widgets: ClassVar[dict[str, Any]] = {
+            'local_storage': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'sftp_storage': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'host': forms.TextInput(attrs={'class': 'form-control'}),
             'port': forms.NumberInput(attrs={'class': 'form-control'}),
             'user': forms.TextInput(attrs={'class': 'form-control'}),
-            'local_storage': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'auth_method': forms.Select(attrs={'class': 'form-select'}),
             'password': forms.PasswordInput(
                 attrs={'class': 'form-control'}, render_value=True
