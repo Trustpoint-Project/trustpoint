@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 from django.db.utils import OperationalError, ProgrammingError
 from packaging.version import InvalidVersion, Version
 
-from settings.models import AppVersion
+from management.models import AppVersion
 
 
 class Command(BaseCommand):

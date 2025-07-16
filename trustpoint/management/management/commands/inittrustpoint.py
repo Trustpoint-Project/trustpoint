@@ -5,7 +5,7 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandParser
 from django.utils.translation import gettext as _
 
-from settings.models import AppVersion
+from management.models import AppVersion
 
 
 class Command(BaseCommand):

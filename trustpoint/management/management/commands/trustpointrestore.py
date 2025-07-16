@@ -14,7 +14,7 @@ from django.utils.translation import gettext as _
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.views import APACHE_CERT_CHAIN_PATH, APACHE_CERT_PATH, APACHE_KEY_PATH, SCRIPT_WIZARD_RESTORE
 
-from settings.models import AppVersion
+from management.models import AppVersion
 
 if TYPE_CHECKING:
     from typing import Any
