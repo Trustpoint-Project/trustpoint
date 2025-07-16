@@ -127,7 +127,7 @@ class EstAuthorization(CompositeAuthorization):
     def __init__(self) -> None:
         """Initialize the composite authorization handler with the default set of components."""
         super().__init__()
-        self.add(CertificateTemplateAuthorization(['tls-clientt']))
+        self.add(CertificateTemplateAuthorization(['tls-client']))
         self.add(DomainScopeValidation())
         self.add(ManualAuthorization())
         self.add(ProtocolAuthorization(['est']))
