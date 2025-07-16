@@ -218,32 +218,21 @@ class BackupOptions(models.Model):
                   'Trailing slash is optional.'),
     )
 
+    def save(self, *args, **kwargs):
+        """Ensure only one instance exists (singleton pattern)."""
+        self.full_clean()
+
+        super().save(*args, **kwargs)
+
     def clean(self):
         """Prevent the creation of more than one instance."""
-        if not self.pk and BackupOptions.objects.exists():
-            raise ValidationError(_('Only one instance of BackupOptions is allowed.'))
-
-        if not self.sftp_storage:
-            missing_fields = []
-            if not self.host:
-                missing_fields.append(_('Host'))
-            if not self.user:
-                missing_fields.append(_('Username'))
-            if not self.auth_method:
-                missing_fields.append(_('Authentication Method'))
-
-            if missing_fields:
-                raise ValidationError(
-                    _('The following fields are required when SFTP storage is enabled: %(fields)s.'),
-                    params={'fields': ', '.join(missing_fields)},
-                )
+        if BackupOptions.objects.exists() and not self.pk:
+            raise ValidationError("Only one BackupOptions instance is allowed.")
 
         return super().clean()
 
-    def save(self, *args, **kwargs):
-        """Ensure only one instance exists (singleton pattern)."""
-        self.pk = 1
-        super().save(*args, **kwargs)
+    class Meta:
+        verbose_name = "Backup Option"
 
     def __str__(self) -> str:
         return f'{self.user}@{self.host}:{self.port} ({self.auth_method})'
