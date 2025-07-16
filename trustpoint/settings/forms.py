@@ -136,6 +136,27 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
         """Validate required fields based on selected authentication method."""
         cleaned: dict[str, Any] = super().clean() or {}
         auth = cleaned.get('auth_method')
+        sftp_storage = cleaned.get('sftp_storage')
+
+        if sftp_storage:
+            missing_fields = []
+            host = cleaned.get('host', '').strip()
+            user = cleaned.get('user', '').strip()
+            remote_directory = cleaned.get('remote_directory', '').strip()
+
+            if not host:
+                missing_fields.append('Host')
+            if not user:
+                missing_fields.append('Username')
+            if not remote_directory:
+                missing_fields.append('Remote Directory')
+
+            if missing_fields:
+                self.add_error(
+                    None ,
+                    f"The following fields are required when SFTP storage is enabled: {', '.join(missing_fields)}."
+                )
+
         if auth:
             pwd = cleaned.get('password', '').strip()
             key = cleaned.get('private_key', '').strip()
