@@ -13,7 +13,7 @@ log() {
   local message
   message="$(printf '%s - wizard_restore.sh - %s - %s\n' \
     "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$*")"
-  echo "$message" >> "$LOGFILE" # | tee -a "$LOGFILE"
+  echo "$message" | tee -a "$LOGFILE" # >> "$LOGFILE" 
 }
 
 # 1) (Re-)create and clean TLS directory

@@ -49,11 +49,9 @@ then
     exit 4
 fi
 
-# configure tsl
-/etc/trustpoint/wizard/transition/update_tls.sh
-
-# 12) gracefully restart Apache if already running
+# 12) if Apache is already running, update tls and gracefully restart
 if pgrep apache2 >/dev/null; then
+   /etc/trustpoint/wizard/transition/update_tls.sh
    log INFO "Restarting Apache (graceful)"
    apache2ctl graceful
 fi
