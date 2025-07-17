@@ -33,5 +33,5 @@ then
     exit 4
 fi
 
-log "Transition from WIZARD_DEMO_DATA to WIZARD_CREATE_SUPER_USER completed successfully."
+echo "Transition from WIZARD_DEMO_DATA to WIZARD_CREATE_SUPER_USER completed successfully."
 exit 0

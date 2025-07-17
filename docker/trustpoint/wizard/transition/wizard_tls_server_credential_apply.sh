@@ -20,81 +20,6 @@ if [[ 1 -ne STATE_COUNT ]]; then
     exit 2
 fi
 
-# Makes sure the apache2 directory exists.
-if ! mkdir -p "$APACHE_TLS_DIRECTORY"
-then
-    echo "ERROR: Failed to create the required TLS directory at $APACHE_TLS_DIRECTORY."
-    exit 3
-fi
-
-# Makes sure the apache2 tls directory does not contain any files or directories.
-if ! rm -f /etc/trustpoint/tls/*
-then
-    echo "ERROR: Failed to clear existing files in $APACHE_TLS_DIRECTORY."
-    exit 4
-fi
-
-# Copies the TLS-Server credentials into the apache2 TLS directory.
-if ! cp /var/www/html/trustpoint/docker/trustpoint/apache/tls/* "$APACHE_TLS_DIRECTORY"
-then
-    echo "ERROR: Failed to copy Trustpoint TLS files to $APACHE_TLS_DIRECTORY."
-    exit 5
-fi
-
-# Makes sure no other sites are enabled within the apache2
-if ! rm -f /etc/apache2/sites-enabled/*
-then
-    echo "ERROR: Failed to remove existing Apache sites from /etc/apache2/sites-enabled."
-    exit 6
-fi
-
-# Copies the apache http (80) config into site-available.
-if ! cp /var/www/html/trustpoint/docker/trustpoint/apache/trustpoint-apache-http.conf /etc/apache2/sites-available/trustpoint-apache-http.conf
-then
-    echo "ERROR: Failed to copy trustpoint-apache-http.conf to /etc/apache2/sites-available."
-    exit 7
-fi
-
-# Copies the apache http (80) config into site-enabled.
-if ! cp /var/www/html/trustpoint/docker/trustpoint/apache/trustpoint-apache-http.conf /etc/apache2/sites-enabled/trustpoint-apache-http.conf
-then
-    echo "ERROR: Failed to copy trustpoint-apache-http.conf to /etc/apache2/sites-enabled."
-    exit 8
-fi
-
-# Copies the apache https (443) config into site-available.
-if ! cp /var/www/html/trustpoint/docker/trustpoint/apache/trustpoint-apache-https.conf /etc/apache2/sites-available/trustpoint-apache-https.conf
-then
-    echo "ERROR: Failed to copy trustpoint-apache-https.conf to /etc/apache2/sites-available."
-    exit 9
-fi
-
-# Copies the apache https (443) config into site-enabled.
-if ! cp /var/www/html/trustpoint/docker/trustpoint/apache/trustpoint-apache-https.conf /etc/apache2/sites-enabled/trustpoint-apache-https.conf
-then
-    echo "ERROR: Failed to copy trustpoint-apache-https.conf to /etc/apache2/sites-enabled."
-    exit 10
-fi
-
-if ! a2enmod ssl
-then
-    echo "ERROR: Failed to enable Apache mod_ssl."
-    exit 11
-fi
-
-if ! a2enmod rewrite
-then
-    echo "ERROR: Failed to enable Apache mod_rewrite."
-    exit 12
-fi
-
-# Tries to gracefully restart and reload the apache2 webserver.
-if ! apache2ctl graceful
-then
-    echo "ERROR: Failed to gracefully restart Apache."
-    exit 13
-fi
-
 # Removes the current WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.
 if ! rm "$WIZARD_TLS_SERVER_CREDENTIAL_APPLY"
 then
@@ -109,5 +34,8 @@ then
     exit 15
 fi
 
-log "Transition from WIZARD_TLS_SERVER_CREDENTIAL_APPLY to WIZARD_DEMO_DATA completed successfully."
+# configure apache and tsl
+/etc/trustpoint/wizard/transition/update_tls.sh
+
+echo "Transition from WIZARD_TLS_SERVER_CREDENTIAL_APPLY to WIZARD_DEMO_DATA completed successfully."
 exit 0
