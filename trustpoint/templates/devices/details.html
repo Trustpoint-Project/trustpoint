@@ -5,7 +5,11 @@
     <div class="card">
         <div class="card-header">
             <div class="">
-                <h1>{% trans 'Device details' %}</h1>
+                {% if page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY %}
+                    <h1>{% trans 'Device Details' %}</h1>
+                {% elif page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY %}
+                    <h1>{% trans 'OPC UA GDS Details' %}</h1>
+                {% endif %}
             </div>
         </div>
         <div class="card-body">
@@ -14,7 +18,7 @@
         <div class="card-footer d-flex justify-content-between align-items-center">
             <div class="tp-card-btn-footer m-1">
                 <button type="button" value="Back" class="btn btn-secondary" onClick="history.back()">{% trans 'Back' %}</button>
-                <a href="{% url 'devices:devices' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                <a href="{% url cancel_details_url %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
             </div>
         </div>
     </div>

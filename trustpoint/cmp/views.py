@@ -1208,11 +1208,11 @@ class CmpCertificationRequestView(
                     status=404,
                 )
 
-            if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_SHARED_SECRET:
+            if self.device.no_onboarding_pki_protocol != DeviceModel.NoOnboardingPkiProtocol.CMP_SHARED_SECRET:
                 return HttpResponse(
                     'Received a password based MAC protected CMP message for a device that does not use the '
-                    f'pki-protocol {DeviceModel.PkiProtocol.CMP_SHARED_SECRET.label}, but instead uses'
-                    f'{self.device.get_pki_protocol_display()}.'
+                    f'pki-protocol {DeviceModel.NoOnboardingPkiProtocol.CMP_SHARED_SECRET.label}, but instead uses'
+                    f'{self.device.get_no_onboarding_pki_protocol_display()}.'
                 )
 
             if self.device.domain != self.requested_domain:

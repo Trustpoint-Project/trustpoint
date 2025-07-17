@@ -1,0 +1,31 @@
+{% extends 'trustpoint/base.html' %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+{% block content %}
+    <div class="card">
+        <div class="card-header d-flex">
+            {% if page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY %}
+                <h1>{% trans 'Create new Device' %}</h1>
+            {% elif page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY %}
+                <h1>{% trans 'Create new OPC UA GDS' %}</h1>
+            {% endif %}
+        </div>
+        <form method="POST" id="add-device-form">
+            <div class="card-body py-3">
+                {% crispy form %}
+            </div>
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url cancel_create_url %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                    <button type="submit" class="btn btn-primary">
+                        {% if page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY %}
+                            {% trans 'Create new Device' %}
+                        {% elif page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY %}
+                            {% trans 'Create new OPC UA GDS' %}
+                        {% endif %}
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+{% endblock content %}
