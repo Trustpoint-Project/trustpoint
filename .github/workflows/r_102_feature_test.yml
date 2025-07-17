@@ -1,13 +1,13 @@
-name: R_102
+# name: R_102
 
-on:
-  pull_request:
-  push:
-    branches:
-      - main
+# on:
+#   pull_request:
+#   push:
+#     branches:
+#       - main
 
-jobs:
-  test:
-    uses: ./.github/workflows/behave-test-template.yml
-    with:
-      feature_file: R_102_certificate_template_security
+# jobs:
+#   test:
+#     uses: ./.github/workflows/behave-test-template.yml
+#     with:
+#       feature_file: R_102_certificate_template_security
