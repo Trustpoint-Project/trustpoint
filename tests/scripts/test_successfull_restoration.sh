@@ -16,9 +16,6 @@ for i in {1..30}; do
   if curl --fail -k -s "$URL" >/dev/null; then
     echo "✅ HTTPS endpoint is reachable"
     break
-  else
-    echo "❌ HTTPS endpoint is NOT reachable" >&2
-    exit 1
   fi
   echo "…still waiting ($i/30)"; sleep 2
   if [[ $i -eq 30 ]]; then
