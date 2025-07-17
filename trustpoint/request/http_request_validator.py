@@ -106,11 +106,13 @@ class AuthorizationHeaderValidation(ValidationComponent):
             error_message = 'Raw message is missing headers.'
             raise ValueError(error_message)
 
-        ValueError("test")
-
         auth_header = context.raw_message.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Basic '):
+        if not auth_header:
             return
+
+        if not auth_header.startswith('Basic '):
+            error_message = "Authorization header must start with 'Basic'."
+            raise ValueError(error_message)
 
         try:
             credentials = base64.b64decode(auth_header.split(' ', 1)[1].strip()).decode('utf-8')
