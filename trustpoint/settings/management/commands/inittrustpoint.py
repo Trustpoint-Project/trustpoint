@@ -33,7 +33,7 @@ class Command(BaseCommand):
         current = django_settings.APP_VERSION
         if not options.get('nomigrations'):
             setup_msg: str = _('Starting setup script...')
-            self.stdout.write(self.style.NOTICE(_(setup_msg)))
+            self.stdout.write(_(setup_msg))
 
             self.stdout.write('Running migrate...')
             call_command('migrate')
