@@ -35,10 +35,10 @@ jobs:
         run: |
           echo "Checking health of the HTTPS endpoint with self-signed cert..."
 
-          URL="https://127.0.0.1/setup-wizard"
+          URL="https://127.0.0.1/"
 
           for i in {1..20}; do
-            http_response=$(curl -k -s -o response.txt -w "%{http_code}" "$URL") || true
+            http_response=$(curl -k -L -s -o response.txt -w "%{http_code}" "$URL") || true
 
             if [ "$http_response" = "200" ]; then
               echo "✅ Success on attempt $i"
