@@ -21,8 +21,36 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_details',
     ),
     # Create Views
-    path('create/', views.CreateDeviceView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create'),
-    path('opc-ua-gds/create/', views.CreateOpcUaGdsView.as_view(), name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_create'),
+    path(
+        'create/',
+        views.DeviceCreateChooseOnboardingView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create'
+    ),
+    path(
+        'opc-ua-gds/create/',
+        views.OpcUaGdsCreateChooseOnboardingView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_create'
+    ),
+    path(
+        'create/onboarding/',
+        views.DeviceCreateChooseOnboardingView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create'
+    ),
+    path(
+        'opc-ua-gds/create/onboarding',
+        views.OpcUaGdsCreateChooseOnboardingView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_create'
+    ),
+    path(
+        'create/no-onboarding/',
+        views.DeviceCreateChooseOnboardingView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create'
+    ),
+    path(
+        'opc-ua-gds/create/no-onboarding',
+        views.OpcUaGdsCreateChooseOnboardingView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_create'
+    ),
     # Certificate Lifecycle Management Views
     path(
         'certificate-lifecycle-management/<int:pk>/',
@@ -241,12 +269,12 @@ urlpatterns = [
 
     path(
         'help/onboarding/cmp-idevid/<int:pk>/',
-        devices_help_views.OnboardingCmpIdevidHelpView.as_view(),
+        devices_help_views.DeviceOnboardingCmpIdevidHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_cmp-idevid',
     ),
     path(
         'opc-ua-gds/help/onboarding/cmp-idevid/<int:pk>/',
-        devices_help_views.OnboardingCmpIdevidHelpView.as_view(),
+        devices_help_views.OpcUaGdsOnboardingCmpIdevidHelpView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-onboarding_cmp-idevid',
     ),
 
@@ -261,16 +289,16 @@ urlpatterns = [
     #     name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-onboarding_est-ldevid',
     # ),
 
-    # path(
-    #     'help/onboarding/est-idevid/<int:pk>/',
-    #     devices_help_views.OnboardingEstIdevidHelpView.as_view(),
-    #     name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_est-idevid',
-    # ),
-    # path(
-    #     'opc-ua-gds/help/onboarding/est-idevid/<int:pk>/',
-    #     devices_help_views.OnboardingEstIdevidHelpView.as_view(),
-    #     name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-onboarding_est-idevid',
-    # ),
+    path(
+        'help/onboarding/est-idevid/<int:pk>/',
+        devices_help_views.DeviceOnboardingEstIdevidHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_est-idevid',
+    ),
+    path(
+        'opc-ua-gds/help/onboarding/est-idevid/<int:pk>/',
+        devices_help_views.OpcUaGdsOnboardingEstIdevidHelpView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-onboarding_est-idevid',
+    ),
 
     path(
         'help/onboarding/method-select-idevid/<int:pk>/',

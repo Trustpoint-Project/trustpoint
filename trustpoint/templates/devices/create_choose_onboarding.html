@@ -1,0 +1,30 @@
+{% extends 'trustpoint/base.html' %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+{% block content %}
+    <div class="card">
+        <div class="card-header d-flex">
+            {% if page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY %}
+                <h1>{% trans 'Create new Device' %}</h1>
+            {% elif page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY %}
+                <h1>{% trans 'Create new OPC UA GDS' %}</h1>
+            {% endif %}
+        </div>
+        
+            <div class="card-body py-3">
+                <h2>Choose Onboarding Mechanism</h2>
+                <hr>
+                <p>If a domain credential shall be issued that will in turn be used for authentication, please choose Onboarding. <br>
+                If the trustpoint shall directly issue application certificates without using a domain credential, please choose No Onboarding.</p>
+                <hr>
+                <a href="" class="btn btn-primary mb-3">Use Onboarding (Recommended)</a><br>
+                <a href="" class="btn btn-primary">Do not use onboarding</a>
+            </div>
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url cancel_create_url %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                </div>
+            </div>
+
+    </div>
+{% endblock content %}

@@ -85,7 +85,7 @@ class CredentialRequest:
 class EstAuthenticationMixin(LoggerMixin):
     """Checks for HTTP Basic Authentication before processing the request."""
 
-    used_onboarding_protocol_auth: DeviceModel.OnboardingProtocol | None = None
+    # used_onboarding_protocol_auth: DeviceModel.OnboardingProtocol | None = None
 
     @staticmethod
     def authenticate_username_password(request: HttpRequest) -> DeviceModel:
@@ -107,7 +107,7 @@ class EstAuthenticationMixin(LoggerMixin):
             error_message = 'Malformed authentication credentials'
             raise UsernamePasswordAuthenticationError(error_message) from e
 
-        device = DeviceModel.objects.filter(est_password=password, common_name=username).first()
+        device = DeviceModel.objects.filter(common_name=username).first()
         if not device:
             error_message = 'Invalid authentication credentials'
             raise UsernamePasswordAuthenticationError(error_message)

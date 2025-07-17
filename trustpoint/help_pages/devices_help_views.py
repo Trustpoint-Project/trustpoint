@@ -266,23 +266,28 @@ class OpcUaGdsOnboardingCmpSharedSecretHelpView(AbstractDomainCredentialCmpHelpV
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
-class OnboardingCmpIdevidHelpView(AbstractDomainCredentialCmpHelpView):
+class DeviceOnboardingCmpIdevidHelpView(AbstractDomainCredentialCmpHelpView):
     """Help view for the onboarding IDeviD case."""
 
     template_name = 'help/onboarding/cmp_idevid.html'
 
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
-# TODO: wrong inheritance
+class OpcUaGdsOnboardingCmpIdevidHelpView(AbstractDomainCredentialCmpHelpView):
+    """Help view for the onboarding IDeviD case."""
+
+    template_name = 'help/onboarding/cmp_idevid.html'
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
 class OnboardingCmpApplicationCredentialsHelpView(AbstractDomainCredentialCmpHelpView):
     """Help view for enrolling application credentials via CMP."""
 
     template_name = 'help/onboarding/cmp_application_credentials.html'
 
 
-
-
-
-class AbstractHelpDomainCredentialEstContextView(PageContextMixin, DetailView[DeviceModel]):
+class AbstractDomainCredentialEstHelpView(PageContextMixin, DetailView[DeviceModel]):
     """Base view for CMP help views concerning the domain credential, not intended to be used directly."""
 
     http_method_names = ('get',)
@@ -372,35 +377,49 @@ class AbstractHelpDomainCredentialEstContextView(PageContextMixin, DetailView[De
         return context
 
 
-class DeviceNoOnboardingEstUsernamePasswordHelpView(AbstractHelpDomainCredentialEstContextView):
+class DeviceOnboardingEstIdevidHelpView(AbstractDomainCredentialEstHelpView):
+    """View to provide help information for EST IDevID enrollment."""
+
+    template_name = 'help/onboarding/est_idevid.html'
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+class OpcUaGdsOnboardingEstIdevidHelpView(AbstractDomainCredentialEstHelpView):
+    """View to provide help information for EST IDevID enrollment."""
+
+    template_name = 'help/onboarding/est_idevid.html'
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class DeviceNoOnboardingEstUsernamePasswordHelpView(AbstractDomainCredentialEstHelpView):
     """View to provide help information for EST username/password authentication with no onboarding."""
 
     template_name = 'help/no_onboarding/est_username_password.html'
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class OpcUaGdsNoOnboardingEstUsernamePasswordHelpView(AbstractHelpDomainCredentialEstContextView):
+class OpcUaGdsNoOnboardingEstUsernamePasswordHelpView(AbstractDomainCredentialEstHelpView):
     """View to provide help information for EST username/password authentication with no onboarding and OPC UA GDS."""
 
     template_name = 'help/no_onboarding/est_gds_username_password.html'
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
-class DeviceOnboardingEstUsernamePasswordHelpView(AbstractHelpDomainCredentialEstContextView):
+class DeviceOnboardingEstUsernamePasswordHelpView(AbstractDomainCredentialEstHelpView):
     """View to provide help information for EST username/password authentication for onboarding."""
 
     template_name = 'help/onboarding/est_username_password.html'
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class OpcUaGdsOnboardingEstUsernamePasswordHelpView(AbstractHelpDomainCredentialEstContextView):
+class OpcUaGdsOnboardingEstUsernamePasswordHelpView(AbstractDomainCredentialEstHelpView):
     """View to provide help information for EST username/password authentication for onboarding."""
 
     template_name = 'help/onboarding/est_username_password.html'
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
-
-class DeviceOnboardingEstApplicationCredentialsHelpView(AbstractHelpDomainCredentialEstContextView):
+class DeviceOnboardingEstApplicationCredentialsHelpView(AbstractDomainCredentialEstHelpView):
     """View to provide help information for EST domain credential authentication."""
 
     template_name = 'help/onboarding/est_application_credentials.html'
@@ -717,7 +736,4 @@ class OnboardingEstIdevidRegistrationHelpView(AbstractOnboardingIdevidRegistrati
     template_name = 'help/onboarding/est_idevid.html'
 
 
-class DeviceOnboardingEstIdevidHelpView(AbstractHelpDomainCredentialEstContextView):
-    """View to provide help information for EST IDevID enrollment."""
 
-    template_name = 'help/onboarding/est_idevid.html'

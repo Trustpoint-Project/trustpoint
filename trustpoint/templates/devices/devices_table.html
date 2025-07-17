@@ -68,7 +68,7 @@
                         {{ device.get_onboarding_protocol_display }}
                     {% endif %}
                 </td>
-                <td>{{ device.get_pki_protocol_display }}</td>
+                <td>{{ device.pki_protocols| safe }}</td>
                 <td>{{ device.clm_button| safe }}</td>
                 <td>{{ device.detail_button| safe }}</td>
             </tr>

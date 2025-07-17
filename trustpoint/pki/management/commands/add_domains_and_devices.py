@@ -12,6 +12,26 @@ from django.core.management.base import BaseCommand
 from pki.models import DevIdRegistration, DomainModel, IssuingCaModel, TruststoreModel
 
 
+def get_random_pki_protocol(include_protocol: DeviceModel.PkiProtocol | None = None) -> list[DeviceModel.PkiProtocol]:
+    """Gets random allowed PkiProtocols.
+
+    Args:
+        include_protocol: This protocol will be included in the allowed list.
+
+    Returns:
+        A list of PkiProtocols.
+    """
+    protocols = list(DeviceModel.PkiProtocol)
+    protocols.remove(DeviceModel.PkiProtocol.NO_ONBOARDING)
+    protocols.remove(DeviceModel.PkiProtocol.MANUAL)
+    if include_protocol:
+        protocols.remove(include_protocol)
+    num_choices = secrets.randbelow(len(protocols) + 1)
+    random_protocols = random.sample(protocols, k=num_choices)
+    if include_protocol:
+        random_protocols.append(include_protocol)
+    return random_protocols
+
 class Command(BaseCommand):
     """Add domains and associated device names with random onboarding protocol and serial number."""
 
@@ -85,6 +105,8 @@ class Command(BaseCommand):
             DeviceModel.OnboardingProtocol.NO_ONBOARDING.value,
             DeviceModel.OnboardingProtocol.CMP_IDEVID.value,
             DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET.value,
+            DeviceModel.OnboardingProtocol.EST_IDEVID.value,
+            DeviceModel.OnboardingProtocol.EST_PASSWORD.value
         ]
 
         print('Starting the process of adding domains and devices...\n')
@@ -135,26 +157,27 @@ class Command(BaseCommand):
 
                 domain_credential_onboarding = onboarding_protocol != DeviceModel.OnboardingProtocol.NO_ONBOARDING
 
-                pki_protocol = (
-                    DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE.value
-                    if (
-                        onboarding_protocol
-                        in (DeviceModel.OnboardingProtocol.CMP_IDEVID, DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET)
-                    )
-                    else random.choice(  # noqa: S311
-                        [
-                            DeviceModel.PkiProtocol.MANUAL.value,
-                            DeviceModel.PkiProtocol.CMP_SHARED_SECRET.value,
-                        ]
-                    )
-                )
+                if domain_credential_onboarding:
+                    if onboarding_protocol == DeviceModel.OnboardingProtocol.MANUAL:
+                        pki_protocols = get_random_pki_protocol()
+                    elif onboarding_protocol in [
+                            DeviceModel.OnboardingProtocol.EST_IDEVID,
+                            DeviceModel.OnboardingProtocol.EST_PASSWORD]:
+                        pki_protocols = get_random_pki_protocol(DeviceModel.PkiProtocol.EST)
+                    elif onboarding_protocol in [
+                            DeviceModel.OnboardingProtocol.CMP_IDEVID,
+                            DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET]:
+                        pki_protocols = get_random_pki_protocol(DeviceModel.PkiProtocol.CMP)
+                    else:
+                        err_msg = 'Unknown onboarding protocol found.'
+                        raise ValueError(err_msg)
+
+                else:
+                    pki_protocols = []
 
                 cmp_shared_secret = (
                     secrets.token_urlsafe(16)
-                    if (
-                        onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET.value
-                        or pki_protocol == DeviceModel.PkiProtocol.CMP_SHARED_SECRET.value
-                    )
+                    if onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET
                     else ''
                 )
 
@@ -169,10 +192,12 @@ class Command(BaseCommand):
                     onboarding_protocol=onboarding_protocol,
                     onboarding_status=onboarding_status,
                     domain_credential_onboarding=domain_credential_onboarding,
-                    pki_protocol=pki_protocol,
                     cmp_shared_secret=cmp_shared_secret,
                     idevid_trust_store=idevid_trust_store,
                 )
+
+                print(pki_protocols)
+                dev.set_pki_protocols(pki_protocols)
 
                 try:
                     dev.save()
@@ -180,7 +205,7 @@ class Command(BaseCommand):
                         print(f"Creating device '{dev.common_name}' (ID {dev.pk}) in domain '{dev.domain}' with:")
                         print(f'  - Serial Number: {dev.serial_number}')
                         print(f'  - Onboarding Protocol: {dev.onboarding_protocol}')
-                        print(f'  - PKI Protocol: {dev.pki_protocol}')
+                        print(f'  - PKI Protocol: {dev.set_pki_protocols}')
                     else:
                         print(f"Device '{device_name}' was not saved correctly.")
                 except Exception as e:  # noqa: BLE001

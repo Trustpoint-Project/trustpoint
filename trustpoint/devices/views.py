@@ -19,7 +19,7 @@ from django.utils.decorators import method_decorator
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
-from django.views.generic.base import RedirectView
+from django.views.generic.base import RedirectView, TemplateView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import CreateView, FormView
 from django.views.generic.list import ListView
@@ -31,8 +31,7 @@ from util.mult_obj_views import get_primary_keys_from_str_as_list_of_ints
 
 from devices.forms import (
     BrowserLoginForm,
-    CreateDeviceForm,
-    CreateOpcUaGdsForm,
+    CreateForm,
     CredentialDownloadForm,
     DeleteDevicesForm,
     IssueOpcUaClientCredentialForm,
@@ -146,9 +145,11 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
         for device in context['devices']:
             device.clm_button = self._get_clm_button_html(device)
             device.detail_button = self._get_details_button_html(device)
+            device.pki_protocols = self._get_pki_protocols(device)
         context['create_url'] = f'{self.page_category}:{self.page_name}_create'
         context['device_revoke_url'] = reverse(f'{self.page_category}:{self.page_name}_device_revoke')
         context['device_delete_url'] = reverse(f'{self.page_category}:{self.page_name}_device_delete')
+
         return context
 
     def get_ordering(self) -> str | Sequence[str] | None:
@@ -186,6 +187,11 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
         details_url = reverse(f'devices:{self.page_name}_details', kwargs={'pk': record.pk})
         return format_html('<a href="{}" class="btn btn-primary tp-table-btn w-100">{}</a>', details_url, _('Details'))
 
+    def _get_pki_protocols(self, record: DeviceModel) -> str:
+        if record.domain_credential_onboarding:
+            return ', '.join([str(p.label) for p in record.get_pki_protocols()])
+
+        return DeviceModel.NoOnboardingPkiProtocol(record.no_onboarding_pki_protocol).label
 
 class DeviceTableView(AbstractDeviceTableView):
     """Device Table View."""
@@ -262,6 +268,38 @@ class OpcUaDeviceDetailsView(AbstractDeviceDetailsView):
 # ------------------------------------------------- Device Create View -------------------------------------------------
 
 
+class AbstractCreateChooseOnboaringView(TemplateView):
+    """Abstract view for choosing if the new device shall be onboarded or not."""
+
+    http_method_names = ('get',)
+    template_name = 'devices/create_choose_onboarding.html'
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name: str
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the cancel url href according to the subcategory.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the devices page.
+        """
+        context = super().get_context_data(**kwargs)
+        context['cancel_create_url'] = f'devices:{self.page_name}'
+        return context
+
+class DeviceCreateChooseOnboardingView(AbstractCreateChooseOnboaringView):
+    """View for choosing if the new device shall be onboarded or not."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+class OpcUaGdsCreateChooseOnboardingView(AbstractCreateChooseOnboaringView):
+    """View for choosing if the new OPC UA GDS shall be onboarded or not."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
 class AbstractCreateDeviceView[T: BaseModelForm[DeviceModel]](PageContextMixin, CreateView[DeviceModel, T]):
     """Abstract Device Create View."""
 
@@ -303,22 +341,28 @@ class AbstractCreateDeviceView[T: BaseModelForm[DeviceModel]](PageContextMixin, 
             f'{self.page_category}:{self.page_name}_help_dispatch_domain', kwargs={'pk': self.object.id}))
 
 
-class CreateDeviceView(AbstractCreateDeviceView[CreateDeviceForm]):
+class CreateDeviceOnboardingView(AbstractCreateDeviceView[CreateForm]):
     """Device Create View."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
-    form_class = CreateDeviceForm
+    form_class = CreateForm
 
+class CreateDeviceNoOnboardingView(AbstractCreateDeviceView[CreateForm]):
+    """Device Create View."""
 
-class CreateOpcUaGdsView(AbstractCreateDeviceView[CreateOpcUaGdsForm]):
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    form_class = CreateForm
+
+class AbstractCreateOpcUaGdsView[T: BaseModelForm[DeviceModel]](AbstractCreateDeviceView[T]):
     """OPC UA GDS Create View."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
-    form_class = CreateOpcUaGdsForm
+    form_class: type[T]
 
-    def form_valid(self, form: CreateOpcUaGdsForm) -> HttpResponse:
+    def form_valid(self, form: T) -> HttpResponse:
         """Set opc_ua_gds to True before saving the device.
 
         Args:
@@ -331,6 +375,18 @@ class CreateOpcUaGdsView(AbstractCreateDeviceView[CreateOpcUaGdsForm]):
         device.device_type = DeviceModel.DeviceType.OPC_UA_GDS
         device.save()
         return super().form_valid(form)
+
+
+class CreateOpcUaGdsOnboardingView(AbstractCreateOpcUaGdsView[CreateForm]):
+    """Opc UA GDS Create View."""
+
+    form_class = CreateForm
+
+
+class CreateOpcUaGdsNoOnboardingView(AbstractCreateOpcUaGdsView[CreateForm]):
+    """Opc UA GDS Create View."""
+
+    form_class = CreateForm
 
 
 # ------------------------------------------ Certificate Lifecycle Management ------------------------------------------
