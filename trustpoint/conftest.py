@@ -5,6 +5,7 @@ from typing import Any, Tuple
 
 import pytest
 from cryptography import x509
+from cryptography.hazmat._oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
@@ -374,6 +375,89 @@ def tls_client_request_with_client_cert_header(
     )
 
     return request, domain_str, operation_str, protocol_str
+
+
+class CSRFixture:
+    """Helper class to provide CSR in different formats."""
+
+    def __init__(self):
+        self.private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+        )
+
+        builder = x509.CertificateSigningRequestBuilder()
+        builder = builder.subject_name(
+            x509.Name([
+                x509.NameAttribute(NameOID.COMMON_NAME, 'Test Device'),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Test Organization'),
+                x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, 'Test Unit'),
+                x509.NameAttribute(NameOID.COUNTRY_NAME, 'DE'),
+            ])
+        )
+
+        builder = builder.add_extension(
+            x509.SubjectAlternativeName([
+                x509.DNSName('test.example.com'),
+            ]),
+            critical=False,
+        )
+
+        builder = builder.add_extension(
+            x509.BasicConstraints(ca=False, path_length=None),
+            critical=True,
+        )
+
+        builder = builder.add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                key_encipherment=True,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                content_commitment=False,
+                data_encipherment=False,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+
+        self.csr = builder.sign(self.private_key, hashes.SHA256())
+
+    def get_pem(self) -> bytes:
+        """Return the CSR in PEM format."""
+        return self.csr.public_bytes(serialization.Encoding.PEM)
+
+    def get_der(self) -> bytes:
+        """Return the CSR in DER format."""
+        return self.csr.public_bytes(serialization.Encoding.DER)
+
+    def get_base64_der(self) -> bytes:
+        """Return the CSR as Base64-encoded DER."""
+        der_bytes = self.get_der()
+        return base64.b64encode(der_bytes)
+
+    def get_base64_der_with_newlines(self) -> bytes:
+        """Return the CSR as Base64-encoded DER with newlines (common format)."""
+        der_bytes = self.get_der()
+        base64_bytes = base64.b64encode(der_bytes)
+        # Add newlines every 64 characters to mimic common base64 formatting
+        lines = []
+        for i in range(0, len(base64_bytes), 64):
+            lines.append(base64_bytes[i:i + 64])
+        return b'\n'.join(lines) + b'\n'
+
+    def get_cryptography_object(self) -> x509.CertificateSigningRequest:
+        """Return the underlying cryptography CSR object."""
+        return self.csr
+
+
+@pytest.fixture
+def test_csr_fixture():
+    """Create a test CSR fixture that can be retrieved in multiple formats."""
+    return CSRFixture()
+
 
 
 
