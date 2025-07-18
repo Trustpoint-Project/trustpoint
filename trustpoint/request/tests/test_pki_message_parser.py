@@ -238,7 +238,7 @@ class TestDomainParsing:
 
         parser = DomainParsing()
 
-        with patch.object(parser, '_extract_requested_domain', return_value=(mock_domain, None)):
+        with patch.object(parser, '_extract_requested_domain', return_value=(mock_domain)):
             parser.parse(mock_context)
 
         assert mock_context.domain == mock_domain
@@ -260,17 +260,12 @@ class TestDomainParsing:
         """Test domain validation error handling."""
         mock_context = Mock(spec=RequestContext)
         mock_context.domain_str = 'invalid.domain.com'
-        mock_error_response = Mock(spec=HttpResponse)
-        mock_error_response.content.decode.return_value = 'Domain not found'
 
         parser = DomainParsing()
 
-        with patch.object(parser, '_extract_requested_domain', return_value=(None, mock_error_response)):
-            try:
+        with patch.object(parser, '_extract_requested_domain', side_effect=ValueError('Domain not found')):
+            with pytest.raises(ValueError, match='Domain not found'):
                 parser.parse(mock_context)
-                assert False, "Expected ValueError to be raised"
-            except ValueError as e:
-                assert 'Domain validation failed: Domain not found' in str(e)
 
     def test_parse_domain_not_found(self):
         """Test domain not found error handling."""
@@ -279,12 +274,13 @@ class TestDomainParsing:
 
         parser = DomainParsing()
 
-        with patch.object(parser, '_extract_requested_domain', return_value=(None, None)):
+        with patch.object(parser, '_extract_requested_domain',
+                          side_effect=ValueError("Domain 'missing.domain.com' does not exist.")):
             try:
                 parser.parse(mock_context)
                 assert False, "Expected ValueError to be raised"
             except ValueError as e:
-                assert 'Domain validation failed: Domain not found.' in str(e)
+                assert "Domain 'missing.domain.com' does not exist." in str(e)
 
     def test_extract_requested_domain_success(self):
         """Test successful domain extraction."""
@@ -293,32 +289,25 @@ class TestDomainParsing:
         parser = DomainParsing()
 
         with patch.object(DomainModel.objects, 'get', return_value=mock_domain):
-            domain, error = parser._extract_requested_domain('test.domain.com')
+            domain = parser._extract_requested_domain('test.domain.com')
 
         assert domain == mock_domain
-        assert error is None
 
     def test_extract_requested_domain_not_exist(self):
         """Test domain extraction when domain doesn't exist."""
         parser = DomainParsing()
 
         with patch.object(DomainModel.objects, 'get', side_effect=DomainModel.DoesNotExist):
-            domain, error = parser._extract_requested_domain('nonexistent.domain.com')
-
-        assert domain is None
-        assert error is not None
-        assert error.status_code == 404
+            with pytest.raises(ValueError, match="Domain 'nonexistent.domain.com' does not exist."):
+                parser._extract_requested_domain('nonexistent.domain.com')
 
     def test_extract_requested_domain_multiple_found(self):
         """Test domain extraction when multiple domains found."""
         parser = DomainParsing()
 
         with patch.object(DomainModel.objects, 'get', side_effect=DomainModel.MultipleObjectsReturned):
-            domain, error = parser._extract_requested_domain('duplicate.domain.com')
-
-        assert domain is None
-        assert error is not None
-        assert error.status_code == 400
+            with pytest.raises(ValueError, match="Multiple domains found for 'duplicate.domain.com'."):
+                parser._extract_requested_domain('duplicate.domain.com')
 
 
 class TestCertTemplateParsing:
