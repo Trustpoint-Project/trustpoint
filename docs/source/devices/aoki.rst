@@ -301,11 +301,8 @@ Service and proceed to enrollment via e.g. EST.
 AOKI Zero-Touch Device Onboarding via CMP
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-   Note: This is only an initial concept and not yet checked for its
-   feasibility or implemented.
-
-It appears possible to achieve the goals of AOKI - particularly mutual
-authentication using IDevIDs and DevOwnerIDs - within a (lightweight)
+The core functionality of AOKI - particularly mutual
+authentication using IDevIDs and DevOwnerIDs - is alternatively implemented within a (lightweight)
 Certificate Management Protocol (CMP) profile.
 
 Compared to AOKI Mutual TLS Onboarding with flexible enrollment, this
@@ -326,5 +323,12 @@ as the CMP protection certificate for the IP. In the event of successful
 LDevID issuance, both the chain of the issued certificate and the
 DevOwnerID certificate with its chain are included in the ``extraCerts``
 field. Custom handling is required to separately extract the DevOwnerID
-chain and LDevID chains from ``extraCerts``, which is unordered MAY
+chain and LDevID chains from ``extraCerts``, which is unordered and MAY
 contain other certificates unrelated to AOKI onboarding.
+
+Implementation Notes
+~~~~~~~~~~~~~~~~~~~~
+
+The URL is ``/.well-known/cmp/initialization/.aoki`` in the PoC.
+It would make sense to change this to ``/.well-known/cmp/p/.aoki/initialization`` in the future.
+The DevOwnerID (CMP sender and signer) is the first certificate returned in the ``extraCerts`` field of the IP.
