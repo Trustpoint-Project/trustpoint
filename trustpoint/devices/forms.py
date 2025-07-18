@@ -12,7 +12,6 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import HTML, Layout
 from django import forms
 from django.utils.translation import gettext_lazy as _
-from devices.models import NoOnboardingConfigModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
@@ -21,11 +20,12 @@ from util.field import UniqueNameValidator
 from devices.models import (
     DeviceModel,
     IssuedCredentialModel,
-    OnboardingConfigModel,
+    NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
+    OnboardingConfigModel,
+    OnboardingPkiProtocol,
     OnboardingProtocol,
     OnboardingStatus,
-    OnboardingPkiProtocol,
     RemoteDeviceCredentialDownloadModel,
 )
 
@@ -336,8 +336,8 @@ class NoOnboardingCreateForm(forms.Form):
         serial_number = cast('str', self.cleaned_data.get('serial_number'))
 
         no_onboarding_pki_protocols = [
-            NoOnboardingPkiProtocol(int(protocol)) for protocol
-            in cast('list[str]', self.cleaned_data.get('no_onboarding_pki_protocols'))
+            NoOnboardingPkiProtocol(int(protocol))
+            for protocol in cast('list[str]', self.cleaned_data.get('no_onboarding_pki_protocols'))
         ]
         no_onboarding_config_model = NoOnboardingConfigModel()
         no_onboarding_config_model.set_pki_protocols(no_onboarding_pki_protocols)
@@ -351,10 +351,7 @@ class NoOnboardingCreateForm(forms.Form):
         no_onboarding_config_model.full_clean()
 
         device_model = DeviceModel(
-            common_name=common_name,
-            serial_number=serial_number,
-            domain=None,
-            device_type=device_type
+            common_name=common_name, serial_number=serial_number, domain=None, device_type=device_type
         )
 
         device_model.no_onboarding_config = no_onboarding_config_model
@@ -382,17 +379,15 @@ class OnboardingCreateForm(forms.Form):
             (OnboardingProtocol.EST_USERNAME_PASSWORD, OnboardingProtocol.EST_USERNAME_PASSWORD.label),
             (OnboardingProtocol.MANUAL, OnboardingProtocol.MANUAL.label),
             (OnboardingProtocol.AOKI, OnboardingProtocol.AOKI.label),
-            (OnboardingProtocol.BRSKI, OnboardingProtocol.BRSKI.label)
+            (OnboardingProtocol.BRSKI, OnboardingProtocol.BRSKI.label),
         ],
         initial=OnboardingProtocol.CMP_IDEVID,
-        label=_('Onboarding Protocol')
+        label=_('Onboarding Protocol'),
     )
 
     idevid_trust_store_queryset = TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.IDEVID)
     idevid_trust_store = forms.ModelChoiceField(
-        queryset=idevid_trust_store_queryset,
-        empty_label='----------',
-        required=False
+        queryset=idevid_trust_store_queryset, empty_label='----------', required=False
     )
 
     onboarding_pki_protocols = forms.MultipleChoiceField(
@@ -455,12 +450,11 @@ class OnboardingCreateForm(forms.Form):
             raise forms.ValidationError(err_msg) from exception
 
         onboarding_pki_protocols = [
-            OnboardingPkiProtocol(int(protocol)) for protocol
-            in cast('list[str]', self.cleaned_data.get('onboarding_pki_protocols'))
+            OnboardingPkiProtocol(int(protocol))
+            for protocol in cast('list[str]', self.cleaned_data.get('onboarding_pki_protocols'))
         ]
         onboarding_config_model = OnboardingConfigModel(
-            onboarding_status=OnboardingStatus.PENDING,
-            onboarding_protocol=onboarding_protocol
+            onboarding_status=OnboardingStatus.PENDING, onboarding_protocol=onboarding_protocol
         )
         onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
 
@@ -477,7 +471,7 @@ class OnboardingCreateForm(forms.Form):
             serial_number=serial_number,
             domain=None,
             device_type=device_type,
-            onboarding_config=onboarding_config_model
+            onboarding_config=onboarding_config_model,
         )
 
         device_model.full_clean()

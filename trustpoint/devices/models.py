@@ -147,10 +147,7 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
     # these will be dropped after successfull onboarding
     onboarding_est_password = models.CharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
     onboarding_cmp_shared_secret = models.CharField(
-        verbose_name=_('CMP Shared Secret'),
-        max_length=128,
-        blank=True,
-        default=''
+        verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default=''
     )
     idevid_trust_store = models.ForeignKey(
         TruststoreModel,
@@ -347,10 +344,7 @@ class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol],
     pki_protocol_class = NoOnboardingPkiProtocol
 
     pki_protocols = models.PositiveIntegerField(
-        verbose_name=_('Pki Protocol Bitwise Flag'),
-        null=False,
-        blank=True,
-        default=0
+        verbose_name=_('Pki Protocol Bitwise Flag'), null=False, blank=True, default=0
     )
     est_username_password = models.CharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
     cmp_shared_secret = models.CharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
@@ -384,7 +378,9 @@ class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol],
         if self.cmp_shared_secret == '' and self.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET):
             error_messages['cmp_shared_secret'] = 'CMP shared-secret must be set if EST_USERNAME_PASSWORD is enabled.'  # noqa: S105
 
-        if self.est_username_password != '' and not self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):
+        if self.est_username_password != '' and not self.has_pki_protocol(
+            NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD
+        ):
             error_messages['est_password'] = 'EST password must not be set if EST_USERNAME_PASSWORD is not enabled.'  # noqa: S105
 
         if self.est_username_password == '' and self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):

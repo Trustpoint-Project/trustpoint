@@ -14,7 +14,7 @@ from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
 
-from devices.models import DeviceModel, IssuedCredentialModel
+from devices.models import DeviceModel, IssuedCredentialModel, OnboardingStatus
 
 if TYPE_CHECKING:
     import ipaddress
@@ -529,7 +529,11 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             issued_credential_purpose=IssuedCredentialModel.IssuedCredentialPurpose.DOMAIN_CREDENTIAL,
         )
 
-        self.device.onboarding_status = self.device.OnboardingStatus.ONBOARDED
+        if self.device.onboarding_config:
+            self.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+            self.device.onboarding_config.onboarding_est_password = ''
+            self.device.onboarding_config.onboarding_cmp_shared_secret = ''
+
         self.device.save()
 
         return issued_domain_credential
@@ -563,7 +567,11 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             issued_credential_purpose=IssuedCredentialModel.IssuedCredentialPurpose.DOMAIN_CREDENTIAL,
         )
 
-        self.device.onboarding_status = self.device.OnboardingStatus.ONBOARDED
+        if self.device.onboarding_config:
+            self.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+            self.device.onboarding_config.onboarding_est_password = ''
+            self.device.onboarding_config.onboarding_cmp_shared_secret = ''
+
         self.device.save()
 
         return issued_domain_credential
