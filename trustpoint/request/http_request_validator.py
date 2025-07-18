@@ -2,6 +2,7 @@
 import base64
 import itertools
 from abc import ABC, abstractmethod
+from trustpoint.logger import LoggerMixin
 
 from cryptography import x509
 
@@ -15,7 +16,7 @@ class ValidationComponent(ABC):
     def validate(self, context: RequestContext) -> None:
         """Execute validation logic and enrich context."""
 
-class PayloadSizeValidation(ValidationComponent):
+class PayloadSizeValidation(ValidationComponent, LoggerMixin):
     """Validate payload size."""
 
     def __init__(self, max_payload_size: int) -> None:
@@ -26,18 +27,25 @@ class PayloadSizeValidation(ValidationComponent):
         """Validate the payload size against the maximum allowed size."""
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
+            self.logger.warning("Payload size validation failed: Raw message is missing")
             raise ValueError(error_message)
+
 
         if not hasattr(context.raw_message, 'body') or not context.raw_message.body:
             error_message = 'Raw message is missing body.'
+            self.logger.warning("Payload size validation failed: Raw message body is missing")
             raise ValueError(error_message)
 
-        if len(context.raw_message.body) > self.max_payload_size:
+        payload_size = len(context.raw_message.body)
+        if payload_size > self.max_payload_size:
             error_message = f'Payload size exceeds maximum allowed size of {self.max_payload_size} bytes.'
+            self.logger.warning(f"Payload size validation failed: {payload_size} bytes exceeds maximum {self.max_payload_size} bytes")
             raise ValueError(error_message)
 
+        self.logger.debug(f"Payload size validation successful: {payload_size} bytes (limit: {self.max_payload_size} bytes)")
 
-class ContentTypeValidation(ValidationComponent):
+
+class ContentTypeValidation(ValidationComponent, LoggerMixin):
     """Validate request content type."""
 
     def __init__(self, expected_content_type: str) -> None:
@@ -48,22 +56,33 @@ class ContentTypeValidation(ValidationComponent):
         """Validate the presence of the 'Content-Type' header and check if it matches the expected type."""
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
+            self.logger.warning("Content type validation failed: Raw message is missing")
             raise ValueError(error_message)
 
         if not hasattr(context.raw_message, 'headers') or not context.raw_message.headers:
             error_message = 'Raw message is missing headers.'
+            self.logger.warning("Content type validation failed: Raw message headers are missing")
             raise ValueError(error_message)
 
         content_type = context.raw_message.headers.get('Content-Type')
         if not content_type:
             error_message = "Missing 'Content-Type' header."
-            raise ValueError(error_message)
-        if content_type != self.expected_content_type:
-            error_message = (f"Invalid 'Content-Type' header '{content_type}'. "
-                             f"Expected '{self.expected_content_type}'.")
+            self.logger.warning("Content type validation failed: Content-Type header is missing")
             raise ValueError(error_message)
 
-class AcceptHeaderValidation(ValidationComponent):
+        if content_type != self.expected_content_type:
+            error_message = (
+                f"Invalid 'Content-Type' header '{content_type}'. "
+                f"Expected '{self.expected_content_type}'."
+            )
+            self.logger.warning(f"Content type validation failed: received '{content_type}', "
+                                f"expected '{self.expected_content_type}'")
+            raise ValueError(error_message)
+
+        self.logger.debug(f"Content type validation successful: {content_type}")
+
+
+class AcceptHeaderValidation(ValidationComponent, LoggerMixin):
     """Validate the Accept header."""
     # TODO(FHK): not mandatory # noqa: FIX002
 
@@ -75,43 +94,56 @@ class AcceptHeaderValidation(ValidationComponent):
         """Validate the presence of the 'Accept' header and check if it matches any of the allowed types."""
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
+            self.logger.warning("Accept header validation failed: Raw message is missing")
             raise ValueError(error_message)
 
         if not hasattr(context.raw_message, 'headers') or not context.raw_message.headers:
             error_message = 'Raw message is missing headers.'
+            self.logger.warning("Accept header validation failed: Raw message headers are missing")
             raise ValueError(error_message)
+
 
         accept_header = context.raw_message.headers.get('Accept')
         if not accept_header:
+            self.logger.debug("Accept header validation skipped: No Accept header present")
             return
 
         accepted_types = [content_type.strip() for content_type in accept_header.split(',')]
-        if not any(
-            allowed_type in accepted_types for allowed_type in self.allowed_content_types
-        ):
-            error_message = (f"The provided 'Accept' header '{accept_header}' does not match any "
-                             f"of the allowed types: {', '.join(self.allowed_content_types)}.")
+        if not any(allowed_type in accepted_types for allowed_type in self.allowed_content_types):
+            error_message = (
+                f"The provided 'Accept' header '{accept_header}' does not match any "
+                f"of the allowed types: {', '.join(self.allowed_content_types)}."
+            )
+            self.logger.warning(f"Accept header validation failed: '{accept_header}' not in allowed types {self.allowed_content_types}")
             raise ValueError(error_message)
 
-class AuthorizationHeaderValidation(ValidationComponent):
+        self.logger.debug(f"Accept header validation successful: {accept_header}")
+
+
+class AuthorizationHeaderValidation(ValidationComponent, LoggerMixin):
     """Validate Authorization header for HTTP Basic Auth."""
 
     def validate(self, context: RequestContext) -> None:
         """Validate the presence and format of the 'Authorization' header and extract credentials."""
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
+            self.logger.warning("Authorization header validation failed: Raw message is missing")
             raise ValueError(error_message)
 
         if not hasattr(context.raw_message, 'headers') or not context.raw_message.headers:
             error_message = 'Raw message is missing headers.'
+            self.logger.warning("Authorization header validation failed: Raw message headers are missing")
             raise ValueError(error_message)
 
         auth_header = context.raw_message.headers.get('Authorization')
         if not auth_header:
+            self.logger.debug("Authorization header validation skipped: No Authorization header present")
             return
 
         if not auth_header.startswith('Basic '):
             error_message = "Authorization header must start with 'Basic'."
+            self.logger.warning(f"Authorization header validation failed: "
+                                f"Header does not start with 'Basic': {auth_header[:20]}...")
             raise ValueError(error_message)
 
         try:
@@ -120,50 +152,65 @@ class AuthorizationHeaderValidation(ValidationComponent):
 
             context.est_username = est_username
             context.est_password = est_password
+            self.logger.debug(f"Authorization header validation successful: "
+                              f"Extracted credentials for user '{est_username}'")
         except Exception as e:
             error_message = "Malformed 'Authorization' header credentials."
+            self.logger.warning(f"Authorization header validation failed: Malformed credentials - {e}")
             raise ValueError(error_message) from e
 
-class ClientCertificateValidation(ValidationComponent):
+
+class ClientCertificateValidation(ValidationComponent, LoggerMixin):
     """Check and optionally process the SSL client certificate from the request headers."""
 
     def validate(self, context: RequestContext) -> None:
         """Check for the presence of the 'SSL_CLIENT_CERT' header and set the certificate in the context if present."""
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
+            self.logger.warning("Client certificate validation failed: Raw message is missing")
             raise ValueError(error_message)
 
         if not hasattr(context.raw_message, 'headers') or not context.raw_message.headers:
             error_message = 'Raw message is missing headers.'
+            self.logger.warning("Client certificate validation failed: Raw message headers are missing")
             raise ValueError(error_message)
 
         ssl_client_cert = context.raw_message.headers.get('SSL_CLIENT_CERT')
 
         if ssl_client_cert is None:
+            self.logger.debug("Client certificate validation skipped: No SSL_CLIENT_CERT header present")
             return
 
-        encoded_cert = ssl_client_cert.encode()
-
         try:
+            encoded_cert = ssl_client_cert.encode()
             client_certificate = x509.load_pem_x509_certificate(encoded_cert)
-        except Exception as e:
-            error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
-            raise ValueError(error_message) from e
-
-        if client_certificate:
             context.client_certificate = client_certificate
 
+            subject_cn = "unknown"
+            try:
+                subject_cn = client_certificate.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
+            except (IndexError, AttributeError):
+                pass
 
-class IntermediateCertificatesValidation(ValidationComponent):
+            self.logger.debug(
+                f"Client certificate validation successful: Certificate loaded for subject '{subject_cn}'")
+        except Exception as e:
+            error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
+            self.logger.warning(f"Client certificate validation failed: {e}")
+            raise ValueError(error_message) from e
+
+
+class IntermediateCertificatesValidation(ValidationComponent, LoggerMixin):
     """Validate and process intermediate CA certificates from the request headers."""
 
     def validate(self, context: RequestContext) -> None:
         """Extract and validate intermediate CA certificates from the 'SSL_CLIENT_CERT_CHAIN_*' headers."""
-        intermediate_cas: list[x509.Certificate] = []
-
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
+            self.logger.warning("Intermediate certificates validation failed: Raw message is missing")
             raise ValueError(error_message)
+
+        intermediate_cas: list[x509.Certificate] = []
 
         for i in itertools.count():
             ca = context.raw_message.META.get(f'SSL_CLIENT_CERT_CHAIN_{i}')
@@ -171,43 +218,61 @@ class IntermediateCertificatesValidation(ValidationComponent):
                 break
             try:
                 ca_cert = x509.load_pem_x509_certificate(ca.encode('utf-8'))
+                intermediate_cas.append(ca_cert)
+                self.logger.debug(f"Loaded intermediate certificate {i} from SSL_CLIENT_CERT_CHAIN_{i}")
             except Exception as e:
                 error_message = f'Invalid SSL_CLIENT_CERT_CHAIN_{i} PEM: {e}'
+                self.logger.warning(
+                    f"Intermediate certificates validation failed: Invalid certificate at position {i} - {e}")
                 raise ValueError(error_message) from e
-
-            intermediate_cas.append(ca_cert)
 
         context.client_intermediate_certificate = intermediate_cas if intermediate_cas else None
 
-class ContentTransferEncodingValidation(ValidationComponent):
+        if intermediate_cas:
+            self.logger.debug(
+                f"Intermediate certificates validation successful: Loaded {len(intermediate_cas)} certificates")
+        else:
+            self.logger.debug("Intermediate certificates validation completed: No intermediate certificates found")
+
+
+class ContentTransferEncodingValidation(ValidationComponent, LoggerMixin):
     """Validate the Content-Transfer-Encoding header and decode base64-encoded messages if required."""
 
     def validate(self, context: RequestContext) -> None:
         """Validates and processes requests with a Content-Transfer-Encoding header set to 'base64'."""
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
+            self.logger.warning("Content transfer encoding validation failed: Raw message is missing")
             raise ValueError(error_message)
 
         if not hasattr(context.raw_message, 'headers') or not context.raw_message.headers:
             error_message = 'Raw message is missing headers.'
+            self.logger.warning("Content transfer encoding validation failed: Raw message headers are missing")
             raise ValueError(error_message)
 
         if not hasattr(context.raw_message, 'body') or not context.raw_message.body:
             error_message = 'Raw message is missing body.'
+            self.logger.warning("Content transfer encoding validation failed: Raw message body is missing")
             raise ValueError(error_message)
 
+        encoding = context.raw_message.headers.get('Content-Transfer-Encoding', '').lower()
         encoding = context.raw_message.headers.get('Content-Transfer-Encoding', '').lower()
         if encoding == 'base64':
             try:
                 decoded_message = base64.b64decode(context.raw_message.body)
+                context.parsed_message = decoded_message
+                self.logger.debug(
+                    f"Content transfer encoding validation successful: Decoded {len(context.raw_message.body)} "
+                    f"bytes to {len(decoded_message)} bytes")
             except Exception as e:
                 error_message = 'Invalid base64 encoding in message.'
+                self.logger.warning(f"Content transfer encoding validation failed: Invalid base64 encoding - {e}")
                 raise ValueError(error_message) from e
+        else:
+            self.logger.debug(f"Content transfer encoding validation skipped: Encoding is '{encoding}', not 'base64'")
 
-            context.parsed_message = decoded_message
 
-
-class CompositeValidation(ValidationComponent):
+class CompositeValidation(ValidationComponent, LoggerMixin):
     """Composite validator to group multiple validators."""
 
     def __init__(self) -> None:
@@ -220,13 +285,36 @@ class CompositeValidation(ValidationComponent):
 
     def remove(self, component: ValidationComponent) -> None:
         """Remove a component from the composite."""
-        self.components.remove(component)
+        if component in self.components:
+            self.components.remove(component)
+            self.logger.debug(f"Removed validation component: {component.__class__.__name__}")
+        else:
+            error_message = f"Attempted to remove non-existent validation component: {component.__class__.__name__}"
+            self.logger.warning(error_message)
+            raise ValueError(error_message)
 
     def validate(self, context: RequestContext) -> None:
         """Validate all child components."""
-        for component in self.components:
-            component.validate(context)
+        self.logger.debug(f"Starting composite validation with {len(self.components)} components")
 
+        for i, component in enumerate(self.components):
+            try:
+                component.validate(context)
+                self.logger.debug(f"Validation component {component.__class__.__name__} passed")
+            except ValueError as e:
+                error_message = f"{component.__class__.__name__}: {e}"
+                self.logger.warning(f"Validation component {component.__class__.__name__} failed: {e}")
+                self.logger.error(
+                    f"Composite validation failed at component {i + 1}/{len(self.components)}: {component.__class__.__name__}")
+                raise ValueError(error_message) from e
+            except Exception as e:
+                error_message = f"Unexpected error in {component.__class__.__name__}: {e}"
+                self.logger.error(f"Unexpected error in validation component {component.__class__.__name__}: {e}")
+                self.logger.error(
+                    f"Composite validation failed at component {i + 1}/{len(self.components)}: {component.__class__.__name__}")
+                raise ValueError(error_message) from e
+
+        self.logger.info(f"Composite validation successful. All {len(self.components)} components passed")
 
 
 class CmpHttpRequestValidator(CompositeValidation):
