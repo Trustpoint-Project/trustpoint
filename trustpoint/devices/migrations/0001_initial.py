@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -18,17 +17,85 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(primary_key=True, serialize=False)),
                 ('common_name', models.CharField(default='New-Device', max_length=100, verbose_name='Device')),
-                ('serial_number', models.CharField(blank=True, default='', max_length=100, verbose_name='Serial-Number')),
-                ('domain_credential_onboarding', models.BooleanField(default=True, verbose_name='Domain Credential Onboarding')),
-                ('onboarding_status', models.IntegerField(choices=[(0, 'No Onboarding'), (1, 'Pending'), (2, 'Onboarded')], default=0, verbose_name='Onboarding Status')),
-                ('onboarding_protocol', models.IntegerField(choices=[(0, 'No Onboarding'), (1, 'EST - Username & Password'), (2, 'EST - IDevID'), (3, 'CMP - Shared Secret'), (4, 'CMP - IDevID'), (5, 'AOKI'), (6, 'BRSKI')], default=0, verbose_name='Onboarding Protocol')),
-                ('pki_protocol', models.IntegerField(choices=[(0, 'Manual Download'), (1, 'EST - Username & Password'), (2, 'EST - LDevID'), (3, 'CMP - Shared Secret'), (4, 'CMP - LDevID')], default=0, verbose_name='Pki Protocol')),
+                (
+                    'serial_number',
+                    models.CharField(blank=True, default='', max_length=100, verbose_name='Serial-Number'),
+                ),
+                (
+                    'domain_credential_onboarding',
+                    models.BooleanField(default=True, verbose_name='Domain Credential Onboarding'),
+                ),
+                (
+                    'onboarding_status',
+                    models.IntegerField(
+                        choices=[(0, 'No Onboarding'), (1, 'Pending'), (2, 'Onboarded')],
+                        default=0,
+                        verbose_name='Onboarding Status',
+                    ),
+                ),
+                (
+                    'onboarding_protocol',
+                    models.IntegerField(
+                        choices=[
+                            (0, 'No Onboarding'),
+                            (1, 'EST - Username & Password'),
+                            (2, 'EST - IDevID'),
+                            (3, 'CMP - Shared Secret'),
+                            (4, 'CMP - IDevID'),
+                            (5, 'AOKI'),
+                            (6, 'BRSKI'),
+                        ],
+                        default=0,
+                        verbose_name='Onboarding Protocol',
+                    ),
+                ),
+                (
+                    'pki_protocol',
+                    models.IntegerField(
+                        choices=[
+                            (0, 'Manual Download'),
+                            (1, 'EST - Username & Password'),
+                            (2, 'EST - LDevID'),
+                            (3, 'CMP - Shared Secret'),
+                            (4, 'CMP - LDevID'),
+                        ],
+                        default=0,
+                        verbose_name='Pki Protocol',
+                    ),
+                ),
                 ('est_password', models.CharField(blank=True, default='', max_length=128, verbose_name='EST Password')),
-                ('cmp_shared_secret', models.CharField(blank=True, default='', max_length=128, verbose_name='CMP Shared Secret')),
-                ('device_type', models.IntegerField(choices=[(0, 'Generic Device'), (1, 'OPC UA GDS')], default=0, verbose_name='Device Type')),
+                (
+                    'cmp_shared_secret',
+                    models.CharField(blank=True, default='', max_length=128, verbose_name='CMP Shared Secret'),
+                ),
+                (
+                    'device_type',
+                    models.IntegerField(
+                        choices=[(0, 'Generic Device'), (1, 'OPC UA GDS')], default=0, verbose_name='Device Type'
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
-                ('domain', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='devices', to='pki.domainmodel', verbose_name='Domain')),
-                ('idevid_trust_store', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='pki.truststoremodel', verbose_name='IDevID Manufacturer Truststore')),
+                (
+                    'domain',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='devices',
+                        to='pki.domainmodel',
+                        verbose_name='Domain',
+                    ),
+                ),
+                (
+                    'idevid_trust_store',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to='pki.truststoremodel',
+                        verbose_name='IDevID Manufacturer Truststore',
+                    ),
+                ),
             ],
             options={
                 'abstract': False,
@@ -39,12 +106,55 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(primary_key=True, serialize=False)),
                 ('common_name', models.CharField(max_length=255, verbose_name='Common Name')),
-                ('issued_credential_type', models.IntegerField(choices=[(0, 'Domain Credential'), (1, 'Application Credential')], verbose_name='Credential Type')),
-                ('issued_credential_purpose', models.IntegerField(choices=[(0, 'Domain Credential'), (1, 'Generic'), (2, 'TLS-Client'), (3, 'TLS-Server'), (4, 'OpcUa-Client'), (5, 'OpcUa-Server')], verbose_name='Credential Purpose')),
+                (
+                    'issued_credential_type',
+                    models.IntegerField(
+                        choices=[(0, 'Domain Credential'), (1, 'Application Credential')],
+                        verbose_name='Credential Type',
+                    ),
+                ),
+                (
+                    'issued_credential_purpose',
+                    models.IntegerField(
+                        choices=[
+                            (0, 'Domain Credential'),
+                            (1, 'Generic'),
+                            (2, 'TLS-Client'),
+                            (3, 'TLS-Server'),
+                            (4, 'OpcUa-Client'),
+                            (5, 'OpcUa-Server'),
+                        ],
+                        verbose_name='Credential Purpose',
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
-                ('credential', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='issued_credential', to='pki.credentialmodel', verbose_name='Credential')),
-                ('device', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='issued_credentials', to='devices.devicemodel', verbose_name='Device')),
-                ('domain', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='issued_credentials', to='pki.domainmodel', verbose_name='Domain')),
+                (
+                    'credential',
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='issued_credential',
+                        to='pki.credentialmodel',
+                        verbose_name='Credential',
+                    ),
+                ),
+                (
+                    'device',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='issued_credentials',
+                        to='devices.devicemodel',
+                        verbose_name='Device',
+                    ),
+                ),
+                (
+                    'domain',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='issued_credentials',
+                        to='pki.domainmodel',
+                        verbose_name='Domain',
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
@@ -56,7 +166,12 @@ class Migration(migrations.Migration):
                 ('download_token', models.CharField(default='', max_length=64, verbose_name='Download Token')),
                 ('token_created_at', models.DateTimeField(null=True, verbose_name='Token Created')),
                 ('device', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='devices.devicemodel')),
-                ('issued_credential_model', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='devices.issuedcredentialmodel')),
+                (
+                    'issued_credential_model',
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE, to='devices.issuedcredentialmodel'
+                    ),
+                ),
             ],
         ),
     ]

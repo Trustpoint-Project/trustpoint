@@ -22,34 +22,32 @@ urlpatterns = [
     ),
     # Create Views
     path(
-        'create/',
-        views.DeviceCreateChooseOnboardingView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create'
+        'create/', views.DeviceCreateChooseOnboardingView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create'
     ),
     path(
         'opc-ua-gds/create/',
         views.OpcUaGdsCreateChooseOnboardingView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_create'
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_create',
     ),
     path(
         'create/onboarding/',
-        views.DeviceCreateChooseOnboardingView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create'
+        views.DeviceCreateOnboardingView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create_onboarding',
     ),
     path(
         'opc-ua-gds/create/onboarding',
-        views.OpcUaGdsCreateChooseOnboardingView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_create'
+        views.OpcUaGdsCreateOnboardingView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_create_onboarding',
     ),
     path(
         'create/no-onboarding/',
-        views.DeviceCreateChooseOnboardingView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create'
+        views.DeviceCreateNoOnboardingView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create_no_onboarding',
     ),
     path(
         'opc-ua-gds/create/no-onboarding',
-        views.OpcUaGdsCreateChooseOnboardingView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_create'
+        views.OpcUaGdsCreateNoOnboardingView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_create_no_onboarding',
     ),
     # Certificate Lifecycle Management Views
     path(
@@ -141,7 +139,6 @@ urlpatterns = [
         views.DeviceBrowserCredentialDownloadView.as_view(),
         name='browser_domain_credential_download',
     ),
-
     # Revokation views
     path(
         'revoke/<int:pk>/',
@@ -173,8 +170,6 @@ urlpatterns = [
         views.DeviceBulkDeleteView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_device_delete',
     ),
-
-
     # Certificate Lifecycle Management - Help Pages
     path(
         'help/dispatch-domain/<int:pk>/',
@@ -206,7 +201,6 @@ urlpatterns = [
     #     devices_help_views.HelpDispatchApplicationCredentialTemplateView.as_view(),
     #     name='help_dispatch_application_template',
     # ),
-
     path(
         'help/no-onboarding/cmp-shared-secret/<int:pk>/',
         devices_help_views.NoOnboardingCmpSharedSecretHelpView.as_view(),
@@ -217,7 +211,6 @@ urlpatterns = [
         devices_help_views.NoOnboardingCmpSharedSecretHelpView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help_no-onboarding_cmp-shared-secret',
     ),
-
     path(
         'help/no-onboarding/est-username-password/<int:pk>/',
         devices_help_views.DeviceNoOnboardingEstUsernamePasswordHelpView.as_view(),
@@ -228,7 +221,6 @@ urlpatterns = [
         devices_help_views.OpcUaGdsNoOnboardingEstUsernamePasswordHelpView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-no-onboarding_est-username-password',
     ),
-
     path(
         'help/onboarding/est-username-password/<int:pk>/',
         devices_help_views.DeviceOnboardingEstUsernamePasswordHelpView.as_view(),
@@ -244,7 +236,6 @@ urlpatterns = [
         devices_help_views.DeviceOnboardingEstApplicationCredentialsHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_est-application-credentials',
     ),
-
     path(
         'help/onboarding/cmp-shared-secret/<int:pk>/',
         devices_help_views.DeviceOnboardingCmpSharedSecretHelpView.as_view(),
@@ -255,7 +246,6 @@ urlpatterns = [
         devices_help_views.OpcUaGdsOnboardingCmpSharedSecretHelpView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-onboarding_cmp-shared-secret',
     ),
-
     path(
         'help/onboarding/cmp-application-credentials/<int:pk>/<str:certificate_template>/',
         devices_help_views.OnboardingCmpApplicationCredentialsHelpView.as_view(),
@@ -266,7 +256,6 @@ urlpatterns = [
         devices_help_views.OnboardingCmpApplicationCredentialsHelpView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-onboarding_cmp-application-credentials',
     ),
-
     path(
         'help/onboarding/cmp-idevid/<int:pk>/',
         devices_help_views.DeviceOnboardingCmpIdevidHelpView.as_view(),
@@ -277,7 +266,6 @@ urlpatterns = [
         devices_help_views.OpcUaGdsOnboardingCmpIdevidHelpView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-onboarding_cmp-idevid',
     ),
-
     # path(
     #     'help/onboarding/ldevid/<int:pk>/',
     #     devices_help_views.OnboardingEstApplicationCredentialsHelpView.as_view(),
@@ -288,7 +276,6 @@ urlpatterns = [
     #     devices_help_views.OnboardingEstApplicationCredentialsHelpView.as_view(),
     #     name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-onboarding_est-ldevid',
     # ),
-
     path(
         'help/onboarding/est-idevid/<int:pk>/',
         devices_help_views.DeviceOnboardingEstIdevidHelpView.as_view(),
@@ -299,23 +286,19 @@ urlpatterns = [
         devices_help_views.OpcUaGdsOnboardingEstIdevidHelpView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-onboarding_est-idevid',
     ),
-
     path(
         'help/onboarding/method-select-idevid/<int:pk>/',
         devices_help_views.OnboardingMethodSelectIdevidHelpView.as_view(),
         name='help-onboarding_method_select-idevid',
     ),
-
     path(
         'help/onboarding/est-idevid-registration/<int:pk>/',
         devices_help_views.OnboardingEstIdevidRegistrationHelpView.as_view(),
         name='help-onboarding_est-idevid-registration',
     ),
-
     path(
         'help/onboarding/cmp-idevid-registration/<int:pk>/',
         devices_help_views.OnboardingCmpIdevidRegistrationHelpView.as_view(),
         name='help-onboarding_cmp-idevid-registration',
     ),
-
 ]

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-import logging
 import secrets
 from typing import TYPE_CHECKING
 
@@ -34,6 +33,7 @@ __all__ = [
     'RemoteDeviceCredentialDownloadModel',
 ]
 
+
 class OnboardingStatus(models.IntegerChoices):
     """The onboarding status."""
 
@@ -42,16 +42,15 @@ class OnboardingStatus(models.IntegerChoices):
 
 
 class OnboardingProtocol(models.IntegerChoices):
-        """Choices of onboarding protocols."""
+    """Choices of onboarding protocols."""
 
-        NO_ONBOARDING = 0, _('No Onboarding')
-        MANUAL = 1, _('Manual Onboarding')
-        CMP_IDEVID = 2, _('CMP - IDevID')
-        CMP_SHARED_SECRET = 3, _('CMP - Shared Secret')
-        EST_IDEVID = 4, _('EST - IDevID')
-        EST_USERNAME_PASSWORD = 5, _('EST - Username & Password')
-        AOKI = 6, _('AOKI')
-        BRSKI = 7, _('BRSKI')
+    MANUAL = 0, _('Manual Onboarding')
+    CMP_IDEVID = 1, _('CMP - IDevID')
+    CMP_SHARED_SECRET = 2, _('CMP - Shared Secret')
+    EST_IDEVID = 3, _('EST - IDevID')
+    EST_USERNAME_PASSWORD = 4, _('EST - Username & Password')
+    AOKI = 5, _('AOKI')
+    BRSKI = 6, _('BRSKI')
 
 
 class OnboardingPkiProtocol(models.IntegerChoices):
@@ -60,6 +59,7 @@ class OnboardingPkiProtocol(models.IntegerChoices):
     # Bitmask: Only use powers of 2: 1, 2, 4, 8, 16 ...
     CMP = 1, _('CMP')
     EST = 2, _('EST')
+
 
 class NoOnboardingPkiProtocol(models.IntegerChoices):
     """Choices for no onboarding pki protocols."""
@@ -72,13 +72,9 @@ class NoOnboardingPkiProtocol(models.IntegerChoices):
     MANUAL = 16, _('Manual')
 
 
-class AbstractPkiProtocolModel[T: models.IntegerChoices](CustomDeleteActionModel):
+class AbstractPkiProtocolModel[T: models.IntegerChoices]:
+    """Extends a model for IntegerChoices stored as bitwise flags."""
 
-    pki_protocols = models.PositiveIntegerField[int, int](
-        verbose_name=_('Pki Protocol Bitwise Flag'),
-        null=False,
-        blank=False
-    )
     pki_protocol_class: type[T]
 
     def add_pki_protocol(self, pki_protocol: T) -> None:
@@ -127,11 +123,12 @@ class AbstractPkiProtocolModel[T: models.IntegerChoices](CustomDeleteActionModel
             self.add_pki_protocol(pki_protocol)
 
 
-class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol]):
+class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], models.Model):
     """Onboarding Configuration Model."""
 
     pki_protocol_class = OnboardingPkiProtocol
-    pki_protocols: models.PositiveIntegerField[int, int]
+
+    pki_protocols = models.PositiveIntegerField(verbose_name=_('Pki Protocol Bitwise Flag'), null=False, blank=False)
 
     onboarding_status = models.IntegerField(
         choices=OnboardingStatus,
@@ -148,9 +145,13 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol]):
     )
 
     # these will be dropped after successfull onboarding
-    onboarding_est_password = models.CharField(verbose_name=_('EST Password'), max_length=128, default='')
-    onboarding_cmp_shared_secret = models.CharField(verbose_name=_('CMP Shared Secret'), max_length=128, default='')
-
+    onboarding_est_password = models.CharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
+    onboarding_cmp_shared_secret = models.CharField(
+        verbose_name=_('CMP Shared Secret'),
+        max_length=128,
+        blank=True,
+        default=''
+    )
     idevid_trust_store = models.ForeignKey(
         TruststoreModel,
         verbose_name=_('IDevID Manufacturer Truststore'),
@@ -159,11 +160,25 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol]):
         on_delete=models.SET_NULL,
     )
 
+    def __str__(self) -> str:
+        """Gets the model instance as human-readable string."""
+        return 'OnboardingConfigModel()'
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Executes full_clean() before saving.
+
+        Args:
+            *args: Positional arguments are passed to super().save().
+            **kwargs: Keyword arguments are passed to super().save().
+        """
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def clean(self) -> None:
         """Validation before saving the model."""
         error_messages = None
 
-        match(self.onboarding_protocol):
+        match self.onboarding_protocol:
             case OnboardingProtocol.MANUAL:
                 error_messages = self._validate_case_manual_onboarding()
             case OnboardingProtocol.CMP_IDEVID:
@@ -187,7 +202,6 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol]):
         if error_messages:
             raise ValidationError(error_messages)
 
-
     def _validate_case_manual_onboarding(self) -> dict[str, str]:
         """Validates case OnboardingProtocol.MANUAL.
 
@@ -200,19 +214,13 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol]):
         error_messages = {}
 
         if self.onboarding_est_password != '':
-            error_messages['onboarding_est_password'] = (
-                'EST password must not be set for manual onboarding.' # noqa: S105
-            )
+            error_messages['onboarding_est_password'] = 'EST password must not be set for manual onboarding.'  # noqa: S105
 
         if self.onboarding_cmp_shared_secret != '':
-            error_messages['onboarding_cmp_shared_secret'] = (
-                'CMP shared-secret must not be set for manual onboarding.'  # noqa: S105
-            )
+            error_messages['onboarding_cmp_shared_secret'] = 'CMP shared-secret must not be set for manual onboarding.'  # noqa: S105
 
         if self.idevid_trust_store is not None:
-            error_messages['idevid_trust_store'] = (
-                'IDevID truststore must not be set for manual onboarding.'
-            )
+            error_messages['idevid_trust_store'] = 'IDevID truststore must not be set for manual onboarding.'
 
         return error_messages
 
@@ -228,9 +236,7 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol]):
         error_messages = {}
 
         if self.onboarding_est_password != '':
-            error_messages['onboarding_est_password'] = (
-                'EST password must not be set for CMP IDevID onboarding.' # noqa: S105
-            )
+            error_messages['onboarding_est_password'] = 'EST password must not be set for CMP IDevID onboarding.'  # noqa: S105
 
         if self.onboarding_cmp_shared_secret != '':
             error_messages['onboarding_cmp_shared_secret'] = (
@@ -253,28 +259,23 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol]):
         error_messages = {}
 
         if self.onboarding_est_password != '':
-            error_messages['onboarding_est_password'] = (
-                'EST password must not be set for CMP shared-secret onboarding.'    # noqa: S105
-            )
+            error_messages['onboarding_est_password'] = 'EST password must not be set for CMP shared-secret onboarding.'  # noqa: S105
 
         if self.onboarding_status == OnboardingStatus.PENDING:
-
             if self.onboarding_cmp_shared_secret == '':
                 error_messages['onboarding_cmp_shared_secret'] = (
-                    'CMP shared-secret must be set for CMP shared-secret onboarding '   # noqa: S105
+                    'CMP shared-secret must be set for CMP shared-secret onboarding '  # noqa: S105
                     'for net yet onboarded devices.'
                 )
 
         elif self.onboarding_cmp_shared_secret != '':
             error_messages['onboarding_cmp_shared_secret'] = (
-                'CMP shared-secret must not be set for CMP shared-secret onboarding '   # noqa: S105
+                'CMP shared-secret must not be set for CMP shared-secret onboarding '  # noqa: S105
                 'for already onboarded devices'
             )
 
         if self.idevid_trust_store is not None:
-            error_messages['idevid_trust_store'] = (
-                'IDevID truststore must not be set for CMP shared-secret onboarding.'
-            )
+            error_messages['idevid_trust_store'] = 'IDevID truststore must not be set for CMP shared-secret onboarding.'
 
         return error_messages
 
@@ -290,9 +291,7 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol]):
         error_messages = {}
 
         if self.onboarding_est_password != '':
-            error_messages['onboarding_est_password'] = (
-                'EST password must not be set for EST IDevID onboarding.' # noqa: S105
-            )
+            error_messages['onboarding_est_password'] = 'EST password must not be set for EST IDevID onboarding.'  # noqa: S105
 
         if self.onboarding_cmp_shared_secret != '':
             error_messages['onboarding_cmp_shared_secret'] = (
@@ -314,8 +313,10 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol]):
         """
         error_messages = {}
 
-        if self.onboarding_status == OnboardingStatus.PENDING:
+        if self.pki_protocols == 0:
+            error_messages['pki_protocols'] = 'At least one pki protocol has to be enabled.'
 
+        if self.onboarding_status == OnboardingStatus.PENDING:
             if self.onboarding_est_password == '':
                 error_messages['onboarding_est_password'] = (
                     'EST password must be set for EST username / password onboarding '  # noqa: S105
@@ -323,7 +324,7 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol]):
                 )
         elif self.onboarding_est_password != '':
             error_messages['onboarding_est_password'] = (
-                'EST password must not be set for EST username / password onboarding '   # noqa: S105
+                'EST password must not be set for EST username / password onboarding '  # noqa: S105
                 'for already onboarded devices.'
             )
 
@@ -339,6 +340,25 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol]):
 
         return error_messages
 
+
+class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol], models.Model):
+    """No Onboarding Configuration Model."""
+
+    pki_protocol_class = NoOnboardingPkiProtocol
+
+    pki_protocols = models.PositiveIntegerField(
+        verbose_name=_('Pki Protocol Bitwise Flag'),
+        null=False,
+        blank=True,
+        default=0
+    )
+    est_username_password = models.CharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
+    cmp_shared_secret = models.CharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
+
+    def __str__(self) -> str:
+        """Gets the model instance as human-readable string."""
+        return 'NoOnboardingConfigModel()'
+
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Executes full_clean() before saving.
 
@@ -348,49 +368,27 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol]):
         """
         self.full_clean()
         super().save(*args, **kwargs)
-
-class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol]):
-    """No Onboarding Configuration Model."""
-
-    pki_protocol_class = NoOnboardingPkiProtocol
-
-    est_password = models.CharField(verbose_name=_('EST Password'), max_length=128, default='')
-    cmp_shared_secret = models.CharField(verbose_name=_('CMP Shared Secret'), max_length=128, default='')
 
     def clean(self) -> None:
         """Validation before saving the model."""
         error_messages = {}
 
+        if self.pki_protocols == 0:
+            error_messages['pki_protocols'] = 'At least one pki protocol has to be enabled.'
+
         if self.cmp_shared_secret != '' and not self.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET):
             error_messages['cmp_shared_secret'] = (
-                'CMP shared-secret must not be set if EST_USERNAME_PASSWORD is not enabled.' # noqa: S105
+                'CMP shared-secret must not be set if EST_USERNAME_PASSWORD is not enabled.'  # noqa: S105
             )
 
         if self.cmp_shared_secret == '' and self.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET):
-            error_messages['cmp_shared_secret'] = (
-                'CMP shared-secret must be set if EST_USERNAME_PASSWORD is enabled.' # noqa: S105
-            )
+            error_messages['cmp_shared_secret'] = 'CMP shared-secret must be set if EST_USERNAME_PASSWORD is enabled.'  # noqa: S105
 
-        if self.est_password != '' and not self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):
-            error_messages['est_password'] = (
-                'EST password must not be set if EST_USERNAME_PASSWORD is not enabled.' # noqa: S105
-            )
+        if self.est_username_password != '' and not self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):
+            error_messages['est_password'] = 'EST password must not be set if EST_USERNAME_PASSWORD is not enabled.'  # noqa: S105
 
-        if self.est_password == '' and self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):
-            error_messages['est_password'] = (
-                'EST password must be set if EST_USERNAME_PASSWORD is enabled.' # noqa: S105
-            )
-
-
-    def save(self, *args: Any, **kwargs: Any) -> None:
-        """Executes full_clean() before saving.
-
-        Args:
-            *args: Positional arguments are passed to super().save().
-            **kwargs: Keyword arguments are passed to super().save().
-        """
-        self.full_clean()
-        super().save(*args, **kwargs)
+        if self.est_username_password == '' and self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):
+            error_messages['est_password'] = 'EST password must be set if EST_USERNAME_PASSWORD is enabled.'  # noqa: S105
 
 
 class DeviceModel(CustomDeleteActionModel):
@@ -405,19 +403,20 @@ class DeviceModel(CustomDeleteActionModel):
     onboarding_config = models.ForeignKey(
         OnboardingConfigModel,
         verbose_name=_('Onboarding Config'),
-        related_name='devices',
+        related_name='device',
         blank=True,
         null=True,
-        on_delete=models.PROTECT
+        on_delete=models.PROTECT,
     )
-    no_onboarding_config_model = models.ForeignKey(
+    no_onboarding_config = models.ForeignKey(
         NoOnboardingConfigModel,
         verbose_name=_('No Onboarding Config'),
-        related_name='devices',
+        related_name='device',
         blank=True,
         null=True,
-        on_delete=models.PROTECT
+        on_delete=models.PROTECT,
     )
+
     class DeviceType(models.IntegerChoices):
         """Enum for device type."""
 
@@ -463,23 +462,13 @@ class DeviceModel(CustomDeleteActionModel):
 
     def clean(self) -> None:
         """Validation before saving the model."""
-        if not (self.onboarding_config or self.no_onboarding_config_model):
+        if not (self.onboarding_config or self.no_onboarding_config):
             err_msg = 'Either onboarding or no-onboarding has to be configured.'
             raise ValidationError(err_msg)
 
-        if self.onboarding_config and self.no_onboarding_config_model:
+        if self.onboarding_config and self.no_onboarding_config:
             err_msg = 'Only one of onboarding or no-onboarding can be configured.'
             raise ValidationError(err_msg)
-
-    def save(self, *args: Any, **kwargs: Any) -> None:
-        """Executes full_clean() before saving.
-
-        Args:
-            *args: Positional arguments are passed to super().save().
-            **kwargs: Keyword arguments are passed to super().save().
-        """
-        self.full_clean()
-        super().save(*args, **kwargs)
 
 
 class IssuedCredentialModel(CustomDeleteActionModel):

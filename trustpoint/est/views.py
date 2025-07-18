@@ -16,7 +16,7 @@ from devices.issuer import (
     OpcUaClientCredentialIssuer,
     OpcUaServerCredentialIssuer,
 )
-from devices.models import DeviceModel, IssuedCredentialModel
+from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, OnboardingStatus
 from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -85,7 +85,7 @@ class CredentialRequest:
 class EstAuthenticationMixin(LoggerMixin):
     """Checks for HTTP Basic Authentication before processing the request."""
 
-    # used_onboarding_protocol_auth: DeviceModel.OnboardingProtocol | None = None
+    used_onboarding_protocol_auth: OnboardingProtocol | None = None
 
     @staticmethod
     def authenticate_username_password(request: HttpRequest) -> DeviceModel:
@@ -196,7 +196,7 @@ class EstAuthenticationMixin(LoggerMixin):
         """Authenticate requests for 'domaincredential' certificates and return the associated DeviceModel."""
         try:
             device = self.authenticate_username_password(request)
-            self.used_onboarding_protocol_auth = DeviceModel.OnboardingProtocol.EST_PASSWORD
+            self.used_onboarding_protocol_auth = OnboardingProtocol.EST_USERNAME_PASSWORD
         except UsernamePasswordAuthenticationError:
             pass
         else:
@@ -204,7 +204,7 @@ class EstAuthenticationMixin(LoggerMixin):
 
         try:
             device_or_none = IDevIDAuthenticator.authenticate_idevid(request, domain)
-            self.used_onboarding_protocol_auth = DeviceModel.OnboardingProtocol.EST_IDEVID
+            self.used_onboarding_protocol_auth = OnboardingProtocol.EST_IDEVID
         except IDevIDAuthenticationError as e:
             return None, LoggedHttpResponse(f'Error validating the IDevID: {e!s}', status=500)
         else:
@@ -502,7 +502,7 @@ class DeviceHandlerMixin:
     This mixin assumes the CSR is already deserialized into a cryptography.x509.CertificateSigningRequest object.
     """
 
-    used_onboarding_protocol_auth: DeviceModel.OnboardingProtocol | None = None
+    used_onboarding_protocol_auth: OnboardingProtocol | None = None
 
     def get_or_create_device_from_csr(
         self, credential_request: CredentialRequest, domain: DomainModel, cert_template: str, device: DeviceModel | None
@@ -522,11 +522,11 @@ class DeviceHandlerMixin:
 
         if cert_template == 'domaincredential':
             onboarding_protocol = self.used_onboarding_protocol_auth
-            onboarding_status = DeviceModel.OnboardingStatus.PENDING
+            onboarding_status = OnboardingStatus.PENDING
 
         else:
-            onboarding_protocol = DeviceModel.OnboardingProtocol.NO_ONBOARDING
-            onboarding_status = DeviceModel.OnboardingStatus.NO_ONBOARDING
+            onboarding_protocol = OnboardingProtocol.NO_ONBOARDING
+            # onboarding_status = OnboardingStatus.NO_ONBOARDING
 
         if onboarding_protocol is None:
                 err_msg = 'Used onboarding protocol: failed to determine.'
@@ -535,13 +535,13 @@ class DeviceHandlerMixin:
         serial_number = str(credential_request.serial_number)
         common_name = credential_request.common_name
 
-        return DeviceModel.objects.create(
-            serial_number=serial_number,
-            common_name=common_name,
-            domain=domain,
-            onboarding_protocol=onboarding_protocol.value,
-            onboarding_status=onboarding_status,
-        ), None
+        # return DeviceModel.objects.create(
+        #     serial_number=serial_number,
+        #     common_name=common_name,
+        #     domain=domain,
+        #     onboarding_protocol=onboarding_protocol.value,
+        #     onboarding_status=onboarding_status,
+        # ), None
 
 
 class CredentialIssuanceMixin:
@@ -644,7 +644,7 @@ class CredentialIssuanceMixin:
             cert = '\n'.join([b64_pkcs7[i:i + 64] for i in range(0, len(b64_pkcs7), 64)])
 
         if requested_cert_template_str == 'domaincredential':
-            device.onboarding_status = DeviceModel.OnboardingStatus.ONBOARDED
+            # device.onboarding_status = DeviceModel.OnboardingStatus.ONBOARDED
             device.save()
 
         return LoggedHttpResponse(content=cert, status=200, content_type='application/pkix-cert')
@@ -717,12 +717,13 @@ class OnboardingMixin(LoggedHttpResponse):
             )
 
         if requested_cert_template_str == 'domaincredential':
-            if device.onboarding_status == DeviceModel.OnboardingStatus.ONBOARDED:
-                return LoggedHttpResponse('The device is already onboarded.', status=422)
-            if device.onboarding_status == DeviceModel.OnboardingStatus.NO_ONBOARDING:
-                return LoggedHttpResponse(
-                    'Requested domain credential for device which does not require onboarding.', status=422
-                )
+            # if device.onboarding_status == DeviceModel.OnboardingStatus.ONBOARDED:
+                # return LoggedHttpResponse('The device is already onboarded.', status=422)
+            # if device.onboarding_status == DeviceModel.OnboardingStatus.NO_ONBOARDING:
+                # return LoggedHttpResponse(
+                #     'Requested domain credential for device which does not require onboarding.', status=422
+                # )
+            pass
         return None
 
 

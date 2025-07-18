@@ -17,12 +17,12 @@
                 <p>If a domain credential shall be issued that will in turn be used for authentication, please choose Onboarding. <br>
                 If the trustpoint shall directly issue application certificates without using a domain credential, please choose No Onboarding.</p>
                 <hr>
-                <a href="" class="btn btn-primary mb-3">Use Onboarding (Recommended)</a><br>
-                <a href="" class="btn btn-primary">Do not use onboarding</a>
+                <a href="{% url use_onboarding_url %}" class="btn btn-primary mb-3 min-width-20">Use Onboarding (Recommended)</a><br>
+                <a href="{% url use_no_onboarding_url %}" class="btn btn-primary min-width-20">Do not use onboarding</a>
             </div>
             <div class="card-footer d-flex justify-content-between align-items-center">
                 <div class="tp-card-btn-footer m-1">
-                    <a href="{% url cancel_create_url %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                    <a href="{% url cancel_create_url %}" class="btn btn-secondary min-width-20">{% trans 'Cancel' %}</a>
                 </div>
             </div>
 

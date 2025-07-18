@@ -59,14 +59,10 @@
                 {% endif %}
                 <td>{{ device.created_at }}</td>
                 <td>
-                    {% if device.onboarding_status != device.OnboardingStatus.NO_ONBOARDING %}
-                        {{ device.get_onboarding_status_display }}
-                    {% endif %}
+                    {{ device.onboarding_config.get_onboarding_status_display }}
                 </td>
                 <td>
-                    {% if device.onboarding_protocol != device.OnboardingProtocol.NO_ONBOARDING %}
-                        {{ device.get_onboarding_protocol_display }}
-                    {% endif %}
+                    {{ device.onboarding_config.get_onboarding_protocol_display }}
                 </td>
                 <td>{{ device.pki_protocols| safe }}</td>
                 <td>{{ device.clm_button| safe }}</td>
