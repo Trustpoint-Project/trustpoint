@@ -11,6 +11,7 @@ from pyasn1.codec.ber import decoder
 from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
 
 from request.request_context import RequestContext
+from trustpoint.logger import LoggerMixin
 
 
 class ParsingComponent(ABC):
@@ -21,7 +22,7 @@ class ParsingComponent(ABC):
         """Execute parsing logic and store results in the context."""
 
 
-class EstPkiMessageParsing(ParsingComponent):
+class EstPkiMessageParsing(ParsingComponent, LoggerMixin):
     """Component for parsing EST-specific PKI messages."""
 
     def parse(self, context: RequestContext) -> None:
@@ -33,34 +34,53 @@ class EstPkiMessageParsing(ParsingComponent):
 
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
+            self.logger.warning("EST PKI message parsing failed: Raw message is missing")
             raise ValueError(error_message)
 
         if not hasattr(context.raw_message, 'body') or not context.raw_message.body:
             error_message = 'Raw message is missing body.'
+            self.logger.warning("EST PKI message parsing failed: Raw message body is missing")
             raise ValueError(error_message)
 
-
         try:
+            body_size = len(context.raw_message.body)
+
             if b'CERTIFICATE REQUEST-----' in context.raw_message.body:
                 est_encoding = 'pem'
                 csr = x509.load_pem_x509_csr(context.raw_message.body)
+                self.logger.debug(f"EST PKI message parsing: Detected PEM format, body size: {body_size} bytes")
             elif re.match(rb'^[A-Za-z0-9+/=\n]+$', context.raw_message.body):
                 est_encoding = 'base64_der'
                 der_data = base64.b64decode(context.raw_message.body)
                 csr = x509.load_der_x509_csr(der_data)
+                self.logger.debug(f"EST PKI message parsing: Detected Base64 DER format, body size: {body_size} bytes, "
+                                  f"decoded: {len(der_data)} bytes")
             elif context.raw_message.body.startswith(b'\x30'):  # ASN.1 DER starts with 0x30
                 est_encoding = 'der'
                 csr = x509.load_der_x509_csr(context.raw_message.body)
+                self.logger.debug(f"EST PKI message parsing: Detected DER format, body size: {body_size} bytes")
             else:
+                self.logger.warning(f"EST PKI message parsing failed: Unsupported CSR format, "
+                                    f"body size: {body_size} bytes")
                 raise_parsing_error("Unsupported CSR format. Ensure it's PEM, Base64, or raw DER.")
 
             context.cert_requested = csr
             context.est_encoding = est_encoding
+
+            subject_cn = "unknown"
+            try:
+                subject_cn = csr.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
+            except (IndexError, AttributeError):
+                pass
+
+            self.logger.info(f"EST PKI message parsing successful: {est_encoding} format, subject CN: {subject_cn}")
+
         except Exception as e:
             error_message = 'Failed to parse the CSR.'
+            self.logger.error(f"EST PKI message parsing failed: {e}")
             raise ValueError(error_message) from e
 
-class EstCsrSignatureVerification(ParsingComponent):
+class EstCsrSignatureVerification(ParsingComponent, LoggerMixin):
     """Parses the context to fetch the CSR and verifies its signature using the public key contained in the CSR."""
 
     def parse(self, context: RequestContext) -> None:
@@ -68,19 +88,26 @@ class EstCsrSignatureVerification(ParsingComponent):
         csr = context.cert_requested
         if csr is None:
             error_message = 'CSR not found in the parsing context. Ensure it was parsed before signature verification.'
+            self.logger.warning("EST CSR signature verification failed: CSR not found in context")
             raise ValueError(error_message)
 
         public_key = csr.public_key()
         signature_hash_algorithm = csr.signature_hash_algorithm
+
         if signature_hash_algorithm is None:
             error_message = 'CSR does not contain a signature hash algorithm.'
+            self.logger.warning("EST CSR signature verification failed: No signature hash algorithm")
             raise ValueError(error_message)
 
         if not isinstance(public_key, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)):
             error_message = 'Unsupported public key type for CSR signature verification.'
+            self.logger.warning(
+                f"EST CSR signature verification failed: Unsupported public key type: {type(public_key)}")
             raise TypeError(error_message)
 
         try:
+            key_type = "RSA" if isinstance(public_key, rsa.RSAPublicKey) else "EC"
+
             if isinstance(public_key, rsa.RSAPublicKey):
                 public_key.verify(
                     signature=csr.signature,
@@ -94,11 +121,15 @@ class EstCsrSignatureVerification(ParsingComponent):
                     data=csr.tbs_certrequest_bytes,
                     signature_algorithm=ec.ECDSA(signature_hash_algorithm),
                 )
+
+            self.logger.info(f"EST CSR signature verification successful: {key_type} key "
+                             f"with {signature_hash_algorithm.name} hash")
         except Exception as e:
             error_message = 'Failed to verify the CSR signature.'
+            self.logger.error(f"EST CSR signature verification failed: {e}")
             raise ValueError(error_message) from e
 
-class DomainParsing(ParsingComponent):
+class DomainParsing(ParsingComponent, LoggerMixin):
     """Parses and validates the domain from the request context object."""
 
     def parse(self, context: RequestContext) -> None:
@@ -106,31 +137,32 @@ class DomainParsing(ParsingComponent):
         domain_str = context.domain_str
         if not domain_str:
             error_message = 'Domain is missing in the request context.'
+            self.logger.warning("Domain parsing failed: Domain string is missing")
             raise ValueError(error_message)
 
-        domain, error_response = self._extract_requested_domain(domain_str)
-        if error_response:
-            error_message = f'Domain validation failed: {error_response.content.decode()}'
-            raise ValueError(error_message)
+        try:
+            domain = self._extract_requested_domain(domain_str)
+            context.domain = domain
+            self.logger.info(f"Domain parsing successful: Domain '{domain_str}'")
+        except ValueError as e:
+            raise e
 
-        if not domain:
-            error_message = 'Domain validation failed: Domain not found.'
-            raise ValueError(error_message)
-
-        context.domain = domain
-
-    def _extract_requested_domain(self, domain_name: str) -> tuple[DomainModel | None, HttpResponse | None]:
+    def _extract_requested_domain(self, domain_name: str) -> DomainModel:
         """Validate and fetch the domain object by name."""
         try:
             domain = DomainModel.objects.get(unique_name=domain_name)
+            self.logger.debug(f"Domain lookup successful: Found domain '{domain_name}'")
+            return domain
         except DomainModel.DoesNotExist:
-            return None, HttpResponse(f"Domain '{domain_name}' does not exist.", status=404)
+            error_message = f"Domain '{domain_name}' does not exist."
+            self.logger.warning(f"Domain lookup failed: Domain '{domain_name}' does not exist")
+            raise ValueError(error_message)
         except DomainModel.MultipleObjectsReturned:
-            return None, HttpResponse(f"Multiple domains found for '{domain_name}'.", status=400)
-        else:
-            return domain, None
+            error_message = f"Multiple domains found for '{domain_name}'."
+            self.logger.warning(f"Domain lookup failed: Multiple domains found for '{domain_name}'")
+            raise ValueError(error_message)
 
-class CertTemplateParsing(ParsingComponent):
+class CertTemplateParsing(ParsingComponent, LoggerMixin):
     """Parses the certificate template from the request context object."""
 
     def parse(self, context: RequestContext) -> None:
@@ -138,33 +170,41 @@ class CertTemplateParsing(ParsingComponent):
         certtemplate_str = context.certificate_template
         if not certtemplate_str:
             error_message = 'Certificate template is missing in the request context.'
+            self.logger.warning("Certificate template parsing failed: Template string is missing")
             raise ValueError(error_message)
 
         context.certificate_template = certtemplate_str
+        self.logger.info(f"Certificate template parsing successful: Template '{certtemplate_str}'")
 
 
-class CmpPkiMessageParsing(ParsingComponent):
+class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
     """Component for parsing CMP-specific PKI messages."""
 
     def parse(self, context: RequestContext) -> None:
         """Parse a CMP PKI message."""
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
+            self.logger.warning("CMP PKI message parsing failed: Raw message is missing")
             raise ValueError(error_message)
 
         if not hasattr(context.raw_message, 'body') or not context.raw_message.body:
             error_message = 'Raw message is missing body.'
+            self.logger.warning("CMP PKI message parsing failed: Raw message body is missing")
             raise ValueError(error_message)
 
         try:
+            body_size = len(context.raw_message.body)
             serialized_message, _ = decoder.decode(context.raw_message.body, asn1Spec=rfc4210.PKIMessage())
             context.parsed_message = serialized_message
+
+            self.logger.info(f"CMP PKI message parsing successful: Parsed {body_size} bytes")
         except (ValueError, TypeError) as e:
             error_message = 'Failed to parse the CMP message. It seems to be corrupted.'
+            self.logger.error(f"CMP PKI message parsing failed: {e}")
             raise ValueError(error_message) from e
 
 
-class CompositeParsing(ParsingComponent):
+class CompositeParsing(ParsingComponent, LoggerMixin):
     """Composite parser to group multiple parsing strategies."""
 
     def __init__(self) -> None:
@@ -177,12 +217,38 @@ class CompositeParsing(ParsingComponent):
 
     def remove(self, component: ParsingComponent) -> None:
         """Remove a parsing component from the composite parser."""
-        self.components.remove(component)
+        if component in self.components:
+            self.components.remove(component)
+            self.logger.debug(f"Removed parsing component: {component.__class__.__name__}")
+        else:
+            error_message = f"Attempted to remove non-existent parsing component: {component.__class__.__name__}"
+            self.logger.warning(error_message)
+            raise ValueError(error_message)
+
 
     def parse(self, context: RequestContext) -> None:
         """Execute all child parsers."""
-        for component in self.components:
-            component.parse(context)
+        self.logger.debug(f"Starting composite parsing with {len(self.components)} components")
+
+        for i, component in enumerate(self.components):
+            try:
+                component.parse(context)
+                self.logger.debug(f"Parsing component {component.__class__.__name__} completed successfully")
+            except ValueError as e:
+                error_message = f"{component.__class__.__name__}: {e}"
+                self.logger.warning(f"Parsing component {component.__class__.__name__} failed: {e}")
+                self.logger.error(
+                    f"Composite parsing failed at component {i + 1}/{len(self.components)}: {component.__class__.__name__}")
+                raise ValueError(error_message) from e
+            except Exception as e:
+                error_message = f"Unexpected error in {component.__class__.__name__}: {e}"
+                self.logger.error(f"Unexpected error in parsing component {component.__class__.__name__}: {e}")
+                self.logger.error(
+                    f"Composite parsing failed at component {i + 1}/{len(self.components)}: {component.__class__.__name__}")
+                raise ValueError(error_message) from e
+
+        self.logger.info(f"Composite parsing successful. All {len(self.components)} components completed")
+
 
 class CmpMessageParser(CompositeParsing):
     """Parser for CMP-specific HTTP requests."""
