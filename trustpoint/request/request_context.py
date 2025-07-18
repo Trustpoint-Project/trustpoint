@@ -41,3 +41,14 @@ class RequestContext:
         """Reset all attributes to default (None)."""
         for field in self.__dataclass_fields__:
             setattr(self, field, None)
+
+    def __str__(self) -> str:
+        """String representation showing key context information."""
+        non_none_fields = self.get_non_none_fields()
+        field_summary = ", ".join(f"{k}={v}" for k, v in non_none_fields.items())
+        return f"RequestContext({field_summary})"
+
+    def __repr__(self) -> str:
+        """Detailed representation for debugging."""
+        return f"RequestContext(protocol={self.protocol}, operation={self.operation}, domain_str={self.domain_str})"
+
