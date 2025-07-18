@@ -186,7 +186,7 @@ How to
     This can be done by executing ``uv run manage.py aoki_gen_test_certs``.
 
 #. **Add DevOwnerID to Trustpoint**
-    This is still work in progress, you can currently import the DevOwnerID as an Issuing CA with the unique name ``DevOwnerID``.
+    Add the DevOwnerID credential in the ``PKI -> DevOwnerIDs`` section.
 
 #. **Add IDevID Truststore in Trustpoint**
     A Truststore containing the certificate chain of the IDevID has to be added.
@@ -194,6 +194,7 @@ How to
     Make sure "Auto-Generate new Device" is enabled in the domain config.
 
 #. **Start AOKI Onboarding**
-    Run ``uv run -m aoki.tests.client`` from the ``trustpoint`` directory. This will start the AOKI test client.
+    AOKI-EST: Run ``uv run -m aoki.tests.client`` from the ``trustpoint`` directory. This will start the AOKI test client.
 
-
+    AOKI-CMP: Run ``uv run -m aoki.tests.cmp_client`` from the ``trustpoint`` directory.
+    This can be implemented with a low amount of custom code, as CMP is handled by OpenSSL.

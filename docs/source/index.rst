@@ -57,3 +57,5 @@ Welcome to Trustpoint's documentation!
    :caption: 🧑‍💻 Development
 
    development/development
+   devices/workflow
+

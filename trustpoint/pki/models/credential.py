@@ -513,7 +513,7 @@ class CertificateChainOrderModel(models.Model):
             'order', flat=True
         )
         return max(existing_orders, default=-1)
-    
+
 
 class IDevIDReferenceModel(models.Model):
     """Model to store the string referencing an IDevID certificate.
@@ -528,7 +528,7 @@ class IDevIDReferenceModel(models.Model):
     def __str__(self) -> str:
         """Returns a human-readable string that represents this IDevIDRefSanModel entry."""
         return f'{self.dev_owner_id.unique_name} - {self.idevid_ref}'
-    
+
     @property
     def idevid_subject_serial_number(self) -> str:
         """Returns the IDevID Subject Serial Number from the SAN of the DevOwnerID certificate."""
@@ -536,7 +536,7 @@ class IDevIDReferenceModel(models.Model):
             return self.idevid_ref.split('.')[0]
         except IndexError:
             return ''
-        
+
     @property
     def idevid_x509_serial_number(self) -> str:
         """Returns the IDevID X.509 Serial Number from the SAN of the DevOwnerID certificate."""
@@ -544,7 +544,7 @@ class IDevIDReferenceModel(models.Model):
             return self.idevid_ref.split('.')[2]
         except IndexError:
             return ''
-        
+
     @property
     def idevid_sha256_fingerprint(self) -> str:
         """Returns the IDevID SHA256 Fingerprint from the SAN of the DevOwnerID certificate."""
@@ -552,7 +552,7 @@ class IDevIDReferenceModel(models.Model):
             return self.idevid_ref.split('.')[3]
         except IndexError:
             return ''
-        
+
 
 
 class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
@@ -564,7 +564,8 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
     unique_name = models.CharField(
         verbose_name=_('Unique Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
     )
-    credential: CredentialModel = models.OneToOneField(CredentialModel, related_name='dev_owner_ids', on_delete=models.PROTECT)
+    credential: CredentialModel = models.OneToOneField(
+        CredentialModel, related_name='dev_owner_ids', on_delete=models.PROTECT)
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
@@ -602,11 +603,13 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         idevid_refs: set[str] = set()
         owner_cert = credential_serializer.certificate
         if not owner_cert:
-            raise ValidationError(_('The provided credential is not a valid DevOwnerID; it does not contain a certificate.'))
+            err_msg = _('The provided credential is not a valid DevOwnerID; it does not contain a certificate.')
+            raise ValidationError(err_msg)
         try:
             san_extension = owner_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
-        except x509.ExtensionNotFound:
-            raise ValidationError(_('The provided certificate is not a valid DevOwnerID; it does not contain a Subject Alternative Name extension.'))
+        except x509.ExtensionNotFound as e:
+            err_msg = _('The provided certificate is not a valid DevOwnerID; it does not contain a SAN extension.')
+            raise ValidationError(err_msg) from e
 
         for san in san_extension.value:
             if isinstance(san, x509.UniformResourceIdentifier):
