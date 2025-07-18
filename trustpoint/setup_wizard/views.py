@@ -451,9 +451,11 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
             HttpResponseRedirect: Redirect to the next step or an error page based on the outcome.
         """
         try:
-            trustpoint_tls_server_credential_model = CredentialModel.objects.get(
-                credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
-            )
+            trustpoint_tls_server = ActiveTrustpointTlsServerCredentialModel.objects.first()
+            if not trustpoint_tls_server:
+                self._raise_tls_credential_error('No ActiveTrustpointTlsServerCredentialModel found.')
+
+            trustpoint_tls_server_credential_model = trustpoint_tls_server.credential
             if not trustpoint_tls_server_credential_model:
                 self._raise_tls_credential_error('No Trustpoint TLS Server Credential found.')
 
