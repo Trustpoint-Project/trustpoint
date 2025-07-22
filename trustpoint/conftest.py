@@ -266,6 +266,27 @@ def domain_credential_est_onboarding(
     return est_device_with_onboarding
 
 @pytest.fixture
+def domain_credential_cmp_onboarding(
+        cmp_device_with_onboarding: dict[str, Any],
+        rsa_private_key: rsa.RSAPrivateKey
+) -> dict[str, Any]:
+    """Fixture to create a domain credential linked to an CMP device."""
+    device: DeviceModel = cmp_device_with_onboarding['device']
+    domain: DomainModel = device.domain
+
+    if domain is None:
+        raise ValueError("The associated domain for the device cannot be None")
+
+    credential_request = rsa_private_key.public_key()
+
+    domain_credential_issuer = LocalDomainCredentialIssuer(device=device, domain=domain)
+    issued_domain_credential = domain_credential_issuer.issue_domain_credential_certificate(
+        public_key=credential_request)
+
+    cmp_device_with_onboarding.update({'domain_credential': issued_domain_credential})
+    return cmp_device_with_onboarding
+
+@pytest.fixture
 def tls_client_certificate_instance_est_onboarding(
         est_device_with_onboarding: dict[str, Any],
                                     rsa_private_key: rsa.RSAPrivateKey
