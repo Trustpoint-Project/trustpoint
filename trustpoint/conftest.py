@@ -59,7 +59,7 @@ CA_COMMON_NAME = 'Root CA'
 UNIQUE_NAME = CA_COMMON_NAME.replace(' ', '_').lower()
 CA_TYPE = IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED
 
-DOMAIN_UNIQUE_NAME = 'domain_name'
+DOMAIN_UNIQUE_NAME = 'domain_test_instance'
 
 
 @pytest.fixture
