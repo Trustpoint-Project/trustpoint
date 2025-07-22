@@ -25,10 +25,10 @@ from pki.models.credential import CredentialModel
 from pki.models.devid_registration import DevIdRegistration
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
-from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
-from pyasn1.type.univ import ObjectIdentifier  # type: ignore[import-untyped]
-from trustpoint_core.serializer import CertificateCollectionSerializer  # type: ignore[import-untyped]
+from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
+from pyasn1.type.univ import ObjectIdentifier
+from trustpoint_core.serializer import CertificateCollectionSerializer
 
 from trustpoint.logger import LoggerMixin
 
