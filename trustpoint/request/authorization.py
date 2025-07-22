@@ -39,7 +39,7 @@ class ProtocolAuthorization(AuthorizationComponent, LoggerMixin):
 
         self.logger.debug(f"Protocol authorization successful for protocol: {protocol}")
 
-class OperationAuthorization(AuthorizationComponent, LoggerMixin):
+class EstOperationAuthorization(AuthorizationComponent, LoggerMixin):
     """Ensures the request is authorized for the specified operation."""
 
     def __init__(self, allowed_operations: list[str]) -> None:
@@ -64,6 +64,60 @@ class OperationAuthorization(AuthorizationComponent, LoggerMixin):
             raise ValueError(error_message)
 
         self.logger.debug(f"Operation authorization successful for operation: {operation}")
+
+class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
+    """Ensures the request is authorized for the specified operation."""
+
+    def __init__(self, allowed_operations: list[str]) -> None:
+        """Initialize the authorization component with a list of allowed operations."""
+        self.allowed_operations = allowed_operations
+
+    def authorize(self, context: RequestContext) -> None:
+        """Authorize the request based on the operation type."""
+        operation = context.operation
+
+        if not operation:
+            error_message = 'Operation information is missing. Authorization denied.'
+            self.logger.warning("Operation authorization failed: Operation information is missing")
+            raise ValueError(error_message)
+
+        if operation not in self.allowed_operations:
+            error_message = (
+                f"Unauthorized operation: '{operation}'. "
+                f"Allowed operations: {', '.join(self.allowed_operations)}."
+            )
+            self.logger.warning(f"Operation authorization failed: {operation} not in allowed operations {self.allowed_operations}")
+            raise ValueError(error_message)
+
+        body_type = context.parsed_message['body'].getName()
+
+        if context.operation == 'initialization' and body_type == 'ir':
+            self._authorize_asn1_body(context.parsed_message, 'ir')
+            self.logger.info("CMP body type validation successful: IR body extracted")
+        elif context.operation == 'certification' and body_type == 'cr':
+            self._authorize_asn1_body(context.parsed_message, 'cr')
+            self.logger.info("CMP body type validation successful: CR body extracted")
+        else:
+            err_msg = f'Expected CMP {context.operation} body, but got CMP {body_type.upper()} body.'
+            raise ValueError(err_msg)
+
+        self.logger.debug(f"Operation authorization successful for operation: {operation}")
+
+    def _authorize_asn1_body(self, serialized_pyasn1_message, expected_body_type: str) -> None:
+        """Extract and validate the specified body type from the CMP message.
+
+        Args:
+            serialized_pyasn1_message: The CMP message to extract the body from.
+            expected_body_type: The expected body type ('cr' or 'ir').
+        """
+        message_body_name = serialized_pyasn1_message['body'].getName()
+        if message_body_name != expected_body_type:
+            err_msg = f'Expected CMP {expected_body_type.upper()} body, but got CMP {message_body_name.upper()} body.'
+            raise ValueError(err_msg)
+
+        if serialized_pyasn1_message['body'].getName() != expected_body_type:
+            err_msg = f'not {expected_body_type} message'
+            raise ValueError(err_msg)
 
 
 class CertificateTemplateAuthorization(AuthorizationComponent, LoggerMixin):
@@ -185,11 +239,47 @@ class CompositeAuthorization(AuthorizationComponent, LoggerMixin):
 
 class EstAuthorization(CompositeAuthorization):
     """Composite authorization handler for EST requests."""
-    def __init__(self) -> None:
-        """Initialize the composite authorization handler with the default set of components."""
+    def __init__(self, allowed_templates: list[str] = None, allowed_operations: list[str] = None) -> None:
+        """Initialize the composite authorization handler with the default set of components.
+
+        Args:
+            allowed_templates: List of allowed certificate templates. Defaults to ['tls-client'] if not provided.
+            allowed_operations: List of allowed CMP operations. Defaults to ['cr', 'ir'] if not provided.
+        """
         super().__init__()
-        self.add(CertificateTemplateAuthorization(['tls-client']))
+
+        if allowed_templates is None:
+            allowed_templates = ['tls-client']
+
+        if allowed_operations is None:
+            allowed_operations = ['simpleenroll', 'simplereenroll']
+
+        self.add(CertificateTemplateAuthorization(allowed_templates))
         self.add(DomainScopeValidation())
         self.add(ManualAuthorization())
         self.add(ProtocolAuthorization(['est']))
-        self.add(OperationAuthorization(['simpleenroll']))
+        self.add(EstOperationAuthorization(allowed_operations))
+
+class CmpAuthorization(CompositeAuthorization):
+    """Composite authorization handler for EST requests."""
+    def __init__(self, allowed_templates: list[str] = None, allowed_operations: list[str] = None) -> None:
+        """Initialize the composite authorization handler with the default set of components.
+
+        Args:
+            allowed_templates: List of allowed certificate templates. Defaults to ['tls-client'] if not provided.
+            allowed_operations: List of allowed CMP operations. Defaults to ['cr', 'ir'] if not provided.
+        """
+
+        super().__init__()
+
+        if allowed_templates is None:
+            allowed_templates = ['tls-client']
+
+        if allowed_operations is None:
+            allowed_operations = ['certification', 'initialization']
+
+        self.add(CertificateTemplateAuthorization(allowed_templates))
+        self.add(DomainScopeValidation())
+        self.add(ManualAuthorization())
+        self.add(ProtocolAuthorization(['cmp']))
+        self.add(CmpOperationAuthorization(allowed_operations))
