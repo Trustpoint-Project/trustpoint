@@ -6,9 +6,12 @@ from abc import ABC, abstractmethod
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from django.http import HttpResponse
+from pyasn1.codec.der import encoder
+from pyasn1.codec.der import decoder
+from pyasn1_modules import rfc2459
 from pki.models import DomainModel
 from pyasn1.codec.ber import decoder
-from pyasn1_modules import rfc4210, rfc2511  # type: ignore[import-untyped]
+from pyasn1_modules import rfc4210, rfc2511, rfc2459  # type: ignore[import-untyped]
 
 from request.request_context import RequestContext
 from trustpoint.logger import LoggerMixin
@@ -209,7 +212,7 @@ class CmpHeaderValidation(ParsingComponent, LoggerMixin):
 
     def __init__(self, cmp_message_version: int = 2, transaction_id_length: int = 16,
                  sender_nonce_length: int = 16, implicit_confirm_oid: str = '1.3.6.1.5.5.7.4.13',
-                 implicit_confirm_str_value: str = 'NULL') -> None:
+                 implicit_confirm_str_value: str = '0x0500') -> None:
         """Initialize the CMP header validation component with configurable parameters.
 
         Args:
@@ -268,9 +271,8 @@ class CmpHeaderValidation(ParsingComponent, LoggerMixin):
             err_msg = 'implicit confirm entry fail'
             raise ValueError(err_msg)
 
-
 class CmpBodyValidation(ParsingComponent, LoggerMixin):
-    """Component for validating CMP message body, specifically for IR/CR requests."""
+    """Component for validating CMP body based on operation context."""
 
     def __init__(self, cert_template_version: int = 2) -> None:
         """Initialize the CMP body validation component.
@@ -281,60 +283,6 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         self.cert_template_version = cert_template_version
 
     def parse(self, context: RequestContext) -> None:
-        """Validate the CMP message body and extract certificate request template."""
-        if context.parsed_message is None:
-            error_message = 'Parsed message is missing from the context.'
-            self.logger.warning("CMP body validation failed: Parsed message is missing")
-            raise ValueError(error_message)
-
-        try:
-            pki_body = context.parsed_message['body']
-            self._validate_body_type_matches_operation(pki_body, context.operation)
-            cert_req_template = self._extract_cert_req_template(pki_body)
-            #context.cert_req_template = cert_req_template
-            self.logger.info("CMP body validation successful")
-        except ValueError as e:
-            self.logger.error(f"CMP body validation failed: {e}")
-            raise
-
-    def _validate_body_type_matches_operation(self, pki_body: rfc4210.PKIBody, operation: str | None) -> None:
-        """Validate that the PKI body type matches the expected operation."""
-        body_type = pki_body.getName()
-
-        if operation == 'initialization' and body_type != 'ir':
-            err_msg = f'Expected CMP IR body for initialization operation, but got CMP {body_type.upper()} body.'
-            raise ValueError(err_msg)
-        elif operation == 'certification' and body_type != 'cr':
-            err_msg = f'Expected CMP CR body for certification operation, but got CMP {body_type.upper()} body.'
-            raise ValueError(err_msg)
-
-    def _extract_cert_req_template(self, pki_body: rfc4210.PKIBody) -> rfc2511.CertTemplate:
-        """Extracts the certificate request template from the PKI (IR/CR) message body."""
-        cert_req_msg = pki_body[0]['certReq']
-
-        if cert_req_msg['certReqId'] != 0:
-            err_msg = 'certReqId must be 0.'
-            raise ValueError(err_msg)
-
-        body_type = pki_body.getName()
-        if body_type in ('ir', 'cr'):
-            if not cert_req_msg['certTemplate'].hasValue():
-                err_msg = 'certTemplate must be contained in IR/CR CertReqMessage.'
-                raise ValueError(err_msg)
-
-        cert_req_template = cert_req_msg['certTemplate']
-
-        if cert_req_template['version'].hasValue() and cert_req_template['version'] != self.cert_template_version:
-            err_msg = 'Version must be 2 if supplied in certificate request.'
-            raise ValueError(err_msg)
-
-        return cert_req_template
-
-
-class CmpBodyTypeValidation(ParsingComponent, LoggerMixin):
-    """Component for validating CMP body type based on operation context."""
-
-    def parse(self, context: RequestContext) -> None:
         """Validate the CMP body type and extract the appropriate body."""
         if context.parsed_message is None:
             error_message = 'Parsed message is missing from the context.'
@@ -342,67 +290,258 @@ class CmpBodyTypeValidation(ParsingComponent, LoggerMixin):
             raise ValueError(error_message)
 
         try:
-            body_type = context.parsed_message['body'].getName()
+            pki_body = context.parsed_message['body']
+            body_type = pki_body.getName()
 
-            if context.operation == 'initialization' and body_type == 'ir':
-                ir_body = self._extract_ir_body(context.parsed_message)
-                context.ir_body = ir_body
-                self.logger.info("CMP body type validation successful: IR body extracted")
-            elif context.operation == 'certification' and body_type == 'cr':
-                cr_body = self._extract_cr_body(context.parsed_message)
-                context.cr_body = cr_body
-                self.logger.info("CMP body type validation successful: CR body extracted")
-            else:
-                err_msg = f'Expected CMP {context.operation} body, but got CMP {body_type.upper()} body.'
+            if body_type not in ('ir', 'cr'):
+                err_msg = f'Unsupported CMP body type: {body_type}'
                 raise ValueError(err_msg)
+
+            # Validate body type matches operation
+            self._validate_operation_body_match(context.operation, body_type)
+
+            # Extract and validate certificate request messages
+            cert_req_messages = pki_body[body_type]
+            self._validate_cert_req_messages(cert_req_messages)
+
+            # Validate certificate request details
+            cert_req_msg = cert_req_messages[0]['certReq']
+            request_builder = self._validate_cert_request(cert_req_msg)
+
+            context.cert_requested = request_builder
+
+            self.logger.info(f"CMP body type validation successful: {body_type.upper()} body extracted")
 
         except ValueError as e:
             self.logger.error(f"CMP body type validation failed: {e}")
             raise
 
-    def _extract_ir_body(self, serialized_pyasn1_message: rfc4210.PKIMessage) -> rfc4210.PKIBody:
-        """Extract and validate the IR body from the CMP message."""
-        message_body_name = serialized_pyasn1_message['body'].getName()
-        if message_body_name != 'ir':
-            err_msg = f'Expected CMP IR body, but got CMP {message_body_name.upper()} body.'
+    def _validate_operation_body_match(self, operation: str | None, body_type: str) -> None:
+        """Validate that the operation matches the body type."""
+        if operation == 'initialization' and body_type != 'ir':
+            err_msg = f'Expected CMP IR body for initialization operation, but got CMP {body_type.upper()} body.'
+            raise ValueError(err_msg)
+        elif operation == 'certification' and body_type != 'cr':
+            err_msg = f'Expected CMP CR body for certification operation, but got CMP {body_type.upper()} body.'
             raise ValueError(err_msg)
 
-        if serialized_pyasn1_message['body'].getName() != 'ir':
-            err_msg = 'not ir message'
-            raise ValueError(err_msg)
+    def _validate_cert_req_messages(self, cert_req_messages) -> None:
+        """Validate the certificate request messages structure."""
+        if len(cert_req_messages) > 1:
+            raise ValueError('Multiple CertReqMessages found.')
 
-        ir_body = serialized_pyasn1_message['body']['ir']
-        if len(ir_body) > 1:
-            err_msg = 'multiple CertReqMessages found for IR.'
-            raise ValueError(err_msg)
+        if len(cert_req_messages) < 1:
+            raise ValueError('No CertReqMessages found.')
 
-        if len(ir_body) < 1:
-            err_msg = 'no CertReqMessages found for IR.'
-            raise ValueError(err_msg)
+    def _validate_cert_request(self, cert_req_msg) -> x509.base.CertificateSigningRequestBuilder:
+        """Validate the certificate request message details."""
+        if cert_req_msg['certReqId'] != 0:
+            raise ValueError('certReqId must be 0.')
 
-        return ir_body
+        if not cert_req_msg['certTemplate'].hasValue():
+            raise ValueError('certTemplate must be contained in IR/CR CertReqMessage.')
 
-    def _extract_cr_body(self, serialized_pyasn1_message: rfc4210.PKIMessage) -> rfc4210.PKIBody:
-        """Extract and validate the CR body from the CMP message."""
-        message_body_name = serialized_pyasn1_message['body'].getName()
-        if message_body_name != 'cr':
-            err_msg = f'Expected CMP CR body, but got CMP {message_body_name.upper()} body.'
-            raise ValueError(err_msg)
+        cert_req_template = cert_req_msg['certTemplate']
 
-        if serialized_pyasn1_message['body'].getName() != 'cr':
-            err_msg = 'not cr message'
-            raise ValueError(err_msg)
+        if (cert_req_template['version'].hasValue() and
+                cert_req_template['version'] != self.cert_template_version):
+            raise ValueError('Version must be 2 if supplied in certificate request.')
 
-        cr_body = serialized_pyasn1_message['body']['cr']
-        if len(cr_body) > 1:
-            err_msg = 'multiple CertReqMessages found for CR.'
-            raise ValueError(err_msg)
+        request_builder = self._cert_template_to_builder(cert_req_template)
 
-        if len(cr_body) < 1:
-            err_msg = 'no CertReqMessages found for CR.'
-            raise ValueError(err_msg)
+        return request_builder
 
-        return cr_body
+
+    def _cert_template_to_builder(self, cert_template) -> x509.base.CertificateSigningRequestBuilder:
+
+        if cert_template['subject'].hasValue():
+            subject = self._parse_asn1_name_to_x509_name(cert_template['subject'])
+        else:
+            subject = x509.Name([])
+
+        builder = x509.CertificateSigningRequestBuilder()
+        builder = builder.subject_name(subject)
+
+        if cert_template['extensions'].hasValue():
+            extensions = self._parse_cert_template_extensions(cert_template['extensions'])
+            for extension in extensions:
+                builder = builder.add_extension(extension.value, extension.critical)
+
+        return builder
+
+    def _parse_asn1_name_to_x509_name(self, asn1_name) -> x509.Name:
+        """Convert ASN.1 Name structure to cryptography x509.Name object."""
+        name_attributes = []
+
+        if not asn1_name or not asn1_name.hasValue():
+            self.logger.warning("ASN.1 name is empty or has no value")
+            return x509.Name([])
+
+        try:
+            for i in range(len(asn1_name)):
+                rdn_sequence = asn1_name.getComponentByPosition(i)
+                for j in range(len(rdn_sequence)):
+                    rdn = rdn_sequence.getComponentByPosition(j)
+                    for k in range(len(rdn)):
+                        atv = rdn.getComponentByPosition(k)
+
+                        oid_component = atv.getComponentByName('type')
+                        value_component = atv.getComponentByName('value')
+
+                        oid_str = str(oid_component)
+                        value_str = str(value_component)
+
+                        if value_str.startswith('0x'):
+                            try:
+                                hex_str = value_str[2:]
+                                value_bytes = bytes.fromhex(hex_str)
+                                attribute_value = value_bytes.decode('utf-8')
+                            except Exception as decode_error:
+                                self.logger.warning(f"Failed to decode hex value: {decode_error}, using raw value")
+                                attribute_value = value_str
+                        else:
+                            attribute_value = value_str
+
+                        oid = x509.ObjectIdentifier(oid_str)
+
+                        name_attr = x509.NameAttribute(oid, attribute_value)
+                        name_attributes.append(name_attr)
+
+        except Exception as e:
+            self.logger.error(f"Error parsing ASN.1 name: {e}")
+            raise
+
+        return x509.Name(name_attributes)
+
+    def _parse_cert_template_extensions(self, extensions_asn1) -> list[x509.Extension]:
+        """Parse ASN.1 extensions from certTemplate into cryptography extension objects using fallback approach."""
+        extensions_list = []
+
+        try:
+            for extension in extensions_asn1:
+                ext_oid = str(extension['extnID'])
+                is_critical = str(extension['critical']) == 'True' if extension['critical'].hasValue() else False
+                ext_value_bytes = bytes(extension['extnValue'])
+
+                try:
+                    if ext_oid == x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string:
+                        extension_obj = self._parse_subject_alternative_name(ext_value_bytes, is_critical)
+                    elif ext_oid == x509.ExtensionOID.CERTIFICATE_POLICIES.dotted_string:
+                        extension_obj = self._parse_certificate_policies(ext_value_bytes, is_critical)
+                    else:
+                        raise NotImplementedError(f"Extension with OID {ext_oid} is not supported")
+                    if extension_obj:
+                        extensions_list.append(extension_obj)
+                except Exception as e:
+                    self.logger.error(f"Error parsing extension: {e}")
+                    raise
+
+        except Exception as e:
+            self.logger.error(f"Error parsing extensions: {e}")
+            raise
+
+        self.logger.info(f"Successfully parsed {len(extensions_list)} extensions")
+        return extensions_list
+
+    def _parse_subject_alternative_name(self, value: bytes, critical: bool) -> x509.Extension:
+        """Parse Subject Alternative Name extension manually using the working approach."""
+        from pyasn1.codec.der import decoder
+        from pyasn1_modules import rfc2459
+        import ipaddress
+
+        try:
+            san_asn1, _ = decoder.decode(value, asn1Spec=rfc2459.SubjectAltName())
+
+            general_names = []
+
+            for general_name in san_asn1:
+                name_type = general_name.getName()
+                name_value = general_name.getComponent()
+
+
+                if name_type == 'iPAddress':
+                    try:
+                        ip_bytes = name_value.asOctets()
+
+                        if len(ip_bytes) == 4:
+                            # IPv4
+                            ip_addr = ipaddress.IPv4Address(ip_bytes)
+                            ip_address = x509.IPAddress(ip_addr)
+                            general_names.append(ip_address)
+                        elif len(ip_bytes) == 16:
+                            # IPv6
+                            ip_addr = ipaddress.IPv6Address(ip_bytes)
+                            ip_address = x509.IPAddress(ip_addr)
+                            general_names.append(ip_address)
+                        else:
+                            self.logger.warning(f"Unknown IP address length: {len(ip_bytes)}")
+                            continue
+                    except (ValueError, TypeError) as ip_error:
+                        self.logger.warning(f"Failed to parse IP address: {ip_error}")
+                        continue
+
+                elif name_type == 'dNSName':
+                    dns_name = x509.DNSName(str(name_value))
+                    general_names.append(dns_name)
+
+                elif name_type == 'uniformResourceIdentifier':
+                    uri = x509.UniformResourceIdentifier(str(name_value))
+                    general_names.append(uri)
+
+                elif name_type == 'rfc822Name':
+                    email = x509.RFC822Name(str(name_value))
+                    general_names.append(email)
+                else:
+                    self.logger.warning(f"Unsupported SAN type: {name_type}")
+
+            if not general_names:
+                self.logger.warning("No valid SAN entries found")
+
+            san_extension = x509.SubjectAlternativeName(general_names)
+            return x509.Extension(
+                oid=x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME,
+                critical=critical,
+                value=san_extension
+            )
+
+        except Exception as e:
+            self.logger.error(f"Failed to parse SAN extension: {e}")
+            raise
+
+    def _parse_certificate_policies(self, value: bytes, critical: bool) -> x509.Extension:
+        """Parse Certificate Policies extension manually."""
+
+        try:
+            cert_policies, _ = decoder.decode(value, asn1Spec=rfc2459.CertificatePolicies())
+
+            policy_information_list = []
+
+            for i in range(len(cert_policies)):
+                policy_info = cert_policies.getComponentByPosition(i)
+
+                policy_oid = str(policy_info.getComponentByName('policyIdentifier'))
+
+                if policy_info.getComponentByName('policyQualifiers').hasValue():
+                    error_message = f"Policy qualifiers are not supported for policy {policy_oid}"
+                    self.logger.error(error_message)
+                    raise ValueError(error_message)
+
+                policy_info_obj = x509.PolicyInformation(
+                    policy_identifier=x509.ObjectIdentifier(policy_oid),
+                    policy_qualifiers=None
+                )
+                policy_information_list.append(policy_info_obj)
+
+            certificate_policies = x509.CertificatePolicies(policy_information_list)
+            return x509.Extension(
+                oid=x509.ExtensionOID.CERTIFICATE_POLICIES,
+                critical=critical,
+                value=certificate_policies
+            )
+
+        except Exception as e:
+            self.logger.error(f"Failed to parse Certificate Policies extension: {e}")
+            raise
 
 
 class CompositeParsing(ParsingComponent, LoggerMixin):
@@ -460,7 +599,8 @@ class CmpMessageParser(CompositeParsing):
         self.add(CmpPkiMessageParsing())
         self.add(CmpHeaderValidation())
         self.add(CmpBodyValidation())
-        self.add(CmpBodyTypeValidation())
+        self.add(DomainParsing())
+        self.add(CertTemplateParsing())
 
 
 class EstMessageParser(CompositeParsing):
