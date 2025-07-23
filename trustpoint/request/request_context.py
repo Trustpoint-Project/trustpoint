@@ -1,5 +1,5 @@
 """This module contains the RequestContext class for managing request-specific named attributes."""
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, fields
 from typing import Any
 
 from cryptography import x509
@@ -36,18 +36,13 @@ class RequestContext:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the context to a dictionary."""
-        return asdict(self)
-
-    def clear(self) -> None:
-        """Reset all attributes to default (None)."""
-        for field in self.__dataclass_fields__:
-            setattr(self, field, None)
+        return {field.name: getattr(self, field.name) for field in fields(self)}
 
     def __str__(self) -> str:
-        """String representation showing key context information."""
-        non_none_fields = self.get_non_none_fields()
-        field_summary = ", ".join(f"{k}={v}" for k, v in non_none_fields.items())
+        """String representation showing all context fields."""
+        field_summary = ", ".join(f"{field.name}={getattr(self, field.name)}" for field in fields(self))
         return f"RequestContext({field_summary})"
+
 
     def __repr__(self) -> str:
         """Detailed representation for debugging."""
