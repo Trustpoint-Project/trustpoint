@@ -355,7 +355,7 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
         try:
             hmac_gen.verify(protection_value)
         except InvalidSignature as exception:
-            err_msg = 'hmac verification failed.'
+            err_msg = f'hmac verification failed: {exception}'
             raise ValueError(err_msg) from exception
 
         return hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
@@ -675,7 +675,6 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
         else:
             err_msg = 'Cannot verify signature due to unsupported public key type.'
             raise TypeError(err_msg)
-
 
 class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
     """Composite authenticator for grouping and executing multiple authentication methods."""
