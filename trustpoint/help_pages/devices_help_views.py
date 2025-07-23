@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from cryptography.hazmat.primitives import serialization
-from devices.models import DeviceModel, IssuedCredentialModel
+from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, NoOnboardingPkiProtocol, \
+    OnboardingPkiProtocol
 from devices.views import (
     ActiveTrustpointTlsServerCredentialModelMissingErrorMsg,
     DeviceWithoutDomainErrorMsg,
@@ -86,27 +87,32 @@ class DeviceHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixin,
         """
         device: DeviceModel = self.get_object()
 
-        if device.onboarding_protocol == device.OnboardingProtocol.CMP_SHARED_SECRET.value:
+        if (device.onboarding_config and
+                device.onboarding_config.onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET.value):
             return reverse(
                 f'{self.page_category}:{self.page_name}_help-onboarding_cmp-shared-secret',
                 kwargs={'pk': device.id})
 
-        if device.onboarding_protocol == device.OnboardingProtocol.CMP_IDEVID.value:
+        if (device.onboarding_config and
+                device.onboarding_config.onboarding_protocol == OnboardingProtocol.CMP_IDEVID.value):
             return reverse(
                 f'{self.page_category}:{self.page_name}_help-onboarding_cmp-idevid',
                 kwargs={'pk': device.id})
 
-        if device.onboarding_protocol == device.OnboardingProtocol.EST_PASSWORD.value:
+        if (device.onboarding_config and
+                device.onboarding_config.onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD.value):
             return reverse(
                 f'{self.page_category}:{self.page_name}_help-onboarding_est-username-password',
                 kwargs={'pk': device.id})
 
-        if device.onboarding_protocol == device.OnboardingProtocol.EST_IDEVID.value:
+        if (device.onboarding_config and
+                device.onboarding_config.onboarding_protocol == OnboardingProtocol.EST_IDEVID.value):
             return reverse(
                 f'{self.page_category}:{self.page_name}_help-onboarding_est-idevid',
                 kwargs={'pk': device.id})
 
         return reverse(f'{self.page_category}:{self.page_name}')
+
 
 
 class OpcUaGdsHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixin, DetailView[DeviceModel]):
@@ -135,12 +141,14 @@ class OpcUaGdsHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixi
         """
         device: DeviceModel = self.get_object()
 
-        if not device.domain_credential_onboarding and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value:
+        if (not device.onboarding_config and
+                device.no_onboarding_config.pki_protocols == NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD.value):
             return reverse(
                 f'{self.page_category}:{self.page_name}_help-no-onboarding_est-username-password',
                 kwargs={'pk': device.id})
 
-        if device.onboarding_protocol == device.OnboardingProtocol.EST_PASSWORD.value:
+        if (device.onboarding_config and
+                device.onboarding_config.onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD.value):
             return reverse(
                 f'{self.page_category}:{self.page_name}_help-onboarding_est-username-password',
                 kwargs={'pk': device.id})
@@ -200,6 +208,7 @@ class AbstractDomainCredentialCmpHelpView(PageContextMixin, DetailView[DeviceMod
             context['cn_entry'] = f'Trustpoint-{camelcase_template}-Credential-{number_of_issued_device_certificates}'
 
         context['clm_url'] = f'{self.page_category}:{self.page_name}_certificate_lifecycle_management'
+        context["cmp_shared_secret"] = device.onboarding_config.onboarding_cmp_shared_secret
 
         return context
 
@@ -510,8 +519,8 @@ class HelpDispatchOpcUaGdsView(RedirectView):
             raise Http404(err_msg)
 
         if (
-            not device.domain_credential_onboarding
-            and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value
+            not device.onboarding_config
+            and device.onboarding_config.pki_protocols == OnboardingPkiProtocol.EST.value
             and device.device_type == DeviceModel.DeviceType.OPC_UA_GDS.value
         ):
             return f'{reverse("devices:help-no-onboarding_est-opcua-gds-username-password", kwargs={"pk": device.id})}'
@@ -546,8 +555,9 @@ class HelpDispatchApplicationCredentialTemplateView(PageContextMixin, SingleObje
         certificate_template = kwargs.get('certificate_template')
 
         if (
-            not device.domain_credential_onboarding
-            and device.pki_protocol == device.PkiProtocol.CMP_SHARED_SECRET.value
+            not device.onboarding_config
+            and device.no_onboarding_config
+            and device.no_onboarding_config.pki_protocols == NoOnboardingPkiProtocol.CMP_SHARED_SECRET.value
         ):
             return f'{
                 reverse(
@@ -556,10 +566,11 @@ class HelpDispatchApplicationCredentialTemplateView(PageContextMixin, SingleObje
                 )
             }'
 
-        if device.onboarding_protocol in {
-            device.OnboardingProtocol.CMP_SHARED_SECRET.value,
-            device.OnboardingProtocol.CMP_IDEVID.value,
-        }:
+        if (device.onboarding_config and
+                device.onboarding_config in {
+            OnboardingProtocol.CMP_SHARED_SECRET.value,
+            OnboardingProtocol.CMP_IDEVID.value,
+        }):
             return f'{
                 reverse(
                     "devices:help-onboarding_cmp-application-credentials",
@@ -568,8 +579,9 @@ class HelpDispatchApplicationCredentialTemplateView(PageContextMixin, SingleObje
             }'
 
         if (
-            not device.domain_credential_onboarding
-            and device.pki_protocol == device.PkiProtocol.EST_PASSWORD.value
+            not device.onboarding_config
+                and device.no_onboarding_config
+            and device.no_onboarding_config == NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD.value
             and device.device_type == DeviceModel.DeviceType.GENERIC_DEVICE.value
         ):
             return f'{
@@ -579,8 +591,8 @@ class HelpDispatchApplicationCredentialTemplateView(PageContextMixin, SingleObje
                 )
             }'
 
-        if device.onboarding_protocol in {
-            device.OnboardingProtocol.EST_PASSWORD.value,
+        if device.onboarding_config and device.onboarding_config.onboarding_protocol in {
+            OnboardingProtocol.EST_USERNAME_PASSWORD.value,
         }:
             return f'{
                 reverse(
@@ -637,6 +649,7 @@ class NoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[DeviceMod
         context['host'] = f'{ipv4_address}:{self.request.META.get("SERVER_PORT", "443")}'
         context['domain'] = device.domain
         context['key_gen_command'] = key_gen_command
+        context["cmp_shared_secret"] = device.no_onboarding_config.cmp_shared_secret
         number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
         camelcase_template = ''.join(word.capitalize() for word in certificate_template.split('-'))
         context['cn_entry'] = f'Trustpoint-{camelcase_template}-Credential-{number_of_issued_device_certificates}'
