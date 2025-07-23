@@ -200,10 +200,49 @@ class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
             serialized_message, _ = decoder.decode(context.raw_message.body, asn1Spec=rfc4210.PKIMessage())
             context.parsed_message = serialized_message
 
+            self._extract_signer_certificate(context)
+
             self.logger.info(f"CMP PKI message parsing successful: Parsed {body_size} bytes")
         except (ValueError, TypeError) as e:
             error_message = 'Failed to parse the CMP message. It seems to be corrupted.'
             self.logger.error(f"CMP PKI message parsing failed: {e}")
+            raise ValueError(error_message) from e
+
+    def _extract_signer_certificate(self, context: RequestContext) -> None:
+        """Extract the CMP signer certificate from extraCerts if available (optional)."""
+        try:
+            extra_certs = context.parsed_message['extraCerts']
+            if extra_certs is None or len(extra_certs) == 0:
+                self.logger.debug("No extra certificates found in CMP message")
+                return
+
+            cmp_signer_extra_cert = extra_certs[0]
+            der_cmp_signer_cert = encoder.encode(cmp_signer_extra_cert)
+            cmp_signer_cert = x509.load_der_x509_certificate(der_cmp_signer_cert)
+            context.client_certificate = cmp_signer_cert
+
+            if len(extra_certs) > 1:
+                intermediate_certs = []
+                for i, cert_asn1 in enumerate(extra_certs[1:], start=1):
+                    try:
+                        der_cert = encoder.encode(cert_asn1)
+                        intermediate_cert = x509.load_der_x509_certificate(der_cert)
+                        intermediate_certs.append(intermediate_cert)
+                        self.logger.debug(f"Loaded intermediate certificate {i} from extraCerts")
+                    except Exception as e:
+                        error_message = f"Failed to extract intermediate certificate {i} from extraCerts: {e}"
+                        self.logger.error(error_message)
+                        raise ValueError(error_message) from e
+
+                context.client_intermediate_certificate = intermediate_certs
+                self.logger.debug(
+                    f"Successfully extracted {len(intermediate_certs)} intermediate certificates from extraCerts")
+
+            self.logger.debug("Successfully extracted CMP signer certificate from extraCerts")
+
+        except Exception as e:
+            error_message = f"Failed to extract CMP signer certificate: {e}"
+            self.logger.error(error_message)
             raise ValueError(error_message) from e
 
 
