@@ -111,6 +111,12 @@ class DeviceHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixin,
                 f'{self.page_category}:{self.page_name}_help-onboarding_est-idevid',
                 kwargs={'pk': device.id})
 
+        if (device.onboarding_config and
+                device.onboarding_config.onboarding_protocol == OnboardingProtocol.MANUAL.value):
+            return reverse(
+                f'{self.page_category}:{self.page_name}_help-onboarding_manual',
+                kwargs={'pk': device.id})
+
         return reverse(f'{self.page_category}:{self.page_name}')
 
 
@@ -152,6 +158,13 @@ class OpcUaGdsHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixi
             return reverse(
                 f'{self.page_category}:{self.page_name}_help-onboarding_est-username-password',
                 kwargs={'pk': device.id})
+
+        if (device.onboarding_config and
+                device.onboarding_config.onboarding_protocol == OnboardingProtocol.MANUAL.value):
+            return reverse(
+                f'{self.page_category}:{self.page_name}_help-onboarding_manual',
+                kwargs={'pk': device.id})
+
 
         return reverse(f'{self.page_category}:{self.page_name}')
 
