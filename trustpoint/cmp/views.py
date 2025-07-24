@@ -277,7 +277,7 @@ class CmpRequestTemplateExtractorMixin:
         # only local key-gen supported currently -> public key must be present
         asn1_public_key = cert_req_template['publicKey']
         if not asn1_public_key.hasValue():
-            err_msg = 'Public-missing in CertTemplate.'
+            err_msg = 'Public key missing in CertTemplate.'
             raise ValueError(err_msg)
 
         spki = rfc2511.SubjectPublicKeyInfo()
@@ -630,10 +630,6 @@ class CmpInitializationRequestView(
             err_msg = f'Expected CMP IR body, but got CMP {message_body_name.upper()} body.'
             raise ValueError(err_msg)
 
-        if self.serialized_pyasn1_message['body'].getName() != 'ir':
-            err_msg = 'not ir message'
-            raise ValueError(err_msg)
-
         ir_body = self.serialized_pyasn1_message['body']['ir']
         if len(ir_body) > 1:
             err_msg = 'multiple CertReqMessages found for IR.'
@@ -784,7 +780,7 @@ class CmpInitializationRequestView(
         return HttpResponse(encoded_ip_message, content_type='application/pkixcmp', status=200)
 
 
-    def _handle_signature_based_initialization_request(
+    def _handle_signature_based_initialization_request(  # noqa: C901
             self) -> HttpResponse:
         """Handles IR for initial certificate requests with signature-based protection."""
         # different protection algorithm than password-based MAC - certificate-based protection
@@ -965,10 +961,6 @@ class CmpCertificationRequestView(
         message_body_name = self.serialized_pyasn1_message['body'].getName()
         if message_body_name != 'cr':
             err_msg = f'Expected CMP CR body, but got CMP {message_body_name.upper()} body.'
-            raise ValueError(err_msg)
-
-        if self.serialized_pyasn1_message['body'].getName() != 'cr':
-            err_msg = 'not cr message'
             raise ValueError(err_msg)
 
         cr_body = self.serialized_pyasn1_message['body']['cr']
@@ -1158,7 +1150,7 @@ class CmpCertificationRequestView(
             err_msg = 'Failed to parse common name value'
             raise TypeError(err_msg)
 
-        if common_name_value != 'Trustpoint Domain Credential':
+        if common_name_value != LocalDomainCredentialIssuer.DOMAIN_CREDENTIAL_CN:
             err_msg = 'Not a domain credential.'
             raise ValueError(err_msg)
 

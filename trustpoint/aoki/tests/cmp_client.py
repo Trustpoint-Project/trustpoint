@@ -129,7 +129,11 @@ class AokiCmpClient:
             '-trusted', f'{CERTS_DIR}/{self.owner_truststore_file}',
             #'-tls_used'
         )
-        print(subprocess.check_output(cmd).decode())  # noqa: S603
+        try:
+            print(subprocess.check_output(cmd).decode())  # noqa: S603
+        except subprocess.CalledProcessError as e:
+            print('Error occurred while requesting domain credential:', e.output.decode())
+            return
 
         # Step 3: Validate that the provided Owner ID certificate matches the IDevID certificate
         # Assuming first extraCert is the OwnerID / CMP signer cert, this is the case in the Trustpoint implementation
