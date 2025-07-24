@@ -22,7 +22,7 @@ from devices.issuer import (
     OpcUaClientCredentialIssuer,
     OpcUaServerCredentialIssuer,
 )
-from devices.models import DeviceModel
+from devices.models import DeviceModel, OnboardingStatus
 from django.http import HttpResponse
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -1153,7 +1153,7 @@ class CmpInitializationRequestView(
 
             encoded_ip_message = encoder.encode(ip_message)
 
-            self.device.onboarding_status = DeviceModel.OnboardingStatus.ONBOARDED
+            self.device.onboarding_status = OnboardingStatus.ONBOARDED
             self.device.save()
 
         return HttpResponse(encoded_ip_message, content_type='application/pkixcmp', status=200)
