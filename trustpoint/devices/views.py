@@ -39,13 +39,13 @@ from devices.forms import (
     NoOnboardingCreateForm,
     OnboardingCreateForm,
     RevokeDevicesForm,
-    RevokeIssuedCredentialForm,
+    RevokeIssuedCredentialForm, IssueDomainCredentialForm,
 )
 from devices.issuer import (
     LocalTlsClientCredentialIssuer,
     LocalTlsServerCredentialIssuer,
     OpcUaClientCredentialIssuer,
-    OpcUaServerCredentialIssuer,
+    OpcUaServerCredentialIssuer, LocalDomainCredentialIssuer,
 )
 from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
 from devices.revocation import DeviceCredentialRevocation
@@ -707,6 +707,34 @@ class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: Ba
             )
 
         return self.render_to_response(self.get_context_data(form=form))
+
+class AbstractIssueDomainCredentialView(AbstractIssueCredentialView):
+    """Base view for issuing domain credentials."""
+
+    form_class = IssueDomainCredentialForm
+    template_name = 'devices/credentials/issue_domain_credential.html'
+    issuer_class = LocalDomainCredentialIssuer
+    friendly_name = 'Domain Credential'
+
+    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
+        """Issue a domain credential for the device.
+
+        Args:
+            device: The device to issue the credential for.
+            cleaned_data: The validated form data.
+
+        Returns:
+            The issued credential model.
+        """
+        issuer = self.issuer_class(device=device, domain=device.domain)
+        return issuer.issue_domain_credential()
+
+
+class DeviceIssueDomainCredentialView(AbstractIssueDomainCredentialView):
+    """View for issuing domain credentials for devices."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
 
 
 class AbstractIssueTlsClientCredentialView(
