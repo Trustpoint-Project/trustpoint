@@ -62,6 +62,11 @@ urlpatterns = [
     ),
     # Certificate Lifecycle Management - Credential Issuance
     path(
+        'certificate-lifecycle-management/<int:pk>/issue-domain-credential/',
+        views.DeviceIssueDomainCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management-issue_domain_credential',
+    ),
+    path(
         'certificate-lifecycle-management/<int:pk>/issue-tls-client-credential/',
         views.DeviceIssueTlsClientCredentialView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management-issue_tls_client_credential',
@@ -231,6 +236,18 @@ urlpatterns = [
         devices_help_views.OpcUaGdsOnboardingEstUsernamePasswordHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_est-username-password',
     ),
+    path(
+        'help/onboarding/manual/<int:pk>/',
+        views.AbstractIssueDomainCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_manual',
+    ),
+    path(
+        'opc-ua-gds/help/onboarding/manual/<int:pk>/',
+        views.AbstractIssueDomainCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_manual',
+    ),
+
+
     path(
         'help/onboarding/est-application-credentials/<int:pk>/<str:certificate_template>/',
         devices_help_views.DeviceOnboardingEstApplicationCredentialsHelpView.as_view(),
