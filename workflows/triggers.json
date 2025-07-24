@@ -1,0 +1,15 @@
+{
+  "EST": [
+    "simpleenroll",
+    "simplereenroll",
+    "cacerts",
+    "csrattrs"
+  ],
+  "CMP": [
+    "certRequest",
+    "revocationRequest"
+  ],
+  "SCEP": [
+    "PKIOperation"
+  ]
+}

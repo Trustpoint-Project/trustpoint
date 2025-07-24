@@ -92,6 +92,22 @@
                     <a href="{% url 'settings:backups' %}" class="tp-menu-item {% if page_name == 'backup' %}tp-menu-active{% endif %}">{% trans "Backup" %}</a>
                 </div>
             </div>
+
+            <div class="tp-menu-group">
+                <a href="{% url 'workflows:definition_list' %}" class="tp-menu-head {% if page_category == 'workflows' %}tp-menu-active{% endif %}">
+                    <svg class="bi" fill="currentColor" role="img">
+                        <use href="{% static 'img/icons.svg' %}#icon-settings"></use></svg>
+                        {% translate "Workflows" %}
+                    <div class="btn-collapse" data-category="workflows"
+                        aria-expanded="{% if page_category == 'workflows' %}true{% else %}false{% endif %}">
+                    </div>
+                </a>
+                <div class="tp-menu-collapse {% if page_category == 'workflows' %}show{% endif %}">
+                    <a href="{% url 'workflows:definition_list' %}" class="tp-menu-item {% if page_name == 'language' %}tp-menu-active{% endif %}">{% trans "Workflows" %}</a>
+                    <a href="{% url 'workflows:definition_wizard' %}" class="tp-menu-item {% if page_name == 'logging' %}tp-menu-active{% endif %}">{% trans "Create new workflow" %}</a>
+                    <a href="{% url 'workflows:pending_list' %}" class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}">{% trans "Pending" %}</a>
+                </div>
+            </div>
             <div class="tp-menu-footer">
                 <div class="tp-menu-group">
                     <button class="tp-menu-head theme-toggle" type="button">

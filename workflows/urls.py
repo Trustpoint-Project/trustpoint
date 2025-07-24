@@ -2,15 +2,34 @@ from __future__ import annotations
 
 from django.urls import path
 
-from workflows.views import PendingApprovalsView, SignalInstanceView
+from workflows.views import (
+    CAListView,
+    DefinitionDetailView,
+    DeviceListView,
+    DomainListView,
+    PendingApprovalsView,
+    SignalInstanceView,
+    TriggerListView,
+    WorkflowDefinitionListView,
+    WorkflowWizardView,
+)
 
 app_name = 'workflows'
 
 urlpatterns = [
+    # APIs for scope pickers
+    path('api/cas/', CAListView.as_view(), name='api_cas'),
+    path('api/domains/', DomainListView.as_view(), name='api_domains'),
+    path('api/devices/', DeviceListView.as_view(), name='api_devices'),
+    path('api/triggers/', TriggerListView.as_view(), name='api_triggers'),
+    # API for loading existing definition in edit mode
+    path('api/definitions/<uuid:pk>/', DefinitionDetailView.as_view(), name='definition_detail'),
+
+    # Wizard UI
+    path('', WorkflowDefinitionListView.as_view(), name='definition_list'),
+    path('wizard/', WorkflowWizardView.as_view(), name='definition_wizard'),
+
+    # Approval console
     path('pending/', PendingApprovalsView.as_view(), name='pending_list'),
-    path(
-        'instances/<uuid:instance_id>/signal/',
-        SignalInstanceView.as_view(),
-        name='signal',
-    ),
+    path('instances/<uuid:instance_id>/signal/', SignalInstanceView.as_view(), name='signal'),
 ]

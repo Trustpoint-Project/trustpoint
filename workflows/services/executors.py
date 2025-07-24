@@ -56,24 +56,35 @@ class ApprovalExecutor(AbstractNodeExecutor):
         instance: WorkflowInstance,
         signal: Optional[str],
     ) -> tuple[Optional[str], str]:
+        transitions = instance.definition.definition['transitions']
+
+        # 1) First arrival: move to AwaitingApproval
         if instance.state == WorkflowInstance.STATE_STARTED:
-            # send email to approvers...
+            # TODO: send your approval email here
             return instance.current_node, WorkflowInstance.STATE_AWAITING
 
+        # 2) On 'Approved' or fallback to 'next'
         if signal == 'Approved':
-            # pick the ‘Approved’ transition
-            transitions = instance.definition.definition['transitions']
-            approved = next(
-                t for t in transitions
-                if t['from'] == instance.current_node and t.get('on') == 'Approved'
+            # pick either an explicit Approved edge, or fallback to next
+            approved_transition = next(
+                (
+                    t for t in transitions
+                    if t['from'] == instance.current_node
+                    and t.get('on') in ('Approved', 'next')
+                ),
+                None,
             )
-            return approved['to'], WorkflowInstance.STATE_STARTED
+            if approved_transition:
+                return approved_transition['to'], WorkflowInstance.STATE_STARTED
+            # no explicit path → complete?
+            return None, WorkflowInstance.STATE_COMPLETED
 
+        # 3) On 'Rejected'
         if signal == 'Rejected':
             return None, WorkflowInstance.STATE_REJECTED
 
+        # 4) Any other signal: stay put
         return instance.current_node, instance.state
-
 
 class IssueCertificateExecutor(AbstractNodeExecutor):
     """Handles IssueCertificate nodes: call PKI logic to issue the cert."""

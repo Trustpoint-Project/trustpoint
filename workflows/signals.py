@@ -19,7 +19,7 @@ def on_certificate_request(
     device_id: Optional[uuid.UUID],
     payload: dict[str, Any],
     **kwargs: Any,
-) -> None:
+) -> dict[str, Any]:
     """Handle incoming certificate‐request events and start workflows.
 
     Args:
@@ -31,7 +31,7 @@ def on_certificate_request(
         device_id: UUID of the requesting device (if any).
         payload: Arbitrary context (CSR, requestor username, etc.).
     """
-    handle_certificate_request(
+    return handle_certificate_request(
         protocol=protocol,
         operation=operation,
         ca_id=ca_id,

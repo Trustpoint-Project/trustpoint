@@ -57,5 +57,5 @@ urlpatterns += [
         name='javascript-catalog',
     ),
     path('', base.IndexView.as_view()),
-    # path('workflows/', include('workflows.urls', namespace='workflows')),
+    path('workflows/', include('workflows.urls', namespace='workflows')),
 ]

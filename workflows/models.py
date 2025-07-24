@@ -16,7 +16,7 @@ class WorkflowDefinition(models.Model):
         default=uuid.uuid4,
         editable=False,
     )
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, unique=True)
     version = models.PositiveIntegerField(default=1)
     published = models.BooleanField(default=False)
     definition = JSONField()  # {triggers:[...], nodes:[...], transitions:[...] }
@@ -30,7 +30,6 @@ class WorkflowDefinition(models.Model):
 
 class WorkflowScope(models.Model):
     """Assigns workflows to CAs, domains, or devices."""
-
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
@@ -41,14 +40,13 @@ class WorkflowScope(models.Model):
         on_delete=models.CASCADE,
         related_name='scopes',
     )
-    ca_id = models.UUIDField(null=True, blank=True)
-    domain_id = models.UUIDField(null=True, blank=True)
-    device_id = models.UUIDField(null=True, blank=True)
+    ca_id = models.IntegerField(null=True, blank=True)
+    domain_id = models.IntegerField(null=True, blank=True)
+    device_id = models.IntegerField(null=True, blank=True)
 
     class Meta:
         db_table = 'workflow_scopes'
         unique_together = [('workflow', 'ca_id', 'domain_id', 'device_id')]
-
 
 class WorkflowInstance(models.Model):
     """Tracks an active workflow instance: pointer into the graph plus its state."""

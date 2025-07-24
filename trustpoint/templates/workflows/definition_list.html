@@ -1,0 +1,13 @@
+{% extends 'trustpoint/base.html' %}
+{% block content %}
+  <h1>Workflows</h1>
+  <a href="{% url 'workflows:definition_wizard' %}">Create New Workflow</a>
+  <ul>
+    {% for wf in object_list %}
+      <li>
+        {{ wf.name }} (v{{ wf.version }}) —
+        <a href="{% url 'workflows:definition_wizard' %}?edit={{ wf.id }}">Edit</a>
+      </li>
+    {% endfor %}
+  </ul>
+{% endblock %}
