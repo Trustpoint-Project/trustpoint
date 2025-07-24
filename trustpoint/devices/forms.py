@@ -49,12 +49,12 @@ def _get_secret(number_of_symbols: int = 16) -> str:
     return ''.join(secrets.choice(allowed_chars) for _ in range(number_of_symbols))
 
 
-class IssueDomainCredentialForm(forms.Form):
-    """Form to issue a new domain credential."""
-
-    common_name = forms.CharField(max_length=255, label=_('Common Name'), required=True, disabled=True)
-    domain_component = forms.CharField(max_length=255, label=_('Domain Component'), required=True, disabled=True)
-    serial_number = forms.CharField(max_length=255, label=_('Serial Number'), required=True, disabled=True)
+# class IssueDomainCredentialForm(forms.Form):
+#     """Form to issue a new domain credential."""
+#
+#     common_name = forms.CharField(max_length=255, label=_('Common Name'), required=True, disabled=True)
+#     domain_component = forms.CharField(max_length=255, label=_('Domain Component'), required=True, disabled=True)
+#     serial_number = forms.CharField(max_length=255, label=_('Serial Number'), required=True, disabled=True)
 
 
 class CredentialDownloadForm(forms.Form):
@@ -172,6 +172,14 @@ class BaseServerCredentialForm(BaseCredentialForm):
             raise forms.ValidationError(err_msg)
         return cleaned_data
 
+class IssueDomainCredentialForm(BaseCredentialForm):
+    """Form to issue a new domain credential."""
+
+    def __init__(self, *args: Any, device: DeviceModel, **kwargs: Any) -> None:
+        """Initialize the form with disabled common name field."""
+        super().__init__(*args, device=device, **kwargs)
+        self.fields['common_name'].disabled = True
+        self.fields['common_name'].initial = 'Trustpoint Domain Credential'
 
 class IssueTlsClientCredentialForm(BaseCredentialForm):
     """Form to issue a new TLS client credential."""
