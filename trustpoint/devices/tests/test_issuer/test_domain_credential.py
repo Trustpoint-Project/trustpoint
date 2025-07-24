@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 
 from devices.issuer import LocalDomainCredentialIssuer
-from devices.models import DeviceModel, IssuedCredentialModel
+from devices.models import DeviceModel, IssuedCredentialModel, OnboardingStatus
 
 
 @pytest.mark.django_db
@@ -31,7 +31,7 @@ def test_issue_domain_credential(device_instance: dict[str, Any]) -> None:
     ), 'The issued_credential_purpose should match DOMAIN_CREDENTIAL'
 
     device.refresh_from_db()
-    assert device.onboarding_status == DeviceModel.OnboardingStatus.ONBOARDED, (
+    assert device.onboarding_status == OnboardingStatus.ONBOARDED, (
         'The device onboarding status should be updated to ONBOARDED'
     )
 
