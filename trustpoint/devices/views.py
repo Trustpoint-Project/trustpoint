@@ -735,6 +735,10 @@ class DeviceIssueDomainCredentialView(AbstractIssueDomainCredentialView):
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
+class OpcUaGdsIssueDomainCredentialView(AbstractIssueDomainCredentialView):
+    """View for issuing domain credentials for OPC-UA GDS devices."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class AbstractIssueTlsClientCredentialView(
