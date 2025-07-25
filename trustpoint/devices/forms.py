@@ -342,6 +342,7 @@ class NoOnboardingCreateForm(forms.Form):
         """
         common_name = cast('str', self.cleaned_data.get('common_name'))
         serial_number = cast('str', self.cleaned_data.get('serial_number'))
+        domain = cast('DomainModel | None', self.cleaned_data.get('domain'))
 
         no_onboarding_pki_protocols = [
             NoOnboardingPkiProtocol(int(protocol))
@@ -359,7 +360,7 @@ class NoOnboardingCreateForm(forms.Form):
         no_onboarding_config_model.full_clean()
 
         device_model = DeviceModel(
-            common_name=common_name, serial_number=serial_number, domain=None, device_type=device_type
+            common_name=common_name, serial_number=serial_number, domain=domain, device_type=device_type
         )
 
         device_model.no_onboarding_config = no_onboarding_config_model
@@ -450,6 +451,7 @@ class OnboardingCreateForm(forms.Form):
         """
         common_name = cast('str', self.cleaned_data.get('common_name'))
         serial_number = cast('str', self.cleaned_data.get('serial_number'))
+        domain = cast('DomainModel | None', self.cleaned_data.get('domain'))
 
         try:
             onboarding_protocol = OnboardingProtocol(int(cast('str', self.cleaned_data.get('onboarding_protocol'))))
@@ -477,7 +479,7 @@ class OnboardingCreateForm(forms.Form):
         device_model = DeviceModel(
             common_name=common_name,
             serial_number=serial_number,
-            domain=None,
+            domain=domain,
             device_type=device_type,
             onboarding_config=onboarding_config_model,
         )

@@ -176,6 +176,8 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_device_delete',
     ),
     # Certificate Lifecycle Management - Help Pages
+
+    # Domain Credential Help Dispatcher
     path(
         'help/dispatch-domain/<int:pk>/',
         devices_help_views.DeviceHelpDispatchDomainCredentialView.as_view(),
@@ -186,6 +188,31 @@ urlpatterns = [
         devices_help_views.DeviceHelpDispatchDomainCredentialView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help_dispatch_domain',
     ),
+
+    # Application Credential Help Dispatcher
+    path(
+        'help/application-credential-selection/<int:pk>/<str:protocol>/',
+        devices_help_views.HelpDispatchApplicationCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help_application_credential_selection',
+    ),
+    path(
+        'opc-ua-gds/help/application-credential-selection/<int:pk>/<str:protocol>/',
+        devices_help_views.HelpDispatchApplicationCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help_application_credential_selection',
+    ),
+
+    # Application Credential Template Dispatcher
+    path(
+        'help/dispatch-application-template/<int:pk>/<str:protocol>/<str:certificate_template>/',
+        devices_help_views.HelpDispatchApplicationCredentialTemplateView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help_dispatch_application_template',
+    ),
+    path(
+        'opc-ua-gds/help/dispatch-application-template/<int:pk>/<str:protocol>/<str:certificate_template>/',
+        devices_help_views.HelpDispatchApplicationCredentialTemplateView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help_dispatch_application_template',
+    ),
+
     # path(
     #     'help/dispatch-device-type-redirect/<int:pk>/',
     #     devices_help_views.HelpDispatchDeviceTypeRedirectView.as_view(),
@@ -207,32 +234,32 @@ urlpatterns = [
     #     name='help_dispatch_application_template',
     # ),
     path(
-        'help/no-onboarding/cmp-shared-secret/<int:pk>/',
+        'help/no-onboarding/cmp-shared-secret/<int:pk>/<str:certificate_template>/',
         devices_help_views.NoOnboardingCmpSharedSecretHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help_no-onboarding_cmp-shared-secret',
     ),
     path(
-        'opc-ua-gds/help/no-onboarding/cmp-shared-secret/<int:pk>/',
+        'opc-ua-gds/help/no-onboarding/cmp-shared-secret/<int:pk>/<str:certificate_template>/',
         devices_help_views.NoOnboardingCmpSharedSecretHelpView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help_no-onboarding_cmp-shared-secret',
     ),
     path(
-        'help/no-onboarding/est-username-password/<int:pk>/',
+        'help/no-onboarding/est-username-password/<int:pk>/<str:certificate_template>/',
         devices_help_views.DeviceNoOnboardingEstUsernamePasswordHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-no-onboarding_est-username-password',
     ),
     path(
-        'opc-ua-gds/help/no-onboarding/est-username-password/<int:pk>/',
+        'opc-ua-gds/help/no-onboarding/est-username-password/<int:pk>/<str:certificate_template>/',
         devices_help_views.OpcUaGdsNoOnboardingEstUsernamePasswordHelpView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-no-onboarding_est-username-password',
     ),
     path(
-        'help/onboarding/est-username-password/<int:pk>/',
+        'help/onboarding/est-username-password/<int:pk>/<str:certificate_template>/',
         devices_help_views.DeviceOnboardingEstUsernamePasswordHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_est-username-password',
     ),
     path(
-        'opc-ua-gds/help/onboarding/est-username-password/<int:pk>/',
+        'opc-ua-gds/help/onboarding/est-username-password/<int:pk>/<str:certificate_template>/',
         devices_help_views.OpcUaGdsOnboardingEstUsernamePasswordHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_est-username-password',
     ),

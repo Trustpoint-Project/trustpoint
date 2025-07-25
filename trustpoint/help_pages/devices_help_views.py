@@ -120,6 +120,117 @@ class DeviceHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixin,
         return reverse(f'{self.page_category}:{self.page_name}')
 
 
+class HelpApplicationCredentialSelectionView(PageContextMixin, DetailView[DeviceModel]):
+    """Shows the application credential selection page."""
+
+    model: type[DeviceModel] = DeviceModel
+    template_name = 'help/generic_details/application_credential_selection.html'
+    page_category = DEVICES_PAGE_CATEGORY
+
+    def get_page_name(self) -> str:
+        """Get page name based on device type."""
+        device: DeviceModel = self.get_object()
+        if device.device_type == DeviceModel.DeviceType.OPC_UA_GDS:
+            return DEVICES_PAGE_OPC_UA_SUBCATEGORY
+        return DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    @property
+    def page_name(self) -> str:
+        """Dynamic page name property."""
+        return self.get_page_name()
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add device and protocol context."""
+        context = super().get_context_data(**kwargs)
+        context['device'] = self.get_object()
+        context['protocol'] = self.request.GET.get('protocol', 'generic')
+        return context
+
+
+class HelpDispatchApplicationCredentialTemplateView(PageContextMixin, GetRedirectMixin, DetailView[DeviceModel]):
+    """Dispatches to the appropriate help page based on protocol and certificate template."""
+
+    http_method_names = ('get',)
+    model: type[DeviceModel] = DeviceModel
+    permanent = False
+    page_category = DEVICES_PAGE_CATEGORY
+
+    def get_page_name(self) -> str:
+        """Get page name based on device type."""
+        device: DeviceModel = self.get_object()
+        if device.device_type == DeviceModel.DeviceType.OPC_UA_GDS:
+            return DEVICES_PAGE_OPC_UA_SUBCATEGORY
+        return DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    @property
+    def page_name(self) -> str:
+        """Dynamic page name property."""
+        return self.get_page_name()
+
+    def get_redirect_url(self, *_args: Any, **_kwargs: Any) -> str:
+        """Get the redirection URL based on protocol and template."""
+        device: DeviceModel = self.get_object()
+        certificate_template = self.kwargs.get('certificate_template')
+        protocol = self.kwargs.get('protocol')
+
+        # Handle no-onboarding config protocols
+        if device.no_onboarding_config:
+            protocols = device.no_onboarding_config.get_pki_protocols()
+
+            if protocol == 'cmp' and NoOnboardingPkiProtocol.CMP_SHARED_SECRET in protocols:
+                url = reverse(
+                    f'{self.page_category}:{self.page_name}_help_no-onboarding_cmp-shared-secret',
+                    kwargs={'pk': device.id, 'certificate_template': certificate_template})
+                return url
+
+            if protocol == 'est' and NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD in protocols:
+                url = reverse(
+                    f'{self.page_category}:{self.page_name}_help-no-onboarding_est-username-password',
+                    kwargs={'pk': device.id, 'certificate_template': certificate_template})
+                return url
+
+            if protocol == 'manual' and NoOnboardingPkiProtocol.MANUAL in protocols:
+                if certificate_template == 'tls-client':
+                    url = reverse(
+                        f'{self.page_category}:{self.page_name}_certificate_lifecycle_management-issue_tls_client_credential',
+                        kwargs={'pk': device.id})
+                    return url
+                elif certificate_template == 'tls-server':
+                    url = reverse(
+                        f'{self.page_category}:{self.page_name}_certificate_lifecycle_management-issue_tls_server_credential',
+                        kwargs={'pk': device.id})
+                    return url
+                elif certificate_template == 'opcua-client':
+                    url = reverse(
+                        f'{self.page_category}:{self.page_name}_certificate_lifecycle_management-issue_opc_ua_client_credential',
+                        kwargs={'pk': device.id})
+                    return url
+                elif certificate_template == 'opcua-server':
+                    url = reverse(
+                        f'{self.page_category}:{self.page_name}_certificate_lifecycle_management-issue_opc_ua_server_credential',
+                        kwargs={'pk': device.id})
+                    return url
+
+        # Handle onboarding config protocols
+        elif device.onboarding_config:
+            protocols = device.onboarding_config.get_pki_protocols()
+
+            if protocol == 'cmp' and OnboardingPkiProtocol.CMP in protocols:
+                url = reverse(
+                    f'{self.page_category}:{self.page_name}_help-onboarding_cmp-application-credentials',
+                    kwargs={'pk': device.id, 'certificate_template': certificate_template})
+                return url
+
+            if protocol == 'est' and OnboardingPkiProtocol.EST in protocols:
+                url = reverse(
+                    f'{self.page_category}:{self.page_name}_help-onboarding_est-application-credentials',
+                    kwargs={'pk': device.id, 'certificate_template': certificate_template})
+                return url
+
+        # Fallback
+        fallback_url = reverse(f'{self.page_category}:{self.page_name}')
+        return fallback_url
+
 
 class OpcUaGdsHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixin, DetailView[DeviceModel]):
     """Redirects to the required help pages depending on the onboarding protocol.
@@ -448,38 +559,6 @@ class DeviceOnboardingEstApplicationCredentialsHelpView(AbstractDomainCredential
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-
-
-# class AbstractHelpDispatchDeviceTypeRedirectView(PageContextMixin, DetailView[DeviceModel]):
-#     """Redirects based on the device type: OPC UA GDS or standard device."""
-
-#     http_method_names = ('get',)
-
-#     model: type[DeviceModel] = DeviceModel
-#     permanent = False
-
-#     def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
-#         """Determines the redirect URL based on the device type.
-
-#         Args:
-#             *args: Ignored positional arguments.
-#             **kwargs: Should include 'pk' of the device to identify it.
-
-#         Returns:
-#             str: The URL to redirect to.
-#         """
-#         del args
-#         device = get_object_or_404(DeviceModel, pk=kwargs.get('pk'))
-
-#         if device.device_type == DeviceModel.DeviceType.OPC_UA_GDS.value:
-#             return reverse('devices:help_dispatch_opcua_gds', kwargs={'pk': device.id})
-
-#         return reverse('devices:help_dispatch_application', kwargs={'pk': device.id})
-
-
-# class DeviceHelpDispatchDeviceTypeRedirectView(AbstractHelpDispatchDeviceTypeRedirectView):
-
-
 class HelpDispatchApplicationCredentialView(TemplateView):
     """Renders the application credential selection page for the given device."""
 
@@ -498,6 +577,7 @@ class HelpDispatchApplicationCredentialView(TemplateView):
 
         device = get_object_or_404(DeviceModel, pk=kwargs.get('pk'))
         context['device'] = device
+        context['protocol'] = kwargs.get('protocol', 'generic')
 
         return context
 
@@ -541,85 +621,6 @@ class HelpDispatchOpcUaGdsView(RedirectView):
         return f'{reverse("devices:devices")}'
 
 
-class HelpDispatchApplicationCredentialTemplateView(PageContextMixin, SingleObjectMixin[DeviceModel], RedirectView):
-    """Redirects to the required help pages depending on PKI protocol.
-
-    If no help page could be determined, it will redirect to the devices page.
-    """
-
-    http_method_names = ('get',)
-
-    model: type[DeviceModel] = DeviceModel
-    permanent = False
-
-    def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
-        """Gets the redirection URL (Application Credentials) for the required help page.
-
-        Args:
-            *args: Positional arguments are discarded.
-            **kwargs: Keyword arguments are discarded.
-
-        Returns:
-            The redirection URL.
-        """
-        del args
-
-        device: DeviceModel = self.get_object()
-        certificate_template = kwargs.get('certificate_template')
-
-        if (
-            not device.onboarding_config
-            and device.no_onboarding_config
-            and device.no_onboarding_config.pki_protocols == NoOnboardingPkiProtocol.CMP_SHARED_SECRET.value
-        ):
-            return f'{
-                reverse(
-                    "devices:help_no-onboarding_cmp-shared-secret",
-                    kwargs={"pk": device.id, "certificate_template": certificate_template},
-                )
-            }'
-
-        if (device.onboarding_config and
-                device.onboarding_config in {
-            OnboardingProtocol.CMP_SHARED_SECRET.value,
-            OnboardingProtocol.CMP_IDEVID.value,
-        }):
-            return f'{
-                reverse(
-                    "devices:help-onboarding_cmp-application-credentials",
-                    kwargs={"pk": device.id, "certificate_template": certificate_template},
-                )
-            }'
-
-        if (
-            not device.onboarding_config
-                and device.no_onboarding_config
-            and device.no_onboarding_config == NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD.value
-            and device.device_type == DeviceModel.DeviceType.GENERIC_DEVICE.value
-        ):
-            return f'{
-                reverse(
-                    "devices:help-no-onboarding_est-username-password",
-                    kwargs={"pk": device.id, "certificate_template": certificate_template},
-                )
-            }'
-
-        if device.onboarding_config and device.onboarding_config.onboarding_protocol in {
-            OnboardingProtocol.EST_USERNAME_PASSWORD.value,
-        }:
-            return f'{
-                reverse(
-                    "devices:help-onboarding_est-application-credentials",
-                    kwargs={"pk": device.id, "certificate_template": certificate_template},
-                )
-            }'
-
-        return f'{reverse("devices:devices")}'
-
-
-
-
-
 class NoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[DeviceModel]):
     """Help view for the case of no onboarding using CMP shared-secret."""
 
@@ -628,6 +629,16 @@ class NoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[DeviceMod
     model = DeviceModel
     template_name = 'help/no_onboarding/cmp_shared_secret.html'
     context_object_name = 'device'
+
+    page_category = DEVICES_PAGE_CATEGORY
+
+    @property
+    def page_name(self) -> str:
+        """Get the page name based on device type."""
+        if hasattr(self, 'object') and self.object:
+            if self.object.device_type == DeviceModel.DeviceType.OPC_UA_GDS:
+                return DEVICES_PAGE_OPC_UA_SUBCATEGORY
+        return DEVICES_PAGE_DEVICES_SUBCATEGORY
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds information about the required OpenSSL commands to the context.
@@ -664,8 +675,11 @@ class NoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[DeviceMod
         context['key_gen_command'] = key_gen_command
         context["cmp_shared_secret"] = device.no_onboarding_config.cmp_shared_secret
         number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
-        camelcase_template = ''.join(word.capitalize() for word in certificate_template.split('-'))
+        camelcase_template = ''.join(word.capitalize() for word in (certificate_template or 'Missing').split('-'))
+
         context['cn_entry'] = f'Trustpoint-{camelcase_template}-Credential-{number_of_issued_device_certificates}'
+        context['clm_url'] = f'{self.page_category}:{self.page_name}_certificate_lifecycle_management'
+
         return context
 
 
