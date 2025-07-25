@@ -221,7 +221,7 @@ class AbstractDomainCredentialCmpHelpView(PageContextMixin, DetailView[DeviceMod
             context['cn_entry'] = f'Trustpoint-{camelcase_template}-Credential-{number_of_issued_device_certificates}'
 
         context['clm_url'] = f'{self.page_category}:{self.page_name}_certificate_lifecycle_management'
-        context["cmp_shared_secret"] = device.onboarding_config.onboarding_cmp_shared_secret
+        context["cmp_shared_secret"] = device.onboarding_config.onboarding_cmp_shared_secret or 'not defined'
 
         return context
 
