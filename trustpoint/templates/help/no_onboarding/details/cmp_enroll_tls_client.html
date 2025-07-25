@@ -20,7 +20,7 @@
                     -server https://{{ host }}/.well-known/cmp/certification/{{ device.domain }}/tls-client/ \<br>
                     -tls_used \<br>
                     -ref {{ device.id }} \<br>
-                    -secret pass:{{ device.cmp_shared_secret }} \<br>
+                    -secret pass:{{ cmp_shared_secret }} \<br>
                     -subject "/CN={{ cn_entry }}" \<br>
                     -days 10 \<br>
                     -newkey key.pem \<br>
