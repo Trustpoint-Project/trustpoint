@@ -20,7 +20,7 @@
                     -server https://{{ host }}/.well-known/cmp/certification/{{ device.domain }}/tls-server/ \<br>
                     -tls_used \<br>
                     -ref {{ device.id }} \<br>
-                    -secret pass:{{ device.cmp_shared_secret }} \<br>
+                    -secret pass:{{ cmp_shared_secret }} \<br>
                     -subject "/CN={{ cn_entry }}" \<br>
                     -days 10 \<br>
                     -sans "critical 127.0.0.1 ::1 localhost" \<br>
