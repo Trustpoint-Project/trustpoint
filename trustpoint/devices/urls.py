@@ -254,12 +254,12 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-no-onboarding_est-username-password',
     ),
     path(
-        'help/onboarding/est-username-password/<int:pk>/<str:certificate_template>/',
+        'help/onboarding/est-username-password/<int:pk>/',
         devices_help_views.DeviceOnboardingEstUsernamePasswordHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_est-username-password',
     ),
     path(
-        'opc-ua-gds/help/onboarding/est-username-password/<int:pk>/<str:certificate_template>/',
+        'opc-ua-gds/help/onboarding/est-username-password/<int:pk>/',
         devices_help_views.OpcUaGdsOnboardingEstUsernamePasswordHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_est-username-password',
     ),
