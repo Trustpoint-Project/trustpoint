@@ -238,13 +238,13 @@ urlpatterns = [
     ),
     path(
         'help/onboarding/manual/<int:pk>/',
-        views.AbstractIssueDomainCredentialView.as_view(),
+        views.DeviceIssueDomainCredentialView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_manual',
     ),
     path(
         'opc-ua-gds/help/onboarding/manual/<int:pk>/',
-        views.AbstractIssueDomainCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_manual',
+        views.OpcUaGdsIssueDomainCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-onboarding_manual',
     ),
 
 
