@@ -8,5 +8,10 @@ class WorkflowsConfig(AppConfig):
 
     def ready(self) -> None:
         """Import signal handlers to register them on startup."""
-        # we import purely for side effects (signal registration)
-        import workflows.signals  # noqa: F401
+        from workflows.services.certificate_request import CertificateRequestHandler
+        from workflows.services.trigger_dispatcher import TriggerDispatcher
+
+        TriggerDispatcher.register(
+            'certificate_request',
+            CertificateRequestHandler()
+        )

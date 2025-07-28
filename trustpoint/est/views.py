@@ -32,7 +32,7 @@ from pyasn1.type.univ import ObjectIdentifier
 from trustpoint_core.serializer import CertificateCollectionSerializer
 
 from trustpoint.logger import LoggerMixin
-from workflows.signals import certificate_request
+from workflows.services.trigger_dispatcher import TriggerDispatcher
 from workflows.triggers import Triggers
 
 
@@ -823,11 +823,10 @@ class EstSimpleEnrollmentView(
             and requested_cert_template_str
             and csr
         ):
-            # Base64‐encode the CSR bytes so it's a JSON string
             csr_pem: str = csr.public_bytes(encoding=Encoding.PEM).decode()
 
-            result = certificate_request.send(
-                sender=self.__class__,
+            info = TriggerDispatcher.dispatch(
+                'certificate_request',
                 protocol=self.TRIGGER.protocol,
                 operation=self.TRIGGER.operation,
                 ca_id=requested_domain.issuing_ca.id,
@@ -839,8 +838,6 @@ class EstSimpleEnrollmentView(
                     'requestor': getattr(request.user, 'username', None),
                 },
             )
-            # Django signals return list of (receiver, return_value)
-            _, info = result[0]
 
             status = info.get('status')
             if status == 'completed':
@@ -858,7 +855,8 @@ class EstSimpleEnrollmentView(
                     status=202,
                     content_type='text/plain',
                 )
-            else:
+            elif status == 'no_match':
+                # No Wofklow instance or definition found for this request
                 http_response = self._issue_simpleenroll(
                     device=device,
                     domain=requested_domain,

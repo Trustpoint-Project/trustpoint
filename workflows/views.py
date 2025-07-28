@@ -23,7 +23,7 @@ from workflows.models import (
     WorkflowInstance,
     WorkflowScope,
 )
-from workflows.services.orchestrator import advance_instance
+from workflows.services.certificate_request import advance_instance
 from workflows.services.wizard import transform_to_definition_schema
 from workflows.triggers import Triggers
 
@@ -132,7 +132,7 @@ class WorkflowDefinitionListView(ListView[WorkflowDefinition]):
     template_name = 'workflows/definition_list.html'
     context_object_name = 'definitions'
 
-
+# TODO(BytesWelder): Do authorization to workflow inputs
 class WorkflowWizardView(View):
     """Wizard for creating or editing linear workflows."""
     template_name = 'workflows/definition_wizard.html'

@@ -103,9 +103,9 @@
                     </div>
                 </a>
                 <div class="tp-menu-collapse {% if page_category == 'workflows' %}show{% endif %}">
-                    <a href="{% url 'workflows:definition_list' %}" class="tp-menu-item {% if page_name == 'language' %}tp-menu-active{% endif %}">{% trans "Workflows" %}</a>
-                    <a href="{% url 'workflows:definition_wizard' %}" class="tp-menu-item {% if page_name == 'logging' %}tp-menu-active{% endif %}">{% trans "Create new workflow" %}</a>
-                    <a href="{% url 'workflows:pending_list' %}" class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}">{% trans "Pending" %}</a>
+                    <a href="{% url 'workflows:definition_list' %}" class="tp-menu-item {% if page_name == 'definitions' %}tp-menu-active{% endif %}">{% trans "Workflows" %}</a>
+                    <a href="{% url 'workflows:definition_wizard' %}" class="tp-menu-item {% if page_name == 'wizard' %}tp-menu-active{% endif %}">{% trans "Create new workflow" %}</a>
+                    <a href="{% url 'workflows:pending_list' %}" class="tp-menu-item {% if page_name == 'pending' %}tp-menu-active{% endif %}">{% trans "Pending" %}</a>
                 </div>
             </div>
             <div class="tp-menu-footer">

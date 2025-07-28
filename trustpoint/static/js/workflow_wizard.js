@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
                  {name:'method',     label:'HTTP Method',  type:'select',
                   options:['GET','POST','PUT','DELETE']}],
     Timer:      [{name:'delaySecs',  label:'Delay (sec)',  type:'number'}],
-    Condition:  [{name:'expression', label:'Condition (JS expr)',type:'text'}],
+    Condition:  [{name:'expression', label:'Condition',type:'text'}],
     IssueCertificate: []
   };
 
