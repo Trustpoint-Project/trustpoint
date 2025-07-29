@@ -72,8 +72,8 @@ def create_db_backup(path: Path) -> str:
     """
     path.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d_%H-%M-%S')
-    filename = f'backup_{timestamp}.dump.gz'
-    call_command('dbbackup', '-o', filename, '-z')
+    filename = f'backup_{timestamp}'
+    call_command('trustpointbackup', filename=filename)
     return filename
 
 
@@ -151,6 +151,8 @@ class BackupManageView(SortableTableMixin, ListView[Any]):
             return redirect(self.success_url)
 
         overrides = {
+            'local_storage': opts.local_storage,
+            'sftp_storage': opts.sftp_storage,
             'host': opts.host,
             'port': opts.port,
             'user': opts.user,
@@ -158,7 +160,6 @@ class BackupManageView(SortableTableMixin, ListView[Any]):
             'password': opts.password or '',
             'private_key': opts.private_key or '',
             'key_passphrase': opts.key_passphrase or '',
-            'local_storage': opts.local_storage,
             'remote_directory': opts.remote_directory or '',
         }
 
@@ -233,6 +234,16 @@ class BackupManageView(SortableTableMixin, ListView[Any]):
             form.save()
             messages.success(request, 'Backup settings saved successfully.')
             return redirect(self.success_url)
+
+        error_messages = []
+        for field, errors in form.errors.items():
+            if field == "__all__":
+                error_messages.extend(errors)
+            else:
+                error_messages.extend([f"{field.capitalize()}: {error}" for error in errors])
+
+        for err_msg in error_messages:
+            messages.error(request, err_msg)
 
         self.object_list = self.get_queryset()
         context = self.get_context_data()

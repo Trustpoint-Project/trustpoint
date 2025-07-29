@@ -27,13 +27,13 @@ class Command(BaseCommand):
             # If the AppVersion table does not exist, we assume the DB is not initialized
             db_error_msg: str = 'AppVersion table not found. DB probably not initialized'
             self.stdout.write(self.style.ERROR(db_error_msg))
-            call_command('inittrustpoint')
+            call_command('inittrustpoint', '--tls')
             return
 
         if not app_version:
-            db_error_msg: str = 'DB AppVersion not found. DB probably not initialized'
-            self.stdout.write(self.style.ERROR(db_error_msg))
-            call_command('inittrustpoint')
+            db_error_msg2: str = 'DB AppVersion not found. DB probably not initialized'
+            self.stdout.write(self.style.ERROR(db_error_msg2))
+            call_command('inittrustpoint', '--tls')
             return
 
         db_version, current_version = self._parse_versions(app_version.version, current)

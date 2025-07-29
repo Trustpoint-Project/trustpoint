@@ -1,5 +1,5 @@
 FROM python:3.12-slim-bookworm
-COPY --from=ghcr.io/astral-sh/uv:0.7.9 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.7.19 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -93,7 +93,8 @@ RUN mkdir -p /etc/trustpoint/secrets && \
 # Remove any enabled Apache sites and add new Apache configuration
 RUN rm -f /etc/apache2/sites-enabled/* && \
     cp ./docker/trustpoint/apache/trustpoint-http-init.conf /etc/apache2/sites-available/trustpoint-http-init.conf && \
-    a2ensite trustpoint-http-init.conf
+    a2ensite trustpoint-http-init.conf && \
+    echo 'ServerName trustpoint' >> /etc/apache2/apache2.conf
 
 # Make entrypoint script executable
 RUN chmod +x ./docker/trustpoint/entrypoint.sh
