@@ -563,7 +563,7 @@ class CmpResponseBuilderMixin:
         return pki_message
 
     def _sign_pki_message(
-            self, pki_message: rfc4210.PKIMessage, signature_suite: SignatureSuite, signer_credential: CredentialModel
+            self, pki_message: rfc4210.PKIMessage, signer_credential: CredentialModel
             ) -> rfc4210.PKIMessage:
         """Applies signature-based protection to the base PKI message."""
         encoded_protected_part = get_encoded_protected_part(pki_message)
@@ -571,6 +571,7 @@ class CmpResponseBuilderMixin:
         private_key = load_pem_private_key(
             signer_credential.private_key.encode(), password=None
         )
+        signature_suite = SignatureSuite.from_certificate(signer_credential.get_certificate())
         hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
         if hash_algorithm is None:
             err_msg = 'Failed to get the corresponding hash algorithm.'
@@ -879,7 +880,7 @@ class CmpInitializationRequestView(
             signer_credential=signer_credential
         )
         pki_message = self._sign_pki_message(
-            pki_message=pki_message, signature_suite=signature_suite, signer_credential=signer_credential)
+            pki_message=pki_message, signer_credential=signer_credential)
 
         encoded_message = encoder.encode(pki_message)
         decoded_message, _ = decoder.decode(encoded_message, asn1Spec=rfc4210.PKIMessage())
@@ -1224,7 +1225,7 @@ class CmpCertificationRequestView(
         )
 
         pki_message = self._sign_pki_message(
-            pki_message=pki_message, signature_suite=signature_suite, signer_credential=issuing_ca_credential)
+            pki_message=pki_message, signer_credential=issuing_ca_credential)
 
         encoded_message = encoder.encode(pki_message)
         decoded_message, _ = decoder.decode(encoded_message, asn1Spec=rfc4210.PKIMessage())
