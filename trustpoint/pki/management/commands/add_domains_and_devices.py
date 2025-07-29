@@ -158,10 +158,6 @@ class Command(BaseCommand):
                     else ''
                 )
 
-                idevid_trust_store = (
-                    truststore if onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_IDEVID.value else None
-                )
-
                 dev = DeviceModel(
                     common_name=device_name,
                     serial_number=serial_number,
@@ -171,7 +167,6 @@ class Command(BaseCommand):
                     domain_credential_onboarding=domain_credential_onboarding,
                     pki_protocol=pki_protocol,
                     cmp_shared_secret=cmp_shared_secret,
-                    idevid_trust_store=idevid_trust_store,
                 )
 
                 try:
