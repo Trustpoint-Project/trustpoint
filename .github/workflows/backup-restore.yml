@@ -25,12 +25,11 @@ jobs:
 
       - name: Initialize database schema
         run: 
-          uv run trustpoint/manage.py inittrustpoint
+          uv run trustpoint/manage.py inittrustpoint --tls
 
       - name: Populate test data
         run: |
           uv run trustpoint/manage.py add_domains_and_devices
-          uv run trustpoint/manage.py tls_cred
 
       - name: Build and start TrustPoint container
         run: |

@@ -236,10 +236,13 @@ function togglePemSelectDisable() {
 
 // ------------------------------------------------- Device Creation --------------------------------------------------
 
+
 const onboardingAndPkiConfigurationSelect = document.getElementById('id_onboarding_protocol');
 const idevidTrustStoreSelectWrapper = document.getElementById('id_idevid_trust_store_select_wrapper');
 const pkiProtocolEstSelect = document.getElementById('id_allowed_pki_protocols_0');
 const pkiProtocolCmpSelect = document.getElementById('id_allowed_pki_protocols_1');
+
+const onboardingAndPkiConfigurationSelect = document.getElementById('id_onboarding_and_pki_configuration');
 
 const domainCredentialOnboardingCheckbox = document.getElementById('id_domain_credential_onboarding');
 const onboardingAndPkiConfigurationWrapper = document.getElementById('id_onboarding_protocol_wrapper');

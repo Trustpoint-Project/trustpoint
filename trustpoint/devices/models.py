@@ -149,6 +149,7 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
     onboarding_cmp_shared_secret = models.CharField(
         verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default=''
     )
+
     idevid_trust_store = models.ForeignKey(
         TruststoreModel,
         verbose_name=_('IDevID Manufacturer Truststore'),

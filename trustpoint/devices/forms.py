@@ -413,6 +413,7 @@ class OnboardingCreateForm(forms.Form):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the CreateDeviceForm."""
+
         super().__init__(*args, **kwargs)
 
         self.helper = FormHelper()

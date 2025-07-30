@@ -31,28 +31,33 @@ jobs:
       # The -s flag makes curl run silently.
       # The -o option saves the full response body into response.txt.
       # The -w option writes out the HTTP status code.
-      - name: Test Home Page with curl
+      - name: Test Home Page with curl (self-signed HTTPS)
         run: |
-          # Try up to 10 times to get a 200 response code from the service.
-          for i in {1..10}; do
-            http_response=$(curl -L -s -o response.txt -w "%{response_code}" http://127.0.0.1:80 || true)
-            if [ "$http_response" == "200" ]; then
-              echo "Success on attempt $i"
+          echo "Checking health of the HTTPS endpoint with self-signed cert..."
+
+          URL="https://127.0.0.1/"
+
+          for i in {1..20}; do
+            http_response=$(curl -k -L -s -o response.txt -w "%{http_code}" "$URL") || true
+
+            if [ "$http_response" = "200" ]; then
+              echo "✅ Success on attempt $i"
               break
             else
-              echo "Attempt $i failed with code $http_response, retrying..."
+              echo "⏳ Attempt $i failed with HTTP code $http_response, retrying..."
               sleep 3
             fi
           done
-          
-          # Log the final HTTP response code to the GitHub Step Summary.
-          echo "Server returned: $http_response" >> $GITHUB_STEP_SUMMARY
-          
-          # If the final response code is not 200, exit with error code to fail the pipeline.
+
+          echo "Server returned: $http_response" >> "$GITHUB_STEP_SUMMARY"
+
           if [ "$http_response" != "200" ]; then
-            echo "This is not expected! Failing Pipeline!" >> $GITHUB_STEP_SUMMARY
+            echo "❌ Healthcheck failed." >> "$GITHUB_STEP_SUMMARY"
+            echo "Response body:" >> "$GITHUB_STEP_SUMMARY"
+            cat response.txt >> "$GITHUB_STEP_SUMMARY"
             exit 1
           else
-            echo "This expected, the full response is:" >> $GITHUB_STEP_SUMMARY
-            cat response.txt >> $GITHUB_STEP_SUMMARY
+            echo "✅ Healthcheck passed." >> "$GITHUB_STEP_SUMMARY"
+            echo "Response body:" >> "$GITHUB_STEP_SUMMARY"
+            cat response.txt >> "$GITHUB_STEP_SUMMARY"
           fi

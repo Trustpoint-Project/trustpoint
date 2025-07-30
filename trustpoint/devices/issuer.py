@@ -496,7 +496,9 @@ class LocalTlsServerCredentialIssuer(BaseTlsCredentialIssuer):
 class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
     """Handles issuing domain credentials."""
 
-    _pseudonym = 'Trustpoint Domain Credential'
+    DOMAIN_CREDENTIAL_CN = 'Trustpoint Domain Credential'
+
+    _pseudonym = DOMAIN_CREDENTIAL_CN
 
     def issue_domain_credential(self) -> IssuedCredentialModel:
         """Issues a domain credential for a device.

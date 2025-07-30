@@ -19,8 +19,19 @@ echo "PostgreSQL database is available!"
 
 run_as_www_data "uv run trustpoint/manage.py managestartup"
 
+# 12) Configure apache
+/etc/trustpoint/wizard/transition/configure_apache.sh
+
+# Configure TLS
+/etc/trustpoint/wizard/transition/update_tls.sh
+
+
 echo "Starting cron service..."
 cron
+
+version=$(awk -F\" '/^version =/ { print $2 }' pyproject.toml)
+echo "Finished with initalisation"
+echo "Trustpoint version: $version"
 
 # Start Apache server
 echo "Starting Apache server..."

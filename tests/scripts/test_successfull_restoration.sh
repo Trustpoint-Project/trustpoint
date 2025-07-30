@@ -10,16 +10,16 @@ DB_NAME=trustpoint_db
 DB_USER=admin
 DB_PASS=testing321
 
-# 1) Wait for HTTP service on port 80
-echo "⏳ Waiting for HTTP service on http://localhost/ …"
+# 1) Wait for HTTPS service on port 443
+echo "⏳ Waiting for HTTPS service on https://localhost/ …"
 for i in {1..30}; do
-  if curl --fail -s "http://localhost/"; then
-    echo "✅ HTTP service is up"
+  if curl --fail -k -s "$URL" >/dev/null; then
+    echo "✅ HTTPS endpoint is reachable"
     break
   fi
   echo "…still waiting ($i/30)"; sleep 2
   if [[ $i -eq 30 ]]; then
-    echo "❌ HTTP service never became ready" >&2
+    echo "❌ HTTPS service never became ready" >&2
     exit 1
   fi
 done
@@ -60,16 +60,7 @@ docker exec "$CONTAINER" bash -lc '
   done
 '
 
-# 3) HTTPS endpoint check
-echo "🌐 Checking reachability of $URL …"
-if curl --fail -k -s "$URL" >/dev/null; then
-  echo "✅ HTTPS endpoint is reachable"
-else
-  echo "❌ HTTPS endpoint is NOT reachable" >&2
-  exit 1
-fi
-
-# 4) Database check for devices_devicemodel rows
+# 3) Database check for devices_devicemodel rows
 echo "🗄️  Checking devices_devicemodel for entries …"
 export PGPASSWORD="$DB_PASS"
 has_entries=$(psql \
