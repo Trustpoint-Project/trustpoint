@@ -2,8 +2,8 @@
 from django.test import TestCase
 from django.core.exceptions import ValidationError
 
-from settings.forms import BackupOptionsForm
-from settings.models import BackupOptions
+from management.forms import BackupOptionsForm
+from management.models import BackupOptions
 
 
 class BackupOptionsModelTest(TestCase):
