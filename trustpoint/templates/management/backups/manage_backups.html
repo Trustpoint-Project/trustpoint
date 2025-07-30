@@ -174,7 +174,7 @@
                             <td>{{ backup.modified_at }}</td>
                             <td class="text-end">{{ backup.size_kb }}</td>
                             <td>
-                                <a href="{% url 'settings:backup-download' filename=backup.filename %}"
+                                <a href="{% url 'management:backup-download' filename=backup.filename %}"
                                    class="btn btn-sm btn-outline-primary">
                                     {% trans "Download" %}
                                 </a>
@@ -193,19 +193,19 @@
 
             <div class="card-footer d-flex justify-content-between">
                 <div>
-                    <button formaction="{% url 'settings:backup-download-multiple' archive_format='tar.gz' %}"
+                    <button formaction="{% url 'management:backup-download-multiple' archive_format='tar.gz' %}"
                             formmethod="post"
                             class="btn btn-secondary">
                         {% trans "Download (tar.gz)" %}
                     </button>
-                    <button formaction="{% url 'settings:backup-download-multiple' archive_format='zip' %}"
+                    <button formaction="{% url 'management:backup-download-multiple' archive_format='zip' %}"
                             formmethod="post"
                             class="btn btn-secondary">
                         {% trans "Download (zip)" %}
                     </button>
                 </div>
                 <div>
-                    <button formaction="{% url 'settings:backup-delete-multiple' %}"
+                    <button formaction="{% url 'management:backup-delete-multiple' %}"
                             formmethod="post"
                             class="btn btn-danger">
                         {% trans "Delete" %}

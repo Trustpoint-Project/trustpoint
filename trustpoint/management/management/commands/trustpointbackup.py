@@ -1,20 +1,16 @@
-"""Management command to check and update the Trustpoint database version."""
+"""Management command to create a new local backup."""
 
 from typing import TYPE_CHECKING, Any
 
 from django.conf import settings as django_settings
-from django.core.management import CommandError, call_command
+from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandParser
-from django.db.utils import OperationalError, ProgrammingError
-from packaging.version import InvalidVersion, Version
-
-from settings.models import AppVersion
 
 
 class Command(BaseCommand):
-    """A Django management command to check and update the Trustpoint version."""
+    """A Django management command to create a new local DB backup (.dump.gz)."""
 
-    help = 'Updates app version'
+    help = 'Create a new local DB backup'
 
     def add_arguments(self, parser: CommandParser) -> None:
         """Adds command arguments/options."""
