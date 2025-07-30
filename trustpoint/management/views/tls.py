@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING, Optional
 
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist
-from django.urls import reverse_lazy
+from django.shortcuts import redirect
+from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import FormView, View
 from pki.models import GeneralNameIpAddress
@@ -152,6 +153,18 @@ class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
 
         except ObjectDoesNotExist:
             return []
+
+class ActivateTLSServerView(View):
+    def post(self, request, *args, **kwargs):
+        cert_id = kwargs['pk']
+        tls_certificate = CredentialModel.objects.get(
+            certificate__id=cert_id)
+
+        active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+        active_tls.credential = tls_certificate
+        active_tls.save()
+        messages.success(request, f"TLS Server certificate activated successfully")
+        return redirect(reverse('management:tls'))
 
 
 

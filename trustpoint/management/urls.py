@@ -27,6 +27,7 @@ urlpatterns = [
     path('loglevel/change', settings.ChangeLogLevelView.as_view(), name='change-loglevel'),
     path('settings/', settings.SettingsView.as_view(), name='settings'),
     path('tls/', tls.TlsView.as_view(), name='tls'),
+    path('tls/activate/<int:pk>', tls.ActivateTLSServerView.as_view(), name='activate-tls'),
     path(
         'backups/',
         backup.BackupManageView.as_view(extra_context={'page_category': 'management', 'page_name': 'backup'}),
