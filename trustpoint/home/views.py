@@ -686,3 +686,12 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             err_msg = f'Error occurred in ca counts by type query: {exception}'
             self.logger.exception(err_msg)
         return issuing_ca_type_counts
+    
+   
+
+from django.views.generic import TemplateView
+
+class HelpView(TemplateView):
+    template_name = 'trustpoint/help.html'
+
+
