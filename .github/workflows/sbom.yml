@@ -27,6 +27,21 @@ jobs:
       run: |
         cyclonedx-py env -o trustpoint-sbom.json
 
+    - name: Copy SBOM to static folder
+      run: |
+        mkdir -p trustpoint/static/sbom
+        cp trustpoint-sbom.json trustpoint/static/sbom/trustpoint-sbom.json
+
+    - name: Commit SBOM to repo
+      run: |
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        git add trustpoint/sbom_cyclonedx.json
+        git commit -m "Update SBOM [CI]" || echo "No changes to commit"
+        git push
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Upload SBOM artifact
       uses: actions/upload-artifact@v4
       with:
