@@ -8,9 +8,9 @@ from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
-from django.views.generic import FormView
+from django.views.generic import FormView, View
 from pki.models import GeneralNameIpAddress
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, CredentialModel, CertificateModel
 
 from management.forms import IPv4AddressForm
 from management.models import TlsSettings
@@ -90,11 +90,15 @@ class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
                     field = issuer_mapping[attribute.oid]
                     issuer_details[field] = attribute.value
 
+        tls_certificates = CertificateModel.objects.filter(
+            credential__credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER)
+
         context.update({
             'certificate': certificate,
             'san_ips': san_ips,
             'san_dns_names': san_dns_names,
             'issuer_details': issuer_details,
+            'tls_certificates': tls_certificates
         })
 
         return context
