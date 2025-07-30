@@ -25,12 +25,12 @@ jobs:
 
     - name: Generate SBOM (from environment)
       run: |
-        cyclonedx-py env -o trustpoint-sbom.json
+        cyclonedx-py env -o sbom_cycondedx.json
 
     - name: Copy SBOM to static folder
       run: |
         mkdir -p trustpoint/static/sbom
-        cp trustpoint-sbom.json trustpoint/static/sbom/trustpoint-sbom.json
+        cp sbom_cyclonedx.json trustpoint/static/sbom/sbom_cyclonedx.json
 
     - name: Commit SBOM to repo
       run: |
@@ -45,5 +45,5 @@ jobs:
     - name: Upload SBOM artifact
       uses: actions/upload-artifact@v4
       with:
-        name: trustpoint-sbom
-        path: trustpoint-sbom.json
+        name: sbom_cyclonedx
+        path: sbom_cyclonedx.json
