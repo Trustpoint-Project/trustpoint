@@ -11,6 +11,7 @@ from django.utils.translation import gettext as _
 from django.views.generic import FormView, View
 from pki.models import GeneralNameIpAddress
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, CredentialModel, CertificateModel
+from setup_wizard.forms import StartupWizardTlsCertificateForm
 
 from management.forms import IPv4AddressForm
 from management.models import TlsSettings
@@ -98,7 +99,8 @@ class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
             'san_ips': san_ips,
             'san_dns_names': san_dns_names,
             'issuer_details': issuer_details,
-            'tls_certificates': tls_certificates
+            'tls_certificates': tls_certificates,
+            'tls_form': StartupWizardTlsCertificateForm()
         })
 
         return context
