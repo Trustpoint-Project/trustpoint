@@ -62,6 +62,16 @@ class CertRequestModel(BaseModel):
 class JSONProfileVerifier:
     """Class to verify certificate requests against JSON-based profiles."""
 
+    def _build_model_from_dict(self, data: dict, model_name: str = 'DynProfileModel') -> type[BaseModel]:
+        fields = {}
+        for key, value in data.items():
+            if isinstance(value, dict):
+                # Recursively generate a sub-model
+                fields[key] = (self._build_model_from_dict(value, model_name=f'{model_name}_{key}'), value)
+            else:
+                fields[key] = (type(value), value)
+        return create_model(model_name, **fields)
+
     def __init__(self, profile: dict) -> None:
         """Initialize the verifier with a certificate profile."""
         validated_profile = CertProfileModel.model_validate(profile)
@@ -70,8 +80,11 @@ class JSONProfileVerifier:
 
         fields = {}
         for key, value in profile.items():
-            inferred_type = type(value)
-            fields[key] = (inferred_type, value)
+            if isinstance(value, dict):
+                # Recursively generate a sub-model
+                fields[key] = (self._build_model_from_dict(value, model_name=f'DynProfileModel_{key}'), value)
+            else:
+                fields[key] = (type(value), value)
         fields['type'] = (Literal['cert_request'] | None, None)  # Ensure type is 'cert_request' if present
         print('Fields:', fields)
 
