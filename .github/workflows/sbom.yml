@@ -1,0 +1,44 @@
+name: Generate SBOM for Trustpoint
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Trustpoint repo
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install CycloneDX CLI
+      run: |
+        pip install cyclonedx-bom
+
+    - name: Generate SBOM (from environment)
+      run: |
+        cyclonedx-py env -o sbom_cyclonedx.json
+
+    - name: Commit SBOM to repo root
+      run: |
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        git add sbom_cyclonedx.json
+        git commit -m "Update SBOM (sbom_cyclonedx.json) [CI]" || echo "No changes to commit"
+        git push
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload SBOM artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: trustpoint-sbom
+        path: sbom_cyclonedx.json
