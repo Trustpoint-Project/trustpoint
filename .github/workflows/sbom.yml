@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:  # permet un lancement manuel
+  workflow_dispatch:
 
 jobs:
   sbom:
@@ -19,14 +19,13 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install CycloneDX and dependencies
+    - name: Install CycloneDX CLI
       run: |
-        pip install -r requirements.txt
         pip install cyclonedx-bom
 
-    - name: Generate SBOM
+    - name: Generate SBOM (from environment)
       run: |
-        cyclonedx-py requirements -i requirements.txt -o trustpoint-sbom.json
+        cyclonedx-py env -o trustpoint-sbom.json
 
     - name: Upload SBOM artifact
       uses: actions/upload-artifact@v4
