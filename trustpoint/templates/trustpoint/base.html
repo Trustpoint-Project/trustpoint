@@ -94,23 +94,38 @@
             </div>
             <div class="tp-menu-footer">
                 <div class="tp-menu-group">
-                    <button class="tp-menu-head theme-toggle" type="button">
-                        <svg class="bi theme-icon dark-only" width="20" height="20" fill="#ffffff" role="img" aria-label="Change theme">
-                            <use href="{% static 'img/icons.svg' %}#icon-sun"></use></svg>
+                     <!-- Light/Dark Theme Toggle -->
+                     <button class="tp-menu-head theme-toggle" type="button">
+                         <svg class="bi theme-icon dark-only" width="20" height="20" fill="#ffffff" role="img" aria-label="Change theme">
+                            <use href="{% static 'img/icons.svg' %}#icon-sun"></use>
+                        </svg>
                         <span class="dark-only">{% trans "Light theme" %}</span>
                         <svg class="bi theme-icon light-only" width="20" height="20" fill="#000000" role="img" aria-label="Change theme">
-                            <use href="{% static 'img/icons.svg' %}#icon-moon-stars"></use></svg>
-                            <span class="light-only">{% trans "Dark theme" %}</span>
+                            <use href="{% static 'img/icons.svg' %}#icon-moon-stars"></use>
+                        </svg>
+                        <span class="light-only">{% trans "Dark theme" %}</span>
                     </button>
+
+
+                    <!-- Help & Support Button -->
+                        <a href="{% url 'home:help' %}" class="tp-menu-head">
+                            <svg class="bi" fill="currentColor" width="16" height="16" role="img">
+                                <use href="{% static 'img/icons.svg' %}#icon-question-circle"></use>
+                            </svg>
+                            {% trans "Help & Support" %}
+                        </a>
+
+
+                    <!-- Logout -->
                     <form method="POST" action="{% url 'users:logout' %}">
                         {% csrf_token %}
                         <button class="tp-menu-head" type="submit">
                             <svg class="bi" fill="currentColor" role="img">
-                            <use href="{% static 'img/icons.svg' %}#icon-door"></use></svg>
-                            {% translate "Logout" %}
+                                <use href="{% static 'img/icons.svg' %}#icon-door"></use>
+                            </svg>
+                        {% translate "Logout" %}
                         </button>
                     </form>
-
                 </div>
                 <div id="tp-version">v{{ APP_VERSION }}</div>
             </div>
@@ -142,6 +157,11 @@
         </main>
 
     </div>
+
+    <div id="offline-banner" style="display: none; position: fixed; top: 0; width: 100%; background-color: #ff4d4f; color: white; text-align: center; padding: 10px; z-index: 9999;">
+        You are currently offline. Some actions may not work.
+    </div>
+
 
         <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
         <script src="{% static 'js/trustpoint.js' %}"></script>

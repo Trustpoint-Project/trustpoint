@@ -1,0 +1,35 @@
+name: Generate SBOM for Trustpoint
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # permet un lancement manuel
+
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Trustpoint repo
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install CycloneDX and dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install cyclonedx-bom
+
+    - name: Generate SBOM
+      run: |
+        cyclonedx-py requirements -i requirements.txt -o trustpoint-sbom.json
+
+    - name: Upload SBOM artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: trustpoint-sbom
+        path: trustpoint-sbom.json
