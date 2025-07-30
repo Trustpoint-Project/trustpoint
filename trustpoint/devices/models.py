@@ -128,7 +128,12 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
 
     pki_protocol_class = OnboardingPkiProtocol
 
-    pki_protocols = models.PositiveIntegerField(verbose_name=_('Pki Protocol Bitwise Flag'), null=False, blank=False)
+    pki_protocols = models.PositiveIntegerField(
+        verbose_name=_('Pki Protocol Bitwise Flag'),
+        null=False,
+        blank=True,
+        default=0
+    )
 
     onboarding_status = models.IntegerField(
         choices=OnboardingStatus,

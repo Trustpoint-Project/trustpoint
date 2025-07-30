@@ -22,7 +22,7 @@ from devices.issuer import (
     OpcUaClientCredentialIssuer,
     OpcUaServerCredentialIssuer,
 )
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingStatus
+from devices.models import DeviceModel, IssuedCredentialModel, OnboardingStatus, OnboardingProtocol, OnboardingPkiProtocol, NoOnboardingPkiProtocol
 from django.http import HttpResponse
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -726,7 +726,12 @@ class CmpInitializationRequestView(
             exc_msg = 'The device domain does not match the requested domain.'
             raise ValueError(exc_msg)
 
-        if self.device.cmp_shared_secret is None:
+        if not self.device.no_onboarding_config:
+            err_msg = 'Device is not configured to use cmp shared secret authentication.'
+            raise ValueError
+
+        shared_secret = self.device.no_onboarding_config.cmp_shared_secret
+        if shared_secret == '':
             err_msg = 'Device is misconfigured.'
             raise ValueError(err_msg)
 
@@ -740,7 +745,7 @@ class CmpInitializationRequestView(
 
         hmac_gen = self._verify_protection_shared_secret(
             serialized_pyasn1_message=self.serialized_pyasn1_message,
-            shared_secret=self.device.cmp_shared_secret,
+            shared_secret=shared_secret,
         )
 
         # Checks regarding contained public key and corresponding signature suite of the issuing CA
@@ -811,8 +816,8 @@ class CmpInitializationRequestView(
             idevid_cert=cmp_signer_cert,
             intermediate_cas=intermediate_certs,
             domain=None if self.is_aoki else self.requested_domain,
-            onboarding_protocol=DeviceModel.OnboardingProtocol.CMP_IDEVID,
-            pki_protocol=DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE,
+            onboarding_protocol=OnboardingProtocol.CMP_IDEVID,
+            pki_protocol=OnboardingPkiProtocol.CMP,
         )
 
         if not self.device.domain:
@@ -821,16 +826,13 @@ class CmpInitializationRequestView(
         self.requested_domain = self.device.domain
 
         # device sanity checks
-        if not self.device.domain_credential_onboarding:
+        if not self.device.onboarding_config:
             return HttpResponse(
                 'The corresponding device is not configured to use the onboarding mechanism.', status=404
             )
 
-        if self.device.onboarding_protocol != DeviceModel.OnboardingProtocol.CMP_IDEVID:
+        if self.device.onboarding_config.onboarding_protocol != OnboardingProtocol.CMP_IDEVID:
             return HttpResponse('Wrong onboarding protocol.')
-
-        if self.device.pki_protocol != DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE:
-            return HttpResponse('PKI protocol CMP client certificate expected, but got something else.')
 
         req_message_body = self._extract_ir_body()
 
@@ -862,8 +864,10 @@ class CmpInitializationRequestView(
             err_msg = 'Contained public key type does not match the signature suite.'
             raise ValueError(err_msg)
 
-            self.device.onboarding_status = OnboardingStatus.ONBOARDED
-            self.device.save()
+        issuer_domain_credential = LocalDomainCredentialIssuer(device=self.device, domain=self.requested_domain)
+        issued_cred = issuer_domain_credential.issue_domain_credential_certificate(
+            public_key=loaded_public_key
+        )
 
         # Build the response PKI message
         ski = x509.SubjectKeyIdentifier.from_public_key(signer_credential.get_certificate().public_key())
@@ -878,13 +882,14 @@ class CmpInitializationRequestView(
             signer_credential=signer_credential
         )
         pki_message = self._sign_pki_message(
-            pki_message=pki_message, signer_credential=signer_credential)
+            pki_message=pki_message, signer_credential=signer_credential
+        )
 
         encoded_message = encoder.encode(pki_message)
         decoded_message, _ = decoder.decode(encoded_message, asn1Spec=rfc4210.PKIMessage())
 
-        self.device.onboarding_status = DeviceModel.OnboardingStatus.ONBOARDED
-        self.device.save()
+        self.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+        # self.device.save()
 
         return HttpResponse(encoded_message, content_type='application/pkixcmp', status=200)
 
@@ -912,8 +917,8 @@ class CmpInitializationRequestView(
                 return HttpResponse('Device not found.', status=404)
 
             if (
-                not self.device.domain_credential_onboarding
-                and self.device.onboarding_protocol == self.device.OnboardingProtocol.NO_ONBOARDING
+                not self.device.onboarding_config
+                and self.device.onboarding_config.onboarding_protocol == OnboardingProtocol.NO_ONBOARDING
                 and self.device.pki_protocol == self.device.PkiProtocol.CMP_SHARED_SECRET
             ):
 
