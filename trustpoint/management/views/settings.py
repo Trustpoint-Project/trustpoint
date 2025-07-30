@@ -18,7 +18,7 @@ from notifications.models import NotificationConfig, WeakECCCurve, WeakSignature
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 from management.forms import SecurityConfigForm
-from management.models import SecurityConfig
+from management.models import SecurityConfig, LoggingConfig
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
 
@@ -122,6 +122,10 @@ class ChangeLogLevelView(View):
         else:
             logger = logging.getLogger()
             logger.setLevel(getattr(logging, level))
+            LoggingConfig.objects.update_or_create(
+                id=1,
+                defaults={'log_level': level}
+            )
             messages.success(request, f"Log level set to {level}")
 
         return redirect(reverse('management:settings'))
