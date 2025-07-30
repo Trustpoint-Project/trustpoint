@@ -41,4 +41,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: trustpoint-sbom
-        path: sbom_cyclonedx.json
+        path: trustpoint-sbom.json
