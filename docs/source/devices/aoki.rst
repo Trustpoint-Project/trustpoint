@@ -106,7 +106,7 @@ facilitate an arbitrary amount of device ownership transfers.
 The DevOwnerID MUST have a ``SubjectAltName`` extension that lists the
 IDevID certificate(s) the DevOwnerID is valid for. Each IDevID is listed
 as a ``UniformResourceIdentifier`` (URI) with the fixed format:
-``<IDevID_Subj_SN>.dev-owner.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>.alt``,
+``dev-owner:<IDevID_Subj_SN>.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>``,
 where: - ``IDevID_Subj_SN`` is the ``SerialNumber`` name attribute in
 the IDevID subject DN; or the character ``_`` (underscore) if this
 attribute is not present in the IDevID certificate - ``IDevID_x509_SN``
