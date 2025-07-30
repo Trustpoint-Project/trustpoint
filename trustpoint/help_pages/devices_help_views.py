@@ -5,8 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from cryptography.hazmat.primitives import serialization
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, NoOnboardingPkiProtocol, \
-    OnboardingPkiProtocol
+from devices.models import (
+    DeviceModel,
+    IssuedCredentialModel,
+    NoOnboardingPkiProtocol,
+    OnboardingPkiProtocol,
+    OnboardingProtocol,
+)
 from devices.views import (
     ActiveTrustpointTlsServerCredentialModelMissingErrorMsg,
     DeviceWithoutDomainErrorMsg,
@@ -19,7 +24,7 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import TemplateView
 from django.views.generic.base import RedirectView
-from django.views.generic.detail import DetailView, SingleObjectMixin
+from django.views.generic.detail import DetailView
 from pki.models.devid_registration import DevIdRegistration
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from settings.models import TlsSettings
@@ -120,52 +125,74 @@ class DeviceHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixin,
         return reverse(f'{self.page_category}:{self.page_name}')
 
 
-class HelpApplicationCredentialSelectionView(PageContextMixin, DetailView[DeviceModel]):
-    """Shows the application credential selection page."""
-
-    model: type[DeviceModel] = DeviceModel
-    template_name = 'help/generic_details/application_credential_selection.html'
-    page_category = DEVICES_PAGE_CATEGORY
-
-    def get_page_name(self) -> str:
-        """Get page name based on device type."""
-        device: DeviceModel = self.get_object()
-        if device.device_type == DeviceModel.DeviceType.OPC_UA_GDS:
-            return DEVICES_PAGE_OPC_UA_SUBCATEGORY
-        return DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-    @property
-    def page_name(self) -> str:
-        """Dynamic page name property."""
-        return self.get_page_name()
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add device and protocol context."""
-        context = super().get_context_data(**kwargs)
-        context['device'] = self.get_object()
-        context['protocol'] = self.request.GET.get('protocol', 'generic')
-        return context
-
-
-class HelpDispatchApplicationCredentialTemplateView(PageContextMixin, GetRedirectMixin, DetailView[DeviceModel]):
+class AbstractHelpDispatchApplicationCredentialTemplateView(
+        PageContextMixin, GetRedirectMixin, DetailView[DeviceModel]):
     """Dispatches to the appropriate help page based on protocol and certificate template."""
 
     http_method_names = ('get',)
     model: type[DeviceModel] = DeviceModel
     permanent = False
+
     page_category = DEVICES_PAGE_CATEGORY
+    page_name: str
 
-    def get_page_name(self) -> str:
-        """Get page name based on device type."""
-        device: DeviceModel = self.get_object()
-        if device.device_type == DeviceModel.DeviceType.OPC_UA_GDS:
-            return DEVICES_PAGE_OPC_UA_SUBCATEGORY
-        return DEVICES_PAGE_DEVICES_SUBCATEGORY
+    def _get_no_onboarding_config_redirect_url(self, protocol: str, certificate_template: str) -> str:
+            if self.object.no_onboarding_config is None:
+                err_msg = 'Failed to get no-onboarding-config.'
+                raise Http404(err_msg)
 
-    @property
-    def page_name(self) -> str:
-        """Dynamic page name property."""
-        return self.get_page_name()
+            protocols = self.object.no_onboarding_config.get_pki_protocols()
+
+            if protocol == 'cmp' and NoOnboardingPkiProtocol.CMP_SHARED_SECRET in protocols:
+                return reverse(
+                    f'{self.page_category}:{self.page_name}_help_no-onboarding_cmp-shared-secret',
+                    kwargs={'pk': self.object.id, 'certificate_template': certificate_template})
+
+            if protocol == 'est' and NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD in protocols:
+                return reverse(
+                    f'{self.page_category}:{self.page_name}_help-no-onboarding_est-username-password',
+                    kwargs={'pk': self.object.id, 'certificate_template': certificate_template})
+
+            if protocol == 'manual' and NoOnboardingPkiProtocol.MANUAL in protocols:
+                if certificate_template == 'tls-client':
+                    return reverse(
+                        f'{self.page_category}:{self.page_name}_certificate_lifecycle_management-issue_tls_client_credential',
+                        kwargs={'pk': self.object.id})
+                if certificate_template == 'tls-server':
+                    return reverse(
+                        f'{self.page_category}:{self.page_name}_certificate_lifecycle_management-issue_tls_server_credential',
+                        kwargs={'pk': self.object.id})
+                if certificate_template == 'opcua-client':
+                    return reverse(
+                        f'{self.page_category}:{self.page_name}_certificate_lifecycle_management-issue_opc_ua_client_credential',
+                        kwargs={'pk': self.object.id})
+                if certificate_template == 'opcua-server':
+                    return reverse(
+                        f'{self.page_category}:{self.page_name}_certificate_lifecycle_management-issue_opc_ua_server_credential',
+                        kwargs={'pk': self.object.id})
+
+            err_msg = 'Failed to get redirect (no-onboarding).'
+            raise Http404(err_msg)
+
+    def _get_onboarding_config_redirect_url(self, protocol: str, certificate_template: str) -> str:
+        if self.object.onboarding_config is None:
+                err_msg = 'Failed to get no-onboarding-config.'
+                raise Http404(err_msg)
+
+        protocols = self.object.onboarding_config.get_pki_protocols()
+
+        if protocol == 'cmp' and OnboardingPkiProtocol.CMP in protocols:
+            return reverse(
+                f'{self.page_category}:{self.page_name}_help-onboarding_cmp-application-credentials',
+                kwargs={'pk': self.object.id, 'certificate_template': certificate_template})
+
+        if protocol == 'est' and OnboardingPkiProtocol.EST in protocols:
+            return reverse(
+                f'{self.page_category}:{self.page_name}_help-onboarding_est-application-credentials',
+                kwargs={'pk': self.object.id, 'certificate_template': certificate_template})
+
+        err_msg = 'Failed to get redirect (onboarding).'
+        raise Http404(err_msg)
 
     def get_redirect_url(self, *_args: Any, **_kwargs: Any) -> str:
         """Get the redirection URL based on protocol and template."""
@@ -173,63 +200,37 @@ class HelpDispatchApplicationCredentialTemplateView(PageContextMixin, GetRedirec
         certificate_template = self.kwargs.get('certificate_template')
         protocol = self.kwargs.get('protocol')
 
+        self.object = self.get_object()
+
         # Handle no-onboarding config protocols
         if device.no_onboarding_config:
-            protocols = device.no_onboarding_config.get_pki_protocols()
-
-            if protocol == 'cmp' and NoOnboardingPkiProtocol.CMP_SHARED_SECRET in protocols:
-                url = reverse(
-                    f'{self.page_category}:{self.page_name}_help_no-onboarding_cmp-shared-secret',
-                    kwargs={'pk': device.id, 'certificate_template': certificate_template})
-                return url
-
-            if protocol == 'est' and NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD in protocols:
-                url = reverse(
-                    f'{self.page_category}:{self.page_name}_help-no-onboarding_est-username-password',
-                    kwargs={'pk': device.id, 'certificate_template': certificate_template})
-                return url
-
-            if protocol == 'manual' and NoOnboardingPkiProtocol.MANUAL in protocols:
-                if certificate_template == 'tls-client':
-                    url = reverse(
-                        f'{self.page_category}:{self.page_name}_certificate_lifecycle_management-issue_tls_client_credential',
-                        kwargs={'pk': device.id})
-                    return url
-                elif certificate_template == 'tls-server':
-                    url = reverse(
-                        f'{self.page_category}:{self.page_name}_certificate_lifecycle_management-issue_tls_server_credential',
-                        kwargs={'pk': device.id})
-                    return url
-                elif certificate_template == 'opcua-client':
-                    url = reverse(
-                        f'{self.page_category}:{self.page_name}_certificate_lifecycle_management-issue_opc_ua_client_credential',
-                        kwargs={'pk': device.id})
-                    return url
-                elif certificate_template == 'opcua-server':
-                    url = reverse(
-                        f'{self.page_category}:{self.page_name}_certificate_lifecycle_management-issue_opc_ua_server_credential',
-                        kwargs={'pk': device.id})
-                    return url
+            return self._get_no_onboarding_config_redirect_url(
+                protocol=protocol, certificate_template=certificate_template
+            )
 
         # Handle onboarding config protocols
-        elif device.onboarding_config:
-            protocols = device.onboarding_config.get_pki_protocols()
-
-            if protocol == 'cmp' and OnboardingPkiProtocol.CMP in protocols:
-                url = reverse(
-                    f'{self.page_category}:{self.page_name}_help-onboarding_cmp-application-credentials',
-                    kwargs={'pk': device.id, 'certificate_template': certificate_template})
-                return url
-
-            if protocol == 'est' and OnboardingPkiProtocol.EST in protocols:
-                url = reverse(
-                    f'{self.page_category}:{self.page_name}_help-onboarding_est-application-credentials',
-                    kwargs={'pk': device.id, 'certificate_template': certificate_template})
-                return url
+        if device.onboarding_config:
+            return self._get_onboarding_config_redirect_url(
+                protocol=protocol,
+                certificate_template=certificate_template
+            )
 
         # Fallback
-        fallback_url = reverse(f'{self.page_category}:{self.page_name}')
-        return fallback_url
+        return reverse(f'{self.page_category}:{self.page_name}')
+
+
+class DeviceHelpDispatchApplicationCredentialTemplateView(
+        AbstractHelpDispatchApplicationCredentialTemplateView):
+    """Something."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class OpcUaGdsHelpDispatchApplicationCredentialTemplateView(
+        AbstractHelpDispatchApplicationCredentialTemplateView):
+
+    """Something."""
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class OpcUaGdsHelpDispatchDomainCredentialView(PageContextMixin, GetRedirectMixin, DetailView[DeviceModel]):

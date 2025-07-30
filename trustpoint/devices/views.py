@@ -32,6 +32,7 @@ from devices.forms import (
     BrowserLoginForm,
     CredentialDownloadForm,
     DeleteDevicesForm,
+    IssueDomainCredentialForm,
     IssueOpcUaClientCredentialForm,
     IssueOpcUaServerCredentialForm,
     IssueTlsClientCredentialForm,
@@ -39,13 +40,14 @@ from devices.forms import (
     NoOnboardingCreateForm,
     OnboardingCreateForm,
     RevokeDevicesForm,
-    RevokeIssuedCredentialForm, IssueDomainCredentialForm,
+    RevokeIssuedCredentialForm,
 )
 from devices.issuer import (
+    LocalDomainCredentialIssuer,
     LocalTlsClientCredentialIssuer,
     LocalTlsServerCredentialIssuer,
     OpcUaClientCredentialIssuer,
-    OpcUaServerCredentialIssuer, LocalDomainCredentialIssuer,
+    OpcUaServerCredentialIssuer,
 )
 from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
 from devices.revocation import DeviceCredentialRevocation
@@ -708,7 +710,9 @@ class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: Ba
 
         return self.render_to_response(self.get_context_data(form=form))
 
-class AbstractIssueDomainCredentialView(AbstractIssueCredentialView):
+
+class AbstractIssueDomainCredentialView(
+        AbstractIssueCredentialView[IssueDomainCredentialForm, LocalDomainCredentialIssuer]):
     """Base view for issuing domain credentials."""
 
     form_class = IssueDomainCredentialForm
@@ -726,6 +730,12 @@ class AbstractIssueDomainCredentialView(AbstractIssueCredentialView):
         Returns:
             The issued credential model.
         """
+        __ = cleaned_data
+
+        if device.domain is None:
+            err_msg = _('Device has no domain configured.')
+            raise Http404(err_msg)
+
         issuer = self.issuer_class(device=device, domain=device.domain)
         return issuer.issue_domain_credential()
 
@@ -734,6 +744,7 @@ class DeviceIssueDomainCredentialView(AbstractIssueDomainCredentialView):
     """View for issuing domain credentials for devices."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
 
 class OpcUaGdsIssueDomainCredentialView(AbstractIssueDomainCredentialView):
     """View for issuing domain credentials for OPC-UA GDS devices."""

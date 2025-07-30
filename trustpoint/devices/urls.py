@@ -176,7 +176,6 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_device_delete',
     ),
     # Certificate Lifecycle Management - Help Pages
-
     # Domain Credential Help Dispatcher
     path(
         'help/dispatch-domain/<int:pk>/',
@@ -188,7 +187,6 @@ urlpatterns = [
         devices_help_views.DeviceHelpDispatchDomainCredentialView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help_dispatch_domain',
     ),
-
     # Application Credential Help Dispatcher
     path(
         'help/application-credential-selection/<int:pk>/<str:protocol>/',
@@ -200,19 +198,17 @@ urlpatterns = [
         devices_help_views.HelpDispatchApplicationCredentialView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help_application_credential_selection',
     ),
-
     # Application Credential Template Dispatcher
     path(
         'help/dispatch-application-template/<int:pk>/<str:protocol>/<str:certificate_template>/',
-        devices_help_views.HelpDispatchApplicationCredentialTemplateView.as_view(),
+        devices_help_views.DeviceHelpDispatchApplicationCredentialTemplateView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help_dispatch_application_template',
     ),
     path(
         'opc-ua-gds/help/dispatch-application-template/<int:pk>/<str:protocol>/<str:certificate_template>/',
-        devices_help_views.HelpDispatchApplicationCredentialTemplateView.as_view(),
+        devices_help_views.OpcUaGdsHelpDispatchApplicationCredentialTemplateView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help_dispatch_application_template',
     ),
-
     # path(
     #     'help/dispatch-device-type-redirect/<int:pk>/',
     #     devices_help_views.HelpDispatchDeviceTypeRedirectView.as_view(),
@@ -273,8 +269,6 @@ urlpatterns = [
         views.OpcUaGdsIssueDomainCredentialView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help-onboarding_manual',
     ),
-
-
     path(
         'help/onboarding/est-application-credentials/<int:pk>/<str:certificate_template>/',
         devices_help_views.DeviceOnboardingEstApplicationCredentialsHelpView.as_view(),

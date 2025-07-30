@@ -172,6 +172,7 @@ class BaseServerCredentialForm(BaseCredentialForm):
             raise forms.ValidationError(err_msg)
         return cleaned_data
 
+
 class IssueDomainCredentialForm(BaseCredentialForm):
     """Form to issue a new domain credential."""
 
@@ -180,6 +181,7 @@ class IssueDomainCredentialForm(BaseCredentialForm):
         super().__init__(*args, device=device, **kwargs)
         self.fields['common_name'].disabled = True
         self.fields['common_name'].initial = 'Trustpoint Domain Credential'
+
 
 class IssueTlsClientCredentialForm(BaseCredentialForm):
     """Form to issue a new TLS client credential."""
