@@ -45,6 +45,7 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         branch: update-sbom-${{ github.run_id }}
+        base: main 
         title: "Update SBOM (sbom_cyclonedx.json) [CI]"
         body: |
           This PR updates the CycloneDX SBOM file automatically.
