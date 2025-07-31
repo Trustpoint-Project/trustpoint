@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - uses: actions/checkout@v4
+    
     - name: Checkout Trustpoint repo
       uses: actions/checkout@v3
 
@@ -36,15 +38,26 @@ jobs:
         ls -lh sbom_spdx.json
 
     - name: Create Pull Request
-      uses: peter-evans/create-pull-request@v5
+      id: cpr
+      uses: peter-evans/create-pull-request@v7
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: "Update SBOM (sbom-cyclonedx.json and sbom-spdx.json) [CI]"
-        branch: update-sbom-${{ github.run_id }}
-        title: "Update SBOM (sbom-cyclonedx.json) [CI]"
-        body: |
-          This PR updates the CycloneDX and SPDX SBOM files automatically.
+        commit-message: Update SBOM
         add-paths: |
-          sbom-cyclonedx.json
-          sbom-spdx.json
+          sbom_cyclonedx.json
+          sbom_spdx.json
+        committer: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+        author: ${{ github.actor }} <${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com>
+        signoff: false
+        branch: update-sbom-${{ github.run_id }}
+        delete-branch: true
+        title: '[ACTION] Update SBOM'
+        body: |
+          Update SBOM
+          - Update sbom_cyclonedx.json
+          - Update sbom_spdx.json
+        labels: |
+          automated pr
+          sbom
+        draft: false
 
