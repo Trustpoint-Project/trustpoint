@@ -1,0 +1,50 @@
+name: Generate SBOM for Trustpoint
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Trustpoint repo
+      uses: actions/checkout@v3
+
+    - name: Install Syft
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+    
+    - name: Build Trustpoint Docker image
+      run: docker build -t trustpoint:latest -f docker/trustpoint/Dockerfile .
+    
+    - name: Generate CycloneDX SBOM
+      run: syft trustpoint:latest -o cyclonedx-json=sbom_cyclonedx.json
+
+    - name: Generate SPDX SBOM
+      run: syft trustpoint:latest -o spdx-json=sbom_spdx.json
+
+    - name: Check if CycloneDX SBOM file exists
+      run: |
+        ls -lh sbom_cyclonedx.json
+
+    - name: Check if SPDX SBOM file exists
+      run: |
+        ls -lh sbom_spdx.json
+
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "Update SBOM (sbom-cyclonedx.json and sbom-spdx.json) [CI]"
+        branch: update-sbom-${{ github.run_id }}
+        title: "Update SBOM (sbom-cyclonedx.json) [CI]"
+        body: |
+          This PR updates the CycloneDX and SPDX SBOM files automatically.
+        add-paths: |
+          sbom-cyclonedx.json
+          sbom-spdx.json
+
