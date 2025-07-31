@@ -7,7 +7,9 @@ on:
   workflow_dispatch:
   pull_request:
     types:
+      - reopened
       - ready_for_review
+      - synchronize
 
 jobs:
   sbom:
@@ -43,7 +45,7 @@ jobs:
       run: |
         ls -lh sbom_spdx.json
 
-    - name: Create Pull Request
+    - name: Create Draft Pull Request
       id: cpr
       uses: peter-evans/create-pull-request@v7
       with:
@@ -65,5 +67,5 @@ jobs:
         labels: |
           automated pr
           sbom
-        draft: always-true
+        draft: true
 
