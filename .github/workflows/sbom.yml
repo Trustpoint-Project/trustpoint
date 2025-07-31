@@ -19,7 +19,7 @@ jobs:
         curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
     
     - name: Build Trustpoint Docker image
-      run: docker build -t trustpoint:latest -f trustpoint/docker/trustpoint/Dockerfile trustpoint
+      run: docker build -t trustpoint:latest -f docker/trustpoint/Dockerfile .
     
     - name: Generate CycloneDX SBOM
       run: syft trustpoint:latest -o cyclonedx-json=sbom-cyclonedx.json
