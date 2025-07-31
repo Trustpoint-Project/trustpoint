@@ -20,13 +20,6 @@ jobs:
     
     - name: Build Trustpoint Docker image
       run: docker build -t trustpoint:latest -f docker/trustpoint/Dockerfile .
-
-    - name: Git checkout
-      run: | 
-        git config user.name "github-actions"
-        git config user.email "github-actions@github.com"
-        BRANCH_NAME=update-sbom-${{ github.run_id }}
-        git checkout -b $BRANCH_NAME
     
     - name: Generate CycloneDX SBOM
       run: syft trustpoint:latest -o cyclonedx-json=sbom_cyclonedx.json
@@ -42,24 +35,16 @@ jobs:
       run: |
         ls -lh sbom_spdx.json
 
-    - name: Create and push branch with SBOM
-      run: |
-        git config user.name "github-actions"
-        git config user.email "github-actions@github.com"
-        BRANCH_NAME=update-sbom-${{ github.run_id }}
-        git add .
-        git commit -m "Update SBOM (sbom_cyclonedx.json and sbom_spdx.json) [CI]" || echo "No changes to commit"
-        git push --set-upstream origin $BRANCH_NAME
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
     - name: Create Pull Request
       uses: peter-evans/create-pull-request@v5
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "Update SBOM (sbom-cyclonedx.json and sbom-spdx.json) [CI]"
         branch: update-sbom-${{ github.run_id }}
-        base: main 
-        title: "Update SBOM (sbom_cyclonedx.json) [CI]"
+        title: "Update SBOM (sbom-cyclonedx.json) [CI]"
         body: |
-          This PR updates the CycloneDX and SPDX SBOM file automatically.
-        commit-message: "Update SBOM (sbom_cyclonedx.json and sbom_spdx.json) [CI]"
+          This PR updates the CycloneDX and SPDX SBOM files automatically.
+        add-paths: |
+          sbom-cyclonedx.json
+          sbom-spdx.json
+
