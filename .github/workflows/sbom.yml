@@ -14,18 +14,26 @@ jobs:
     - name: Checkout Trustpoint repo
       uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-
-    - name: Install CycloneDX CLI
+    - name: Install Syft
       run: |
-        pip install cyclonedx-bom
+        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+    
+    - name: Build Docker image
+      run: docker build -t trustpoint:latest .
+    
+    - name: Generate CycloneDX SBOM
+      run: syft trustpoint:latest -o cyclonedx-json=sbom-cyclonedx.json
 
-    - name: Generate SBOM (from environment)
+    - name: Generate SPDX SBOM
+      run: syft trustpoint:latest -o spdx-json=sbom-spdx.json
+
+    - name: Check if CycloneDX SBOM file exists
       run: |
-        cyclonedx-py env -o sbom_cyclonedx.json
+        ls -lh sbom_cyclonedx.json
+
+    - name: Check if SPDX SBOM file exists
+      run: |
+        ls -lh sbom-spdx.json
 
     - name: Create and push branch with SBOM
       run: |
@@ -35,7 +43,8 @@ jobs:
         BRANCH_NAME=update-sbom-${{ github.run_id }}
         git checkout -b $BRANCH_NAME
         git add sbom_cyclonedx.json
-        git commit -m "Update SBOM (sbom_cyclonedx.json) [CI]" || echo "No changes to commit"
+        git add sbom-spdx.json
+        git commit -m "Update SBOM (sbom_cyclonedx.json and sbom-spdx.json) [CI]" || echo "No changes to commit"
         git push origin $BRANCH_NAME
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -48,11 +57,5 @@ jobs:
         base: main 
         title: "Update SBOM (sbom_cyclonedx.json) [CI]"
         body: |
-          This PR updates the CycloneDX SBOM file automatically.
-        commit-message: "Update SBOM (sbom_cyclonedx.json) [CI]"
-
-    - name: Upload SBOM artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: trustpoint-sbom
-        path: sbom_cyclonedx.json
+          This PR updates the CycloneDX and SPDX SBOM file automatically.
+        commit-message: "Update SBOM (sbom_cyclonedx.json and sbom-spdx.json) [CI]"
