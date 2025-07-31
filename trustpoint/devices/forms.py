@@ -384,9 +384,7 @@ class OnboardingCreateForm(forms.Form):
 
     onboarding_protocol = forms.ChoiceField(
         choices=[
-            (OnboardingProtocol.CMP_IDEVID, OnboardingProtocol.CMP_IDEVID.label),
             (OnboardingProtocol.CMP_SHARED_SECRET, OnboardingProtocol.CMP_SHARED_SECRET.label),
-            (OnboardingProtocol.EST_IDEVID, OnboardingProtocol.EST_IDEVID.label),
             (OnboardingProtocol.EST_USERNAME_PASSWORD, OnboardingProtocol.EST_USERNAME_PASSWORD.label),
             (OnboardingProtocol.MANUAL, OnboardingProtocol.MANUAL.label),
             (OnboardingProtocol.AOKI, OnboardingProtocol.AOKI.label),
@@ -394,11 +392,6 @@ class OnboardingCreateForm(forms.Form):
         ],
         initial=OnboardingProtocol.CMP_IDEVID,
         label=_('Onboarding Protocol'),
-    )
-
-    idevid_trust_store_queryset = TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.IDEVID)
-    idevid_trust_store = forms.ModelChoiceField(
-        queryset=idevid_trust_store_queryset, empty_label='----------', required=False
     )
 
     onboarding_pki_protocols = forms.MultipleChoiceField(
@@ -425,7 +418,6 @@ class OnboardingCreateForm(forms.Form):
             Field('domain'),
             HTML('<h2 class="mt-5">Onboarding Protocol</h2><hr>'),
             Field('onboarding_protocol'),
-            Field('idevid_trust_store'),
             HTML('<h2 class="mt-5">PKI Protocol Configuration</h2><hr>'),
             Field('onboarding_pki_protocols'),
         )
