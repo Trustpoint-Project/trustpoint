@@ -1,0 +1,15 @@
+@startuml
+skinparam linetype ortho
+
+' Positioning using a layout trick
+card A as "A"
+card B as "B"
+card C as "C"
+
+' Force layout using hidden lines
+A -[hidden]-> B
+
+A -down-> C
+B -down-> C
+
+@enduml

@@ -66,21 +66,26 @@ class ValidityModel(BaseModel):
 
     model_config = ConfigDict(extra='ignore')  # allow, ignore (default)
 
-class CertProfileModel(BaseModel):
-    """Model for a certificate profile."""
-    type: Literal['cert_profile']
-    subj: SubjectModel | None = Field(alias='subject', default=None)
-    ext: ExtensionsModel | None = Field(alias='extensions', default=None)
+class CertProfileBaseModel(BaseModel):
+    """Base model for each nesting level of certificate profiles.
 
+    This allows for granular control over allowed fields and constraints at each level.
+    """
     allow: list[str] | Literal['*'] | None = None
     reject_mods: bool = Field(default=False)
+
+class CertProfileModel(CertProfileBaseModel):
+    """Model for a certificate profile."""
+    type: Literal['cert_profile']
+    subject: SubjectModel | None = Field(alias='subj', default=None)
+    extensions: ExtensionsModel | None = Field(alias='ext', default=None)
 
 
 class CertRequestModel(BaseModel):
     """Model for a certificate request."""
-    type: Literal['cert_request']
-    subj: SubjectModel
-    ext: ExtensionsModel | None = Field(alias='extensions', default=None)
+    type: Literal['cert_request'] = 'cert_request'
+    subject: SubjectModel | None = Field(alias='subj', default=None)
+    extensions: ExtensionsModel | None = Field(alias='ext', default=None)
 
     model_config = ConfigDict(extra='forbid')
 
@@ -144,3 +149,12 @@ class JSONProfileVerifier:
         validated_dict = self.request_validation_model.model_dump(validated_request)
         print('Validation Model:', validated_dict)
         return validated_dict
+
+    @staticmethod
+    def validate_request(request: dict[str, Any]) -> dict[str, Any]:
+        """Validates and normalizes a certificate request.
+
+        This just checks its structure, it does not validate against a profile.
+        """
+        req_model = CertRequestModel.model_validate(request)
+        return req_model.model_dump()

@@ -79,3 +79,12 @@ def test_implicit_allow_unknown_field() -> None:
         'type': None
     }
     assert verifier.apply_profile(request)
+
+def test_request_normalization() -> None:
+    """Test that a request is normalized correctly."""
+    request = {
+        'subj': {'cn': 'example.com'},
+    }
+    validated_request = JSONProfileVerifier.validate_request(request)
+    # 'subj' should be expanded to 'subject' and 'cn' to 'common_name'
+    assert validated_request['subject']['common_name'] == 'example.com'

@@ -5,6 +5,7 @@
 import os
 import sys
 from pathlib import Path
+from trustpoint.settings import settings  # Import Django settings
 
 import django  # Required for Django-based projects
 
@@ -19,7 +20,8 @@ feature_path = project_root / 'trustpoint' / 'features'
 sys.path.insert(0, str(feature_path))
 
 # -- Django setup (only required if using Django models in documentation) --
-os.environ['DJANGO_SETTINGS_MODULE'] = 'trustpoint.settings'  # Set Django settings
+#os.environ['DJANGO_SETTINGS_MODULE'] = 'trustpoint.settings'  # Set Django settings
+settings.configure()  # Configure Django settings
 django.setup()  # Initialize Django
 
 # -- PlantUML Configuration -------------------------------------------------
