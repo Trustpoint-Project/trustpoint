@@ -49,7 +49,15 @@ from devices.issuer import (
     OpcUaClientCredentialIssuer,
     OpcUaServerCredentialIssuer,
 )
-from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
+from devices.models import (
+    DeviceModel,
+    IssuedCredentialModel,
+    NoOnboardingPkiProtocol,
+    OnboardingPkiProtocol,
+    OnboardingProtocol,
+    OnboardingStatus,
+    RemoteDeviceCredentialDownloadModel,
+)
 from devices.revocation import DeviceCredentialRevocation
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
@@ -519,7 +527,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         context['domain_credentials'] = paginator_domain.get_page(page_number_domain)
         context['is_paginated'] = paginator_domain.num_pages > 1
 
-        paginator_application = Paginator(self.application_credentials_qs, UIConfig.paginate_by)
+        paginator_application = Paginator(self.application_credentials_qs, 3)
         page_number_application = self.request.GET.get('page-a', 1)
         context['application_credentials'] = paginator_application.get_page(page_number_application)
         context['is_paginated_a'] = paginator_application.num_pages > 1
@@ -556,6 +564,11 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         context['help_dispatch_device_type_url'] = f'{self.page_category}:{self.page_name}_help_dispatch_domain'
 
         context['pki_protocols'] = self._get_pki_protocols(self.object)
+
+        context['OnboardingProtocol'] = OnboardingProtocol
+        context['OnboardingPkiProtocol'] = OnboardingPkiProtocol
+        context['NoOnboardingPkiProtocol'] = NoOnboardingPkiProtocol
+        context['OnboardingStatus'] = OnboardingStatus
 
         return context
 
