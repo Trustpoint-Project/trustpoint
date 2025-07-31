@@ -307,6 +307,14 @@ class AbstractDomainCredentialCmpHelpView(PageContextMixin, DetailView[DeviceMod
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
 
+    @property
+    def page_name(self) -> str:
+        """Get the page name based on device type."""
+        if hasattr(self, 'object') and self.object:
+            if self.object.device_type == DeviceModel.DeviceType.OPC_UA_GDS:
+                return DEVICES_PAGE_OPC_UA_SUBCATEGORY
+        return DEVICES_PAGE_DEVICES_SUBCATEGORY
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds information about the required OpenSSL commands to the context.
 
