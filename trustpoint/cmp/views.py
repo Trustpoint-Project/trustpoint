@@ -723,16 +723,24 @@ class CmpInitializationRequestView(
             assert self.device is not None
 
         if self.device.domain != self.requested_domain:
-            exc_msg = 'The device domain does not match the requested domain.'
-            raise ValueError(exc_msg)
+            err_msg = 'The device domain does not match the requested domain.'
+            raise ValueError(err_msg)
 
-        if not self.device.no_onboarding_config:
-            err_msg = 'Device is not configured to use cmp shared secret authentication.'
-            raise ValueError
+        config = None
+        shared_secret = None
 
-        shared_secret = self.device.no_onboarding_config.cmp_shared_secret
-        if shared_secret == '':
-            err_msg = 'Device is misconfigured.'
+        if self.device.onboarding_config:
+            config = self.device.onboarding_config
+            shared_secret = config.onboarding_cmp_shared_secret
+        elif self.device.no_onboarding_config:
+            config = self.device.no_onboarding_config
+            shared_secret = config.cmp_shared_secret
+        else:
+            err_msg = 'Device is not configured for shared secret authentication.'
+            raise ValueError(err_msg)
+
+        if not shared_secret:
+            err_msg = 'Device is misconfigured: shared secret is missing or empty.'
             raise ValueError(err_msg)
 
         req_message_body = self._extract_ir_body()
