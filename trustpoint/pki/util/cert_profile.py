@@ -33,12 +33,38 @@ class SubjectModel(BaseModel):
     # Should allow unknown fields, but not required
     model_config = ConfigDict(extra='forbid')  # allow, ignore (default)
 
+class SanExtensionModel(BaseModel):
+    """Model for the SAN extension of a certificate profile."""
+    dns_names: list[str] | None = None
+    ip_addresses: list[str] | None = None
+    rfc822_names: list[str] | None = None
+    uris: list[str] | None = None
+    other_names: list[str] | None = None
+
+    model_config = ConfigDict(extra='forbid')  # allow, ignore (default)
+
 class ExtensionsModel(BaseModel):
     """Model for the extensions of a certificate profile."""
     basic_constraints: str | None = None
     key_usage: str | None = None
     extended_key_usage: str | None = None
-    subject_alternative_name: str | None = None
+    subject_alternative_name: SanExtensionModel | None = None
+
+class ValidityModel(BaseModel):
+    """Model for the validity period of a certificate profile."""
+    not_before: str | None = None  # ISO 8601 format
+    not_after: str | None = None  # ISO 8601 format
+    days: float | None = None  # Number of days for validity
+    hours: float | None = None  # Number of hours for validity
+    minutes: float | None = None  # Number of minutes for validity
+    seconds: int | None = None  # Number of seconds for validity
+    duration: str | None = None  # Duration string in ISO 8601 format
+
+    offset_s: int | None = None  # Offset in seconds
+    validity_max: str | None = None  # Maximum validity period in ISO 8601 format
+    validity_min: str | None = None  # Minimum validity period in ISO 8601 format
+
+    model_config = ConfigDict(extra='ignore')  # allow, ignore (default)
 
 class CertProfileModel(BaseModel):
     """Model for a certificate profile."""
@@ -62,17 +88,18 @@ class CertRequestModel(BaseModel):
 class JSONProfileVerifier:
     """Class to verify certificate requests against JSON-based profiles."""
 
-    def _build_model_from_dict(self, data: dict, model_name: str = 'DynProfileModel') -> type[BaseModel]:
+    def _build_model_from_dict(self, data: dict[str, Any], model_name: str = 'DynProfileModel') -> type[BaseModel]:
         fields = {}
         for key, value in data.items():
             if isinstance(value, dict):
                 # Recursively generate a sub-model
-                fields[key] = (self._build_model_from_dict(value, model_name=f'{model_name}_{key}'), value)
+                nested_model = self._build_model_from_dict(value, model_name=f'{model_name}_{key}')
+                fields[key] = (type(nested_model), nested_model)
             else:
                 fields[key] = (type(value), value)
         return create_model(model_name, **fields)
 
-    def __init__(self, profile: dict) -> None:
+    def __init__(self, profile: dict[str, Any]) -> None:
         """Initialize the verifier with a certificate profile."""
         validated_profile = CertProfileModel.model_validate(profile)
         self.profile = validated_profile
@@ -82,7 +109,8 @@ class JSONProfileVerifier:
         for key, value in profile.items():
             if isinstance(value, dict):
                 # Recursively generate a sub-model
-                fields[key] = (self._build_model_from_dict(value, model_name=f'DynProfileModel_{key}'), value)
+                nested_model = self._build_model_from_dict(value, model_name=f'DynProfileModel_{key}')
+                fields[key] = (type(nested_model), nested_model)
             else:
                 fields[key] = (type(value), value)
         fields['type'] = (Literal['cert_request'] | None, None)  # Ensure type is 'cert_request' if present
@@ -93,7 +121,7 @@ class JSONProfileVerifier:
         #@model_validator(mode='before')
         @field_validator('*', mode='after')
         @staticmethod
-        def forbid_none_fields(value: str | None, info: dict[str, Any]) -> str | None:
+        def forbid_none_fields(value: str | None, info: dict[str, Any]) -> None:
             print(f'Validating field: {info.field_name} with value: {value}')
             if info.field_name in fields and fields[info.field_name][1] is None and value is not None:
                 msg = f"Field '{info.field_name}' is not allowed in the profile."
@@ -101,14 +129,18 @@ class JSONProfileVerifier:
 
         validators['forbid_none_fields'] = forbid_none_fields
 
-        self.request_validation_model = create_model('ProfileAwareCertRequestModel', __validators__=validators, **fields)
+        config = ConfigDict(extra='allow')
+
+        self.request_validation_model = create_model(
+            'ProfileAwareCertRequestModel', __validators__=validators, __config__=config, **fields)
 
 
-    def apply_profile(self, request: CertRequestModel) -> CertRequestModel:
+    def apply_profile(self, request: dict[str, Any]) -> dict[str, Any]:
         """Verify a certificate request against the profile and attempt to change it to match the profile.
 
         Raises a ProfileValidationError if the request cannot be changed to match the profile.
         """
         validated_request = self.request_validation_model.model_validate(request)
-        print('Validation Model:', self.request_validation_model.model_dump(validated_request))
-        return validated_request
+        validated_dict = self.request_validation_model.model_dump(validated_request)
+        print('Validation Model:', validated_dict)
+        return validated_dict

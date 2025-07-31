@@ -51,7 +51,8 @@ def test_allowed_cn_present() -> None:
     request = {
         'subj': {'cn': 'example.com'}
     }
-    assert verifier.apply_profile(request)
+    validated_request = verifier.apply_profile(request)
+    assert validated_request['subj']['cn'] == 'example.com'
 
 def test_implicit_allow_subject() -> None:
     """Test that a request with implicit allow for all fields passes verification."""
