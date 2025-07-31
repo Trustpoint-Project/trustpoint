@@ -41,7 +41,7 @@ jobs:
       id: cpr
       uses: peter-evans/create-pull-request@v7
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.GH_PAT }}
         commit-message: Update SBOM
         add-paths: |
           sbom_cyclonedx.json
