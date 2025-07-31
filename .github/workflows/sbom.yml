@@ -46,7 +46,7 @@ jobs:
       run: |
         git add .
         git commit -m "Update SBOM (sbom_cyclonedx.json and sbom_spdx.json) [CI]" || echo "No changes to commit"
-        git push origin $BRANCH_NAME
+        git push --set-upstream origin $BRANCH_NAME
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
