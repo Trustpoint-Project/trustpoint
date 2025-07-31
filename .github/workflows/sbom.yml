@@ -44,6 +44,9 @@ jobs:
 
     - name: Create and push branch with SBOM
       run: |
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        BRANCH_NAME=update-sbom-${{ github.run_id }}
         git add .
         git commit -m "Update SBOM (sbom_cyclonedx.json and sbom_spdx.json) [CI]" || echo "No changes to commit"
         git push --set-upstream origin $BRANCH_NAME
