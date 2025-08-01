@@ -33,16 +33,18 @@ def test_issue_opcua_server_credential(device_instance: dict[str, Any]) -> None:
         validity_days=validity_days,
     )
 
-    assert isinstance(issued_credential, IssuedCredentialModel), \
+    assert isinstance(issued_credential, IssuedCredentialModel), (
         'The returned object should be an IssuedCredentialModel'
+    )
     assert issued_credential.common_name == common_name, 'The common name should match the input'
     assert issued_credential.device == device, 'The issued credential should belong to the correct device'
     assert issued_credential.domain == device.domain, 'The issued credential should belong to the correct domain'
-    assert (issued_credential.issued_credential_type ==
-            IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL), \
-        'The issued_credential_type should be APPLICATION_CREDENTIAL'
-    assert issued_credential.issued_credential_purpose == IssuedCredentialModel.IssuedCredentialPurpose.OPCUA_SERVER, \
+    assert (
+        issued_credential.issued_credential_type == IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
+    ), 'The issued_credential_type should be APPLICATION_CREDENTIAL'
+    assert issued_credential.issued_credential_purpose == IssuedCredentialModel.IssuedCredentialPurpose.OPCUA_SERVER, (
         'The issued_credential_purpose should be OPCUA_SERVER'
+    )
 
     db_credential = IssuedCredentialModel.objects.get(pk=issued_credential.pk)
     assert db_credential == issued_credential, 'The credential should be saved correctly in the database'

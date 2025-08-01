@@ -8,7 +8,13 @@ from typing import TYPE_CHECKING
 
 from cryptography import x509
 from cryptography.x509.verification import Criticality, ExtensionPolicy, PolicyBuilder, Store, VerificationError
-from devices.models import DeviceModel
+from devices.models import (
+    DeviceModel,
+    OnboardingConfigModel,
+    OnboardingPkiProtocol,
+    OnboardingProtocol,
+    OnboardingStatus,
+)
 
 from pki.models import DevIdRegistration, DomainModel, TruststoreModel
 from pki.util.x509 import ApacheTLSClientCertExtractor
@@ -113,14 +119,10 @@ class IDevIDAuthenticator(LoggerMixin):
     @staticmethod
     def _auto_create_device_from_idevid(
         idevid_cert: x509.Certificate, idevid_subj_sn: str, domain: DomainModel,
-        pki_protocol: DeviceModel.PkiProtocol,
-        onboarding_protocol: DeviceModel.OnboardingProtocol,
+        pki_protocol: OnboardingPkiProtocol,
+        onboarding_protocol: OnboardingProtocol,
     ) -> DeviceModel:
         """Auto-create a new DeviceModel from the IDevID certificate."""
-        if not domain.auto_create_new_device:
-            error_message = 'Auto-creating a new device for this domain is not permitted.'
-            raise IDevIDAuthenticationError(error_message)
-
         try:
             cn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
             common_name = cn_b.decode() if isinstance(cn_b, bytes) else cn_b
@@ -130,14 +132,23 @@ class IDevIDAuthenticator(LoggerMixin):
         if DeviceModel.objects.filter(common_name=common_name, domain=domain).exists():
             common_name += f'_{secrets.token_hex(4)}'
 
-        return DeviceModel.objects.create(
+        onboarding_config_model = OnboardingConfigModel(
+            onboarding_status=OnboardingStatus.PENDING,
+            onboarding_protocol=onboarding_protocol,
+        )
+        onboarding_config_model.set_pki_protocols([pki_protocol])
+        device = DeviceModel(
             serial_number=idevid_subj_sn,
             common_name=common_name,
             domain=domain,
-            onboarding_protocol=onboarding_protocol,
-            pki_protocol=pki_protocol,
-            onboarding_status = DeviceModel.OnboardingStatus.PENDING
+            onboarding_config=onboarding_config_model
         )
+        onboarding_config_model.full_clean()
+        onboarding_config_model.save()
+        device.full_clean()
+        device.save()
+
+        return device
 
     @staticmethod
     def get_subject_serial_number(idevid_cert: x509.Certificate) -> str:
@@ -186,8 +197,8 @@ class IDevIDAuthenticator(LoggerMixin):
         idevid_cert: x509.Certificate,
         intermediate_cas: list[x509.Certificate],
         domain: DomainModel | None = None,
-        onboarding_protocol: DeviceModel.OnboardingProtocol = DeviceModel.OnboardingProtocol.EST_IDEVID,
-        pki_protocol: DeviceModel.PkiProtocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE,
+        onboarding_protocol: OnboardingProtocol = OnboardingProtocol.EST_IDEVID,
+        pki_protocol: OnboardingPkiProtocol = OnboardingPkiProtocol.EST,
     ) -> DeviceModel:
         """Authenticate client using IDevID certificate for Domain Credential request and create a device."""
         domain, idevid_subj_sn = cls.authenticate_idevid_from_x509_no_device(
@@ -199,8 +210,7 @@ class IDevIDAuthenticator(LoggerMixin):
             existing_device = DeviceModel.objects.get(
                 domain=domain,
                 serial_number=idevid_subj_sn,
-                onboarding_protocol=onboarding_protocol,
-                pki_protocol=pki_protocol,
+
             )
         except DeviceModel.DoesNotExist:
             pass

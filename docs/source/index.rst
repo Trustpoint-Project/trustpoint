@@ -57,3 +57,4 @@ Welcome to Trustpoint's documentation!
    :caption: 🧑‍💻 Development
 
    development/development
+   development/architecture/credentials

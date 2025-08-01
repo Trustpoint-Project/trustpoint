@@ -1,6 +1,5 @@
 """Test suite for validating the CredentialDownloadForm."""
 
-
 import pytest
 
 from devices.forms import PASSWORD_MIN_LENGTH, CredentialDownloadForm
@@ -11,24 +10,23 @@ from devices.forms import PASSWORD_MIN_LENGTH, CredentialDownloadForm
     [
         # Test Case 1: Valid passwords
         ('validpassword123', 'validpassword123', {}),
-
         # Test Case 2: Passwords do not match
         ('password123', 'differentpassword123', {'confirm_password': ['Passwords do not match.']}),
-
         # Test Case 3: Password too short
         ('short', 'short', {'password': [f'Password must be at least {PASSWORD_MIN_LENGTH} characters long.']}),
-
         # Test Case 4: Password too short and mismatched
-        ('short', 'different', {
-            'password': [f'Password must be at least {PASSWORD_MIN_LENGTH} characters long.'],
-            'confirm_password': ['Passwords do not match.']
-        }),
-    ]
+        (
+            'short',
+            'different',
+            {
+                'password': [f'Password must be at least {PASSWORD_MIN_LENGTH} characters long.'],
+                'confirm_password': ['Passwords do not match.'],
+            },
+        ),
+    ],
 )
 def test_credential_download_form_clean(
-    password: str,
-    confirm_password: str,
-    expected_errors: dict[str, list[str]]
+    password: str, confirm_password: str, expected_errors: dict[str, list[str]]
 ) -> None:
     """Test the form's validation logic for password matching and length."""
     form_data = {
