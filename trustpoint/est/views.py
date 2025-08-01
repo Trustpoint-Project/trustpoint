@@ -633,19 +633,28 @@ class CredentialIssuanceMixin:
         if issued_credential is None:
             return LoggedHttpResponse('Credential cannot be found', 400)
 
-        cert_bytes = issued_credential.credential.get_certificate().public_bytes(
-            encoding=Encoding.DER if credential_request.request_format in {'der', 'base64_der'} else Encoding.PEM
-        )
+        encoding = Encoding.DER if credential_request.request_format in {'der', 'base64_der'} else Encoding.PEM
+        cert_bytes = issued_credential.credential.get_certificate().public_bytes(encoding=encoding)
 
         if credential_request.request_format == 'base64_der':
-            b64_pkcs7 = base64.b64encode(cert_bytes).decode('utf-8')
-            cert = '\n'.join([b64_pkcs7[i:i + 64] for i in range(0, len(b64_pkcs7), 64)])
+            b64_cert = base64.b64encode(cert_bytes).decode('utf-8')
+            cert = '\n'.join([b64_cert[i:i + 64] for i in range(0, len(b64_cert), 64)])
+            content_type = 'application/pkix-cert'
+        elif credential_request.request_format == 'der':
+            cert = cert_bytes
+            content_type = 'application/pkix-cert'
+        else:
+            try:
+                cert = cert_bytes.decode('utf-8')
+            except UnicodeDecodeError:
+                cert = cert_bytes
+            content_type = 'application/x-pem-file'
 
         if device.onboarding_config and requested_cert_template_str == 'domaincredential':
             device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
             device.save()
 
-        return LoggedHttpResponse(content=cert, status=200, content_type='application/pkix-cert')
+        return LoggedHttpResponse(content=cert, status=200, content_type=content_type)
 
     def _issue_based_on_template(
         self, cert_template_str: str, credential_request: CredentialRequest, device: DeviceModel, domain: DomainModel
