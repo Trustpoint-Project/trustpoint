@@ -1,0 +1,52 @@
+{% extends 'trustpoint/base.html' %}
+{% load static %}
+{% block content %}
+  <h1>Pending Workflows</h1>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Current Node</th>
+        <th>Started</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for inst in instances %}
+        <tr>
+          <td>{{ inst.id }}</td>
+          <td>{{ inst.definition.name }}</td>
+          <td>{{ inst.current_node }}</td>
+          <td>{{ inst.created_at|date:"Y-m-d H:i:s" }}</td>
+          <td>
+            <form
+              method="post"
+              action="{% url 'workflows:signal' inst.id %}"
+              style="display:inline"
+            >
+              {% csrf_token %}
+              <input type="hidden" name="action" value="Approved">
+              <button type="submit">Approve</button>
+            </form>
+
+            <form
+              method="post"
+              action="{% url 'workflows:signal' inst.id %}"
+              style="display:inline"
+            >
+              {% csrf_token %}
+              <input type="hidden" name="action" value="Rejected">
+              <button type="submit">Reject</button>
+            </form>
+          </td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="5">No pending workflows.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

@@ -208,6 +208,7 @@ INSTALLED_APPS = [
     'crispy_forms',
     'crispy_bootstrap5',
     'dbbackup',
+    'workflows.apps.WorkflowsConfig',
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:

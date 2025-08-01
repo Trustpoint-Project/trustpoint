@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol, cast
 
 from cryptography import x509
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives._serialization import Encoding
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from devices.issuer import (
@@ -25,12 +26,14 @@ from pki.models.credential import CredentialModel
 from pki.models.devid_registration import DevIdRegistration
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
-from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
-from pyasn1.type.univ import ObjectIdentifier  # type: ignore[import-untyped]
-from trustpoint_core.serializer import CertificateCollectionSerializer  # type: ignore[import-untyped]
+from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
+from pyasn1.type.univ import ObjectIdentifier
+from trustpoint_core.serializer import CertificateCollectionSerializer
 
 from trustpoint.logger import LoggerMixin
+from workflows.services.trigger_dispatcher import TriggerDispatcher
+from workflows.triggers import Triggers
 
 
 class UsernamePasswordAuthenticationError(Exception):
@@ -764,6 +767,7 @@ class EstSimpleEnrollmentView(
     either Mutual TLS or username/password, validates the device, and issues the requested certificate
     based on the certificate template specified in the request.
     """
+    TRIGGER = Triggers.est_simpleenroll
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
         """Handle POST requests for simple enrollment."""
@@ -795,7 +799,7 @@ class EstSimpleEnrollmentView(
             )
 
         if not http_response:
-            credential_request, _csr, http_response = self.deserialize_pki_message(self.raw_message)
+            credential_request, csr, http_response = self.deserialize_pki_message(self.raw_message)
 
         if not http_response and credential_request and requested_domain and requested_cert_template_str:
             device, http_response = self.get_or_create_device_from_csr(
@@ -810,14 +814,62 @@ class EstSimpleEnrollmentView(
                                                       credential_request=credential_request,
                                                       requested_cert_template_str=requested_cert_template_str)
 
-        if not http_response and credential_request and device and requested_domain and requested_cert_template_str:
-            http_response = self._issue_simpleenroll(device=device,
-                                                     domain=requested_domain,
-                                                     credential_request=credential_request,
-                                                     requested_cert_template_str=requested_cert_template_str)
+        # If we've gotten here, everything is valid → enqueue a workflow instance
+        if (
+            not http_response
+            and credential_request
+            and device
+            and requested_domain
+            and requested_cert_template_str
+            and csr
+        ):
+            csr_pem: str = csr.public_bytes(encoding=Encoding.PEM).decode()
 
-        if not http_response:
-            http_response = LoggedHttpResponse('Something went wrong during EST simpleenroll.', status=500)
+            info = TriggerDispatcher.dispatch(
+                'certificate_request',
+                protocol=self.TRIGGER.protocol,
+                operation=self.TRIGGER.operation,
+                ca_id=requested_domain.issuing_ca.id,
+                domain_id=requested_domain.id,
+                device_id=device.id,
+                payload={
+                    'csr_pem': csr_pem,
+                    'template': requested_cert_template_str,
+                    'requestor': getattr(request.user, 'username', None),
+                },
+            )
+
+            status = info.get('status')
+            if status == 'completed':
+                # already approved → issue directly
+                http_response = self._issue_simpleenroll(
+                    device=device,
+                    domain=requested_domain,
+                    credential_request=credential_request,
+                    requested_cert_template_str=requested_cert_template_str,
+                )
+            elif status == 'pending':
+                # newly queued or re‑queued
+                return LoggedHttpResponse(
+                    'Enrollment request pending approval',
+                    status=202,
+                    content_type='text/plain',
+                )
+            elif status == 'no_match':
+                # No Wofklow instance or definition found for this request
+                http_response = self._issue_simpleenroll(
+                    device=device,
+                    domain=requested_domain,
+                    credential_request=credential_request,
+                    requested_cert_template_str=requested_cert_template_str
+                )
+
+        # Fallback error
+        if http_response is None:
+            http_response = LoggedHttpResponse(
+                'Something went wrong during EST simpleenroll. Have fun debugging <3',
+                status=500,
+            )
 
         return http_response
 
