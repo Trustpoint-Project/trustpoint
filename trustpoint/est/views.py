@@ -32,6 +32,7 @@ from pyasn1.type.univ import ObjectIdentifier
 from trustpoint_core.serializer import CertificateCollectionSerializer
 
 from trustpoint.logger import LoggerMixin
+from workflows.models import WorkflowInstance
 from workflows.services.trigger_dispatcher import TriggerDispatcher
 from workflows.triggers import Triggers
 
@@ -840,7 +841,11 @@ class EstSimpleEnrollmentView(
             )
 
             status = info.get('status')
-            if status == 'completed':
+            print('info')
+            print(info)
+            print('status')
+            print(status)
+            if status == WorkflowInstance.STATE_COMPLETE:
                 # already approved → issue directly
                 http_response = self._issue_simpleenroll(
                     device=device,
@@ -848,7 +853,7 @@ class EstSimpleEnrollmentView(
                     credential_request=credential_request,
                     requested_cert_template_str=requested_cert_template_str,
                 )
-            elif status == 'pending':
+            elif status == WorkflowInstance.STATE_PENDING:
                 # newly queued or re‑queued
                 return LoggedHttpResponse(
                     'Enrollment request pending approval',

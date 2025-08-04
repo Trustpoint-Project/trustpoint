@@ -1,24 +1,24 @@
-from __future__ import annotations
+# workflows/services/executors.py
 
-from typing import Any, Optional, Tuple
+from util.email_service import EmailService
 
 from workflows.models import WorkflowInstance
 
 
 class NodeExecutorFactory:
     """Factory Method: map node types to their executor classes."""
-    _registry: dict[str, type[AbstractNodeExecutor]] = {}
+    _registry: dict[str, type['AbstractNodeExecutor']] = {}
 
     @classmethod
     def register(
         cls,
         node_type: str,
-        executor_cls: type[AbstractNodeExecutor],
+        executor_cls: type['AbstractNodeExecutor'],
     ) -> None:
         cls._registry[node_type] = executor_cls
 
     @classmethod
-    def create(cls, node_type: str) -> AbstractNodeExecutor:
+    def create(cls, node_type: str) -> 'AbstractNodeExecutor':
         executor_cls = cls._registry.get(node_type)
         if not executor_cls:
             raise ValueError(f'No executor registered for node type {node_type!r}')
@@ -26,127 +26,197 @@ class NodeExecutorFactory:
 
 
 class AbstractNodeExecutor:
-    """Template Method: wrap common pre/post logic around do_execute()."""
+    """Base for all executors, defining core states and the 2‑tuple API."""
+
+    STATE_NOT_STARTED = 'not_started_yet'
+    STATE_WAITING     = 'waiting'
+    STATE_COMPLETED   = 'completed'
+    STATE_ERROR       = 'error'
 
     def execute(
         self,
         instance: WorkflowInstance,
-        signal: Optional[str] = None,
-    ) -> tuple[Optional[str], str]:
-        """Run this executor and return (next_node, next_state)."""
-        # (pre‑execution hooks could go here)
-        next_node, next_state = self.do_execute(instance, signal)
-        # (post‑execution hooks could go here)
-        return next_node, next_state
+        signal: str | None = None,
+    ) -> tuple[str | None, str]:
+        """1) Mark this node as waiting.
+        2) Call do_execute().
+        3) Return (next_node, state).
+        """
+        node_id = instance.current_node
+
+        # 1) mark waiting
+        instance.step_states[node_id] = self.STATE_WAITING
+        instance.save(update_fields=['step_states'])
+
+        # 2) delegate to subclass
+        next_node, state = self.do_execute(instance, signal)
+
+        # 3) sanity‑check
+        allowed = self.core_states() | self.extra_states()
+        if state not in allowed:
+            raise ValueError(
+                f'{self.__class__.__name__}.do_execute returned invalid state {state!r}; '
+                f'allowed: {allowed}'
+            )
+
+        return next_node, state
 
     def do_execute(
         self,
         instance: WorkflowInstance,
-        signal: Optional[str],
-    ) -> tuple[Optional[str], str]:
-        """Subclasses must implement their node’s behavior."""
+        signal: str | None,
+    ) -> tuple[str | None, str]:
+        """Subclasses implement. Return (next_node, state)."""
         raise NotImplementedError
+
+    @classmethod
+    def core_states(cls) -> set[str]:
+        return {
+            cls.STATE_NOT_STARTED,
+            cls.STATE_WAITING,
+            cls.STATE_COMPLETED,
+            cls.STATE_ERROR,
+        }
+
+    @classmethod
+    def extra_states(cls) -> set[str]:
+        """Override to add step‑specific states."""
+        return set()
 
 
 class ApprovalExecutor(AbstractNodeExecutor):
-    """Handles Approval nodes: send email, wait for, and process approval."""
+    """Handles Approval nodes: waiting → approved/rejected."""
+
+    STATE_APPROVED = 'approved'
+    STATE_REJECTED = 'rejected'
+
+    @classmethod
+    def extra_states(cls) -> set[str]:
+        return {cls.STATE_APPROVED, cls.STATE_REJECTED}
 
     def do_execute(
         self,
         instance: WorkflowInstance,
-        signal: Optional[str],
-    ) -> tuple[Optional[str], str]:
-        transitions = instance.definition.definition['transitions']
+        signal: str | None,
+    ) -> tuple[str | None, str]:
+        definition  = instance.definition.definition
+        transitions = definition.get('transitions', [])
+        node_id     = instance.current_node
+        prev_state  = instance.step_states.get(node_id, self.STATE_NOT_STARTED)
 
-        # 1) First arrival: move to AwaitingApproval
-        if instance.state == WorkflowInstance.STATE_STARTED:
-            # TODO: send your approval email here
-            return instance.current_node, WorkflowInstance.STATE_AWAITING
+        # first arrival → send email & stay waiting
+        if prev_state == self.STATE_NOT_STARTED:
+            # TODO: send your approval‑request email here
+            return node_id, self.STATE_WAITING
 
-        # 2) On 'Approved' or fallback to 'next'
+        # on Approved → move on or complete
         if signal == 'Approved':
-            # pick either an explicit Approved edge, or fallback to next
-            approved_transition = next(
+            approved = next(
                 (
                     t for t in transitions
-                    if t['from'] == instance.current_node
-                    and t.get('on') in ('Approved', 'next')
+                    if t['from'] == node_id and t.get('on') in ('Approved', 'next')
                 ),
-                None,
+                None
             )
-            if approved_transition:
-                return approved_transition['to'], WorkflowInstance.STATE_STARTED
-            # no explicit path → complete?
-            return None, WorkflowInstance.STATE_COMPLETED
+            if approved and approved.get('to'):
+                return approved['to'], self.STATE_APPROVED
+            return None, self.STATE_APPROVED
 
-        # 3) On 'Rejected'
+        # on Rejected → stop
         if signal == 'Rejected':
-            return None, WorkflowInstance.STATE_REJECTED
+            return None, self.STATE_REJECTED
 
-        # 4) Any other signal: stay put
-        return instance.current_node, instance.state
-
-class IssueCertificateExecutor(AbstractNodeExecutor):
-    """Handles IssueCertificate nodes: call PKI logic to issue the cert."""
-
-    def do_execute(
-        self,
-        instance: WorkflowInstance,
-        signal: Optional[str],
-    ) -> tuple[Optional[str], str]:
-        # call into your existing PKI issue logic here...
-        return None, WorkflowInstance.STATE_COMPLETED
+        # otherwise remain in whatever state we were in
+        return node_id, prev_state
 
 
-# Roadmap: register additional executors
 class ConditionExecutor(AbstractNodeExecutor):
-    """Evaluate a condition and branch accordingly."""
+    """Evaluate a condition and branch immediately."""
+
     def do_execute(
         self,
         instance: WorkflowInstance,
-        signal: Optional[str],
-    ) -> tuple[Optional[str], str]:
-        # implement condition logic...
-        return None, instance.state
+        signal: str | None,
+    ) -> tuple[str | None, str]:
+        cfg       = instance.payload.get('current_node_config', {})
+        next_node = cfg.get('params', {}).get('next')
+        return next_node, self.STATE_COMPLETED
 
 
 class EmailExecutor(AbstractNodeExecutor):
-    """Send templated email notifications."""
+    """Send a multipart email; skip or error if needed."""
+
+    STATE_SKIPPED = 'skipped'
+    STATE_ERROR   = 'error'
+
+    @classmethod
+    def extra_states(cls) -> set[str]:
+        return {cls.STATE_SKIPPED, cls.STATE_ERROR}
+
     def do_execute(
         self,
         instance: WorkflowInstance,
-        signal: Optional[str],
-    ) -> tuple[Optional[str], str]:
-        # implement email logic...
-        return None, instance.state
+        signal: str | None = None,
+    ) -> tuple[str | None, str]:
+        cfg    = instance.payload.get('current_node_config', {})
+        params = cfg.get('params', {})
+
+        raw = params.get('to') or params.get('recipients')
+        if isinstance(raw, str):
+            to_addrs = [a.strip() for a in raw.split(',') if a.strip()]
+        elif isinstance(raw, list):
+            to_addrs = raw
+        else:
+            to_addrs = []
+
+        if not to_addrs:
+            return None, self.STATE_SKIPPED
+
+        try:
+            EmailService.send_email(
+                subject=params.get('subject', ''),
+                to=to_addrs,
+                template_name=params.get('template', ''),
+                context=params.get('context', {}),
+                cc=params.get('cc'),
+                bcc=params.get('bcc'),
+                attachments=params.get('attachments'),
+            )
+        except Exception:
+            return None, self.STATE_ERROR
+
+        return cfg.get('params', {}).get('next'), self.STATE_COMPLETED
 
 
 class WebhookExecutor(AbstractNodeExecutor):
-    """Invoke an external HTTP endpoint."""
+    """Invoke an external HTTP endpoint, then complete."""
+
     def do_execute(
         self,
         instance: WorkflowInstance,
-        signal: Optional[str],
-    ) -> tuple[Optional[str], str]:
-        # implement webhook logic...
-        return None, instance.state
+        signal: str | None,
+    ) -> tuple[str | None, str]:
+        cfg = instance.payload.get('current_node_config', {})
+        # TODO: perform HTTP call here
+        return cfg.get('params', {}).get('next'), self.STATE_COMPLETED
 
 
 class TimerExecutor(AbstractNodeExecutor):
-    """Schedule or await a timer event."""
+    """Synchronous timer stub: immediately complete."""
+
     def do_execute(
         self,
         instance: WorkflowInstance,
-        signal: Optional[str],
-    ) -> tuple[Optional[str], str]:
-        # implement timer logic...
-        return None, instance.state
+        signal: str | None,
+    ) -> tuple[str | None, str]:
+        cfg = instance.payload.get('current_node_config', {})
+        # TODO: schedule real timer if needed
+        return cfg.get('params', {}).get('next'), self.STATE_COMPLETED
 
 
 # Register all executors
-NodeExecutorFactory.register('Approval', ApprovalExecutor)
-NodeExecutorFactory.register('IssueCertificate', IssueCertificateExecutor)
-NodeExecutorFactory.register('Condition', ConditionExecutor)
-NodeExecutorFactory.register('Email', EmailExecutor)
-NodeExecutorFactory.register('Webhook', WebhookExecutor)
-NodeExecutorFactory.register('Timer', TimerExecutor)
+NodeExecutorFactory.register('Approval',   ApprovalExecutor)
+NodeExecutorFactory.register('Condition',  ConditionExecutor)
+NodeExecutorFactory.register('Email',      EmailExecutor)
+NodeExecutorFactory.register('Webhook',    WebhookExecutor)
+NodeExecutorFactory.register('Timer',      TimerExecutor)

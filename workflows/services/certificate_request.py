@@ -8,24 +8,19 @@ from typing import Any
 from cryptography import x509
 from django.db import transaction
 
-from workflows.models import (
-    AuditLog,
-    WorkflowDefinition,
-    WorkflowInstance,
-)
+from workflows.models import AuditLog, WorkflowDefinition, WorkflowInstance
 from workflows.services.engine import advance_instance
+from workflows.services.executors import AbstractNodeExecutor
 
 logger = logging.getLogger(__name__)
 
 
 class CertificateRequestHandler:
-    """1) Compute a stable CSR fingerprint.
-
-    2) Iterate all published workflows,
-       a) skip ones without any nodes
-       b) match on trigger (protocol & operation)
-       c) match on scope (ca/domain/device), treating NULL as wildcard
-    3) For the first match: dedupe or create a WorkflowInstance, advance it, return status.
+    """Central orchestration for 'certificate_request':
+    • match trigger+scope → pick a WorkflowDefinition
+    • dedupe/create a WorkflowInstance
+    • if brand‑new: auto‑drive it until waiting, error, or completion
+    • return unified JSON: instance_id, status, steps[{id,type,state}]
     """
 
     def __call__(
@@ -41,81 +36,106 @@ class CertificateRequestHandler:
     ) -> dict[str, Any]:
         csr_pem = payload.get('csr_pem')
         if not isinstance(csr_pem, str):
-            return {'status': 'error', 'msg': 'csr_pem missing'}
+            return {'status': 'error', 'error': 'csr_pem missing'}
 
         # 1) fingerprint
         csr = x509.load_pem_x509_csr(csr_pem.encode())
-        fp = hashlib.sha256(csr.tbs_certrequest_bytes).hexdigest()
+        fp  = hashlib.sha256(csr.tbs_certrequest_bytes).hexdigest()
 
-        # 2) loop definitions in Python so we can treat NULL as wildcard
-        definitions = WorkflowDefinition.objects.filter(published=True)
-
-        for wf in definitions:
-            nodes = wf.definition.get('nodes') or []
+        # 2) find matching definition
+        for wf in WorkflowDefinition.objects.filter(published=True):
+            nodes = wf.definition.get('nodes', []) or []
             if not nodes:
                 logger.warning('Skipping %r: no nodes', wf.name)
                 continue
 
-            # 2a) trigger match
-            triggers = wf.definition.get('triggers', [])
+            # trigger match?
             if not any(
                 t.get('protocol') == protocol and t.get('operation') == operation
-                for t in triggers
+                for t in wf.definition.get('triggers', [])
             ):
                 continue
 
-            # 2b) scope match
-            for scope in wf.scopes.all():
-                if scope.ca_id is not None and scope.ca_id != ca_id:
-                    continue
-                if scope.domain_id is not None and scope.domain_id != domain_id:
-                    continue
-                if scope.device_id is not None and scope.device_id != device_id:
-                    continue
+            # scope match (None = wildcard)
+            if not any(
+                (sc.ca_id     in (None, ca_id)) and
+                (sc.domain_id in (None, domain_id)) and
+                (sc.device_id in (None, device_id))
+                for sc in wf.scopes.all()
+            ):
+                continue
 
-                # 3) OK — we’ve found a matching workflow
-                # 3a) already completed?
-                if WorkflowInstance.objects.filter(
-                    definition=wf,
-                    payload__fingerprint=fp,
-                    state=WorkflowInstance.STATE_COMPLETED,
-                ).exists():
-                    return {'status': 'completed'}
+            # 3) dedupe or create
+            inst = WorkflowInstance.objects.filter(
+                definition=wf,
+                payload__fingerprint=fp
+            ).first()
 
-                # 3b) dedupe pending
-                existing = (
-                    WorkflowInstance.objects
-                    .filter(definition=wf, payload__fingerprint=fp)
-                    .exclude(state=WorkflowInstance.STATE_REJECTED)
-                    .first()
-                )
-
-                start_node = nodes[0]['id']
+            is_new = inst is None
+            if is_new:
+                start = nodes[0]['id']
                 full_payload = {
-                    'protocol': protocol,
-                    'operation': operation,
-                    'ca_id': ca_id,
-                    'domain_id': domain_id,
-                    'device_id': device_id,
+                    'protocol':    protocol,
+                    'operation':   operation,
+                    'ca_id':       ca_id,
+                    'domain_id':   domain_id,
+                    'device_id':   device_id,
                     'fingerprint': fp,
-                    **{k: v for k, v in payload.items() if k != 'csr_b64'},
+                    **{k: v for k, v in payload.items() if k != 'csr_pem'},
+                }
+                step_states = {
+                    n['id']: AbstractNodeExecutor.STATE_NOT_STARTED
+                    for n in nodes
                 }
 
                 with transaction.atomic():
-                    if existing:
-                        inst = existing
-                    else:
-                        inst = WorkflowInstance.objects.create(
-                            definition=wf,
-                            current_node=start_node,
-                            state=WorkflowInstance.STATE_STARTED,
-                            payload=full_payload,
-                        )
-                        AuditLog.objects.create(
-                            instance=inst, action='Started', details=full_payload
-                        )
+                    inst = WorkflowInstance.objects.create(
+                        definition   = wf,
+                        current_node = start,
+                        state        = WorkflowInstance.STATE_PENDING,
+                        payload      = full_payload,
+                        step_states  = step_states,
+                    )
+                    AuditLog.objects.create(
+                        instance=inst,
+                        action='Started',
+                        details=full_payload,
+                    )
 
-                advance_instance(inst)
-                return {'status': 'pending', 'instance_id': str(inst.id)}
+                # auto‑drive until waiting on an Approval, error, or complete
+                for _ in range(len(nodes)):
+                    advance_instance(inst)
+                    inst.refresh_from_db()
+                    if inst.state in (
+                        WorkflowInstance.STATE_ERROR,
+                        WorkflowInstance.STATE_COMPLETE,
+                    ):
+                        break
+                    curr_state = inst.step_states.get(inst.current_node)
+                    if curr_state in (
+                        AbstractNodeExecutor.STATE_NOT_STARTED,
+                        AbstractNodeExecutor.STATE_WAITING
+                    ):
+                        break
 
-        return {'status': 'no_match'}
+            # 4) build the response
+            steps = []
+            for n in nodes:
+                st = inst.step_states.get(n['id'], AbstractNodeExecutor.STATE_NOT_STARTED)
+                steps.append({
+                    'id':    n['id'],
+                    'type':  n['type'],
+                    'state': st,
+                })
+
+            return {
+                'instance_id': str(inst.id),
+                'status':      inst.state,   # pending | error | complete
+                'steps':       steps,
+            }
+
+        # no matching workflow
+        return {
+            'status': 'no_match',
+            'error':  'no published workflow for this trigger/scope',
+        }

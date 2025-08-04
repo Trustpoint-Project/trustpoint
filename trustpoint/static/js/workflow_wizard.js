@@ -1,301 +1,304 @@
 // static/js/workflow_wizard.js
-document.addEventListener('DOMContentLoaded', () => {
-  const container = document.getElementById('workflow-wizard');
+
+document.addEventListener('DOMContentLoaded', function() {
+  var container = document.getElementById('workflow-wizard');
   if (!container) return;
 
-  // 1) Inject the form skeleton
-  container.innerHTML = `
-    <form id="wizard-form">
-      <div><label>Name: <input type="text" id="wf-name" required></label></div>
-      <h3>Trigger</h3>
-      <label>Protocol:<select id="trigger-protocol"></select></label>
-      <label>Operation:<select id="trigger-operation"></select></label>
-      <h3>Steps</h3>
-      <button type="button" id="add-step-btn">+ Add Step</button>
-      <ul id="steps-list"></ul>
-      <h3>Scopes</h3>
-      <label>Scope Type:<select id="scope-type">
-        <option value="CA">CA</option>
-        <option value="Domain">Domain</option>
-        <option value="Device">Device</option>
-      </select></label>
-      <label>Select:<select id="scope-multi" multiple size="4" style="min-width:200px"></select></label>
-      <button type="button" id="add-scope-btn">+ Add This Scope</button>
-      <ul id="scopes-list"></ul>
-      <div style="margin-top:1em"><button type="submit">Save Workflow</button></div>
-    </form>
-    <pre id="wizard-result" style="color:green;"></pre>
-  `;
-
-  // 2) Grab our elements & params
-  const wfName      = document.getElementById('wf-name');
-  const protoSelect = document.getElementById('trigger-protocol');
-  const opSelect    = document.getElementById('trigger-operation');
-  const stepsList   = document.getElementById('steps-list');
-  const typeSelect  = document.getElementById('scope-type');
-  const multiSelect = document.getElementById('scope-multi');
-  const scopesList  = document.getElementById('scopes-list');
-  const resultPre   = document.getElementById('wizard-result');
-  const params      = new URLSearchParams(window.location.search);
-  const editId      = params.get('edit');
-
-  // 3) Static step‑type → param definitions
-  const stepParamDefs = {
-    Approval:   [{name:'approverRole',label:'Approver Role',type:'text'},
-                 {name:'timeoutSecs',  label:'Timeout (sec)',  type:'number'}],
-    Email:      [{name:'template',   label:'Email Template',type:'text'},
-                 {name:'recipients', label:'Recipients (comma)',type:'text'}],
-    Webhook:    [{name:'url',        label:'Webhook URL',  type:'text'},
-                 {name:'method',     label:'HTTP Method',  type:'select',
-                  options:['GET','POST','PUT','DELETE']}],
-    Timer:      [{name:'delaySecs',  label:'Delay (sec)',  type:'number'}],
-    Condition:  [{name:'expression', label:'Condition',type:'text'}],
-    IssueCertificate: []
-  };
-
-  // 4) Helper to create elements
-  function makeEl(tag, attrs={}, ...kids) {
-    const el = document.createElement(tag);
-    Object.entries(attrs).forEach(([k,v]) => {
-      if (k === 'class') el.className = v;
-      else el.setAttribute(k, v);
-    });
-    kids.forEach(c => el.append(typeof c === 'string' ? document.createTextNode(c) : c));
-    return el;
+  // 1) Parse the injected STEP_PARAM_DEFS JSON
+  var stepParamDefs;
+  try {
+    stepParamDefs = JSON.parse(
+      document.getElementById('stepParamDefs').textContent
+    );
+    // Expose globally for debugging
+    window._stepParamDefs = stepParamDefs;
+    console.log('Loaded stepParamDefs:', stepParamDefs);
+  } catch (e) {
+    console.error('Failed to parse STEP_PARAM_DEFS:', e);
+    container.innerHTML = '<p style="color:red;">Error loading step definitions.</p>';
+    return;
   }
 
-  // 5) Load scope pick‑lists (with Choices.js if available)
-  let scopeChoices = null;
+  // 2) Build the form skeleton
+  container.innerHTML = '\
+    <form id="wizard-form">\
+      <div><label>Name: <input type="text" id="wf-name" required></label></div>\
+      <h3>Trigger</h3>\
+      <label>Protocol: <select id="trigger-protocol"></select></label>\
+      <label>Operation: <select id="trigger-operation"></select></label>\
+      <h3>Steps</h3>\
+      <button type="button" id="add-step-btn">+ Add Step</button>\
+      <ul id="steps-list"></ul>\
+      <h3>Scopes</h3>\
+      <label>Scope Type: \
+        <select id="scope-type">\
+          <option value="CA">CA</option>\
+          <option value="Domain">Domain</option>\
+          <option value="Device">Device</option>\
+        </select>\
+      </label>\
+      <label>Select: <select id="scope-multi" multiple size="4" style="min-width:200px"></select></label>\
+      <button type="button" id="add-scope-btn">+ Add This Scope</button>\
+      <ul id="scopes-list"></ul>\
+      <div style="margin-top:1em"><button type="submit">Save Workflow</button></div>\
+    </form>\
+    <pre id="wizard-result" style="color:green;"></pre>\
+  ';
+
+  // 3) Grab references
+  var wfName      = document.getElementById('wf-name');
+  var protoSelect = document.getElementById('trigger-protocol');
+  var opSelect    = document.getElementById('trigger-operation');
+  var stepsList   = document.getElementById('steps-list');
+  var typeSelect  = document.getElementById('scope-type');
+  var multiSelect = document.getElementById('scope-multi');
+  var scopesList  = document.getElementById('scopes-list');
+  var resultPre   = document.getElementById('wizard-result');
+  var params      = new URLSearchParams(window.location.search);
+  var editId      = params.get('edit');
+
+  // 4) Load scopes into the multi-select
   function loadScopeValues() {
-    const t = typeSelect.value.toLowerCase();  // "ca", "domain", "device"
-    fetch(`/workflows/api/${t}s/`)
-      .then(r => r.json())
-      .then(items => {
+    var t = typeSelect.value.toLowerCase();
+    fetch('/workflows/api/' + t + 's/')
+      .then(function(r){ return r.json(); })
+      .then(function(items){
         multiSelect.innerHTML = '';
-        items.forEach(it => {
-          multiSelect.append(makeEl('option',{value:it.id}, it.name));
+        items.forEach(function(it){
+          var o = document.createElement('option');
+          o.value = it.id;
+          o.textContent = it.name;
+          multiSelect.append(o);
         });
-        if (scopeChoices) scopeChoices.destroy();
-        if (window.Choices) {
-          scopeChoices = new Choices(multiSelect, {
-            removeItemButton: true,
-            placeholder: true,
-            placeholderValue: 'Search & select…',
-            shouldSort: false
-          });
-        }
       })
-      .catch(err => console.error('Failed to load scopes:', err));
+      .catch(function(err){
+        console.error('Failed to load scopes:', err);
+      });
   }
   typeSelect.addEventListener('change', loadScopeValues);
   loadScopeValues();
 
-  // 6) Add a new Step row
-  document.getElementById('add-step-btn').addEventListener('click', () => {
-    const li = makeEl('li');
-    const sel = makeEl('select');
-    Object.keys(stepParamDefs).forEach(type => sel.append(makeEl('option',{value:type},type)));
-    const paramsDiv = makeEl('div');
-    const rm = makeEl('button',{type:'button'},'Remove');
-    li.append(
-      makeEl('label',{}, 'Type: ', sel),
-      paramsDiv,
-      rm
-    );
-    stepsList.append(li);
-
-    function renderParams() {
-      paramsDiv.innerHTML = '';
-      (stepParamDefs[sel.value]||[]).forEach(def => {
-        let inp;
-        if (def.type === 'select') {
-          inp = makeEl('select',{name:def.name});
-          def.options.forEach(opt=>inp.append(makeEl('option',{value:opt},opt)));
-        } else {
-          inp = makeEl('input',{
-            name:def.name,
-            type:def.type,
-            placeholder:def.label
-          });
-        }
-        paramsDiv.append(
-          makeEl('label',{}, def.label+': ', inp),
-          makeEl('br')
-        );
-      });
-    }
-    sel.addEventListener('change', renderParams);
-    renderParams();
-    rm.addEventListener('click', () => li.remove());
-  });
-
-  // 7) Add a new Scope entry (showing names instead of IDs)
-  document.getElementById('add-scope-btn').addEventListener('click', () => {
-    const t = typeSelect.value;  // "CA","Domain","Device"
-    let items;
-    if (scopeChoices) {
-      // Choices.js: get full {value,label} objects
-      items = scopeChoices.getValue().map(ch => ({value: ch.value, label: ch.label}));
-    } else {
-      // Plain <select>
-      items = Array.from(multiSelect.selectedOptions)
-                   .map(o => ({value:o.value, label:o.textContent||o.value}));
-    }
-
-    items.forEach(({value:id, label:name}) => {
-      // dedupe
-      if (scopesList.querySelector(`li[data-scope-type="${t}"][data-scope-id="${id}"]`)) return;
-      const li = makeEl(
-        'li', {},
-        `${t}: ${name} `,
-        makeEl('button',{type:'button'}, '✖')
-      );
-      li.dataset.scopeType = t;
-      li.dataset.scopeId   = id;
-      li.querySelector('button').addEventListener('click', () => li.remove());
-      scopesList.append(li);
+  // 5) Load triggers & operations
+  var operationsByProtocol = {};
+  function populateProtocols() {
+    protoSelect.innerHTML = '';
+    Object.keys(operationsByProtocol).forEach(function(p){
+      var o = document.createElement('option');
+      o.value = p;
+      o.textContent = p;
+      protoSelect.append(o);
     });
-
-    // clear selection
-    if (scopeChoices) scopeChoices.clearStore();
-    else multiSelect.selectedIndex = -1;
-  });
-
-  // 8) Fetch your “single source of truth” triggers & kick off the wizard
-  let operationsByProtocol = {};
+  }
+  function updateOps() {
+    opSelect.innerHTML = '';
+    var ops = operationsByProtocol[protoSelect.value] || [];
+    ops.forEach(function(op){
+      var o = document.createElement('option');
+      o.value = op;
+      o.textContent = op;
+      opSelect.append(o);
+    });
+  }
   fetch('/workflows/api/triggers/')
-    .then(r => r.json())
-    .then(trigs => {
+    .then(function(r){ return r.json(); })
+    .then(function(trigs){
       operationsByProtocol = trigs;
       populateProtocols();
       updateOps();
       protoSelect.addEventListener('change', updateOps);
-
-      // **now** that protocols & ops exist, load edit‑mode if needed
       if (editId) loadExistingDefinition(editId);
     })
-    .catch(err => {
+    .catch(function(err){
       console.error('Failed to load trigger definitions:', err);
       resultPre.textContent = '⚠️ Could not load trigger definitions';
     });
 
-  function populateProtocols() {
-    protoSelect.innerHTML = '';
-    Object.keys(operationsByProtocol).forEach(p => {
-      protoSelect.append(makeEl('option',{value:p},p));
+  // 6) Add Step button logic
+  document.getElementById('add-step-btn').addEventListener('click', function(){
+    var li = document.createElement('li');
+    var sel = document.createElement('select');
+    // Populate Type dropdown
+    Object.keys(stepParamDefs).forEach(function(type){
+      var o = document.createElement('option');
+      o.value = type;
+      o.textContent = type;
+      sel.append(o);
     });
-  }
 
-  function updateOps() {
-    opSelect.innerHTML = '';
-    (operationsByProtocol[protoSelect.value] || []).forEach(op => {
-      opSelect.append(makeEl('option',{value:op},op));
+    var paramsDiv = document.createElement('div');
+    var rm = document.createElement('button');
+    rm.type = 'button';
+    rm.textContent = 'Remove';
+
+    li.appendChild((function(){
+      var lbl = document.createElement('label');
+      lbl.textContent = 'Type: ';
+      return lbl;
+    })());
+    li.appendChild(sel);
+    li.appendChild(paramsDiv);
+    li.appendChild(rm);
+    stepsList.appendChild(li);
+
+    function renderParams(){
+      paramsDiv.innerHTML = '';
+      var defs = stepParamDefs[sel.value] || [];
+      defs.forEach(function(def){
+        var inp;
+        if (def.type === 'select') {
+        inp = document.createElement('select');
+        inp.name = def.name;
+        (def.options || []).forEach(function(opt){
+            var o = document.createElement('option');
+            if (typeof opt === 'object') {
+            o.value = opt.value;
+            o.textContent = opt.label;
+            } else {
+            o.value = opt;
+            o.textContent = opt;
+            }
+            inp.appendChild(o);
+        });
+        } else {
+          inp = document.createElement('input');
+          inp.type = def.type;
+          inp.name = def.name;
+          inp.placeholder = def.label;
+        }
+        var lbl = document.createElement('label');
+        lbl.textContent = def.label + ': ';
+        lbl.appendChild(inp);
+        paramsDiv.appendChild(lbl);
+        paramsDiv.appendChild(document.createElement('br'));
+      });
+    }
+
+    sel.addEventListener('change', renderParams);
+    renderParams();
+    rm.addEventListener('click', function(){ li.remove(); });
+  });
+
+  // 7) Add Scope button logic
+  document.getElementById('add-scope-btn').addEventListener('click', function(){
+    var items = Array.prototype.slice.call(multiSelect.selectedOptions).map(function(o){
+      return { value: o.value, label: o.textContent };
     });
-  }
+    items.forEach(function(it){
+      if (scopesList.querySelector('li[data-scope-id="' + it.value + '"]')) return;
+      var li = document.createElement('li');
+      li.dataset.scopeType = typeSelect.value;
+      li.dataset.scopeId   = it.value;
+      li.textContent = typeSelect.value + ': ' + it.label + ' ';
+      var x = document.createElement('button');
+      x.type = 'button';
+      x.textContent = '✖';
+      x.addEventListener('click', function(){ li.remove(); });
+      li.appendChild(x);
+      scopesList.appendChild(li);
+    });
+    multiSelect.selectedIndex = -1;
+  });
 
-  // 9) Edit‑mode loader
-  function loadExistingDefinition(id) {
-    fetch(`/workflows/api/definitions/${id}/`)
-      .then(r => r.json())
-      .then(data => {
-        // name
+  // 8) Load existing workflow for edit
+  function loadExistingDefinition(id){
+    fetch('/workflows/api/definitions/' + id + '/')
+      .then(function(r){ return r.json(); })
+      .then(function(data){
         wfName.value = data.name || '';
-
-        // trigger
-        if (data.triggers?.[0]) {
+        if (data.triggers && data.triggers[0]) {
           protoSelect.value = data.triggers[0].protocol;
           updateOps();
-          opSelect.value    = data.triggers[0].operation;
+          opSelect.value = data.triggers[0].operation;
         }
-
-        // steps
-        data.steps?.forEach(step => {
-          document.getElementById('add-step-btn').click(); // create row
-          const li = stepsList.lastElementChild;
-          const sel = li.querySelector('select');
+        if (data.steps) data.steps.forEach(function(step){
+          document.getElementById('add-step-btn').click();
+          var li = stepsList.lastChild;
+          var sel = li.querySelector('select');
           sel.value = step.type;
-          sel.dispatchEvent(new Event('change')); // render params
-          Object.entries(step.params || {}).forEach(([k,v]) => {
-            const inp = li.querySelector(`[name="${k}"]`);
-            if (inp) inp.value = v;
+          sel.dispatchEvent(new Event('change'));
+          Object.keys(step.params || {}).forEach(function(k){
+            var inp = li.querySelector('[name="' + k + '"]');
+            if (inp) inp.value = step.params[k];
           });
         });
-
-        // scopes
-        data.scopes?.forEach(sc => {
-          const li = makeEl(
-            'li', {},
-            `${sc.type}: ${sc.name} `,
-            makeEl('button',{type:'button'}, '✖')
-          );
+        if (data.scopes) data.scopes.forEach(function(sc){
+          var li = document.createElement('li');
           li.dataset.scopeType = sc.type;
           li.dataset.scopeId   = sc.id;
-          li.querySelector('button').addEventListener('click', () => li.remove());
-          scopesList.append(li);
+          li.textContent = sc.type + ': ' + sc.name + ' ';
+          var x = document.createElement('button');
+          x.type = 'button';
+          x.textContent = '✖';
+          x.addEventListener('click', function(){ li.remove(); });
+          li.appendChild(x);
+          scopesList.appendChild(li);
         });
       })
-      .catch(err => {
+      .catch(function(err){
         console.error('Failed to load workflow definition:', err);
-        resultPre.textContent = `❌ Could not load workflow: ${err}`;
+        resultPre.textContent = '❌ Could not load workflow: ' + err;
       });
   }
 
-  // 10) Form submission
-  document.getElementById('wizard-form').addEventListener('submit', e => {
+  // 9) Form submission
+  document.getElementById('wizard-form').addEventListener('submit', function(e){
     e.preventDefault();
     resultPre.textContent = '';
 
-    const name     = wfName.value.trim();
-    const triggers = [{protocol: protoSelect.value, operation: opSelect.value}];
-    const steps    = Array.from(stepsList.children).map(li => {
-      const type = li.querySelector('select').value;
-      const params = {};
-      li.querySelectorAll('[name]').forEach(inp => {
-        params[inp.name] = inp.type==='number' ? Number(inp.value) : inp.value;
+    var name = wfName.value.trim();
+    var triggers = [{ protocol: protoSelect.value, operation: opSelect.value }];
+    var steps = Array.prototype.slice.call(stepsList.children).map(function(li){
+      var type = li.querySelector('select').value;
+      var paramsObj = {};
+      Array.prototype.slice.call(li.querySelectorAll('[name]')).forEach(function(inp){
+        paramsObj[inp.name] = inp.type === 'number' ? Number(inp.value) : inp.value;
       });
-      return {type, params};
+      return { type: type, params: paramsObj };
     });
-    const scopes   = Array.from(scopesList.children).map(li => {
-      const obj = {ca_id:null, domain_id:null, device_id:null};
-      const t = li.dataset.scopeType.toLowerCase();
-      obj[`${t}_id`] = li.dataset.scopeId;
-      return obj;
+    var scopes = Array.prototype.slice.call(scopesList.children).map(function(li){
+      var lower = li.dataset.scopeType.toLowerCase();
+      return {
+        ca_id:     lower === 'ca'     ? li.dataset.scopeId : null,
+        domain_id: lower === 'domain' ? li.dataset.scopeId : null,
+        device_id: lower === 'device' ? li.dataset.scopeId : null,
+      };
     });
 
-    const payload = {name, triggers, steps, scopes};
+    var payload = { name: name, triggers: triggers, steps: steps, scopes: scopes };
     if (editId) payload.id = editId;
 
     fetch('/workflows/wizard/', {
       method: 'POST',
       headers: {
-        'Content-Type':'application/json',
+        'Content-Type': 'application/json',
         'X-CSRFToken': getCookie('csrftoken'),
       },
       body: JSON.stringify(payload),
     })
-    .then(async r => {
-      const txt = await r.text();
-      let data;
-      try { data = JSON.parse(txt); }
-      catch { data = {error: txt || `Status ${r.status}`} }
-      return {status: r.status, data};
+    .then(function(response){
+      return response.text().then(function(txt){
+        var data;
+        try { data = JSON.parse(txt); }
+        catch { data = { error: txt || 'Status ' + response.status }; }
+        return { status: response.status, data: data };
+      });
     })
-    .then(({status,data}) => {
-      if (status === 201) {
-        resultPre.textContent = `✅ Workflow ID: ${data.id}`;
-        window.history.replaceState(null, '', `?edit=${data.id}`);
+    .then(function(res){
+      if (res.status === 201) {
+        resultPre.textContent = '✅ Workflow ID: ' + res.data.id;
+        window.history.replaceState(null, '', '?edit=' + res.data.id);
       } else {
-        resultPre.textContent = `❌ ${data.error||JSON.stringify(data)}`;
+        resultPre.textContent = '❌ ' + (res.data.error || JSON.stringify(res.data));
       }
     })
-    .catch(err => {
-      resultPre.textContent = `❌ ${err}`;
+    .catch(function(err){
+      resultPre.textContent = '❌ ' + err;
     });
   });
 
-  // helper to read cookies
+  // 10) Cookie helper
   function getCookie(name) {
-    const m = document.cookie.match(new RegExp('(^| )'+name+'=([^;]+)'));
+    var m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
     return m ? m.pop() : '';
   }
 });

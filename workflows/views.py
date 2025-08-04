@@ -25,7 +25,7 @@ from workflows.models import (
 )
 from workflows.services.certificate_request import advance_instance
 from workflows.services.wizard import transform_to_definition_schema
-from workflows.triggers import Triggers
+from workflows.triggers import STEP_PARAM_DEFS, Triggers
 
 
 class CAListView(View):
@@ -138,7 +138,12 @@ class WorkflowWizardView(View):
     template_name = 'workflows/definition_wizard.html'
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        return render(request, self.template_name)
+        # Inject the STEP_PARAM_DEFS JSON into the template context
+        return render(
+            request,
+            self.template_name,
+            {'step_param_defs_json': json.dumps(STEP_PARAM_DEFS)},
+        )
 
     def post(self, request: HttpRequest) -> JsonResponse:
         try:
@@ -191,7 +196,7 @@ class PendingApprovalsView(ListView[WorkflowInstance]):
     context_object_name = 'instances'
 
     def get_queryset(self) -> Any:
-        return WorkflowInstance.objects.filter(state=WorkflowInstance.STATE_AWAITING)
+        return WorkflowInstance.objects.filter(state=WorkflowInstance.STATE_PENDING)
 
 
 class SignalInstanceView(View):

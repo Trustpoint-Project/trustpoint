@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import datetime
 import uuid
-from typing import Any
 
-from django.db.models import JSONField
 from django.db import models
+from django.db.models import JSONField
 
 
 class WorkflowDefinition(models.Model):
@@ -51,16 +49,14 @@ class WorkflowScope(models.Model):
 class WorkflowInstance(models.Model):
     """Tracks an active workflow instance: pointer into the graph plus its state."""
 
-    STATE_STARTED = 'Started'
-    STATE_AWAITING = 'AwaitingApproval'
-    STATE_COMPLETED = 'Completed'
-    STATE_REJECTED = 'Rejected'
+    STATE_PENDING  = 'pending'
+    STATE_ERROR    = 'error'
+    STATE_COMPLETE = 'complete'
 
     STATE_CHOICES = [
-        (STATE_STARTED, 'Started'),
-        (STATE_AWAITING, 'AwaitingApproval'),
-        (STATE_COMPLETED, 'Completed'),
-        (STATE_REJECTED, 'Rejected'),
+        (STATE_PENDING,  'Pending'),
+        (STATE_ERROR,    'Error'),
+        (STATE_COMPLETE, 'Complete'),
     ]
 
     id = models.UUIDField(
@@ -74,7 +70,14 @@ class WorkflowInstance(models.Model):
         related_name='instances',
     )
     current_node = models.CharField(max_length=100)
-    state = models.CharField(max_length=32, choices=STATE_CHOICES)
+    state = models.CharField(
+        max_length=20,
+        choices=STATE_CHOICES,
+        default=STATE_PENDING,
+        help_text='Overall instance status: pending, error, or complete',
+    )
+    # maps node_id (str) → state (str), e.g. {"step-1":"waiting","step-2":"not_started_yet"}
+    step_states = models.JSONField(default=dict)
     payload = JSONField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

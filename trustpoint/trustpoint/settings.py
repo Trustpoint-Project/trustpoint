@@ -67,6 +67,7 @@ PUBLIC_PATHS = [
     '/crl',
 ]
 
+
 # ------------- Functions --------------
 
 def is_postgre_available() -> bool:
@@ -138,6 +139,20 @@ DOCKER_CONTAINER = False
 DEBUG = True
 ADMIN_ENABLED = bool(DEBUG)
 DEVELOPMENT_ENV = True
+
+
+
+# —––––––– Basic SMTP backend –––––––—
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    # EMAIL_HOST = os.environ.get('EMAIL_HOST')
+    # EMAIL_PORT = os.environ.get('EMAIL_PORT')
+    # EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+    # EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+    # EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', True)
+    DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', default='no‑reply@trustpoint.ai')
 
 
 # Settings for postgreql database

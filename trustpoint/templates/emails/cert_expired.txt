@@ -1,0 +1,9 @@
+Hello {{ owner_name }},
+
+Your certificate {{ cert_name }} (serial {{ serial }})
+expired on {{ expiry_date }} and is no longer valid.
+
+Please generate a new CSR and request a replacement certificate.
+
+Regards,
+Trustpoint PKI
