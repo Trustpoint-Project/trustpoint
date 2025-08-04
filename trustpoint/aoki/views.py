@@ -10,10 +10,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from django.http import JsonResponse
 from django.views import View
-from pki.models.certificate import CertificateModel
-from pki.models.credential import IDevIDReferenceModel
-from pki.models.extension import GeneralNameUniformResourceIdentifier, SubjectAlternativeNameExtension
-from pki.models.issuing_ca import IssuingCaModel
+from pki.models.credential import CredentialModel, IDevIDReferenceModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
@@ -29,10 +26,10 @@ if TYPE_CHECKING:
 class AokiServiceMixin:
     """Mixin for AOKI functionality."""
     @staticmethod
-    def _get_idevid_owner_san_uri(idevid_cert: x509.Certificate) -> str:
+    def get_idevid_owner_san_uri(idevid_cert: x509.Certificate) -> str:
         """Get the Owner ID SAN URI corresponding to a IDevID certificate.
 
-        Formatted as '<IDevID_Subj_SN>.dev-owner.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>.alt'
+        Formatted as 'dev-owner:<IDevID_Subj_SN>.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>'
         """
         try:
             sn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
@@ -41,7 +38,20 @@ class AokiServiceMixin:
             idevid_subj_sn = '_'
         idevid_x509_sn = hex(idevid_cert.serial_number)[2:].zfill(16)
         idevid_sha256_fingerprint = idevid_cert.fingerprint(hashes.SHA256()).hex()
-        return f'{idevid_subj_sn}.dev-owner.{idevid_x509_sn}.{idevid_sha256_fingerprint}.alt'
+        return f'dev-owner:{idevid_subj_sn}.{idevid_x509_sn}.{idevid_sha256_fingerprint}'
+
+    @staticmethod
+    def get_owner_credential(idevid_cert: x509.Certificate) -> CredentialModel | None:
+        """Get the Device Owner ID credential corresponding to a IDevID cert, or None if it does not exist in the DB.
+
+        This does not perform any authentication or validation of the IDevID certificate! Use IDevIDAuthenticator first.
+        """
+        idevid_san_uri = AokiServiceMixin.get_idevid_owner_san_uri(idevid_cert)
+        owner_cred_ref = IDevIDReferenceModel.objects.filter(idevid_ref=idevid_san_uri).first()
+        if not owner_cred_ref:
+            return None
+        owner_cred = owner_cred_ref.dev_owner_id
+        return owner_cred.credential
 
 
 class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
@@ -72,15 +82,13 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
                 f'IDevID authentication failed: {e}', status = 403
             )
 
-        idevid_san_uri = self._get_idevid_owner_san_uri(client_cert)
-        owner_cred_ref = IDevIDReferenceModel.objects.filter(idevid_ref=idevid_san_uri).first()
-        if not owner_cred_ref:
+        owner_cred = self.get_owner_credential(client_cert)
+        if not owner_cred:
             return LoggedHttpResponse(
                 'No DevOwnerID present for this IDevID.', status = 422
             )
-        owner_cred = owner_cred_ref.dev_owner_id
-        owner_pk = owner_cred.credential.get_private_key()
-        owner_id_cert = owner_cred.credential.certificate
+        owner_pk = owner_cred.get_private_key()
+        owner_id_cert = owner_cred.certificate
 
         aoki_init_response = {
             'aoki-init': {

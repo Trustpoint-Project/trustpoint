@@ -112,7 +112,9 @@ class IDevIDAuthenticator(LoggerMixin):
 
     @staticmethod
     def _auto_create_device_from_idevid(
-        idevid_cert: x509.Certificate, idevid_subj_sn: str, domain: DomainModel
+        idevid_cert: x509.Certificate, idevid_subj_sn: str, domain: DomainModel,
+        pki_protocol: DeviceModel.PkiProtocol,
+        onboarding_protocol: DeviceModel.OnboardingProtocol,
     ) -> DeviceModel:
         """Auto-create a new DeviceModel from the IDevID certificate."""
         if not domain.auto_create_new_device:
@@ -132,8 +134,8 @@ class IDevIDAuthenticator(LoggerMixin):
             serial_number=idevid_subj_sn,
             common_name=common_name,
             domain=domain,
-            onboarding_protocol=DeviceModel.OnboardingProtocol.EST_IDEVID,
-            pki_protocol=DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE,
+            onboarding_protocol=onboarding_protocol,
+            pki_protocol=pki_protocol,
             onboarding_status = DeviceModel.OnboardingStatus.PENDING
         )
 
@@ -143,7 +145,7 @@ class IDevIDAuthenticator(LoggerMixin):
         try:
             sn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
         except (ValueError, IndexError) as e:
-            # TODO(Air): Check if we want to add field to associate IDevID with device by fingerprint
+            # TODO(Air): Check if we want to add field to associate IDevID with device by fingerprint  # noqa: FIX002
             # This would however be incompatible with the current approach to Registration patterns
             # One option is to modify the registration pattern to allow matching certain Issuer DN fields instead of SN
             error_message = 'IDevID certificates without a serial number in the subject DN are not supported.'
@@ -180,7 +182,12 @@ class IDevIDAuthenticator(LoggerMixin):
 
     @classmethod
     def authenticate_idevid_from_x509(
-        cls, idevid_cert: x509.Certificate, intermediate_cas: list[x509.Certificate], domain: DomainModel | None = None
+        cls,
+        idevid_cert: x509.Certificate,
+        intermediate_cas: list[x509.Certificate],
+        domain: DomainModel | None = None,
+        onboarding_protocol: DeviceModel.OnboardingProtocol = DeviceModel.OnboardingProtocol.EST_IDEVID,
+        pki_protocol: DeviceModel.PkiProtocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE,
     ) -> DeviceModel:
         """Authenticate client using IDevID certificate for Domain Credential request and create a device."""
         domain, idevid_subj_sn = cls.authenticate_idevid_from_x509_no_device(
@@ -192,7 +199,8 @@ class IDevIDAuthenticator(LoggerMixin):
             existing_device = DeviceModel.objects.get(
                 domain=domain,
                 serial_number=idevid_subj_sn,
-                onboarding_protocol=DeviceModel.OnboardingProtocol.EST_IDEVID
+                onboarding_protocol=onboarding_protocol,
+                pki_protocol=pki_protocol,
             )
         except DeviceModel.DoesNotExist:
             pass
@@ -204,7 +212,13 @@ class IDevIDAuthenticator(LoggerMixin):
 
         if existing_device:
             return existing_device
-        return cls._auto_create_device_from_idevid(idevid_cert, idevid_subj_sn, domain)
+        return cls._auto_create_device_from_idevid(
+            idevid_cert=idevid_cert,
+            idevid_subj_sn=idevid_subj_sn,
+            domain=domain,
+            onboarding_protocol=onboarding_protocol,
+            pki_protocol=pki_protocol
+        )
 
     @classmethod
     def authenticate_idevid(cls, request: HttpRequest, domain: DomainModel | None = None) -> DeviceModel:
