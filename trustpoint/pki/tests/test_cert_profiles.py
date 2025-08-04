@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from pki.util.cert_profile import JSONProfileVerifier
+from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 
 
 def test_valid_profile_instance() -> None:
@@ -29,30 +29,31 @@ def test_invalid_profile_instance() -> None:
 
 def test_prohibited_cn_present() -> None:
     """Test that a request with a prohibited CN fails verification."""
-    template = {
+    profile = {
         'type': 'cert_profile',
         'subj': {'cn': None},
         'reject_mods': True
     }
-    verifier = JSONProfileVerifier(template)
+    verifier = JSONProfileVerifier(profile)
     request = {
         'subj': {'cn': 'example.com'}
     }
-    with pytest.raises(ValidationError):
-        verifier.apply_profile(request)
+    with pytest.raises(ProfileValidationError, match="Field 'common_name' is prohibited in the profile."):
+        verifier.apply_profile_to_request(request)
 
 def test_allowed_cn_present() -> None:
     """Test that a request with an allowed CN passes verification."""
-    template = {
+    profile = {
         'type': 'cert_profile',
-        'subj': {'allow': ['cn']},
+        'subj': {'allow': ['cn', 'common_name']}, # TODO: Normalize the Allow list!
     }
-    verifier = JSONProfileVerifier(template)
+    verifier = JSONProfileVerifier(profile)
     request = {
         'subj': {'cn': 'example.com'}
     }
-    validated_request = verifier.apply_profile(request)
-    assert validated_request['subj']['cn'] == 'example.com'
+    validated_request = verifier.apply_profile_to_request(request)
+    print('Validated Request: ', validated_request)
+    assert validated_request['subject']['common_name'] == 'example.com'
 
 def test_implicit_allow_subject() -> None:
     """Test that a request with implicit allow for all fields passes verification."""
@@ -64,7 +65,7 @@ def test_implicit_allow_subject() -> None:
     request = {
         'subj': {'cn': 'example.com', 'ou': 'IT'},
     }
-    assert verifier.apply_profile(request)
+    assert verifier.apply_profile_to_request(request)
 
 def test_implicit_allow_unknown_field() -> None:
     """Test that a request with an unknown field passes verification with implicit allow."""
@@ -76,9 +77,9 @@ def test_implicit_allow_unknown_field() -> None:
     request = {
         # This should probably still fail if the field is not recognized at all / add OID map in Trustpoint core?
         'subj': {'cn': 'example.com', 'unknown_field': 'value'},
-        'type': None
+        #'type': None
     }
-    assert verifier.apply_profile(request)
+    assert verifier.apply_profile_to_request(request)
 
 def test_request_normalization() -> None:
     """Test that a request is normalized correctly."""

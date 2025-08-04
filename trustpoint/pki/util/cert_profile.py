@@ -6,7 +6,7 @@ Profiles define allowed fields, prohibited fields, and other constraints for cer
 They can also specify default values for fields and validate the request against these rules.
 """
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     AliasChoices,
@@ -19,11 +19,17 @@ from pydantic import (
     model_validator,
 )
 
+from pydantic_core import PydanticUndefined
+
+
+class ProfileValidationError(Exception):
+    """Raised when the request is well-formed but does not match the profile constraints."""
+
 ALIAS_CN = AliasChoices('common_name', 'cn', 'CN', 'commonName', '2.5.4.3')
 
 class SubjectModel(BaseModel):
     """Model for the subject DN of a certificate profile."""
-    common_name: str | None = Field(alias=ALIAS_CN, default=None)
+    common_name: str | None = Field(None, alias=ALIAS_CN)
     #organization: str | None = None
     #organizational_unit: str | None = None
     #country: str | None = None
@@ -31,7 +37,7 @@ class SubjectModel(BaseModel):
     #locality: str | None = None
 
     # Should allow unknown fields, but not required
-    model_config = ConfigDict(extra='forbid')  # allow, ignore (default)
+    model_config = ConfigDict(extra='allow')
 
 class SanExtensionModel(BaseModel):
     """Model for the SAN extension of a certificate profile."""
@@ -83,14 +89,14 @@ class CertProfileModel(CertProfileBaseModel):
 
 class CertRequestModel(BaseModel):
     """Model for a certificate request."""
-    type: Literal['cert_request'] = 'cert_request'
+    type: Literal['cert_request'] | None = 'cert_request'
     subject: SubjectModel | None = Field(alias='subj', default=None)
     extensions: ExtensionsModel | None = Field(alias='ext', default=None)
 
-    model_config = ConfigDict(extra='forbid')
+    model_config = ConfigDict(extra='allow') # extra fields are validated by _apply_profile_rules
 
 
-class InheritedProfileConfig():
+class InheritedProfileConfig:
     """Constraints set in the profile that are inherited by deeper nesting levels."""
     allow_implicit: bool = False
     reject_mods: bool = False
@@ -121,6 +127,10 @@ class JSONProfileVerifier:
         validated_profile = CertProfileModel.model_validate(profile)
         self.profile = validated_profile
         print('Profile:', self.profile)
+
+        self.profile_dict = validated_profile.model_dump(exclude_unset=True)
+        print('Profile Dict:', self.profile_dict)
+        return
 
         fields = {}
         for key, value in profile.items():
@@ -179,33 +189,54 @@ class JSONProfileVerifier:
         """
         return isinstance(value, (str, int, float, bool))
 
-    def _apply_profile_rules(self, request: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
+    def _handle_request_only_fields(
+            self, request: dict[str, Any], profile: dict[str, Any],
+            profile_config: InheritedProfileConfig, allow_list: list[str] | None = None
+            ) -> None:
+        """Consider the fields that are only in the request, but not in the profile.
+
+        Don't need to do any nested stuff here,
+        since if the key is not in the profile, it will also not constrain sub-keys.
+
+        Request fields are deleted in-place if they are not allowed by the profile.
+        """
+        for field, value in list(request.items()):
+            if field in profile or profile_config.allow_implicit or (allow_list and field in allow_list):
+                # Field is explicitly or implicitly allowed, keep it
+                continue
+            # Field is not allowed, remove it
+            if profile_config.reject_mods and value:
+                msg = f"Field '{field}' is not explicitly allowed in the profile."
+                raise ProfileValidationError(msg)
+            del request[field]
+
+    def _apply_profile_rules(self, request: dict[str, Any], profile: dict[str, Any],
+                             parent_profile_config: InheritedProfileConfig | None = None) -> dict[str, Any]:
         """Apply the actual profile rules to one level of the request dict.
 
         It needs them both request and profile to be in the same structure and hierarchy,
         e.g. both in the "subject" sub-dict.
         """
-        profile_allow = profile.get('allow') # TODO: If '*', inherit from hierarchy parent
-        profile_reject_mods = profile.get('reject_mods', False) # TODO: inherit from hierarchy parent
-        profile_mutable = profile.get('mutable', False)  # TODO: inherit from hierarchy parent
+        if not parent_profile_config: # top level
+            parent_profile_config = InheritedProfileConfig()
 
-        # consider the fields that are only in the request, but not in the profile
-        # don't need to do any nested stuff here,
-        # since if the key is not in the profile, it will also not constrain sub-keys
-        for field, value in request.items():
-            if field not in profile:
-                if profile_allow == '*' or field in profile_allow:
-                    # Field is implicitly allowed, keep it
-                    continue
-                # Field is not allowed, remove it
-                if profile_reject_mods and value:
-                    msg = f"Field '{field}' is not explicitly allowed in the profile."
-                    raise ValidationError(msg)
-                del request[field]
-                continue
+        profile_allow = profile.get('allow', parent_profile_config.allow_implicit)
+        profile_reject_mods = profile.get('reject_mods', parent_profile_config.reject_mods)
+        profile_mutable = profile.get('mutable', parent_profile_config.mutable)
+        if profile_allow == '*':
+            profile_allow = True
+
+        profile_config = InheritedProfileConfig(
+            allow_implicit=profile_allow,
+            reject_mods=profile_reject_mods,
+            mutable=profile_mutable
+        )
+
+        self._handle_request_only_fields(
+            request, profile, profile_config, profile_allow if isinstance(profile_allow, list) else None)
 
         # Constraining profile fields that should not literally be in the request
-        skip_keys = {'allow', 'reject_mods', 'mutable', 'default', 'value', 'required'}
+        skip_keys = {'type','allow', 'reject_mods', 'mutable', 'default', 'value', 'required'}
         filtered_profile = {k: v for k, v in profile.items() if k not in skip_keys}
 
         for field, profile_value in filtered_profile.items():
@@ -214,11 +245,13 @@ class JSONProfileVerifier:
                 # Field is not allowed in the profile, but present in the request
                 if profile_reject_mods:
                     msg = f"Field '{field}' is prohibited in the profile."
-                    raise ValidationError(msg)
+                    raise ProfileValidationError(msg)
                 del request[field]
                 continue
             if field not in request:
                 if isinstance(profile_value, dict):
+                    # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
+                    self._apply_profile_rules(request.setdefault(field, {}), profile_value, profile_config)
                 # check for default and required fields
                     if 'value' in profile_value:
                         # Set default value from profile
@@ -231,28 +264,29 @@ class JSONProfileVerifier:
                     if 'required' in profile_value:
                         # Required field is missing in the request
                         msg = f"Field '{field}' is required but not present in the request."
-                        raise ValidationError(msg)
+                        raise ProfileValidationError(msg)
                     # 're' case
-                    # if none of the above are present, we assume it is a nested dict
-                    self._apply_profile_rules(request.setdefault(field, {}), profile_value)
                 elif JSONProfileVerifier._is_simple_type(profile_value):
                     request[field] = profile_value
                 else:
                     print(f"Warning: Field '{field}' in profile is of type {type(profile_value).__name__}, skipping.")
                 continue
             # Field is present in both request and profile
+            # TODO! Required but set to 'None' in the request
             if isinstance(profile_value, dict):
-                if 'value' in profile_value and not profile_mutable: # TODO: does not consider {"value":"x", "mutable": True}
+                self._apply_profile_rules(request.setdefault(field, {}), profile_value, profile_config)
+                local_value_mutable = profile_value.get('mutable', profile_mutable)
+                if 'value' in profile_value and not local_value_mutable:
                     # Field is not mutable, force the value from the profile
                     if profile_reject_mods and request[field] != profile_value['value']:
                         msg = f"Field '{field}' is not mutable in the profile."
-                        raise ValidationError(msg)
+                        raise ProfileValidationError(msg)
                     request[field] = profile_value['value']
                     continue
             elif JSONProfileVerifier._is_simple_type(profile_value) and not profile_mutable:
-                if profile_reject_mods and request[field] != profile_value['value']:
+                if profile_reject_mods and request[field] != profile_value:
                     msg = f"Field '{field}' is not mutable in the profile."
-                    raise ValidationError(msg)
+                    raise ProfileValidationError(msg)
                 request[field] = profile_value
             else:
                 print(f"Warning: Field '{field}' in profile is of type {type(profile_value).__name__}, skipping.")
@@ -262,6 +296,8 @@ class JSONProfileVerifier:
 
     def apply_profile_to_request(self, request: dict[str, Any]) -> dict[str, Any]:
         """Apply the profile to a certificate request and return the modified request."""
+        validated_request = self.validate_request(request=request)
+        return self._apply_profile_rules(validated_request, self.profile_dict)
         # For each field in the request, check on the same hierarchy level in the profile if:
         # - it is allowed.
         # - any default values are set

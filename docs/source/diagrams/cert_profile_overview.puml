@@ -1,15 +1,39 @@
 @startuml
 skinparam linetype ortho
 
-' Positioning using a layout trick
-card A as "A"
-card B as "B"
-card C as "C"
+card orig [
+Incoming certificate request (e.g. PKI message)
+----
+Parsing, authentication and authorization steps
+]
 
-' Force layout using hidden lines
-A -[hidden]-> B
+card A0 [
+Convert CSR/PKI message to JSON <i>cert_request</i>
+]
 
+card A [ 
+Validate + normalize <i>cert_profile</i>
+----
+pydantic
+]
+
+card B [ 
+Validate + normalize <i>cert_request</i>
+----
+pydantic
+]
+
+card C [
+Apply rules from <i>cert_profile</i> to <i>cert_request</i>
+]
+
+card D [
+Convert validated <i>cert_request</i> to <i>CertificateBuilder</i>
+]
+
+orig -down-> A0
+A0 -down-> B
 A -down-> C
 B -down-> C
-
+C -down-> D
 @enduml
