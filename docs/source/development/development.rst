@@ -164,7 +164,7 @@ Building auto documentation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code:: bash
-
+   uv sync --group docs
    cd ../docs
    sphinx-apidoc -f -e -o ./source ../trustpoint /*/migrations/*
    make html

@@ -4,6 +4,12 @@ This directory contains the reStructuredText (reST) sources to the Trustpoint do
 
 ## Building the docs
 
+Use
+```
+uv sync --group docs
+```
+to install the dependencies required to build docs.
+
 ### Using make
 
 ```
