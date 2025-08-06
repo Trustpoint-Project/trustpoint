@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = "==3.12.*"
 
 [[package]]
@@ -1270,7 +1270,7 @@ wheels = [
 
 [[package]]
 name = "trustpoint"
-version = "0.3.0.dev0"
+version = "0.3.0.dev1"
 source = { editable = "." }
 dependencies = [
     { name = "crispy-bootstrap5" },
