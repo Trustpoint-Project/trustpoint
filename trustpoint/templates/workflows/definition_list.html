@@ -1,13 +1,39 @@
 {% extends 'trustpoint/base.html' %}
+{% load static %}
 {% block content %}
   <h1>Workflows</h1>
-  <a href="{% url 'workflows:definition_wizard' %}">Create New Workflow</a>
-  <ul>
-    {% for wf in object_list %}
-      <li>
-        {{ wf.name }} (v{{ wf.version }}) —
-        <a href="{% url 'workflows:definition_wizard' %}?edit={{ wf.id }}">Edit</a>
-      </li>
-    {% endfor %}
-  </ul>
+  <p>
+    <a class="btn btn-primary" href="{% url 'workflows:definition_wizard' %}">
+      + Create New Workflow
+    </a>
+    <a class="btn btn-secondary" href="{% url 'workflows:pending_list' %}">
+      Pending Approvals
+    </a>
+  </p>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Updated</th>
+        <th>Published</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for wf in definitions %}
+        <tr>
+          <td>{{ wf.name }}</td>
+          <td>{{ wf.updated_at }}</td>
+          <td>{{ wf.published }}</td>
+          <td>
+            <a href="{% url 'workflows:definition_wizard' %}?edit={{ wf.id }}">Edit</a>
+          </td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="4">No workflows defined.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 {% endblock %}

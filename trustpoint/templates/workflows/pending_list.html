@@ -1,16 +1,15 @@
 {% extends 'trustpoint/base.html' %}
 {% load static %}
 {% block content %}
-  <h1>Pending Workflows</h1>
-
-  <table>
+  <h1>Pending Approvals</h1>
+  <table class="table">
     <thead>
       <tr>
-        <th>ID</th>
-        <th>Name</th>
-        <th>Current Node</th>
-        <th>Started</th>
-        <th>Actions</th>
+        <th>Instance ID</th>
+        <th>Workflow</th>
+        <th>Current Step</th>
+        <th>Requested At</th>
+        <th>Action</th>
       </tr>
     </thead>
     <tbody>
@@ -18,34 +17,22 @@
         <tr>
           <td>{{ inst.id }}</td>
           <td>{{ inst.definition.name }}</td>
-          <td>{{ inst.current_node }}</td>
-          <td>{{ inst.created_at|date:"Y-m-d H:i:s" }}</td>
+          <td>{{ inst.current_step }}</td>
+          <td>{{ inst.created_at }}</td>
           <td>
-            <form
-              method="post"
-              action="{% url 'workflows:signal' inst.id %}"
-              style="display:inline"
-            >
+            <form method="post" action="{% url 'workflows:signal' inst.id %}">
               {% csrf_token %}
-              <input type="hidden" name="action" value="Approved">
-              <button type="submit">Approve</button>
-            </form>
-
-            <form
-              method="post"
-              action="{% url 'workflows:signal' inst.id %}"
-              style="display:inline"
-            >
-              {% csrf_token %}
-              <input type="hidden" name="action" value="Rejected">
-              <button type="submit">Reject</button>
+              <button name="action" value="Approved" class="btn btn-sm btn-success">
+                Approve
+              </button>
+              <button name="action" value="Rejected" class="btn btn-sm btn-danger">
+                Reject
+              </button>
             </form>
           </td>
         </tr>
       {% empty %}
-        <tr>
-          <td colspan="5">No pending workflows.</td>
-        </tr>
+        <tr><td colspan="5">No pending workflows.</td></tr>
       {% endfor %}
     </tbody>
   </table>

@@ -39,18 +39,18 @@ class Triggers:
 
 
 RAW_EMAIL_TEMPLATES = [
-    "device_onboarded",
-    "cert_expiry_warning",
-    "cert_expired",
-    "cert_revoked",
-    "user_welcome",
-    "password_reset",
+    'device_onboarded',
+    'cert_expiry_warning',
+    'cert_expired',
+    'cert_revoked',
+    'user_welcome',
+    'password_reset',
 ]
 
 EMAIL_TEMPLATES: list[dict[str, str]] = [
     {
-        "value": t,
-        "label": " ".join(word.capitalize() for word in t.split("_"))
+        'value': t,
+        'label': ' '.join(word.capitalize() for word in t.split('_'))
     }
     for t in RAW_EMAIL_TEMPLATES
 ]

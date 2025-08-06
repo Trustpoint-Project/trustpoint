@@ -1,27 +1,24 @@
-# workflows/services/trigger_dispatcher.py
-from collections.abc import Callable
-from typing import Any
+from typing import Any, Dict
+
+# from workflows.services.certificate_issued import CertificateIssuedHandler
+from workflows.services.certificate_request import CertificateRequestHandler
+
+# from workflows.services.device_created import DeviceCreatedHandler
+# from workflows.services.device_deleted import DeviceDeletedHandler
 
 
 class TriggerDispatcher:
-    """Central registry for named workflow triggers."""
-    _handlers: dict[str, Callable[..., dict[str, Any]]] = {}
+    """Map event‐names to handler instances."""
+    _handlers: dict[str, Any] = {
+        'certificate_request': CertificateRequestHandler(),
+        # 'device_created':      DeviceCreatedHandler(),
+        # 'certificate_issued':  CertificateIssuedHandler(),
+        # 'device_deleted':      DeviceDeletedHandler(),
+    }
 
     @classmethod
-    def register(cls, name: str, handler: Callable[..., dict[str, Any]]) -> None:
-        """Register a handler function under this trigger name.
-
-        Handler signature: (**event_kwargs) -> dict(status=..., …)
-        """
-        cls._handlers[name] = handler
-
-    @classmethod
-    def dispatch(cls, name: str, **event: Any) -> dict[str, Any]:
-        """Look up the handler for `name` and call it with the event payload.
-
-        Returns the handler’s status dict, or a no_handler error.
-        """
-        handler = cls._handlers.get(name)
+    def dispatch(cls, event: str, **kwargs: Any) -> Dict[str, Any]:
+        handler = cls._handlers.get(event)
         if not handler:
-            return {'status': 'no_handler', 'error': f'No trigger registered for {name!r}'}
-        return handler(**event)
+            return {'status': 'error', 'msg': f'No handler for event {event!r}'}
+        return handler(**kwargs)

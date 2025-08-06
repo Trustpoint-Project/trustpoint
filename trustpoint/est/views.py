@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol, cast
 
 from cryptography import x509
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives._serialization import Encoding
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from devices.issuer import (
@@ -23,13 +22,10 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from pki.models.credential import CredentialModel
-from pki.models.devid_registration import DevIdRegistration
 from pki.models.domain import DomainModel
-from pki.models.truststore import TruststoreModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
 from pyasn1.type.univ import ObjectIdentifier
-from trustpoint_core.serializer import CertificateCollectionSerializer
 
 from trustpoint.logger import LoggerMixin
 from workflows.models import WorkflowInstance
@@ -782,11 +778,11 @@ class EstSimpleEnrollmentView(
         raw_message, http_response = self.process_http_request(request)
 
         if not http_response and raw_message:
-            domain_name = cast(str, kwargs.get('domain'))
+            domain_name = cast('str', kwargs.get('domain'))
             requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
 
         if not http_response and raw_message and requested_domain:
-            cert_template = cast(str, kwargs.get('certtemplate'))
+            cert_template = cast('str', kwargs.get('certtemplate'))
             requested_cert_template_str, http_response = self.extract_cert_template(cert_template=cert_template)
 
         if (not http_response and
@@ -828,8 +824,8 @@ class EstSimpleEnrollmentView(
 
             info = TriggerDispatcher.dispatch(
                 'certificate_request',
-                protocol=self.TRIGGER.protocol,
-                operation=self.TRIGGER.operation,
+                protocol=Triggers.est_simpleenroll.protocol,
+                operation=Triggers.est_simpleenroll.operation,
                 ca_id=requested_domain.issuing_ca.id,
                 domain_id=requested_domain.id,
                 device_id=device.id,
@@ -845,7 +841,7 @@ class EstSimpleEnrollmentView(
             print(info)
             print('status')
             print(status)
-            if status == WorkflowInstance.STATE_COMPLETE:
+            if status == WorkflowInstance.STATE_APPROVED:
                 # already approved → issue directly
                 http_response = self._issue_simpleenroll(
                     device=device,
@@ -853,11 +849,24 @@ class EstSimpleEnrollmentView(
                     credential_request=credential_request,
                     requested_cert_template_str=requested_cert_template_str,
                 )
-            elif status == WorkflowInstance.STATE_PENDING:
+                instance = WorkflowInstance.objects.filter(id=info.get('instance_id')).first().finalize()
+                print('Instance')
+                print(instance)
+            elif status == WorkflowInstance.STATE_AWAITING:
                 # newly queued or re‑queued
-                return LoggedHttpResponse(
+                http_response = LoggedHttpResponse(
                     'Enrollment request pending approval',
                     status=202,
+                    content_type='text/plain',
+                )
+            elif status == WorkflowInstance.STATE_REJECTED:
+                # newly queued or re‑queued
+                instance = WorkflowInstance.objects.filter(id=info.get('instance_id')).first().finalize()
+                print('Instance')
+                print(instance)
+                http_response = LoggedHttpResponse(
+                    'Enrollment request Rejected',
+                    status=403,
                     content_type='text/plain',
                 )
             elif status == 'no_match':
@@ -909,11 +918,11 @@ class EstSimpleReEnrollmentView(EstAuthenticationMixin,
         raw_message, http_response = self.process_http_request(request)
 
         if not http_response and raw_message:
-            domain_name = cast(str, kwargs.get('domain'))
+            domain_name = cast('str', kwargs.get('domain'))
             requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
 
         if not http_response and raw_message and requested_domain:
-            cert_template = cast(str, kwargs.get('certtemplate'))
+            cert_template = cast('str', kwargs.get('certtemplate'))
             requested_cert_template_str, http_response = self.extract_cert_template(cert_template=cert_template)
 
         if not http_response:
@@ -962,7 +971,7 @@ class EstCACertsView(EstAuthenticationMixin, EstRequestedDomainExtractorMixin, V
         requested_domain: DomainModel | None
 
         try:
-            domain_name = cast(str, kwargs.get('domain'))
+            domain_name = cast('str', kwargs.get('domain'))
             requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
 
             if not http_response and requested_domain:

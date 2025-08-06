@@ -1,12 +1,7 @@
-{% extends "trustpoint/base.html" %}
+{% extends 'trustpoint/base.html' %}
 {% load static %}
 {% block content %}
+  <h1 id="wizard-title">Create / Edit Workflow</h1>
   <div id="workflow-wizard"></div>
-
-  {# Inject the STEP_PARAM_DEFS JSON for the wizard #}
-  <script id="stepParamDefs" type="application/json">
-    {{ step_param_defs_json|safe }}
-  </script>
-
   <script src="{% static 'js/workflow_wizard.js' %}"></script>
 {% endblock %}
