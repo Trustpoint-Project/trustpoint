@@ -29,7 +29,6 @@ from trustpoint_core.serializer import CredentialFileFormat
 from util.mult_obj_views import get_primary_keys_from_str_as_list_of_ints
 
 from devices.forms import (
-    ApplicationCertProfileSelectForm,
     BrowserLoginForm,
     ClmDeviceModelNoOnboardingForm,
     ClmDeviceModelOnboardingForm,
@@ -552,10 +551,23 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             cred.expiration_date = cast('datetime.datetime', cred.credential.certificate.not_valid_after)
             cred.revoke = self._get_revoke_button_html(cred)
 
-        context['main_url'] = f'devices:{self.page_name}'
+        context['main_url'] = f'{self.page_category}:{self.page_name}'
         context['issue_app_cred_no_onboarding_url'] = (
             f'devices:{self.page_name}_no_onboarding_clm_issue_application_credential'
+        ) if self.object.no_onboarding_config else (
+            f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential'
         )
+        issue_domain_cred_onboarding_url = ''
+        if self.object.onboarding_config:
+            if self.object.onboarding_config.onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
+                issue_domain_cred_onboarding_url = (
+                    f'{self.page_category}:{self.page_name}_help-onboarding_cmp-shared-secret'
+                )
+            elif self.object.onboarding_config.onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD:
+                issue_domain_cred_onboarding_url = (
+                    f'{self.page_category}:{self.page_name}_help-onboarding_est-username-password'
+                )
+        context['issue_domain_cred_onboarding_url'] = issue_domain_cred_onboarding_url
 
         context['download_url'] = f'{self.page_category}:{self.page_name}_download'
 
@@ -794,7 +806,75 @@ class OpcUaGdsNoOnboardingIssueNewApplicationCredentialView(AbstractNoOnboarding
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
-class AbstractNoOnboardingProfileSelectHelpView(DetailView[DeviceModel]):
+
+class AbstractOnboardingIssueNewApplicationCredentialView(DetailView[DeviceModel]):
+    """abc."""
+
+    http_method_names = ('get',)
+
+    model = DeviceModel
+    context_object_name = 'device'
+    template_name = 'devices/credentials/issue_credential.html'
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name: str
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the sections to the context.
+
+        Args:
+            **kwargs: Keyword arguments are passed to super().get_context_data(**kwargs).
+
+        Returns:
+            The context data for the view.
+        """
+        context = super().get_context_data(**kwargs)
+        context['clm_url'] = f'{self.page_category}:{self.page_name}_certificate_lifecycle_management'
+        context['heading'] = 'Issue New Application Credential'
+        sections = []
+
+        if not self.object.onboarding_config:
+            err_msg = _('Device is not configured for onboarding')
+            raise ValueError(err_msg)
+
+        sections.append({
+            'heading': _('CMP with Domain Credential'),
+            'description': _(
+                'This option will guide you through all steps and commands that are '
+                'required to issue a new application certificate using CMP with OpenSSL using a shared-secret (HMAC).'),
+            'protocol': 'cmp',
+            'enabled': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP),
+        })
+
+        sections.append({
+            'heading': _('EST with Domain Credential'),
+            'description': _(
+                'This option will guide you through all steps and commands that are '
+                'required to issue a new application certificate using EST using OpenSSL and curL.'
+            ),
+            'protocol': 'est',
+            'enabled': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST),
+        })
+
+        context['sections'] = sections
+        context['profile_select_url'] = (
+            f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_profile_select'
+        )
+
+        return context
+
+
+class DeviceOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssueNewApplicationCredentialView):
+    """abc."""
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class OpcUaGdsOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssueNewApplicationCredentialView):
+    """abc."""
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class AbstractNoOnboardingProfileSelectView(DetailView[DeviceModel]):
     """abc."""
 
     http_method_names = ('get',)
@@ -863,13 +943,65 @@ class AbstractNoOnboardingProfileSelectHelpView(DetailView[DeviceModel]):
         return context
 
 
-class DeviceNoOnboardingProfileSelectHelpView(AbstractNoOnboardingProfileSelectHelpView):
+class DeviceNoOnboardingProfileSelectView(AbstractNoOnboardingProfileSelectView):
     """abc."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class OpcUaGdsNoOnboardingProfileSelectHelpView(AbstractNoOnboardingProfileSelectHelpView):
+class OpcUaGdsNoOnboardingProfileSelectView(AbstractNoOnboardingProfileSelectView):
+    """abc."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class AbstractOnboardingProfileSelectView(DetailView[DeviceModel]):
+    """abc."""
+
+    http_method_names = ('get',)
+
+    model = DeviceModel
+    context_object_name = 'device'
+    template_name = 'devices/credentials/profile_select.html'
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name: str
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the sections to the context.
+
+        Args:
+            **kwargs: Keyword arguments are passed to super().get_context_data(**kwargs).
+
+        Returns:
+            The context data for the view.
+        """
+        context = super().get_context_data(**kwargs)
+        context['cert_profiles'] = ALLOWED_APP_CRED_PROFILES
+
+        protocol = self.kwargs.get('protocol')
+
+        context['manual_options'] = []
+        if protocol == 'cmp':
+            help_url = f'{self.page_category}:{self.page_name}_help_onboarding_cmp'
+        elif protocol == 'est':
+            help_url = f'{self.page_category}:{self.page_name}_help_onboarding_est'
+        else:
+            err_msg = 'Unknown protocol found.'
+            raise Http404(err_msg)
+
+        context['help_url'] = help_url
+
+        return context
+
+
+class DeviceOnboardingProfileSelectView(AbstractOnboardingProfileSelectView):
+    """abc."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class OpcUaGdsOnboardingProfileSelectView(AbstractOnboardingProfileSelectView):
     """abc."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
