@@ -56,7 +56,7 @@ class WorkflowInstance(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    definition = models.ForeignKey(WorkflowDefinition, on_delete=models.PROTECT, related_name='instances')
+    definition = models.ForeignKey(WorkflowDefinition, on_delete=models.CASCADE, related_name='instances')
     current_step = models.CharField(max_length=100, help_text='The node-ID we are currently at (e.g. "step-1")')
     state = models.CharField(max_length=32, choices=STATE_CHOICES, default=STATE_STARTING)
     payload = JSONField(help_text='Immutable inputs (eg. CSR fingerprint, CA/Domain/Device IDs)')

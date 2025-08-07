@@ -10,6 +10,7 @@
       Pending Approvals
     </a>
   </p>
+
   <table class="table">
     <thead>
       <tr>
@@ -26,7 +27,22 @@
           <td>{{ wf.updated_at }}</td>
           <td>{{ wf.published }}</td>
           <td>
-            <a href="{% url 'workflows:definition_wizard' %}?edit={{ wf.id }}">Edit</a>
+            <a class="btn btn-sm btn-primary"
+               href="{% url 'workflows:definition_wizard' %}?edit={{ wf.id }}">
+              Edit
+            </a>
+
+            <form
+              action="{% url 'workflows:definition_delete' wf.id %}"
+              method="post"
+              style="display:inline;"
+              onsubmit="return confirm('Delete workflow {{ wf.name }}?');"
+            >
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-danger">
+                Delete
+              </button>
+            </form>
           </td>
         </tr>
       {% empty %}

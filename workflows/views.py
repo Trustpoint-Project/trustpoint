@@ -92,6 +92,28 @@ class WorkflowDefinitionListView(ListView[WorkflowDefinition]):
     context_object_name = 'definitions'
 
 
+class WorkflowDefinitionDeleteView(View):
+    """
+    POST only: delete a workflow definition if no active (non-finalized)
+    instances exist.
+    """
+    def post(self, request: HttpRequest, pk: UUID, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
+        wf = get_object_or_404(WorkflowDefinition, pk=pk)
+        # block deletion if any non-finalized instances remain
+        if WorkflowInstance.objects.filter(definition=wf, finalized=False).exists():
+            messages.error(
+                request,
+                f'Cannot delete workflow "{wf.name}" — there are active instances.'
+            )
+        else:
+            wf.delete()
+            messages.success(
+                request,
+                f'Workflow "{wf.name}" deleted successfully.'
+            )
+        return redirect('workflows:definition_list')
+
+
 class WorkflowWizardView(View):
     """UI wizard to create or edit a linear workflow."""
 

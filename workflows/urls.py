@@ -2,13 +2,14 @@ from django.urls import path
 
 from workflows.views import (
     CAListView,
-    DomainListView,
-    DeviceListView,
     DefinitionDetailView,
-    WorkflowDefinitionListView,
-    WorkflowWizardView,
+    DeviceListView,
+    DomainListView,
     PendingApprovalsView,
     SignalInstanceView,
+    WorkflowDefinitionDeleteView,
+    WorkflowDefinitionListView,
+    WorkflowWizardView,
 )
 
 app_name = 'workflows'
@@ -25,6 +26,13 @@ urlpatterns = [
     # main UI
     path('', WorkflowDefinitionListView.as_view(), name='definition_list'),
     path('wizard/', WorkflowWizardView.as_view(), name='definition_wizard'),
+
+    # delete workflow definition
+    path(
+        'definitions/<uuid:pk>/delete/',
+        WorkflowDefinitionDeleteView.as_view(),
+        name='definition_delete'
+    ),
 
     # approval console
     path('pending/', PendingApprovalsView.as_view(), name='pending_list'),
