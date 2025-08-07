@@ -75,7 +75,6 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
-
                 (
                     'domain',
                     models.ForeignKey(
@@ -97,7 +96,6 @@ class Migration(migrations.Migration):
                         verbose_name='IDevID Manufacturer Truststore',
                     ),
                 ),
-
             ],
             options={
                 'abstract': False,

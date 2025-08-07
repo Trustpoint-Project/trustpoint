@@ -129,10 +129,7 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
     pki_protocol_class = OnboardingPkiProtocol
 
     pki_protocols = models.PositiveIntegerField(
-        verbose_name=_('Pki Protocol Bitwise Flag'),
-        null=False,
-        blank=True,
-        default=0
+        verbose_name=_('Pki Protocol Bitwise Flag'), null=False, blank=True, default=0
     )
 
     onboarding_status = models.IntegerField(
@@ -165,7 +162,13 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
 
     def __str__(self) -> str:
         """Gets the model instance as human-readable string."""
-        return 'OnboardingConfigModel()'
+        return (
+            'OnboardingConfigModel('
+            f'onboarding_status:{OnboardingStatus(self.onboarding_status).label}, '
+            f'onboarding_protocol:{OnboardingProtocol(self.onboarding_protocol).label}, '
+            f'cmp_shared_secret:{bool(self.onboarding_cmp_shared_secret)}, '
+            f'est_password:{bool(self.onboarding_est_password)})'
+        )
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Executes full_clean() before saving.
@@ -246,8 +249,6 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
                 'CMP shared-secret must not be set for CMP IDevID onboarding.'  # noqa: S105
             )
 
-        # idevid_trust_store can be left blank while this would ofcourse mean no onboarding is possible.
-
         return error_messages
 
     def _validate_case_cmp_shared_secret_onboarding(self) -> dict[str, str]:
@@ -316,9 +317,6 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         """
         error_messages = {}
 
-        if self.pki_protocols == 0:
-            error_messages['pki_protocols'] = 'At least one pki protocol has to be enabled.'
-
         if self.onboarding_status == OnboardingStatus.PENDING:
             if self.onboarding_est_password == '':
                 error_messages['onboarding_est_password'] = (
@@ -357,7 +355,11 @@ class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol],
 
     def __str__(self) -> str:
         """Gets the model instance as human-readable string."""
-        return 'NoOnboardingConfigModel()'
+        return (
+            'NoOnboardingConfigModel('
+            f'cmp_shared_secret:{bool(self.cmp_shared_secret)}'
+            f'est_username_password:{bool(self.est_username_password)})'
+        )
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Executes full_clean() before saving.
@@ -372,9 +374,6 @@ class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol],
     def clean(self) -> None:
         """Validation before saving the model."""
         error_messages = {}
-
-        if self.pki_protocols == 0:
-            error_messages['pki_protocols'] = 'At least one pki protocol has to be enabled.'
 
         if self.cmp_shared_secret != '' and not self.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET):
             error_messages['cmp_shared_secret'] = (

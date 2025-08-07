@@ -29,7 +29,10 @@ from trustpoint_core.serializer import CredentialFileFormat
 from util.mult_obj_views import get_primary_keys_from_str_as_list_of_ints
 
 from devices.forms import (
+    ApplicationCertProfileSelectForm,
     BrowserLoginForm,
+    ClmDeviceModelNoOnboardingForm,
+    ClmDeviceModelOnboardingForm,
     CredentialDownloadForm,
     DeleteDevicesForm,
     IssueDomainCredentialForm,
@@ -89,6 +92,13 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = _('No active trustpoin
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
+# This must be removed in the future makeing use of the profile engine
+ALLOWED_APP_CRED_PROFILES = [
+    {'profile': 'tls-server', 'label': 'TLS-Server Certficate'},
+    {'profile': 'tls-client', 'label': 'TLS-Client Certificate'},
+    {'profile': 'opcua-server', 'label': 'OPC-UA-Server Certificate'},
+    {'profile': 'opcua-client', 'label': 'OPC-UA-Client Certificate'},
+]
 
 # -------------------------------------------------- Main Table Views --------------------------------------------------
 
@@ -453,7 +463,7 @@ class OpcUaGdsCreateOnboardingView(AbstractCreateOnboardingView):
 class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, DetailView[DeviceModel], abc.ABC):
     """This is the CLM summary view in the devices section."""
 
-    http_method_names = ('get',)
+    http_method_names = ('get', 'post')
 
     model = DeviceModel
     template_name = 'devices/credentials/certificate_lifecycle_management.html'
@@ -542,20 +552,9 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             cred.expiration_date = cast('datetime.datetime', cred.credential.certificate.not_valid_after)
             cred.revoke = self._get_revoke_button_html(cred)
 
-        context['details_url'] = f'devices:{self.page_name}_details'
         context['main_url'] = f'devices:{self.page_name}'
-
-        context['issue_tls_client_cred_url'] = (
-            f'devices:{self.page_name}_certificate_lifecycle_management-issue_tls_client_credential'
-        )
-        context['issue_tls_server_cred_url'] = (
-            f'devices:{self.page_name}_certificate_lifecycle_management-issue_tls_server_credential'
-        )
-        context['issue_opc_ua_client_cred_url'] = (
-            f'devices:{self.page_name}_certificate_lifecycle_management-issue_opc_ua_client_credential'
-        )
-        context['issue_opc_ua_server_cred_url'] = (
-            f'devices:{self.page_name}_certificate_lifecycle_management-issue_opc_ua_server_credential'
+        context['issue_app_cred_no_onboarding_url'] = (
+            f'devices:{self.page_name}_no_onboarding_clm_issue_application_credential'
         )
 
         context['download_url'] = f'{self.page_category}:{self.page_name}_download'
@@ -570,7 +569,76 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         context['NoOnboardingPkiProtocol'] = NoOnboardingPkiProtocol
         context['OnboardingStatus'] = OnboardingStatus
 
+        context['device_form'] = self.get_device_form()
+
         return context
+
+    def get_onboarding_initial(self) -> dict[str, Any]:
+        """Gets the initial values for onboarding.
+
+        Returns:
+            Initial values for onboarding.
+        """
+        if not self.object.onboarding_config:
+            err_msg = _('The device does not have onboarding configured.')
+            raise ValueError(err_msg)
+        return {
+            'common_name': self.object.common_name,
+            'serial_number': self.object.serial_number,
+            'domain': self.object.domain,
+            'onboarding_protocol': self.object.onboarding_config.onboarding_protocol,
+            'onboarding_status': OnboardingStatus(self.object.onboarding_config.onboarding_status).label,
+            'pki_protocol_cmp': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP),
+            'pki_protocol_est': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST),
+        }
+
+    def get_no_onboarding_initial(self) -> dict[str, Any]:
+        """Gets the initial values for no onboarding.
+
+        Returns:
+            Initial values for no onboarding.
+        """
+        if not self.object.no_onboarding_config:
+            err_msg = _('The object has onboarding configured.')
+            raise ValueError(err_msg)
+        return {
+            'common_name': self.object.common_name,
+            'serial_number': self.object.serial_number,
+            'domain': self.object.domain,
+            'pki_protocol_cmp': self.object.no_onboarding_config.has_pki_protocol(
+                NoOnboardingPkiProtocol.CMP_SHARED_SECRET),
+            'pki_protocol_est': self.object.no_onboarding_config.has_pki_protocol(
+                NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD),
+            'pki_protocol_manual': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.MANUAL)
+        }
+
+    def get_onboarding_form(self) -> ClmDeviceModelOnboardingForm:
+        """Gets the form for onboarding.
+
+        Returns:
+            The onboarding form.
+        """
+        return ClmDeviceModelOnboardingForm(initial=self.get_onboarding_initial(), instance=self.object)
+
+    def get_no_onboarding_form(self) -> ClmDeviceModelNoOnboardingForm:
+        """Gets the form for no onboarding.
+
+        Returns:
+            The no onboarding form.
+        """
+        if self.request.method == 'POST':
+            return ClmDeviceModelNoOnboardingForm(self.request.POST, instance=self.object)
+        return ClmDeviceModelNoOnboardingForm(initial=self.get_no_onboarding_initial(), instance=self.object)
+
+    def get_device_form(self) -> ClmDeviceModelOnboardingForm | ClmDeviceModelNoOnboardingForm:
+        """Gets the device Form for onboarding or no onboarding.
+
+        Returns:
+            The required form.
+        """
+        if self.object.onboarding_config:
+            return self.get_onboarding_form()
+        return self.get_no_onboarding_form()
 
     @staticmethod
     def _get_expires_in(record: IssuedCredentialModel) -> str:
@@ -614,6 +682,22 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
 
         return ''
 
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        self.object = self.get_object()
+
+        __, ___, ____ = request, args, kwargs
+
+        form: ClmDeviceModelOnboardingForm | ClmDeviceModelNoOnboardingForm
+        if self.object.onboarding_config:
+            form = ClmDeviceModelOnboardingForm(self.request.POST, instance=self.object)
+        else:
+            form = ClmDeviceModelNoOnboardingForm(self.request.POST, instance=self.object)
+
+        if form.is_valid():
+            form.save()
+
+        context = self.get_context_data(object=self.object)
+        return self.render_to_response(context)
 
 class DeviceCertificateLifecycleManagementSummaryView(AbstractCertificateLifecycleManagementSummaryView):
     """Certificate Lifecycle Management Summary View for devices."""
@@ -628,6 +712,167 @@ class OpcUaGdsCertificateLifecycleManagementSummaryView(AbstractCertificateLifec
 
 
 #  ------------------------------ Certificate Lifecycle Management - Credential Issuance -------------------------------
+
+
+class AbstractNoOnboardingIssueNewApplicationCredentialView(DetailView[DeviceModel]):
+    """abc."""
+
+    http_method_names = ('get',)
+
+    model = DeviceModel
+    context_object_name = 'device'
+    template_name = 'devices/credentials/issue_credential.html'
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name: str
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the sections to the context.
+
+        Args:
+            **kwargs: Keyword arguments are passed to super().get_context_data(**kwargs).
+
+        Returns:
+            The context data for the view.
+        """
+        context = super().get_context_data(**kwargs)
+        context['clm_url'] = f'{self.page_category}:{self.page_name}_certificate_lifecycle_management'
+        context['heading'] = 'Issue New Application Credential'
+        sections = []
+
+        if not self.object.no_onboarding_config:
+            err_msg = _('Device is configured for onboarding')
+            raise ValueError(err_msg)
+
+        sections.append({
+            'heading': _('CMP with OpenSSL (shared-secret)'),
+            'description': _(
+                'This option will guide you through all steps and commands that are '
+                'required to issue a new application certificate using CMP with OpenSSL using a shared-secret (HMAC).'),
+            'protocol': 'cmp-shared-secret',
+            'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET),
+        })
+
+        sections.append({
+            'heading': _('EST with OpenSSL and curL (username & password)'),
+            'description': _(
+                'This option will guide you through all steps and commands that are '
+                'required to issue a new application certificate using EST using OpenSSL and curL.'
+            ),
+            'protocol': 'est-username-password',
+            'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD),
+        })
+
+
+        sections.append({
+            'heading': _('Manual Issuance'),
+            'description': _(
+                'This option will allow you to issue a new domain credential on the Trustpoint. '
+                'The domain credential can then be downloaded for manual injection into the device, '
+                'e.g., using a USB-stick.'
+            ),
+            'protocol': 'manual',
+            'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.MANUAL),
+        })
+
+
+        context['sections'] = sections
+        context['profile_select_url'] = (
+            f'{self.page_category}:{self.page_name}_no_onboarding_clm_issue_application_credential_profile_select'
+        )
+
+        return context
+
+
+class DeviceNoOnboardingIssueNewApplicationCredentialView(AbstractNoOnboardingIssueNewApplicationCredentialView):
+    """abc."""
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class OpcUaGdsNoOnboardingIssueNewApplicationCredentialView(AbstractNoOnboardingIssueNewApplicationCredentialView):
+    """abc."""
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class AbstractNoOnboardingProfileSelectHelpView(DetailView[DeviceModel]):
+    """abc."""
+
+    http_method_names = ('get',)
+
+    model = DeviceModel
+    context_object_name = 'device'
+    template_name = 'devices/credentials/profile_select.html'
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name: str
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the sections to the context.
+
+        Args:
+            **kwargs: Keyword arguments are passed to super().get_context_data(**kwargs).
+
+        Returns:
+            The context data for the view.
+        """
+        context = super().get_context_data(**kwargs)
+        context['cert_profiles'] = ALLOWED_APP_CRED_PROFILES
+
+        protocol = self.kwargs.get('protocol')
+
+        context['manual_options'] = []
+        if protocol == 'cmp-shared-secret':
+            help_url = f'{self.page_category}:{self.page_name}_help_no_onboarding_cmp_shared_secret'
+        elif protocol == 'est-username-password':
+            help_url = f'{self.page_category}:{self.page_name}_help_no_onboarding_est_username_password'
+        elif protocol == 'manual':
+            help_url = None
+            context['manual_options'] = [
+                {
+                    'profile': 'TLS-Client Certificate',
+                    'url': (
+                        f'{self.page_category}:{self.page_name}'
+                        '_certificate_lifecycle_management-issue_tls_client_credential')
+                },
+                {
+                    'profile': 'TLS-Server Certificate',
+                    'url': (
+                        f'{self.page_category}:{self.page_name}'
+                        '_certificate_lifecycle_management-issue_tls_server_credential')
+                },
+                {
+                    'profile': 'OPC-UA-Client Certificate',
+                    'url': (
+                        f'{self.page_category}:{self.page_name}'
+                        '_certificate_lifecycle_management-issue_opc_ua_client_credential')
+                },
+                {
+                    'profile': 'OPC-UA-Client Certificate',
+                    'url': (
+                        f'{self.page_category}:{self.page_name}'
+                        '_certificate_lifecycle_management-issue_opc_ua_server_credential')
+                },
+            ]
+        else:
+            err_msg = _('Unknown protocol found.')
+            raise Http404(err_msg)
+
+        context['help_url'] = help_url
+
+
+        return context
+
+
+class DeviceNoOnboardingProfileSelectHelpView(AbstractNoOnboardingProfileSelectHelpView):
+    """abc."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class OpcUaGdsNoOnboardingProfileSelectHelpView(AbstractNoOnboardingProfileSelectHelpView):
+    """abc."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: BaseTlsCredentialIssuer](
@@ -725,7 +970,8 @@ class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: Ba
 
 
 class AbstractIssueDomainCredentialView(
-        AbstractIssueCredentialView[IssueDomainCredentialForm, LocalDomainCredentialIssuer]):
+    AbstractIssueCredentialView[IssueDomainCredentialForm, LocalDomainCredentialIssuer]
+):
     """Base view for issuing domain credentials."""
 
     form_class = IssueDomainCredentialForm
@@ -801,6 +1047,12 @@ class DeviceIssueTlsClientCredentialView(AbstractIssueTlsClientCredentialView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
+class OpcUaGdsIssueTlsClientCredentialView(AbstractIssueTlsClientCredentialView):
+    """Issue a new TLS client credential within the devices section."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
 class AbstractIssueTlsServerCredentialView(
     AbstractIssueCredentialView[IssueTlsServerCredentialForm, LocalTlsServerCredentialIssuer]
 ):
@@ -843,6 +1095,11 @@ class DeviceIssueTlsServerCredentialView(AbstractIssueTlsServerCredentialView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
+class OpcUaGdsIssueTlsServerCredentialView(AbstractIssueTlsServerCredentialView):
+    """Issues a TLS server credenital within the devices section."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
 class AbstractIssueOpcUaClientCredentialView(
     AbstractIssueCredentialView[IssueOpcUaClientCredentialForm, OpcUaClientCredentialIssuer]
 ):
@@ -876,6 +1133,12 @@ class DeviceIssueOpcUaClientCredentialView(AbstractIssueOpcUaClientCredentialVie
     """Issues an OPC UA client credential within the devices section."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class OpcUaGdsIssueOpcUaClientCredentialView(AbstractIssueOpcUaClientCredentialView):
+    """Issues an OPC UA client credential within the devices section."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class AbstractIssueOpcUaServerCredentialView(
@@ -924,6 +1187,12 @@ class DeviceIssueOpcUaServerCredentialView(AbstractIssueOpcUaServerCredentialVie
     """Issues an OPC UA server credential within the devices section."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class OpcUaGdsIssueOpcUaServerCredentialView(AbstractIssueOpcUaServerCredentialView):
+    """Issues an OPC UA server credential within the devices section."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 #  -------------------------------- Certificate Lifecycle Management - Token Auth Mixin --------------------------------
@@ -1435,6 +1704,11 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
         """
         self.object = self.get_object()
 
+        reverse_path = reverse(
+            f'{self.page_category}:{self.page_name}_certificate_lifecycle_management',
+            kwargs={'pk': self.object.device.pk}
+        )
+
         revoke_form = self.form_class(self.request.POST)
         if revoke_form.is_valid():
             revocation_reason = revoke_form.cleaned_data['revocation_reason']
@@ -1443,10 +1717,10 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
             if status == CertificateModel.CertificateStatus.EXPIRED:
                 msg = _('Credential is already expired. Cannot revoke expired certificates.')
                 messages.error(self.request, msg)
-                return redirect('devices:devices')
+                return redirect(reverse_path)
             if status == CertificateModel.CertificateStatus.REVOKED:
                 msg = _('Certificate is already revoked. Cannot revoke a revoked certificate again.')
-                return redirect('devices:devices')
+                return redirect(reverse_path)
             revoked_successfully, __ = DeviceCredentialRevocation.revoke_certificate(self.object.id, revocation_reason)
             if revoked_successfully:
                 msg = _('Successfully revoked one active credential.')
@@ -1454,7 +1728,7 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
             else:
                 messages.error(self.request, _('Failed to revoke certificate. See logs for more information.'))
 
-        return redirect('devices:devices')
+        return redirect(reverse_path)
 
 
 class DeviceIssuedCredentialRevocationView(AbstractIssuedCredentialRevocationView):
