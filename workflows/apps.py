@@ -8,7 +8,7 @@ class WorkflowsConfig(AppConfig):
 
     def ready(self) -> None:
         """Import signal handlers to register them on startup."""
-        from workflows.handlers.certificate_request import CertificateRequestHandler
+        from workflows.services.certificate_request import CertificateRequestHandler
         from workflows.services.handler_lookup import register_handler
 
         # Register the certificate request handler under a stable name

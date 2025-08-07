@@ -38,6 +38,7 @@ def advance_instance(
         # stop on any “pause” state
         if instance.state in {
             WorkflowInstance.STATE_AWAITING,
+            WorkflowInstance.STATE_APPROVED,
             WorkflowInstance.STATE_REJECTED,
             WorkflowInstance.STATE_COMPLETED,
         }:

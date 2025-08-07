@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
 # from workflows.services.certificate_issued import CertificateIssuedHandler
-from workflows.handlers.certificate_request import CertificateRequestHandler
+from workflows.services.certificate_request import CertificateRequestHandler
 
 # from workflows.services.device_created import DeviceCreatedHandler
 # from workflows.services.device_deleted import DeviceDeletedHandler
