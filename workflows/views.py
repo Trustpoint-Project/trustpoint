@@ -117,7 +117,6 @@ class WorkflowDefinitionListView(ListView[WorkflowDefinition]):
 
 class WorkflowWizardView(View):
     """UI wizard to create or edit a linear workflow."""
-
     template_name = 'workflows/definition_wizard.html'
 
     def get(self, request: HttpRequest) -> HttpResponse:
@@ -133,11 +132,26 @@ class WorkflowWizardView(View):
         name = data.get('name')
         triggers = data.get('triggers')
         steps = data.get('steps')
-        scopes = data.get('scopes', [])
+        scopes_in = data.get('scopes', {})
 
         if not name or not isinstance(triggers, list) or not isinstance(steps, list):
             return JsonResponse({'error': 'Missing or invalid name, triggers, or steps.'}, status=400)
 
+        # Build flat scopes list from grouped input
+        scopes_list: list[dict[str, Any]] = []
+        if isinstance(scopes_in, dict):
+            for ca in scopes_in.get('ca_ids', []):
+                scopes_list.append({'ca_id': ca, 'domain_id': None, 'device_id': None})
+            for dom in scopes_in.get('domain_ids', []):
+                scopes_list.append({'ca_id': None, 'domain_id': dom, 'device_id': None})
+            for dev in scopes_in.get('device_ids', []):
+                scopes_list.append({'ca_id': None, 'domain_id': None, 'device_id': dev})
+        elif isinstance(scopes_in, list):
+            scopes_list = scopes_in
+        else:
+            return JsonResponse({'error': 'Invalid scopes format.'}, status=400)
+
+        # Transform to internal definition
         definition = transform_to_definition_schema(triggers, steps)
 
         try:
@@ -155,9 +169,9 @@ class WorkflowWizardView(View):
         except IntegrityError:
             return JsonResponse({'error': 'A workflow with that name already exists.'}, status=400)
 
-        # reset scopes
+        # Reset scopes
         wf.scopes.all().delete()
-        for sc in scopes:
+        for sc in scopes_list:
             WorkflowScope.objects.create(
                 workflow=wf,
                 ca_id=sc.get('ca_id'),

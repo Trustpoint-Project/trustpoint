@@ -27,9 +27,9 @@ document.addEventListener('DOMContentLoaded', () => {
     IssueCertificate: []
   };
 
-  // --- Parse edit ID from URL ---
-  const urlParams = new URLSearchParams(window.location.search);
-  const editId = urlParams.get('edit');
+  // --- Parse edit‐mode ID ---
+  const params = new URLSearchParams(window.location.search);
+  const editId = params.get('edit');
 
   // --- DOM refs ---
   const wfNameEl     = document.getElementById('wf-name');
@@ -53,29 +53,45 @@ document.addEventListener('DOMContentLoaded', () => {
   function regeneratePreview() {
     const name     = wfNameEl.value.trim();
     const triggers = [{ protocol: protoEl.value, operation: opEl.value }];
-    const steps    = Array.from(stepsList.children).map(card => {
-      const type   = card.querySelector('select.step-type').value;
+
+    // gather steps
+    const steps = Array.from(stepsList.children).map(card => {
+      const type = card.querySelector('select.step-type').value;
       const params = {};
       card.querySelectorAll('[data-param-name]').forEach(inp => {
         const key = inp.dataset.paramName;
-        const val = inp.type==='number'? Number(inp.value) : inp.value;
+        const val = inp.type==='number' ? Number(inp.value) : inp.value;
         params[key] = val;
       });
       return { type, params };
     });
-    const scopes = Array.from(scopesList.children).map(item => {
-      const obj = { ca_id:null, domain_id:null, device_id:null };
-      const t = item.dataset.scopeType.toLowerCase();
-      obj[`${t}_id`] = item.dataset.scopeId;
-      return obj;
-    });
 
+    // gather scopes into sets
+    const caSet = new Set();
+    const domainSet = new Set();
+    const deviceSet = new Set();
+    Array.from(scopesList.children).forEach(item => {
+      const id = item.dataset.scopeId;
+      switch(item.dataset.scopeType) {
+        case 'CA':     caSet.add(id);     break;
+        case 'Domain': domainSet.add(id); break;
+        case 'Device': deviceSet.add(id); break;
+      }
+    });
+    const scopes = {
+      ca_ids:     Array.from(caSet),
+      domain_ids: Array.from(domainSet),
+      device_ids: Array.from(deviceSet),
+    };
+
+    // assemble payload
     const payload = { name, triggers, steps, scopes };
     if (editId) payload.id = editId;
+
     previewEl.textContent = JSON.stringify(payload, null, 2);
   }
 
-  // --- Populate protocol & operation selects ---
+  // --- Initialize Protocol/Operation selects ---
   Object.keys(operationsByProtocol).forEach(p => protoEl.add(new Option(p,p)));
   function updateOperations() {
     opEl.innerHTML = '';
@@ -146,17 +162,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     stepsList.appendChild(card);
   }
-
   addStepBtn.addEventListener('click', () => addStep());
 
-  // --- Scopes loader & builder ---
+  // --- Scope loader & builder ---
   function loadScopes() {
     const t = scopeTypeEl.value.toLowerCase();
     fetch(`/workflows/api/${t}s/`)
       .then(r=>r.json())
       .then(data=>{
         multiEl.innerHTML = '';
-        data.forEach(it => multiEl.add(new Option(it.name, it.id)));
+        data.forEach(it => multiEl.add(new Option(it.name,it.id)));
       });
   }
   scopeTypeEl.addEventListener('change', loadScopes);
@@ -171,25 +186,28 @@ document.addEventListener('DOMContentLoaded', () => {
       div.dataset.scopeId   = opt.value;
       const rm = document.createElement('button');
       rm.type = 'button'; rm.className = 'btn-close btn-close-sm';
-      rm.addEventListener('click', ()=> { div.remove(); regeneratePreview(); });
+      rm.addEventListener('click', ()=>{ div.remove(); regeneratePreview(); });
       div.appendChild(rm);
       scopesList.appendChild(div);
     });
     regeneratePreview();
   });
 
-  // --- Edit-mode preload ---
+  // --- Edit‐mode preload ---
   if (editId) {
     fetch(`/workflows/api/definitions/${editId}/`)
       .then(r => r.json())
       .then(data => {
-        wfNameEl.value = data.name || '';
+        // basic
+        wfNameEl.value = data.name||'';
         if (data.triggers?.[0]) {
           protoEl.value = data.triggers[0].protocol;
           updateOperations();
           opEl.value    = data.triggers[0].operation;
         }
+        // steps
         data.steps?.forEach(s => addStep(s.type, s.params));
+        // scopes
         data.scopes?.forEach(sc => {
           const div = document.createElement('div');
           div.className = 'alert alert-secondary d-flex justify-content-between align-items-center py-1 px-2';
@@ -198,14 +216,13 @@ document.addEventListener('DOMContentLoaded', () => {
           div.dataset.scopeId   = sc.id;
           const rm = document.createElement('button');
           rm.type = 'button'; rm.className = 'btn-close btn-close-sm';
-          rm.addEventListener('click', ()=> { div.remove(); regeneratePreview(); });
+          rm.addEventListener('click', ()=>{ div.remove(); regeneratePreview(); });
           div.appendChild(rm);
           scopesList.appendChild(div);
         });
         regeneratePreview();
       });
   } else {
-    // initial preview
     regeneratePreview();
   }
 
@@ -215,22 +232,22 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       payload = JSON.parse(previewEl.textContent);
     } catch {
-      return alert('Fix errors before saving.');
+      return alert('Fix preview errors.');
     }
     fetch('/workflows/wizard/', {
       method:'POST',
       headers:{
         'Content-Type':'application/json',
-        'X-CSRFToken': getCookie('csrftoken'),
+        'X-CSRFToken':getCookie('csrftoken'),
       },
       body: JSON.stringify(payload),
     })
     .then(async res => {
       const data = await res.json();
-      if (res.status === 201) {
+      if (res.status===201) {
         window.location.href = `/workflows/?saved=${data.id}`;
       } else {
-        alert('Error: ' + (data.error||'Unknown'));
+        alert('Error: '+(data.error||'Unknown'));
       }
     });
   });
