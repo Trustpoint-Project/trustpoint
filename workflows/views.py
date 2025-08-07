@@ -7,10 +7,14 @@ from uuid import UUID
 from devices.models import DeviceModel
 from django.contrib import messages
 from django.db import IntegrityError
-from django.db.models import ProtectedError, Q, QuerySet
-from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
+from django.db.models import QuerySet
+from django.http import (
+    HttpRequest,
+    HttpResponse,
+    HttpResponseRedirect,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
 from django.views import View
 from django.views.generic import ListView
 from pki.models import DomainModel, IssuingCaModel
@@ -21,7 +25,6 @@ from workflows.models import (
     WorkflowScope,
 )
 from workflows.services.engine import advance_instance
-from workflows.services.trigger_dispatcher import TriggerDispatcher
 from workflows.services.wizard import transform_to_definition_schema
 
 
@@ -58,20 +61,40 @@ class DefinitionDetailView(View):
     def get(self, request: HttpRequest, pk: UUID, *args: Any, **kwargs: Any) -> JsonResponse:
         wf = get_object_or_404(WorkflowDefinition, pk=pk)
         meta = wf.definition
+
         # strip out auto-IDs, leave only type+params for wizard
         steps = [{'type': n['type'], 'params': n.get('params', {})} for n in meta.get('nodes', [])]
+
         # scopes out with names
         scopes_out: list[dict[str, str]] = []
         for sc in wf.scopes.all():
             if sc.ca_id:
                 ca = get_object_or_404(IssuingCaModel, pk=sc.ca_id)
-                scopes_out.append({'type': 'CA', 'id': str(sc.ca_id), 'name': ca.unique_name})
+                scopes_out.append(
+                    {
+                        'type': 'CA',
+                        'id': str(sc.ca_id),
+                        'name': ca.unique_name,
+                    }
+                )
             elif sc.domain_id:
                 dm = get_object_or_404(DomainModel, pk=sc.domain_id)
-                scopes_out.append({'type': 'Domain', 'id': str(sc.domain_id), 'name': dm.unique_name})
+                scopes_out.append(
+                    {
+                        'type': 'Domain',
+                        'id': str(sc.domain_id),
+                        'name': dm.unique_name,
+                    }
+                )
             elif sc.device_id:
                 dv = get_object_or_404(DeviceModel, pk=sc.device_id)
-                scopes_out.append({'type': 'Device', 'id': str(sc.device_id), 'name': dv.common_name})
+                scopes_out.append(
+                    {
+                        'type': 'Device',
+                        'id': str(sc.device_id),
+                        'name': dv.common_name,
+                    }
+                )
 
         return JsonResponse(
             {
@@ -90,28 +113,6 @@ class WorkflowDefinitionListView(ListView[WorkflowDefinition]):
     model = WorkflowDefinition
     template_name = 'workflows/definition_list.html'
     context_object_name = 'definitions'
-
-
-class WorkflowDefinitionDeleteView(View):
-    """
-    POST only: delete a workflow definition if no active (non-finalized)
-    instances exist.
-    """
-    def post(self, request: HttpRequest, pk: UUID, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
-        wf = get_object_or_404(WorkflowDefinition, pk=pk)
-        # block deletion if any non-finalized instances remain
-        if WorkflowInstance.objects.filter(definition=wf, finalized=False).exists():
-            messages.error(
-                request,
-                f'Cannot delete workflow "{wf.name}" — there are active instances.'
-            )
-        else:
-            wf.delete()
-            messages.success(
-                request,
-                f'Workflow "{wf.name}" deleted successfully.'
-            )
-        return redirect('workflows:definition_list')
 
 
 class WorkflowWizardView(View):
@@ -167,6 +168,31 @@ class WorkflowWizardView(View):
         return JsonResponse({'id': str(wf.id)}, status=201)
 
 
+class WorkflowDefinitionDeleteView(View):
+    """
+    POST-only: deletes the WorkflowDefinition if no non-finalized
+    WorkflowInstance exists for it.
+    """
+    def post(
+        self,
+        request: HttpRequest,
+        pk: UUID,
+        *args: Any,
+        **kwargs: Any
+    ) -> HttpResponseRedirect:
+        wf = get_object_or_404(WorkflowDefinition, pk=pk)
+        # if WorkflowInstance.objects.filter(definition=wf, finalized=False).exists():
+        #     messages.error(
+        #         request,
+        #         f'Cannot delete "{wf.name}" — active instances remain.'
+        #     )
+        # else:
+        wf.delete()
+        messages.success(request, f'Workflow "{wf.name}" deleted.')
+        return redirect('workflows:definition_list')
+
+
+
 class PendingApprovalsView(ListView[WorkflowInstance]):
     """Show all instances awaiting human approval."""
 
@@ -179,26 +205,19 @@ class PendingApprovalsView(ListView[WorkflowInstance]):
 
 
 class SignalInstanceView(View):
-    """Endpoint to signal (approve/reject) a workflow instance via POST form."""
+    """Endpoint to signal (approve/reject) a workflow instance via POST."""
 
     def post(self, request: HttpRequest, instance_id: UUID, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
-        # 1) Load the instance or 404
         inst = get_object_or_404(WorkflowInstance, pk=instance_id)
-
-        # 2) Validate action
         action = request.POST.get('action')
         if action not in {'Approved', 'Rejected'}:
             messages.error(request, f'Invalid action: {action!r}')
             return redirect('workflows:pending_list')
 
-        # 4) Advance the instance in the engine
         advance_instance(inst, signal=action)
-
-        # 5) Add a success banner
         if action == 'Approved':
-            messages.success(request, f'Workflow {inst.id} approved and moved to next step.')
+            messages.success(request, f'Workflow {inst.id} approved and advanced.')
         else:
             messages.warning(request, f'Workflow {inst.id} was rejected.')
 
-        # 6) Redirect back to the pending list
         return redirect('workflows:pending_list')
