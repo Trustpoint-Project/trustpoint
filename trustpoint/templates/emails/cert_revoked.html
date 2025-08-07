@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <p>Dear {{ owner_name }},</p>
+    <p>
+      The certificate <strong>{{ cert_name }}</strong>
+      (serial {{ serial }}) was revoked on
+      <strong>{{ revocation_date }}</strong> for the following reason:
+    </p>
+    <blockquote>{{ reason }}</blockquote>
+    <p>
+      If you have questions, please email
+      <a href="mailto:{{ support_email }}">{{ support_email }}</a>.
+    </p>
+    <hr>
+    <p>Thank you,<br/>Trustpoint PKI</p>
+  </body>
+</html>
