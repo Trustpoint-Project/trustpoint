@@ -1,7 +1,9 @@
 {% extends 'trustpoint/base.html' %}
 {% load static %}
+
 {% block content %}
   <h1>Pending Approvals</h1>
+
   <table class="table">
     <thead>
       <tr>
@@ -9,30 +11,52 @@
         <th>Workflow</th>
         <th>Current Step</th>
         <th>Requested At</th>
-        <th>Action</th>
+        <th class="text-end">Action</th>
       </tr>
     </thead>
     <tbody>
       {% for inst in instances %}
         <tr>
-          <td>{{ inst.id }}</td>
+          <td>
+            {{ inst.id }}
+            <a
+              href="{% url 'workflows:pending_detail' inst.id %}"
+              class="btn-info ms-2"
+            >
+              Details
+            </a>
+          </td>
           <td>{{ inst.definition.name }}</td>
           <td>{{ inst.current_step }}</td>
-          <td>{{ inst.created_at }}</td>
-          <td>
-            <form method="post" action="{% url 'workflows:signal' inst.id %}">
+          <td>{{ inst.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+          <td class="text-end">
+            <form
+              action="{% url 'workflows:signal' inst.id %}"
+              method="post"
+              class="d-inline"
+            >
               {% csrf_token %}
-              <button name="action" value="Approved" class="btn btn-sm btn-success">
+              <button
+                name="action"
+                value="Approved"
+                class="btn btn-sm btn-success me-1"
+              >
                 Approve
               </button>
-              <button name="action" value="Rejected" class="btn btn-sm btn-danger">
+              <button
+                name="action"
+                value="Rejected"
+                class="btn btn-sm btn-danger"
+              >
                 Reject
               </button>
             </form>
           </td>
         </tr>
       {% empty %}
-        <tr><td colspan="5">No pending workflows.</td></tr>
+        <tr>
+          <td colspan="5" class="text-center">No pending workflows.</td>
+        </tr>
       {% endfor %}
     </tbody>
   </table>

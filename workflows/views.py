@@ -4,6 +4,8 @@ import json
 from typing import Any
 from uuid import UUID
 
+from cryptography import x509
+from cryptography.x509.oid import ExtensionOID, NameOID
 from devices.models import DeviceModel
 from django.contrib import messages
 from django.db import IntegrityError
@@ -112,7 +114,12 @@ class WorkflowDefinitionListView(ListView[WorkflowDefinition]):
 
     model = WorkflowDefinition
     template_name = 'workflows/definition_list.html'
-    context_object_name = 'definitions'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['page_category'] = 'workflows'
+        context['page_name'] = 'definitions'
+        return context
 
 
 class WorkflowWizardView(View):
@@ -120,7 +127,10 @@ class WorkflowWizardView(View):
     template_name = 'workflows/definition_wizard.html'
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        return render(request, self.template_name)
+        return render(request, self.template_name, {
+            'page_category': 'workflows',
+            'page_name': 'wizard',
+        })
 
     def post(self, request: HttpRequest) -> JsonResponse:
         try:
@@ -216,6 +226,74 @@ class PendingApprovalsView(ListView[WorkflowInstance]):
 
     def get_queryset(self) -> QuerySet[WorkflowInstance]:
         return WorkflowInstance.objects.filter(state=WorkflowInstance.STATE_AWAITING, finalized=False)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['page_category'] = 'workflows'
+        context['page_name'] = 'pending'
+        return context
+
+
+class WorkflowInstanceDetailView(View):
+    """Show detailed info for a pending workflow instance."""
+    template_name = 'workflows/pending_detail.html'
+
+    def get(self, request: HttpRequest, instance_id: UUID, *args: Any, **kwargs: Any) -> HttpResponse:
+        inst = get_object_or_404(WorkflowInstance, pk=instance_id)
+        payload = inst.payload or {}
+
+        # Lookup CA/Domain/Device names
+        ca_name = None
+        if payload.get('ca_id'):
+            ca = get_object_or_404(IssuingCaModel, pk=payload['ca_id'])
+            ca_name = ca.unique_name
+
+        domain_name = None
+        if payload.get('domain_id'):
+            dm = get_object_or_404(DomainModel, pk=payload['domain_id'])
+            domain_name = dm.unique_name
+
+        device_name = None
+        if payload.get('device_id'):
+            dv = get_object_or_404(DeviceModel, pk=payload['device_id'])
+            device_name = dv.common_name
+
+        # Parse CSR if present
+        csr_info: dict[str, Any] | None = None
+        csr_pem = payload.get('csr_pem')
+        if isinstance(csr_pem, str):
+            try:
+                csr_obj = x509.load_pem_x509_csr(csr_pem.encode('utf-8'))
+                # Common Name
+                cn_attrs = csr_obj.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+                cn = cn_attrs[0].value if cn_attrs else None
+                # SANs
+                try:
+                    san_ext = csr_obj.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
+                    sans = san_ext.value.get_values_for_type(x509.DNSName)
+                except Exception:
+                    sans = []
+                csr_info = {
+                    'subject': csr_obj.subject.rfc4514_string(),
+                    'common_name': cn,
+                    'sans': sans,
+                    'key_algorithm': csr_obj.public_key().__class__.__name__,
+                    'signature_algorithm': csr_obj.signature_algorithm_oid._name,
+                }
+            except Exception as e:
+                csr_info = {'error': f'Failed to parse CSR: {e!s}'}
+
+        context = {
+            'inst': inst,
+            'payload': payload,
+            'ca_name': ca_name,
+            'domain_name': domain_name,
+            'device_name': device_name,
+            'csr_info': csr_info,
+            'page_category': 'workflows',
+            'page_name': 'pending',
+        }
+        return render(request, self.template_name, context)
 
 
 class SignalInstanceView(View):

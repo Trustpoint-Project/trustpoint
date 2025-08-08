@@ -9,6 +9,7 @@ from workflows.views import (
     SignalInstanceView,
     WorkflowDefinitionDeleteView,
     WorkflowDefinitionListView,
+    WorkflowInstanceDetailView,
     WorkflowWizardView,
 )
 
@@ -36,5 +37,6 @@ urlpatterns = [
 
     # approval console
     path('pending/', PendingApprovalsView.as_view(), name='pending_list'),
+    path('pending/<uuid:instance_id>/', WorkflowInstanceDetailView.as_view(), name='pending_detail'),
     path('instances/<uuid:instance_id>/signal/', SignalInstanceView.as_view(), name='signal'),
 ]
