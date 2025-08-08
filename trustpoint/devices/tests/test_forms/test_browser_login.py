@@ -1,4 +1,5 @@
 """Test suite for validating the browser login functionality."""
+
 from typing import Any
 
 import pytest
@@ -7,9 +8,7 @@ from devices.forms import BrowserLoginForm
 
 
 @pytest.mark.django_db
-def test_browser_login_form_valid(
-        remote_device_credential_download_instance: dict[str, Any]
-                                  ) -> None:
+def test_browser_login_form_valid(remote_device_credential_download_instance: dict[str, Any]) -> None:
     """Test the BrowserLoginForm with a valid OTP."""
     remote_device_credential_download = remote_device_credential_download_instance['remote_credential']
     credential_id = remote_device_credential_download.issued_credential_model.pk
@@ -23,12 +22,15 @@ def test_browser_login_form_valid(
 
     cleaned_data = form.cleaned_data
     assert 'credential_id' in cleaned_data, "The form should extract 'credential_id' from the OTP."
-    assert 'credential_download' in cleaned_data, \
+    assert 'credential_download' in cleaned_data, (
         "The form should include the related 'RemoteDeviceCredentialDownloadModel'."
-    assert cleaned_data['credential_id'] == credential_id, \
+    )
+    assert cleaned_data['credential_id'] == credential_id, (
         'The extracted credential ID should match the expected value.'
-    assert cleaned_data['credential_download'] == remote_device_credential_download, \
+    )
+    assert cleaned_data['credential_download'] == remote_device_credential_download, (
         'The extracted credential download instance should match the expected one.'
+    )
 
 
 @pytest.mark.django_db
@@ -41,14 +43,13 @@ def test_browser_login_form_invalid_otp_structure() -> None:
     assert not form.is_valid(), 'The form should be invalid if the OTP structure is incorrect.'
 
     assert '__all__' in form.errors, 'A general form-level error should be raised.'
-    assert form.errors['__all__'][0] == 'The provided OTP is invalid.', \
+    assert form.errors['__all__'][0] == 'The provided OTP is invalid.', (
         'Incorrect error message for invalid OTP structure.'
+    )
 
 
 @pytest.mark.django_db
-def test_browser_login_form_nonexistent_credential(
-        remote_device_credential_download_instance: dict[str, Any]
-) -> None:
+def test_browser_login_form_nonexistent_credential(remote_device_credential_download_instance: dict[str, Any]) -> None:
     """Test the BrowserLoginForm with a non-existent credential ID in the OTP."""
     remote_device_credential_download = remote_device_credential_download_instance['remote_credential']
     invalid_credential_id = 999999
@@ -60,14 +61,13 @@ def test_browser_login_form_nonexistent_credential(
     assert not form.is_valid(), 'The form should be invalid if the credential ID does not exist.'
 
     assert '__all__' in form.errors, 'A general form-level error should be raised.'
-    assert form.errors['__all__'][0] == 'The credential download process is not valid, it may have expired.', \
+    assert form.errors['__all__'][0] == 'The credential download process is not valid, it may have expired.', (
         'Incorrect error message for non-existent credential ID.'
+    )
 
 
 @pytest.mark.django_db
-def test_browser_login_form_invalid_otp_value(
-        remote_device_credential_download_instance: dict[str, Any]
-) -> None:
+def test_browser_login_form_invalid_otp_value(remote_device_credential_download_instance: dict[str, Any]) -> None:
     """Test the BrowserLoginForm with an invalid OTP value."""
     remote_device_credential_download = remote_device_credential_download_instance['remote_credential']
     credential_id = remote_device_credential_download.issued_credential_model.pk

@@ -1,4 +1,5 @@
 """Test suite for validating the TLS Client Credential functionality."""
+
 from typing import Any
 
 import pytest
@@ -22,8 +23,9 @@ def test_issue_tls_client_credential(device_instance: dict[str, Any]) -> None:
 
     issued_credential = issuer.issue_tls_client_credential(common_name=common_name, validity_days=validity_days)
 
-    assert isinstance(issued_credential,
-                      IssuedCredentialModel), 'The returned object should be an IssuedCredentialModel'
+    assert isinstance(issued_credential, IssuedCredentialModel), (
+        'The returned object should be an IssuedCredentialModel'
+    )
     assert issued_credential.common_name == common_name, 'The common name of the issued credential should match'
     assert issued_credential.device == device, 'The issued credential should belong to the correct device'
     assert issued_credential.domain == device.domain, 'The issued credential should belong to the correct domain'
@@ -36,7 +38,7 @@ def test_issue_tls_client_credential(device_instance: dict[str, Any]) -> None:
 
 @pytest.mark.django_db
 def test_issue_tls_client_certificate(
-        device_instance: dict[str, Any], ec_private_key: ec.EllipticCurvePrivateKey
+    device_instance: dict[str, Any], ec_private_key: ec.EllipticCurvePrivateKey
 ) -> None:
     """Test issuing a TLS client certificate using the `issue_tls_client_certificate` method."""
     device = device_instance['device']
@@ -49,9 +51,7 @@ def test_issue_tls_client_certificate(
     public_key = ec_private_key.public_key()
 
     issued_credential = issuer.issue_tls_client_certificate(
-        common_name=common_name,
-        validity_days=validity_days,
-        public_key=public_key
+        common_name=common_name, validity_days=validity_days, public_key=public_key
     )
 
     assert isinstance(issued_credential, IssuedCredentialModel), (
@@ -70,11 +70,8 @@ def test_issue_tls_client_certificate(
 
     san_extension = certificate.extensions.get_extension_for_class(SubjectAlternativeName).value
     san_uris = san_extension.get_values_for_type(UniformResourceIdentifier)
-    expected_san_uri = f"{common_name.replace(' ', '')}.alt"
+    expected_san_uri = f'{common_name.replace(" ", "")}.alt'
 
     assert expected_san_uri in san_uris, (
-        f'The SAN should include the expected URI value. '
-        f'Expected: {expected_san_uri}, Found: {san_uris}'
+        f'The SAN should include the expected URI value. Expected: {expected_san_uri}, Found: {san_uris}'
     )
-
-

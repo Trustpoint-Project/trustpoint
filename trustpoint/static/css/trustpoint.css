@@ -963,5 +963,10 @@ code {
     border-collapse: collapse;
 }
 
+input[readonly].readonly-field {
+    background-color: #717272;
+    opacity: 1;
+    pointer-events: none;
+}
 
 /* ----- Testing ----- */

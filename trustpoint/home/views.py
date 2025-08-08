@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from django.urls import reverse
 
-from devices.models import DeviceModel, IssuedCredentialModel
+from devices.models import DeviceModel, IssuedCredentialModel, OnboardingStatus, OnboardingProtocol
 from django.contrib import messages
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -361,16 +361,16 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         Returns:
             It returns device counts grouped by device onboarding status.
         """
-        device_os_counts = {str(status): 0 for _, status in DeviceModel.OnboardingStatus.choices}
+        device_os_counts = {str(status): 0 for _, status in OnboardingStatus.choices}
         try:
             device_os_qr = (
-                DeviceModel.objects.filter(created_at__gt=start_date)
-                .values('onboarding_status')
-                .annotate(count=Count('onboarding_status'))
+                DeviceModel.objects.filter(created_at__gt=start_date, onboarding_config__isnull=False)
+                .values('onboarding_config__onboarding_status')
+                .annotate(count=Count('onboarding_config__onboarding_status'))
             )
 
-            protocol_mapping = {key: str(value) for key, value in DeviceModel.OnboardingStatus.choices}
-            device_os_counts = {protocol_mapping[item['onboarding_status']]: item['count'] for item in device_os_qr}
+            protocol_mapping = {key: str(value) for key, value in OnboardingStatus.choices}
+            device_os_counts = {protocol_mapping[item['onboarding_config__onboarding_status']]: item['count'] for item in device_os_qr}
 
             for protocol in protocol_mapping.values():
                 device_os_counts.setdefault(protocol, 0)
@@ -517,16 +517,16 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         Returns:
             It returns device count by onboarding protocol.
         """
-        device_op_counts = {str(status): 0 for _, status in DeviceModel.OnboardingProtocol.choices}
+        device_op_counts = {str(status): 0 for _, status in OnboardingProtocol.choices}
         try:
             device_op_qr = (
-                DeviceModel.objects.filter(created_at__gt=start_date)
-                .values('onboarding_protocol')
-                .annotate(count=Count('onboarding_protocol'))
+                DeviceModel.objects.filter(created_at__gt=start_date, onboarding_config__isnull=False)
+                .values('onboarding_config__onboarding_protocol')
+                .annotate(count=Count('onboarding_config__onboarding_protocol'))
             )
 
-            protocol_mapping = {key: str(value) for key, value in DeviceModel.OnboardingProtocol.choices}
-            device_op_counts = {protocol_mapping[item['onboarding_protocol']]: item['count'] for item in device_op_qr}
+            protocol_mapping = {key: str(value) for key, value in OnboardingProtocol.choices}
+            device_op_counts = {protocol_mapping[item['onboarding_config__onboarding_protocol']]: item['count'] for item in device_op_qr}
 
         except Exception as exception:
             err_msg = f'Error occurred in device count by onboarding protocol query: {exception}'
@@ -546,7 +546,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         try:
             device_domain_qr = (
                 DeviceModel.objects.filter(
-                    Q(onboarding_status=DeviceModel.OnboardingStatus.ONBOARDED) & Q(created_at__gte=start_date)
+                    Q(onboarding_config__onboarding_status=OnboardingStatus.ONBOARDED) & Q(created_at__gte=start_date)
                 )
                 .values(domain_name=F('domain__unique_name'))
                 .annotate(onboarded_device_count=Count('id'))

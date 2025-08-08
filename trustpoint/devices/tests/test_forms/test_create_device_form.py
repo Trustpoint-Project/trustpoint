@@ -1,4 +1,5 @@
 """Test suite for validating the CreateDeviceForm."""
+
 from typing import Any
 
 import pytest
