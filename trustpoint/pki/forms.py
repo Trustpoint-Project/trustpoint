@@ -13,7 +13,7 @@ from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
-    PrivateKeySerializer,
+    PrivateKeySerializer, PrivateKeyLocation, PrivateKeyReference,
 )
 from util.field import UniqueNameValidator
 
@@ -148,7 +148,7 @@ class TruststoreAddForm(forms.Form):
 
     @staticmethod
     def _save_trust_store(
-        unique_name: str, intended_usage: TruststoreModel.IntendedUsage, certificates: list[x509.Certificate]
+            unique_name: str, intended_usage: TruststoreModel.IntendedUsage, certificates: list[x509.Certificate]
     ) -> TruststoreModel:
         saved_certs: list[CertificateModel] = []
 
@@ -411,6 +411,10 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
 
         try:
             credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
+            credential_serializer.private_key_reference = (
+                PrivateKeyReference.from_private_key(private_key=credential_serializer.private_key,
+                                                     key_label=unique_name,
+                                                     location=PrivateKeyLocation.HSM_PROVIDED))
         except Exception as exception:
             err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
             raise ValidationError(err_msg) from exception
@@ -419,7 +423,7 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             IssuingCaModel.create_new_issuing_ca(
                 unique_name=unique_name,
                 credential_serializer=credential_serializer,
-                issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED,
+                issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.LOCAL_PKCS11,
             )
         # TODO(AlexHx8472): Filter credentials and check if any issuing ca corresponds to it.
         # TODO(AlexHx8472): If it does get and display the name of the issuing ca in the message.
@@ -510,7 +514,6 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         except Exception as exception:
             err_msg = _('Failed to parse the private key file. Either wrong password or file corrupted.')
             raise ValidationError(err_msg) from exception
-
 
     def clean_ca_certificate(self) -> CertificateSerializer:
         """Validates and parses the uploaded Issuing CA certificate file.
@@ -611,15 +614,20 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
                 return
 
             credential_serializer = CredentialSerializer.from_serializers(
-                private_key_serializer= private_key_serializer,
+                private_key_serializer=private_key_serializer,
                 certificate_serializer=ca_certificate_serializer,
                 certificate_collection_serializer=ca_certificate_chain_serializer
             )
 
+            credential_serializer.private_key_reference = (
+                PrivateKeyReference.from_private_key(private_key=credential_serializer.private_key,
+                                                     key_label=unique_name,
+                                                     location=PrivateKeyLocation.HSM_PROVIDED))
+
             IssuingCaModel.create_new_issuing_ca(
                 unique_name=unique_name,
                 credential_serializer=credential_serializer,
-                issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED,
+                issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.LOCAL_PKCS11,
             )
         # TODO(AlexHx8472): Filter credentials and check if any issuing ca corresponds to it.
         # TODO(AlexHx8472): If it does get and display the name of the issuing ca in the message.
@@ -710,7 +718,6 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
         except Exception as exception:
             err_msg = _('Failed to parse the private key file. Either wrong password or file corrupted.')
             raise ValidationError(err_msg) from exception
-
 
     def clean_certificate(self) -> CertificateSerializer:
         """Validates and parses the uploaded certificate file.
@@ -811,7 +818,7 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
                 return
 
             credential_serializer = CredentialSerializer.from_serializers(
-                private_key_serializer= private_key_serializer,
+                private_key_serializer=private_key_serializer,
                 certificate_serializer=certificate_serializer,
                 certificate_collection_serializer=certificate_chain_serializer
             )

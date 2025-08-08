@@ -5,14 +5,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
-from devices.models import DeviceModel
 from django.db import models
 from django.utils.encoding import force_str
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
-from pki.models.certificate import CertificateModel
-from pki.models.domain import DomainModel
-from pki.models.issuing_ca import IssuingCaModel
 
 if TYPE_CHECKING:
     from django_stubs_ext import StrOrPromise
@@ -305,19 +301,19 @@ class NotificationModel(models.Model):
     message_data = models.JSONField(blank=True, default=dict)
 
     domain = models.ForeignKey(
-        DomainModel, on_delete=models.SET_NULL, blank=True, null=True, related_name='notifications'
+        'pki.DomainModel', on_delete=models.SET_NULL, blank=True, null=True, related_name='notifications'
     )
 
     certificate = models.ForeignKey(
-        CertificateModel, on_delete=models.SET_NULL, blank=True, null=True, related_name='notifications'
+        'pki.CertificateModel', on_delete=models.SET_NULL, blank=True, null=True, related_name='notifications'
     )
 
     device = models.ForeignKey(
-        DeviceModel, on_delete=models.SET_NULL, blank=True, null=True, related_name='notifications'
+        'devices.DeviceModel', on_delete=models.SET_NULL, blank=True, null=True, related_name='notifications'
     )
 
     issuing_ca = models.ForeignKey(
-        IssuingCaModel, on_delete=models.SET_NULL, blank=True, null=True, related_name='notifications'
+        'pki.IssuingCaModel', on_delete=models.SET_NULL, blank=True, null=True, related_name='notifications'
     )
 
     event = models.CharField(max_length=255, blank=True, default='')

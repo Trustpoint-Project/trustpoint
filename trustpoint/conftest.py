@@ -14,7 +14,6 @@ from pki.models.issuing_ca import IssuingCaModel
 from pki.util.x509 import CertificateGenerator
 from trustpoint_core.serializer import CredentialSerializer
 
-
 @pytest.fixture(autouse=True)
 def enable_db_access_for_all_tests(db: None) -> None:
     """Fixture to enable database access for all tests."""

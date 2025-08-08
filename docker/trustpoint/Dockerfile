@@ -7,6 +7,13 @@ ENV PYTHONUNBUFFERED=1 \
     UV_NO_CACHE=1 \
     UV_FROZEN=1
 
+# Configure SoftHSM token directory and config
+RUN mkdir -p /var/lib/softhsm/tokens && \
+    echo "directories.tokendir = /var/lib/softhsm/tokens" > /etc/softhsm2.conf && \
+    chown -R www-data:www-data /var/lib/softhsm
+
+ENV SOFTHSM2_CONF=/etc/softhsm2.conf
+
 # Make port 80 and 443 available to the world outside this container.
 # 80 will be redirected to 443 using TLS through the apache.
 EXPOSE 80 443
@@ -14,7 +21,9 @@ EXPOSE 80 443
 # Update apt repository and install required dependencies from apt
 RUN apt-get update && \
     apt-get upgrade -y && \
-        apt-get install -y --no-install-recommends \ 
+        apt-get install -y --no-install-recommends \
+        softhsm2 \
+        opensc \
         sudo \
         apt-utils \
         apache2 \

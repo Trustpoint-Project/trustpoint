@@ -2,7 +2,7 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, backup, language, logging, security, tls
+from .views import IndexView, backup, language, logging, security, tls, pkcs11
 
 app_name = 'settings'
 urlpatterns = [
@@ -38,4 +38,6 @@ urlpatterns = [
         name='backup-download-multiple'
     ),
     path('backups/delete-multiple/', backup.BackupFilesDeleteMultipleView.as_view(), name='backup-delete-multiple'),
+    path('pkcs11/', pkcs11.PKCS11ConfigView.as_view(), name='pkcs11'),
+
 ]
