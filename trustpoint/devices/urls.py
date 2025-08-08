@@ -104,42 +104,42 @@ urlpatterns = [
     path(
         'certificate-lifecycle-management/<int:pk>/issue-tls-client-credential/',
         views.DeviceIssueTlsClientCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management-issue_tls_client_credential',
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_client_credential',
     ),
     path(
         'opc-ua-gds/certificate-lifecycle-management/<int:pk>/issue-tls-client-credential/',
         views.OpcUaGdsIssueTlsClientCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management-issue_tls_client_credential',
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_client_credential',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/issue-tls-server-credential/',
         views.DeviceIssueTlsServerCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management-issue_tls_server_credential',
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_server_credential',
     ),
     path(
         'opc-ua-gds/certificate-lifecycle-management/<int:pk>/issue-tls-server-credential/',
         views.OpcUaGdsIssueTlsServerCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management-issue_tls_server_credential',
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_server_credential',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/issue-opcua-client-credential/',
         views.DeviceIssueOpcUaClientCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management-issue_opc_ua_client_credential',
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_client_credential',
     ),
     path(
         'opc-ua-gds/certificate-lifecycle-management/<int:pk>/issue-opcua-client-credential/',
         views.OpcUaGdsIssueOpcUaClientCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management-issue_opc_ua_client_credential',
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_client_credential',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/issue-opcua-server-credential/',
         views.DeviceIssueOpcUaServerCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management-issue_opc_ua_server_credential',
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_server_credential',
     ),
     path(
         'opc-ua-gds/certificate-lifecycle-management/<int:pk>/issue-opcua-server-credential/',
         views.OpcUaGdsIssueOpcUaServerCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management-issue_opc_ua_server_credential',
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_server_credential',
     ),
 
     # path(
@@ -287,26 +287,26 @@ urlpatterns = [
         devices_help_views.OpcUaGdsOnboardingEstUsernamePasswordHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help-onboarding_est-username-password',
     ),
-    path(
-        'help/onboarding/cmp-shared-secret/<int:pk>/<str:certificate_template>/',
-        devices_help_views.DeviceOnboardingCmpHelpView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help_onboarding_cmp',
-    ),
-    path(
-        'opc-ua-gds/help/onboarding/cmp-shared-secret/<int:pk>/<str:certificate_template>/',
-        devices_help_views.OpcUaGdsOnboardingCmpHelpView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help_onboarding_cmp',
-    ),
-    path(
-        'help/onboarding/est-username-password/<int:pk>/<str:certificate_template>/',
-        devices_help_views.DeviceOnboardingEstHelpView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help_no_onboarding_est',
-    ),
-    path(
-        'opc-ua-gds/help/onboarding/est-username-password/<int:pk>/<str:certificate_template>/',
-        devices_help_views.OpcUaGdsOnboardingEstHelpView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help_onboarding_est',
-    ),
+    # path(
+    #     'help/onboarding/cmp-shared-secret/<int:pk>/<str:certificate_template>/',
+    #     devices_help_views.DeviceOnboardingCmpHelpView.as_view(),
+    #     name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help_onboarding_cmp',
+    # ),
+    # path(
+    #     'opc-ua-gds/help/onboarding/cmp-shared-secret/<int:pk>/<str:certificate_template>/',
+    #     devices_help_views.OpcUaGdsOnboardingCmpHelpView.as_view(),
+    #     name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help_onboarding_cmp',
+    # ),
+    # path(
+    #     'help/onboarding/est-username-password/<int:pk>/<str:certificate_template>/',
+    #     devices_help_views.DeviceOnboardingEstHelpView.as_view(),
+    #     name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_help_no_onboarding_est',
+    # ),
+    # path(
+    #     'opc-ua-gds/help/onboarding/est-username-password/<int:pk>/<str:certificate_template>/',
+    #     devices_help_views.OpcUaGdsOnboardingEstHelpView.as_view(),
+    #     name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_help_onboarding_est',
+    # ),
 
 
 

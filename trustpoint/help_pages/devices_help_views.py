@@ -83,26 +83,12 @@ class AbstractNoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[D
         device: DeviceModel = self.object
         certificate_template = self.kwargs.get('certificate_template')
         context['certificate_template'] = certificate_template
-        if not device.public_key_info:
-            raise Http404(PublicKeyInfoMissingErrorMsg)
-        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
-            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
-        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
-            if not device.public_key_info.named_curve:
-                raise Http404(NamedCurveMissingForEccErrorMsg)
-            key_gen_command = (
-                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out key.pem'
-            )
-        else:
-            err_msg = _('Unsupported public key algorithm')
-            raise ValueError(err_msg)
 
         ipv4_address = TlsSettings.get_first_ipv4_address()
-
         context['host'] = f'{ipv4_address}:{self.request.META.get("SERVER_PORT", "443")}'
         context['domain'] = device.domain
-        context['key_gen_command'] = key_gen_command
+
+        context['key_gen_command'] = self._get_key_gen_command()
 
         if not device.no_onboarding_config:
             err_msg = _('Device is configured for onboarding.')
@@ -116,6 +102,28 @@ class AbstractNoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[D
         context['clm_url'] = f'{self.page_category}:{self.page_name}_certificate_lifecycle_management'
 
         return context
+
+    def _get_key_gen_command(self) -> str:
+        device: DeviceModel = self.object
+
+        if device.domain is None:
+            raise Http404(DeviceWithoutDomainErrorMsg)
+
+        if not device.public_key_info:
+            raise Http404(PublicKeyInfoMissingErrorMsg)
+
+        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
+            return f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
+        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
+            if not device.public_key_info.named_curve:
+                raise Http404(NamedCurveMissingForEccErrorMsg)
+            return (
+                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
+                f'-genkey -noout -out key.pem'
+            )
+
+        err_msg = _('Unsupported public key algorithm')
+        raise ValueError(err_msg)
 
 
 class DeviceNoOnboardingCmpSharedSecretHelpView(AbstractNoOnboardingCmpSharedSecretHelpView):
@@ -154,13 +162,16 @@ class AbstractCredentialEstHelpView(PageContextMixin, DetailView[DeviceModel]):
         device: DeviceModel = self.object
         certificate_template = self.kwargs.get('certificate_template')
         context['certificate_template'] = certificate_template
+
         ipv4_address = TlsSettings.get_first_ipv4_address()
-
         context['host'] = f'{ipv4_address}:{self.request.META.get("SERVER_PORT", "443")}'
-
         context['domain'] = device.domain
 
-        context.update(self._get_domain_credential_est_context(device=device))
+        context['key_gen_command'] = self._get_key_gen_command()
+        context['domain_credential_key_gen_command'] = self._get_domain_credential_key_gen_command()
+
+        context['domain_credential_cn'] = 'Trustpoint Domain Credential'
+        context['trustpoint_server_certificate'] = self._get_tls_server_cert()
 
         if certificate_template is not None:
             number_of_issued_device_certificates = len(IssuedCredentialModel.objects.filter(device=device))
@@ -171,53 +182,55 @@ class AbstractCredentialEstHelpView(PageContextMixin, DetailView[DeviceModel]):
 
         return context
 
-    @staticmethod
-    def _get_domain_credential_est_context(device: DeviceModel) -> dict[str, Any]:
-        """Provides the context for est commands using client based authentication.
-
-        Args:
-            device: The corresponding device model.
-
-        Returns:
-            The required context.
-        """
+    def _get_key_gen_command(self) -> str:
+        device: DeviceModel = self.object
         if device.domain is None:
             raise Http404(DeviceWithoutDomainErrorMsg)
+
         if not device.public_key_info:
-            raise Http404(DeviceWithoutDomainErrorMsg)
-        context: dict[str, Any] = {}
+            raise Http404(PublicKeyInfoMissingErrorMsg)
+
         if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
-            domain_credential_key_gen_command = (
-                f'openssl genrsa -out domain_credential_key.pem {device.public_key_info.key_size}'
-            )
-            key_gen_command = f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
-        elif device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
+            return f'openssl genrsa -out key.pem {device.public_key_info.key_size}'
+
+        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
             if not device.public_key_info.named_curve:
                 raise Http404(NamedCurveMissingForEccErrorMsg)
-            domain_credential_key_gen_command = (
-                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out domain_credential_key.pem'
-            )
-            key_gen_command = (
+            return (
                 f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
                 f'-genkey -noout -out key.pem'
             )
-        else:
-            err_msg = _('Unsupported public key algorithm')
-            raise ValueError(err_msg)
 
-        context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
-        context['key_gen_command'] = key_gen_command
+        err_msg = _('Unsupported public key algorithm')
+        raise ValueError(err_msg)
+
+    def _get_domain_credential_key_gen_command(self) -> str:
+        device: DeviceModel = self.object
+        if device.domain is None:
+            raise Http404(DeviceWithoutDomainErrorMsg)
+
+        if not device.public_key_info:
+            raise Http404(PublicKeyInfoMissingErrorMsg)
+
+        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
+            return f'openssl genrsa -out domain_credential_key.pem {device.public_key_info.key_size}'
+
+        if device.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
+            if not device.public_key_info.named_curve:
+                raise Http404(NamedCurveMissingForEccErrorMsg)
+            return (
+                f'openssl ecparam -name {device.public_key_info.named_curve.ossl_curve_name} '
+                f'-genkey -noout -out domain_credential_key.pem'
+            )
+
+        err_msg = _('Unsupported public key algorithm')
+        raise ValueError(err_msg)
+
+    def _get_tls_server_cert(self) -> str:
         tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
         if not tls_cert or not tls_cert.credential:
             raise Http404(ActiveTrustpointTlsServerCredentialModelMissingErrorMsg)
-        context['trustpoint_server_certificate'] = (
-            tls_cert.credential.certificate.get_certificate_serializer().as_pem().decode('utf-8')
-        )
-
-        context['domain_credential_cn'] = 'Trustpoint Domain Credential'
-
-        return context
+        return tls_cert.credential.certificate.get_certificate_serializer().as_pem().decode('utf-8')
 
 
 class DeviceNoOnboardingEstUsernamePasswordHelpView(AbstractCredentialEstHelpView):

@@ -912,25 +912,25 @@ class AbstractNoOnboardingProfileSelectView(DetailView[DeviceModel]):
                     'profile': 'TLS-Client Certificate',
                     'url': (
                         f'{self.page_category}:{self.page_name}'
-                        '_certificate_lifecycle_management-issue_tls_client_credential')
+                        '_certificate_lifecycle_management_issue_tls_client_credential')
                 },
                 {
                     'profile': 'TLS-Server Certificate',
                     'url': (
                         f'{self.page_category}:{self.page_name}'
-                        '_certificate_lifecycle_management-issue_tls_server_credential')
+                        '_certificate_lifecycle_management_issue_tls_server_credential')
                 },
                 {
                     'profile': 'OPC-UA-Client Certificate',
                     'url': (
                         f'{self.page_category}:{self.page_name}'
-                        '_certificate_lifecycle_management-issue_opc_ua_client_credential')
+                        '_certificate_lifecycle_management_issue_opc_ua_client_credential')
                 },
                 {
                     'profile': 'OPC-UA-Client Certificate',
                     'url': (
                         f'{self.page_category}:{self.page_name}'
-                        '_certificate_lifecycle_management-issue_opc_ua_server_credential')
+                        '_certificate_lifecycle_management_issue_opc_ua_server_credential')
                 },
             ]
         else:
