@@ -3,7 +3,7 @@
 
 STATE_FILE_DIR="/etc/trustpoint/wizard/state/"
 WIZARD_INITIAL="/etc/trustpoint/wizard/state/WIZARD_INITIAL"
-WIZARD_TLS_SERVER_CREDENTIAL_APPLY="/etc/trustpoint/wizard/state/WIZARD_TLS_SERVER_CREDENTIAL_APPLY"
+WIZARD_SETUP_HSM="/etc/trustpoint/wizard/state/WIZARD_SETUP_HSM"
 
 # Checks if the state file is present.
 if [ ! -f "$WIZARD_INITIAL" ]; then
@@ -26,12 +26,12 @@ then
     exit 3
 fi
 
-# Creates the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.
-if ! touch "$WIZARD_TLS_SERVER_CREDENTIAL_APPLY"
+# Creates the WIZARD_SETUP_HSM state file.
+if ! touch "$WIZARD_SETUP_HSM"
 then
-    echo "ERROR: Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file."
+    echo "ERROR: Failed to create the WIZARD_SETUP_HSM state file."
     exit 4
 fi
 
-echo "SUCCESS: Transitioned to WIZARD_TLS_SERVER_CREDENTIAL_APPLY state."
+echo "SUCCESS: Transitioned to WIZARD_HSM_CONFIGURED state."
 exit 0

@@ -19,6 +19,7 @@ from django.urls import reverse_lazy
 from django.views.generic import FormView, TemplateView, View
 from pki.models import CertificateModel, CredentialModel, IssuingCaModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from settings.models import PKCS11Token
 
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import EmptyForm, StartupWizardTlsCertificateForm
@@ -38,6 +39,7 @@ APACHE_CERT_CHAIN_PATH = APACHE_PATH / Path('apache-tls-server-cert-chain.pem')
 
 STATE_FILE_DIR = Path('/etc/trustpoint/wizard/transition/')
 SCRIPT_WIZARD_INITIAL = STATE_FILE_DIR / Path('wizard_initial.sh')
+SCRIPT_WIZARD_SETUP_HSM = STATE_FILE_DIR / Path('wizard_setup_hsm.sh')
 SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY = STATE_FILE_DIR / Path('wizard_tls_server_credential_apply.sh')
 SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY_CANCEL = STATE_FILE_DIR / Path('wizard_tls_server_credential_apply_cancel.sh')
 SCRIPT_WIZARD_DEMO_DATA = STATE_FILE_DIR / Path('wizard_demo_data.sh')
@@ -122,6 +124,8 @@ class StartupWizardRedirect:
         """
         if wizard_state == SetupWizardState.WIZARD_INITIAL:
             return redirect('setup_wizard:initial', permanent=False)
+        if wizard_state == SetupWizardState.WIZARD_SETUP_HSM:
+            return redirect('setup_wizard:hsm_setup', permanent=False)
         if wizard_state == SetupWizardState.WIZARD_TLS_SERVER_CREDENTIAL_APPLY:
             return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
         if wizard_state == SetupWizardState.WIZARD_DEMO_DATA:
@@ -211,6 +215,116 @@ class SetupWizardOptionsView(TemplateView):
             return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().get(*args, **kwargs)
+
+
+class SetupWizardHsmSetupView(LoggerMixin, FormView):
+    """View for handling HSM setup during the setup wizard.
+
+    This view allows the user to configure HSM settings, currently supporting
+    SoftHSM with Physical HSM options disabled. It validates the current wizard
+    state and transitions to the next state upon successful completion.
+    """
+
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/hsm_setup.html'
+    success_url = reverse_lazy('setup_wizard:demo_data')
+
+    def get_form_class(self):
+        """Return the form class for HSM setup."""
+        from setup_wizard.forms import HsmSetupForm
+        return HsmSetupForm
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle request dispatch and wizard state validation."""
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_SETUP_HSM:
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form) -> HttpResponse:
+        """Handle form submission for HSM setup."""
+        try:
+            cleaned_data = form.cleaned_data
+            hsm_type = cleaned_data['hsm_type']
+
+            if hsm_type == 'softhsm':
+                module_path = cleaned_data['module_path']
+                slot = str(cleaned_data['slot'])
+                label = cleaned_data['label']
+
+                command = ['sudo', str(SCRIPT_WIZARD_SETUP_HSM), module_path, slot, label]
+                result = subprocess.run(command, capture_output=True, text=True, check=True)
+
+                if result.returncode == 0:
+
+                    token, created = PKCS11Token.objects.get_or_create(
+                        label=label,
+                        defaults={
+                            'hsm_type': hsm_type,
+                            'slot': int(slot),
+                            'module_path': module_path,
+                        }
+                    )
+
+                    if not created:
+                        token.hsm_type = hsm_type
+                        token.slot = int(slot)
+                        token.module_path = module_path
+                        token.save()
+
+                    action = "created" if created else "updated"
+                    messages.add_message(self.request, messages.SUCCESS,
+                                         f'HSM setup completed successfully for {hsm_type.upper()}. '
+                                         f'PKCS#11 token configuration {action}.')
+                    self.logger.info(f'PKCS11Token {action}: {token}')
+
+                else:
+                    raise subprocess.CalledProcessError(result.returncode, str(SCRIPT_WIZARD_SETUP_HSM))
+            else:
+                messages.add_message(self.request, messages.ERROR, 'Physical HSM is not yet supported.')
+                return redirect('setup_wizard:hsm_setup', permanent=False)
+
+        except subprocess.CalledProcessError as exception:
+            err_msg = f'HSM setup failed: {self._map_exit_code_to_message(exception.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:hsm_setup', permanent=False)
+        except FileNotFoundError:
+            err_msg = f'HSM setup script not found: {SCRIPT_WIZARD_SETUP_HSM}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:hsm_setup', permanent=False)
+        except Exception:
+            err_msg = 'An unexpected error occurred during HSM setup.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:hsm_setup', permanent=False)
+
+        return super().form_valid(form)
+
+    @staticmethod
+    def _map_exit_code_to_message(return_code: int) -> str:
+        """Map script exit codes to meaningful error messages."""
+        error_messages = {
+            1: 'Invalid number of arguments provided to HSM setup script.',
+            2: 'Trustpoint is not in the WIZARD_SETUP_HSM state.',
+            3: 'Found multiple wizard state files. The wizard state seems to be corrupted.',
+            4: 'HSM SO PIN file not found or not readable.',
+            5: 'HSM PIN file not found or not readable.',
+            6: 'HSM SO PIN is empty or could not be read from file.',
+            7: 'HSM PIN is empty or could not be read from file.',
+            8: 'PKCS#11 module not found.',
+            9: 'Failed to initialize HSM token.',
+            10: 'Failed to initialize user PIN for HSM.',
+            11: 'Failed to access HSM with configured PIN.',
+            12: 'Failed to remove the WIZARD_SETUP_HSM state file',
+            13: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred during HSM setup.')
 
 
 class BackupRestoreView(View):

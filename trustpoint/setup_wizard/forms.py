@@ -104,3 +104,98 @@ class StartupWizardTlsCertificateForm(forms.Form):
             err_msg = 'At least one SAN entry is required.'
             raise forms.ValidationError(err_msg)
         return cleaned_data
+
+
+class HsmSetupForm(forms.Form):
+    """Form for HSM setup configuration."""
+
+    HSM_TYPE_CHOICES = [
+        ('softhsm', _('SoftHSM')),
+        ('physical', _('Physical HSM')),
+    ]
+
+    hsm_type = forms.ChoiceField(
+        choices=HSM_TYPE_CHOICES,
+        initial='softhsm',
+        widget=forms.RadioSelect,
+        label=_('HSM Type'),
+        help_text=_('Select the type of HSM to configure.')
+    )
+
+    module_path = forms.CharField(
+        max_length=255,
+        initial='/usr/lib/softhsm/libsofthsm2.so',
+        label=_('PKCS#11 Module Path'),
+        help_text=_('Path to the PKCS#11 module library.'),
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        required=False
+    )
+
+    slot = forms.IntegerField(
+        initial=0,
+        min_value=0,
+        max_value=255,
+        label=_('Slot Number'),
+        help_text=_('HSM slot number to use.'),
+        widget=forms.NumberInput(attrs={'class': 'form-control'}),
+        required=False
+    )
+
+    label = forms.CharField(
+        max_length=32,
+        initial='TrustPoint-SoftHSM',
+        label=_('Token Label'),
+        help_text=_('Label for the HSM token.'),
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        required=False
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the form and set field states."""
+        super().__init__(*args, **kwargs)
+        hsm_type = None
+        if args and len(args) > 0:  # POST data available
+            hsm_type = args[0].get('hsm_type')
+
+        if hsm_type == 'softhsm':
+            self.fields['label'].required = False
+            self.fields['slot'].required = False
+            self.fields['module_path'].required = False
+
+
+    def clean(self):
+        """Custom validation for the form."""
+        cleaned_data = super().clean()
+        hsm_type = cleaned_data.get('hsm_type')
+
+        if hsm_type == 'softhsm':
+            cleaned_data['label'] = 'TrustPoint-SoftHSM'
+            cleaned_data['slot'] = 0
+            cleaned_data['module_path'] = '/usr/lib/softhsm/libsofthsm2.so'
+        elif hsm_type == 'physical':
+            raise forms.ValidationError(_("Physical HSM is not yet supported."))
+
+        return cleaned_data
+
+    def clean_label(self):
+        """Clean token label field."""
+        hsm_type = self.data.get('hsm_type')
+        if hsm_type == 'softhsm':
+            return 'TrustPoint-SoftHSM'
+        return self.cleaned_data.get('label', '')
+
+    def clean_slot(self):
+        """Clean slot number field."""
+        hsm_type = self.data.get('hsm_type')
+        if hsm_type == 'softhsm':
+            return 0
+        return self.cleaned_data.get('slot')
+
+    def clean_module_path(self):
+        """Clean module path field."""
+        hsm_type = self.data.get('hsm_type')
+        if hsm_type == 'softhsm':
+            return '/usr/lib/softhsm/libsofthsm2.so'
+        return self.cleaned_data.get('module_path', '')
+
+

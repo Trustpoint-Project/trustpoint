@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from cryptography import x509
 from django.core.exceptions import ValidationError
@@ -17,6 +17,10 @@ from trustpoint_core.serializer import (
 )
 from util.db import CustomDeleteActionModel
 from util.field import UniqueNameValidator
+from settings.models import PKCS11Token
+from settings.pkcs11_util import Pkcs11RSAPrivateKey, Pkcs11ECPrivateKey
+from cryptography.hazmat.primitives.asymmetric import rsa, ec
+import uuid
 
 from pki.models import CertificateModel
 from trustpoint.logger import LoggerMixin
@@ -39,6 +43,64 @@ class CredentialAlreadyExistsError(ValidationError):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the CredentialAlreadyExistsError with a default message."""
         super().__init__(_('Credential already exists.'), *args, **kwargs)
+
+
+class PKCS11PrivateKey(models.Model):
+    """Model representing a private key stored in a PKCS#11 HSM/token."""
+
+    class KeyType(models.TextChoices):
+        """Supported key types in PKCS#11."""
+        RSA = 'rsa', _('RSA')
+        EC = 'ec', _('Elliptic Curve')
+
+    token_label = models.CharField(
+        max_length=255,
+        verbose_name=_('Token Label'),
+        help_text=_('Label of the HSM token containing the private key')
+    )
+
+    key_label = models.CharField(
+        max_length=255,
+        verbose_name=_('Key Label'),
+        help_text=_('Unique label of the private key within the token')
+    )
+
+    key_type = models.CharField(
+        max_length=10,
+        choices=KeyType.choices,
+        verbose_name=_('Key Type'),
+        help_text=_('Type of the cryptographic key (RSA or EC)')
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [['token_label', 'key_label']]
+        verbose_name = _('PKCS#11 Private Key')
+        verbose_name_plural = _('PKCS#11 Private Keys')
+
+    def __str__(self) -> str:
+        return f"{self.token_label}/{self.key_label} ({self.key_type})"
+
+    def get_pkcs11_key_instance(self, lib_path: str, user_pin: str):
+        """Get the appropriate PKCS#11 key instance."""
+
+        if self.key_type == self.KeyType.RSA:
+            return Pkcs11RSAPrivateKey(
+                lib_path=lib_path,
+                token_label=self.token_label,
+                user_pin=user_pin,
+                key_label=self.key_label
+            )
+        elif self.key_type == self.KeyType.EC:
+            return Pkcs11ECPrivateKey(
+                lib_path=lib_path,
+                token_label=self.token_label,
+                user_pin=user_pin,
+                key_label=self.key_label
+            )
+        else:
+            raise ValueError(f"Unsupported key type: {self.key_type}")
 
 
 class CredentialModel(LoggerMixin, CustomDeleteActionModel):
@@ -66,6 +128,14 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
 
     credential_type = models.IntegerField(verbose_name=_('Credential Type'), choices=CredentialTypeChoice)
     private_key = models.CharField(verbose_name='Private key (PEM)', max_length=65536, default='', blank=True)
+    pkcs11_private_key = models.ForeignKey(
+        PKCS11PrivateKey,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name=_('PKCS#11 Private Key'),
+        help_text=_('Reference to HSM-stored private key')
+    )
 
     certificate = models.ForeignKey(
         CertificateModel, on_delete=models.PROTECT, related_name='credential_set', blank=False
@@ -131,6 +201,206 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return self.certificatechainordermodel_set.order_by('order')
 
     @classmethod
+    def _import_private_key_to_hsm(
+            cls,
+            crypto_private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey,
+            token_config: PKCS11Token,
+            key_label: str,
+    ) -> 'PKCS11PrivateKey':
+        """
+        Import a private key to HSM and create corresponding PKCS11PrivateKey model.
+
+        Args:
+            crypto_private_key: The private key from cryptography library
+            key_label: Custom label for the key (auto-generated if None)
+            token_config: PKCS11Token configuration
+
+        Returns:
+            PKCS11PrivateKey: The created model instance referencing the HSM key
+
+        Raises:
+            RuntimeError: If HSM import fails
+            ValueError: If unsupported key type
+            NotImplementedError: If EC key import not yet supported
+        """
+
+        if not token_config:
+            raise RuntimeError("No PKCS#11 token configuration found")
+
+        if key_label is None:
+            err_msg = "No Key Label found"
+            raise ValueError(err_msg)
+
+        pkcs11_key_handler = None
+        try:
+            if isinstance(crypto_private_key, rsa.RSAPrivateKey):
+                key_type = PKCS11PrivateKey.KeyType.RSA
+
+                pkcs11_key_handler = Pkcs11RSAPrivateKey(
+                    lib_path=token_config.module_path,
+                    token_label=token_config.label,
+                    user_pin=token_config.get_pin(),
+                    key_label=key_label,
+                )
+
+                if not pkcs11_key_handler.import_private_key_from_crypto(crypto_private_key):
+                    raise RuntimeError("Failed to import RSA private key to HSM")
+
+            elif isinstance(crypto_private_key, ec.EllipticCurvePrivateKey):
+                key_type = PKCS11PrivateKey.KeyType.EC
+
+                pkcs11_key_handler = Pkcs11ECPrivateKey(
+                    lib_path=token_config.module_path,
+                    token_label=token_config.label,
+                    user_pin=token_config.get_pin(),
+                    key_label=key_label,
+                )
+
+                # TODO: Implement import_private_key_from_crypto for EC keys
+                raise NotImplementedError("EC key import to HSM not yet implemented")
+
+            else:
+                raise ValueError(f"Unsupported private key type: {type(crypto_private_key)}")
+
+            pkcs11_private_key = PKCS11PrivateKey.objects.create(
+                token_label=token_config.label,
+                key_label=key_label,
+                key_type=key_type
+            )
+
+            return pkcs11_private_key
+
+        finally:
+            if pkcs11_key_handler:
+                pkcs11_key_handler.close()
+
+    @classmethod
+    def _create_private_key_in_hsm(
+            cls,
+            key_type: str,
+            token_config: PKCS11Token,
+            key_label: str,
+            key_size: Optional[int] = None,
+            curve: Optional[ec.EllipticCurve] = None,
+    ) -> 'PKCS11PrivateKey':
+        """
+        Generate a new private key in HSM and create corresponding PKCS11PrivateKey model.
+
+        Args:
+            key_type: Type of key to generate ('rsa' or 'ec')
+            token_config: PKCS11Token configuration
+            key_label: Label for the new key in HSM
+            key_size: For RSA keys: key size in bits (e.g., 2048, 4096)
+            curve: For EC keys: curve instance (e.g., ec.SECP256R1())
+
+        Returns:
+            PKCS11PrivateKey: The created model instance referencing the HSM key
+
+        Raises:
+            RuntimeError: If HSM key generation fails
+            ValueError: If unsupported key type or invalid parameters
+            NotImplementedError: If EC key generation not yet supported
+        """
+
+        if not token_config:
+            raise RuntimeError("No PKCS#11 token configuration found")
+
+        if key_label is None:
+            err_msg = "No Key Label found"
+            raise ValueError(err_msg)
+
+        pkcs11_key_handler = None
+        try:
+            if key_type.lower() == 'rsa':
+                if key_size is None:
+                    raise ValueError("key_size parameter is required for RSA keys")
+                if curve is not None:
+                    raise ValueError("curve parameter should not be provided for RSA keys")
+
+                if key_size < 1024:
+                    raise ValueError("RSA key size must be at least 1024 bits")
+
+                model_key_type = PKCS11PrivateKey.KeyType.RSA
+
+                pkcs11_key_handler = Pkcs11RSAPrivateKey(
+                    lib_path=token_config.module_path,
+                    token_label=token_config.label,
+                    user_pin=token_config.get_pin(),
+                    key_label=key_label,
+                )
+
+                pkcs11_key_handler.generate_key(key_length=key_size)
+
+            elif key_type.lower() == 'ec':
+                if curve is None:
+                    raise ValueError("curve parameter is required for EC keys")
+                if key_size is not None:
+                    raise ValueError("key_size parameter should not be provided for EC keys")
+
+                model_key_type = PKCS11PrivateKey.KeyType.EC
+
+                pkcs11_key_handler = Pkcs11ECPrivateKey(
+                    lib_path=token_config.module_path,
+                    token_label=token_config.label,
+                    user_pin=token_config.get_pin(),
+                    key_label=key_label,
+                )
+
+                pkcs11_key_handler.generate_key(curve=curve)
+
+            else:
+                raise ValueError(f"Unsupported key type: {key_type}. Supported types: 'rsa', 'ec'")
+
+            pkcs11_private_key = PKCS11PrivateKey.objects.create(
+                token_label=token_config.label,
+                key_label=key_label,
+                key_type=model_key_type
+            )
+
+            return pkcs11_private_key
+
+        finally:
+            if pkcs11_key_handler:
+                pkcs11_key_handler.close()
+
+    @classmethod
+    def create_pkcs11_credential(
+            cls,
+            certificate: x509.Certificate,
+            certificate_chain: list[x509.Certificate],
+            credential_type: 'CredentialModel.CredentialTypeChoice',
+            pkcs11_private_key: PKCS11PrivateKey
+    ) -> 'CredentialModel':
+        """Create a credential with a PKCS#11 private key reference."""
+
+        certificate_model = CertificateModel.save_certificate(certificate)
+
+        credential_model = cls.objects.create(
+            certificate=certificate_model,
+            credential_type=credential_type,
+            pkcs11_private_key=pkcs11_private_key
+        )
+
+        # Set up certificate relationships...
+        PrimaryCredentialCertificate.objects.create(
+            certificate=certificate_model,
+            credential=credential_model,
+            is_primary=True
+        )
+
+        # Handle certificate chain...
+        for order, certificate_in_chain in enumerate(certificate_chain):
+            certificate_model = CertificateModel.save_certificate(certificate_in_chain)
+            CertificateChainOrderModel.objects.create(
+                certificate=certificate_model,
+                credential=credential_model,
+                order=order,
+                primary_certificate=credential_model.certificate
+            )
+
+        return credential_model
+
+    @classmethod
     @transaction.atomic
     def _save_normalized_credential_serializer(
         cls,
@@ -149,10 +419,56 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         certificate = CertificateModel.save_certificate(normalized_credential_serializer.certificate)
         # TODO(AlexHx8472): Verify that the credential is valid in respect to the credential_type!!!
 
+        pkcs11_private_key = None
+
+        try:
+            token_config = PKCS11Token.objects.first()
+            if not token_config:
+                raise RuntimeError("No PKCS#11 token configuration found")
+
+            key_label = f"credential_key_{uuid.uuid4().hex[:8]}"
+
+            crypto_private_key = normalized_credential_serializer.get_private_key_serializer().as_crypto()
+
+            if isinstance(crypto_private_key, rsa.RSAPrivateKey):
+                key_type = PKCS11PrivateKey.KeyType.RSA
+
+                pkcs11_key_handler = Pkcs11RSAPrivateKey(
+                    lib_path=token_config.module_path,
+                    token_label=token_config.label,
+                    user_pin=token_config.get_pin(),
+                    key_label=key_label,
+                    slot_id=token_config.slot_id if hasattr(token_config, 'slot_id') else None
+                )
+
+                if not pkcs11_key_handler.import_private_key_from_crypto(crypto_private_key):
+                    raise RuntimeError("Failed to import private key to HSM")
+
+            elif isinstance(crypto_private_key, ec.EllipticCurvePrivateKey):
+                key_type = PKCS11PrivateKey.KeyType.EC
+                # TODO: Implement EC key handling
+                raise NotImplementedError("EC key import to HSM not yet implemented")
+            else:
+                raise ValueError(f"Unsupported private key type: {type(crypto_private_key)}")
+
+            pkcs11_private_key = PKCS11PrivateKey.objects.create(
+                token_label=token_config.label,
+                key_label=key_label,
+                key_type=key_type
+            )
+
+            pkcs11_key_handler.close()
+
+        except Exception as e:
+            ValueError(f"Failed to store private key in HSM: {e}")
+
+        private_key_pem = normalized_credential_serializer.get_private_key_serializer().as_pkcs8_pem().decode()
+
         credential_model = cls.objects.create(
             certificate=certificate,
             credential_type=credential_type,
-            private_key=normalized_credential_serializer.get_private_key_serializer().as_pkcs8_pem().decode(),
+            private_key=private_key_pem,
+            pkcs11_private_key=pkcs11_private_key
         )
 
         PrimaryCredentialCertificate.objects.create(
@@ -261,6 +577,23 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
 
         err_msg = 'Failed to get private key information.'
         raise RuntimeError(err_msg)
+
+    def get_pkcs11_private_key(self) -> PrivateKey:
+        """Gets the private key abstraction."""
+        if self.pkcs11_private_key:
+            try:
+                token_config = PKCS11Token.objects.get(label=self.pkcs11_private_key.token_label)
+                lib_path = token_config.module_path
+                user_pin = token_config.get_pin()
+
+                pkcs11_key = self.pkcs11_private_key.get_pkcs11_key_instance(lib_path, user_pin)
+                pkcs11_key.load_key()
+                return pkcs11_key
+
+            except PKCS11Token.DoesNotExist:
+                raise RuntimeError(f'PKCS#11 token configuration not found: {self.pkcs11_private_key.token_label}')
+
+        raise RuntimeError('No private key available for this credential.')
 
     def get_private_key_serializer(self) -> PrivateKeySerializer:
         """Gets a serializer of the credential private key.

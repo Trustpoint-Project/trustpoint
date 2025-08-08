@@ -1,0 +1,24 @@
+{% extends 'trustpoint/base.html' %}
+{% load static %}
+
+{% load i18n %}
+{% load crispy_forms_filters %}
+{% block content %}
+    <div class="card">
+        <div class="card-header">
+            <h1>{% trans "PKCS#11 Configuration" %}</h1>
+        </div>
+        <div class="card-body pt-4 pb-4">
+            {% include 'settings/details/hsm_config.html' %}
+        </div>
+        <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+            <div class="tp-card-btn-footer m-1">
+                <button class="btn btn-primary w-100 mt-1" type="submit" form="hsm_configuration" id="hsm-submit-btn">
+                    {% trans 'Save' %}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{% static 'js/hsm_config.js' %}"></script>
+{% endblock content %}

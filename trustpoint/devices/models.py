@@ -177,7 +177,7 @@ class IssuedCredentialModel(CustomDeleteActionModel):
         blank=False,
     )
     device = models.ForeignKey(
-        DeviceModel, verbose_name=_('Device'), on_delete=models.PROTECT, related_name='issued_credentials'
+        'devices.DeviceModel', verbose_name=_('Device'), on_delete=models.PROTECT, related_name='issued_credentials'
     )
     domain = models.ForeignKey(
         DomainModel, verbose_name=_('Domain'), on_delete=models.PROTECT, related_name='issued_credentials'
@@ -275,7 +275,7 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
 
     issued_credential_model = models.OneToOneField(IssuedCredentialModel, on_delete=models.CASCADE)
     otp = models.CharField(_('OTP'), max_length=32, default='')
-    device = models.ForeignKey(DeviceModel, on_delete=models.CASCADE)
+    device = models.ForeignKey('devices.DeviceModel', on_delete=models.CASCADE)
     attempts = models.IntegerField(_('Attempts'), default=0)
     download_token = models.CharField(_('Download Token'), max_length=64, default='')
     token_created_at = models.DateTimeField(_('Token Created'), null=True)

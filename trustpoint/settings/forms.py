@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from typing import TYPE_CHECKING, Any, cast
 
 from crispy_forms.helper import FormHelper
@@ -10,7 +12,7 @@ from django import forms
 from django.utils.translation import gettext_lazy as _
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
-from settings.models import BackupOptions, SecurityConfig
+from settings.models import BackupOptions, SecurityConfig, PKCS11Token
 from settings.security import manager
 from settings.security.features import AutoGenPkiFeature, SecurityFeature
 
@@ -195,6 +197,117 @@ class IPv4AddressForm(forms.Form):
 
         ipv4_field = cast(forms.ChoiceField, self.fields['ipv4_address'])
         ipv4_field.choices = [(ip, ip) for ip in san_ips]
+
+
+class PKCS11ConfigForm(forms.Form):
+    """
+    Form for configuring PKCS#11 settings including HSM PIN and token information.
+    """
+
+    HSM_TYPE_CHOICES = [
+        ('softhsm', _('SoftHSM')),
+        ('physical', _('Physical HSM')),
+    ]
+
+    hsm_type = forms.ChoiceField(
+        choices=HSM_TYPE_CHOICES,
+        initial='softhsm',
+        widget=forms.RadioSelect,
+        label=_('HSM Type'),
+        help_text=_('Select the type of HSM to configure.')
+    )
+
+    label = forms.CharField(
+        label=_("Token Label"),
+        max_length=100,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        help_text=_("Unique label for the PKCS#11 token"),
+        required=False
+    )
+
+    slot = forms.IntegerField(
+        label=_("Slot Number"),
+        widget=forms.NumberInput(attrs={'class': 'form-control'}),
+        help_text=_("Slot number where the token is located"),
+        min_value=0,
+        required=False
+    )
+
+    module_path = forms.CharField(
+        label=_("Module Path"),
+        max_length=255,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        help_text=_("Path to the PKCS#11 module library file"),
+        initial="/usr/lib/softhsm/libsofthsm2.so",
+        required=False
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        try:
+            token = PKCS11Token.objects.first()
+            if token:
+                self.fields['hsm_type'].initial = token.hsm_type
+                self.fields['label'].initial = token.label
+                self.fields['slot'].initial = token.slot
+                self.fields['module_path'].initial = token.module_path
+        except PKCS11Token.DoesNotExist:
+            pass
+
+    def clean(self):
+        """Custom validation for the form."""
+        cleaned_data = super().clean()
+        hsm_type = cleaned_data.get('hsm_type')
+
+        if hsm_type == 'softhsm':
+            cleaned_data['label'] = 'TrustPoint-SoftHSM'
+            cleaned_data['slot'] = 0
+            cleaned_data['module_path'] = '/usr/lib/softhsm/libsofthsm2.so'
+        elif hsm_type == 'physical':
+            raise forms.ValidationError(_("Physical HSM is not yet supported."))
+
+        return cleaned_data
+
+    def clean_label(self):
+        """Validate that label is unique, excluding current token if updating."""
+        hsm_type = self.data.get('hsm_type')
+        if hsm_type == 'softhsm':
+            return 'TrustPoint-SoftHSM'
+
+        label = self.cleaned_data.get('label', '')
+        existing = PKCS11Token.objects.filter(label=label)
+
+        current_token = PKCS11Token.objects.first()
+        if current_token:
+            existing = existing.exclude(pk=current_token.pk)
+
+        if existing.exists():
+            raise forms.ValidationError(_("A token with this label already exists."))
+
+        return label
+
+    def save_token_config(self):
+        """Save or update token configuration."""
+        token, created = PKCS11Token.objects.get_or_create(
+            defaults={
+                'hsm_type': self.cleaned_data['hsm_type'],
+                'label': self.cleaned_data['label'],
+                'slot': self.cleaned_data['slot'],
+                'module_path': self.cleaned_data['module_path'],
+            }
+        )
+
+        if not created:
+            # Update existing token
+            token.hsm_type = self.cleaned_data['hsm_type']
+            token.label = self.cleaned_data['label']
+            token.slot = self.cleaned_data['slot']
+            token.module_path = self.cleaned_data['module_path']
+            token.save()
+
+        return token
+
 
 
 

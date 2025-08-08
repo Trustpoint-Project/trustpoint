@@ -11,13 +11,20 @@ services:
     depends_on:
       - postgres
     volumes:
-      - ./trustpoint:/var/www/html/trustpoint/trustpoint/pkcs11_support
+      - ./trustpoint/settings:/var/www/html/trustpoint/trustpoint/settings
     environment:
       POSTGRES_DB: "trustpoint_db"
-      DATABASE_USER: "admin"
-      DATABASE_PASSWORD: "testing321"
+      POSTGRES_USER_FILE: /run/secrets/db_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
       DATABASE_HOST: "postgres"
       DATABASE_PORT: "5432"
+      HSM_PIN_FILE: /run/secrets/hsm_pin
+      HSM_SO_PIN_FILE: /run/secrets/hsm_so_pin
+    secrets:
+      - db_user
+      - db_password
+      - hsm_pin
+      - hsm_so_pin
 
   postgres:
     build:
@@ -30,9 +37,23 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      POSTGRES_USER: "admin"
-      POSTGRES_PASSWORD: "testing321"
+      POSTGRES_USER_FILE: /run/secrets/db_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
       POSTGRES_DB: "trustpoint_db"
+    secrets:
+      - db_user
+      - db_password
+
+secrets:
+  db_user:
+    file: db_user.txt
+  db_password:
+    file: db_password.txt
+  hsm_pin:
+    file: hsm_pin.txt
+  hsm_so_pin:
+    file: hsm_so_pin.txt
+
 
 volumes:
   postgres_data:

@@ -22,16 +22,6 @@ class PKCS11Token(models.Model):
         help_text=_("Slot number in SoftHSM"),
         verbose_name=_("Slot")
     )
-    user_pin: str = models.CharField(
-        max_length=64,
-        help_text=_("User PIN for token access"),
-        verbose_name=_("User PIN")
-    )
-    so_pin: str = models.CharField(
-        max_length=64,
-        help_text=_("Security Officer PIN (admin)"),
-        verbose_name=_("SO PIN")
-    )
     module_path: str = models.CharField(
         max_length=255,
         default="/usr/lib/softhsm/libsofthsm2.so",

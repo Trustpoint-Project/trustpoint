@@ -1,7 +1,8 @@
 """Models concerning the Trustpoint settings."""
+import os
 from typing import ClassVar
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ImproperlyConfigured
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from notifications.models import WeakECCCurve, WeakSignatureAlgorithm
@@ -236,3 +237,102 @@ class BackupOptions(models.Model):
 
     def __str__(self) -> str:
         return f'{self.user}@{self.host}:{self.port} ({self.auth_method})'
+
+class PKCS11Token(models.Model):
+    """
+    Model representing a PKCS#11 token (e.g., a SoftHSM slot/token pair).
+
+    Stores metadata required to authenticate and interact with the token,
+    including slot number, user and security officer PINs, and the path to
+    the PKCS#11 module library.
+    """
+
+    class HSMType(models.TextChoices):
+        """Types of HSM."""
+        SOFTHSM = 'softhsm', _('SoftHSM')
+        PHYSICAL = 'physical', _('Physical HSM')
+
+    hsm_type: str = models.CharField(
+        max_length=10,
+        choices=HSMType.choices,
+        default=HSMType.SOFTHSM,
+        help_text=_("Type of HSM (SoftHSM or Physical)"),
+        verbose_name=_("HSM Type")
+    )
+
+    label: str = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text=_("Token label in SoftHSM"),
+        verbose_name=_("Label")
+    )
+    slot: int = models.PositiveIntegerField(
+        help_text=_("Slot number in SoftHSM"),
+        verbose_name=_("Slot")
+    )
+    module_path: str = models.CharField(
+        max_length=255,
+        default="/usr/lib/softhsm/libsofthsm2.so",
+        help_text=_("Path to PKCS#11 module library"),
+        verbose_name=_("Module Path")
+    )
+    created_at = models.DateTimeField(
+        verbose_name=_('Created'),
+        auto_now_add=True
+    )
+
+    class Meta:
+        """
+        Meta configuration for the PKCS11Token model.
+        """
+        verbose_name = _("PKCS#11 Token")
+        verbose_name_plural = _("PKCS#11 Tokens")
+
+    def __str__(self) -> str:
+        """
+        Returns a human-readable representation of the token.
+
+        Returns:
+            str: A string in the format "<label> (Slot <slot>)".
+        """
+        return f"{self.label} (Slot {self.slot})"
+
+    def get_pin(self) -> str:
+        """
+        Get the user PIN for this PKCS#11 token.
+
+        PIN retrieval priority:
+        1. HSM_PIN_FILE environment variable (Docker secrets)
+        2. HSM_PIN environment variable
+
+        Returns:
+            str: The user PIN for token authentication.
+
+        Raises:
+            ImproperlyConfigured: If no PIN is available.
+        """
+        # Try reading from HSM_PIN_FILE (Docker secrets approach)
+        hsm_pin_file = os.getenv('HSM_PIN_FILE', '/run/secrets/hsm_pin')
+        if os.path.exists(hsm_pin_file) and os.access(hsm_pin_file, os.R_OK):
+            try:
+                with open(hsm_pin_file, 'r') as f:
+                    pin = f.read().strip()
+                    if pin:
+                        return pin
+            except (OSError, IOError) as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to read HSM PIN from file {hsm_pin_file}: {e}")
+
+        # Try HSM_PIN environment variable
+        pin = os.getenv('HSM_PIN')
+        if pin:
+            return pin.strip()
+
+        # No PIN available
+        raise ImproperlyConfigured(
+            f"No PIN configured for PKCS#11 token '{self.label}'. "
+            "Ensure HSM_PIN_FILE points to a readable file with the PIN, "
+            "or set the HSM_PIN environment variable."
+        )
+

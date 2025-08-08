@@ -1,4 +1,5 @@
 import pkcs11
+
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
@@ -11,7 +12,7 @@ from cryptography.hazmat.primitives.asymmetric import (
     ec,
     padding as asym_padding,
 )
-from pkcs11.exceptions import NoSuchKey, PKCS11Error
+from pkcs11.exceptions import NoSuchKey, PKCS11Error, NoSuchToken
 
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from cryptography.hazmat.backends import default_backend
@@ -20,6 +21,8 @@ import datetime
 
 from typing import Union, Optional, Any
 from abc import ABC, abstractmethod
+
+#from trustpoint.logger import LoggerMixin
 
 
 class Pkcs11Utilities:
@@ -58,7 +61,19 @@ class Pkcs11Utilities:
             List[pkcs11.Token]: List of available tokens.
         """
         if self._tokens_cache is None:
-            self._tokens_cache = [slot.token for slot in self.get_slots()]
+            tokens = []
+            for slot in self.get_slots():
+                try:
+                    if hasattr(slot, 'token') and slot.token is not None:
+                        tokens.append(slot.token)
+                    elif hasattr(slot, 'get_token'):
+                        token = slot.get_token()
+                        if token is not None:
+                            tokens.append(token)
+                except Exception as e:
+                    print(f"Warning: Could not get token from slot {slot}: {e}")
+                    continue
+            self._tokens_cache = tokens
         return self._tokens_cache
 
     def get_token_by_label(self, token_label: str) -> pkcs11.Token:
@@ -78,6 +93,33 @@ class Pkcs11Utilities:
             if token.label == token_label:
                 return token
         raise ValueError(f"Token with label '{token_label}' not found.")
+
+    def get_slot_id_for_pkcs11_tool_slot(self, pkcs11_tool_slot: int) -> int:
+        """Convert pkcs11-tool slot number to Python slot ID.
+
+        Args:
+            pkcs11_tool_slot (int): Slot number as used by pkcs11-tool (0, 1, 2, etc.)
+
+        Returns:
+            int: Actual slot ID for use with Python pkcs11 library.
+
+        Raises:
+            ValueError: If slot not found.
+        """
+        try:
+            slots = self._lib.get_slots(token_present=True)
+
+            if pkcs11_tool_slot >= len(slots):
+                available = list(range(len(slots)))
+                raise ValueError(
+                    f"pkcs11-tool slot {pkcs11_tool_slot} not found. "
+                    f"Available slots: {available}"
+                )
+
+            return slots[pkcs11_tool_slot].slot_id
+
+        except Exception as e:
+            raise ValueError(f"Failed to get slot mapping: {e}")
 
     def get_mechanisms(self, token_label: str) -> list[Mechanism]:
         """
@@ -169,12 +211,61 @@ class Pkcs11PrivateKey(ABC):
     }
 
 
-    def __init__(self, lib_path: str, token_label: str, user_pin: str, key_label: str):
-        self._lib = lib(lib_path)
-        self._token = self._lib.get_token(token_label=token_label)
-        self._session = self._token.open(user_pin=user_pin, rw=True)
+    def __init__(self, lib_path: str, token_label: str, user_pin: str, key_label: str, slot_id: int = None):
+        """
+                Initialize a PKCS#11 private key handler.
+
+                Args:
+                    lib_path (str): Path to the PKCS#11 library.
+                    token_label (str): Label of the HSM token.
+                    user_pin (str): User PIN for the token.
+                    key_label (str): Label of the private key.
+                    slot_id (int, optional): Specific slot ID to use. If None, uses token_label to find slot.
+                """
+        self._lib_path = lib_path
+        self._token_label = token_label
+        self._user_pin = user_pin
         self._key_label = key_label
+        self._slot_id = slot_id
+        self._lib = None
+        self._token = None
+        self._session = None
         self._key = None
+
+        self._initialize()
+
+
+    def _initialize(self) -> None:
+        """Initialize the PKCS#11 library and create a session."""
+        try:
+            self._lib = lib(self._lib_path)
+
+            if self._slot_id is not None:
+                # Use specific slot ID
+                slots = self._lib.get_slots(token_present=True)
+                slot = next((s for s in slots if s.slot_id == self._slot_id), None)
+                if slot is None:
+                    # Try looking in all slots (including empty ones)
+                    all_slots = self._lib.get_slots()
+                    slot = next((s for s in all_slots if s.slot_id == self._slot_id), None)
+                    if slot is None:
+                        available_slots = [f"ID={s.slot_id} (0x{s.slot_id:x})" for s in all_slots]
+                        raise ValueError(
+                            f"Slot {self._slot_id} not found. Available slot IDs: {available_slots}"
+                        )
+                    else:
+                        raise ValueError(f"Slot {self._slot_id} exists but has no token")
+
+                self._token = slot.get_token()
+            else:
+                # Use token label (existing behavior)
+                self._token = self._lib.get_token(token_label=self._token_label)
+
+            self._session = self._token.open(user_pin=self._user_pin, rw=True)
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize PKCS#11 session: {e}")
+
 
     def copy_key(
         self,
@@ -366,7 +457,7 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
         Attribute.TOKEN: True,
     }
 
-    def __init__(self, lib_path: str, token_label: str, user_pin: str, key_label: str):
+    def __init__(self, lib_path: str, token_label: str, user_pin: str, key_label: str, slot_id: int = None):
         """
         Initialize an RSA private key handler for PKCS#11 tokens.
 
@@ -375,8 +466,9 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
             token_label (str): Label of the HSM token.
             user_pin (str): User PIN for the token.
             key_label (str): Label of the RSA private key.
+            slot_id (int, optional): Specific slot ID to use. If None, uses token_label to find slot.
         """
-        super().__init__(lib_path, token_label, user_pin, key_label)
+        super().__init__(lib_path, token_label, user_pin, key_label, slot_id)
         self._public_key = None
 
     def load_key(self) -> None:
@@ -438,6 +530,82 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
 
         self._key = priv
         self._public_key = None
+
+    def import_private_key_from_crypto(self, private_key: rsa.RSAPrivateKey) -> bool:
+        """Import an RSA private key from cryptography RSAPrivateKey object into the HSM.
+
+        Args:
+            private_key: The RSA private key object from cryptography library
+
+        Returns:
+            bool: True if import was successful, False otherwise
+        """
+        try:
+            if not isinstance(private_key, rsa.RSAPrivateKey):
+                raise ValueError("Expected RSA private key")
+
+            private_numbers = private_key.private_numbers()
+            public_numbers = private_numbers.public_numbers
+
+            def int_to_bytes(value: int) -> bytes:
+                """Convert integer to bytes in big-endian format."""
+                bit_length = value.bit_length()
+                byte_length = (bit_length + 7) // 8
+                return value.to_bytes(byte_length, byteorder='big')
+
+            private_template = {
+                Attribute.CLASS: ObjectClass.PRIVATE_KEY,
+                Attribute.KEY_TYPE: KeyType.RSA,
+                Attribute.LABEL: self._key_label,
+                Attribute.ID: self._key_label.encode(),
+                Attribute.TOKEN: True,
+                Attribute.PRIVATE: True,
+                Attribute.SENSITIVE: True,
+                Attribute.EXTRACTABLE: False,
+                Attribute.SIGN: True,
+                Attribute.DECRYPT: True,
+                Attribute.UNWRAP: False,
+                Attribute.MODULUS: int_to_bytes(public_numbers.n),
+                Attribute.PUBLIC_EXPONENT: int_to_bytes(public_numbers.e),
+                Attribute.PRIVATE_EXPONENT: int_to_bytes(private_numbers.d),
+                Attribute.PRIME_1: int_to_bytes(private_numbers.p),
+                Attribute.PRIME_2: int_to_bytes(private_numbers.q),
+                Attribute.EXPONENT_1: int_to_bytes(private_numbers.dmp1),
+                Attribute.EXPONENT_2: int_to_bytes(private_numbers.dmq1),
+                Attribute.COEFFICIENT: int_to_bytes(private_numbers.iqmp),
+            }
+
+            public_template = {
+                Attribute.CLASS: ObjectClass.PUBLIC_KEY,
+                Attribute.KEY_TYPE: KeyType.RSA,
+                Attribute.LABEL: self._key_label,
+                Attribute.ID: self._key_label.encode(),
+                Attribute.TOKEN: True,
+                Attribute.PRIVATE: False,
+                Attribute.VERIFY: True,
+                Attribute.ENCRYPT: True,
+                Attribute.WRAP: False,
+                Attribute.MODULUS: int_to_bytes(public_numbers.n),
+                Attribute.PUBLIC_EXPONENT: int_to_bytes(public_numbers.e),
+            }
+
+            if self._key_exists(KeyType.RSA, ObjectClass.PRIVATE_KEY):
+                raise ValueError(f"Key with label '{self._key_label}' already exists")
+
+            private_key_obj = self._session.create_object(private_template)
+
+            public_key_obj = self._session.create_object(public_template)
+
+            self._key = private_key_obj
+            self._public_key = None
+
+            return True
+
+        except Exception as e:
+            logger = getattr(self, 'logger', None)
+            if logger:
+                logger.error(f"Failed to import RSA private key from PEM: {e}")
+            return False
 
     def sign(self, data: bytes, padding: asym_padding.AsymmetricPadding, algorithm: hashes.HashAlgorithm) -> bytes:
         """
@@ -616,7 +784,7 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         Attribute.TOKEN: True,
     }
 
-    def __init__(self, lib_path: str, token_label: str, user_pin: str, key_label: str):
+    def __init__(self, lib_path: str, token_label: str, user_pin: str, key_label: str, slot_id: int = None):
         """
         Initialize an EC private key handler for PKCS#11 tokens.
 
@@ -625,8 +793,9 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             token_label (str): Label of the HSM token.
             user_pin (str): User PIN for the token.
             key_label (str): Label of the EC private key.
+            slot_id (int, optional): Specific slot ID to use. If None, uses token_label to find slot.
         """
-        super().__init__(lib_path, token_label, user_pin, key_label)
+        super().__init__(lib_path, token_label, user_pin, key_label, slot_id)
         self._public_key = None
 
     def load_key(self) -> None:
@@ -849,58 +1018,40 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
 
 if __name__== '__main__':
 
-    key = Pkcs11RSAPrivateKey(
+    lib_path = "/usr/lib/softhsm/libsofthsm2.so"
+
+    utils = Pkcs11Utilities(lib_path)
+
+    python_slot_id = utils.get_slot_id_for_pkcs11_tool_slot(0)
+
+    print(python_slot_id)
+
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=4096
+    )
+
+    # Create PKCS#11 RSA key handler
+    rsa_key = Pkcs11RSAPrivateKey(
         lib_path="/usr/lib/softhsm/libsofthsm2.so",
-        token_label="MyToken",
+        token_label="TrustPoint-SoftHSM",
         user_pin="1234",
-        key_label="issuer-key-10"
+        key_label="generated_rsa_key-8",
     )
 
-    key.generate_key(2048)
+    #success = rsa_key.generate_key(4096)
 
-    message = b"Hello from SoftHSM + PKCS#11 RSA!"
+    # Import the generated key
+    success = rsa_key.import_private_key_from_crypto(private_key)
 
-    signature = key.sign(
-        message,
-        padding=padding.PKCS1v15(),
-        algorithm=hashes.SHA256()
-    )
+    if success:
+        print("RSA key created and imported successfully")
+        # Now you can use the key for signing, etc.
+        # Example: rsa_key.sign(data, padding, algorithm)
+    else:
+        print("Failed to import RSA key")
 
-    print(f"Signature: {signature}")
+    utils = Pkcs11Utilities("/usr/lib/softhsm/libsofthsm2.so")
+    token = utils.get_slots()
 
-    ciphertext = key.encrypt(b"Hello world!")
-
-    plaintext = key.decrypt(ciphertext, padding=padding.PKCS1v15())
-
-    assert plaintext == b"Hello world!"
-
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, "DE"),
-        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "BW"),
-        x509.NameAttribute(NameOID.LOCALITY_NAME, "FDS"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Trustpoint"),
-        x509.NameAttribute(NameOID.COMMON_NAME, "HSM"),
-    ])
-
-    not_valid_before = datetime.datetime.utcnow()
-    not_valid_after = not_valid_before + datetime.timedelta(days=365)
-
-    builder = (
-        x509.CertificateBuilder()
-        .subject_name(subject)
-        .issuer_name(issuer)
-        .public_key(key.public_key())
-        .serial_number(x509.random_serial_number())
-        .not_valid_before(not_valid_before)
-        .not_valid_after(not_valid_after)
-        .add_extension(
-            x509.BasicConstraints(ca=True, path_length=None), critical=True
-        )
-    )
-
-    certificate = builder.sign(
-        private_key=key,
-        algorithm=hashes.SHA256()
-    )
-
-    print(certificate.public_bytes(serialization.Encoding.PEM).decode())
+    print(token)

@@ -23,8 +23,9 @@ dependencies = [
     "psycopg-binary>=3.2.6",
     "pyasn1>=0.6.1,<0.7",
     "pyasn1-modules>=0.4.1,<0.5",
+    "pydeps>=3.0.1",
     "python-pkcs11>=0.8.1",
-    "trustpoint-core==0.2.5",
+    #"trustpoint-core==0.2.5",
     "types-paramiko>=3.5.0.20250516",
     "zeroconf>=0.147,<0.148",
 ]

@@ -12,11 +12,17 @@ from setup_wizard.views import (
     SetupWizardOptionsView,
     SetupWizardTlsServerCredentialApplyCancelView,
     SetupWizardTlsServerCredentialApplyView,
+    SetupWizardHsmSetupView,
 )
 
 app_name = 'setup_wizard'
 urlpatterns = [
     path('', SetupWizardInitialView.as_view(), name='initial'),
+    path(
+        'hsm-setup/',
+        SetupWizardHsmSetupView.as_view(),
+        name='hsm_setup',
+    ),
     path(
         'generate-tls-server-credential/',
         SetupWizardGenerateTlsServerCredentialView.as_view(),
