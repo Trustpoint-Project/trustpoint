@@ -11,7 +11,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509.oid import NameOID
-from trustpoint_core.serializer import CredentialSerializer
+from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
 from pki.models import IssuingCaModel
 from pki.util.keys import CryptographyUtils
@@ -217,6 +217,11 @@ class CertificateGenerator:
             certificate=issuing_ca_cert,
             additional_certificates=chain
         )
+
+        issuing_ca_credential_serializer.private_key_reference = (
+            PrivateKeyReference.from_private_key(private_key=issuing_ca_credential_serializer.private_key,
+                                                 key_label=unique_name,
+                                                 location=PrivateKeyLocation.HSM_PROVIDED))
 
         issuing_ca = IssuingCaModel.create_new_issuing_ca(
             unique_name=unique_name, credential_serializer=issuing_ca_credential_serializer, issuing_ca_type=ca_type
