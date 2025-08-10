@@ -335,8 +335,7 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
             messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential generated successfully.')
 
             if self.request.user.is_authenticated:
-                referer = self.request.META.get('HTTP_REFERER')
-                return redirect(referer)
+                return redirect('management:tls', permanent=False)
 
             return super().form_valid(form)
         except subprocess.CalledProcessError as exception:
