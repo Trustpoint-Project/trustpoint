@@ -7,12 +7,18 @@ from typing import TYPE_CHECKING, Any, cast
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Fieldset, Layout
 from django import forms
+from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from pki.util.keys import AutoGenPkiKeyAlgorithm
+from trustpoint_core.serializer import CredentialSerializer
+from util.field import UniqueNameValidator
 
 from management.models import BackupOptions, SecurityConfig
+from pki.models import CredentialModel, IssuingCaModel
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -196,7 +202,83 @@ class IPv4AddressForm(forms.Form):
         ipv4_field = cast(forms.ChoiceField, self.fields['ipv4_address'])
         ipv4_field.choices = [(ip, ip) for ip in san_ips]
 
+class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
+    """Form for importing an TLS-Server Credential using a PKCS#12 file.
 
+    This form allows the user to upload a PKCS#12 file containing the private key
+    and certificate chain, along with an optional password. It validates the
+    uploaded file and its contents.
+
+    Attributes:
+        pkcs12_file (FileField): The PKCS#12 file containing the private key and certificates.
+        pkcs12_password (CharField): An optional password for the PKCS#12 file.
+    """
+
+    pkcs12_file = forms.FileField(label=_('PKCS#12 File (.p12, .pfx)'), required=True)
+    pkcs12_password = forms.CharField(
+        # hack, force autocomplete off in chrome with: one-time-code
+        widget=forms.PasswordInput(attrs={'autocomplete': 'one-time-code'}),
+        label=_('[Optional] PKCS#12 password'),
+        required=False,
+    )
+
+    def clean(self) -> None:
+        """Cleans and validates the entire form.
+
+        This method performs additional validation on the cleaned data to ensure
+        all required fields are valid and consistent. It checks the uploaded PKCS#12
+        file and its password (if provided). Any issues during validation
+        raise appropriate errors.
+
+        Raises:
+            ValidationError: If the data is invalid, such as when the unique name
+            is already taken or the PKCS#12 file cannot be read or parsed.
+        """
+        cleaned_data = super().clean()
+        if not cleaned_data:  # only for typing, cleaned_data should always be a dict, but not entirely sure
+            exc_msg = 'No data was provided.'
+            raise ValidationError(exc_msg)
+        unique_name = cleaned_data.get('unique_name')
+
+        try:
+            pkcs12_raw = cleaned_data.get('pkcs12_file').read()
+            pkcs12_password = cleaned_data.get('pkcs12_password')
+        except (OSError, AttributeError) as original_exception:
+            # These exceptions are likely to occur if the file cannot be read or is missing attributes.
+            error_message = _(
+                'Unexpected error occurred while trying to get file contents. Please see logs for further details.'
+            )
+            raise ValidationError(error_message, code='unexpected-error') from original_exception
+
+        if pkcs12_password:
+            try:
+                pkcs12_password = pkcs12_password.encode()
+            except Exception as original_exception:
+                error_message = 'The PKCS#12 password contains invalid data, that cannot be encoded in UTF-8.'
+                raise ValidationError(error_message) from original_exception
+        else:
+            pkcs12_password = None
+
+        try:
+            tls_credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
+        except Exception as exception:
+            err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
+            raise ValidationError(err_msg) from exception
+
+        try:
+            trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
+                credential_serializer=tls_credential_serializer,
+                credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+            )
+
+            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+            active_tls.credential = trustpoint_tls_server_credential
+            active_tls.save()
+        except ValidationError:
+            raise
+        except Exception as exception:
+            err_msg = str(exception)
+            raise ValidationError(err_msg) from exception
 
 
 

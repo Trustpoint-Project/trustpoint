@@ -14,8 +14,9 @@ from pki.models import GeneralNameIpAddress
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, CredentialModel, CertificateModel
 from setup_wizard.forms import StartupWizardTlsCertificateForm
 
-from management.forms import IPv4AddressForm
+from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form
 from management.models import TlsSettings
+from trustpoint.views.base import ContextDataMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -27,7 +28,6 @@ class TlsSettingsContextMixin:
     """Mixin which adds data to the context for the TLS settings application."""
 
     extra_context: ClassVar = {'page_category': 'management', 'page_name': 'tls'}
-
 
 class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
     """View to display certificate details, including Subject Alternative Name (SAN) and associated IP addresses."""
@@ -155,7 +155,7 @@ class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
             return []
 
 
-class TLSAddMethodSelectView(TemplateView):
+class TlsAddMethodSelectView(TemplateView):
     """View to select the method to add a TLS Certificate."""
 
     template_name = 'management/tls/method_select.html'
@@ -163,7 +163,7 @@ class TLSAddMethodSelectView(TemplateView):
 
 
 
-class GenerateTLSCertificateView(TemplateView):
+class GenerateTlsCertificateView(TemplateView):
     """View to generate self-signed TLS server certificate."""
 
     template_name = 'management/tls/generate_tls.html'
@@ -177,7 +177,23 @@ class GenerateTLSCertificateView(TemplateView):
         return context
 
 
-class ActivateTLSServerView(View):
+class TlsAddFileImportPkcs12View(TlsSettingsContextMixin, FormView[TlsAddFileImportPkcs12Form]):
+    """View to import an TLS-Server Credential from a PKCS12 file."""
+
+    template_name = 'management/tls/file_import.html'
+    form_class = TlsAddFileImportPkcs12Form
+    success_url = reverse_lazy('management:tls')
+
+    def form_valid(self, form: TlsAddFileImportPkcs12Form) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        messages.success(
+            self.request,
+            _('Successfully added TLS-Server Credential.'),
+        )
+        return super().form_valid(form)
+
+
+class ActivateTlsServerView(View):
     """Activate a TLS server certificate."""
 
     def post(self, request, *args, **kwargs):
