@@ -281,8 +281,6 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
             HttpResponse: A redirect response to the appropriate page or
                           the next handler in the dispatch chain.
         """
-        if request.user.is_authenticated:
-            return super().dispatch(request, *args, **kwargs)
 
         if not DOCKER_CONTAINER:
             return redirect('users:login', permanent=False)
@@ -333,9 +331,6 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
                 execute_shell_script(SCRIPT_WIZARD_INITIAL)
 
             messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential generated successfully.')
-
-            if self.request.user.is_authenticated:
-                return redirect('management:tls', permanent=False)
 
             return super().form_valid(form)
         except subprocess.CalledProcessError as exception:
