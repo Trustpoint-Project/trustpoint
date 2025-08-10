@@ -10,11 +10,16 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from pki.util.keys import AutoGenPkiKeyAlgorithm
-from trustpoint_core.serializer import CredentialSerializer
-from util.field import UniqueNameValidator
+from trustpoint_core.serializer import (
+    CertificateCollectionSerializer,
+    CertificateSerializer,
+    CredentialSerializer,
+    PrivateKeySerializer
+)
 
 from management.models import BackupOptions, SecurityConfig
 from pki.models import CredentialModel, IssuingCaModel
+from pki.models.certificate import CertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
@@ -278,6 +283,172 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             err_msg = str(exception)
             raise ValidationError(err_msg) from exception
 
+class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
+    """Form for importing a TLS-Server Credential using separate files.
 
+    This form allows the user to upload a private key file, its password (optional),
+    an TLS certificate file, and an optional certificate chain. The form
+    validates the uploaded files, ensuring they are correctly formatted, within
+    size limits, and not already associated with an existing Issuing CA.
+
+    Attributes:
+        private_key_file (FileField): The private key file (.key, .pem).
+        private_key_file_password (CharField): An optional password for the private key.
+        tls_certificate (FileField): The Issuing CA certificate file (.cer, .der, .pem, .p7b, .p7c).
+        tls_certificate_chain (FileField): An optional certificate chain file.
+    """
+
+    tls_certificate = forms.FileField(label=_('TLS Certificate (.cer, .der, .pem, .p7b, .p7c)'), required=True)
+    tls_certificate_chain = forms.FileField(label=_('[Optional] Certificate Chain (.pem, .p7b, .p7c).'), required=False)
+    private_key_file = forms.FileField(label=_('Private Key File (.key, .pem)'), required=True)
+    private_key_file_password = forms.CharField(
+        # hack, force autocomplete off in chrome with: one-time-code
+        widget=forms.PasswordInput(attrs={'autocomplete': 'one-time-code'}),
+        label=_('[Optional] Private Key File Password'),
+        required=False,
+    )
+
+    def clean_private_key_file(self) -> PrivateKeySerializer:
+        """Validates and parses the uploaded private key file.
+
+        This method checks if the private key file is provided, ensures it meets
+        size constraints, and validates its contents. If a password is provided,
+        it is used to decrypt the private key. Raises validation errors for missing,
+        oversized, or corrupted private key files.
+
+        Returns:
+            PrivateKeySerializer: A serializer containing the parsed private key.
+
+        Raises:
+            ValidationError: If the private key file is missing, too large, or
+            corrupted, or if the password is invalid or incompatible.
+        """
+        private_key_file = self.cleaned_data.get('private_key_file')
+        private_key_file_password = (
+            self.data.get('private_key_file_password') if self.data.get('private_key_file_password') else None
+        )
+
+        if not private_key_file:
+            err_msg = 'No private key file was uploaded.'
+            raise forms.ValidationError(err_msg)
+
+        # max size: 64 kiB
+        max_size = 1024 * 64
+        if private_key_file.size > max_size:
+            err_msg = 'Private key file is too large, max. 64 kiB.'
+            raise ValidationError(err_msg)
+
+        try:
+            return PrivateKeySerializer.from_bytes(private_key_file.read(), private_key_file_password)
+        except Exception as exception:
+            err_msg = _('Failed to parse the private key file. Either wrong password or file corrupted.')
+            raise ValidationError(err_msg) from exception
+
+
+    def clean_tls_certificate(self) -> CertificateSerializer:
+        """Validates and parses the uploaded TLS certificate file.
+
+        This method ensures the provided TLS certificate file is valid and
+        not already associated with an existing TLS in the database. If the
+        file is too large, corrupted, or already in use, a validation error is raised.
+
+        Returns:
+            CertificateSerializer: A serializer containing the parsed certificate.
+
+        Raises:
+            ValidationError: If the file is missing, too large, corrupted, or already
+            associated with an existing TLS.
+        """
+        tls_certificate = self.cleaned_data['tls_certificate']
+
+        if not tls_certificate:
+            err_msg = 'No TLS certificate file was uploaded.'
+            raise forms.ValidationError(err_msg)
+
+        # max size: 64 kiB
+        max_size = 1024 * 64
+        if tls_certificate.size > max_size:
+            err_msg = 'TLS certificate file is too large, max. 64 kiB.'
+            raise ValidationError(err_msg)
+
+        try:
+            certificate_serializer = CertificateSerializer.from_bytes(tls_certificate.read())
+        except Exception as exception:
+            err_msg = _('Failed to parse the TLS certificate. Seems to be corrupted.')
+            raise ValidationError(err_msg) from exception
+
+        return certificate_serializer
+
+    def clean_tls_certificate_chain(self) -> None | CertificateCollectionSerializer:
+        """Validates and parses the uploaded TLS certificate chain file.
+
+        This method checks if the optional certificate chain file is provided.
+        If present, it validates and attempts to parse the file into a collection
+        of certificates. Raises a validation error if parsing fails or the file
+        appears corrupted.
+
+        Returns:
+            CertificateCollectionSerializer: A serializer containing the parsed
+            certificate chain if provided.
+
+        Raises:
+            ValidationError: If the certificate chain cannot be parsed.
+        """
+        tls_certificate_chain = self.cleaned_data['tls_certificate_chain']
+
+        if tls_certificate_chain:
+            try:
+                return CertificateCollectionSerializer.from_bytes(tls_certificate_chain.read())
+            except Exception as exception:
+                err_msg = _('Failed to parse the TLS certificate chain. Seems to be corrupted.')
+                raise ValidationError(err_msg) from exception
+
+        return None
+
+    def clean(self) -> None:
+        """Cleans and validates the form data.
+
+        This method performs additional validation on the provided data,
+        such as ensuring the private key file, and certificates
+        are valid. It also activates and saves the TLS certificate
+        if all checks pass.
+
+        Raises:
+            ValidationError: If the form data is invalid or there is an error during processing.
+        """
+        try:
+            cleaned_data = super().clean()
+            if not cleaned_data:
+                return
+
+            private_key_serializer = cleaned_data.get('private_key_file')
+            ca_certificate_serializer = cleaned_data.get('tls_certificate')
+            ca_certificate_chain_serializer = (
+                cleaned_data.get('tls_certificate_chain') if cleaned_data.get('tls_certificate_chain') else None
+            )
+
+            if not private_key_serializer or not ca_certificate_serializer:
+                return
+
+            credential_serializer = CredentialSerializer.from_serializers(
+                private_key_serializer= private_key_serializer,
+                certificate_serializer=ca_certificate_serializer,
+                certificate_collection_serializer=ca_certificate_chain_serializer
+            )
+
+            trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
+                credential_serializer=credential_serializer,
+                credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+            )
+
+            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+            active_tls.credential = trustpoint_tls_server_credential
+            active_tls.save()
+
+        except ValidationError:
+            raise
+        except Exception as exception:
+            err_msg = str(exception)
+            raise ValidationError(err_msg) from exception
 
 

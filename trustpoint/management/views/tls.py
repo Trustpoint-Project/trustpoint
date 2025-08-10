@@ -15,9 +15,8 @@ from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, Cred
 from setup_wizard.forms import StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 
-from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form
+from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.models import TlsSettings
-from trustpoint.views.base import ContextDataMixin
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -242,6 +241,20 @@ class TlsAddFileImportPkcs12View(TlsSettingsContextMixin, FormView[TlsAddFileImp
         )
         return super().form_valid(form)
 
+class TlsAddFileImportSeparateFilesView(TlsSettingsContextMixin, FormView[TlsAddFileImportSeparateFilesForm]):
+    """View to import an Issuing CA from separate PEM files."""
+
+    template_name = 'management/tls/file_import.html'
+    form_class = TlsAddFileImportSeparateFilesForm
+    success_url = reverse_lazy('management:tls')
+
+    def form_valid(self, form: TlsAddFileImportSeparateFilesForm) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        messages.success(
+            self.request,
+            _('Successfully added TLS-Server Credential.'),
+        )
+        return super().form_valid(form)
 
 class ActivateTlsServerView(View):
     """Activate a TLS server certificate."""

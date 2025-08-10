@@ -38,6 +38,11 @@ urlpatterns = [
         tls.TlsAddFileImportPkcs12View.as_view(),
         name='tls-add-file_import-pkcs12',
     ),
+    path(
+        'tls/add/file-import/separate-files',
+        tls.TlsAddFileImportSeparateFilesView.as_view(),
+        name='tls-add-file_import-separate_files',
+    ),
     path('tls/activate/<int:pk>', tls.ActivateTlsServerView.as_view(), name='activate-tls'),
     path(
         'backups/',
