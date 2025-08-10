@@ -9,7 +9,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext as _
-from django.views.generic import FormView, View
+from django.views.generic import FormView, View, TemplateView
 from pki.models import GeneralNameIpAddress
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, CredentialModel, CertificateModel
 from setup_wizard.forms import StartupWizardTlsCertificateForm
@@ -154,7 +154,32 @@ class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
         except ObjectDoesNotExist:
             return []
 
+
+class TLSAddMethodSelectView(TemplateView):
+    """View to select the method to add a TLS Certificate."""
+
+    template_name = 'management/tls/method_select.html'
+    success_url = reverse_lazy('management:tls-add-method-select')
+
+
+
+class GenerateTLSCertificateView(TemplateView):
+    """View to generate self-signed TLS server certificate."""
+
+    template_name = 'management/tls/generate_tls.html'
+    success_url = reverse_lazy('management:tls')
+
+    def get_context_data(self, **kwargs):
+        """Add TLS Certificate Form."""
+
+        context = super().get_context_data(**kwargs)
+        context['tls_form'] = StartupWizardTlsCertificateForm()
+        return context
+
+
 class ActivateTLSServerView(View):
+    """Activate a TLS server certificate."""
+
     def post(self, request, *args, **kwargs):
         cert_id = kwargs['pk']
         tls_certificate = CredentialModel.objects.get(

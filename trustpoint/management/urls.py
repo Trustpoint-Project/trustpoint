@@ -27,6 +27,12 @@ urlpatterns = [
     path('loglevel/change', settings.ChangeLogLevelView.as_view(), name='change-loglevel'),
     path('settings/', settings.SettingsView.as_view(), name='settings'),
     path('tls/', tls.TlsView.as_view(), name='tls'),
+    path('tls/add/method-select/', tls.TLSAddMethodSelectView.as_view(),
+        name='tls-add-method_select',
+    ),
+    path('tls/add/generate-tls', tls.GenerateTLSCertificateView.as_view(),
+        name='tls-generate',
+    ),
     path('tls/activate/<int:pk>', tls.ActivateTLSServerView.as_view(), name='activate-tls'),
     path(
         'backups/',

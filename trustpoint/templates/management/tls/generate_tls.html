@@ -1,0 +1,35 @@
+{% extends 'trustpoint/base.html' %} 
+{% load crispy_forms_filters %}
+{% load i18n %} 
+{% block content %}
+
+<div
+  class="card"
+  style="max-height: 100%; display: flex; flex-direction: column"
+>
+  <div class="card-header">
+    <h1>{% trans 'Generate Self-Signed TLS-Server Credential' %}</h1>
+  </div>
+  <div class="card-body pt-3 pb-4">
+    <h3 class="mb-3">Subject Alternative Name (SAN) Information.</h3>
+    <form
+      method="POST"
+      action="{% url 'setup_wizard:generate_tls_server_credential' %}"
+      class="text-start"
+    >
+      {% csrf_token %}
+      <fieldset class="form-group tp-form-group">
+        {{ tls_form|crispy }}
+      </fieldset>
+      <hr />
+      <div class="tp-form-btn-group tp-form-btn-group">
+        <a href="" class="btn btn-secondary w-100 mt-1">{% trans "Cancel" %}</a>
+        <button class="btn btn-primary w-100 mt-1" type="submit">
+          {% trans "Generate Self-Signed TLS-Server Credential and Activate" %}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
