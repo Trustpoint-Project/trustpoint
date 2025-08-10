@@ -238,8 +238,6 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         if not cleaned_data:  # only for typing, cleaned_data should always be a dict, but not entirely sure
             exc_msg = 'No data was provided.'
             raise ValidationError(exc_msg)
-        unique_name = cleaned_data.get('unique_name')
-
         try:
             pkcs12_raw = cleaned_data.get('pkcs12_file').read()
             pkcs12_password = cleaned_data.get('pkcs12_password')
