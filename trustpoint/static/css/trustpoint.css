@@ -917,9 +917,18 @@ code {
 
 .copy-container {
     background-color: var(--bs-secondary-bg);
-    padding-top: 25px;
-    padding-bottom: 25px;
-    border-radius: 5px;
+    padding: 1.2rem 0.5rem;
+    border-radius: 0.4rem;
+}
+
+.no-copy-container {
+    background-color: var(--bs-secondary-bg);
+    padding: 1.2rem 0.5rem;
+    border-radius: 0.4rem;
+}
+
+.row-key-container {
+    padding: 1.2rem 0.5rem;
 }
 
 /* Style for the copy button */

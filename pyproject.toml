@@ -54,7 +54,7 @@ dev = [
 ]
 # For building docs
 docs = [
-    "sphinx >= 8.2.3",
+    "sphinx>=8.2.3",
     "sphinx-autoapi>=3.6.0",
     "sphinxcontrib-plantuml>=0.30",
     "furo >= 2024.8.6",

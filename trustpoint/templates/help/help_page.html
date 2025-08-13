@@ -1,0 +1,64 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block head %}
+    <script src="{% static 'js/copy_clipboard.js' %}"></script>
+{% endblock head %}
+
+{% block content %}
+
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h1>{{ help_page.heading }}</h1>
+            </div>
+        </div>
+        <div class="card-body">
+            {% for section in help_page.sections %}
+                <h2>{{ section.heading }}</h2>
+                <hr>
+        
+                <ul class="tp-kvp-list">
+                    {% for row in section.rows %}
+                        <li {% if row.hidden %}hidden{% endif %}>
+                            <div class="row-key-container">{{ row.key }}</div>
+                            {% if row.value_render_type.value == ValueRenderType_CODE %}
+                                <div class="copy-container" style="position: relative;">
+
+                                        <code class="command-text language-bash">
+                                            {{ row.value|linebreaksbr }}
+                                        </code>
+                        
+                                        <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
+                                            aria-label="Copy to clipboard">
+                                            <svg class="icon icon-copy" width="40" height="40" fill="currentColor">
+                                                <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
+                                            </svg>
+                                        </button>
+                                </div>
+                            {% elif row.value_render_type.value == ValueRenderType_PLAIN %}
+                                <div class="no-copy-container" style="position:relative;">
+                                    {{ row.value|linebreaksbr }}
+                                </div>
+                            
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endfor %}
+        </div>
+        <div class="card-footer">
+            <div class="tp-card-btn-footer">
+                <button type="button" value="Back" class="btn btn-secondary btn-half" onClick="history.back()">
+                    {% trans 'Back' %}
+                </button>
+                <a href="{% url clm_url pk=device.pk %}" class="btn btn-primary">
+                    {% trans 'Certificate Lifecycle Management Summary' %}
+                </a>
+            </div>
+        </div>
+    </div>
+
+
+{% endblock content %}

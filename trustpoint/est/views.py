@@ -3,6 +3,7 @@
 import base64
 import ipaddress
 import re
+import enum
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, cast
 
@@ -37,7 +38,6 @@ from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from pki.models.credential import CredentialModel
-
 
 class UsernamePasswordAuthenticationError(Exception):
     """Exception raised for username and password authentication failures."""
