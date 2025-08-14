@@ -13,10 +13,13 @@ from django.db.models import Q
 
 from workflows.models import WorkflowDefinition, WorkflowInstance
 from workflows.services.engine import advance_instance
+from workflows.services.handler_lookup import register_handler
 
 logger = logging.getLogger(__name__)
 
 
+
+@register_handler("certificate_request")
 class CertificateRequestHandler:
     """Handle certificate‐request events (e.g. EST simpleenroll).
 

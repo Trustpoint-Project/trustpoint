@@ -7,6 +7,7 @@ from workflows.views import (
     DomainListView,
     PendingApprovalsView,
     SignalInstanceView,
+    TriggerListView,
     WorkflowDefinitionDeleteView,
     WorkflowDefinitionListView,
     WorkflowInstanceDetailView,
@@ -20,6 +21,7 @@ urlpatterns = [
     path('api/cas/', CAListView.as_view(), name='api_cas'),
     path('api/domains/', DomainListView.as_view(), name='api_domains'),
     path('api/devices/', DeviceListView.as_view(), name='api_devices'),
+    path('api/triggers/', TriggerListView.as_view(), name='api_triggers'),
 
     # load one definition for “edit” in the wizard
     path('api/definitions/<uuid:pk>/', DefinitionDetailView.as_view(), name='definition_detail'),

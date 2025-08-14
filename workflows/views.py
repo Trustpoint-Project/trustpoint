@@ -28,6 +28,33 @@ from workflows.models import (
 )
 from workflows.services.engine import advance_instance
 from workflows.services.wizard import transform_to_definition_schema
+from workflows.triggers import Triggers
+
+
+class TriggerListView(View):
+    """API endpoint returning all triggers.
+
+    Response JSON format:
+    {
+      "est_simpleenroll": {
+         "protocol": "EST",
+         "operation": "simpleenroll",
+         "handler": "certificate_request"
+      },
+      ...
+    }
+    """
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        data = {
+            t.key: {
+                "protocol":  t.protocol,
+                "operation": t.operation,
+                "handler":   t.handler,
+            }
+            for t in Triggers.all()
+        }
+        return JsonResponse(data)
 
 
 class CAListView(View):
@@ -114,8 +141,9 @@ class WorkflowDefinitionListView(ListView[WorkflowDefinition]):
 
     model = WorkflowDefinition
     template_name = 'workflows/definition_list.html'
+    context_object_name = 'definitions'
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'workflows'
         context['page_name'] = 'definitions'
@@ -124,13 +152,18 @@ class WorkflowDefinitionListView(ListView[WorkflowDefinition]):
 
 class WorkflowWizardView(View):
     """UI wizard to create or edit a linear workflow."""
+
     template_name = 'workflows/definition_wizard.html'
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        return render(request, self.template_name, {
-            'page_category': 'workflows',
-            'page_name': 'wizard',
-        })
+        return render(
+            request,
+            self.template_name,
+            {
+                'page_category': 'workflows',
+                'page_name': 'wizard',
+            },
+        )
 
     def post(self, request: HttpRequest) -> JsonResponse:
         try:
@@ -197,13 +230,8 @@ class WorkflowDefinitionDeleteView(View):
     POST-only: deletes the WorkflowDefinition if no non-finalized
     WorkflowInstance exists for it.
     """
-    def post(
-        self,
-        request: HttpRequest,
-        pk: UUID,
-        *args: Any,
-        **kwargs: Any
-    ) -> HttpResponseRedirect:
+
+    def post(self, request: HttpRequest, pk: UUID, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
         wf = get_object_or_404(WorkflowDefinition, pk=pk)
         # if WorkflowInstance.objects.filter(definition=wf, finalized=False).exists():
         #     messages.error(
@@ -214,7 +242,6 @@ class WorkflowDefinitionDeleteView(View):
         wf.delete()
         messages.success(request, f'Workflow "{wf.name}" deleted.')
         return redirect('workflows:definition_list')
-
 
 
 class PendingApprovalsView(ListView[WorkflowInstance]):
@@ -236,6 +263,7 @@ class PendingApprovalsView(ListView[WorkflowInstance]):
 
 class WorkflowInstanceDetailView(View):
     """Show detailed info for a pending workflow instance."""
+
     template_name = 'workflows/pending_detail.html'
 
     def get(self, request: HttpRequest, instance_id: UUID, *args: Any, **kwargs: Any) -> HttpResponse:

@@ -14,18 +14,25 @@
             <label for="wf-name" class="form-label">Name</label>
             <input type="text" id="wf-name" class="form-control" placeholder="Workflow name">
           </div>
+          <div class="mb-3">
+            <label for="trigger-handler" class="form-label">Event Type</label>
+            <select id="trigger-handler" class="form-select"></select>
+          </div>
           <div class="row g-2">
-            <div class="col">
-              <label for="trigger-protocol" class="form-label">Protocol</label>
+            <div class="col" id="proto-container" style="display:none;">
+              <label for="trigger-protocol" class="form-label">PROTOCOL</label>
+              <!-- removed text-uppercase here -->
               <select id="trigger-protocol" class="form-select"></select>
             </div>
-            <div class="col">
-              <label for="trigger-operation" class="form-label">Operation</label>
+            <div class="col" id="op-container" style="display:none;">
+              <label for="trigger-operation" class="form-label">OPERATION</label>
+              <!-- removed text-uppercase here -->
               <select id="trigger-operation" class="form-select"></select>
             </div>
           </div>
         </div>
       </div>
+
       <!-- Steps -->
       <div class="card mb-3">
         <div class="card-header d-flex justify-content-between">
@@ -36,6 +43,7 @@
           <!-- Steps inserted here -->
         </div>
       </div>
+
       <!-- Scopes -->
       <div class="card mb-3">
         <div class="card-header">Scopes</div>
@@ -57,9 +65,9 @@
               <button id="add-scope-btn" class="btn btn-sm btn-primary w-100">+ Add</button>
             </div>
           </div>
-          <div id="scopes-list" class="list-group">
+          <ul id="scopes-list" class="list-group">
             <!-- Scopes inserted here -->
-          </div>
+          </ul>
         </div>
       </div>
     </div>

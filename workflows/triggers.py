@@ -1,79 +1,95 @@
 # workflows/triggers.py
 
 from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass(frozen=True)
 class Trigger:
-    protocol:  str
+    """Represents a single event trigger:
+    - key: internal name 
+    - protocol/operation for filtering 
+    - handler: the service key that will process it
+    """
+    key: str
+    protocol: str
     operation: str
+    handler: str
 
 
 class Triggers:
-    # —––– your single source of truth —–––
-    est_simpleenroll   = Trigger('EST', 'simpleenroll')
-    est_simplereenroll = Trigger('EST', 'simplereenroll')
-    est_cacerts        = Trigger('EST', 'cacerts')
-    est_csrattrs       = Trigger('EST', 'csrattrs')
+    """Central definition of all supported triggers in one place."""
+    est_simpleenroll = Trigger(
+        key='est_simpleenroll',
+        protocol='EST',
+        operation='simpleenroll',
+        handler='certificate_request',
+    )
+    est_simplereenroll = Trigger(
+        key='est_simplereenroll',
+        protocol='EST',
+        operation='simplereenroll',
+        handler='certificate_request',
+    )
+    est_cacerts = Trigger(
+        key='est_cacerts',
+        protocol='EST',
+        operation='cacerts',
+        handler='certificate_issued',
+    )
+    est_csrattrs = Trigger(
+        key='est_csrattrs',
+        protocol='EST',
+        operation='csrattrs',
+        handler='certificate_request',
+    )
 
-    cmp_certrequest       = Trigger('CMP', 'certRequest')
-    cmp_revocationrequest = Trigger('CMP', 'revocationRequest')
+    cmp_certrequest = Trigger(
+        key='cmp_certrequest',
+        protocol='CMP',
+        operation='certRequest',
+        handler='certificate_request',
+    )
+    cmp_revocationrequest = Trigger(
+        key='cmp_revocationrequest',
+        protocol='CMP',
+        operation='revocationRequest',
+        handler='certificate_request',
+    )
 
-    scep_pkioperation     = Trigger('SCEP', 'PKIOperation')
+    scep_pkioperation = Trigger(
+        key='scep_pkioperation',
+        protocol='SCEP',
+        operation='PKIOperation',
+        handler='certificate_request',
+    )
+
+    device_created = Trigger(
+        key='device_created',
+        protocol='',
+        operation='',
+        handler='device_created',
+    )
+    device_deleted = Trigger(
+        key='device_deleted',
+        protocol='',
+        operation='',
+        handler='device_deleted',
+    )
 
     @classmethod
     def all(cls) -> list[Trigger]:
         """Return every Trigger defined on this class."""
-        return [v for v in vars(cls).values() if isinstance(v, Trigger)]
+        return [
+            v for v in vars(cls).values()
+            if isinstance(v, Trigger)
+        ]
 
     @classmethod
     def protocols(cls) -> list[str]:
-        """Unique list of protocol names."""
-        return sorted({t.protocol for t in cls.all()})
+        """Unique list of non-empty protocol names."""
+        return sorted({t.protocol for t in cls.all() if t.protocol})
 
     @classmethod
     def operations_for(cls, protocol: str) -> list[str]:
         """All operations available for a given protocol."""
         return [t.operation for t in cls.all() if t.protocol == protocol]
-
-
-RAW_EMAIL_TEMPLATES = [
-    'device_onboarded',
-    'cert_expiry_warning',
-    'cert_expired',
-    'cert_revoked',
-    'user_welcome',
-    'password_reset',
-]
-
-EMAIL_TEMPLATES: list[dict[str, str]] = [
-    {
-        'value': t,
-        'label': ' '.join(word.capitalize() for word in t.split('_'))
-    }
-    for t in RAW_EMAIL_TEMPLATES
-]
-
-# 2) Map each workflow node type to the list of parameters the wizard should render.
-#    For now, only Email has inputs; others are empty lists.
-STEP_PARAM_DEFS: dict[str, list[dict[str, Any]]] = {
-    'Approval': [],
-    'Email': [
-        {
-            'name': 'template',
-            'label': 'Email Template',
-            'type': 'select',
-            'options': EMAIL_TEMPLATES,
-        },
-        {
-            'name': 'recipients',
-            'label': 'Recipients (comma-separated)',
-            'type': 'text',
-        },
-    ],
-    'Webhook': [],
-    'Timer': [],
-    'Condition': [],
-    'IssueCertificate': [],
-}

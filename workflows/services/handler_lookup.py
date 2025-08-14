@@ -1,23 +1,24 @@
 # workflows/services/handler_lookup.py
 
-from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
-
-Handler = Callable[..., dict[str, Any]]  # simplified alias; handlers return dict status
-
-_registry: dict[str, Handler] = {}
+_handler_registry: dict[str, type] = {}
 
 
-def register_handler(name: str, handler: Handler) -> None:
-    """Register a handler under a common event name."""
-    _registry[name] = handler
+def register_handler(key: str):
+    """Decorator to register an event handler under a given key.
+
+    Usage:
+        @register_handler("certificate_request")
+        class CertificateRequestHandler: ...
+    """
+
+    def decorator(cls: type) -> type:
+        _handler_registry[key] = cls
+        return cls
+
+    return decorator
 
 
-def get_handler(name: str) -> Handler:
-    """Retrieve a previously registered handler; KeyError if missing."""
-    try:
-        return _registry[name]
-    except KeyError as exc:
-        raise KeyError(f'Handler for {name!r} not registered') from exc
+def get_handler_by_key(key: str) -> type | None:
+    """Lookup a handler class by its registry key."""
+    return _handler_registry.get(key)

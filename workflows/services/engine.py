@@ -41,6 +41,7 @@ def advance_instance(
             WorkflowInstance.STATE_APPROVED,
             WorkflowInstance.STATE_REJECTED,
             WorkflowInstance.STATE_COMPLETED,
+            WorkflowInstance.STATE_FAILED,
         }:
             break
 

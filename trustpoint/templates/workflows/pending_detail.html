@@ -12,29 +12,7 @@
     <strong>Requested At:</strong> {{ inst.created_at|date:"SHORT_DATETIME_FORMAT" }}
   </p>
 
-  <hr>
-
-  <h3>CSR Details</h3>
-  {% if csr_info %}
-    {% if csr_info.error %}
-      <div class="alert alert-warning">{{ csr_info.error }}</div>
-    {% else %}
-      <ul>
-        <li><strong>Subject:</strong> {{ csr_info.subject }}</li>
-        {% if csr_info.common_name %}
-          <li><strong>Common Name:</strong> {{ csr_info.common_name }}</li>
-        {% endif %}
-        {% if csr_info.sans %}
-          <li><strong>SANs:</strong> {{ csr_info.sans|join:", " }}</li>
-        {% endif %}
-        <li><strong>Key Algorithm:</strong> {{ csr_info.key_algorithm }}</li>
-        <li><strong>Signature Algorithm:</strong> {{ csr_info.signature_algorithm }}</li>
-      </ul>
-    {% endif %}
-  {% else %}
-    <p>No CSR data available.</p>
-  {% endif %}
-
+  
   <hr>
 
   <h3>Payload</h3>
@@ -70,6 +48,29 @@
       </li>
     {% endif %}
   </ul>
+
+  <hr>
+
+  <h3>CSR Details</h3>
+  {% if csr_info %}
+    {% if csr_info.error %}
+      <div class="alert alert-warning">{{ csr_info.error }}</div>
+    {% else %}
+      <ul>
+        <li><strong>Subject:</strong> {{ csr_info.subject }}</li>
+        {% if csr_info.common_name %}
+          <li><strong>Common Name:</strong> {{ csr_info.common_name }}</li>
+        {% endif %}
+        {% if csr_info.sans %}
+          <li><strong>SANs:</strong> {{ csr_info.sans|join:", " }}</li>
+        {% endif %}
+        <li><strong>Key Algorithm:</strong> {{ csr_info.key_algorithm }}</li>
+        <li><strong>Signature Algorithm:</strong> {{ csr_info.signature_algorithm }}</li>
+      </ul>
+    {% endif %}
+  {% else %}
+    <p>No CSR data available.</p>
+  {% endif %}
 
   <p>
     <a href="{% url 'workflows:pending_list' %}" class="btn btn-secondary">

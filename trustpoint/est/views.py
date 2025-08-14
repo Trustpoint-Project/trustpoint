@@ -29,7 +29,7 @@ from pyasn1.type.univ import ObjectIdentifier
 
 from trustpoint.logger import LoggerMixin
 from workflows.models import WorkflowInstance
-from workflows.services.trigger_dispatcher import TriggerDispatcher
+from workflows.services.event_dispatcher import EventDispatcher
 from workflows.triggers import Triggers
 
 
@@ -822,10 +822,8 @@ class EstSimpleEnrollmentView(
         ):
             csr_pem: str = csr.public_bytes(encoding=Encoding.PEM).decode()
 
-            info = TriggerDispatcher.dispatch(
-                'certificate_request',
-                protocol=Triggers.est_simpleenroll.protocol,
-                operation=Triggers.est_simpleenroll.operation,
+            info = EventDispatcher.dispatch(
+                Triggers.est_simpleenroll,
                 ca_id=requested_domain.issuing_ca.id,
                 domain_id=requested_domain.id,
                 device_id=device.id,
