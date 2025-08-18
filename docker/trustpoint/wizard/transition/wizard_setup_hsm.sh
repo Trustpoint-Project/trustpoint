@@ -2,6 +2,7 @@
 # This script sets up an HSM slot using the pins provided via Docker Compose secrets.
 # Usage: wizard_setup_hsm.sh <pkcs11_module_path> <slot_number> <token_label>
 
+
 STATE_FILE_DIR="/etc/trustpoint/wizard/state/"
 WIZARD_SETUP_HSM="/etc/trustpoint/wizard/state/WIZARD_SETUP_HSM"
 WIZARD_TLS_SERVER_CREDENTIAL_APPLY="/etc/trustpoint/wizard/state/WIZARD_TLS_SERVER_CREDENTIAL_APPLY"
@@ -85,11 +86,55 @@ fi
 
 log "HSM token initialized successfully."
 
-# Test HSM access
-log "Testing HSM access..."
-if ! pkcs11-tool --module "$PKCS11_MODULE_PATH" --list-objects --pin "$HSM_PIN" >/dev/null 2>&1; then
-    echo "ERROR: Failed to access HSM slot $HSM_SLOT with configured PIN."
-    exit 11
+log "Setting correct permissions for SoftHSM files..."
+
+# Add www-data to softhsm group (in case it's not already)
+usermod -a -G softhsm www-data || log "WARNING: Could not add www-data to softhsm group"
+
+if ! chgrp www-data /var/lib/softhsm; then
+    log "WARNING: Failed to change group ownership of /var/lib/softhsm"
+fi
+
+if ! chmod 755 /var/lib/softhsm; then
+    echo "ERROR: Failed to set permissions on /var/lib/softhsm directory."
+    exit 17
+fi
+
+# Fix ownership and permissions of the entire SoftHSM directory structure
+if ! chown -R www-data:www-data /var/lib/softhsm/tokens/; then
+    echo "ERROR: Failed to set ownership of SoftHSM tokens to www-data."
+    exit 14
+fi
+
+if ! chmod -R 755 /var/lib/softhsm/tokens/; then
+    echo "ERROR: Failed to set permissions on SoftHSM tokens."
+    exit 15
+fi
+
+# Ensure the SoftHSM config is readable by www-data
+if ! chmod 644 /etc/softhsm2.conf; then
+    echo "ERROR: Failed to set permissions on SoftHSM config file."
+    exit 16
+fi
+
+log "DEBUG: Testing www-data access to token directory:"
+if su -s /bin/bash www-data -c "ls /var/lib/softhsm/tokens/" >/dev/null 2>&1; then
+    log "DEBUG: www-data can access token directory"
+else
+    log "ERROR: www-data still cannot access token directory"
+    exit 18
+fi
+
+log "SoftHSM permissions set successfully."
+
+# Test HSM access with proper environment
+log "Testing HSM access as www-data user..."
+if ! su -s /bin/bash www-data -c "SOFTHSM2_CONF=/etc/softhsm2.conf pkcs11-tool --module '$PKCS11_MODULE_PATH' --list-objects --pin '$HSM_PIN'" >/dev/null 2>&1; then
+    echo "ERROR: Failed to access HSM slot $HSM_SLOT as www-data user."
+    # Additional debugging
+    log "DEBUG: Attempting to get more error details..."
+    su -s /bin/bash www-data -c "SOFTHSM2_CONF=/etc/softhsm2.conf pkcs11-tool --module '$PKCS11_MODULE_PATH' --list-objects --pin '$HSM_PIN'" 2>&1 | head -20
+    exit 19
 fi
 
 log "HSM access test successful."
