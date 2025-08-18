@@ -323,6 +323,9 @@ class SetupWizardHsmSetupView(LoggerMixin, FormView):
             11: 'Failed to access HSM with configured PIN.',
             12: 'Failed to remove the WIZARD_SETUP_HSM state file',
             13: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
+            14: 'Failed to set ownership of token files to www-data.',
+            15: 'Failed to set permissions on token files.',
+            16: 'Failed to access HSM as www-data user after permission fix.',
         }
         return error_messages.get(return_code, 'An unknown error occurred during HSM setup.')
 
