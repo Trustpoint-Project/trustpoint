@@ -146,7 +146,7 @@ class Pkcs11Utilities:
             pkcs11.Session: The opened session.
         """
         token = self.get_token_by_label(token_label)
-        return token.open(user_pin, rw=True)
+        return token.open(user_pin=user_pin, rw=True)
 
     def generate_random(self, token_label: str, user_pin: str, length: int) -> bytes:
         """
@@ -239,32 +239,13 @@ class Pkcs11PrivateKey(ABC):
         """Initialize the PKCS#11 library and create a session."""
         try:
             self._lib = lib(self._lib_path)
-
-            if self._slot_id is not None:
-                # Use specific slot ID
-                slots = self._lib.get_slots(token_present=True)
-                slot = next((s for s in slots if s.slot_id == self._slot_id), None)
-                if slot is None:
-                    # Try looking in all slots (including empty ones)
-                    all_slots = self._lib.get_slots()
-                    slot = next((s for s in all_slots if s.slot_id == self._slot_id), None)
-                    if slot is None:
-                        available_slots = [f"ID={s.slot_id} (0x{s.slot_id:x})" for s in all_slots]
-                        raise ValueError(
-                            f"Slot {self._slot_id} not found. Available slot IDs: {available_slots}"
-                        )
-                    else:
-                        raise ValueError(f"Slot {self._slot_id} exists but has no token")
-
-                self._token = slot.get_token()
-            else:
-                # Use token label (existing behavior)
-                self._token = self._lib.get_token(token_label=self._token_label)
+            self._token = self._lib.get_token(token_label=self._token_label)
 
             self._session = self._token.open(user_pin=self._user_pin, rw=True)
-
+        except pkcs11.exceptions.UserAlreadyLoggedIn:
+            pass
         except Exception as e:
-            raise RuntimeError(f"Failed to initialize PKCS#11 session: {e}")
+            raise RuntimeError(f"Failed to initialize PKCS#11 session: {e}; lib_path: {self._lib_path} token: {self._token_label} pin: {self._user_pin}")
 
 
     def copy_key(
@@ -415,7 +396,6 @@ class Pkcs11PrivateKey(ABC):
         """
         if hasattr(self, '_session') and self._session:
             self._session.close()
-
 
     def __enter__(self) -> 'Pkcs11PrivateKey':
         """
@@ -929,6 +909,93 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         pub_numbers = ec.EllipticCurvePublicNumbers(x, y, curve)
         self._public_key = pub_numbers.public_key()
         return self._public_key
+
+    def import_private_key_from_crypto(self, private_key: ec.EllipticCurvePrivateKey) -> bool:
+        """Import an EC private key from cryptography EllipticCurvePrivateKey object into the HSM.
+
+        Args:
+            private_key: The EC private key object from cryptography library
+
+        Returns:
+            bool: True if import was successful, False otherwise
+        """
+        try:
+            if not isinstance(private_key, ec.EllipticCurvePrivateKey):
+                raise ValueError("Expected EC private key")
+
+            private_numbers = private_key.private_numbers()
+            public_numbers = private_numbers.public_numbers
+
+            # Get curve information
+            curve = private_numbers.public_numbers.curve
+
+            # Determine the curve parameters
+            if isinstance(curve, ec.SECP256R1):
+                curve_params = b'\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07'  # secp256r1 OID
+            elif isinstance(curve, ec.SECP384R1):
+                curve_params = b'\x06\x05\x2b\x81\x04\x00\x22'  # secp384r1 OID
+            elif isinstance(curve, ec.SECP521R1):
+                curve_params = b'\x06\x05\x2b\x81\x04\x00\x23'  # secp521r1 OID
+            else:
+                raise ValueError(f"Unsupported curve: {curve.name}")
+
+            def int_to_bytes(value: int, byte_length: int) -> bytes:
+                """Convert integer to bytes in big-endian format with specified length."""
+                return value.to_bytes(byte_length, byteorder='big')
+
+            # Calculate key size and coordinate size
+            key_size = curve.key_size
+            coord_size = (key_size + 7) // 8
+            private_value_size = coord_size
+
+            # Encode public key point as uncompressed format (0x04 + x + y)
+            public_point = (b'\x04' +
+                            int_to_bytes(public_numbers.x, coord_size) +
+                            int_to_bytes(public_numbers.y, coord_size))
+
+            private_template = {
+                Attribute.CLASS: ObjectClass.PRIVATE_KEY,
+                Attribute.KEY_TYPE: KeyType.EC,
+                Attribute.LABEL: self._key_label,
+                Attribute.ID: self._key_label.encode(),
+                Attribute.TOKEN: True,
+                Attribute.PRIVATE: True,
+                Attribute.SENSITIVE: True,
+                Attribute.EXTRACTABLE: False,
+                Attribute.SIGN: True,
+                Attribute.EC_PARAMS: curve_params,
+                Attribute.VALUE: int_to_bytes(private_numbers.private_value, private_value_size),
+            }
+
+            public_template = {
+                Attribute.CLASS: ObjectClass.PUBLIC_KEY,
+                Attribute.KEY_TYPE: KeyType.EC,
+                Attribute.LABEL: self._key_label,
+                Attribute.ID: self._key_label.encode(),
+                Attribute.TOKEN: True,
+                Attribute.PRIVATE: False,
+                Attribute.VERIFY: True,
+                Attribute.EC_PARAMS: curve_params,
+                Attribute.EC_POINT: public_point,
+            }
+
+            if self._key_exists(KeyType.EC, ObjectClass.PRIVATE_KEY):
+                raise ValueError(f"Key with label '{self._key_label}' already exists")
+
+            private_key_obj = self._session.create_object(private_template)
+
+            public_key_obj = self._session.create_object(public_template)
+
+            self._key = private_key_obj
+            self._public_key = None
+
+            return True
+
+        except Exception as e:
+            logger = getattr(self, 'logger', None)
+            if logger:
+                logger.error(f"Failed to import EC private key from cryptography object: {e}")
+            return False
 
     def key_size(self) -> int:
         """
