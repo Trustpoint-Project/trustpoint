@@ -256,8 +256,8 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                     key_label=key_label,
                 )
 
-                # TODO: Implement import_private_key_from_crypto for EC keys
-                raise NotImplementedError("EC key import to HSM not yet implemented")
+                if not pkcs11_key_handler.import_private_key_from_crypto(crypto_private_key):
+                    raise RuntimeError("Failed to import EC private key to HSM")
 
             else:
                 raise ValueError(f"Unsupported private key type: {type(crypto_private_key)}")
@@ -383,16 +383,13 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         # TODO(AlexHx8472): Verify that the credential is valid in respect to the credential_type!!!
 
         pkcs11_private_key = None
-        private_key_pem = None
 
         if credential_type in [cls.CredentialTypeChoice.ROOT_CA | cls.CredentialTypeChoice.ISSUING_CA]:
             if normalized_credential_serializer.private_key_reference.location == PrivateKeyLocation.SOFTWARE:
                 err_msg = "Credentials of type Root CA and Issuing CA need to be stored in an HSM"
                 ValueError(err_msg)
 
-        if normalized_credential_serializer.private_key_reference.location == PrivateKeyLocation.SOFTWARE:
-            private_key_pem = normalized_credential_serializer.get_private_key_serializer().as_pkcs8_pem().decode()
-
+        private_key_pem = normalized_credential_serializer.get_private_key_serializer().as_pkcs8_pem().decode()
 
         if normalized_credential_serializer.private_key_reference.location in [PrivateKeyLocation.HSM_GENERATED,
                                                                                PrivateKeyLocation.HSM_PROVIDED]:
