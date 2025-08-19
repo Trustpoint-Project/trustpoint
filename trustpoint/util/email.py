@@ -21,9 +21,10 @@ Attachment = tuple[str, bytes, str]  # (filename, content, mimetype)
 @dataclass(frozen=True)
 class MailTemplate:
     """Represents a template base path with helpers for .txt and .html variants."""
-    key: str               # stable programmatic id (e.g. "user_welcome")
-    base: str              # template base path without extension
-    label: str             # i18n label for UI
+
+    key: str  # name of template (e.g. "user_welcome")
+    base: str  # template base path
+    label: str  # label for UI
 
     def txt(self) -> str:
         """Return the plain-text template path."""
@@ -36,6 +37,7 @@ class MailTemplate:
 
 class MailTemplates:
     """Registry of grouped mail templates."""
+
     # --- User ---
     USER_WELCOME: ClassVar[MailTemplate] = MailTemplate(
         key='user_welcome',
@@ -98,6 +100,7 @@ class EmailPayload:
         attachments: Optional sequence of (filename, bytes, mimetype).
         headers: Optional extra headers (e.g., {"X-Tag": "welcome"}).
     """
+
     subject: str
     to: tuple[str, ...]
     template_html: MailTemplate
@@ -142,7 +145,7 @@ def _render_bodies(tpl: MailTemplate, context: Mapping[str, object]) -> tuple[st
         return text, html
 
 
-def send_email(payload: EmailPayload, *, connection: Any=None) -> int:
+def send_email(payload: EmailPayload, *, connection: Any = None) -> int:
     """Send a single email with HTML + text alternative.
 
     Returns:
