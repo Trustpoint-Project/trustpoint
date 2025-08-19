@@ -1,0 +1,16 @@
+<p>A certificate has been issued.</p>
+<ul>
+  <li><b>Workflow:</b> {{ workflow.name }}</li>
+  <li><b>Instance:</b> {{ instance.id }}</li>
+  <li><b>State:</b> {{ state }}</li>
+  <li><b>Step:</b> {{ step }}</li>
+  <li><b>Protocol:</b> {{ payload.protocol|default:"-" }}</li>
+  <li><b>Operation:</b> {{ payload.operation|default:"-" }}</li>
+  <li><b>Certificate ID:</b> {{ payload.cert_id|default:"-" }}</li>
+  <li><b>Device:</b>
+    {% if payload.device_name %}{{ payload.device_name }} ({{ payload.device_id }})
+    {% elif payload.device_id %}{{ payload.device_id }}
+    {% else %}-{% endif %}
+  </li>
+</ul>
+<p>If distribution is required, complete any manual steps as needed.</p>
