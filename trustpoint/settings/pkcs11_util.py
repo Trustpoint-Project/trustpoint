@@ -1,3 +1,5 @@
+import os
+
 import pkcs11
 
 from cryptography import x509
@@ -5,19 +7,18 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
 from pkcs11 import lib, KeyType, Mechanism, ObjectClass, Attribute
 
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import (
     rsa,
     ec,
     padding as asym_padding,
 )
-from pkcs11.exceptions import NoSuchKey, PKCS11Error, NoSuchToken
+from cryptography.hazmat.primitives import padding as sym_padding
+
+from pkcs11.exceptions import NoSuchKey, PKCS11Error, NoSuchToken, MechanismInvalid, AttributeTypeInvalid
+from trustpoint_core.oid import NamedCurve
 
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
-from cryptography.hazmat.backends import default_backend
-from cryptography.x509.oid import NameOID
-import datetime
 
 from typing import Union, Optional, Any
 from abc import ABC, abstractmethod
@@ -245,7 +246,9 @@ class Pkcs11PrivateKey(ABC):
         except pkcs11.exceptions.UserAlreadyLoggedIn:
             pass
         except Exception as e:
-            raise RuntimeError(f"Failed to initialize PKCS#11 session: {e}; lib_path: {self._lib_path} token: {self._token_label} pin: {self._user_pin}")
+            raise RuntimeError(f"Failed to initialize PKCS#11 session: {e}; "
+                               f"lib_path: {self._lib_path} "
+                               f"token: {self._token_label} ")
 
 
     def copy_key(
@@ -335,7 +338,10 @@ class Pkcs11PrivateKey(ABC):
 
 
     @abstractmethod
-    def sign(self, data: bytes, padding: Optional[asym_padding.AsymmetricPadding], algorithm: hashes.HashAlgorithm) -> bytes:
+    def sign(self,
+             data: bytes,
+             padding: Optional[asym_padding.AsymmetricPadding],
+             algorithm: hashes.HashAlgorithm) -> bytes:
         """
         Sign the provided data using the private key.
 
@@ -406,7 +412,10 @@ class Pkcs11PrivateKey(ABC):
         """
         return self
 
-    def __exit__(self, exc_type: Optional[type[BaseException]], exc_value: Optional[BaseException], traceback: Optional[Any]) -> None:
+    def __exit__(self,
+                 exc_type: Optional[type[BaseException]],
+                 exc_value: Optional[BaseException],
+                 traceback: Optional[Any]) -> None:
         """
         Context manager exit point, closes the session.
 
@@ -415,6 +424,65 @@ class Pkcs11PrivateKey(ABC):
             exc_value (Optional[BaseException]]): Exception instance if an error occurred.
             traceback (Optional[Any]]): Traceback if an error occurred.
         """
+        self.close()
+
+
+class Pkcs11AESKey:
+    """PKCS#11 AES symmetric key implementation using python-pkcs11."""
+
+    # AES key lengths in bits
+    SUPPORTED_KEY_LENGTHS = [128, 192, 256]
+
+    def __init__(self, lib_path: str, token_label: str, user_pin: str, key_label: str):
+        """
+        Initialize PKCS#11 AES key.
+
+        Args:
+            lib_path: Path to PKCS#11 library
+            token_label: Token label
+            user_pin: User PIN for token authentication
+            key_label: Label for the AES key
+        """
+        self._lib_path = lib_path
+        self._token_label = token_label
+        self._user_pin = user_pin
+        self._key_label = key_label
+        self._lib = None
+        self._slot_id = None
+        self._token = None
+        self._session = None
+        self._key = None
+        self._key_length: Optional[int] = None
+
+    def _initialize(self):
+        """Initialize PKCS#11 library and session (copied from parent logic)."""
+        try:
+            self._lib = pkcs11.lib(self._lib_path)
+            self._token = self._lib.get_token(token_label=self._token_label)
+
+            self._session = self._token.open(user_pin=self._user_pin, rw=True)
+        except pkcs11.exceptions.UserAlreadyLoggedIn:
+            pass
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize PKCS#11 session: {e}; "
+                               f"lib_path: {self._lib_path} "
+                               f"token: {self._token_label} ")
+
+    def close(self):
+        """Close PKCS#11 session."""
+        if self._session:
+            try:
+                self._session.close()
+            except Exception:
+                pass
+            self._session = None
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
         self.close()
 
 
@@ -739,9 +807,12 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
 class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
 
     CURVE_KEY_LENGTHS = {
-        ec.SECP256R1: 256,
-        ec.SECP384R1: 384,
-        ec.SECP521R1: 521,
+        NamedCurve.SECP192R1: NamedCurve.SECP192R1.key_size,
+        NamedCurve.SECP224R1: NamedCurve.SECP224R1.key_size,
+        NamedCurve.SECP256K1: NamedCurve.SECP256K1.key_size,
+        NamedCurve.SECP256R1: NamedCurve.SECP256R1.key_size,
+        NamedCurve.SECP384R1: NamedCurve.SECP384R1.key_size,
+        NamedCurve.SECP521R1: NamedCurve.SECP521R1.key_size,
     }
 
     EC_MECHANISMS = {

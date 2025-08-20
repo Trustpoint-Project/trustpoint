@@ -131,9 +131,6 @@ log "SoftHSM permissions set successfully."
 log "Testing HSM access as www-data user..."
 if ! su -s /bin/bash www-data -c "SOFTHSM2_CONF=/etc/softhsm2.conf pkcs11-tool --module '$PKCS11_MODULE_PATH' --list-objects --pin '$HSM_PIN'" >/dev/null 2>&1; then
     echo "ERROR: Failed to access HSM slot $HSM_SLOT as www-data user."
-    # Additional debugging
-    log "DEBUG: Attempting to get more error details..."
-    su -s /bin/bash www-data -c "SOFTHSM2_CONF=/etc/softhsm2.conf pkcs11-tool --module '$PKCS11_MODULE_PATH' --list-objects --pin '$HSM_PIN'" 2>&1 | head -20
     exit 19
 fi
 

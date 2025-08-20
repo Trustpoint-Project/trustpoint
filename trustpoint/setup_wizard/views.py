@@ -276,6 +276,23 @@ class SetupWizardHsmSetupView(LoggerMixin, FormView):
                         token.module_path = module_path
                         token.save()
 
+                    try:
+                        token.generate_kek(key_length=256)
+                        self.logger.info(f'key encryption key (KEK) generated for token: {token.label}')
+                    except Exception as e:
+                        self.logger.error(f'Failed to generate key encryption key (KEK): {str(e)}')
+                        messages.add_message(self.request, messages.WARNING,
+                                             f'HSM setup completed, but key encryption key '
+                                             f'(KEK) generation failed: {str(e)}')
+
+                    try:
+                        token.generate_and_wrap_dek()
+                        self.logger.info(f'DEK generated and wrap for token: {token.label}')
+                    except Exception as e:
+                        self.logger.error(f'Failed to generate and wrap DEK: {str(e)}')
+                        messages.add_message(self.request, messages.WARNING,
+                                             f'HSM setup completed, but DEK generation failed: {str(e)}')
+
                     action = "created" if created else "updated"
                     messages.add_message(self.request, messages.SUCCESS,
                                          f'HSM setup completed successfully for {hsm_type.upper()}. '

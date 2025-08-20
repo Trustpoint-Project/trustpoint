@@ -18,7 +18,7 @@ from trustpoint_core.serializer import (
 from util.db import CustomDeleteActionModel
 from util.field import UniqueNameValidator
 from settings.models import PKCS11Token
-from settings.pkcs11_util import Pkcs11RSAPrivateKey, Pkcs11ECPrivateKey
+from settings.pkcs11_util import Pkcs11RSAPrivateKey, Pkcs11ECPrivateKey, Pkcs11AESKey
 from cryptography.hazmat.primitives.asymmetric import rsa, ec
 import uuid
 
@@ -34,7 +34,12 @@ if TYPE_CHECKING:
     from util.db import CustomDeleteActionManager
 
 
-__all__ = ['CertificateChainOrderModel', 'CredentialAlreadyExistsError', 'CredentialModel', 'IDevIDReferenceModel', 'OwnerCredentialModel',]
+__all__ = ['CertificateChainOrderModel',
+           'CredentialAlreadyExistsError',
+           'CredentialModel',
+           'IDevIDReferenceModel',
+           'OwnerCredentialModel',
+           'PKCS11Key',]
 
 
 class CredentialAlreadyExistsError(ValidationError):
@@ -45,13 +50,14 @@ class CredentialAlreadyExistsError(ValidationError):
         super().__init__(_('Credential already exists.'), *args, **kwargs)
 
 
-class PKCS11PrivateKey(models.Model):
+class PKCS11Key(models.Model):
     """Model representing a private key stored in a PKCS#11 HSM/token."""
 
     class KeyType(models.TextChoices):
         """Supported key types in PKCS#11."""
         RSA = 'rsa', _('RSA')
         EC = 'ec', _('Elliptic Curve')
+        AES = 'aes', _('AES')
 
     token_label = models.CharField(
         max_length=255,
@@ -99,6 +105,13 @@ class PKCS11PrivateKey(models.Model):
                 user_pin=user_pin,
                 key_label=self.key_label
             )
+        elif self.key_type == self.KeyType.AES:
+            return Pkcs11AESKey(
+                lib_path=lib_path,
+                token_label=self.token_label,
+                user_pin=user_pin,
+                key_label=self.key_label
+            )
         else:
             raise ValueError(f"Unsupported key type: {self.key_type}")
 
@@ -129,7 +142,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     credential_type = models.IntegerField(verbose_name=_('Credential Type'), choices=CredentialTypeChoice)
     private_key = models.CharField(verbose_name=_('Private key (PEM)'), max_length=65536, default='', blank=True)
     pkcs11_private_key = models.ForeignKey(
-        PKCS11PrivateKey,
+        PKCS11Key,
         on_delete=models.PROTECT,
         null=True,
         blank=True,
@@ -206,9 +219,9 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             crypto_private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey,
             token_config: PKCS11Token,
             key_label: str,
-    ) -> 'PKCS11PrivateKey':
+    ) -> 'PKCS11Key':
         """
-        Import a private key to HSM and create corresponding PKCS11PrivateKey model.
+        Import a private key to HSM and create corresponding PKCS11Key model.
 
         Args:
             crypto_private_key: The private key from cryptography library
@@ -216,7 +229,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             token_config: PKCS11Token configuration
 
         Returns:
-            PKCS11PrivateKey: The created model instance referencing the HSM key
+            PKCS11Key: The created model instance referencing the HSM key
 
         Raises:
             RuntimeError: If HSM import fails
@@ -234,7 +247,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         pkcs11_key_handler = None
         try:
             if isinstance(crypto_private_key, rsa.RSAPrivateKey):
-                key_type = PKCS11PrivateKey.KeyType.RSA
+                key_type = PKCS11Key.KeyType.RSA
 
                 pkcs11_key_handler = Pkcs11RSAPrivateKey(
                     lib_path=token_config.module_path,
@@ -247,7 +260,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                     raise RuntimeError("Failed to import RSA private key to HSM")
 
             elif isinstance(crypto_private_key, ec.EllipticCurvePrivateKey):
-                key_type = PKCS11PrivateKey.KeyType.EC
+                key_type = PKCS11Key.KeyType.EC
 
                 pkcs11_key_handler = Pkcs11ECPrivateKey(
                     lib_path=token_config.module_path,
@@ -262,7 +275,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             else:
                 raise ValueError(f"Unsupported private key type: {type(crypto_private_key)}")
 
-            pkcs11_private_key = PKCS11PrivateKey.objects.create(
+            pkcs11_private_key = PKCS11Key.objects.create(
                 token_label=token_config.label,
                 key_label=key_label,
                 key_type=key_type
@@ -282,9 +295,9 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             key_label: str,
             key_size: Optional[int] = None,
             key_curve: Optional[ec.EllipticCurve] = None,
-    ) -> 'PKCS11PrivateKey':
+    ) -> 'PKCS11Key':
         """
-        Generate a new private key in HSM and create corresponding PKCS11PrivateKey model.
+        Generate a new private key in HSM and create corresponding PKCS11Key model.
 
         Args:
             key_type: Type of key to generate ('rsa.PrivateKey' or 'ec.PrivateKey')
@@ -294,7 +307,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             key_curve: For EC keys: curve instance (e.g., ec.SECP256R1())
 
         Returns:
-            PKCS11PrivateKey: The created model instance referencing the HSM key
+            PKCS11Key: The created model instance referencing the HSM key
 
         Raises:
             RuntimeError: If HSM key generation fails
@@ -320,7 +333,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 if key_size < 1024:
                     raise ValueError("RSA key size must be at least 1024 bits")
 
-                model_key_type = PKCS11PrivateKey.KeyType.RSA
+                model_key_type = PKCS11Key.KeyType.RSA
 
                 pkcs11_key_handler = Pkcs11RSAPrivateKey(
                     lib_path=token_config.module_path,
@@ -337,7 +350,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 if key_size is not None:
                     raise ValueError("key_size parameter should not be provided for EC keys")
 
-                model_key_type = PKCS11PrivateKey.KeyType.EC
+                model_key_type = PKCS11Key.KeyType.EC
 
                 pkcs11_key_handler = Pkcs11ECPrivateKey(
                     lib_path=token_config.module_path,
@@ -351,7 +364,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             else:
                 raise ValueError(f"Unsupported key type: {key_type}. Supported types: 'rsa', 'ec'")
 
-            pkcs11_private_key = PKCS11PrivateKey.objects.create(
+            pkcs11_private_key = PKCS11Key.objects.create(
                 token_label=token_config.label,
                 key_label=key_label,
                 key_type=model_key_type
