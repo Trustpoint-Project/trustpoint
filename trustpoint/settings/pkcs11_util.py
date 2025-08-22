@@ -1,9 +1,10 @@
 """PKCS#11 Utility Functions."""
+
 from abc import ABC, abstractmethod
 from types import TracebackType
 from typing import Any, ClassVar, Never
 
-import pkcs11
+import pkcs11  # type: ignore[import-untyped]
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import (
     ec,
@@ -14,14 +15,15 @@ from cryptography.hazmat.primitives.asymmetric import (
 )
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
+from cryptography.hazmat.primitives.serialization import Encoding, KeySerializationEncryption, PrivateFormat
 from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass, lib
-from pkcs11.exceptions import NoSuchKey, PKCS11Error
+from pkcs11.exceptions import NoSuchKey, PKCS11Error  # type: ignore[import-untyped]
 from trustpoint_core.oid import NamedCurve
 
 from trustpoint.logger import LoggerMixin
 
 
-class Pkcs11Utilities:
+class Pkcs11Utilities(LoggerMixin):
     """Utility class for general PKCS#11 operations not specific to private keys.
 
     Provides functions for slot/token management, random generation, object destruction, and mechanism listing.
@@ -35,7 +37,16 @@ class Pkcs11Utilities:
         """
         self._lib = lib(lib_path)
         self._slots_cache = None
-        self._tokens_cache = None
+        self._tokens_cache: list[pkcs11.Token] = []
+
+    def _raise_value_error(self, message: str) -> Never:
+        raise ValueError(message)
+
+    def _raise_runtime_error(self, message: str) -> Never:
+        raise RuntimeError(message)
+
+    def _raise_type_error(self, message: str) -> Never:
+        raise TypeError(message)
 
     def get_slots(self) -> list[pkcs11.Slot]:
         """Get all available slots in the PKCS#11 library with caching.
@@ -45,6 +56,9 @@ class Pkcs11Utilities:
         """
         if self._slots_cache is None:
             self._slots_cache = self._lib.get_slots()
+        if self._slots_cache is None:
+            msg = 'Failed to retrieve PKCS#11 slots from library.'
+            self._raise_runtime_error(msg)
         return self._slots_cache
 
     def get_tokens(self) -> list[pkcs11.Token]:
@@ -69,7 +83,7 @@ class Pkcs11Utilities:
             self._tokens_cache = tokens
         return self._tokens_cache
 
-    def get_token_by_label(self, token_label: str) -> pkcs11.Token:
+    def get_token_by_label(self, token_label: str) -> pkcs11.Token | None:
         """Get a token by its label with optimized lookup.
 
         Args:
@@ -85,7 +99,7 @@ class Pkcs11Utilities:
             if token.label == token_label:
                 return token
         msg = f'Token with label {token_label} not found.'
-        self._raise(msg)
+        self._raise_value_error(msg)
         return None
 
     def get_slot_id_for_pkcs11_tool_slot(self, pkcs11_tool_slot: int) -> int:
@@ -105,17 +119,19 @@ class Pkcs11Utilities:
 
             if pkcs11_tool_slot >= len(slots):
                 available = list(range(len(slots)))
-                msg = (
-                    f'pkcs11-tool slot {pkcs11_tool_slot} not found. '
-                    f'Available slots: {available}'
-                )
+                msg = f'pkcs11-tool slot {pkcs11_tool_slot} not found. Available slots: {available}'
                 self._raise_value_error(msg)
 
-            return slots[pkcs11_tool_slot].slot_id
+            slot_id = slots[pkcs11_tool_slot].slot_id
+            if not isinstance(slot_id, int):
+                msg = f'Slot ID is not an integer: {slot_id}'
+                self._raise_value_error(msg)
 
         except Exception as e:
             msg = f'Failed to get slot mapping: {e}'
             raise ValueError(msg) from e
+        else:
+            return slot_id
 
     def get_mechanisms(self, token_label: str) -> list[Mechanism]:
         """Get all mechanisms supported by the specified token.
@@ -127,7 +143,10 @@ class Pkcs11Utilities:
             List[Mechanism]: List of supported mechanisms.
         """
         token = self.get_token_by_label(token_label)
-        return token.get_mechanisms()
+        if token is None:
+            msg = f'Token with label {token_label} not found.'
+            self._raise_value_error(msg)
+        return list(token.get_mechanisms())
 
     def open_session(self, token_label: str, user_pin: str) -> pkcs11.Session:
         """Open a session with the specified token.
@@ -140,6 +159,9 @@ class Pkcs11Utilities:
             pkcs11.Session: The opened session.
         """
         token = self.get_token_by_label(token_label)
+        if token is None:
+            msg = f'Token with label {token_label} not found.'
+            self._raise_value_error(msg)
         return token.open(user_pin=user_pin, rw=True)
 
     def generate_random(self, token_label: str, user_pin: str, length: int) -> bytes:
@@ -154,7 +176,11 @@ class Pkcs11Utilities:
             bytes: Randomly generated bytes.
         """
         with self.open_session(token_label, user_pin) as session:
-            return session.generate_random(length)
+            random_bytes = session.generate_random(length)
+            if not isinstance(random_bytes, bytes):
+                msg = 'Generated random data is not of type bytes.'
+                self._raise_type_error(msg)
+            return bytes(random_bytes)
 
     def seed_random(self, token_label: str, user_pin: str, seed_data: bytes) -> None:
         """Seed the HSM's random number generator with provided entropy.
@@ -167,8 +193,9 @@ class Pkcs11Utilities:
         with self.open_session(token_label, user_pin) as session:
             session.seed_random(seed_data)
 
-    def destroy_object(self, token_label: str, user_pin: str, label: str, key_type: KeyType,
-                       object_class: ObjectClass) -> None:
+    def destroy_object(
+        self, token_label: str, user_pin: str, label: str, key_type: KeyType, object_class: ObjectClass
+    ) -> None:
         """Destroy a cryptographic object on the token.
 
         Args:
@@ -193,21 +220,15 @@ class Pkcs11Utilities:
 class Pkcs11PrivateKey(ABC, LoggerMixin):
     """Base class for PKCS#11-backed private keys (RSA, EC)."""
 
-    DIGEST_MECHANISMS: ClassVar[dict] = {
+    DIGEST_MECHANISMS: ClassVar[dict[type[hashes.HashAlgorithm], Mechanism]] = {
         hashes.SHA256: Mechanism.SHA256,
         hashes.SHA384: Mechanism.SHA384,
         hashes.SHA512: Mechanism.SHA512,
         hashes.SHA224: Mechanism.SHA224,
     }
 
-
     def __init__(
-        self,
-        lib_path: str,
-        token_label: str,
-        user_pin: str,
-        key_label: str,
-        slot_id: int | None = None
+        self, lib_path: str, token_label: str, user_pin: str, key_label: str, slot_id: int | None = None
     ) -> None:
         """Initialize a PKCS#11 private key handler.
 
@@ -225,7 +246,7 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
         self._slot_id = slot_id
         self._lib = None
         self._token = None
-        self._session = None
+        self._session: pkcs11.Session | None = None
         self._key = None
 
         self._initialize()
@@ -236,23 +257,25 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
     def _raise_type_error(self, message: str) -> Never:
         raise TypeError(message)
 
+    def _raise_runtime_error(self, message: str) -> Never:
+        raise RuntimeError(message)
+
     def _initialize(self) -> None:
         """Initialize the PKCS#11 library and create a session."""
+        if self._session is None:
+            self._raise_runtime_error('PKCS#11 session is not initialized.')
         try:
             self._lib = pkcs11.lib(self._lib_path)
+            if self._lib is None:
+                self._raise_runtime_error('PKCS#11 library is not initialized.')
             self._token = self._lib.get_token(token_label=self._token_label)
 
             self._session = self._token.open(user_pin=self._user_pin, rw=True)
         except pkcs11.exceptions.UserAlreadyLoggedIn:
             pass
         except Exception as e:
-            msg = (
-                f'Failed to initialize PKCS#11 session: {e}; '
-                               f'lib_path: {self._lib_path} '
-                               f'token: {self._token_label} '
-            )
+            msg = f'Failed to initialize PKCS#11 session: {e}; lib_path: {self._lib_path} token: {self._token_label} '
             raise RuntimeError(msg) from e
-
 
     def copy_key(
         self,
@@ -260,7 +283,7 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
         target_label: str,
         key_type: KeyType,
         object_class: ObjectClass,
-        template: dict[Attribute, Any] | None = None
+        template: dict[Attribute, Any] | None = None,
     ) -> None:
         """Copy a cryptographic key with a new label and attributes.
 
@@ -274,6 +297,8 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
         Raises:
             ValueError: If source key doesn't exist.
         """
+        if self._session is None:
+            self._raise_runtime_error('PKCS#11 session is not initialized.')
         source_key = self._session.get_key(label=source_label, key_type=key_type, object_class=object_class)
         template = template or {}
         template[Attribute.LABEL] = target_label
@@ -290,6 +315,8 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
         Raises:
             ValueError: If the object doesn't exist.
         """
+        if self._session is None:
+            self._raise_runtime_error('PKCS#11 session is not initialized.')
         try:
             obj = self._session.get_key(label=label, key_type=key_type, object_class=object_class)
             obj.destroy()
@@ -315,7 +342,13 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
             msg = f'Unsupported digest algorithm: {algorithm.name}'
             self._raise_value_error(msg)
 
-        return self._session.digest(mechanism, data)
+        if self._session is None:
+            self._raise_runtime_error('PKCS#11 session is not initialized.')
+        digest_result = self._session.digest(mechanism, data)
+        if not isinstance(digest_result, bytes):
+            msg = 'Digest result is not of type bytes.'
+            self._raise_type_error(msg)
+        return bytes(digest_result)
 
     def _key_exists(self, key_type: KeyType, object_class: ObjectClass) -> bool:
         """Check if a key with the specified type and object class exists on the token.
@@ -327,37 +360,27 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
         Returns:
             bool: True if the key exists, False otherwise.
         """
+        if self._session is None:
+            self._raise_runtime_error('PKCS#11 session is not initialized.')
         try:
-            self._session.get_key(
-                label=self._key_label,
-                key_type=key_type,
-                object_class=object_class
-            )
+            self._session.get_key(label=self._key_label, key_type=key_type, object_class=object_class)
         except NoSuchKey:
             return False
-        else :
+        else:
             return True
 
-
     @abstractmethod
-    def sign(self,
-             data: bytes,
-             padding: asym_padding.AsymmetricPadding | None,
-             algorithm: hashes.HashAlgorithm) -> bytes:
+    def sign(self, data: bytes, *args: Any, **kwargs: Any) -> bytes:
         """Sign the provided data using the private key.
 
         Args:
             data (bytes): Data to be signed.
-            padding (Optional[asym_padding.AsymmetricPadding]): Padding scheme to use (if applicable).
-            algorithm (hashes.HashAlgorithm): Hash algorithm to use for signing.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
 
         Returns:
             bytes: The signature.
-
-        Raises:
-            NotImplementedError: If the padding or algorithm is not supported.
         """
-        ...
 
     @abstractmethod
     def public_key(self) -> RSAPublicKey | ec.EllipticCurvePublicKey:
@@ -368,6 +391,7 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
         """
         ...
 
+    @property
     @abstractmethod
     def key_size(self) -> int:
         """Return the key size in bits.
@@ -411,10 +435,12 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
 
     import types
 
-    def __exit__(self,
-                 exc_type: type[BaseException] | None,
-                 exc_value: BaseException | None,
-                 traceback: types.TracebackType | None) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: types.TracebackType | None,
+    ) -> None:
         """Context manager exit point, closes the session.
 
         Args:
@@ -440,15 +466,15 @@ class Pkcs11AESKey:
             user_pin: User PIN for token authentication
             key_label: Label for the AES key
         """
-        self._lib_path = lib_path
-        self._token_label = token_label
-        self._user_pin = user_pin
-        self._key_label = key_label
-        self._lib = None
-        self._slot_id = None
-        self._token = None
-        self._session = None
-        self._key = None
+        self._lib_path: str = lib_path
+        self._token_label: str = token_label
+        self._user_pin: str = user_pin
+        self._key_label: str = key_label
+        self._lib: pkcs11.lib | None = None
+        self._slot_id: int | None = None
+        self._token: pkcs11.token | None = None
+        self._session: pkcs11.session | None = None
+        self._key: pkcs11.key | None = None
         self._key_length: int | None = None
 
     def _initialize(self) -> None:
@@ -461,16 +487,13 @@ class Pkcs11AESKey:
         except pkcs11.exceptions.UserAlreadyLoggedIn:
             pass
         except Exception as e:
-            msg = (
-                f'Failed to initialize PKCS#11 session: {e}; '
-                               f'lib_path: {self._lib_path} '
-                               f'token: {self._token_label} '
-            )
+            msg = f'Failed to initialize PKCS#11 session: {e}; lib_path: {self._lib_path} token: {self._token_label} '
             raise RuntimeError(msg) from e
 
     def close(self) -> None:
         """Close PKCS#11 session."""
         import contextlib
+
         if self._session:
             with contextlib.suppress(Exception):
                 self._session.close()
@@ -479,11 +502,9 @@ class Pkcs11AESKey:
     def __enter__(self) -> 'Pkcs11AESKey':
         """Context manager entry."""
         return self
+
     def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: TracebackType | None
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """Context manager exit."""
         self.close()
@@ -498,17 +519,19 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
     and key management operations.
     """
 
-    from typing import ClassVar
-
-    DEFAULT_PUBLIC_TEMPLATE: ClassVar[dict] = {
-        Attribute.ENCRYPT: True,
-        Attribute.VERIFY: True,
-        Attribute.MODIFIABLE: True,
+    DEFAULT_PUBLIC_TEMPLATE: ClassVar[dict[Attribute, Any]] = {
+        Attribute.CLASS: ObjectClass.PUBLIC_KEY,
+        Attribute.KEY_TYPE: KeyType.RSA,
         Attribute.TOKEN: True,
-        Attribute.PUBLIC_EXPONENT: (0x01, 0x00, 0x01),  # 65537
+        Attribute.PRIVATE: False,
+        Attribute.VERIFY: True,
+        Attribute.ENCRYPT: True,
+        Attribute.WRAP: False,
     }
 
-    DEFAULT_PRIVATE_TEMPLATE: ClassVar[dict] = {
+    DEFAULT_PRIVATE_TEMPLATE: ClassVar[dict[Attribute, Any]] = {
+        Attribute.CLASS: ObjectClass.PRIVATE_KEY,
+        Attribute.KEY_TYPE: KeyType.RSA,
         Attribute.DECRYPT: True,
         Attribute.SIGN: True,
         Attribute.SENSITIVE: True,
@@ -518,12 +541,7 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
     }
 
     def __init__(
-        self,
-        lib_path: str,
-        token_label: str,
-        user_pin: str,
-        key_label: str,
-        slot_id: int | None = None
+        self, lib_path: str, token_label: str, user_pin: str, key_label: str, slot_id: int | None = None
     ) -> None:
         """Initialize an RSA private key handler for PKCS#11 tokens.
 
@@ -535,7 +553,7 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
             slot_id (int, optional): Specific slot ID to use. If None, uses token_label to find slot.
         """
         super().__init__(lib_path, token_label, user_pin, key_label, slot_id)
-        self._public_key = None
+        self._public_key: ec.EllipticCurvePublicKey | None = None
 
     def load_key(self) -> None:
         """Load RSA private key from token using the specified label.
@@ -545,22 +563,23 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
         """
         if self._key is not None:
             return
+        if self._session is None:
+            msg = 'PKCS#11 session is not initialized.'
+            self._raise_value_error(msg)
 
         try:
             self._key = self._session.get_key(
-                label=self._key_label,
-                key_type=KeyType.RSA,
-                object_class=ObjectClass.PRIVATE_KEY
+                label=self._key_label, key_type=KeyType.RSA, object_class=ObjectClass.PRIVATE_KEY
             )
         except NoSuchKey as e:
-            msg = f"RSA private key with label '{self._key_label}' not found on token '{self._token.label}'."
+            msg = f"RSA private key with label '{self._key_label}' not found on token '{self._token_label}'."
             raise ValueError(msg) from e
 
     def generate_key(
-            self,
-            key_length: int = 2048,
-            public_template: dict[Attribute, Any] | None = None,
-            private_template: dict[Attribute, Any] | None = None,
+        self,
+        key_length: int = 2048,
+        public_template: dict[Attribute, Any] | None = None,
+        private_template: dict[Attribute, Any] | None = None,
     ) -> None:
         """Generate RSA key pair and store handles on the token.
 
@@ -573,32 +592,39 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
             ValueError: If a key with the same label already exists.
         """
         if self._key_exists(KeyType.RSA, ObjectClass.PRIVATE_KEY):
-            msg = f"RSA key with label '{self._key_label}' already exists on token '{self._token.label}'."
-            raise ValueError(msg)
+            token_label = getattr(self._token, 'label', self._token_label)
+            msg = f"RSA key with label '{self._key_label}' already exists on token '{token_label}'."
+            self._raise_value_error(msg)
 
-        final_public_template = self.DEFAULT_PUBLIC_TEMPLATE.copy()
+        final_public_template = dict(self.DEFAULT_PUBLIC_TEMPLATE).copy()
         final_public_template[Attribute.LABEL] = self._key_label
         if public_template:
             final_public_template.update(public_template)
 
-        final_private_template = self.DEFAULT_PRIVATE_TEMPLATE.copy()
+        final_private_template = dict(self.DEFAULT_PRIVATE_TEMPLATE).copy()
         final_private_template[Attribute.LABEL] = self._key_label
         if private_template:
             final_private_template.update(private_template)
 
-        pub, priv = self._session.generate_keypair(
+        if self._session is None:
+            self._initialize()
+        if self._session is None:
+            msg = 'PKCS#11 session is not initialized.'
+            self._raise_value_error(msg)
+
+        _pub, priv = self._session.generate_keypair(
             KeyType.RSA,
             key_length,
             public_template=final_public_template,
             private_template=final_private_template,
-            store=True
+            store=True,
         )
 
         self._key = priv
         self._public_key = None
 
     def _raise(self, msg: str, exc_type: type[Exception] = Exception) -> Never:
-            raise exc_type(msg)
+        raise exc_type(msg)
 
     def import_private_key_from_crypto(self, private_key: rsa.RSAPrivateKey) -> bool:
         """Import an RSA private key from cryptography RSAPrivateKey object into the HSM.
@@ -612,7 +638,6 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
         try:
             if not isinstance(private_key, rsa.RSAPrivateKey):
                 self._raise('Expected RSA private key', TypeError)
-
 
             private_numbers = private_key.private_numbers()
             public_numbers = private_numbers.public_numbers
@@ -663,6 +688,12 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
                 msg = f"Key with label '{self._key_label}' already exists"
                 self._raise_value_error(msg)
 
+            if self._session is None:
+                self._initialize()
+            if self._session is None:
+                msg = 'PKCS#11 session is not initialized.'
+                self._raise_value_error(msg)
+
             private_key_obj = self._session.create_object(private_template)
 
             self._session.create_object(public_template)
@@ -676,7 +707,12 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
 
             return True
 
-    def sign(self, data: bytes, padding: asym_padding.AsymmetricPadding, algorithm: hashes.HashAlgorithm) -> bytes:
+    def sign(
+        self,
+        data: bytes | bytearray | memoryview,
+        padding: asym_padding.AsymmetricPadding,
+        algorithm: hashes.HashAlgorithm | Prehashed,
+    ) -> bytes:
         """Sign the provided data using the RSA private key with PKCS#1 v1.5 padding.
 
         Args:
@@ -691,12 +727,18 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
             NotImplementedError: If padding is not PKCS1v15.
             ValueError: If Prehashed digest is used.
         """
-        if self._key is None:
-            self.load_key()
-
-        if not isinstance(padding, asym_padding.PKCS1v15):
+        def _raise_unsupported_padding() -> Never:
             msg = 'Only PKCS#1 v1.5 supported.'
             raise NotImplementedError(msg)
+
+        if self._key is None:
+            self.load_key()
+        if self._key is None:
+            msg = 'RSA private key is not loaded.'
+            self._raise_value_error(msg)
+
+        if not isinstance(padding, asym_padding.PKCS1v15):
+            _raise_unsupported_padding()
 
         if isinstance(algorithm, Prehashed):
             msg = 'Prehashed digests not supported.'
@@ -718,26 +760,29 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
             ValueError: If the public key is not found or invalid.
         """
         if self._public_key:
-            return self._public_key
+            return self._public_key  # type: ignore[return-value]
+        if self._session is None:
+            self._initialize()
+        if self._session is None:
+            msg = 'PKCS#11 session is not initialized.'
+            self._raise_value_error(msg)
 
         try:
             public = self._session.get_key(
-                label=self._key_label,
-                key_type=KeyType.RSA,
-                object_class=ObjectClass.PUBLIC_KEY
+                label=self._key_label, key_type=KeyType.RSA, object_class=ObjectClass.PUBLIC_KEY
             )
         except NoSuchKey as e:
-            msg = f"RSA public key with label '{self._key_label}' not found on token '{self._token.label}'."
+            msg = f"RSA public key with label '{self._key_label}' not found on token '{self._token_label}'."
             raise ValueError(msg) from e
 
         n = public[Attribute.MODULUS]
-        e = public[Attribute.PUBLIC_EXPONENT]
+        pub_e = public[Attribute.PUBLIC_EXPONENT]
         n = int.from_bytes(n, 'big') if isinstance(n, bytes) else n
-        e = int.from_bytes(e, 'big') if isinstance(e, bytes) else e
+        pub_e = int.from_bytes(pub_e, 'big') if isinstance(pub_e, bytes) else pub_e
 
-        self._public_key = rsa.RSAPublicNumbers(e, n).public_key()
-        return self._public_key
+        return rsa.RSAPublicNumbers(pub_e, n).public_key()
 
+    @property
     def key_size(self) -> int:
         """Return the RSA key size in bits.
 
@@ -746,6 +791,9 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
         """
         if self._key is None:
             self.load_key()
+        if self._key is None:
+            msg = 'RSA private key is not loaded and key size cannot be determined.'
+            self._raise_value_error(msg)
         return self._key.key_length
 
     def encrypt(self, plaintext: bytes) -> bytes:
@@ -760,13 +808,20 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
         Raises:
             NoSuchKey: If the public key is not found.
         """
+        if self._session is None:
+            self._initialize()
+        if self._session is None:
+            msg = 'PKCS#11 session is not initialized.'
+            self._raise_value_error(msg)
         try:
             public_key = self._session.get_key(
-                label=self._key_label,
-                key_type=KeyType.RSA,
-                object_class=ObjectClass.PUBLIC_KEY
+                label=self._key_label, key_type=KeyType.RSA, object_class=ObjectClass.PUBLIC_KEY
             )
-            return public_key.encrypt(plaintext, mechanism=Mechanism.RSA_PKCS)
+            encrypted_data = public_key.encrypt(plaintext, mechanism=Mechanism.RSA_PKCS)
+            if not isinstance(encrypted_data, bytes):
+                msg = 'Encrypted data is not of type bytes.'
+                self._raise_type_error(msg)
+            return bytes(encrypted_data)
         except NoSuchKey as e:
             msg = f"RSA public key with label '{self._key_label}' not found."
             raise ValueError(msg) from e
@@ -787,6 +842,10 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
         if self._key is None:
             self.load_key()
 
+        if self._key is None:
+            msg = 'RSA private key is not loaded.'
+            self._raise_value_error(msg)
+
         if isinstance(padding, asym_padding.PKCS1v15):
             mechanism = Mechanism.RSA_PKCS
         elif isinstance(padding, asym_padding.OAEP):
@@ -797,7 +856,7 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
 
         return self._key.decrypt(ciphertext, mechanism=mechanism)
 
-    def private_numbers(self) -> None:
+    def private_numbers(self) -> rsa.RSAPrivateNumbers:
         """Not implemented for PKCS#11 private keys.
 
         Raises:
@@ -806,7 +865,9 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
         msg = 'Private numbers are not accessible.'
         raise NotImplementedError(msg)
 
-    def private_bytes(self) -> None:
+    def private_bytes(
+        self, encoding: Encoding, format: PrivateFormat, encryption_algorithm: KeySerializationEncryption
+    ) -> bytes:
         """Not implemented for PKCS#11 private keys.
 
         Raises:
@@ -831,7 +892,7 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
     It implements the cryptography EllipticCurvePrivateKey interface and supports signing and key management operations.
     """
 
-    CURVE_KEY_LENGTHS: ClassVar[dict] = {
+    CURVE_KEY_LENGTHS: ClassVar[dict[NamedCurve, int]] = {
         NamedCurve.SECP192R1: NamedCurve.SECP192R1.key_size,
         NamedCurve.SECP224R1: NamedCurve.SECP224R1.key_size,
         NamedCurve.SECP256K1: NamedCurve.SECP256K1.key_size,
@@ -840,19 +901,19 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         NamedCurve.SECP521R1: NamedCurve.SECP521R1.key_size,
     }
 
-    EC_MECHANISMS: ClassVar[dict] = {
+    EC_MECHANISMS: ClassVar[dict[type[hashes.HashAlgorithm], Mechanism]] = {
         hashes.SHA256: Mechanism.ECDSA_SHA256,
         hashes.SHA384: Mechanism.ECDSA_SHA384,
         hashes.SHA512: Mechanism.ECDSA_SHA512,
     }
 
-    DEFAULT_PUBLIC_TEMPLATE: ClassVar[dict] = {
+    DEFAULT_PUBLIC_TEMPLATE: ClassVar[dict[Attribute, Any]] = {
         Attribute.VERIFY: True,
         Attribute.MODIFIABLE: True,
         Attribute.TOKEN: True,
     }
 
-    DEFAULT_PRIVATE_TEMPLATE: ClassVar[dict] = {
+    DEFAULT_PRIVATE_TEMPLATE: ClassVar[dict[Attribute, Any]] = {
         Attribute.SIGN: True,
         Attribute.SENSITIVE: True,
         Attribute.EXTRACTABLE: False,
@@ -861,12 +922,7 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
     }
 
     def __init__(
-        self,
-        lib_path: str,
-        token_label: str,
-        user_pin: str,
-        key_label: str,
-        slot_id: int | None = None
+        self, lib_path: str, token_label: str, user_pin: str, key_label: str, slot_id: int | None = None
     ) -> None:
         """Initialize an EC private key handler for PKCS#11 tokens.
 
@@ -878,7 +934,7 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             slot_id (int, optional): Specific slot ID to use. If None, uses token_label to find slot.
         """
         super().__init__(lib_path, token_label, user_pin, key_label, slot_id)
-        self._public_key = None
+        self._public_key: ec.EllipticCurvePublicKey | None = None
 
     def load_key(self) -> None:
         """Load EC private key from token using the specified label.
@@ -889,21 +945,25 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         if self._key is not None:
             return
 
+        if self._session is None:
+            self._initialize()
+        if self._session is None:
+            msg = 'PKCS#11 session is not initialized.'
+            self._raise_value_error(msg)
+
         try:
             self._key = self._session.get_key(
-                label=self._key_label,
-                key_type=KeyType.EC,
-                object_class=ObjectClass.PRIVATE_KEY
+                label=self._key_label, key_type=KeyType.EC, object_class=ObjectClass.PRIVATE_KEY
             )
         except NoSuchKey as e:
-            msg = f"EC private key with label '{self._key_label}' not found on token '{self._token.label}'."
+            msg = f"EC private key with label '{self._key_label}' not found on token '{self._token_label}'."
             raise ValueError(msg) from e
 
     def generate_key(
-            self,
-            curve: ec.EllipticCurve = None,
-            public_template: dict[Attribute, Any] | None = None,
-            private_template: dict[Attribute, Any] | None = None,
+        self,
+        curve: ec.EllipticCurve | None = None,
+        public_template: dict[Attribute, Any] | None = None,
+        private_template: dict[Attribute, Any] | None = None,
     ) -> None:
         """Generate EC key pair and store it on the token.
 
@@ -918,10 +978,12 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         if curve is None:
             curve = ec.SECP256R1()
         if self._key_exists(KeyType.EC, ObjectClass.PRIVATE_KEY):
-            msg = f"EC key with label '{self._key_label}' already exists on token '{self._token.label}'."
+            token_label = getattr(self._token, 'label', self._token_label)
+            msg = f"EC key with label '{self._key_label}' already exists on token '{token_label}'."
             raise ValueError(msg)
 
-        key_length = self.CURVE_KEY_LENGTHS.get(type(curve))
+        named_curve = NamedCurve.from_curve(type(curve))
+        key_length = self.CURVE_KEY_LENGTHS.get(named_curve)
         if key_length is None:
             msg = f'Unsupported curve: {curve.name}'
             raise ValueError(msg)
@@ -937,6 +999,12 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         if private_template:
             final_private_template.update(private_template)
 
+        if self._session is None:
+            self._initialize()
+        if self._session is None:
+            msg = 'PKCS#11 session is not initialized.'
+            self._raise_value_error(msg)
+
         pub, priv = self._session.generate_keypair(
             KeyType.EC,
             key_length,
@@ -948,12 +1016,17 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         self._key = priv
         self._public_key = None
 
-    def sign(self, data: bytes, algorithm: hashes.HashAlgorithm) -> bytes:
+    def sign(
+    self,
+    data: bytes | bytearray | memoryview,
+    signature_algorithm: ec.EllipticCurveSignatureAlgorithm
+) -> bytes:
         """Sign the provided data using the EC private key with ECDSA.
 
         Args:
             data (bytes): Data to be signed.
-            algorithm (hashes.HashAlgorithm): The hash algorithm to use for signing.
+            padding (Optional[asym_padding.AsymmetricPadding]): Padding scheme to use (if applicable).
+            algorithm (ec.EllipticCurveSignatureAlgorithm): The signature algorithm to use for signing.
 
         Returns:
             bytes: The ECDSA signature.
@@ -964,22 +1037,26 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         if self._key is None:
             self.load_key()
 
-        if not isinstance(algorithm, ec.ECDSA):
+        if not isinstance(signature_algorithm, ec.ECDSA):
             msg = 'Only ECDSA is supported.'
             raise NotImplementedError(msg)
 
-        if isinstance(algorithm.algorithm, Prehashed):
+        if isinstance(signature_algorithm.algorithm, Prehashed):
             msg = 'Prehashed not supported.'
             self._raise_value_error(msg)
 
-        digest = hashes.Hash(algorithm.algorithm)
+        digest = hashes.Hash(signature_algorithm.algorithm)
         digest.update(data)
         hashed = digest.finalize()
 
-        mechanism = self.EC_MECHANISMS.get(type(algorithm.algorithm))
+        mechanism = self.EC_MECHANISMS.get(type(signature_algorithm.algorithm))
         if mechanism is None:
-            msg = f'Unsupported EC algorithm: {type(algorithm.algorithm)}'
-            raise ValueError(msg)
+            msg = f'Unsupported EC algorithm: {type(signature_algorithm.algorithm)}'
+            self._raise_value_error(msg)
+
+        if self._key is None:
+            msg = 'EC private key is not loaded.'
+            self._raise_value_error(msg)
 
         return self._key.sign(hashed, mechanism=mechanism)
 
@@ -995,14 +1072,18 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         if self._public_key:
             return self._public_key
 
+        if self._session is None:
+            self._initialize()
+        if self._session is None:
+            msg = 'PKCS#11 session is not initialized.'
+            self._raise_value_error(msg)
+
         try:
             public = self._session.get_key(
-                label=self._key_label,
-                key_type=KeyType.EC,
-                object_class=ObjectClass.PUBLIC_KEY
+                label=self._key_label, key_type=KeyType.EC, object_class=ObjectClass.PUBLIC_KEY
             )
         except NoSuchKey as e:
-            msg = f"EC public key with label '{self._key_label}' not found on token '{self._token.label}'."
+            msg = f"EC public key with label '{self._key_label}' not found on token '{self._token_label}'."
             raise ValueError(msg) from e
 
         try:
@@ -1011,7 +1092,7 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             msg = 'EC public key point is missing or invalid.'
             raise ValueError(msg) from e
 
-        curve = self.curve()
+        curve = self.curve
         pub_numbers = ec.EllipticCurvePublicNumbers(x, y, curve)
         self._public_key = pub_numbers.public_key()
         return self._public_key
@@ -1057,9 +1138,9 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             private_value_size = coord_size
 
             # Encode public key point as uncompressed format (0x04 + x + y)
-            public_point = (b'\x04' +
-                            int_to_bytes(public_numbers.x, coord_size) +
-                            int_to_bytes(public_numbers.y, coord_size))
+            public_point = (
+                b'\x04' + int_to_bytes(public_numbers.x, coord_size) + int_to_bytes(public_numbers.y, coord_size)
+            )
 
             private_template = {
                 Attribute.CLASS: ObjectClass.PRIVATE_KEY,
@@ -1091,6 +1172,12 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
                 msg = f"Key with label '{self._key_label}' already exists"
                 self._raise_value_error(msg)
 
+            if self._session is None:
+                self._initialize()
+            if self._session is None:
+                msg = 'PKCS#11 session is not initialized.'
+                self._raise_value_error(msg)
+
             private_key_obj = self._session.create_object(private_template)
 
             self._session.create_object(public_template)
@@ -1104,6 +1191,7 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         else:
             return True
 
+    @property
     def key_size(self) -> int:
         """Return the EC key size in bits.
 
@@ -1112,6 +1200,9 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         """
         if self._key is None:
             self.load_key()
+        if self._key is None:
+            msg = 'EC private key is not loaded and key size cannot be determined.'
+            self._raise_value_error(msg)
         return self._key.key_length
 
     def encrypt(self, plaintext: bytes) -> None:
@@ -1132,7 +1223,7 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         msg = 'EC decryption is not supported by PKCS#11.'
         raise NotImplementedError(msg)
 
-    def private_numbers(self) -> None:
+    def private_numbers(self) -> ec.EllipticCurvePrivateNumbers:
         """Not implemented for PKCS#11 private keys.
 
         Raises:
@@ -1141,7 +1232,9 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         msg = 'Private numbers not accessible.'
         raise NotImplementedError(msg)
 
-    def private_bytes(self, *args: Any, **kwargs: Any) -> None:
+    def private_bytes(
+        self, _encoding: Encoding, _format: PrivateFormat, _encryption_algorithm: KeySerializationEncryption
+    ) -> bytes:
         """Not implemented for PKCS#11 private keys.
 
         Raises:
@@ -1150,7 +1243,7 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         msg = 'Export of private key is not supported.'
         raise NotImplementedError(msg)
 
-    def exchange(self, algorithm: Any, peer_public_key: Any) -> None:
+    def exchange(self, algorithm: Any, peer_public_key: Any) -> bytes:
         """Not implemented for EC keys.
 
         Raises:
@@ -1159,6 +1252,7 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         msg = 'Key exchange not implemented.'
         raise NotImplementedError(msg)
 
+    @property
     def curve(self) -> ec.EllipticCurve:
         """Return the elliptic curve used by the private key.
 
@@ -1170,6 +1264,9 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         """
         if self._key is None:
             self.load_key()
+        if self._key is None:
+            msg = 'EC private key is not loaded and key size cannot be determined.'
+            raise ValueError(msg)
         key_size = self._key.key_length
 
         for curve_class, length in self.CURVE_KEY_LENGTHS.items():
