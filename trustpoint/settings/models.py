@@ -1,16 +1,16 @@
 """Models concerning the Trustpoint settings."""
-import base64
 import os
-from typing import ClassVar, Optional
+from pathlib import Path
+from typing import ClassVar
 
 import pkcs11
-from django.core.exceptions import ValidationError, ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from notifications.models import WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
-from trustpoint.logger import LoggerMixin
 
+from trustpoint.logger import LoggerMixin
 
 
 class SecurityConfig(models.Model):
@@ -139,14 +139,17 @@ class SecurityConfig(models.Model):
 
 
 class TlsSettings(models.Model):
-    """TLS settings model"""
+    """TLS settings model."""
 
-    ipv4_address = models.GenericIPAddressField(protocol="IPv4", null=True, blank=True)
+    ipv4_address = models.GenericIPAddressField(protocol='IPv4', null=True, blank=True)
+
+    def __str__(self) -> str:
+        """Return a string representation of the TLS settings."""
+        return f"TLS Settings (IPv4: {self.ipv4_address or 'None'})"
 
     @classmethod
     def get_first_ipv4_address(cls) -> str:
         """Get the first IPv4 address or a default value."""
-
         try:
             network_settings = cls.objects.get(id=1)
             ipv4_address = network_settings.ipv4_address
@@ -157,24 +160,29 @@ class TlsSettings(models.Model):
 
 
 class AppVersion(models.Model):
+    """Model representing the application version and its last update timestamp."""
     objects: models.Manager['AppVersion']
 
     version = models.CharField(max_length=17)
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
+        """Meta options for the AppVersion model."""
         verbose_name = 'App Version'
 
     def __str__(self) -> str:
+        """Return a string representation for the AppVersion."""
         return f'{self.version} @ {self.last_updated.isoformat()}'
 
 
 class BackupOptions(models.Model):
     """A singleton model (we always operate with pk=1) for backup settings.
+
     We store host/port/user/local_storage, plus either a password or an SSH key.
     """
 
     class AuthMethod(models.TextChoices):
+        """Authentication methods for backup options."""
         PASSWORD = 'password', 'Password'
         SSH_KEY   = 'ssh_key',  'SSH Key'
 
@@ -193,12 +201,12 @@ class BackupOptions(models.Model):
         verbose_name=_('Authentication Method')
     )
 
-    # TODO (Dome): Storing passwords in plain text
+    # TODO (Dome): Storing passwords in plain text  # noqa: FIX002
     password = models.CharField(
         max_length=128,
         blank=True,
         verbose_name=_('Password'),
-        help_text=_('Plain‐text password for SFTP.')
+        help_text=_('Plain-text password for SFTP.')
     )
 
     private_key = models.TextField(
@@ -223,64 +231,67 @@ class BackupOptions(models.Model):
                   'Trailing slash is optional.'),
     )
 
-    def save(self, *args, **kwargs):
+    class Meta:
+        """Meta options for the BackupOptions model."""
+        verbose_name = 'Backup Option'
+
+    def __str__(self) -> str:
+        """Return a string representation of the backup options."""
+        return f'{self.user}@{self.host}:{self.port} ({self.auth_method})'
+
+    def save(self, *args: object, **kwargs: object) -> None:
         """Ensure only one instance exists (singleton pattern)."""
         self.full_clean()
 
         super().save(*args, **kwargs)
 
-    def clean(self):
+    def clean(self) -> None:
         """Prevent the creation of more than one instance."""
         if BackupOptions.objects.exists() and not self.pk:
-            raise ValidationError("Only one BackupOptions instance is allowed.")
+            msg = 'Only one BackupOptions instance is allowed.'
+            raise ValidationError(msg)
 
         return super().clean()
 
-    class Meta:
-        verbose_name = "Backup Option"
-
-    def __str__(self) -> str:
-        return f'{self.user}@{self.host}:{self.port} ({self.auth_method})'
-
 class PKCS11Token(models.Model, LoggerMixin):
-    """
-    Model representing a PKCS#11 token (e.g., a SoftHSM slot/token pair).
+    """Model representing a PKCS#11 token (e.g., a SoftHSM slot/token pair).
 
     Stores metadata required to authenticate and interact with the token,
     including slot number, user and security officer PINs, and the path to
     the PKCS#11 module library.
     """
 
-    KEK_ENCRYPTION_KEY_LABEL = "trustpoint-kek"
+    KEK_ENCRYPTION_KEY_LABEL = 'trustpoint-kek'
+    WRAPPED_DEK_LENGTH = 40  # Expected length of wrapped DEK in bytes
 
     class HSMType(models.TextChoices):
         """Types of HSM."""
         SOFTHSM = 'softhsm', _('SoftHSM')
         PHYSICAL = 'physical', _('Physical HSM')
 
-    hsm_type: str = models.CharField(
+    hsm_type = models.CharField(
         max_length=10,
         choices=HSMType.choices,
         default=HSMType.SOFTHSM,
-        help_text=_("Type of HSM (SoftHSM or Physical)"),
-        verbose_name=_("HSM Type")
+        help_text=_('Type of HSM (SoftHSM or Physical)'),
+        verbose_name=_('HSM Type')
     )
 
-    label: str = models.CharField(
+    label = models.CharField(
         max_length=100,
         unique=True,
-        help_text=_("Token label in SoftHSM"),
-        verbose_name=_("Label")
+        help_text=_('Token label in SoftHSM'),
+        verbose_name=_('Label')
     )
-    slot: int = models.PositiveIntegerField(
-        help_text=_("Slot number in SoftHSM"),
-        verbose_name=_("Slot")
+    slot = models.PositiveIntegerField(
+        help_text=_('Slot number in SoftHSM'),
+        verbose_name=_('Slot')
     )
-    module_path: str = models.CharField(
+    module_path = models.CharField(
         max_length=255,
-        default="/usr/lib/softhsm/libsofthsm2.so",
-        help_text=_("Path to PKCS#11 module library"),
-        verbose_name=_("Module Path")
+        default='/usr/lib/softhsm/libsofthsm2.so',
+        help_text=_('Path to PKCS#11 module library'),
+        verbose_name=_('Module Path')
     )
     encrypted_dek = models.BinaryField(
         max_length=512,
@@ -303,28 +314,28 @@ class PKCS11Token(models.Model, LoggerMixin):
         auto_now_add=True
     )
 
-    _dek_cache: Optional[bytes] = None
+    _dek_cache: bytes | None = None
 
 
     class Meta:
-        """
-        Meta configuration for the PKCS11Token model.
-        """
-        verbose_name = _("PKCS#11 Token")
-        verbose_name_plural = _("PKCS#11 Tokens")
+        """Meta options for the PKCS11Token model."""
+        verbose_name = _('PKCS#11 Token')
+        verbose_name_plural = _('PKCS#11 Tokens')
 
     def __str__(self) -> str:
-        """
-        Returns a human-readable representation of the token.
+        """Returns a human-readable representation of the token.
 
         Returns:
             str: A string in the format "<label> (Slot <slot>)".
         """
-        return f"{self.label} (Slot {self.slot})"
+        return f'{self.label} (Slot {self.slot})'
+
+    def __del__(self) -> None:
+        """Ensure decrypted DEK is cleared when object is destroyed."""
+        self.clear_dek_cache()
 
     def generate_kek(self, key_length: int = 256) -> bool:
-        """
-        Generate the KEK (key encryption key) in the PKCS#11 token.
+        """Generate the KEK (key encryption key) in the PKCS#11 token.
 
         Args:
             key_length: AES key length in bits (default: 256)
@@ -354,26 +365,35 @@ class PKCS11Token(models.Model, LoggerMixin):
             try:
                 try:
                     aes_key.load_aes_key()
-                    self.logger.info(f"KEK '{self.KEK_ENCRYPTION_KEY_LABEL}' already exists in token '{self.label}'")
+                    self.logger.info(
+                        "KEK '%s' already exists in token '%s'",
+                        self.KEK_ENCRYPTION_KEY_LABEL,
+                        self.label
+                    )
 
                     if not self.kek:
                         self.kek = kek
                         self.save(update_fields=['kek'])
 
-                    return True
                 except Exception:
-                    pass
+                    self.logger.exception("Exception occurred while loading KEK in token '%s'", self.label)
+                else:
+                    return True
 
                 aes_key.generate_aes_key(key_length=key_length)
-                self.logger.info(f"Generated KEK '{self.KEK_ENCRYPTION_KEY_LABEL}' in token '{self.label}'")
+                self.logger.info(
+                    "Generated KEK '%s' in token '%s'",
+                    self.KEK_ENCRYPTION_KEY_LABEL,
+                    self.label
+                )
 
                 aes_key.load_aes_key()
-                self.logger.info(f"KEK verification successful for token '{self.label}'")
+                self.logger.info("KEK verification successful for token '%s'", self.label)
 
                 if not self.kek:
                     self.kek = kek
                     self.save(update_fields=['kek'])
-                    self.logger.info(f"Linked KEK to token '{self.label}'")
+                    self.logger.info("Linked KEK to token '%s'", self.label)
 
                 return True
 
@@ -381,12 +401,12 @@ class PKCS11Token(models.Model, LoggerMixin):
                 aes_key.close()
 
         except Exception as e:
-            self.logger.error(f"Failed to generate KEK for token '{self.label}': {e}")
-            raise RuntimeError(f"Failed to generate KEK: {str(e)}")
+            self.logger.exception("Failed to generate KEK for token '%s'", self.label)
+            msg = f'Failed to generate KEK: {e!s}'
+            raise RuntimeError(msg) from e
 
     def generate_and_wrap_dek(self, dek_size: int = 32) -> bytes:
-        """
-        Generate a new DEK and wrap it using the HSM AES key.
+        """Generate a new DEK and wrap it using the HSM AES key.
 
         Args:
             dek_size: Size of the DEK in bytes (default: 32 for AES-256)
@@ -398,7 +418,8 @@ class PKCS11Token(models.Model, LoggerMixin):
             RuntimeError: If DEK generation or wrapping fails
         """
         if dek_size not in [16, 24, 32]:  # AES-128, AES-192, AES-256
-            raise ValueError(f"Invalid DEK size: {dek_size} (must be 16, 24, or 32)")
+            msg = f'Invalid DEK size: {dek_size} (must be 16, 24, or 32)'
+            raise ValueError(msg)
 
         self._dek_cache = None
 
@@ -411,15 +432,15 @@ class PKCS11Token(models.Model, LoggerMixin):
                 self.encrypted_dek = wrapped_data
                 self.save(update_fields=['encrypted_dek'])
 
+        except (OSError, ValueError, RuntimeError) as e:
+            self.logger.exception('Failed to generate and wrap DEK for token %s', self.label)
+            msg = f'DEK generation/wrapping failed: {e}'
+            raise RuntimeError(msg) from e
+        else:
             return wrapped_data
 
-        except Exception as e:
-            self.logger.error(f"Failed to generate and wrap DEK for token {self.label}: {e}")
-            raise RuntimeError(f"DEK generation/wrapping failed: {e}")
-
     def _wrap_dek(self, dek_bytes: bytes) -> bytes:
-        """
-        Wrap a DEK using the HSM AES key.
+        """Wrap a DEK using the HSM AES key.
 
         Args:
             dek_bytes: The plain DEK to wrap
@@ -443,7 +464,7 @@ class PKCS11Token(models.Model, LoggerMixin):
                 label=self.KEK_ENCRYPTION_KEY_LABEL
             )
 
-            temp_label = f"temp-wrap-{os.urandom(8).hex()}"
+            temp_label = f'temp-wrap-{os.urandom(8).hex()}'
             temp_key = session.create_object({
                 pkcs11.Attribute.CLASS: pkcs11.ObjectClass.SECRET_KEY,
                 pkcs11.Attribute.KEY_TYPE: pkcs11.KeyType.AES,
@@ -458,33 +479,35 @@ class PKCS11Token(models.Model, LoggerMixin):
                 mechanism=pkcs11.Mechanism.AES_KEY_WRAP
             )
 
-            return wrapped_data
 
-        except pkcs11.NoSuchKey:
-            raise RuntimeError(
+        except pkcs11.NoSuchKey as e:
+            msg = (
                 f"AES wrapping key '{self.KEK_ENCRYPTION_KEY_LABEL}' not found in token '{self.label}'. "
                 "Generate the KEK first using generate_kek()."
             )
+            raise RuntimeError(msg) from e
         except Exception as e:
-            raise RuntimeError(f"Failed to wrap DEK: {e}")
+            msg = f'Failed to wrap DEK: {e}'
+            raise RuntimeError(msg) from e
+        else:
+            return wrapped_data
 
         finally:
             # Cleanup
             if temp_key:
                 try:
                     temp_key.destroy()
-                except Exception as cleanup_error:
-                    self.logger.warning(f"Failed to cleanup temp key: {cleanup_error}")
+                except pkcs11.PKCS11Exception as cleanup_error:
+                    self.logger.warning('Failed to cleanup temp key: %s', cleanup_error)
 
             if session:
                 try:
                     session.close()
-                except Exception as cleanup_error:
-                    self.logger.warning(f"Failed to close session: {cleanup_error}")
+                except Exception as cleanup_error:  # noqa: BLE001
+                    self.logger.warning('Failed to close session: %s', cleanup_error)
 
     def get_dek(self) -> bytes:
-        """
-        Get the Data Encryption Key (DEK), unwrapping it if necessary.
+        """Get the Data Encryption Key (DEK), unwrapping it if necessary.
 
         Returns:
             bytes: The 32-byte DEK
@@ -499,17 +522,61 @@ class PKCS11Token(models.Model, LoggerMixin):
             dek = self._unwrap_dek()
 
             self._dek_cache = dek
-
-            self.logger.info(f"Successfully retrieved DEK for token {self.label}")
+        except Exception as e:
+            self.logger.exception('Failed to retrieve DEK for token %s', self.label)
+            msg = f'Failed to retrieve DEK: {e}'
+            raise RuntimeError(msg) from e
+        else:
+            self.logger.info('DEK retrieved successfully for token %s', self.label)
             return dek
 
-        except Exception as e:
-            self.logger.error(f"Failed to retrieve DEK for token {self.label}: {e}")
-            raise RuntimeError(f"Failed to retrieve DEK: {e}")
+    def _raise_no_dek(self) -> None:
+        """Raise an error if no wrapped DEK is available.
+
+        Raises:
+            RuntimeError: If no wrapped DEK is available for unwrapping.
+        """
+        msg = 'No wrapped DEK available for unwrapping'
+        raise RuntimeError(msg)
+
+    def _raise_dek_no_value(self) -> None:
+        """Raise an error if the unwrapped DEK has no value.
+
+        Raises:
+            RuntimeError: If the unwrapped DEK has no VALUE attribute.
+        """
+        msg = 'Unwrapped key has no VALUE attribute'
+        raise RuntimeError(msg)
+
+    def _raise_invalid_dek_length(self, length: int) -> None:
+        """Raise an error for invalid DEK length.
+
+        Args:
+            length (int): The length of the DEK.
+
+        Raises:
+            RuntimeError: If the DEK length is invalid.
+        """
+        msg = f'Invalid unwrapped DEK length: {length} bytes'
+        raise RuntimeError(msg)
+
+    def _get_wrapped_data(self) -> bytes:
+        """Get the wrapped DEK data.
+
+        Returns:
+            bytes: The wrapped DEK data.
+        """
+        if not self.encrypted_dek:
+            self._raise_no_dek()
+        if isinstance(self.encrypted_dek, memoryview):
+            return bytes(self.encrypted_dek)
+        if self.encrypted_dek is None:
+            self._raise_no_dek()
+        return self.encrypted_dek
+
 
     def _unwrap_dek(self) -> bytes:
-        """
-        Unwrap the DEK using the HSM AES key.
+        """Unwrap the DEK using the HSM AES key.
 
         Returns:
             bytes: The unwrapped DEK
@@ -518,103 +585,169 @@ class PKCS11Token(models.Model, LoggerMixin):
             RuntimeError: If unwrapping fails or DEK is not available
         """
         if not self.encrypted_dek:
-            raise RuntimeError("No wrapped DEK available for unwrapping")
+            self._raise_no_dek()
 
-        if isinstance(self.encrypted_dek, memoryview):
-            wrapped_data = bytes(self.encrypted_dek)
-        else:
-            wrapped_data = self.encrypted_dek
-
-        if len(wrapped_data) != 40:
-            self.logger.warning(f"Unexpected wrapped DEK length: {len(wrapped_data)} (expected 40)")
+        wrapped_data = self._get_wrapped_data()
+        self._log_unexpected_wrapped_length(wrapped_data)
 
         session = None
         unwrapped_key = None
 
         try:
-            pkcs11_lib = pkcs11.lib(self.module_path)
-            pkcs11_token = pkcs11_lib.get_token(token_label=self.label)
-            session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
-
-            wrap_key = session.get_key(
-                key_type=pkcs11.KeyType.AES,
-                label=self.KEK_ENCRYPTION_KEY_LABEL
-            )
-
-            temp_label = f"temp-unwrap-{os.urandom(8).hex()}"
-            unwrapped_key = wrap_key.unwrap_key(
-                pkcs11.ObjectClass.SECRET_KEY,
-                pkcs11.KeyType.AES,
-                wrapped_data,
-                template={
-                    pkcs11.Attribute.LABEL: temp_label,
-                    pkcs11.Attribute.TOKEN: False,
-                    pkcs11.Attribute.ENCRYPT: True,
-                    pkcs11.Attribute.DECRYPT: True,
-                    pkcs11.Attribute.EXTRACTABLE: True,
-                    pkcs11.Attribute.SENSITIVE: False,
-                },
-                mechanism=pkcs11.Mechanism.AES_KEY_WRAP
-            )
-
-            dek_bytes = unwrapped_key[pkcs11.Attribute.VALUE]
-
-            if not dek_bytes:
-                raise RuntimeError("Unwrapped key has no VALUE attribute")
-
-            if len(dek_bytes) not in [16, 24, 32]:
-                raise RuntimeError(f"Invalid unwrapped DEK length: {len(dek_bytes)} bytes")
-
-            self.logger.info(f"Successfully unwrapped {len(dek_bytes)}-byte DEK")
+            session, wrap_key = self._open_session_and_get_wrap_key()
+            dek_bytes, unwrapped_key = self._unwrap_with_key(wrap_key, wrapped_data)
+            self._validate_dek_bytes(dek_bytes)
+        except pkcs11.NoSuchKey as e:
+            self._handle_no_such_key(e)
+        except Exception as e:  # noqa: BLE001
+            self._handle_unwrap_exception(e, wrapped_data)
+        else:
+            self.logger.info('DEK unwrapped successfully for token %s', self.label)
             return dek_bytes
-
-        except pkcs11.NoSuchKey:
-            raise RuntimeError(
-                f"AES wrapping key '{self.KEK_ENCRYPTION_KEY_LABEL}' not found in token '{self.label}'. "
-                "Generate the KEK first using generate_kek()."
-            )
-        except Exception as e:
-            error_msg = str(e).lower()
-
-            if "bytes must be in range" in error_msg or "invalid data" in error_msg:
-                raise RuntimeError(
-                    f"Wrapped DEK data is corrupted or incompatible. "
-                    f"Data length: {len(wrapped_data)} bytes. "
-                    f"Consider regenerating the DEK. Original error: {e}"
-                )
-            elif "mechanism" in error_msg:
-                raise RuntimeError(
-                    f"AES Key Wrap mechanism not supported or configured incorrectly. "
-                    f"Original error: {e}"
-                )
-            else:
-                self.logger.error(f"DEK unwrapping failed: {e}")
-                raise RuntimeError(f"Failed to unwrap DEK: {e}")
-
         finally:
-            if unwrapped_key:
-                try:
-                    unwrapped_key.destroy()
-                except Exception as cleanup_error:
-                    self.logger.warning(f"Failed to cleanup unwrapped key: {cleanup_error}")
+            self._cleanup_unwrapped_key(unwrapped_key)
+            self._cleanup_session(session)
+        msg = 'Failed to unwrap DEK: Unknown error'
+        raise RuntimeError(msg)
 
-            if session:
-                try:
-                    session.close()
-                except Exception as cleanup_error:
-                    self.logger.warning(f"Failed to close session: {cleanup_error}")
+    def _log_unexpected_wrapped_length(self, wrapped_data: bytes) -> None:
+        """Log a warning if the wrapped DEK length is unexpected.
 
-    def clear_dek_cache(self):
+        Args:
+            wrapped_data (bytes): The wrapped DEK data.
+        """
+        if len(wrapped_data) != self.WRAPPED_DEK_LENGTH:
+            self.logger.warning(
+                'Unexpected wrapped DEK length: %d (expected %d)',
+                len(wrapped_data), self.WRAPPED_DEK_LENGTH
+            )
+
+    def _open_session_and_get_wrap_key(self) -> tuple[pkcs11.Session, pkcs11.Key]:
+        """Open a PKCS#11 session and retrieve the AES wrapping key for this token."""
+        pkcs11_lib = pkcs11.lib(self.module_path)
+        pkcs11_token = pkcs11_lib.get_token(token_label=self.label)
+        session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
+        wrap_key = session.get_key(
+            key_type=pkcs11.KeyType.AES,
+            label=self.KEK_ENCRYPTION_KEY_LABEL
+        )
+        return session, wrap_key
+
+    def _unwrap_with_key(self, wrap_key: pkcs11.Key, wrapped_data: bytes) -> tuple[bytes, pkcs11.Key]:
+        """Unwrap the DEK using the provided wrapping key.
+
+        Args:
+            wrap_key (pkcs11.Key): The wrapping key.
+            wrapped_data (bytes): The wrapped DEK data.
+
+        Returns:
+            tuple[bytes, pkcs11.Key]: The unwrapped DEK and the unwrapped key.
+        """
+        temp_label = f'temp-unwrap-{os.urandom(8).hex()}'
+        unwrapped_key = wrap_key.unwrap_key(
+            pkcs11.ObjectClass.SECRET_KEY,
+            pkcs11.KeyType.AES,
+            wrapped_data,
+            template={
+                pkcs11.Attribute.LABEL: temp_label,
+                pkcs11.Attribute.TOKEN: False,
+                pkcs11.Attribute.ENCRYPT: True,
+                pkcs11.Attribute.DECRYPT: True,
+                pkcs11.Attribute.EXTRACTABLE: True,
+                pkcs11.Attribute.SENSITIVE: False,
+            },
+            mechanism=pkcs11.Mechanism.AES_KEY_WRAP
+        )
+        dek_bytes = unwrapped_key[pkcs11.Attribute.VALUE]
+        return dek_bytes, unwrapped_key
+
+    def _validate_dek_bytes(self, dek_bytes: bytes) -> None:
+        """Validate the unwrapped DEK bytes."""
+        if not dek_bytes:
+            self._raise_dek_no_value()
+        if len(dek_bytes) not in [16, 24, 32]:
+            self._raise_invalid_dek_length(len(dek_bytes))
+
+    def _handle_no_such_key(self, e: Exception) -> None:
+        """Handle the case where the wrapping key is not found.
+
+        Args:
+            e (Exception): The exception raised.
+
+        Raises:
+            RuntimeError: If the wrapping key is not found.
+        """
+        msg = (
+            f"AES wrapping key '{self.KEK_ENCRYPTION_KEY_LABEL}' not found in token '{self.label}'. "
+            "Generate the KEK first using generate_kek()."
+        )
+        raise RuntimeError(msg) from e
+
+    def _handle_unwrap_exception(self, e: Exception, wrapped_data: bytes) -> None:
+        """Handle exceptions that occur during DEK unwrapping.
+
+        Args:
+            e (Exception): The exception raised.
+            wrapped_data (bytes): The wrapped DEK data.
+
+        Raises:
+            RuntimeError: If the wrapped DEK data is invalid.
+            RuntimeError: If the unwrapping mechanism is not supported.
+            RuntimeError: If the DEK unwrapping fails for any other reason.
+        """
+        error_msg = str(e).lower()
+        if 'bytes must be in range' in error_msg or 'invalid data' in error_msg:
+            msg = (
+                f'Wrapped DEK data is corrupted or incompatible. '
+                f'Data length: {len(wrapped_data)} bytes. '
+                f'Consider regenerating the DEK. Original error: {e}'
+            )
+            raise RuntimeError(msg) from e
+        if 'mechanism' in error_msg:
+            msg = (
+                f'AES Key Wrap mechanism not supported or configured incorrectly. '
+                f'Original error: {e}'
+            )
+            raise RuntimeError(msg) from e
+        self.logger.exception('DEK unwrapping failed')
+        msg = f'Failed to unwrap DEK: {e}'
+        raise RuntimeError(msg) from e
+
+    def _cleanup_unwrapped_key(self, unwrapped_key: pkcs11.Key) -> None:
+        """Cleanup the unwrapped key from memory.
+
+        Args:
+            unwrapped_key (pkcs11.Key): The unwrapped key object.
+        """
+        if unwrapped_key:
+            try:
+                unwrapped_key.destroy()
+            except Exception as cleanup_error:  # noqa: BLE001
+                self.logger.warning('Failed to cleanup unwrapped key: %s', cleanup_error)
+
+    def _cleanup_session(self, session: pkcs11.Session) -> None:
+        """Cleanup the session from memory.
+
+        Args:
+            session (pkcs11.Session): The session object.
+        """
+        if session:
+            try:
+                session.close()
+            except Exception as cleanup_error:  # noqa: BLE001
+                self.logger.warning('Failed to close session: %s', cleanup_error)
+
+
+    def clear_dek_cache(self) -> None:
         """Clear the cached DEK from memory."""
         if hasattr(self, '_dek_cache'):
             if self._dek_cache:
                 self._dek_cache = b'\x00' * len(self._dek_cache)
             self._dek_cache = None
-        self.logger.debug(f"Cleared DEK cache for token {self.label}")
+        self.logger.debug('Cleared DEK cache for token %s', self.label)
 
     def get_pin(self) -> str:
-        """
-        Get the user PIN for this PKCS#11 token.
+        """Get the user PIN for this PKCS#11 token.
 
         PIN retrieval priority:
         1. HSM_PIN_FILE environment variable (Docker secrets)
@@ -628,31 +761,30 @@ class PKCS11Token(models.Model, LoggerMixin):
         """
         # Try reading from HSM_PIN_FILE (Docker secrets approach)
         hsm_pin_file = os.getenv('HSM_PIN_FILE', '/run/secrets/hsm_pin')
-        if os.path.exists(hsm_pin_file) and os.access(hsm_pin_file, os.R_OK):
+        pin_path = Path(hsm_pin_file)
+        if pin_path.exists() and os.access(hsm_pin_file, os.R_OK):
             try:
-                with open(hsm_pin_file, 'r') as f:
+                with pin_path.open('r') as f:
                     pin = f.read().strip()
                     if pin:
                         return pin
-            except (OSError, IOError) as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"Failed to read HSM PIN from file {hsm_pin_file}: {e}")
+            except Exception:  # noqa: BLE001
+                self.logger.warning('Failed to read HSM PIN from file %s', hsm_pin_file)
 
         # Try HSM_PIN environment variable
-        pin = os.getenv('HSM_PIN')
-        if pin:
-            return pin.strip()
+        env_pin: str | None = os.getenv('HSM_PIN')
+        if env_pin:
+            return env_pin.strip()
 
         # No PIN available
-        raise ImproperlyConfigured(
+        msg = (
             f"No PIN configured for PKCS#11 token '{self.label}'. "
             "Ensure HSM_PIN_FILE points to a readable file with the PIN, "
             "or set the HSM_PIN environment variable."
         )
+        raise ImproperlyConfigured(
+            msg
+        )
 
-    def __del__(self):
-        """Ensure decrypted DEK is cleared when object is destroyed."""
-        self.clear_dek_cache()
 
 

@@ -1,3 +1,9 @@
+"""Management command to test KEK loading and DEK unwrapping for PKCS11Token.
+
+Usage:
+    python manage.py unwrap_dek [--token-label <label>]
+"""
+
 from django.core.management.base import BaseCommand
 from django.core.exceptions import ObjectDoesNotExist
 import logging

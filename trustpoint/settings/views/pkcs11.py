@@ -1,35 +1,37 @@
+"""Views for configuring PKCS#11 settings, including HSM PIN and token configuration."""
+
+from typing import Any
+
 from django.contrib import messages
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import FormView
+
 from settings.forms import PKCS11ConfigForm
 
 
-class PKCS11ConfigView(FormView):
-    """
-    Class-based view for configuring PKCS#11 settings including HSM PIN and token configuration.
-    """
+class PKCS11ConfigView(FormView[PKCS11ConfigForm]):
+    """Class-based view for configuring PKCS#11 settings including HSM PIN and token configuration."""
     template_name = 'settings/pkcs11.html'
     form_class = PKCS11ConfigForm
     success_url = reverse_lazy('settings:pkcs11')
-
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context to the template."""
         context = super().get_context_data(**kwargs)
         context['page_title'] = _('PKCS#11 Configuration')
         return context
 
-    def form_valid(self, form):
+    def form_valid(self, form: PKCS11ConfigForm) -> Any:
         """Handle valid form submission."""
         success_messages = []
         error_messages = []
 
         # Save token configuration
         try:
-            token = form.save_token_config()
+            form.save_token_config()
             success_messages.append(_('Token configuration saved successfully.'))
-        except Exception as e:
-            error_messages.append(_('Failed to save token configuration: {}').format(str(e)))
+        except Exception as e:  # noqa: BLE001
+            error_messages.append(_('Failed to save token configuration'))
 
         # Display messages
         for msg in success_messages:
@@ -43,7 +45,7 @@ class PKCS11ConfigView(FormView):
 
         return super().form_valid(form)
 
-    def form_invalid(self, form):
+    def form_invalid(self, form: PKCS11ConfigForm) -> Any:
         """Handle invalid form submission."""
         messages.error(self.request, _('Please correct the errors below.'))
         return super().form_invalid(form)

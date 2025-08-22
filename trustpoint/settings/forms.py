@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 from typing import TYPE_CHECKING, Any, cast
 
 from crispy_forms.helper import FormHelper
@@ -12,7 +10,7 @@ from django import forms
 from django.utils.translation import gettext_lazy as _
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
-from settings.models import BackupOptions, SecurityConfig, PKCS11Token
+from settings.models import BackupOptions, PKCS11Token, SecurityConfig
 from settings.security import manager
 from settings.security.features import AutoGenPkiFeature, SecurityFeature
 
@@ -23,11 +21,11 @@ if TYPE_CHECKING:
 class SecurityConfigForm(forms.ModelForm):
     """Security configuration model form."""
 
-    FEATURE_TO_FIELDS: dict[type[SecurityFeature], list[str]] = {
+    FEATURE_TO_FIELDS: ClassVar[dict[type[SecurityFeature], list[str]]] = {
         AutoGenPkiFeature: ['auto_gen_pki', 'auto_gen_pki_key_algorithm'],
     }
 
-    def __init__(self, *args: Any, **kwargs: Any):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the SecurityConfigForm."""
         super().__init__(*args, **kwargs)
 
@@ -88,6 +86,7 @@ class SecurityConfigForm(forms.ModelForm):
     )
 
     class Meta:
+        """ModelForm Meta configuration for SecurityConfig."""
         model = SecurityConfig
         fields: ClassVar[list[str]] = ['security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm']
 
@@ -195,16 +194,14 @@ class IPv4AddressForm(forms.Form):
 
         super().__init__(*args, **kwargs)
 
-        ipv4_field = cast(forms.ChoiceField, self.fields['ipv4_address'])
+        ipv4_field = cast('forms.ChoiceField', self.fields['ipv4_address'])
         ipv4_field.choices = [(ip, ip) for ip in san_ips]
 
 
 class PKCS11ConfigForm(forms.Form):
-    """
-    Form for configuring PKCS#11 settings including HSM PIN and token information.
-    """
+    """Form for configuring PKCS#11 settings including HSM PIN and token information."""
 
-    HSM_TYPE_CHOICES = [
+    HSM_TYPE_CHOICES: ClassVar[list[tuple[str, Any]]] = [
         ('softhsm', _('SoftHSM')),
         ('physical', _('Physical HSM')),
     ]
@@ -218,31 +215,32 @@ class PKCS11ConfigForm(forms.Form):
     )
 
     label = forms.CharField(
-        label=_("Token Label"),
+        label=_('Token Label'),
         max_length=100,
         widget=forms.TextInput(attrs={'class': 'form-control'}),
-        help_text=_("Unique label for the PKCS#11 token"),
+        help_text=_('Unique label for the PKCS#11 token'),
         required=False
     )
 
     slot = forms.IntegerField(
-        label=_("Slot Number"),
+        label=_('Slot Number'),
         widget=forms.NumberInput(attrs={'class': 'form-control'}),
-        help_text=_("Slot number where the token is located"),
+        help_text=_('Slot number where the token is located'),
         min_value=0,
         required=False
     )
 
     module_path = forms.CharField(
-        label=_("Module Path"),
+        label=_('Module Path'),
         max_length=255,
         widget=forms.TextInput(attrs={'class': 'form-control'}),
-        help_text=_("Path to the PKCS#11 module library file"),
-        initial="/usr/lib/softhsm/libsofthsm2.so",
+        help_text=_('Path to the PKCS#11 module library file'),
+        initial='/usr/lib/softhsm/libsofthsm2.so',
         required=False
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the PKCS11ConfigForm with existing token data if available."""
         super().__init__(*args, **kwargs)
 
         try:
@@ -255,9 +253,9 @@ class PKCS11ConfigForm(forms.Form):
         except PKCS11Token.DoesNotExist:
             pass
 
-    def clean(self):
+    def clean(self) -> dict[str, Any]:
         """Custom validation for the form."""
-        cleaned_data = super().clean()
+        cleaned_data: dict[str, Any] = super().clean() or {}
         hsm_type = cleaned_data.get('hsm_type')
 
         if hsm_type == 'softhsm':
@@ -265,11 +263,11 @@ class PKCS11ConfigForm(forms.Form):
             cleaned_data['slot'] = 0
             cleaned_data['module_path'] = '/usr/lib/softhsm/libsofthsm2.so'
         elif hsm_type == 'physical':
-            raise forms.ValidationError(_("Physical HSM is not yet supported."))
+            raise forms.ValidationError(_('Physical HSM is not yet supported.'))
 
         return cleaned_data
 
-    def clean_label(self):
+    def clean_label(self) -> str:
         """Validate that label is unique, excluding current token if updating."""
         hsm_type = self.data.get('hsm_type')
         if hsm_type == 'softhsm':
@@ -283,11 +281,11 @@ class PKCS11ConfigForm(forms.Form):
             existing = existing.exclude(pk=current_token.pk)
 
         if existing.exists():
-            raise forms.ValidationError(_("A token with this label already exists."))
+            raise forms.ValidationError(_('A token with this label already exists.'))
 
-        return label
+        return str(label)
 
-    def save_token_config(self):
+    def save_token_config(self) -> PKCS11Token:
         """Save or update token configuration."""
         token, created = PKCS11Token.objects.get_or_create(
             defaults={

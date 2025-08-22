@@ -29,14 +29,14 @@ if TYPE_CHECKING:
 
 
 class IndexView(RedirectView):
-    """Index view"""
+    """Index view."""
 
     permanent = True
     pattern_name = 'settings:language'
 
 
 def language(request: HttpRequest) -> HttpResponse:
-    """Handle language Configuration
+    """Handle language Configuration.
 
     Returns: HTTPResponse
     """
@@ -132,7 +132,7 @@ class LoggingFilesDetailsView(LoggerMixin, LoggingContextMixin, TemplateView):
 
 
 class LoggingFilesDownloadView(LoggerMixin, LoggingContextMixin, TemplateView):
-    """View to download a single log file"""
+    """View to download a single log file."""
 
     http_method_names = ('get',)
 

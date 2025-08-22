@@ -2,7 +2,7 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, backup, language, logging, security, tls, pkcs11
+from .views import IndexView, backup, language, logging, pkcs11, security, tls
 
 app_name = 'settings'
 urlpatterns = [

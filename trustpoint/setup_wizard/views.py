@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -22,7 +23,7 @@ from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from settings.models import PKCS11Token
 
 from setup_wizard import SetupWizardState
-from setup_wizard.forms import EmptyForm, StartupWizardTlsCertificateForm
+from setup_wizard.forms import EmptyForm, HsmSetupForm, StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
@@ -217,7 +218,7 @@ class SetupWizardOptionsView(TemplateView):
         return super().get(*args, **kwargs)
 
 
-class SetupWizardHsmSetupView(LoggerMixin, FormView):
+class SetupWizardHsmSetupView(LoggerMixin, FormView[Any]):
     """View for handling HSM setup during the setup wizard.
 
     This view allows the user to configure HSM settings, currently supporting
@@ -229,10 +230,6 @@ class SetupWizardHsmSetupView(LoggerMixin, FormView):
     template_name = 'setup_wizard/hsm_setup.html'
     success_url = reverse_lazy('setup_wizard:demo_data')
 
-    def get_form_class(self):
-        """Return the form class for HSM setup."""
-        from setup_wizard.forms import HsmSetupForm
-        return HsmSetupForm
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Handle request dispatch and wizard state validation."""
@@ -245,83 +242,113 @@ class SetupWizardHsmSetupView(LoggerMixin, FormView):
 
         return super().dispatch(request, *args, **kwargs)
 
-    def form_valid(self, form) -> HttpResponse:
+    def form_valid(self, form: HsmSetupForm) -> HttpResponse:
         """Handle form submission for HSM setup."""
+        cleaned_data = form.cleaned_data
+        hsm_type = cleaned_data['hsm_type']
+
+        if hsm_type != 'softhsm':
+            messages.add_message(self.request, messages.ERROR, 'Physical HSM is not yet supported.')
+            return redirect('setup_wizard:hsm_setup', permanent=False)
+
+        module_path = cleaned_data['module_path']
+        slot = str(cleaned_data['slot'])
+        label = cleaned_data['label']
+
+        if not self._validate_hsm_inputs(module_path, slot, label):
+            return redirect('setup_wizard:hsm_setup', permanent=False)
+
         try:
-            cleaned_data = form.cleaned_data
-            hsm_type = cleaned_data['hsm_type']
-
-            if hsm_type == 'softhsm':
-                module_path = cleaned_data['module_path']
-                slot = str(cleaned_data['slot'])
-                label = cleaned_data['label']
-
-                command = ['sudo', str(SCRIPT_WIZARD_SETUP_HSM), module_path, slot, label]
-                result = subprocess.run(command, capture_output=True, text=True, check=True)
-
-                if result.returncode == 0:
-
-                    token, created = PKCS11Token.objects.get_or_create(
-                        label=label,
-                        defaults={
-                            'hsm_type': hsm_type,
-                            'slot': int(slot),
-                            'module_path': module_path,
-                        }
-                    )
-
-                    if not created:
-                        token.hsm_type = hsm_type
-                        token.slot = int(slot)
-                        token.module_path = module_path
-                        token.save()
-
-                    try:
-                        token.generate_kek(key_length=256)
-                        self.logger.info(f'key encryption key (KEK) generated for token: {token.label}')
-                    except Exception as e:
-                        self.logger.error(f'Failed to generate key encryption key (KEK): {str(e)}')
-                        messages.add_message(self.request, messages.WARNING,
-                                             f'HSM setup completed, but key encryption key '
-                                             f'(KEK) generation failed: {str(e)}')
-
-                    try:
-                        token.generate_and_wrap_dek()
-                        self.logger.info(f'DEK generated and wrap for token: {token.label}')
-                    except Exception as e:
-                        self.logger.error(f'Failed to generate and wrap DEK: {str(e)}')
-                        messages.add_message(self.request, messages.WARNING,
-                                             f'HSM setup completed, but DEK generation failed: {str(e)}')
-
-                    action = "created" if created else "updated"
-                    messages.add_message(self.request, messages.SUCCESS,
-                                         f'HSM setup completed successfully for {hsm_type.upper()}. '
-                                         f'PKCS#11 token configuration {action}.')
-                    self.logger.info(f'PKCS11Token {action}: {token}')
-
-                else:
-                    raise subprocess.CalledProcessError(result.returncode, str(SCRIPT_WIZARD_SETUP_HSM))
-            else:
-                messages.add_message(self.request, messages.ERROR, 'Physical HSM is not yet supported.')
-                return redirect('setup_wizard:hsm_setup', permanent=False)
-
-        except subprocess.CalledProcessError as exception:
-            err_msg = f'HSM setup failed: {self._map_exit_code_to_message(exception.returncode)}'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return redirect('setup_wizard:hsm_setup', permanent=False)
-        except FileNotFoundError:
-            err_msg = f'HSM setup script not found: {SCRIPT_WIZARD_SETUP_HSM}'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return redirect('setup_wizard:hsm_setup', permanent=False)
-        except Exception:
-            err_msg = 'An unexpected error occurred during HSM setup.'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return redirect('setup_wizard:hsm_setup', permanent=False)
+            result = self._run_hsm_setup_script(module_path, slot, label)
+            if result.returncode != 0:
+                self._raise_called_process_error(result.returncode)
+            token, created = self._get_or_update_token(hsm_type, module_path, slot, label)
+            self._generate_kek_and_dek(token)
+            self._add_success_message(hsm_type, created=created, token=token)
+        except Exception as exc:  # noqa: BLE001
+            return self._handle_hsm_setup_exception(exc)
 
         return super().form_valid(form)
+
+    def _validate_hsm_inputs(self, module_path: str, slot: str, label: str) -> bool:
+        """Validate HSM input fields and add error messages if invalid."""
+        if not re.match(r'^[\w\-/\.]+$', module_path):
+            messages.add_message(self.request, messages.ERROR, 'Invalid module path.')
+            return False
+        if not slot.isdigit():
+            messages.add_message(self.request, messages.ERROR, 'Invalid slot value.')
+            return False
+        if not re.match(r'^[\w\-]+$', label):
+            messages.add_message(self.request, messages.ERROR, 'Invalid label.')
+            return False
+        for arg in [module_path, slot, label]:
+            if not re.match(r'^[\w\-/\.]+$', arg):
+                messages.add_message(self.request, messages.ERROR, 'Invalid argument detected in command.')
+                return False
+        return True
+
+    def _run_hsm_setup_script(self, module_path: str, slot: str, label: str) -> subprocess.CompletedProcess[str]:
+        """Run the HSM setup shell script."""
+        command = ['sudo', str(SCRIPT_WIZARD_SETUP_HSM), module_path, slot, label]
+        return subprocess.run(command, capture_output=True, text=True, check=True)  # noqa: S603
+
+    def _get_or_update_token(self, hsm_type: str, module_path: str, slot: str, label: str) -> tuple[PKCS11Token, bool]:
+        """Get or update the PKCS11Token object."""
+        token, created = PKCS11Token.objects.get_or_create(
+            label=label,
+            defaults={
+                'hsm_type': hsm_type,
+                'slot': int(slot),
+                'module_path': module_path,
+            }
+        )
+        if not created:
+            token.hsm_type = hsm_type
+            token.slot = int(slot)
+            token.module_path = module_path
+            token.save()
+        return token, created
+
+    def _generate_kek_and_dek(self, token: PKCS11Token) -> None:
+        """Generate KEK and DEK for the token, log and warn on failure."""
+        try:
+            token.generate_kek(key_length=256)
+            self.logger.info('key encryption key (KEK) generated for token: %s', token.label)
+        except Exception as e:
+            self.logger.exception('Failed to generate key encryption key (KEK)')
+            messages.add_message(self.request, messages.WARNING,
+                                 f'HSM setup completed, but key encryption key (KEK) generation failed: {e!s}')
+        try:
+            token.generate_and_wrap_dek()
+            self.logger.info('DEK generated and wrap for token: %s', token.label)
+        except Exception as e:
+            self.logger.exception('Failed to generate and wrap DEK')
+            messages.add_message(self.request, messages.WARNING,
+                                 f'HSM setup completed, but DEK generation failed: {e!s}')
+
+    def _raise_called_process_error(self, returncode: int) -> None:
+        """Raise a subprocess.CalledProcessError with the given return code."""
+        raise subprocess.CalledProcessError(returncode, str(SCRIPT_WIZARD_SETUP_HSM))
+
+    def _add_success_message(self, hsm_type: str, *, created: bool, token: PKCS11Token) -> None:
+        """Add a success message for HSM setup."""
+        action = 'created' if created else 'updated'
+        messages.add_message(self.request, messages.SUCCESS,
+                             f'HSM setup completed successfully for {hsm_type.upper()}. '
+                             f'PKCS#11 token configuration {action}.')
+        self.logger.info('PKCS11Token %s: %s', action, token)
+
+    def _handle_hsm_setup_exception(self, exc: Exception) -> HttpResponse:
+        """Handle exceptions during HSM setup and add appropriate error messages."""
+        if isinstance(exc, subprocess.CalledProcessError):
+            err_msg = f'HSM setup failed: {self._map_exit_code_to_message(exc.returncode)}'
+        elif isinstance(exc, FileNotFoundError):
+            err_msg = f'HSM setup script not found: {SCRIPT_WIZARD_SETUP_HSM}'
+        else:
+            err_msg = 'An unexpected error occurred during HSM setup.'
+        messages.add_message(self.request, messages.ERROR, err_msg)
+        self.logger.exception(err_msg)
+        return redirect('setup_wizard:hsm_setup', permanent=False)
 
     @staticmethod
     def _map_exit_code_to_message(return_code: int) -> str:
@@ -351,6 +378,14 @@ class BackupRestoreView(View):
     """Upload a dump file and restore the database from it."""
 
     def post(self, request: HttpRequest) -> HttpResponse:
+        """Handle POST requests to upload a backup file and restore the database.
+
+        Args:
+            request (HttpRequest): The HTTP request containing the uploaded backup file.
+
+        Returns:
+            HttpResponse: A redirect to the appropriate page based on the outcome.
+        """
         backup_file = request.FILES.get('backup_file')
         if not backup_file:
             messages.error(request, 'No file uploaded for restore.')
@@ -363,7 +398,7 @@ class BackupRestoreView(View):
         temp_path = temp_dir / backup_file.name
         # save upload
 
-        with open(temp_path, 'wb+') as f:
+        with temp_path.open('wb+') as f:
             for chunk in backup_file.chunks():
                 f.write(chunk)
 
