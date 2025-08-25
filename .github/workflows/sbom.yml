@@ -5,40 +5,65 @@ on:
     branches:
       - main
   workflow_dispatch:
+  pull_request:
+    types:
+      - reopened
+      - ready_for_review
+      - synchronize
 
 jobs:
   sbom:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
     - name: Checkout Trustpoint repo
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Install Syft
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+    
+    - name: Build Trustpoint Docker image
+      run: docker build -t trustpoint:latest -f docker/trustpoint/Dockerfile .
+    
+    - name: Generate CycloneDX SBOM
+      run: syft trustpoint:latest -o cyclonedx-json=sbom_cyclonedx.json
+
+    - name: Generate SPDX SBOM
+      run: syft trustpoint:latest -o spdx-json=sbom_spdx.json
+
+    - name: Check if CycloneDX SBOM file exists
+      run: |
+        ls -lh sbom_cyclonedx.json
+
+    - name: Check if SPDX SBOM file exists
+      run: |
+        ls -lh sbom_spdx.json
+
+    - name: Create Draft Pull Request
+      id: cpr
+      uses: peter-evans/create-pull-request@v7
       with:
-        python-version: '3.11'
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: Update SBOM
+        add-paths: |
+          sbom_cyclonedx.json
+          sbom_spdx.json
+        committer: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+        author: ${{ github.actor }} <${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com>
+        signoff: false
+        branch: update-sbom-${{ github.run_id }}
+        delete-branch: true
+        title: '[ACTION] Update SBOM'
+        body: |
+          Update SBOM
+          - Update sbom_cyclonedx.json
+          - Update sbom_spdx.json
+        labels: |
+          automated pr
+          sbom
+        draft: true
 
-    - name: Install CycloneDX CLI
-      run: |
-        pip install cyclonedx-bom
-
-    - name: Generate SBOM (from environment)
-      run: |
-        cyclonedx-py env -o sbom_cyclonedx.json
-
-    - name: Commit SBOM to repo root
-      run: |
-        git config user.name "github-actions"
-        git config user.email "github-actions@github.com"
-        git add sbom_cyclonedx.json
-        git commit -m "Update SBOM (sbom_cyclonedx.json) [CI]" || echo "No changes to commit"
-        git push
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Upload SBOM artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: trustpoint-sbom
-        path: sbom_cyclonedx.json

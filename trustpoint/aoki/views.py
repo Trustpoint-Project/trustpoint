@@ -29,7 +29,7 @@ class AokiServiceMixin:
     def get_idevid_owner_san_uri(idevid_cert: x509.Certificate) -> str:
         """Get the Owner ID SAN URI corresponding to a IDevID certificate.
 
-        Formatted as '<IDevID_Subj_SN>.dev-owner.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>.alt'
+        Formatted as 'dev-owner:<IDevID_Subj_SN>.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>'
         """
         try:
             sn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
@@ -38,7 +38,7 @@ class AokiServiceMixin:
             idevid_subj_sn = '_'
         idevid_x509_sn = hex(idevid_cert.serial_number)[2:].zfill(16)
         idevid_sha256_fingerprint = idevid_cert.fingerprint(hashes.SHA256()).hex()
-        return f'{idevid_subj_sn}.dev-owner.{idevid_x509_sn}.{idevid_sha256_fingerprint}.alt'
+        return f'dev-owner:{idevid_subj_sn}.{idevid_x509_sn}.{idevid_sha256_fingerprint}'
 
     @staticmethod
     def get_owner_credential(idevid_cert: x509.Certificate) -> CredentialModel | None:

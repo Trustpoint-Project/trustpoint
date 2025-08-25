@@ -8,6 +8,8 @@ from pathlib import Path
 
 import django  # Required for Django-based projects
 
+BUILD_AUTODOCS = True
+
 # -- Path setup -------------------------------------------------------------
 # Ensures Sphinx can find the project's modules for autodoc and autoapi.
 # Get absolute path to project root
@@ -31,20 +33,24 @@ plantuml = f'java -jar {PLANTUML_PATH}'
 project = 'Trustpoint'
 copyright = '2025, Trustpoint Project'
 author = 'Trustpoint Project'
-release = '0.2.0'  # Project version
+release = '0.3.0.dev1'  # Project version
 
 # -- General configuration --------------------------------------------------
 extensions = [
-    'sphinx.ext.autodoc',  # Auto-generate documentation from docstrings
     'sphinx.ext.inheritance_diagram',  # Generates class inheritance diagrams
-    'sphinx.ext.napoleon',  # Supports Google & NumPy docstring formats
     'sphinx.ext.viewcode',  # Adds links to highlighted source code
     'sphinxcontrib.plantuml',  # Enables PlantUML diagrams
-    'autoapi.extension',  # Automatically documents the API
 ]
 
-autoapi_dirs = ['../../trustpoint']  # Directories for autoapi to scan
-autodoc_typehints = 'description'  # Display type hints in descriptions
+if BUILD_AUTODOCS:
+    autodoc_extensions = [
+        'sphinx.ext.autodoc',  # Auto-generate documentation from docstrings
+        'sphinx.ext.napoleon',  # Supports Google & NumPy docstring formats
+        'autoapi.extension',  # Automatically documents the API
+    ]
+    extensions.extend(autodoc_extensions)
+    autoapi_dirs = ['../../trustpoint']  # Directories for autoapi to scan
+    autodoc_typehints = 'description'  # Display type hints in descriptions
 
 # -- Templates and exclusions -----------------------------------------------
 templates_path = ['_templates']  # Custom templates directory
