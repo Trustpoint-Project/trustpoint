@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import ClassVar
 
 import pkcs11
+from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -262,6 +263,7 @@ class PKCS11Token(models.Model, LoggerMixin):
     """
 
     KEK_ENCRYPTION_KEY_LABEL = 'trustpoint-kek'
+    DEK_CACHE_LABEL = 'trustpoint-dek-chache'
     WRAPPED_DEK_LENGTH = 40  # Expected length of wrapped DEK in bytes
 
     class HSMType(models.TextChoices):
@@ -314,9 +316,6 @@ class PKCS11Token(models.Model, LoggerMixin):
         auto_now_add=True
     )
 
-    _dek_cache: bytes | None = None
-
-
     class Meta:
         """Meta options for the PKCS11Token model."""
         verbose_name = _('PKCS#11 Token')
@@ -364,7 +363,7 @@ class PKCS11Token(models.Model, LoggerMixin):
 
             try:
                 try:
-                    aes_key.load_aes_key()
+                    aes_key.load_key()
                     self.logger.info(
                         "KEK '%s' already exists in token '%s'",
                         self.KEK_ENCRYPTION_KEY_LABEL,
@@ -374,21 +373,19 @@ class PKCS11Token(models.Model, LoggerMixin):
                     if not self.kek:
                         self.kek = kek
                         self.save(update_fields=['kek'])
-
+                except pkcs11.NoSuchKey:
+                    pass
                 except Exception:
                     self.logger.exception("Exception occurred while loading KEK in token '%s'", self.label)
                 else:
                     return True
 
-                aes_key.generate_aes_key(key_length=key_length)
+                aes_key.generate_key(key_length=key_length)
                 self.logger.info(
                     "Generated KEK '%s' in token '%s'",
                     self.KEK_ENCRYPTION_KEY_LABEL,
                     self.label
                 )
-
-                aes_key.load_aes_key()
-                self.logger.info("KEK verification successful for token '%s'", self.label)
 
                 if not self.kek:
                     self.kek = kek
@@ -421,7 +418,7 @@ class PKCS11Token(models.Model, LoggerMixin):
             msg = f'Invalid DEK size: {dek_size} (must be 16, 24, or 32)'
             raise ValueError(msg)
 
-        self._dek_cache = None
+        self.clear_dek_cache()
 
         try:
             dek_bytes = os.urandom(dek_size)
@@ -515,13 +512,15 @@ class PKCS11Token(models.Model, LoggerMixin):
         Raises:
             RuntimeError: If DEK cannot be retrieved or unwrapped
         """
-        if hasattr(self, '_dek_cache') and self._dek_cache:
-            return self._dek_cache
+        cached_dek = cache.get(self.DEK_CACHE_LABEL)
+        if cached_dek:
+            self.logger.debug('Retrieved DEK from cache for token %s', self.label)
+            return cached_dek
 
         try:
             dek = self._unwrap_dek()
 
-            self._dek_cache = dek
+            cache.set(self.DEK_CACHE_LABEL, dek, None)
         except Exception as e:
             self.logger.exception('Failed to retrieve DEK for token %s', self.label)
             msg = f'Failed to retrieve DEK: {e}'
@@ -737,13 +736,21 @@ class PKCS11Token(models.Model, LoggerMixin):
             except Exception as cleanup_error:  # noqa: BLE001
                 self.logger.warning('Failed to close session: %s', cleanup_error)
 
+    def get_dek_cache(self) -> bytes | None:
+        """Get the cached DEK without triggering unwrapping.
+
+        This method provides direct access to the cached DEK value without
+        performing any PKCS#11 operations. Returns None if the cache is empty.
+
+        Returns:
+            bytes | None: The cached DEK bytes if available, None otherwise.
+        """
+        return cache.get(self.DEK_CACHE_LABEL)
+
 
     def clear_dek_cache(self) -> None:
         """Clear the cached DEK from memory."""
-        if hasattr(self, '_dek_cache'):
-            if self._dek_cache:
-                self._dek_cache = b'\x00' * len(self._dek_cache)
-            self._dek_cache = None
+        cache.delete(self.DEK_CACHE_LABEL)
         self.logger.debug('Cleared DEK cache for token %s', self.label)
 
     def get_pin(self) -> str:

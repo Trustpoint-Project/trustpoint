@@ -262,8 +262,6 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
 
     def _initialize(self) -> None:
         """Initialize the PKCS#11 library and create a session."""
-        if self._session is None:
-            self._raise_runtime_error('PKCS#11 session is not initialized.')
         try:
             self._lib = pkcs11.lib(self._lib_path)
             if self._lib is None:
@@ -490,6 +488,55 @@ class Pkcs11AESKey:
             msg = f'Failed to initialize PKCS#11 session: {e}; lib_path: {self._lib_path} token: {self._token_label} '
             raise RuntimeError(msg) from e
 
+    def load_key(self) -> None:
+        """Load an existing AES key from the PKCS#11 token.
+
+        Raises:
+            RuntimeError: If the key cannot be loaded or does not exist.
+        """
+        if self._session is None:
+            self._initialize()
+
+        try:
+            self._key = self._session.get_key(
+                label=self._key_label,
+                key_type=pkcs11.KeyType.AES
+            )
+        except pkcs11.NoSuchKey as e:
+            msg = f"AES key with label '{self._key_label}' not found in token '{self._token_label}'."
+            raise pkcs11.NoSuchKey(msg) from e
+        except Exception as e:
+            msg = f"Failed to load AES key '{self._key_label}': {e}"
+            raise RuntimeError(msg) from e
+
+    def generate_key(self, key_length: int = 256) -> None:
+            """Generate an AES key in the PKCS#11 token.
+
+            Args:
+                key_length (int): Length of the AES key in bits (default: 256).
+
+            Raises:
+                ValueError: If the key length is not supported.
+                RuntimeError: If key generation fails.
+            """
+            if key_length not in self.SUPPORTED_KEY_LENGTHS:
+                msg = f'Unsupported key length: {key_length}. Must be one of {self.SUPPORTED_KEY_LENGTHS}.'
+                raise ValueError(msg)
+
+            if self._session is None:
+                self._initialize()
+
+            try:
+                self._key = self._session.generate_key(
+                    pkcs11.KeyType.AES,
+                    key_length=key_length,
+                    label=self._key_label,
+                    store=True
+                )
+            except Exception as e:
+                msg = f'Failed to generate AES key: {e}'
+                raise RuntimeError(msg) from e
+
     def close(self) -> None:
         """Close PKCS#11 session."""
         import contextlib
@@ -508,8 +555,6 @@ class Pkcs11AESKey:
     ) -> None:
         """Context manager exit."""
         self.close()
-        self.close()
-
 
 class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
     """PKCS#11-backed RSA private key implementation.

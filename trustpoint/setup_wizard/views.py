@@ -6,7 +6,7 @@ import logging
 import re
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
 from django.contrib import messages
@@ -29,8 +29,6 @@ from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
-    from typing import Any
-
     from trustpoint_core.serializer import CertificateSerializer
 
 APACHE_PATH = Path(__file__).parent.parent.parent / 'docker/trustpoint/apache/tls'
@@ -218,7 +216,7 @@ class SetupWizardOptionsView(TemplateView):
         return super().get(*args, **kwargs)
 
 
-class SetupWizardHsmSetupView(LoggerMixin, FormView[Any]):
+class SetupWizardHsmSetupView(LoggerMixin, FormView):
     """View for handling HSM setup during the setup wizard.
 
     This view allows the user to configure HSM settings, currently supporting
@@ -229,7 +227,7 @@ class SetupWizardHsmSetupView(LoggerMixin, FormView[Any]):
     http_method_names = ('get', 'post')
     template_name = 'setup_wizard/hsm_setup.html'
     success_url = reverse_lazy('setup_wizard:demo_data')
-
+    form_class = HsmSetupForm
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Handle request dispatch and wizard state validation."""

@@ -20,6 +20,7 @@ from pki.models.truststore import TruststoreModel
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 from trustpoint_core import oid
 from util.db import CustomDeleteActionModel
+from util.encrypted_fields import EncryptedCharField
 
 if TYPE_CHECKING:
     from typing import Any
@@ -94,8 +95,8 @@ class DeviceModel(CustomDeleteActionModel):
         choices=PkiProtocol, verbose_name=_('Pki Protocol'), null=False, default=PkiProtocol.MANUAL
     )
 
-    est_password = models.CharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
-    cmp_shared_secret = models.CharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
+    est_password = EncryptedCharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
+    cmp_shared_secret = EncryptedCharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
 
     class DeviceType(models.IntegerChoices):
         """Enum for device type."""
