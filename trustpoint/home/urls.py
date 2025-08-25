@@ -12,6 +12,5 @@ urlpatterns = [
     path('notification/<int:pk>/', views.NotificationDetailsView.as_view(), name='notification_details'),
     path('notification/<int:pk>/mark-as-solved/', views.NotificationMarkSolvedView.as_view(), name='mark_as_solved'),
     path('dashboard_data/', views.DashboardChartsAndCountsView.as_view(), name='dashboard_data'),
-    path("help/", views.HelpView.as_view(), name="help"),
 ]
 
