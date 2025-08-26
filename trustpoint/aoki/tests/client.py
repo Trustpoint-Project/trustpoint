@@ -84,7 +84,7 @@ class AokiClient:
     def _get_idevid_owner_san_uri(self, idevid_cert: x509.Certificate) -> str:
         """Get the Owner ID SAN URI corresponding to a IDevID certificate.
 
-        Formatted as "<idevid_subj_sn>.dev-owner.<idevid_x509_sn>.<idevid_sha256_fingerprint>.alt
+        Formatted as "dev-owner:<idevid_subj_sn>.<idevid_x509_sn>.<idevid_sha256_fingerprint>"
         """
         try:
             sn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
@@ -94,7 +94,7 @@ class AokiClient:
         self.idevid_subj_sn = idevid_subj_sn
         idevid_x509_sn = hex(idevid_cert.serial_number)[2:].zfill(16)
         idevid_sha256_fingerprint = idevid_cert.fingerprint(hashes.SHA256()).hex()
-        return f'{idevid_subj_sn}.dev-owner.{idevid_x509_sn}.{idevid_sha256_fingerprint}.alt'
+        return f'dev-owner:{idevid_subj_sn}.{idevid_x509_sn}.{idevid_sha256_fingerprint}'
 
     def _verify_matches_idevid_cert(self, owner_id_cert: x509.Certificate, idevid_cert: x509.Certificate) -> None:
         """Verify the Owner ID certificate is valid for the device IDevID."""

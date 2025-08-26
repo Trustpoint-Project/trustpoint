@@ -102,6 +102,12 @@
                             <use href="{% static 'img/icons.svg' %}#icon-moon-stars"></use></svg>
                             <span class="light-only">{% trans "Dark theme" %}</span>
                     </button>
+                    <a href="{% url 'settings:help' %}" class="tp-menu-head">
+                        <svg class="bi" fill="currentColor" width="16" height="16" role="img">
+                            <use href="{% static 'img/icons.svg' %}#icon-question-circle"></use>
+                        </svg>
+                        {% trans "Help & Support" %}
+                    </a>
                     <form method="POST" action="{% url 'users:logout' %}">
                         {% csrf_token %}
                         <button class="tp-menu-head" type="submit">

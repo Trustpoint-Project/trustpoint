@@ -599,7 +599,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
             OwnerCredentialModel: The newly created owner credential model.
         """
         # Extract the IDevID references from the SAN of the DevOwnerID certificate
-        # Reference URI format: '<IDevID_Subj_SN>.dev-owner.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>.alt'
+        # Reference URI format: 'dev-owner:<IDevID_Subj_SN>.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>'
         idevid_refs: set[str] = set()
         owner_cert = credential_serializer.certificate
         if not owner_cert:

@@ -164,7 +164,7 @@ Building auto documentation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code:: bash
-
+   uv sync --group docs
    cd ../docs
    sphinx-apidoc -f -e -o ./source ../trustpoint /*/migrations/*
    make html
@@ -233,7 +233,7 @@ Trustpoint uses behave to run BDD tests. The tests are located in the
 
 .. code:: shell
 
-   uv run behave
+   uv run manage.py behave
 
 --------------------
 Editor configuration
