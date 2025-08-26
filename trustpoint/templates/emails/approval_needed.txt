@@ -1,0 +1,15 @@
+Subject: {{ workflow.name }}: Approval required
+
+An action in the workflow requires human approval.
+
+Workflow: {{ workflow.name }}
+Instance: {{ instance.id }}
+State:    {{ state }}
+Step:     {{ step }}
+
+Context:
+- Protocol: {{ payload.protocol|default:"-" }}
+- Operation: {{ payload.operation|default:"-" }}
+- Requestor: {{ payload.requestor|default:"unknown" }}
+
+Please approve or reject in the approvals console.

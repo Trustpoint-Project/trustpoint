@@ -1,0 +1,10 @@
+Subject: {{ workflow.name }}: Approved
+
+The approval has been granted.
+
+Workflow: {{ workflow.name }}
+Instance: {{ instance.id }}
+State:    {{ state }}
+Step:     {{ step }}
+
+The workflow will continue automatically.

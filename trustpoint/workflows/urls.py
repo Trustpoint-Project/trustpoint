@@ -5,6 +5,7 @@ from workflows.views import (
     DefinitionDetailView,
     DeviceListView,
     DomainListView,
+    MailTemplateListView,
     PendingApprovalsView,
     SignalInstanceView,
     TriggerListView,
@@ -22,6 +23,7 @@ urlpatterns = [
     path('api/domains/', DomainListView.as_view(), name='api_domains'),
     path('api/devices/', DeviceListView.as_view(), name='api_devices'),
     path('api/triggers/', TriggerListView.as_view(), name='api_triggers'),
+    path('api/mail-templates/', MailTemplateListView.as_view(), name='api_mail_templates'),
 
     # load one definition for “edit” in the wizard
     path('api/definitions/<uuid:pk>/', DefinitionDetailView.as_view(), name='definition_detail'),

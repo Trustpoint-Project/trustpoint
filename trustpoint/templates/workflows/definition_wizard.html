@@ -19,14 +19,12 @@
             <select id="trigger-handler" class="form-select"></select>
           </div>
           <div class="row g-2">
-            <div class="col" id="proto-container" style="display:none;">
-              <label for="trigger-protocol" class="form-label">PROTOCOL</label>
-              <!-- removed text-uppercase here -->
+            <div class="col" id="proto-container">
+              <label for="trigger-protocol" class="form-label">Protocol</label>
               <select id="trigger-protocol" class="form-select"></select>
             </div>
-            <div class="col" id="op-container" style="display:none;">
-              <label for="trigger-operation" class="form-label">OPERATION</label>
-              <!-- removed text-uppercase here -->
+            <div class="col" id="op-container">
+              <label for="trigger-operation" class="form-label">Operation</label>
               <select id="trigger-operation" class="form-select"></select>
             </div>
           </div>
@@ -39,9 +37,7 @@
           <span>Steps</span>
           <button id="add-step-btn" class="btn btn-sm btn-primary">+ Step</button>
         </div>
-        <div class="card-body" id="steps-list">
-          <!-- Steps inserted here -->
-        </div>
+        <div class="card-body" id="steps-list"></div>
       </div>
 
       <!-- Scopes -->
@@ -65,9 +61,7 @@
               <button id="add-scope-btn" class="btn btn-sm btn-primary w-100">+ Add</button>
             </div>
           </div>
-          <ul id="scopes-list" class="list-group">
-            <!-- Scopes inserted here -->
-          </ul>
+          <ul id="scopes-list" class="list-group"></ul>
         </div>
       </div>
     </div>
@@ -85,5 +79,6 @@
   </div>
 </div>
 
-<script src="{% static 'js/workflow_wizard.js' %}"></script>
+<!-- Load the modular wizard -->
+<script type="module" src="{% static 'js/workflow/main.js' %}"></script>
 {% endblock %}

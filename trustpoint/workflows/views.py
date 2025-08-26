@@ -20,6 +20,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.views.generic import ListView
 from pki.models import DomainModel, IssuingCaModel
+from util.email import MailTemplates
 
 from workflows.models import (
     WorkflowDefinition,
@@ -29,6 +30,43 @@ from workflows.models import (
 from workflows.services.engine import advance_instance
 from workflows.services.wizard import transform_to_definition_schema
 from workflows.triggers import Triggers
+
+
+class MailTemplateListView(View):
+    """Return email templates grouped for the wizard.
+
+    Response:
+    {
+      "groups": [
+        {
+          "key": "user",
+          "label": "User",
+          "templates": [
+            {"key":"user_welcome","label":"User Welcome"},
+            {"key":"user_delete","label":"User Delete"}
+          ]
+        },
+        {
+          "key": "certificate",
+          "label": "Certificate",
+          "templates": [
+            {"key":"certificate_issued","label":"Certificate Issued"},
+            {"key":"certificate_revoked","label":"Certificate Revoked"}
+          ]
+        }
+      ]
+    }
+    """
+
+    def get(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
+        groups = []
+        for group_key, tpl_tuple in MailTemplates.GROUPS.items():
+            groups.append({
+                'key': group_key,
+                'label': group_key.replace('_', ' ').title(),
+                'templates': [{'key': t.key, 'label': t.label} for t in tpl_tuple],
+            })
+        return JsonResponse({'groups': groups})
 
 
 class TriggerListView(View):
@@ -48,9 +86,9 @@ class TriggerListView(View):
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
         data = {
             t.key: {
-                "protocol":  t.protocol,
-                "operation": t.operation,
-                "handler":   t.handler,
+                'protocol':  t.protocol,
+                'operation': t.operation,
+                'handler':   t.handler,
             }
             for t in Triggers.all()
         }
@@ -226,8 +264,7 @@ class WorkflowWizardView(View):
 
 
 class WorkflowDefinitionDeleteView(View):
-    """
-    POST-only: deletes the WorkflowDefinition if no non-finalized
+    """POST-only: deletes the WorkflowDefinition if no non-finalized
     WorkflowInstance exists for it.
     """
 

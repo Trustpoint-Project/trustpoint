@@ -82,7 +82,7 @@ class WorkflowInstance(models.Model):
 
     def get_steps(self) -> list[dict[str, Any]]:
         """Return the ordered list of nodes from the workflow definition."""
-        return cast(list[dict[str, Any]], self.definition.definition.get('nodes', []))
+        return cast('list[dict[str, Any]]', self.definition.definition.get('nodes', []))
 
     def get_current_step_index(self) -> int:
         """Return the index of `self.current_step` in the node list, or raise."""
