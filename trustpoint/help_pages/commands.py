@@ -8,17 +8,20 @@ from trustpoint_core import oid
 class KeyGenCommandBuilder:
 
     @staticmethod
-    def get_key_gen_command(public_key_info: oid.PublicKeyInfo, cred_number: int) -> str:
+    def get_key_gen_command(public_key_info: oid.PublicKeyInfo, cred_number: int, key_name: str = '') -> str:
+
+        if not key_name:
+            key_name = f'key-{ cred_number }.pem'
 
         if public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
-            return f'openssl genrsa -out key-{cred_number}.pem {public_key_info.key_size}'
+            return f'openssl genrsa -out { key_name } {public_key_info.key_size}'
 
         if public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
             if not public_key_info.named_curve:
                 raise ValueError(NamedCurveMissingForEccErrorMsg)
             return (
                 f'openssl ecparam -name {public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out key-{cred_number}.pem'
+                f'-genkey -noout -out { key_name }'
             )
 
         err_msg = _('Unsupported public key algorithm')
@@ -113,9 +116,9 @@ class CmpSharedSecretCommandBuilder:
             f'-server { host }.well-known/cmp/initialization/{ domain_name }/ \\\n'
             f'-ref { pk } \\\n'
             f'-secret pass:{ shared_secret } \\\n'
-            f'-subject "/CN=Trustpoint-Domain-Credential-{ device_name }" \\\n'
+            f'-subject "/CN=Trustpoint-Domain-Credential" \\\n'
             '-days 10 \\\n'
-            '-newkey key.pem \\\n'
+            '-newkey domain_credential_key.pem \\\n'
             '-certout cert.pem \\\n'
             '-chainout chain_without_root.pem \\\n'
             '-extracertsout full_chain.pem'

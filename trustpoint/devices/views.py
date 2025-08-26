@@ -521,7 +521,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                 )
             elif self.object.onboarding_config.onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD:
                 issue_domain_cred_onboarding_url = (
-                    f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_domain_credential_cmp_shared_secret'
+                    f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_domain_credential_est_username_password'
                 )
         context['issue_domain_cred_onboarding_url'] = issue_domain_cred_onboarding_url
 
@@ -658,11 +658,12 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         form: ClmDeviceModelOnboardingForm | ClmDeviceModelNoOnboardingForm
         if self.object.onboarding_config:
             form = ClmDeviceModelOnboardingForm(self.request.POST, instance=self.object)
+            if form.is_valid():
+                form.save(onboarding_protocol=OnboardingProtocol(self.object.onboarding_config.onboarding_protocol))
         else:
             form = ClmDeviceModelNoOnboardingForm(self.request.POST, instance=self.object)
-
-        if form.is_valid():
-            form.save()
+            if form.is_valid():
+                form.save()
 
         context = self.get_context_data(object=self.object)
         return self.render_to_response(context)

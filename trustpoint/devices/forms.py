@@ -392,6 +392,7 @@ class OnboardingCreateForm(forms.Form):
         label=_('Onboarding Protocol'),
         widget=DisableOptionsSelect(
             disabled_options=[
+                OnboardingProtocol.MANUAL,
                 OnboardingProtocol.AOKI,
                 OnboardingProtocol.BRSKI
             ]
@@ -504,12 +505,14 @@ class ClmDeviceModelOnboardingForm(forms.Form):
         choices=ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS,
         label='Onboarding Protocol',
         coerce=int,
-        widget=DisableOptionsSelect(
-            disabled_options=[
-                OnboardingProtocol.AOKI,
-                OnboardingProtocol.BRSKI
-            ]
-        )
+        # widget=DisableOptionsSelect(
+        #     disabled_options=[
+        #         OnboardingProtocol.AOKI,
+        #         OnboardingProtocol.BRSKI
+        #     ]
+        # )
+        widget=forms.Select(attrs={'disabled': 'disabled'}),
+        required=False
     )
     onboarding_status = forms.CharField(
         label='Onboading Status',
@@ -545,7 +548,7 @@ class ClmDeviceModelOnboardingForm(forms.Form):
 
         super().__init__(*args, **kwargs)
 
-    def save(self) -> None:
+    def save(self, onboarding_protocol: OnboardingProtocol) -> None:
         """Saves the changes to DB."""
         if not self.instance.onboarding_config:
             err_msg = _('Expected DeviceModel that is configured to use onboarding.')
@@ -556,7 +559,7 @@ class ClmDeviceModelOnboardingForm(forms.Form):
             self.instance.serial_number = self.cleaned_data['serial_number']
             self.instance.domain = self.cleaned_data['domain']
 
-            onboarding_protocol_selected = OnboardingProtocol(self.cleaned_data['onboarding_protocol'])
+            onboarding_protocol_selected = onboarding_protocol
             if onboarding_protocol_selected == OnboardingProtocol.MANUAL:
                 self.instance.onboarding_config.onboarding_cmp_shared_secret = ''
                 self.instance.onboarding_config.onboarding_est_password = ''
@@ -571,7 +574,7 @@ class ClmDeviceModelOnboardingForm(forms.Form):
                 if not self.instance.onboarding_config.onboarding_est_password:
                     self.instance.onboarding_config.onboarding_est_password = _get_secret()
 
-            self.instance.onboarding_config.onboarding_protocol = self.cleaned_data['onboarding_protocol']
+            self.instance.onboarding_config.onboarding_protocol = onboarding_protocol
             self.instance.onboarding_config.clear_pki_protocols()
             if self.cleaned_data['pki_protocol_cmp'] is True:
                 self.instance.onboarding_config.add_pki_protocol(OnboardingPkiProtocol.CMP)

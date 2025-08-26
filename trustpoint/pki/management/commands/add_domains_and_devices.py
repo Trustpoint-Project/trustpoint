@@ -134,6 +134,9 @@ class Command(BaseCommand):
         onboarding_protocols = list(OnboardingProtocol)
         onboarding_protocols.remove(OnboardingProtocol.AOKI)
         onboarding_protocols.remove(OnboardingProtocol.BRSKI)
+        onboarding_protocols.remove(OnboardingProtocol.MANUAL)
+        onboarding_protocols.remove(OnboardingProtocol.CMP_IDEVID)
+        onboarding_protocols.remove(OnboardingProtocol.EST_IDEVID)
 
         print('Starting the process of adding domains and devices...\n')
 
