@@ -743,9 +743,7 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
             ),
             'protocol': 'manual',
             'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.MANUAL),
-            # 'url': f'{self.page_category}:{self.page_name}
-            # _no_onboarding_clm_issue_application_credential_profile_select'
-            'url': f'{self.page_category}:{self.page_name}_no_onboarding_cmp_shared_secret_help'
+            'url': f'{self.page_category}:{self.page_name}_no_onboarding_select_certificate_profile'
         })
 
 
@@ -804,8 +802,67 @@ class OpcUaGdsNoOnboardingIssueNewApplicationCredentialView(AbstractNoOnboarding
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
+class AbstractSelectCertificateProfileNewApplicationCredentialView(PageContextMixin, DetailView[DeviceModel]):
+    """abc."""
 
-class AbstractOnboardingIssueNewApplicationCredentialView(DetailView[DeviceModel]):
+    http_method_names = ('get',)
+
+    model = DeviceModel
+    context_object_name = 'device'
+    template_name = 'devices/credentials/profile_select.html'
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name: str
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the sections to the context.
+
+        Args:
+            **kwargs: Keyword arguments are passed to super().get_context_data(**kwargs).
+
+        Returns:
+            The context data for the view.
+        """
+        context = super().get_context_data(**kwargs)
+
+        context['certificate_profiles'] = ALLOWED_APP_CRED_PROFILES
+
+        for profile in context['certificate_profiles']:
+            if profile['profile'] == 'tls-client':
+                profile['url'] = (
+                    f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_tls_client_credential'
+                )
+            elif profile['profile'] == 'tls-server':
+                profile['url'] = (
+                    f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_tls_server_credential'
+                )
+            elif profile['profile'] == 'opc-ua-client':
+                profile['url'] = (
+                    f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_opc_ua_client_credential'
+                )
+            elif profile['profile'] == 'opc-ua-server':
+                profile['url'] = (
+                    f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_opc_ua_server_credential'
+                )
+
+        return context
+
+
+class DeviceSelectCertificateProfileNewApplicationCredentialView(
+        AbstractSelectCertificateProfileNewApplicationCredentialView):
+    """abc."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class OpcUaGdsSelectCertificateProfileNewApplicationCredentialView(
+        AbstractSelectCertificateProfileNewApplicationCredentialView):
+    """abc."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class AbstractOnboardingIssueNewApplicationCredentialView(PageContextMixin, DetailView[DeviceModel]):
     """abc."""
 
     http_method_names = ('get',)

@@ -94,6 +94,59 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_no_onboarding_cmp_shared_secret_help'
     ),
 
+    path(
+        'certificate-lifecycle-management/<int:pk>/manual/select-certificate-profile',
+        views.DeviceSelectCertificateProfileNewApplicationCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_no_onboarding_select_certificate_profile'
+    ),
+    path(
+        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/manual/select-certificate-profile',
+        views.OpcUaGdsSelectCertificateProfileNewApplicationCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_no_onboarding_select_certificate_profile'
+    ),
+
+
+    path(
+        'certificate-lifecycle-management/<int:pk>/manual/issue-tls-client-credential/',
+        views.DeviceIssueTlsClientCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_client_credential',
+    ),
+    path(
+        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/manual/issue-tls-client-credential/',
+        views.OpcUaGdsIssueTlsClientCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_client_credential',
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/manual/issue-tls-server-credential/',
+        views.DeviceIssueTlsServerCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_server_credential',
+    ),
+    path(
+        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/manual/issue-tls-server-credential/',
+        views.OpcUaGdsIssueTlsServerCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_server_credential',
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/manual/issue-opc-ua-client-credential/',
+        views.DeviceIssueOpcUaClientCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_client_credential',
+    ),
+    path(
+        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/manual/issue-opc-ua-client-credential/',
+        views.OpcUaGdsIssueOpcUaClientCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_client_credential',
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/manual/issue-opc-ua-server-credential/',
+        views.DeviceIssueOpcUaServerCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_server_credential',
+    ),
+    path(
+        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/manual/issue-opc-ua-server-credential/',
+        views.OpcUaGdsIssueOpcUaServerCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_server_credential',
+    ),
+
 
     # ^^^^^ DONE DONE DONE ^^^^^
     path(
@@ -106,46 +159,7 @@ urlpatterns = [
         views.OpcUaGdsOnboardingIssueNewApplicationCredentialView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_onboarding_clm_issue_application_credential'
     ),
-    path(
-        'certificate-lifecycle-management/<int:pk>/issue-tls-client-credential/',
-        views.DeviceIssueTlsClientCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_client_credential',
-    ),
-    path(
-        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/issue-tls-client-credential/',
-        views.OpcUaGdsIssueTlsClientCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_client_credential',
-    ),
-    path(
-        'certificate-lifecycle-management/<int:pk>/issue-tls-server-credential/',
-        views.DeviceIssueTlsServerCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_server_credential',
-    ),
-    path(
-        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/issue-tls-server-credential/',
-        views.OpcUaGdsIssueTlsServerCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_server_credential',
-    ),
-    path(
-        'certificate-lifecycle-management/<int:pk>/issue-opc-ua-client-credential/',
-        views.DeviceIssueOpcUaClientCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_client_credential',
-    ),
-    path(
-        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/issue-opc-ua-client-credential/',
-        views.OpcUaGdsIssueOpcUaClientCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_client_credential',
-    ),
-    path(
-        'certificate-lifecycle-management/<int:pk>/issue-opc-ua-server-credential/',
-        views.DeviceIssueOpcUaServerCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_server_credential',
-    ),
-    path(
-        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/issue-opc-ua-server-credential/',
-        views.OpcUaGdsIssueOpcUaServerCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_server_credential',
-    ),
+    
     # Certificate Lifecycle Management - Downloads
     path(
         'download/<int:pk>/',
