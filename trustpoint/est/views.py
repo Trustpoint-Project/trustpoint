@@ -439,7 +439,6 @@ class EstPkiMessageSerializerMixin(LoggerMixin):
         :return: An CredentialRequest object.
         :raises ValueError: If deserialization fails.
         """
-        logger.error(data)
         try:
             if b'CERTIFICATE REQUEST-----' in data:
                 request_format = 'pem'
