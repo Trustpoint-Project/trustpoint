@@ -14,7 +14,6 @@ from django.db.models import Case, Count, F, IntegerField, Q, Value, When
 from django.db.models.functions import TruncDate
 from django.http import HttpRequest, HttpResponseRedirect, JsonResponse
 from django.shortcuts import redirect
-from django.urls import reverse
 from django.utils import dateparse, timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
