@@ -642,7 +642,7 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
             errror_message = 'Application URI cannot be longer than 1 item'
             raise ValueError(errror_message)
 
-    def issue_opcua_server_credential(  # noqa: PLR0913
+    def issue_opc_ua_server_credential(  # noqa: PLR0913
         self,
         common_name: str,
         application_uri: str,
@@ -692,7 +692,7 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
             IssuedCredentialModel.IssuedCredentialPurpose.OPCUA_SERVER,
         )
 
-    def issue_opcua_server_certificate(  # noqa: PLR0913
+    def issue_opc_ua_server_certificate(  # noqa: PLR0913
         self,
         common_name: str,
         application_uri: str | list[str],
@@ -787,7 +787,7 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
             error_message = 'Application URI cannot be longer than 1 item'
             raise ValueError(error_message)
 
-    def issue_opcua_client_credential(
+    def issue_opc_ua_client_credential(
         self, common_name: str, application_uri: str | list[str], validity_days: int = 365
     ) -> IssuedCredentialModel:
         """Issues an OPC UA client credential (certificate + private key) following OPC UA security standards."""
@@ -828,7 +828,7 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
             IssuedCredentialModel.IssuedCredentialPurpose.OPCUA_CLIENT,
         )
 
-    def issue_opcua_client_certificate(
+    def issue_opc_ua_client_certificate(
         self, common_name: str, application_uri: str | list[str], validity_days: int, public_key: PublicKey
     ) -> IssuedCredentialModel:
         """Issues an OPC UA client certificate (no private key) following OPC UA security standards."""

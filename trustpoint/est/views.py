@@ -321,15 +321,15 @@ class EstRequestedCertTemplateExtractorMixin:
     requested_cert_template_str: str
     allowed_cert_templates: ClassVar[list[str]] = ['tls-server',
                                                    'tls-client',
-                                                   'opcua-client',
-                                                   'opcua-server',
+                                                   'opc-ua-client',
+                                                   'opc-ua-server',
                                                    'domaincredential']
 
     cert_template_classes: ClassVar[dict[str, type[object]]] = {
         'tls-server': LocalTlsServerCredentialIssuer,
         'tls-client': LocalTlsClientCredentialIssuer,
-        'opcua-server': LocalTlsServerCredentialIssuer,
-        'opcua-client': LocalTlsClientCredentialIssuer,
+        'opc-ua-server': LocalTlsServerCredentialIssuer,
+        'opc-ua-client': LocalTlsClientCredentialIssuer,
         'domaincredential': LocalDomainCredentialIssuer,
     }
 
@@ -439,6 +439,7 @@ class EstPkiMessageSerializerMixin(LoggerMixin):
         :return: An CredentialRequest object.
         :raises ValueError: If deserialization fails.
         """
+        logger.error(data)
         try:
             if b'CERTIFICATE REQUEST-----' in data:
                 request_format = 'pem'
@@ -452,9 +453,9 @@ class EstPkiMessageSerializerMixin(LoggerMixin):
                 csr = x509.load_der_x509_csr(data)
             else:
                 error_message = "Unsupported CSR format. Ensure it's PEM, Base64, or raw DER."
-                return None, None, LoggedHttpResponse(error_message, status_code=400)
-        except Exception:  # noqa: BLE001
-            return None, None, LoggedHttpResponse('Failed to deserialize PKCS#10 certificate signing request',
+                return None, None, LoggedHttpResponse(error_message, status=400)
+        except Exception as exception:
+            return None, None, LoggedHttpResponse(f'Failed to deserialize PKCS#10 certificate signing request {exception}',
                                             status=500)
 
         try:
@@ -562,8 +563,8 @@ class CredentialIssuanceMixin:
     cert_template_classes: ClassVar[dict[str, type]] = {
         'tls-server': LocalTlsServerCredentialIssuer,
         'tls-client': LocalTlsClientCredentialIssuer,
-        'opcua-server': OpcUaServerCredentialIssuer,
-        'opcua-client': OpcUaClientCredentialIssuer,
+        'opc-ua-server': OpcUaServerCredentialIssuer,
+        'opc-ua-client': OpcUaClientCredentialIssuer,
         'domaincredential': LocalDomainCredentialIssuer,
     }
 
@@ -681,18 +682,18 @@ class CredentialIssuanceMixin:
                 public_key=credential_request.public_key,
                 validity_days=365,
             )
-        if cert_template_str == 'opcua-client':
-            opcua_client_credential = OpcUaClientCredentialIssuer(device=device, domain=domain)
+        if cert_template_str == 'opc-ua-client':
+            opc_ua_client_credential = OpcUaClientCredentialIssuer(device=device, domain=domain)
 
-            return opcua_client_credential.issue_opcua_client_certificate(
+            return opc_ua_client_credential.issue_opc_ua_client_certificate(
                 common_name=credential_request.common_name,
                 public_key=credential_request.public_key,
                 validity_days=365,
                 application_uri=credential_request.uniform_resource_identifiers
             )
-        if cert_template_str == 'opcua-server':
-            opcua_server_credential = OpcUaServerCredentialIssuer(device=device, domain=domain)
-            return opcua_server_credential.issue_opcua_server_certificate(
+        if cert_template_str == 'opc-ua-server':
+            opc_ua_server_credential = OpcUaServerCredentialIssuer(device=device, domain=domain)
+            return opc_ua_server_credential.issue_opc_ua_server_certificate(
                 common_name=credential_request.common_name,
                 ipv4_addresses=credential_request.ipv4_addresses,
                 ipv6_addresses=credential_request.ipv6_addresses,

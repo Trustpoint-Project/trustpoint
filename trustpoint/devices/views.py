@@ -16,8 +16,7 @@ from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.decorators import method_decorator
 from django.utils.html import format_html
-from django.utils.translation import gettext_lazy as _
-from django.utils.translation import ngettext
+from django.utils.translation import gettext_lazy, ngettext
 from django.views.generic.base import RedirectView, TemplateView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
@@ -84,9 +83,11 @@ if TYPE_CHECKING:
     # noinspection PyUnresolvedReferences
     from devices.issuer import BaseTlsCredentialIssuer
 
-DeviceWithoutDomainErrorMsg = _('Device does not have an associated domain.')
-NamedCurveMissingForEccErrorMsg = _('Failed to retrieve named curve for ECC algorithm.')
-ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = _('No active trustpoint TLS server credential found.')
+DeviceWithoutDomainErrorMsg = gettext_lazy('Device does not have an associated domain.')
+NamedCurveMissingForEccErrorMsg = gettext_lazy('Failed to retrieve named curve for ECC algorithm.')
+ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
+    'No active trustpoint TLS server credential found.'
+)
 
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
@@ -95,8 +96,8 @@ PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 ALLOWED_APP_CRED_PROFILES = [
     {'profile': 'tls-server', 'label': 'TLS-Server Certficate'},
     {'profile': 'tls-client', 'label': 'TLS-Client Certificate'},
-    {'profile': 'opcua-server', 'label': 'OPC-UA-Server Certificate'},
-    {'profile': 'opcua-client', 'label': 'OPC-UA-Client Certificate'},
+    {'profile': 'opc-ua-server', 'label': 'OPC-UA-Server Certificate'},
+    {'profile': 'opc-ua-client', 'label': 'OPC-UA-Client Certificate'},
 ]
 
 # -------------------------------------------------- Main Table Views --------------------------------------------------
@@ -163,7 +164,6 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
 
         for device in context['devices']:
             device.clm_button = self._get_clm_button_html(device)
-            device.detail_button = self._get_details_button_html(device)
             device.pki_protocols = self._get_pki_protocols(device)
         context['create_url'] = f'{self.page_category}:{self.page_name}_create'
         context['device_revoke_url'] = reverse(f'{self.page_category}:{self.page_name}_device_revoke')
@@ -192,19 +192,11 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
             f'{self.page_category}:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': record.pk}
         )
 
-        return format_html('<a href="{}" class="btn btn-primary tp-table-btn w-100">{}</a>', clm_url, _('Manage'))
-
-    def _get_details_button_html(self, record: DeviceModel) -> SafeString:
-        """Gets the HTML for the Details button in the devices table.
-
-        Args:
-            record: The corresponding DeviceModel.
-
-        Returns:
-            the HTML of the hyperlink for the detail button.
-        """
-        details_url = reverse(f'devices:{self.page_name}_details', kwargs={'pk': record.pk})
-        return format_html('<a href="{}" class="btn btn-primary tp-table-btn w-100">{}</a>', details_url, _('Details'))
+        return format_html(
+            '<a href="{}" class="btn btn-primary tp-table-btn w-100">{}</a>',
+            clm_url,
+            gettext_lazy('Manage')
+        )
 
     def _get_pki_protocols(self, record: DeviceModel) -> str:
         if record.onboarding_config:
@@ -248,50 +240,10 @@ class OpcUaGdsTableView(DeviceTableView):
         return super(ListView, self).get_queryset().filter(device_type=DeviceModel.DeviceType.OPC_UA_GDS)
 
 
-# ------------------------------------------------- Device Detail View -------------------------------------------------
-
-
-class AbstractDeviceDetailsView(PageContextMixin, DetailView[DeviceModel], abc.ABC):
-    """Device Details View."""
-
-    http_method_names = ('get',)
-
-    model = DeviceModel
-    template_name = 'devices/details.html'
-    context_object_name = 'device'
-
-    page_category = DEVICES_PAGE_CATEGORY
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds the cancel url href according to the subcategory.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            The context to use for rendering the devices page.
-        """
-        context = super().get_context_data(**kwargs)
-        context['cancel_details_url'] = f'devices:{self.page_name}'
-        return context
-
-
-class DeviceDetailsView(AbstractDeviceDetailsView):
-    """Details view for common devices."""
-
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaDeviceDetailsView(AbstractDeviceDetailsView):
-    """Details view for OPC UA devices."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 # ------------------------------------------------- Device Create View -------------------------------------------------
 
 
-class AbstractCreateChooseOnboaringView(TemplateView):
+class AbstractCreateChooseOnboaringView(PageContextMixin, TemplateView):
     """Abstract view for choosing if the new device shall be onboarded or not."""
 
     http_method_names = ('get',)
@@ -552,21 +504,25 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             cred.revoke = self._get_revoke_button_html(cred)
 
         context['main_url'] = f'{self.page_category}:{self.page_name}'
-        context['issue_app_cred_no_onboarding_url'] = (
-            f'devices:{self.page_name}_no_onboarding_clm_issue_application_credential'
-        ) if self.object.no_onboarding_config else (
-            f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential'
-        )
+        context['issue_app_cred_no_onboarding_url'] = ''
+        if self.object.domain \
+                and self.object.no_onboarding_config \
+                and self.object.no_onboarding_config.get_pki_protocols():
+            context['issue_app_cred_no_onboarding_url'] = (
+                f'{self.page_category}:{self.page_name}_no_onboarding_clm_issue_application_credential'
+            ) if self.object.no_onboarding_config else (
+                f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential'
+            )
         issue_domain_cred_onboarding_url = ''
-        if self.object.onboarding_config:
-            if self.object.onboarding_config.onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
-                issue_domain_cred_onboarding_url = (
-                    f'{self.page_category}:{self.page_name}_help-onboarding_cmp-shared-secret'
-                )
-            elif self.object.onboarding_config.onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD:
-                issue_domain_cred_onboarding_url = (
-                    f'{self.page_category}:{self.page_name}_help-onboarding_est-username-password'
-                )
+        # if self.object.onboarding_config:
+        #     if self.object.onboarding_config.onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
+        #         issue_domain_cred_onboarding_url = (
+        #             f'{self.page_category}:{self.page_name}_help-onboarding_cmp-shared-secret'
+        #         )
+        #     elif self.object.onboarding_config.onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD:
+        #         issue_domain_cred_onboarding_url = (
+        #             f'{self.page_category}:{self.page_name}_help-onboarding_est-username-password'
+        #         )
         context['issue_domain_cred_onboarding_url'] = issue_domain_cred_onboarding_url
 
         context['download_url'] = f'{self.page_category}:{self.page_name}_download'
@@ -592,7 +548,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             Initial values for onboarding.
         """
         if not self.object.onboarding_config:
-            err_msg = _('The device does not have onboarding configured.')
+            err_msg = gettext_lazy('The device does not have onboarding configured.')
             raise ValueError(err_msg)
         return {
             'common_name': self.object.common_name,
@@ -611,7 +567,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             Initial values for no onboarding.
         """
         if not self.object.no_onboarding_config:
-            err_msg = _('The object has onboarding configured.')
+            err_msg = gettext_lazy('The object has onboarding configured.')
             raise ValueError(err_msg)
         return {
             'common_name': self.object.common_name,
@@ -681,9 +637,9 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             The HTML of the hyperlink for the revoke button.
         """
         if record.credential.certificate.certificate_status == CertificateModel.CertificateStatus.REVOKED:
-            return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', _('Revoked'))
+            return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', gettext_lazy('Revoked'))
         url = reverse(f'{self.page_category}:{self.page_name}_credential_revoke', kwargs={'pk': record.pk})
-        return format_html('<a href="{}" class="btn btn-danger tp-table-btn w-100">{}</a>', url, _('Revoke'))
+        return format_html('<a href="{}" class="btn btn-danger tp-table-btn w-100">{}</a>', url, gettext_lazy('Revoke'))
 
     def _get_pki_protocols(self, record: DeviceModel) -> str:
         if record.onboarding_config:
@@ -726,7 +682,7 @@ class OpcUaGdsCertificateLifecycleManagementSummaryView(AbstractCertificateLifec
 #  ------------------------------ Certificate Lifecycle Management - Credential Issuance -------------------------------
 
 
-class AbstractNoOnboardingIssueNewApplicationCredentialView(DetailView[DeviceModel]):
+class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, DetailView[DeviceModel]):
     """abc."""
 
     http_method_names = ('get',)
@@ -753,47 +709,89 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(DetailView[DeviceMod
         sections = []
 
         if not self.object.no_onboarding_config:
-            err_msg = _('Device is configured for onboarding')
+            err_msg = gettext_lazy('Device is configured for onboarding')
             raise ValueError(err_msg)
 
         sections.append({
-            'heading': _('CMP with OpenSSL (shared-secret)'),
-            'description': _(
+            'heading': gettext_lazy('CMP with OpenSSL (shared-secret)'),
+            'description': gettext_lazy(
                 'This option will guide you through all steps and commands that are '
                 'required to issue a new application certificate using CMP with OpenSSL using a shared-secret (HMAC).'),
             'protocol': 'cmp-shared-secret',
             'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET),
+            'url': f'{self.page_category}:{self.page_name}_no_onboarding_cmp_shared_secret_help'
         })
 
         sections.append({
-            'heading': _('EST with OpenSSL and curL (username & password)'),
-            'description': _(
+            'heading': gettext_lazy('EST with OpenSSL and curL (username & password)'),
+            'description': gettext_lazy(
                 'This option will guide you through all steps and commands that are '
                 'required to issue a new application certificate using EST using OpenSSL and curL.'
             ),
             'protocol': 'est-username-password',
             'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD),
+            'url': f'{self.page_category}:{self.page_name}_no_onboarding_cmp_shared_secret_help'
         })
 
 
         sections.append({
-            'heading': _('Manual Issuance'),
-            'description': _(
+            'heading': gettext_lazy('Manual Issuance'),
+            'description': gettext_lazy(
                 'This option will allow you to issue a new domain credential on the Trustpoint. '
                 'The domain credential can then be downloaded for manual injection into the device, '
                 'e.g., using a USB-stick.'
             ),
             'protocol': 'manual',
             'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.MANUAL),
+            # 'url': f'{self.page_category}:{self.page_name}
+            # _no_onboarding_clm_issue_application_credential_profile_select'
+            'url': f'{self.page_category}:{self.page_name}_no_onboarding_cmp_shared_secret_help'
         })
 
 
         context['sections'] = sections
-        context['profile_select_url'] = (
-            f'{self.page_category}:{self.page_name}_no_onboarding_clm_issue_application_credential_profile_select'
-        )
 
         return context
+
+    def _get_redirect_url(self) -> HttpResponseRedirect:
+        return redirect(
+            f'{self.page_category}:{self.page_name}_certificate_lifecycle_management',
+            pk=self.object.pk
+        )
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Adds checks if the device is configured for no-onboarding and has a domain set.
+
+        Args:
+            request: The django request object.
+            *args: Positional arguments are discarded.
+            **kwargs: Keyword arguments are discarded.
+
+        Returns:
+            The HttpResponse Or HttpRedirect to the CLM page.
+        """
+        self.object = self.get_object()
+        _, __ = args, kwargs
+
+        if not self.object.no_onboarding_config:
+            err_msg = gettext_lazy('This device is configured for onboarding.')
+            messages.warning(request, err_msg)
+            return self._get_redirect_url()
+
+        if not self.object.no_onboarding_config.get_pki_protocols():
+            err_msg = gettext_lazy(
+                'All PKI protocols for this device to request application certifciates are disabled.'
+            )
+            messages.warning(request, err_msg)
+            return self._get_redirect_url()
+
+        if not self.object.domain:
+            err_msg = gettext_lazy('No domain is configured for this device.')
+            messages.warning(request, err_msg)
+            return self._get_redirect_url()
+
+        context = self.get_context_data(object=self.object)
+        return self.render_to_response(context)
 
 
 class DeviceNoOnboardingIssueNewApplicationCredentialView(AbstractNoOnboardingIssueNewApplicationCredentialView):
@@ -834,12 +832,12 @@ class AbstractOnboardingIssueNewApplicationCredentialView(DetailView[DeviceModel
         sections = []
 
         if not self.object.onboarding_config:
-            err_msg = _('Device is not configured for onboarding')
+            err_msg = gettext_lazy('Device is not configured for onboarding')
             raise ValueError(err_msg)
 
         sections.append({
-            'heading': _('CMP with Domain Credential'),
-            'description': _(
+            'heading': gettext_lazy('CMP with Domain Credential'),
+            'description': gettext_lazy(
                 'This option will guide you through all steps and commands that are '
                 'required to issue a new application certificate using CMP with OpenSSL using a shared-secret (HMAC).'),
             'protocol': 'cmp',
@@ -847,8 +845,8 @@ class AbstractOnboardingIssueNewApplicationCredentialView(DetailView[DeviceModel
         })
 
         sections.append({
-            'heading': _('EST with Domain Credential'),
-            'description': _(
+            'heading': gettext_lazy('EST with Domain Credential'),
+            'description': gettext_lazy(
                 'This option will guide you through all steps and commands that are '
                 'required to issue a new application certificate using EST using OpenSSL and curL.'
             ),
@@ -857,9 +855,6 @@ class AbstractOnboardingIssueNewApplicationCredentialView(DetailView[DeviceModel
         })
 
         context['sections'] = sections
-        context['profile_select_url'] = (
-            f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_profile_select'
-        )
 
         return context
 
@@ -874,137 +869,6 @@ class OpcUaGdsOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssu
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
-class AbstractNoOnboardingProfileSelectView(DetailView[DeviceModel]):
-    """abc."""
-
-    http_method_names = ('get',)
-
-    model = DeviceModel
-    context_object_name = 'device'
-    template_name = 'devices/credentials/profile_select.html'
-
-    page_category = DEVICES_PAGE_CATEGORY
-    page_name: str
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the sections to the context.
-
-        Args:
-            **kwargs: Keyword arguments are passed to super().get_context_data(**kwargs).
-
-        Returns:
-            The context data for the view.
-        """
-        context = super().get_context_data(**kwargs)
-        context['cert_profiles'] = ALLOWED_APP_CRED_PROFILES
-
-        protocol = self.kwargs.get('protocol')
-
-        context['manual_options'] = []
-        if protocol == 'cmp-shared-secret':
-            help_url = f'{self.page_category}:{self.page_name}_help_no_onboarding_cmp_shared_secret'
-        elif protocol == 'est-username-password':
-            help_url = f'{self.page_category}:{self.page_name}_help_no_onboarding_est_username_password'
-        elif protocol == 'manual':
-            help_url = None
-            context['manual_options'] = [
-                {
-                    'profile': 'TLS-Client Certificate',
-                    'url': (
-                        f'{self.page_category}:{self.page_name}'
-                        '_certificate_lifecycle_management_issue_tls_client_credential')
-                },
-                {
-                    'profile': 'TLS-Server Certificate',
-                    'url': (
-                        f'{self.page_category}:{self.page_name}'
-                        '_certificate_lifecycle_management_issue_tls_server_credential')
-                },
-                {
-                    'profile': 'OPC-UA-Client Certificate',
-                    'url': (
-                        f'{self.page_category}:{self.page_name}'
-                        '_certificate_lifecycle_management_issue_opc_ua_client_credential')
-                },
-                {
-                    'profile': 'OPC-UA-Client Certificate',
-                    'url': (
-                        f'{self.page_category}:{self.page_name}'
-                        '_certificate_lifecycle_management_issue_opc_ua_server_credential')
-                },
-            ]
-        else:
-            err_msg = _('Unknown protocol found.')
-            raise Http404(err_msg)
-
-        context['help_url'] = help_url
-
-
-        return context
-
-
-class DeviceNoOnboardingProfileSelectView(AbstractNoOnboardingProfileSelectView):
-    """abc."""
-
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsNoOnboardingProfileSelectView(AbstractNoOnboardingProfileSelectView):
-    """abc."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
-class AbstractOnboardingProfileSelectView(DetailView[DeviceModel]):
-    """abc."""
-
-    http_method_names = ('get',)
-
-    model = DeviceModel
-    context_object_name = 'device'
-    template_name = 'devices/credentials/profile_select.html'
-
-    page_category = DEVICES_PAGE_CATEGORY
-    page_name: str
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the sections to the context.
-
-        Args:
-            **kwargs: Keyword arguments are passed to super().get_context_data(**kwargs).
-
-        Returns:
-            The context data for the view.
-        """
-        context = super().get_context_data(**kwargs)
-        context['cert_profiles'] = ALLOWED_APP_CRED_PROFILES
-
-        protocol = self.kwargs.get('protocol')
-
-        context['manual_options'] = []
-        if protocol == 'cmp':
-            help_url = f'{self.page_category}:{self.page_name}_help_onboarding_cmp'
-        elif protocol == 'est':
-            help_url = f'{self.page_category}:{self.page_name}_help_onboarding_est'
-        else:
-            err_msg = 'Unknown protocol found.'
-            raise Http404(err_msg)
-
-        context['help_url'] = help_url
-
-        return context
-
-
-class DeviceOnboardingProfileSelectView(AbstractOnboardingProfileSelectView):
-    """abc."""
-
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsOnboardingProfileSelectView(AbstractOnboardingProfileSelectView):
-    """abc."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: BaseTlsCredentialIssuer](
@@ -1073,24 +937,26 @@ class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: Ba
             The IssuedCredentialModel object that was created and saved.
         """
 
-    def post(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Adds the object model to the instance and forwards to super().post().
 
         Args:
-            _request: The Django request object is only used implicitly through self.
-            *_args: Positional arguments are discarded.
-            **_kwargs: Keyword arguments are discarded.
+            request: The Django request object is only used implicitly through self.
+            *args: Positional arguments are discarded.
+            **kwargs: Keyword arguments are discarded.
 
         Returns:
             The HttpResponseBase object returned by super().post().
         """
+        _, __ = args, kwargs
+
         self.object = self.get_object()
         form = self.form_class(**self.get_form_kwargs())
 
         if form.is_valid():
             credential = self.issue_credential(device=self.object, cleaned_data=form.cleaned_data)
             messages.success(
-                self.request, f'Successfully issued {self.friendly_name} for device {credential.device.common_name}'
+                request, f'Successfully issued {self.friendly_name} for device {credential.device.common_name}'
             )
             return HttpResponseRedirect(
                 reverse_lazy(
@@ -1124,7 +990,7 @@ class AbstractIssueDomainCredentialView(
         __ = cleaned_data
 
         if device.domain is None:
-            err_msg = _('Device has no domain configured.')
+            err_msg = gettext_lazy('Device has no domain configured.')
             raise Http404(err_msg)
 
         issuer = self.issuer_class(device=device, domain=device.domain)
@@ -1254,7 +1120,7 @@ class AbstractIssueOpcUaClientCredentialView(
         if not device.domain:
             raise Http404(DeviceWithoutDomainErrorMsg)
         issuer = self.issuer_class(device=device, domain=device.domain)
-        return issuer.issue_opcua_client_credential(
+        return issuer.issue_opc_ua_client_credential(
             common_name=cast('str', cleaned_data.get('common_name')),
             application_uri=cast('str', cleaned_data.get('application_uri')),
             validity_days=cast('int', cleaned_data.get('validity')),
@@ -1305,7 +1171,7 @@ class AbstractIssueOpcUaServerCredentialView(
         domain_names: list[str] = cleaned_data.get('domain_names', [])
         validity_days: int = cleaned_data.get('validity', 0)
 
-        return issuer.issue_opcua_server_credential(
+        return issuer.issue_opc_ua_server_credential(
             common_name=common_name,
             application_uri=cast('str', cleaned_data.get('application_uri')),
             ipv4_addresses=ipv4_addresses,
@@ -1381,16 +1247,17 @@ class AbstractDownloadPageDispatcherView(PageContextMixin, RedirectView):
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
 
-    def get_redirect_url(self, *_args: Any, **kwargs: Any) -> str:
+    def get_redirect_url(self, *args: Any, **kwargs: Any) -> str:
         """Gets the redirection URL depending on the type credential, that is if a private key is available or not.
 
         Args:
-            *_args: Positional arguments are discarded.
+            *args: Positional arguments are discarded.
             **kwargs: The pk parameter is retrieved and expected to be there.
 
         Returns:
             The redirect URL.
         """
+        _ = args
         pk = kwargs.get('pk')
 
         # This can only happen if the path for the URL defined in urls.py does not contain <int:pk>.
@@ -1536,19 +1403,21 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
 
         return context
 
-    def post(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Processing the valid form data.
 
         This will use the contained form data to start the download process of the desired file.
 
         Args:
             form: The valid form including the cleaned data.
-            *_args: Positional arguments are discarded.
-            **_kwargs: Keyword arguments are discarded.
+            *args: Positional arguments are discarded.
+            **kwargs: Keyword arguments are discarded.
 
         Returns:
             If successful, this will start the file download. Otherwise, a Http404 will be raised and displayed.
         """
+        _, __ = request, args
+        ___ = kwargs
         self.object = self.get_object()
         form = self.form_class(self.request.POST)
 
@@ -1558,7 +1427,7 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
             try:
                 file_format = CredentialFileFormat(self.request.POST.get('file_format'))
             except ValueError as exception:
-                err_msg = _('Unknown file format.')
+                err_msg = gettext_lazy('Unknown file format.')
                 raise Http404(err_msg) from exception
 
             credential_model = self.object.credential
@@ -1599,7 +1468,7 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
                 file_stream_data = io.BytesIO(file_data)
 
             else:
-                err_msg = _('Unknown file format.')
+                err_msg = gettext_lazy('Unknown file format.')
                 raise Http404(err_msg)
 
             response = FileResponse(
@@ -1704,7 +1573,7 @@ class AbstractBrowserOnboardingCancelView(PageContextMixin, DetailView[IssuedCre
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
 
-    def get(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Cancels the browser onboarding process and deletes the associated RemoteDeviceCredentialDownloadModel.
 
         Args:
@@ -1715,6 +1584,7 @@ class AbstractBrowserOnboardingCancelView(PageContextMixin, DetailView[IssuedCre
         Returns:
             The HttpResponseBase object with the desired redirection URL.
         """
+        _, __ = args, kwargs
         self.object = self.get_object()
         try:
             cdm = RemoteDeviceCredentialDownloadModel.objects.get(
@@ -1775,7 +1645,7 @@ class DeviceOnboardingBrowserLoginView(FormView[BrowserLoginForm]):
         Returns:
             The Django HttpResponse object.
         """
-        messages.error(self.request, _('The provided password is not valid.'))
+        messages.error(self.request, gettext_lazy('The provided password is not valid.'))
         return super().form_invalid(form)
 
     def form_valid(self, form: BrowserLoginForm) -> HttpResponse:
@@ -1847,18 +1717,21 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
 
             status = self.object.credential.certificate.certificate_status
             if status == CertificateModel.CertificateStatus.EXPIRED:
-                msg = _('Credential is already expired. Cannot revoke expired certificates.')
+                msg = gettext_lazy('Credential is already expired. Cannot revoke expired certificates.')
                 messages.error(self.request, msg)
                 return redirect(reverse_path)
             if status == CertificateModel.CertificateStatus.REVOKED:
-                msg = _('Certificate is already revoked. Cannot revoke a revoked certificate again.')
+                msg = gettext_lazy('Certificate is already revoked. Cannot revoke a revoked certificate again.')
                 return redirect(reverse_path)
             revoked_successfully, __ = DeviceCredentialRevocation.revoke_certificate(self.object.id, revocation_reason)
             if revoked_successfully:
-                msg = _('Successfully revoked one active credential.')
+                msg = gettext_lazy('Successfully revoked one active credential.')
                 messages.success(self.request, msg)
             else:
-                messages.error(self.request, _('Failed to revoke certificate. See logs for more information.'))
+                messages.error(
+                    self.request,
+                    gettext_lazy('Failed to revoke certificate. See logs for more information.')
+                )
 
         return redirect(reverse_path)
 
@@ -1927,19 +1800,21 @@ class AbstractBulkRevokeView(LoggerMixin, PageContextMixin, ListView[DeviceModel
         try:
             self.queryset = self.get_queryset()
         except ValueError:
-            err_msg_template = _('Please select the devices you would like to revoke.')
+            err_msg_template = gettext_lazy('Please select the devices you would like to revoke.')
             err_msg = err_msg_template.format(pks=self.pks)
             messages.error(request, err_msg)
             return 'devices:devices'
         except Exception:
-            err_msg_template = _('Failed to retrieve the queryset for primary keys: {pks}.See logs for more details.')
+            err_msg_template = gettext_lazy(
+                f'Failed to retrieve the queryset for primary keys: {self.pks}.See logs for more details.')
             err_msg = err_msg_template.format(pks=self.pks)
             self.logger.exception(err_msg)
             messages.error(request, err_msg)
             return 'devices:devices'
 
         if self.missing:
-            err_msg_template = _('Devices for the following primary keys were not found: {pks}.')
+            err_msg_template = gettext_lazy(
+                f'Devices for the following primary keys were not found: {self.pks}.')
             err_msg = err_msg_template.format(pks=self.missing)
             messages.error(request, err_msg)
             return 'devices:devices'
@@ -1961,7 +1836,7 @@ class AbstractBulkRevokeView(LoggerMixin, PageContextMixin, ListView[DeviceModel
         if redirect_name:
             return redirect(redirect_name)
         messages.warning(
-            request, _('This operation will revoke ALL certificates associated with the selected devices.')
+            request, gettext_lazy('This operation will revoke ALL certificates associated with the selected devices.')
         )
         return super().get(request, *args, **kwargs)
 
@@ -2009,7 +1884,7 @@ class AbstractBulkRevokeView(LoggerMixin, PageContextMixin, ListView[DeviceModel
 
                 messages.success(self.request, msg)
             else:
-                messages.error(self.request, _('No credentials were revoked.'))
+                messages.error(self.request, gettext_lazy('No credentials were revoked.'))
 
         return redirect('devices:devices')
 
@@ -2078,19 +1953,21 @@ class AbstractBulkDeleteView(LoggerMixin, PageContextMixin, ListView[DeviceModel
         try:
             self.queryset = self.get_queryset()
         except ValueError:
-            err_msg_template = _('Please select the devices you would like to delete.')
+            err_msg_template = gettext_lazy('Please select the devices you would like to delete.')
             err_msg = err_msg_template.format(pks=self.pks)
             messages.error(request, err_msg)
             return 'devices:devices'
         except Exception:
-            err_msg_template = _('Failed to retrieve the queryset for primary keys: {pks}.See logs for more details.')
+            err_msg_template = gettext_lazy(
+                f'Failed to retrieve the queryset for primary keys: {self.pks}.See logs for more details.')
             err_msg = err_msg_template.format(pks=self.pks)
             self.logger.exception(err_msg)
             messages.error(request, err_msg)
             return 'devices:devices'
 
         if self.missing:
-            err_msg_template = _('Devices for the following primary keys were not found: {pks}.')
+            err_msg_template = gettext_lazy(
+                f'Devices for the following primary keys were not found: {self.pks}.')
             err_msg = err_msg_template.format(pks=self.missing)
             messages.error(request, err_msg)
             return 'devices:devices'
@@ -2112,7 +1989,7 @@ class AbstractBulkDeleteView(LoggerMixin, PageContextMixin, ListView[DeviceModel
         if redirect_name:
             return redirect(redirect_name)
         messages.warning(
-            request, _('This operation will revoke ALL certificates associated with the selected devices.')
+            request, gettext_lazy('This operation will revoke ALL certificates associated with the selected devices.')
         )
         return super().get(request, *args, **kwargs)
 
@@ -2136,7 +2013,7 @@ class AbstractBulkDeleteView(LoggerMixin, PageContextMixin, ListView[DeviceModel
 
         try:
             count, __ = self.queryset.delete()
-            success_msg_template = _(
+            success_msg_template = gettext_lazy(
                 'Successfully deleted {count} devices. All corresponding certificates have been revoked.'
             )
             success_msg = success_msg_template.format(count=count)
@@ -2144,7 +2021,10 @@ class AbstractBulkDeleteView(LoggerMixin, PageContextMixin, ListView[DeviceModel
         except Exception:
             err_msg = 'Failed to delete DeviceModel records.'
             self.logger.exception(err_msg)
-            messages.error(request, _('Failed to delete DeviceModel records. See logs for more information.'))
+            messages.error(
+                request,
+                gettext_lazy('Failed to delete DeviceModel records. See logs for more information.')
+            )
 
         return redirect('devices:devices')
 

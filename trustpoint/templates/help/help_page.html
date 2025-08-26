@@ -16,36 +16,38 @@
         </div>
         <div class="card-body">
             {% for section in help_page.sections %}
-                <h2>{{ section.heading }}</h2>
-                <hr>
-        
-                <ul class="tp-kvp-list">
-                    {% for row in section.rows %}
-                        <li {% if row.hidden %}hidden{% endif %}>
-                            <div class="row-key-container">{{ row.key }}</div>
-                            {% if row.value_render_type.value == ValueRenderType_CODE %}
-                                <div class="copy-container" style="position: relative;">
+                <div{% if section.css_id %} id="{{ section.css_id }}"{% endif %}{% if section.css_class %} class="{{ section.css_class }}"{% endif %}{% if section.hidden %} hidden{% endif %}>
+                    <h2>{{ section.heading }}</h2>
+                    <hr>
+            
+                    <ul class="tp-kvp-list">
+                        {% for row in section.rows %}
+                            <li{% if row.css_id %} id="{{ row.css_id }}"{% endif %}{% if row.css_class %} class="{{ row.css_class }}"{% endif %}{% if row.hidden %} hidden{% endif %}>
+                                <div class="row-key-container">{{ row.key }}</div>
+                                {% if row.value_render_type.value == ValueRenderType_CODE %}
+                                    <div class="copy-container" style="position: relative;">
 
-                                        <code class="command-text language-bash">
-                                            {{ row.value|linebreaksbr }}
-                                        </code>
-                        
-                                        <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
-                                            aria-label="Copy to clipboard">
-                                            <svg class="icon icon-copy" width="40" height="40" fill="currentColor">
-                                                <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
-                                            </svg>
-                                        </button>
-                                </div>
-                            {% elif row.value_render_type.value == ValueRenderType_PLAIN %}
-                                <div class="no-copy-container" style="position:relative;">
-                                    {{ row.value|linebreaksbr }}
-                                </div>
+                                            <code class="command-text language-bash" style="padding: 0;">
+                                                {{ row.value|linebreaksbr }}
+                                            </code>
                             
-                            {% endif %}
-                        </li>
-                    {% endfor %}
-                </ul>
+                                            <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
+                                                aria-label="Copy to clipboard">
+                                                <svg class="icon icon-copy" width="40" height="40" fill="currentColor">
+                                                    <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
+                                                </svg>
+                                            </button>
+                                    </div>
+                                {% elif row.value_render_type.value == ValueRenderType_PLAIN %}
+                                    <div class="no-copy-container" style="position:relative;">
+                                        {{ row.value|linebreaksbr }}
+                                    </div>
+                                
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
             {% endfor %}
         </div>
         <div class="card-footer">

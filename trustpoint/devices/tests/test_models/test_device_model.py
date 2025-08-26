@@ -123,7 +123,7 @@ def test_generic_device_no_onboarding(domain_instance: dict[str, Any]) -> None:
 
 
 @pytest.mark.django_db
-def test_device_opcua_gds(domain_instance: dict[str, Any]) -> None:
+def test_device_opc_ua_gds(domain_instance: dict[str, Any]) -> None:
     """Test for a device with OPC UA GDS type."""
     domain = domain_instance['domain']
 

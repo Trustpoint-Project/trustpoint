@@ -10,7 +10,7 @@ from devices.models import IssuedCredentialModel
 
 
 @pytest.mark.django_db
-def test_issue_opcua_client_credential(device_instance: dict[str, Any]) -> None:
+def test_issue_opc_ua_client_credential(device_instance: dict[str, Any]) -> None:
     """Test that issuing an OPC UA client credential works without mocks."""
     device = device_instance['device']
 
@@ -18,10 +18,10 @@ def test_issue_opcua_client_credential(device_instance: dict[str, Any]) -> None:
 
     # Input parameters
     common_name = 'Test OPC UA Client Credential'
-    application_uri = 'urn:example:opcua:client'
+    application_uri = 'urn:example:opc-ua:client'
     validity_days = 365
 
-    issued_credential = issuer.issue_opcua_client_credential(
+    issued_credential = issuer.issue_opc_ua_client_credential(
         common_name=common_name,
         application_uri=application_uri,
         validity_days=validity_days,

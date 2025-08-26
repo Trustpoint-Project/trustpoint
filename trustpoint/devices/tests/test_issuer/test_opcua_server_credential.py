@@ -11,20 +11,20 @@ from devices.models import IssuedCredentialModel
 
 
 @pytest.mark.django_db
-def test_issue_opcua_server_credential(device_instance: dict[str, Any]) -> None:
+def test_issue_opc_ua_server_credential(device_instance: dict[str, Any]) -> None:
     """Test that issuing an OPC UA server credential works without mocks."""
     device = device_instance['device']
 
     issuer = OpcUaServerCredentialIssuer(device=device, domain=device.domain)
 
     common_name = 'Test OPC UA Server Credential'
-    application_uri = 'urn:example:opcua:server'
+    application_uri = 'urn:example:opc-ua:server'
     ipv4_addresses = [ipaddress.IPv4Address('192.168.1.100')]
     ipv6_addresses: list[ipaddress.IPv6Address] = []
-    domain_names = ['opcua.example.com']
+    domain_names = ['opc-ua.example.com']
     validity_days = 365
 
-    issued_credential = issuer.issue_opcua_server_credential(
+    issued_credential = issuer.issue_opc_ua_server_credential(
         common_name=common_name,
         application_uri=application_uri,
         ipv4_addresses=ipv4_addresses,

@@ -98,8 +98,8 @@ class ApplicationCertificateTemplateNames(enum.Enum):
 
     TLS_CLIENT = 'tls-client'
     TLS_SERVER = 'tls-server'
-    OPCUA_SERVER = 'opcua-server'
-    OPCUA_CLIENT = 'opcua-client'
+    OPCUA_SERVER = 'opc-ua-server'
+    OPCUA_CLIENT = 'opc-ua-client'
 
 
 IMPLICIT_CONFIRM_OID = '1.3.6.1.5.5.7.4.13'
@@ -476,7 +476,7 @@ class CmpResponseBuilderMixin:
 
             if application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_SERVER:
                 opc_ua_server_cred_issuer = OpcUaServerCredentialIssuer(device=device, domain=domain)
-                return opc_ua_server_cred_issuer.issue_opcua_server_certificate(
+                return opc_ua_server_cred_issuer.issue_opc_ua_server_certificate(
                     common_name=common_name,
                     application_uri=application_uri,
                     ipv4_addresses=san['ipv4_addresses'],
@@ -490,7 +490,7 @@ class CmpResponseBuilderMixin:
 
             if application_certificate_template == ApplicationCertificateTemplateNames.OPCUA_CLIENT:
                 opc_ua_client_cred_issuer = OpcUaClientCredentialIssuer(device=device, domain=domain)
-                return opc_ua_client_cred_issuer.issue_opcua_client_certificate(
+                return opc_ua_client_cred_issuer.issue_opc_ua_client_certificate(
                     common_name=common_name,
                     application_uri=application_uri,
                     # TODO (FHKatCSW): san_critical not supported in OpcUaClientCredentialIssuer    # noqa: FIX002

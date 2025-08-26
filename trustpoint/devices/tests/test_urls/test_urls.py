@@ -30,19 +30,19 @@ from devices import views
             views.DeviceIssueTlsServerCredential,
         ),
         (
-            'devices:certificate_lifecycle_management-issue_opcua_client_credential',
+            'devices:certificate_lifecycle_management-issue_opc_ua_client_credential',
             {'pk': 1},
             views.DeviceIssueOpcUaClientCredential,
         ),
         (
-            'devices:certificate_lifecycle_management-issue_opcua_server_credential',
+            'devices:certificate_lifecycle_management-issue_opc_ua_server_credential',
             {'pk': 1},
             views.DeviceIssueOpcUaServerCredential,
         ),
         # Help Pages
         ('devices:help_dispatch_domain', {'pk': 1}, views.HelpDispatchDomainCredentialView),
         ('devices:help_dispatch_device_type_redirect', {'pk': 1}, views.HelpDispatchDeviceTypeRedirectView),
-        ('devices:help_dispatch_opcua_gds', {'pk': 1}, views.HelpDispatchOpcUaGdsView),
+        ('devices:help_dispatch_opc_ua_gds', {'pk': 1}, views.HelpDispatchOpcUaGdsView),
         ('devices:help_dispatch_application', {'pk': 1}, views.HelpDispatchApplicationCredentialView),
         (
             'devices:help_dispatch_application_template',
@@ -78,7 +78,7 @@ from devices import views
         ('devices:help-onboarding_est-idevid-registration', {'pk': 1}, views.OnboardingEstIdevidRegistrationHelpView),
         ('devices:help-onboarding_method_select-idevid', {'pk': 1}, views.OnboardingMethodSelectIdevidHelpView),
         (
-            'devices:help-no-onboarding_est-opcua-gds-username-password',
+            'devices:help-no-onboarding_est-opc-ua-gds-username-password',
             {'pk': 1},
             views.NoOnboardingEstOpcUaGdsUsernamePasswordHelpView,
         ),

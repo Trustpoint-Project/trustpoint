@@ -242,7 +242,7 @@ const idevidTrustStoreSelectWrapper = document.getElementById('id_idevid_trust_s
 const pkiProtocolEstSelect = document.getElementById('id_allowed_pki_protocols_0');
 const pkiProtocolCmpSelect = document.getElementById('id_allowed_pki_protocols_1');
 
-const onboardingAndPkiConfigurationSelect = document.getElementById('id_onboarding_and_pki_configuration');
+// const onboardingAndPkiConfigurationSelect = document.getElementById('id_onboarding_and_pki_configuration');
 
 const domainCredentialOnboardingCheckbox = document.getElementById('id_domain_credential_onboarding');
 const onboardingAndPkiConfigurationWrapper = document.getElementById('id_onboarding_protocol_wrapper');
@@ -320,3 +320,36 @@ function removeClassIfPresent(element, className) {
   }
 }
 
+// -------------------------------------------- Help Pages - Hidden Toggle ---------------------------------------------
+
+let certProfileSelect = document.getElementById('cert-profile-select');
+let sections = {};
+
+if (certProfileSelect) {
+    for (const option of certProfileSelect.options) {
+        const el = document.getElementById(option.value);
+        if (el) {
+            sections[option.value] = el;
+        }
+    }
+}
+
+function displayOnly(sectionIdToDisplay) {
+    for (const [id, el] of Object.entries(sections)) {
+        if (id == sectionIdToDisplay) {
+            el.removeAttribute('hidden');
+        } else {
+            el.setAttribute('hidden', '');
+        }
+    }
+}
+
+certProfileSelect?.addEventListener("change", function() {
+    let a = certProfileSelect.value;
+    console.log(a);
+    displayOnly(a);
+    for (const [id, el] of Object.entries(sections)) {
+        console.log(id, el);
+    }
+    
+});
