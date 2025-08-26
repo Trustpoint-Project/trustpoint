@@ -730,7 +730,7 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
             ),
             'protocol': 'est-username-password',
             'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD),
-            'url': f'{self.page_category}:{self.page_name}_no_onboarding_cmp_shared_secret_help'
+            'url': f'{self.page_category}:{self.page_name}_no_onboarding_est_username_password_help'
         })
 
 

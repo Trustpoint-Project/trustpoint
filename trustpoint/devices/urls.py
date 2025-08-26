@@ -86,12 +86,12 @@ urlpatterns = [
     path(
         'certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/est-username-password/',
         devices_help_views.DeviceNoOnboardingEstUsernamePasswordHelpView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_no_onboarding_cmp_shared_secret_help'
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_no_onboarding_est_username_password_help'
     ),
     path(
         'opc-ua-gds/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/est-username-password/',
         devices_help_views.OpcUaGdsNoOnboardingEstUsernamePasswordHelpView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_no_onboarding_cmp_shared_secret_help'
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_no_onboarding_est_username_password_help'
     ),
 
     path(
