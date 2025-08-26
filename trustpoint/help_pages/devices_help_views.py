@@ -728,7 +728,7 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
                     kwargs={
                         'file_format': 'pem',
                         'pk': tls_cert_pk,
-                        'file_name': 'device_trust_store.pem'
+                        'file_name': f'trust-store-{ self.domain.unique_name }.pem'
                     }
                 ),
                 _non_lazy('Download Device Trust-Store')

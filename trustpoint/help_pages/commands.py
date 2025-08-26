@@ -161,7 +161,7 @@ class EstUsernamePasswordCommandBuilder:
             f'curl --user "{ est_username }:{ est_password }" \\\n'
             f'--cacert trust-store-{ domain_name }.pem \\\n'
             '--header "Content-Type: application/pkcs10" \\\n'
-            '--data-binary "@csr.der" \\\n'
+            f'--data-binary "@csr-{cred_number}.der" \\\n'
             f'-o certificate-{cred_number}.der \\\n'
             f'{ host }'
         )
@@ -171,7 +171,7 @@ class EstUsernamePasswordCommandBuilder:
         return (
             'openssl x509 \\\n'
             '-inform DER \\\n'
-            '-outform PEM'
+            '-outform PEM \\\n'
             f'-in certificate-{cred_number}.der \\\n'
             f'-out certificate-{cred_number}.pem'
         )
