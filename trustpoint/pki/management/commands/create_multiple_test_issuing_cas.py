@@ -92,15 +92,15 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             unique_name='issuing-ca-d',
         )
 
-        ecc2_root_ca_key = ec.generate_private_key(curve=ec.SECT283R1())
-        ecc2_issuing_ca_key = ec.generate_private_key(curve=ec.SECT283R1())
+        ecc2_root_ca_key = ec.generate_private_key(curve=ec.SECP384R1())
+        ecc2_issuing_ca_key = ec.generate_private_key(curve=ec.SECP384R1())
         ecc2_root, _ = self.create_root_ca(
-            'Root-CA SECT283R1-SHA256', private_key=ecc2_root_ca_key, hash_algorithm=hashes.SHA256()
+            'Root-CA SECP384R1-SHA256', private_key=ecc2_root_ca_key, hash_algorithm=hashes.SHA256()
         )
         ecc2_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=ecc2_root_ca_key,
             private_key=ecc2_issuing_ca_key,
-            issuer_cn='Root-CA SECT283R1-SHA256',
+            issuer_cn='Root-CA SECP384R1-SHA256',
             subject_cn='Issuing CA E',
             hash_algorithm=hashes.SHA256(),
         )
@@ -111,15 +111,15 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             unique_name='issuing-ca-e',
         )
 
-        ecc3_root_ca_key = ec.generate_private_key(curve=ec.SECT571R1())
-        ecc3_issuing_ca_key = ec.generate_private_key(curve=ec.SECT571R1())
+        ecc3_root_ca_key = ec.generate_private_key(curve=ec.SECP521R1())
+        ecc3_issuing_ca_key = ec.generate_private_key(curve=ec.SECP521R1())
         ecc3_root, _ = self.create_root_ca(
-            'Root-CA SECT571R1-SHA256', private_key=ecc3_root_ca_key, hash_algorithm=hashes.SHA3_512()
+            'Root-CA SECP521R1-SHA256', private_key=ecc3_root_ca_key, hash_algorithm=hashes.SHA3_512()
         )
         ecc3_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=ecc3_root_ca_key,
             private_key=ecc3_issuing_ca_key,
-            issuer_cn='Root-CA SECT571R1-SHA256',
+            issuer_cn='Root-CA SECP521R1-SHA256',
             subject_cn='Issuing CA F',
             hash_algorithm=hashes.SHA3_512(),
         )

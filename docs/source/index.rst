@@ -34,6 +34,11 @@ Welcome to Trustpoint's documentation!
    devices/onboarding
    devices/aoki
 
+.. toctree::
+   :maxdepth: 2
+   :caption: 🔒 Security
+
+   security/pkcs11
 
 .. toctree::
    :maxdepth: 2

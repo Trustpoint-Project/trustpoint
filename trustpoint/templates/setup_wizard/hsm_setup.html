@@ -1,0 +1,51 @@
+{% extends 'users/base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+{% block content %}
+
+    {% if messages %}
+        <div class="messages tp-messages text-center">
+            {% for message in messages %}
+                <div class="tp-message alert
+                    {% if message.tags %}
+                        {% if message.tags == "error" %}
+                            alert-danger
+                        {% else %}
+                            alert-{{ message.tags }}
+                        {% endif %}
+                    {% endif %} d-flex" role="alert">
+
+                    <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="{{ message.tags }}:">
+                        <use href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use></svg>
+                    <div>
+                        {{ message }}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="card tp-card-setup-wizard text-center">
+        <div class="card-header">
+            <h1>{% trans "Trustpoint - Setup Wizard" %}</h1>
+        </div>
+        <div class="card-body pt-3 pb-4">
+            <h2>{% trans 'HSM Configuration' %}</h2>
+            <hr>
+            <h3 class="mb-3">{% trans 'Configure Hardware Security Module Settings' %}</h3>
+            {% include 'settings/details/hsm_config.html'%}
+        </div>
+        <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+            <div class="tp-card-btn-footer m-1">
+                <a href="{% url 'setup_wizard:options' %}" class="btn btn-secondary w-100 mt-1">{% trans "Back" %}</a>
+                <button class="btn btn-primary w-100 mt-1" type="submit" form="hsm_configuration" id="hsm-submit-btn">
+                    {% trans 'Configure HSM' %}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{% static 'js/hsm_config.js' %}"></script>
+
+{% endblock content %}

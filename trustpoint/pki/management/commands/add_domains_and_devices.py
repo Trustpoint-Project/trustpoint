@@ -77,8 +77,8 @@ class Command(BaseCommand):
             'homag': ('issuing-ca-b', 'idevid-truststore-RSA-3072'),
             'siemens': ('issuing-ca-c', 'idevid-truststore-RSA-4096'),
             'belden': ('issuing-ca-d', 'idevid-truststore-EC-256'),
-            'phoenix_contact': ('issuing-ca-e', 'idevid-truststore-EC-283'),
-            'schmalz': ('issuing-ca-f', 'idevid-truststore-EC-570'),
+            'phoenix_contact': ('issuing-ca-e', 'idevid-truststore-EC-384'),
+            'schmalz': ('issuing-ca-f', 'idevid-truststore-EC-521'),
         }
 
         onboarding_protocols = [

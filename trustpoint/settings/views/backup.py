@@ -237,10 +237,10 @@ class BackupManageView(SortableTableMixin, ListView[Any]):
 
         error_messages = []
         for field, errors in form.errors.items():
-            if field == "__all__":
+            if field == '__all__':
                 error_messages.extend(errors)
             else:
-                error_messages.extend([f"{field.capitalize()}: {error}" for error in errors])
+                error_messages.extend([f'{field.capitalize()}: {error}' for error in errors])
 
         for err_msg in error_messages:
             messages.error(request, err_msg)

@@ -199,6 +199,9 @@ INSTALLED_APPS = [
     'aoki.apps.AokiConfig',
     'settings.apps.SettingsConfig',
     'notifications.apps.NotificationsConfig',
+
+    'trustpoint_core',
+    
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

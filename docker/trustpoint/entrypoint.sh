@@ -14,6 +14,14 @@ echo "PostgreSQL database is available!"
 
 run_as_www_data "uv run trustpoint/manage.py managestartup"
 
+echo "Unwrapping DEK..."
+if run_as_www_data "uv run trustpoint/manage.py unwrap_dek --token-label 'TrustPoint-SoftHSM'"; then
+    echo "DEK unwrapping completed successfully"
+else
+    echo "DEK unwrapping failed or no DEK found, continuing startup..."
+fi
+
+
 # 12) Configure apache
 /etc/trustpoint/wizard/transition/configure_apache.sh
 
