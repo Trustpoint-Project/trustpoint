@@ -1,0 +1,70 @@
+{% load i18n %}
+{% load static %}
+
+{% block head %}
+    <script src="{% static 'js/copy_clipboard.js' %}"></script>
+{% endblock head %}
+
+{% block cmp_enroll_tls_server %}
+    <ul class="tp-kvp-list">
+        <li>
+            <h2 class="mt-5">{% trans 'TLS-Server Certificate Request' %}</h2>
+            <hr>
+            <div>{% trans 'OpenSSL Command' %}</div>
+
+            <div class="copy-container" style="position: relative;">
+                <code class="command-text language-bash">
+                    openssl cmp \<br>
+                    -cmd cr \<br>
+                    -implicit_confirm \<br>
+                    -server https://{{ host }}/.well-known/cmp/certification/{{ device.domain }}/tls-server/ \<br>
+                    -tls_used \<br>
+                    -ref {{ device.id }} \<br>
+                    -secret pass:{{ cmp_shared_secret }} \<br>
+                    -subject "/CN={{ cn_entry }}" \<br>
+                    -days 10 \<br>
+                    -sans "critical 127.0.0.1 ::1 localhost" \<br>
+                    -newkey key.pem \<br>
+                    -certout cert.pem \<br>
+                    -chainout chain_without_root.pem \<br>
+                    -extracertsout full_chain.pem
+                </code>
+
+                <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
+                        aria-label="Copy to clipboard">
+                    <svg class="icon icon-copy" width="40" height="40" fill="currentColor">
+                        <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
+                    </svg>
+                </button>
+
+            </div>
+        </li>
+        <li>
+            <h3 class="mt-3">{% trans 'Mutable Parameters' %}</h3>
+            <hr>
+            <div>{% trans 'Common Name' %}</div>
+            <div>-subject "/CN={{ cn_entry }}"</div>
+        </li>
+        <li>
+            <div>{% trans 'Validity (days)' %}</div>
+            <div>-days 10</div>
+        </li>
+        <li>
+            <div>{% trans 'Subject Alternative Name (SAN)' %}</div>
+            <div>
+                -sans "critical 127.0.0.1 ::1 localhost"<br><br>
+                {% trans 'Add as many SAN entries as desired, separated by whitespace. At least one must be given. The default is to make the SAN extension critical. To make it non-critical, remove the keyword critical.' %}
+            </div>
+        </li>
+
+
+        <li>
+            <hr>
+            <div>Remarks</div>
+            {% trans 'Note that it is possible to use the CMP initialization (IR) and certification (CR) request message types interchangeably for this use case. Thus, if you are using a different CMP client that requires you to use the initialization request message type, this will work as well.' %}<br><br>
+            -cmd ir <br>
+            -server https://{{ host }}/.well-known/cmp/initialization/{{ device.domain }}/tls-client/
+        </li>
+    </ul>
+
+{% endblock cmp_enroll_tls_server %}

@@ -6,11 +6,11 @@ which can be used within the apps.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast, Protocol, Self
 
 from django import forms as dj_forms
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models import Model, QuerySet
+from django.db import models
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.views.generic.base import RedirectView
@@ -21,6 +21,8 @@ from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from django.http import HttpRequest
 
 
 class IndexView(RedirectView):
@@ -39,7 +41,6 @@ class ListInDetailView(ListView):
     """
 
     detail_context_object_name = 'object'
-    object: Model
 
     def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
         self.object = self.get_object()
@@ -48,7 +49,7 @@ class ListInDetailView(ListView):
     def get_queryset_for_object(self):
         return self.detail_model.objects.all()
 
-    def get_object(self) -> Model:
+    def get_object(self) -> models.odel:
         queryset = self.get_queryset_for_object()
         pk = self.kwargs.get('pk')
         if pk is None:
@@ -61,44 +62,38 @@ class ListInDetailView(ListView):
         context[self.detail_context_object_name] = self.object
         return context
 
+class SupportsGetContextData(Protocol):
+    """For typing to provide super().get_context_data()."""
 
-class SortableTableMixin:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        ...
+
+class ParentSupportsGetContextData(SupportsGetContextData, Protocol):
+    """For typing to provide super().get_context_data()."""
+
+
+class SortableTableMixin[T: models.Model]:
     """Adds utility for sorting a ListView query by URL parameters.
 
     default_sort_param must be set in the view to specify default sorting order.
     """
 
-    @staticmethod
-    def _sort_list_of_dicts(list_of_dicts: list[dict], sort_param: str) -> list[dict]:
-        """Sorts a list of dictionaries by the given sort parameter.
+    default_sort_param: str
+    request: HttpRequest
+    model: T
 
-        Args:
-            list_of_dicts: List of dictionaries to sort.
-            sort_param: The parameter to sort by. Prefix with '-' for descending order.
-
-        Returns:
-            The sorted list of dictionaries.
-        """
-        return sorted(list_of_dicts, key=lambda x: x[sort_param.lstrip('-')], reverse=sort_param.startswith('-'))
-
-    def get_queryset(self) -> QuerySet[Any]:
+    def get_queryset(self) -> models.QuerySet[Any]:
         if hasattr(self, 'queryset') and self.queryset is not None:
             queryset = self.queryset
         else:
             queryset = self.model.objects.all()
 
-        # Get sort parameter (e.g., "name" or "-name")
         sort_param = self.request.GET.get('sort', self.default_sort_param)
-        queryset_type = type(queryset)
-        if issubclass(queryset_type, QuerySet):
-            if hasattr(self.model, 'is_active'):
-                return queryset.order_by('-is_active', sort_param)
-            return queryset.order_by(sort_param)
-        if queryset_type is list:
-            return self._sort_list_of_dicts(queryset, sort_param)
+        # if issubclass(queryset_type, models.QuerySet):
+        if hasattr(self.model, 'is_active'):
+            return queryset.order_by('-is_active', sort_param)
+        return queryset.order_by(sort_param)
 
-        exc_msg = f'Unknown queryset type: {type}'
-        raise TypeError(exc_msg)
 
     def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(*args, **kwargs)
@@ -199,7 +194,7 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
     def get_pks_path(self) -> str:
         return self.kwargs.get('pks')
 
-    def get_queryset(self) -> None | QuerySet:
+    def get_queryset(self) -> None | models.QuerySet:
         if self.queryset:
             return self.queryset
 
@@ -241,4 +236,3 @@ class LoggedHttpResponse(HttpResponse, LoggerMixin):
             self.logger.info('SUCCESS (%s)', status)
 
         super().__init__(content, *args, status=status, **kwargs)
-

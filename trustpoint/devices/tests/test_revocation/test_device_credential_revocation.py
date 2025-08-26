@@ -1,4 +1,5 @@
 """Tests for the DeviceCredentialRevocation model."""
+
 from typing import Any
 
 import pytest
@@ -24,6 +25,7 @@ def test_revoke_certificate_success(tls_client_credential_instance: dict[str, An
     assert revoked_cert is not None, 'A RevokedCertificateModel instance should be created.'
     assert revoked_cert.revocation_reason == 'keyCompromise', 'The revocation reason should match the provided reason.'
 
+
 @pytest.mark.django_db
 def test_revoke_certificate_already_revoked(tls_client_credential_instance: dict[str, Any]) -> None:
     """Test that revoking a certificate that is already revoked returns the appropriate message."""
@@ -36,8 +38,9 @@ def test_revoke_certificate_already_revoked(tls_client_credential_instance: dict
     )
 
     assert success is False, 'Revocation should fail for an already revoked certificate.'
-    assert message == 'The certificate is already revoked.', \
+    assert message == 'The certificate is already revoked.', (
         'Message should indicate that the certificate is already revoked.'
+    )
 
 
 @pytest.mark.django_db
@@ -50,6 +53,6 @@ def test_revoke_certificate_invalid_id() -> None:
     )
 
     assert success is False, 'Revocation should fail for a non-existent credential ID.'
-    assert message == 'The credential to revoke does not exist.', \
+    assert message == 'The credential to revoke does not exist.', (
         'Error message should indicate that the credential ID is invalid.'
-
+    )

@@ -73,6 +73,11 @@ urlpatterns = [
         certificates.CertificateDownloadView.as_view(),
         name='certificate-file-download',
     ),
+    re_path(
+        r'^certificates/download/(?P<file_format>[a-zA-Z0-9_]+)/(?P<pk>[0-9]+)/(?P<file_name>[^/]+)/?$',
+        certificates.CertificateDownloadView.as_view(),
+        name='certificate-file-download-file-name',
+    ),
     path(
         'certificates/download/issuing-ca/<int:pk>/',
         certificates.CmpIssuingCaCertificateDownloadView.as_view(),

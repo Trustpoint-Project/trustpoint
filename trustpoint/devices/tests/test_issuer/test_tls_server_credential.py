@@ -31,8 +31,9 @@ def test_issue_tls_server_credential(device_instance: dict[str, Any]) -> None:
         validity_days=validity_days,
     )
 
-    assert isinstance(issued_credential, IssuedCredentialModel), \
+    assert isinstance(issued_credential, IssuedCredentialModel), (
         'The returned object should be an IssuedCredentialModel'
+    )
     assert issued_credential.common_name == common_name, 'The common name of the issued credential should match'
     assert issued_credential.device == device, 'The issued credential should belong to the correct device'
     assert issued_credential.domain == device.domain, 'The issued credential should belong to the correct domain'
