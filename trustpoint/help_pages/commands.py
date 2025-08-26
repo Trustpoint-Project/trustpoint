@@ -103,6 +103,24 @@ class CmpSharedSecretCommandBuilder:
             '-extracertsout full_chain.pem'
         )
 
+    @staticmethod
+    def get_domaincredential_profile_command(host: str, pk: int, shared_secret: str, domain_name: str, device_name: str) -> str:
+        return (
+            'openssl cmp \\\n'
+            '-cmd ir \\\n'
+            '-implicit_confirm \\\n'
+            '-tls_used \\\n'
+            f'-server { host }.well-known/cmp/initialization/{ domain_name }/ \\\n'
+            f'-ref { pk } \\\n'
+            f'-secret pass:{ shared_secret } \\\n'
+            f'-subject "/CN=Trustpoint-Domain-Credential-{ device_name }" \\\n'
+            '-days 10 \\\n'
+            '-newkey key.pem \\\n'
+            '-certout cert.pem \\\n'
+            '-chainout chain_without_root.pem \\\n'
+            '-extracertsout full_chain.pem'
+        )
+
 
 class EstUsernamePasswordCommandBuilder:
     """Builds EST username-password commands for different certificate profiles."""

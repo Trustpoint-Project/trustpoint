@@ -514,15 +514,15 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                 f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential'
             )
         issue_domain_cred_onboarding_url = ''
-        # if self.object.onboarding_config:
-        #     if self.object.onboarding_config.onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
-        #         issue_domain_cred_onboarding_url = (
-        #             f'{self.page_category}:{self.page_name}_help-onboarding_cmp-shared-secret'
-        #         )
-        #     elif self.object.onboarding_config.onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD:
-        #         issue_domain_cred_onboarding_url = (
-        #             f'{self.page_category}:{self.page_name}_help-onboarding_est-username-password'
-        #         )
+        if self.object.onboarding_config:
+            if self.object.onboarding_config.onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
+                issue_domain_cred_onboarding_url = (
+                    f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_domain_credential_cmp_shared_secret'
+                )
+            elif self.object.onboarding_config.onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD:
+                issue_domain_cred_onboarding_url = (
+                    f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_domain_credential_cmp_shared_secret'
+                )
         context['issue_domain_cred_onboarding_url'] = issue_domain_cred_onboarding_url
 
         context['download_url'] = f'{self.page_category}:{self.page_name}_download'

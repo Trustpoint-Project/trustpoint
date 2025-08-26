@@ -147,6 +147,16 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_server_credential',
     ),
 
+    path(
+        'certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/cmp-shared-secret/',
+        devices_help_views.DeviceOnboardingDomainCredentialCmpSharedSecretHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_domain_credential_cmp_shared_secret'
+    ),
+    path(
+        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/cmp-shared-secret/',
+        devices_help_views.DeviceOnboardingDomainCredentialCmpSharedSecretHelpView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_domain_credential_cmp_shared_secret'
+    ),
 
     # ^^^^^ DONE DONE DONE ^^^^^
     path(
