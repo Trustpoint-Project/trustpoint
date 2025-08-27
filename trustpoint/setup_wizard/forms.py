@@ -143,7 +143,7 @@ class HsmSetupForm(forms.Form):
 
     label = forms.CharField(
         max_length=32,
-        initial='TrustPoint-SoftHSM',
+        initial='Trustpoint-SoftHSM',
         label=_('Token Label'),
         help_text=_('Label for the HSM token.'),
         widget=forms.TextInput(attrs={'class': 'form-control'}),
@@ -169,7 +169,7 @@ class HsmSetupForm(forms.Form):
         hsm_type = cleaned_data.get('hsm_type')
 
         if hsm_type == 'softhsm':
-            cleaned_data['label'] = 'TrustPoint-SoftHSM'
+            cleaned_data['label'] = 'Trustpoint-SoftHSM'
             cleaned_data['slot'] = 0
             cleaned_data['module_path'] = '/usr/lib/softhsm/libsofthsm2.so'
         elif hsm_type == 'physical':
@@ -181,7 +181,7 @@ class HsmSetupForm(forms.Form):
         """Clean token label field."""
         hsm_type = self.data.get('hsm_type')
         if hsm_type == 'softhsm':
-            return 'TrustPoint-SoftHSM'
+            return 'Trustpoint-SoftHSM'
         return self.cleaned_data.get('label', '')
 
     def clean_slot(self):

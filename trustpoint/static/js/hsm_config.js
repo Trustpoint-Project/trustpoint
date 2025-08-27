@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Configure fields for SoftHSM
             if (tokenLabelField) {
-                tokenLabelField.value = 'TrustPoint-SoftHSM';
+                tokenLabelField.value = 'Trustpoint-SoftHSM';
                 tokenLabelField.disabled = true;
                 tokenLabelField.style.opacity = '0.6';
                 tokenLabelField.removeAttribute('required');

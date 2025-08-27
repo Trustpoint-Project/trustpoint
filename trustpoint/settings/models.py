@@ -329,10 +329,6 @@ class PKCS11Token(models.Model, LoggerMixin):
         """
         return f'{self.label} (Slot {self.slot})'
 
-    def __del__(self) -> None:
-        """Ensure decrypted DEK is cleared when object is destroyed."""
-        self.clear_dek_cache()
-
     def generate_kek(self, key_length: int = 256) -> bool:
         """Generate the KEK (key encryption key) in the PKCS#11 token.
 
@@ -512,15 +508,30 @@ class PKCS11Token(models.Model, LoggerMixin):
         Raises:
             RuntimeError: If DEK cannot be retrieved or unwrapped
         """
-        cached_dek = cache.get(self.DEK_CACHE_LABEL)
+        cache_key = f'{self.DEK_CACHE_LABEL}-{self.label}'
+        self.logger.info('get_dek() called for token %s with cache key: %s', self.label, cache_key)
+        
+        cached_dek = cache.get(cache_key)
         if cached_dek:
-            self.logger.debug('Retrieved DEK from cache for token %s', self.label)
+            self.logger.info('Cache HIT - Retrieved DEK from cache for token %s', self.label)
             return cached_dek
+        
+        self.logger.info('Cache MISS - No cached DEK found for token %s, unwrapping DEK', self.label)
 
         try:
             dek = self._unwrap_dek()
-
-            cache.set(self.DEK_CACHE_LABEL, dek, None)
+            self.logger.info('DEK unwrapped successfully, attempting to cache with key: %s', cache_key)
+            
+            # Set in cache
+            cache.set(cache_key, dek, None)
+            
+            # Verify it was cached
+            verify_cached = cache.get(cache_key)
+            if verify_cached:
+                self.logger.info('Cache SET successful - DEK cached for token %s', self.label)
+            else:
+                self.logger.error('Cache SET failed - DEK not cached for token %s', self.label)
+            
         except Exception as e:
             self.logger.exception('Failed to retrieve DEK for token %s', self.label)
             msg = f'Failed to retrieve DEK: {e}'
@@ -745,12 +756,14 @@ class PKCS11Token(models.Model, LoggerMixin):
         Returns:
             bytes | None: The cached DEK bytes if available, None otherwise.
         """
-        return cache.get(self.DEK_CACHE_LABEL)
+        cache_key = f'{self.DEK_CACHE_LABEL}-{self.label}'
+        return cache.get(cache_key)
 
 
     def clear_dek_cache(self) -> None:
         """Clear the cached DEK from memory."""
-        cache.delete(self.DEK_CACHE_LABEL)
+        cache_key = f'{self.DEK_CACHE_LABEL}-{self.label}'
+        cache.delete(cache_key)
         self.logger.debug('Cleared DEK cache for token %s', self.label)
 
     def get_pin(self) -> str:

@@ -259,7 +259,7 @@ class PKCS11ConfigForm(forms.Form):
         hsm_type = cleaned_data.get('hsm_type')
 
         if hsm_type == 'softhsm':
-            cleaned_data['label'] = 'TrustPoint-SoftHSM'
+            cleaned_data['label'] = 'Trustpoint-SoftHSM'
             cleaned_data['slot'] = 0
             cleaned_data['module_path'] = '/usr/lib/softhsm/libsofthsm2.so'
         elif hsm_type == 'physical':
@@ -271,7 +271,7 @@ class PKCS11ConfigForm(forms.Form):
         """Validate that label is unique, excluding current token if updating."""
         hsm_type = self.data.get('hsm_type')
         if hsm_type == 'softhsm':
-            return 'TrustPoint-SoftHSM'
+            return 'Trustpoint-SoftHSM'
 
         label = self.cleaned_data.get('label', '')
         existing = PKCS11Token.objects.filter(label=label)
