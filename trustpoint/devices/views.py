@@ -488,7 +488,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         context['domain_credentials'] = paginator_domain.get_page(page_number_domain)
         context['is_paginated'] = paginator_domain.num_pages > 1
 
-        paginator_application = Paginator(self.application_credentials_qs, 3)
+        paginator_application = Paginator(self.application_credentials_qs, UIConfig.paginate_by)
         page_number_application = self.request.GET.get('page-a', 1)
         context['application_credentials'] = paginator_application.get_page(page_number_application)
         context['is_paginated_a'] = paginator_application.num_pages > 1
@@ -510,8 +510,6 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                 and self.object.no_onboarding_config.get_pki_protocols():
             context['issue_app_cred_no_onboarding_url'] = (
                 f'{self.page_category}:{self.page_name}_no_onboarding_clm_issue_application_credential'
-            ) if self.object.no_onboarding_config else (
-                f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential'
             )
         issue_domain_cred_onboarding_url = ''
         if self.object.onboarding_config:
@@ -523,6 +521,12 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                 issue_domain_cred_onboarding_url = (
                     f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_domain_credential_est_username_password'
                 )
+
+        context['issue_app_cred_onboarding_url'] = ''
+        if self.object.domain and self.object.onboarding_config and self.object.onboarding_config.get_pki_protocols():
+            context['issue_app_cred_onboarding_url'] = (
+                f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential')
+
         context['issue_domain_cred_onboarding_url'] = issue_domain_cred_onboarding_url
 
         context['download_url'] = f'{self.page_category}:{self.page_name}_download'
@@ -900,6 +904,7 @@ class AbstractOnboardingIssueNewApplicationCredentialView(PageContextMixin, Deta
                 'required to issue a new application certificate using CMP with OpenSSL using a shared-secret (HMAC).'),
             'protocol': 'cmp',
             'enabled': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP),
+            'url': f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_domain_credential'
         })
 
         sections.append({
@@ -910,6 +915,7 @@ class AbstractOnboardingIssueNewApplicationCredentialView(PageContextMixin, Deta
             ),
             'protocol': 'est',
             'enabled': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST),
+            'url': f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_domain_credential'
         })
 
         context['sections'] = sections
@@ -925,8 +931,6 @@ class DeviceOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssueN
 class OpcUaGdsOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssueNewApplicationCredentialView):
     """abc."""
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
 
 
 class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: BaseTlsCredentialIssuer](

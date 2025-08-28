@@ -168,7 +168,6 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_domain_credential_est_username_password'
     ),
 
-    # ^^^^^ DONE DONE DONE ^^^^^
     path(
         'certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/',
         views.DeviceOnboardingIssueNewApplicationCredentialView.as_view(),
@@ -179,7 +178,18 @@ urlpatterns = [
         views.OpcUaGdsOnboardingIssueNewApplicationCredentialView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_onboarding_clm_issue_application_credential'
     ),
-    
+
+    path(
+        'certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/cmp-domain-credential/',
+        devices_help_views.DeviceOnboardingCmpDomainCredentialHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_onboarding_clm_issue_application_credential_domain_credential'
+    ),
+    path(
+        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/cmp-domain-credential/',
+        devices_help_views.OpcUaGdsOnboardingCmpDomainCredentialHelpView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_onboarding_clm_issue_application_credential_domain_credential'
+    ),
+
     # Certificate Lifecycle Management - Downloads
     path(
         'download/<int:pk>/',

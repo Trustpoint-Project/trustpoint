@@ -119,9 +119,9 @@ class CmpSharedSecretCommandBuilder:
             f'-subject "/CN=Trustpoint-Domain-Credential" \\\n'
             '-days 10 \\\n'
             '-newkey domain_credential_key.pem \\\n'
-            '-certout cert.pem \\\n'
-            '-chainout chain_without_root.pem \\\n'
-            '-extracertsout full_chain.pem'
+            '-certout domain_credential_certificate.pem \\\n'
+            '-chainout domain_credential_chain.pem \\\n'
+            '-extracertsout domain_credential_full_chain.pem'
         )
 
 
@@ -195,4 +195,86 @@ class EstUsernamePasswordCommandBuilder:
             '-outform PEM \\\n'
             f'-in certificate-{cred_number}.der \\\n'
             f'-out certificate-{cred_number}.pem'
+        )
+
+
+class CmpClientCertificateCommandBuilder:
+
+    @staticmethod
+    def get_tls_client_profile_command(host: str, cred_number: int) -> str:
+        return (
+            'openssl cmp \\\n'
+            '-cmd cr \\\n'
+            '-implicit_confirm \\\n'
+            '-tls_used \\\n'
+            '-trusted domain_credential_full_chain.pem \\\n'
+            f'-server  { host } \\\n'
+            '-cert domain_credential_certificate.pem \\\n'
+            '-key domain_credential_key.pem \\\n'
+            f'-subject "/CN=Trustpoint-TLS-Client-Credential-{ cred_number }" \\\n'
+            '-days 10 \\\n'
+            f'-newkey key-{ cred_number }.pem \\\n'
+            f'-certout certificate-{ cred_number }.pem \\\n'
+            f'-chainout chain-{ cred_number }.pem \\\n'
+            f'-extracertsout full-chain-{ cred_number }.pem'
+        )
+
+    @staticmethod
+    def get_tls_server_profile_command(host: str, cred_number: int) -> str:
+        return (
+            'openssl cmp \\\n'
+            '-cmd cr \\\n'
+            '-implicit_confirm \\\n'
+            '-tls_used \\\n'
+            '-trusted domain_credential_full_chain.pem \\\n'
+            f'-server { host } \\\n'
+            '-cert domain_credential_certificate.pem \\\n'
+            '-key domain_credential_key.pem \\\n'
+            f'-subject "/CN=Trustpoint-TLS-Server-Client-Credential-{ cred_number }" \\\n'
+            '-days 10 \\\n'
+            '-sans "critical 127.0.0.1 ::1 localhost" \\\n'
+            f'-newkey key-{ cred_number }.pem \\\n'
+            f'-certout certificate-{ cred_number }.pem \\\n'
+            f'-chainout chain-{ cred_number }.pem \\\n'
+            f'-extracertsout full-chain-{ cred_number }.pem'
+        )
+
+    @staticmethod
+    def get_opc_ua_client_profile_command(host: str, cred_number: int) -> str:
+        return (
+            'openssl cmp \\\n'
+            '-cmd cr \\\n'
+            '-implicit_confirm \\\n'
+            '-tls_used \\\n'
+            '-trusted domain_credential_full_chain.pem \\\n'
+            f'-server  { host } \\\n'
+            '-cert domain_credential_certificate.pem \\\n'
+            '-key domain_credential_key.pem \\\n'
+            f'-subject "/CN=Trustpoint-OPC-UA-Client-Credential-{ cred_number }" \\\n'
+            '-days 10 \\\n'
+            f'-sans "critical URI:trustpoint.opc-ua-uri.de/credential-{cred_number}" \\\n'
+            f'-newkey key-{ cred_number }.pem \\\n'
+            f'-certout certificate-{ cred_number }.pem \\\n'
+            f'-chainout chain-{ cred_number }.pem \\\n'
+            f'-extracertsout full-chain-{ cred_number }.pem'
+        )
+
+    @staticmethod
+    def get_opc_ua_server_profile_command(host: str, cred_number: int) -> str:
+        return (
+            'openssl cmp \\\n'
+            '-cmd cr \\\n'
+            '-implicit_confirm \\\n'
+            '-tls_used \\\n'
+            '-trusted domain_credential_full_chain.pem \\\n'
+            f'-server { host } \\\n'
+            '-cert domain_credential_certificate.pem \\\n'
+            '-key domain_credential_key.pem \\\n'
+            f'-subject "/CN=Trustpoint-OPC-UA-Server-Client-Credential-{ cred_number }" \\\n'
+            '-days 10 \\\n'
+            f'-sans "critical 127.0.0.1 ::1 localhost URI::trustpoint.opc-ua-uri.de/credential-{cred_number}" \\\n'
+            f'-newkey key-{ cred_number }.pem \\\n'
+            f'-certout certificate-{ cred_number }.pem \\\n'
+            f'-chainout chain-{ cred_number }.pem \\\n'
+            f'-extracertsout full-chain-{ cred_number }.pem'
         )
