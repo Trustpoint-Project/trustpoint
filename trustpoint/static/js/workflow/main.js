@@ -1,6 +1,6 @@
 import { api } from './api.js';
 import {
-  state, setName, buildPayload, addStep,
+  state, setName, addStep, buildPayload,
 } from './state.js';
 import { renderTriggersUI } from './ui-triggers.js';
 import { renderStepsUI } from './steps.js';
@@ -40,8 +40,8 @@ async function init() {
     api.triggers().catch(()=> ({})),
     api.mailTemplates().catch(()=> ({ groups: [] })),
   ]);
-  state.triggersMap  = trigs || {};
-  state.mailTemplates= mailTpls && mailTpls.groups ? mailTpls : { groups: [] };
+  state.triggersMap   = trigs || {};
+  state.mailTemplates = mailTpls && mailTpls.groups ? mailTpls : { groups: [] };
 
   // bind name
   els.wfNameEl.oninput = () => { setName(els.wfNameEl.value); onAnyChange(); };
@@ -77,14 +77,20 @@ async function init() {
   // preload edit
   if (state.editId) {
     const data = await api.definition(state.editId);
+
     // name
     state.name = data.name || '';
     els.wfNameEl.value = state.name;
 
-    // handler/protocol/operation (infer handler)
+    // handler/protocol/operation (fallback if handler not stored)
     const tr = (data.triggers && data.triggers[0]) || {};
-    const match = Object.values(state.triggersMap).find(t => t.protocol === tr.protocol && t.operation === tr.operation);
-    state.handler  = (match && match.handler) || '';
+    const match = Object.values(state.triggersMap).find(
+      t => t.protocol === tr.protocol && t.operation === tr.operation
+    );
+    const inferredHandler = match ? match.handler : (tr.handler || '');
+    // set in state + re-render UI to reflect defaults
+    // (we call renderTriggersUI again to guarantee consistency)
+    state.handler  = inferredHandler || '';
     state.protocol = tr.protocol || '';
     state.operation= tr.operation || '';
     renderTriggersUI({
@@ -108,14 +114,14 @@ async function init() {
       onChange: onAnyChange,
     });
 
-    // scopes
+    // scopes (reset first)
     state.scopes = { CA:new Set(), Domain:new Set(), Device:new Set() };
     (data.scopes || []).forEach(sc => {
       if (sc.type && sc.id != null && state.scopes[sc.type]) {
         state.scopes[sc.type].add(String(sc.id));
       }
     });
-    // best-effort cache of names
+    // ensure choices cache has names for selected items
     for (const kind of ['CA','Domain','Device']) {
       if (state.scopes[kind].size && state.scopesChoices[kind].size === 0) {
         try {
@@ -124,7 +130,7 @@ async function init() {
         } catch {}
       }
     }
-    // render scopes list
+    // re-init scopes UI to reflect current state
     await initScopesUI({
       typeEl: els.scopeTypeEl,
       multiEl: els.scopeMultiEl,
@@ -137,8 +143,21 @@ async function init() {
   // initial preview
   renderPreview(els.previewEl);
 
-  // save
+  // save (with validations)
   els.saveBtnEl.onclick = async () => {
+    // validations
+    const scopesCount =
+      state.scopes.CA.size + state.scopes.Domain.size + state.scopes.Device.size;
+    if (scopesCount === 0) {
+      return alert('Please add at least one Scope (CA, Domain, or Device).');
+    }
+    const emailStepsMissingRecipients = state.steps.some(
+      s => s.type === 'Email' && !(s.params.recipients || '').trim()
+    );
+    if (emailStepsMissingRecipients) {
+      return alert('Every Email step must have at least one recipient.');
+    }
+
     const payload = buildPayload();
     const { ok, data } = await api.save(payload, getCookie('csrftoken'));
     if (ok) {
@@ -149,6 +168,8 @@ async function init() {
   };
 }
 
-init().catch(err => {
-  console.error('Wizard init failed:', err);
+document.addEventListener('DOMContentLoaded', () => {
+  init().catch(err => {
+    console.error('Wizard init failed:', err);
+  });
 });

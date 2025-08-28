@@ -366,15 +366,24 @@ class SignalInstanceView(View):
 
     def post(self, request: HttpRequest, instance_id: UUID, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
         inst = get_object_or_404(WorkflowInstance, pk=instance_id)
+        print('post: 1')
         action = request.POST.get('action')
+        print('post: 2')
         if action not in {'Approved', 'Rejected'}:
             messages.error(request, f'Invalid action: {action!r}')
+            print('post: 3')
             return redirect('workflows:pending_list')
-
+        print('post: 4')
         advance_instance(inst, signal=action)
+        print('post: 5')
         if action == 'Approved':
+            print('post: 6')
             messages.success(request, f'Workflow {inst.id} approved and advanced.')
+            print('post: 7')
         else:
+            print('post: 8')
             messages.warning(request, f'Workflow {inst.id} was rejected.')
+            print('post: 9')
 
+        print('post: 10')
         return redirect('workflows:pending_list')

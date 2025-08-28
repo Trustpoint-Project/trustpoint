@@ -2,7 +2,26 @@ import {
   state, addStep, removeStep, updateStepType, updateStepParam,
 } from './state.js';
 
+// minimal styles for chips (one-time)
+let stylesInjected = false;
+function injectStyles() {
+  if (stylesInjected) return;
+  stylesInjected = true;
+  const style = document.createElement('style');
+  style.textContent = `
+    .chip-input { min-height: 2.375rem; display:flex; align-items:center; gap:.35rem; flex-wrap:wrap; padding:.375rem .5rem; border:1px solid var(--bs-border-color, #ced4da); border-radius:.375rem; background:#fff; }
+    .chip-input:focus-within { outline: 2px solid rgba(13,110,253,.2); }
+    .chip-input input { border:none; outline:none; min-width:12ch; flex:1 0 120px; padding:.25rem; }
+    .chip { display:inline-flex; align-items:center; gap:.35rem; border-radius:999px; padding:.15rem .5rem; background:#e9ecef; }
+    .chip .remove { border:none; background:transparent; cursor:pointer; font-size:1rem; line-height:1; padding:0 .1rem; opacity:.6; }
+    .chip .remove:hover { opacity:1; }
+  `;
+  document.head.appendChild(style);
+}
+
 export function renderStepsUI({containerEl, addBtnEl, onChange}) {
+  injectStyles();
+
   containerEl.textContent = '';
   const frag = document.createDocumentFragment();
   state.steps.forEach(step => frag.appendChild(stepCard(step, {containerEl, addBtnEl, onChange})));
@@ -102,16 +121,16 @@ function renderParams(step, container, ctx) {
   });
 }
 
-// -------- Email step --------
+// -------- Email step (chips + template/custom) --------
 function renderEmailParams(step, container, ctx) {
   const { onChange } = ctx;
+  container.textContent = ''; // avoid duplicate blocks
 
-  // 🔧 IMPORTANT: clear container to avoid duplicate sections on toggle
-  container.textContent = '';
-
-  // Recipients (csv)
-  container.appendChild(labeledTextArea('Recipients (comma-separated)', step.params.recipients || '', v => {
-    updateStepParam(step.id, 'recipients', v); onChange();
+  // Recipients (chips)
+  container.appendChild(chipField({
+    label: 'Recipients',
+    csv: step.params.recipients || '',
+    onChange: csv => { updateStepParam(step.id, 'recipients', csv); onChange(); },
   }));
 
   // From / CC / BCC
@@ -119,11 +138,15 @@ function renderEmailParams(step, container, ctx) {
   row.appendChild(colNode(labeledInput('From (optional)', step.params.from_email || '', v => {
     updateStepParam(step.id, 'from_email', v); onChange();
   }, 'email')));
-  row.appendChild(colNode(labeledInput('CC (optional, comma-separated)', step.params.cc || '', v => {
-    updateStepParam(step.id, 'cc', v); onChange();
+  row.appendChild(colNode(chipField({
+    label: 'CC (optional)',
+    csv: step.params.cc || '',
+    onChange: csv => { updateStepParam(step.id, 'cc', csv); onChange(); },
   })));
-  row.appendChild(colNode(labeledInput('BCC (optional, comma-separated)', step.params.bcc || '', v => {
-    updateStepParam(step.id, 'bcc', v); onChange();
+  row.appendChild(colNode(chipField({
+    label: 'BCC (optional)',
+    csv: step.params.bcc || '',
+    onChange: csv => { updateStepParam(step.id, 'bcc', csv); onChange(); },
   })));
   container.appendChild(row);
 
@@ -138,12 +161,10 @@ function renderEmailParams(step, container, ctx) {
       const first = firstTemplateKey();
       if (first) updateStepParam(step.id, 'template', first);
     }
-    // Re-render the Email section only (container is cleared inside)
-    renderEmailParams(step, container, ctx);
+    renderEmailParams(step, container, ctx); // re-render this section only
     onChange();
   });
   const custom = radio('email-mode-'+step.id, 'Write custom', !useTpl, () => {
-    // Switch to custom → clear template
     updateStepParam(step.id, 'template', '');
     renderEmailParams(step, container, ctx);
     onChange();
@@ -151,7 +172,7 @@ function renderEmailParams(step, container, ctx) {
   modeWrap.appendChild(tpl.wrap); modeWrap.appendChild(custom.wrap);
   container.appendChild(modeWrap);
 
-  // Template selects
+  // Template selectors
   const tplBlock = document.createElement('div'); tplBlock.className = useTpl ? '' : 'd-none';
   const groups = (state.mailTemplates && Array.isArray(state.mailTemplates.groups)) ? state.mailTemplates.groups : [];
 
@@ -205,6 +226,7 @@ function renderEmailParams(step, container, ctx) {
   }
 }
 
+// ---- small UI primitives ----
 function labeledInput(label, val, onInput, type='text') {
   const lbl = document.createElement('label');
   lbl.className = 'form-label small d-block';
@@ -244,4 +266,45 @@ function radio(name, text, checked, onChange) {
   const label = document.createElement('label'); label.className = 'form-check-label'; label.htmlFor = id; label.textContent = text;
   wrap.appendChild(input); wrap.appendChild(label);
   return { wrap, input };
+}
+
+// Chips
+function chipField({label, csv, onChange}) {
+  const lbl = document.createElement('label'); lbl.className = 'form-label small d-block';
+  lbl.textContent = label + ': ';
+  const holder = document.createElement('div'); holder.className = 'chip-input';
+  const input = document.createElement('input'); input.type = 'text'; input.placeholder = 'Type and Enter';
+  holder.appendChild(input);
+  lbl.appendChild(holder);
+
+  const tokens = [];
+  function sync() { onChange(tokens.join(', ')); }
+  function addChip(text) {
+    const val = (text || '').trim().replace(/,$/, '');
+    if (!val) return;
+    if (tokens.includes(val)) { input.value = ''; return; }
+    tokens.push(val);
+    const chip = document.createElement('span'); chip.className = 'chip'; chip.textContent = val;
+    const rm = document.createElement('button'); rm.type='button'; rm.className='remove'; rm.innerHTML='&times;';
+    rm.onclick = () => { const i = tokens.indexOf(val); if (i>=0) tokens.splice(i,1); chip.remove(); sync(); };
+    chip.appendChild(rm);
+    holder.insertBefore(chip, input);
+    input.value = '';
+    sync();
+  }
+  function seed(csv0) {
+    (csv0 || '').split(',').map(s => s.trim()).filter(Boolean).forEach(addChip);
+  }
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ',' || e.key === 'Tab') {
+      if (input.value.trim() !== '') { e.preventDefault(); addChip(input.value); }
+    } else if (e.key === 'Backspace' && input.value === '' && tokens.length) {
+      const lastChip = holder.querySelector('.chip:last-of-type');
+      if (lastChip) lastChip.querySelector('.remove').click();
+    }
+  });
+  input.addEventListener('blur', () => { if (input.value.trim()) addChip(input.value); });
+
+  seed(csv);
+  return lbl;
 }

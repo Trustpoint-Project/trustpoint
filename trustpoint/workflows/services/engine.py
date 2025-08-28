@@ -28,7 +28,10 @@ def advance_instance(
 
     # Main driver loop
     while True:
+        print('Inside while loop')
         nodes = instance.definition.definition.get('nodes', [])
+        print('Nodes: ')
+        print(nodes)
         try:
             node_meta = next(n for n in nodes if n['id'] == instance.current_step)
         except StopIteration:
@@ -37,11 +40,16 @@ def advance_instance(
             break
 
         node_type = node_meta.get('type')
+
+        print('Node type: ', node_type)
         executor = NodeExecutorFactory.create(node_type)
+        print('executor: ', executor)
         result: NodeResult = executor.execute(instance, signal)
+        print('result: ', result)
 
         # Stash per-step context if provided
         if result.context is not None:
+            print('result.None: ', result.context)
             sc = dict(instance.step_contexts or {})
             sc[str(instance.current_step)] = result.context
             instance.step_contexts = sc
@@ -49,6 +57,7 @@ def advance_instance(
 
         # Interpret result
         if result.status == ExecStatus.PASSED:
+            print('result.PASSED: ', result.status)
             # proceed to next node (if any) and keep running
             next_step = instance.get_next_step()
             if next_step:
@@ -63,6 +72,7 @@ def advance_instance(
             break
 
         if result.status == ExecStatus.WAITING:
+            print('result.WAITING: ', result.status)
             # Pause. Approval nodes set AwaitingApproval; others may set generic waits later.
             if node_type == 'Approval':
                 instance.state = WorkflowInstance.STATE_AWAITING
@@ -70,6 +80,7 @@ def advance_instance(
             break
 
         if result.status == ExecStatus.APPROVED:
+            print('result.APPROVED: ', result.status)
             # Terminal approval: mark Approved and *prepare* to continue later.
             # Move pointer to the NEXT node now so a later call resumes seamlessly.
             next_step = instance.get_next_step()
@@ -78,14 +89,16 @@ def advance_instance(
                 instance.save(update_fields=['current_step'])
             instance.state = WorkflowInstance.STATE_APPROVED
             instance.save(update_fields=['state'])
-            break
+            continue
 
         if result.status == ExecStatus.REJECTED:
+            print('result.REJECTED: ', result.status)
             instance.state = WorkflowInstance.STATE_REJECTED
             instance.save(update_fields=['state'])
-            break
+            continue
 
         if result.status == ExecStatus.COMPLETED:
+            print('result.COMPLETED: ', result.status)
             instance.state = WorkflowInstance.STATE_COMPLETED
             break
 
