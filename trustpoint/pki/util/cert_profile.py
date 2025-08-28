@@ -27,9 +27,18 @@ class ProfileValidationError(Exception):
 
 ALIAS_CN = AliasChoices('common_name', 'cn', 'CN', 'commonName', '2.5.4.3')
 
+class ProfileValuePropertyModel(BaseModel):
+    """Model for a profile value property."""
+    value: Any | None = None
+    default: Any | None = None
+    required: bool = False
+    mutable: bool = True
+
+    model_config = ConfigDict(extra='forbid')
+
 class SubjectModel(BaseModel):
     """Model for the subject DN of a certificate profile."""
-    common_name: str | None = Field(None, alias=ALIAS_CN)
+    common_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIAS_CN)
     #organization: str | None = None
     #organizational_unit: str | None = None
     #country: str | None = None
@@ -111,17 +120,6 @@ class InheritedProfileConfig:
 class JSONProfileVerifier:
     """Class to verify certificate requests against JSON-based profiles."""
 
-    def _build_model_from_dict(self, data: dict[str, Any], model_name: str = 'DynProfileModel') -> type[BaseModel]:
-        fields = {}
-        for key, value in data.items():
-            if isinstance(value, dict):
-                # Recursively generate a sub-model
-                nested_model = self._build_model_from_dict(value, model_name=f'{model_name}_{key}')
-                fields[key] = (type(nested_model), nested_model)
-            else:
-                fields[key] = (type(value), value)
-        return create_model(model_name, **fields)
-
     def __init__(self, profile: dict[str, Any]) -> None:
         """Initialize the verifier with a certificate profile."""
         validated_profile = CertProfileModel.model_validate(profile)
@@ -130,47 +128,6 @@ class JSONProfileVerifier:
 
         self.profile_dict = validated_profile.model_dump(exclude_unset=True)
         print('Profile Dict:', self.profile_dict)
-        return
-
-        fields = {}
-        for key, value in profile.items():
-            if isinstance(value, dict):
-                # Recursively generate a sub-model
-                nested_model = self._build_model_from_dict(value, model_name=f'DynProfileModel_{key}')
-                fields[key] = (type(nested_model), nested_model)
-            else:
-                fields[key] = (type(value), value)
-        fields['type'] = (Literal['cert_request'] | None, None)  # Ensure type is 'cert_request' if present
-        print('Fields:', fields)
-
-        validators = {}
-
-        #@model_validator(mode='before')
-        @field_validator('*', mode='after')
-        @staticmethod
-        def forbid_none_fields(value: str | None, info: dict[str, Any]) -> None:
-            print(f'Validating field: {info.field_name} with value: {value}')
-            if info.field_name in fields and fields[info.field_name][1] is None and value is not None:
-                msg = f"Field '{info.field_name}' is not allowed in the profile."
-                raise ValidationError(msg)
-
-        validators['forbid_none_fields'] = forbid_none_fields
-
-        config = ConfigDict(extra='allow')
-
-        self.request_validation_model = create_model(
-            'ProfileAwareCertRequestModel', __validators__=validators, __config__=config, **fields)
-
-
-    def apply_profile(self, request: dict[str, Any]) -> dict[str, Any]:
-        """Verify a certificate request against the profile and attempt to change it to match the profile.
-
-        Raises a ProfileValidationError if the request cannot be changed to match the profile.
-        """
-        validated_request = self.request_validation_model.model_validate(request)
-        validated_dict = self.request_validation_model.model_dump(validated_request)
-        print('Validation Model:', validated_dict)
-        return validated_dict
 
     @staticmethod
     def validate_request(request: dict[str, Any]) -> dict[str, Any]:
@@ -179,7 +136,7 @@ class JSONProfileVerifier:
         This just checks its structure, it does not validate against a profile.
         """
         req_model = CertRequestModel.model_validate(request)
-        return req_model.model_dump()
+        return req_model.model_dump(exclude_unset=True)
 
     @staticmethod
     def _is_simple_type(value: Any) -> bool:
@@ -200,6 +157,8 @@ class JSONProfileVerifier:
 
         Request fields are deleted in-place if they are not allowed by the profile.
         """
+        if not isinstance(request, dict):
+            return
         for field, value in list(request.items()):
             if field in profile or profile_config.allow_implicit or (allow_list and field in allow_list):
                 # Field is explicitly or implicitly allowed, keep it
@@ -223,14 +182,15 @@ class JSONProfileVerifier:
         profile_allow = profile.get('allow', parent_profile_config.allow_implicit)
         profile_reject_mods = profile.get('reject_mods', parent_profile_config.reject_mods)
         profile_mutable = profile.get('mutable', parent_profile_config.mutable)
-        if profile_allow == '*':
-            profile_allow = True
 
         profile_config = InheritedProfileConfig(
-            allow_implicit=profile_allow,
+            allow_implicit=(profile_allow == '*'),
             reject_mods=profile_reject_mods,
             mutable=profile_mutable
         )
+
+        if not request:
+            request = {}
 
         self._handle_request_only_fields(
             request, profile, profile_config, profile_allow if isinstance(profile_allow, list) else None)
@@ -240,6 +200,7 @@ class JSONProfileVerifier:
         filtered_profile = {k: v for k, v in profile.items() if k not in skip_keys}
 
         for field, profile_value in filtered_profile.items():
+            print('Processing field:', field, 'Profile value:', profile_value, 'Request:', request)
             request_value = request.get(field)
             if profile_value is None and request_value is not None:
                 # Field is not allowed in the profile, but present in the request
@@ -249,9 +210,8 @@ class JSONProfileVerifier:
                 del request[field]
                 continue
             if field not in request:
+                print(f'Field {field} not in request {request}')
                 if isinstance(profile_value, dict):
-                    # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
-                    self._apply_profile_rules(request.setdefault(field, {}), profile_value, profile_config)
                 # check for default and required fields
                     if 'value' in profile_value:
                         # Set default value from profile
@@ -259,6 +219,7 @@ class JSONProfileVerifier:
                         continue
                     if 'default' in profile_value:
                         # Set default value from profile
+                        print(f"Setting default for field '{field}' to {profile_value['default']}")
                         request[field] = profile_value['default']
                         continue
                     if 'required' in profile_value:
@@ -266,15 +227,16 @@ class JSONProfileVerifier:
                         msg = f"Field '{field}' is required but not present in the request."
                         raise ProfileValidationError(msg)
                     # 're' case
+                    # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
+                    request[field] = self._apply_profile_rules(request.setdefault(field, {}), profile_value, profile_config)
                 elif JSONProfileVerifier._is_simple_type(profile_value):
                     request[field] = profile_value
                 else:
                     print(f"Warning: Field '{field}' in profile is of type {type(profile_value).__name__}, skipping.")
                 continue
             # Field is present in both request and profile
-            # TODO! Required but set to 'None' in the request
             if isinstance(profile_value, dict):
-                self._apply_profile_rules(request.setdefault(field, {}), profile_value, profile_config)
+                request[field] = self._apply_profile_rules(request.setdefault(field, {}), profile_value, profile_config)
                 local_value_mutable = profile_value.get('mutable', profile_mutable)
                 if 'value' in profile_value and not local_value_mutable:
                     # Field is not mutable, force the value from the profile
@@ -292,11 +254,14 @@ class JSONProfileVerifier:
                 print(f"Warning: Field '{field}' in profile is of type {type(profile_value).__name__}, skipping.")
                 continue
 
+        print(f'Resulting request at profile level {profile}:', request)
+
         return request
 
     def apply_profile_to_request(self, request: dict[str, Any]) -> dict[str, Any]:
         """Apply the profile to a certificate request and return the modified request."""
         validated_request = self.validate_request(request=request)
+        print('Validated Request before profile rules:', validated_request)
         return self._apply_profile_rules(validated_request, self.profile_dict)
         # For each field in the request, check on the same hierarchy level in the profile if:
         # - it is allowed.

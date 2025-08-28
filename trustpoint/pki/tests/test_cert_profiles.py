@@ -45,7 +45,7 @@ def test_allowed_cn_present() -> None:
     """Test that a request with an allowed CN passes verification."""
     profile = {
         'type': 'cert_profile',
-        'subj': {'allow': ['cn', 'common_name']}, # TODO: Normalize the Allow list!
+        'subj': {'allow': ['cn','common_name']}, # TODO: Normalize the Allow list!
     }
     verifier = JSONProfileVerifier(profile)
     request = {
@@ -54,6 +54,45 @@ def test_allowed_cn_present() -> None:
     validated_request = verifier.apply_profile_to_request(request)
     print('Validated Request: ', validated_request)
     assert validated_request['subject']['common_name'] == 'example.com'
+
+def test_unspecified_cn_present() -> None:
+    """Test that a request with a not explicitly allowed CN and without implicit allow fails verification."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'allow': ['pamajauke']}, # TODO: Normalize the Allow list!
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'}
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    print('Validated Request: ', validated_request)
+    assert 'common_name' not in validated_request['subject']
+
+def test_default_cn_present_in_request() -> None:
+    """Test that the request CN takes precedence over the profile's default CN."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': {'default': 'default.example.com'}},
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'}
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    assert validated_request['subject']['common_name'] == 'example.com'
+
+def test_default_cn_absent_in_request() -> None:
+    """Test that the profile's default CN is applied when the request CN is absent."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': {'default': 'default.example.com'}},
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {'subj': {}}
+    validated_request = verifier.apply_profile_to_request(request)
+    print('Validated Request: ', validated_request)
+    assert validated_request['subject']['common_name'] == 'default.example.com'
 
 def test_implicit_allow_subject() -> None:
     """Test that a request with implicit allow for all fields passes verification."""
