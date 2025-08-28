@@ -1,0 +1,12 @@
+Subject: {{ workflow.name }}: Device deleted
+
+A device has been deleted.
+
+Workflow: {{ workflow.name }}
+Instance: {{ instance.id }}
+State:    {{ state }}
+Step:     {{ step }}
+
+Device: {% if payload.device_name %}{{ payload.device_name }} ({{ payload.device_id }}){% elif payload.device_id %}{{ payload.device_id }}{% else %}-{% endif %}
+
+Verify that all credentials and access have been revoked.
