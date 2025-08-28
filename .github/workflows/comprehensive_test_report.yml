@@ -78,13 +78,13 @@ jobs:
           path: gh-pages
 
       - name: Download unit-test-results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: unit-test-results
           path: unit-test-results
 
       - name: Download bdd-test-results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: bdd-test-results
           path: bdd-test-results
