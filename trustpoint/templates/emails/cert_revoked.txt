@@ -1,0 +1,10 @@
+Dear {{ owner_name }},
+
+The certificate {{ cert_name }} (serial {{ serial }})
+has been revoked on {{ revocation_date }} for the following reason:
+{{ reason }}
+
+If you have questions, contact {{ support_email }}.
+
+Thank you,
+Trustpoint PKI

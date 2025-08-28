@@ -1,0 +1,11 @@
+<p>An action in the workflow requires human approval.</p>
+<ul>
+  <li><b>Workflow:</b> {{ workflow.name }}</li>
+  <li><b>Instance:</b> {{ instance.id }}</li>
+  <li><b>State:</b> {{ state }}</li>
+  <li><b>Step:</b> {{ step }}</li>
+  <li><b>Protocol:</b> {{ payload.protocol|default:"-" }}</li>
+  <li><b>Operation:</b> {{ payload.operation|default:"-" }}</li>
+  <li><b>Requestor:</b> {{ payload.requestor|default:"unknown" }}</li>
+</ul>
+<p>Please approve or reject in the approvals console.</p>

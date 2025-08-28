@@ -1,0 +1,10 @@
+Subject: {{ workflow.name }}: Rejected
+
+The approval was rejected.
+
+Workflow: {{ workflow.name }}
+Instance: {{ instance.id }}
+State:    {{ state }}
+Step:     {{ step }}
+
+No further actions will be taken automatically.

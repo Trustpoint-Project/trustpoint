@@ -1,0 +1,14 @@
+Subject: {{ workflow.name }}: Certificate revoked
+
+A certificate has been revoked.
+
+Workflow: {{ workflow.name }}
+Instance: {{ instance.id }}
+State:    {{ state }}
+Step:     {{ step }}
+
+Details:
+- Certificate ID: {{ payload.cert_id|default:"-" }}
+- Reason: {{ payload.revocation_reason|default:"-" }}
+
+Ensure dependent services are updated accordingly.

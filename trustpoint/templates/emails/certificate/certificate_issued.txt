@@ -1,0 +1,16 @@
+Subject: {{ workflow.name }}: Certificate issued
+
+A certificate has been issued.
+
+Workflow: {{ workflow.name }}
+Instance: {{ instance.id }}
+State:    {{ state }}
+Step:     {{ step }}
+
+Details:
+- Protocol: {{ payload.protocol|default:"-" }}
+- Operation: {{ payload.operation|default:"-" }}
+- Certificate ID: {{ payload.cert_id|default:"-" }}
+- Device: {% if payload.device_name %}{{ payload.device_name }} ({{ payload.device_id }}){% elif payload.device_id %}{{ payload.device_id }}{% else %}-{% endif %}
+
+If distribution is required, complete any manual steps as needed.
