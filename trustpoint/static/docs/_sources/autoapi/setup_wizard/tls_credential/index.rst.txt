@@ -1,0 +1,57 @@
+setup_wizard.tls_credential
+===========================
+
+.. py:module:: setup_wizard.tls_credential
+
+.. autoapi-nested-parse::
+
+   Module that contains the logic for generating the TLS server credential.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   setup_wizard.tls_credential.ONE_DAY
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   setup_wizard.tls_credential.TlsServerCredentialGenerator
+
+
+Module Contents
+---------------
+
+.. py:data:: ONE_DAY
+
+.. py:class:: TlsServerCredentialGenerator(ipv4_addresses, ipv6_addresses, domain_names)
+
+   Wraps methods for generating a TLS server credential.
+
+
+   .. py:attribute:: _ipv4_addresses
+
+
+   .. py:attribute:: _ipv6_addresses
+
+
+   .. py:attribute:: _domain_names
+
+
+   .. py:method:: _generate_key_pair()
+      :staticmethod:
+
+
+
+   .. py:method:: generate_tls_server_credential()
+
+      Generates a self-signed TLS credential for use by the Trustpoint Apache server.
+
+
+

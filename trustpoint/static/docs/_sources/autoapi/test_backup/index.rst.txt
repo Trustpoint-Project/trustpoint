@@ -1,0 +1,81 @@
+test_backup
+===========
+
+.. py:module:: test_backup
+
+.. autoapi-nested-parse::
+
+   Test suite for the BackupOptions model.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   test_backup.BackupOptionsModelTest
+   test_backup.BackupOptionsFormTest
+
+
+Module Contents
+---------------
+
+.. py:class:: BackupOptionsModelTest(methodName='runTest')
+
+   Bases: :py:obj:`django.test.TestCase`
+
+
+   Test suite for the BackupOptions model, ensuring that it enforces singleton behavior.
+
+
+   .. py:method:: test_singleton_creation()
+
+      Test that attempts to create more than one BackupOptions instance.
+
+
+
+   .. py:method:: test_singleton_save_overwrite()
+
+      Test that saving an existing BackupOptions instance overwrites its values.
+
+
+
+.. py:class:: BackupOptionsFormTest(methodName='runTest')
+
+   Bases: :py:obj:`django.test.TestCase`
+
+
+   Test suite for the BackupOptionsForm, ensuring validation logic.
+
+
+   .. py:method:: test_invalid_sftp_configuration()
+
+      Test that enabling SFTP storage without providing required fields.
+
+
+
+   .. py:method:: test_sftp_password_auth_without_password()
+
+      Test validation fails when password is not provided for PASSWORD auth method.
+
+
+
+   .. py:method:: test_sftp_ssh_key_auth_without_private_key()
+
+      Test validation fails when private_key is not provided for SSH_KEY auth method.
+
+
+
+   .. py:method:: test_valid_sftp_password_auth()
+
+      Test that SFTP with PASSWORD auth method and valid password passes validation.
+
+
+
+   .. py:method:: test_valid_sftp_ssh_key_auth()
+
+      Test that SFTP with SSH_KEY auth method and valid private_key passes validation.
+
+
+

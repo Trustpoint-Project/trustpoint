@@ -1,0 +1,22 @@
+users
+=====
+
+.. py:module:: users
+
+.. autoapi-nested-parse::
+
+   Application responsible for user management.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/users/apps/index
+   /autoapi/users/urls/index
+   /autoapi/users/views/index
+
+

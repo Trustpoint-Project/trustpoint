@@ -1,0 +1,27 @@
+trustpoint.tests.test_wsgi
+==========================
+
+.. py:module:: trustpoint.tests.test_wsgi
+
+.. autoapi-nested-parse::
+
+   Tests for the WSGI configuration module.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   trustpoint.tests.test_wsgi.test_wsgi_application_initialization
+
+
+Module Contents
+---------------
+
+.. py:function:: test_wsgi_application_initialization()
+
+   Test that the WSGI application is initialized correctly.
+
+

@@ -1,0 +1,131 @@
+features.steps.r_008_steps
+==========================
+
+.. py:module:: features.steps.r_008_steps
+
+.. autoapi-nested-parse::
+
+   Python steps file for R_008.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   features.steps.r_008_steps.step_when_admin_configures_auto_ca
+   features.steps.r_008_steps.step_then_system_generates_ca
+   features.steps.r_008_steps.step_then_generated_ca_appears
+   features.steps.r_008_steps.step_when_admin_sets_ca_config
+   features.steps.r_008_steps.step_then_system_generates_ca_with_config
+   features.steps.r_008_steps.step_when_admin_attempts_incomplete_ca
+   features.steps.r_008_steps.step_then_system_prevents_ca
+   features.steps.r_008_steps.step_then_error_message_logged
+   features.steps.r_008_steps.step_when_admin_inspects_ca
+   features.steps.r_008_steps.step_then_ca_contains_expected_values
+   features.steps.r_008_steps.step_when_admin_issues_certificate
+   features.steps.r_008_steps.step_then_certificate_issuance_succeeds
+
+
+Module Contents
+---------------
+
+.. py:function:: step_when_admin_configures_auto_ca(context)
+
+   Simulates the admin configuring the system for automatic CA generation.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_system_generates_ca(context)
+
+   Verifies that the system has automatically generated a CA.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_generated_ca_appears(context)
+
+   Ensures the newly generated CA appears in the CA list.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_admin_sets_ca_config(context)
+
+   Simulates the admin setting CA parameters before auto-generation.
+
+   The parameters include key size, validity period, and subject name.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_system_generates_ca_with_config(context)
+
+   Ensures the system generates a CA that matches the provided configuration.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_admin_attempts_incomplete_ca(context)
+
+   Simulates the admin attempting to generate a CA with missing parameters.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_system_prevents_ca(context)
+
+   Verifies that the system blocks CA generation when parameters are incomplete.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_error_message_logged(context)
+
+   Ensures an error message is logged when CA generation fails.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_admin_inspects_ca(context)
+
+   Simulates the admin checking the details of the generated CA.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_ca_contains_expected_values(context)
+
+   Ensures the generated CA contains the correct attributes.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_admin_issues_certificate(context)
+
+   Simulates the admin using the generated CA to issue a certificate.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_certificate_issuance_succeeds(context)
+
+   Verifies that a certificate can be successfully issued using the generated CA.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+

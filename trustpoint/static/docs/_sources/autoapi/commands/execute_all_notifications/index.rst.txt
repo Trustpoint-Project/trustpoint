@@ -1,0 +1,44 @@
+commands.execute_all_notifications
+==================================
+
+.. py:module:: commands.execute_all_notifications
+
+.. autoapi-nested-parse::
+
+   This module contains a Django management command to execute all task-related notifications sequentially.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.execute_all_notifications.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   A Django management command to run all task-related commands in sequence.
+
+
+   .. py:attribute:: help
+      :value: 'Run all task-related commands sequentially.'
+
+
+
+   .. py:method:: handle(*args, **kwargs)
+
+      Entrypoint for the command.
+
+      :param \*args: Additional positional arguments.
+      :param \*\*kwargs: Additional keyword arguments.
+
+
+

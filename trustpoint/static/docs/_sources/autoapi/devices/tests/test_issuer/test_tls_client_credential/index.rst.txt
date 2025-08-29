@@ -1,0 +1,33 @@
+devices.tests.test_issuer.test_tls_client_credential
+====================================================
+
+.. py:module:: devices.tests.test_issuer.test_tls_client_credential
+
+.. autoapi-nested-parse::
+
+   Test suite for validating the TLS Client Credential functionality.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   devices.tests.test_issuer.test_tls_client_credential.test_issue_tls_client_credential
+   devices.tests.test_issuer.test_tls_client_credential.test_issue_tls_client_certificate
+
+
+Module Contents
+---------------
+
+.. py:function:: test_issue_tls_client_credential(device_instance)
+
+   Test that issuing a TLS client credential.
+
+
+.. py:function:: test_issue_tls_client_certificate(device_instance, ec_private_key)
+
+   Test issuing a TLS client certificate using the `issue_tls_client_certificate` method.
+
+

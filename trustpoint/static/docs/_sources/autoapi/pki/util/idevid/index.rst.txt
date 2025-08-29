@@ -1,0 +1,141 @@
+pki.util.idevid
+===============
+
+.. py:module:: pki.util.idevid
+
+.. autoapi-nested-parse::
+
+   Classes for handling IDevID certificates according to IEEE 802.1AR.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   pki.util.idevid.IDevIDAuthenticationError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.util.idevid.IDevIDExtensionPolicy
+   pki.util.idevid.IDevIDVerifier
+   pki.util.idevid.IDevIDAuthenticator
+
+
+Module Contents
+---------------
+
+.. py:exception:: IDevIDAuthenticationError
+
+   Bases: :py:obj:`Exception`
+
+
+   Exception raised for IDevID authentication failures.
+
+
+.. py:class:: IDevIDExtensionPolicy
+
+   Builder for IDevID extension policies.
+
+
+   .. py:method:: _idevid_base_policy()
+      :staticmethod:
+
+
+      Create an extension policy for all certificates in a IDevID PKI.
+
+
+
+   .. py:method:: idevid_ee_policy()
+      :staticmethod:
+
+
+      Create an extension policy for IDevID end-entity certificates.
+
+
+
+   .. py:method:: idevid_ca_policy()
+      :staticmethod:
+
+
+      Create an extension policy for IDevID CA certificates.
+
+
+
+.. py:class:: IDevIDVerifier
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`
+
+
+   Verifies IDevID certificates as used e.g. by EST with mutual TLS auth.
+
+
+   .. py:method:: verify_idevid_against_truststore(idevid_cert, intermediate_cas, truststore)
+      :classmethod:
+
+
+      Verify the IDevID certificate against the provided truststore.
+
+
+
+.. py:class:: IDevIDAuthenticator
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`
+
+
+   Authenticates IDevID certificates as used e.g. by EST with mutual TLS auth.
+
+
+   .. py:method:: _get_matching_registrations(idevid_subj_sn, domain)
+      :staticmethod:
+
+
+      Get DevIdRegistration patters matching the given domain and serial number.
+
+
+
+   .. py:method:: _auto_create_device_from_idevid(idevid_cert, idevid_subj_sn, domain, pki_protocol, onboarding_protocol)
+      :staticmethod:
+
+
+      Auto-create a new DeviceModel from the IDevID certificate.
+
+
+
+   .. py:method:: get_subject_serial_number(idevid_cert)
+      :staticmethod:
+
+
+      Get the serial number from the subject of the IDevID certificate.
+
+
+
+   .. py:method:: authenticate_idevid_from_x509_no_device(idevid_cert, intermediate_cas, domain = None)
+      :classmethod:
+
+
+      Authenticate client using an IDevID certificate.
+
+
+
+   .. py:method:: authenticate_idevid_from_x509(idevid_cert, intermediate_cas, domain = None, onboarding_protocol = DeviceModel.OnboardingProtocol.EST_IDEVID, pki_protocol = DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE)
+      :classmethod:
+
+
+      Authenticate client using IDevID certificate for Domain Credential request and create a device.
+
+
+
+   .. py:method:: authenticate_idevid(request, domain = None)
+      :classmethod:
+
+
+      Authenticate client using IDevID certificate for Domain Credential request.
+
+
+

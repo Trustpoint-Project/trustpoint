@@ -1,0 +1,28 @@
+trustpoint
+==========
+
+.. py:module:: trustpoint
+
+.. autoapi-nested-parse::
+
+   Core of the Trustpoint Django Application.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/trustpoint/asgi/index
+   /autoapi/trustpoint/forms/index
+   /autoapi/trustpoint/logger/index
+   /autoapi/trustpoint/middleware/index
+   /autoapi/trustpoint/settings/index
+   /autoapi/trustpoint/tests/index
+   /autoapi/trustpoint/urls/index
+   /autoapi/trustpoint/views/index
+   /autoapi/trustpoint/wsgi/index
+
+

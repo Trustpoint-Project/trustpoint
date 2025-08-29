@@ -1,0 +1,297 @@
+pki.views.truststores
+=====================
+
+.. py:module:: pki.views.truststores
+
+.. autoapi-nested-parse::
+
+   This module contains all views concerning the PKI -> Truststore section.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.views.truststores.TruststoresRedirectView
+   pki.views.truststores.TruststoresContextMixin
+   pki.views.truststores.TruststoreTableView
+   pki.views.truststores.TruststoreCreateView
+   pki.views.truststores.TruststoreDetailView
+   pki.views.truststores.TruststoreDownloadView
+   pki.views.truststores.TruststoreMultipleDownloadView
+   pki.views.truststores.TruststoreBulkDeleteConfirmView
+
+
+Module Contents
+---------------
+
+.. py:class:: TruststoresRedirectView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.base.RedirectView`
+
+
+   View that redirects to the index of the PKI Truststores application: Truststores.
+
+
+   .. py:attribute:: permanent
+      :value: False
+
+
+
+   .. py:attribute:: pattern_name
+      :value: 'pki:truststores'
+
+
+
+.. py:class:: TruststoresContextMixin
+
+   Mixin which adds some extra context for the PKI Views.
+
+
+   .. py:attribute:: extra_context
+      :type:  ClassVar
+
+
+.. py:class:: TruststoreTableView
+
+   Bases: :py:obj:`TruststoresContextMixin`, :py:obj:`trustpoint.views.base.SortableTableMixin`, :py:obj:`django.views.generic.list.ListView`\ [\ :py:obj:`pki.models.truststore.TruststoreModel`\ ]
+
+
+   Truststore Table View.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/truststores/truststores.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'truststores'
+
+
+
+   .. py:attribute:: paginate_by
+
+
+   .. py:attribute:: default_sort_param
+      :value: 'unique_name'
+
+
+
+.. py:class:: TruststoreCreateView
+
+   Bases: :py:obj:`TruststoresContextMixin`, :py:obj:`django.views.generic.edit.FormView`\ [\ :py:obj:`pki.forms.TruststoreAddForm`\ ]
+
+
+   View for creating a new Truststore.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/truststores/add/file_import.html'
+
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:method:: form_valid(form)
+
+      If the form is valid, redirect to Truststore overview.
+
+
+
+   .. py:method:: get_success_url()
+
+      You could still use a success URL here if needed.
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Include domain in context only if pk is present.
+
+
+
+.. py:class:: TruststoreDetailView
+
+   Bases: :py:obj:`TruststoresContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`pki.models.truststore.TruststoreModel`\ ]
+
+
+   The truststore detail view.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/truststores/details.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'truststore'
+
+
+
+.. py:class:: TruststoreDownloadView
+
+   Bases: :py:obj:`TruststoresContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`pki.models.truststore.TruststoreModel`\ ]
+
+
+   View for downloading a single truststore.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/truststores/download.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'truststore'
+
+
+
+   .. py:method:: get(request, pk = None, file_format = None, *args, **kwargs)
+
+      HTTP GET Method.
+
+      If only the certificate primary key are passed in the url, the download summary will be displayed.
+      If value for file_format is also provided, a file download will be performed.
+
+      Compare the re_path regex in the pki.urls package.
+
+      :param request: The HttpRequest object.
+      :param pk: A string containing the certificate primary key.
+      :param file_format: The format of the certificate to download.
+      :param \*args: Positional arguments.
+      :param \*\*kwargs: Keyword arguments.
+
+      :returns: The HTTP response with either the download summary or a file download.
+      :rtype: HttpResponse
+
+      :raises Http404:
+
+
+
+.. py:class:: TruststoreMultipleDownloadView
+
+   Bases: :py:obj:`TruststoresContextMixin`, :py:obj:`trustpoint.views.base.PrimaryKeyListFromPrimaryKeyString`, :py:obj:`django.views.generic.list.ListView`\ [\ :py:obj:`pki.models.truststore.TruststoreModel`\ ]
+
+
+   View for downloading multiple truststores at once as archived files.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/truststores/download_multiple.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'truststores'
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adding the part of the url to the context, that contains the truststores primary keys.
+
+      This is used for the {% url }% tags in the template to download files.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data().
+
+      :returns: The context data.
+      :rtype: dict
+
+
+
+   .. py:method:: get(request, pks = None, file_format = None, archive_format = None, *args, **kwargs)
+
+      HTTP GET Method.
+
+      If only certificate primary keys are passed in the url, the download summary will be displayed.
+      If value for file_format and archive_format are also provided, a file download will be performed.
+
+      Compare the re_path regex in the pki.urls package.
+
+      :param request: The HttpRequest object.
+      :param pks: A string containing the certificate primary keys, e.g. 1/2/3/4/5
+      :param file_format: The format of the archived certificate files.
+      :param archive_format: The archive format that will be provided as download.
+      :param \*args: Positional arguments.
+      :param \*\*kwargs: Keyword arguments.
+
+      :returns: The HTTP response with either the download summary or a file download.
+      :rtype: HttpResponse
+
+      :raises Http404:
+
+
+
+.. py:class:: TruststoreBulkDeleteConfirmView(**kwargs)
+
+   Bases: :py:obj:`TruststoresContextMixin`, :py:obj:`trustpoint.views.base.BulkDeleteView`
+
+
+   View for confirming the deletion of multiple truststores.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/truststores/confirm_delete.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'truststores'
+
+
+
+   .. py:method:: form_valid(form)
+
+      Attempts to delete the selected truststores on valid form.
+
+
+

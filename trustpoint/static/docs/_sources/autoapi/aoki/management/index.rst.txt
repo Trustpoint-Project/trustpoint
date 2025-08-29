@@ -1,0 +1,20 @@
+aoki.management
+===============
+
+.. py:module:: aoki.management
+
+.. autoapi-nested-parse::
+
+   Django Management Commands specific to AOKI.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/aoki/management/commands/index
+
+

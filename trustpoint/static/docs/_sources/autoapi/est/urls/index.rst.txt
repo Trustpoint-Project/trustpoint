@@ -1,0 +1,29 @@
+est.urls
+========
+
+.. py:module:: est.urls
+
+.. autoapi-nested-parse::
+
+   URL configuration for the 'est' app.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   est.urls.app_name
+   est.urls.urlpatterns
+
+
+Module Contents
+---------------
+
+.. py:data:: app_name
+   :value: 'est'
+
+
+.. py:data:: urlpatterns
+

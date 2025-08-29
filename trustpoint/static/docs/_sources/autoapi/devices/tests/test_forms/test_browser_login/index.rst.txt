@@ -1,0 +1,51 @@
+devices.tests.test_forms.test_browser_login
+===========================================
+
+.. py:module:: devices.tests.test_forms.test_browser_login
+
+.. autoapi-nested-parse::
+
+   Test suite for validating the browser login functionality.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   devices.tests.test_forms.test_browser_login.test_browser_login_form_valid
+   devices.tests.test_forms.test_browser_login.test_browser_login_form_invalid_otp_structure
+   devices.tests.test_forms.test_browser_login.test_browser_login_form_nonexistent_credential
+   devices.tests.test_forms.test_browser_login.test_browser_login_form_invalid_otp_value
+   devices.tests.test_forms.test_browser_login.test_browser_login_form_missing_otp
+
+
+Module Contents
+---------------
+
+.. py:function:: test_browser_login_form_valid(remote_device_credential_download_instance)
+
+   Test the BrowserLoginForm with a valid OTP.
+
+
+.. py:function:: test_browser_login_form_invalid_otp_structure()
+
+   Test the BrowserLoginForm with an OTP that has an invalid structure.
+
+
+.. py:function:: test_browser_login_form_nonexistent_credential(remote_device_credential_download_instance)
+
+   Test the BrowserLoginForm with a non-existent credential ID in the OTP.
+
+
+.. py:function:: test_browser_login_form_invalid_otp_value(remote_device_credential_download_instance)
+
+   Test the BrowserLoginForm with an invalid OTP value.
+
+
+.. py:function:: test_browser_login_form_missing_otp()
+
+   Test the BrowserLoginForm with a missing OTP.
+
+

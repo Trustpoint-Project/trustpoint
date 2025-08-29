@@ -1,0 +1,69 @@
+devices.tests.test_models.test_device_model
+===========================================
+
+.. py:module:: devices.tests.test_models.test_device_model
+
+.. autoapi-nested-parse::
+
+   Tests for the DeviceModel model.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   devices.tests.test_models.test_device_model.test_no_onboarding_with_est_password
+   devices.tests.test_models.test_device_model.test_no_onboarding_with_cmp_shared_secret
+   devices.tests.test_models.test_device_model.test_est_onboarding_with_client_certificate
+   devices.tests.test_models.test_device_model.test_cmp_onboarding_with_client_certificate
+   devices.tests.test_models.test_device_model.test_generic_device_no_onboarding
+   devices.tests.test_models.test_device_model.test_device_opcua_gds
+   devices.tests.test_models.test_device_model.test_device_without_domain
+   devices.tests.test_models.test_device_model.test_device_creation_without_common_name
+
+
+Module Contents
+---------------
+
+.. py:function:: test_no_onboarding_with_est_password(domain_instance)
+
+   Test for no onboarding configuration with EST Password PKI protocol.
+
+
+.. py:function:: test_no_onboarding_with_cmp_shared_secret(domain_instance)
+
+   Test for no onboarding configuration with CMP Shared Secret PKI protocol.
+
+
+.. py:function:: test_est_onboarding_with_client_certificate(domain_instance)
+
+   Test for EST onboarding configuration with EST Client Certificate PKI protocol.
+
+
+.. py:function:: test_cmp_onboarding_with_client_certificate(domain_instance)
+
+   Test for CMP onboarding configuration with CMP Client Certificate PKI protocol.
+
+
+.. py:function:: test_generic_device_no_onboarding(domain_instance)
+
+   Test for a generic device with no onboarding configurations.
+
+
+.. py:function:: test_device_opcua_gds(domain_instance)
+
+   Test for a device with OPC UA GDS type.
+
+
+.. py:function:: test_device_without_domain()
+
+   Test for a device with no assigned domain.
+
+
+.. py:function:: test_device_creation_without_common_name(domain_instance)
+
+   Test for device creation without a common name.
+
+

@@ -1,0 +1,1444 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" />
+
+    <!-- Generated with Sphinx 8.2.3 and Furo 2024.08.06 -->
+        <title>notifications.models - Trustpoint 0.3.0.dev1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=354aac6f" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=302659d7" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f8f8f8;
+  --color-code-foreground: black;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">Trustpoint 0.3.0.dev1 documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  
+  
+  <span class="sidebar-brand-text">Trustpoint 0.3.0.dev1 documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">🚀 Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/quickstart_setup.html">Quickstart Setup Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/quickstart_operate.html">Quickstart Operation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/usage_guide.html">Trustpoint Usage Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/community_support.html">Community &amp; Support</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/faq.html">Frequently Asked Questions (FAQ)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">📟 Devices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../devices/onboarding.html">Onboarding Mechanisms</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../devices/aoki.html">Automated Onboarding Key Infrastructure (AOKI)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">📍 Indices and Tables</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../indices_and_tables/glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../indices_and_tables/issued_certificates.html">Issued Certificate Defaults</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">🔎 Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../testing/test_plan.html">Test Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../testing/ci_cd.html">CI/CD</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../testing/test_report.html">Test Report</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">🧑‍💻 Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../development/development.html">Trustpoint Development environment setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../development/sbom.html">Trustpoint Software Bill of Materials</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../autoapi/index.html">API Reference</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of API Reference</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/cmp/index.html">cmp</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of cmp</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/cmp/apps/index.html">cmp.apps</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/cmp/urls/index.html">cmp.urls</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/cmp/util/index.html">cmp.util</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/cmp/views/index.html">cmp.views</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/est/index.html">est</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of est</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/est/apps/index.html">est.apps</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/est/tests/index.html">est.tests</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><div class="visually-hidden">Toggle navigation of est.tests</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/est/tests/client/index.html">est.tests.client</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/est/tests/test_est_interface/index.html">est.tests.test_est_interface</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/est/urls/index.html">est.urls</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/est/views/index.html">est.views</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/pki/index.html">pki</a><input class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><div class="visually-hidden">Toggle navigation of pki</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/pki/admin/index.html">pki.admin</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/pki/apps/index.html">pki.apps</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/pki/auto_gen_pki/index.html">pki.auto_gen_pki</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/pki/forms/index.html">pki.forms</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/pki/models/index.html">pki.models</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><div class="visually-hidden">Toggle navigation of pki.models</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/models/certificate/index.html">pki.models.certificate</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/models/credential/index.html">pki.models.credential</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/models/devid_registration/index.html">pki.models.devid_registration</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/models/domain/index.html">pki.models.domain</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/models/extension/index.html">pki.models.extension</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/models/issuing_ca/index.html">pki.models.issuing_ca</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/models/truststore/index.html">pki.models.truststore</a></li>
+</ul>
+</li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/pki/tests/index.html">pki.tests</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><div class="visually-hidden">Toggle navigation of pki.tests</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/tests/conftest/index.html">pki.tests.conftest</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/tests/fixtures/index.html">pki.tests.fixtures</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/tests/test_auto_gen_pki/index.html">pki.tests.test_auto_gen_pki</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/tests/test_idevid_verifier/index.html">pki.tests.test_idevid_verifier</a></li>
+<li class="toctree-l4 has-children"><a class="reference internal" href="../../autoapi/pki/tests/test_models/index.html">pki.tests.test_models</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><div class="visually-hidden">Toggle navigation of pki.tests.test_models</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/pki/tests/test_models/test_certificate_extensions/index.html">pki.tests.test_models.test_certificate_extensions</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/pki/tests/test_models/test_certificate_model/index.html">pki.tests.test_models.test_certificate_model</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/pki/tests/test_models/test_certificate_values/index.html">pki.tests.test_models.test_certificate_values</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/pki/tests/test_models/test_domain_model/index.html">pki.tests.test_models.test_domain_model</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/pki/tests/test_models/test_issuing_ca_model/index.html">pki.tests.test_models.test_issuing_ca_model</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/pki/urls/index.html">pki.urls</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/pki/util/index.html">pki.util</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><div class="visually-hidden">Toggle navigation of pki.util</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/util/idevid/index.html">pki.util.idevid</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/util/keys/index.html">pki.util.keys</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/util/x509/index.html">pki.util.x509</a></li>
+</ul>
+</li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/pki/views/index.html">pki.views</a><input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><div class="visually-hidden">Toggle navigation of pki.views</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/views/certificates/index.html">pki.views.certificates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/views/domains/index.html">pki.views.domains</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/views/issuing_cas/index.html">pki.views.issuing_cas</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/views/owner_credentials/index.html">pki.views.owner_credentials</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/pki/views/truststores/index.html">pki.views.truststores</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/home/index.html">home</a><input class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><div class="visually-hidden">Toggle navigation of home</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/home/admin/index.html">home.admin</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/home/apps/index.html">home.apps</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/home/filters/index.html">home.filters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/home/tests/index.html">home.tests</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/home/urls/index.html">home.urls</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/home/views/index.html">home.views</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/util/index.html">util</a><input class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><div class="visually-hidden">Toggle navigation of util</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/util/db/index.html">util.db</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/util/field/index.html">util.field</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/util/sftp/index.html">util.sftp</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/aoki/index.html">aoki</a><input class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><div class="visually-hidden">Toggle navigation of aoki</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/aoki/apps/index.html">aoki.apps</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/aoki/management/index.html">aoki.management</a><input class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" role="switch" type="checkbox"/><label for="toctree-checkbox-14"><div class="visually-hidden">Toggle navigation of aoki.management</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4 has-children"><a class="reference internal" href="../../autoapi/aoki/management/commands/index.html">aoki.management.commands</a><input class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" role="switch" type="checkbox"/><label for="toctree-checkbox-15"><div class="visually-hidden">Toggle navigation of aoki.management.commands</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/aoki/management/commands/aoki_gen_test_certs/index.html">aoki.management.commands.aoki_gen_test_certs</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/aoki/tests/index.html">aoki.tests</a><input class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" role="switch" type="checkbox"/><label for="toctree-checkbox-16"><div class="visually-hidden">Toggle navigation of aoki.tests</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/aoki/tests/client/index.html">aoki.tests.client</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/aoki/tests/cmp_client/index.html">aoki.tests.cmp_client</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/aoki/urls/index.html">aoki.urls</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/aoki/views/index.html">aoki.views</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/users/index.html">users</a><input class="toctree-checkbox" id="toctree-checkbox-17" name="toctree-checkbox-17" role="switch" type="checkbox"/><label for="toctree-checkbox-17"><div class="visually-hidden">Toggle navigation of users</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/users/apps/index.html">users.apps</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/users/urls/index.html">users.urls</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/users/views/index.html">users.views</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/manage/index.html">manage</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/devices/index.html">devices</a><input class="toctree-checkbox" id="toctree-checkbox-18" name="toctree-checkbox-18" role="switch" type="checkbox"/><label for="toctree-checkbox-18"><div class="visually-hidden">Toggle navigation of devices</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/devices/admin/index.html">devices.admin</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/devices/apps/index.html">devices.apps</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/devices/forms/index.html">devices.forms</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/devices/issuer/index.html">devices.issuer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/devices/models/index.html">devices.models</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/devices/revocation/index.html">devices.revocation</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/devices/tests/index.html">devices.tests</a><input class="toctree-checkbox" id="toctree-checkbox-19" name="toctree-checkbox-19" role="switch" type="checkbox"/><label for="toctree-checkbox-19"><div class="visually-hidden">Toggle navigation of devices.tests</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/devices/tests/conftest/index.html">devices.tests.conftest</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/devices/tests/test_credential_download/index.html">devices.tests.test_credential_download</a></li>
+<li class="toctree-l4 has-children"><a class="reference internal" href="../../autoapi/devices/tests/test_forms/index.html">devices.tests.test_forms</a><input class="toctree-checkbox" id="toctree-checkbox-20" name="toctree-checkbox-20" role="switch" type="checkbox"/><label for="toctree-checkbox-20"><div class="visually-hidden">Toggle navigation of devices.tests.test_forms</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/devices/tests/test_forms/test_browser_login/index.html">devices.tests.test_forms.test_browser_login</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/devices/tests/test_forms/test_create_device_form/index.html">devices.tests.test_forms.test_create_device_form</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/devices/tests/test_forms/test_credential_download_form/index.html">devices.tests.test_forms.test_credential_download_form</a></li>
+</ul>
+</li>
+<li class="toctree-l4 has-children"><a class="reference internal" href="../../autoapi/devices/tests/test_issuer/index.html">devices.tests.test_issuer</a><input class="toctree-checkbox" id="toctree-checkbox-21" name="toctree-checkbox-21" role="switch" type="checkbox"/><label for="toctree-checkbox-21"><div class="visually-hidden">Toggle navigation of devices.tests.test_issuer</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/devices/tests/test_issuer/test_domain_credential/index.html">devices.tests.test_issuer.test_domain_credential</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/devices/tests/test_issuer/test_opcua_client_credential/index.html">devices.tests.test_issuer.test_opcua_client_credential</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/devices/tests/test_issuer/test_opcua_server_credential/index.html">devices.tests.test_issuer.test_opcua_server_credential</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/devices/tests/test_issuer/test_tls_client_credential/index.html">devices.tests.test_issuer.test_tls_client_credential</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/devices/tests/test_issuer/test_tls_server_credential/index.html">devices.tests.test_issuer.test_tls_server_credential</a></li>
+</ul>
+</li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/devices/tests/test_model_delete/index.html">devices.tests.test_model_delete</a></li>
+<li class="toctree-l4 has-children"><a class="reference internal" href="../../autoapi/devices/tests/test_models/index.html">devices.tests.test_models</a><input class="toctree-checkbox" id="toctree-checkbox-22" name="toctree-checkbox-22" role="switch" type="checkbox"/><label for="toctree-checkbox-22"><div class="visually-hidden">Toggle navigation of devices.tests.test_models</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/devices/tests/test_models/test_device_model/index.html">devices.tests.test_models.test_device_model</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/devices/tests/test_models/test_issued_credential/index.html">devices.tests.test_models.test_issued_credential</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/devices/tests/test_models/test_remote_device_credential/index.html">devices.tests.test_models.test_remote_device_credential</a></li>
+</ul>
+</li>
+<li class="toctree-l4 has-children"><a class="reference internal" href="../../autoapi/devices/tests/test_revocation/index.html">devices.tests.test_revocation</a><input class="toctree-checkbox" id="toctree-checkbox-23" name="toctree-checkbox-23" role="switch" type="checkbox"/><label for="toctree-checkbox-23"><div class="visually-hidden">Toggle navigation of devices.tests.test_revocation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/devices/tests/test_revocation/test_device_credential_revocation/index.html">devices.tests.test_revocation.test_device_credential_revocation</a></li>
+</ul>
+</li>
+<li class="toctree-l4 has-children"><a class="reference internal" href="../../autoapi/devices/tests/test_urls/index.html">devices.tests.test_urls</a><input class="toctree-checkbox" id="toctree-checkbox-24" name="toctree-checkbox-24" role="switch" type="checkbox"/><label for="toctree-checkbox-24"><div class="visually-hidden">Toggle navigation of devices.tests.test_urls</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/devices/tests/test_urls/test_urls/index.html">devices.tests.test_urls.test_urls</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/devices/urls/index.html">devices.urls</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/devices/views/index.html">devices.views</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/devices/widgets/index.html">devices.widgets</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/conftest/index.html">conftest</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/settings/index.html">settings</a><input class="toctree-checkbox" id="toctree-checkbox-25" name="toctree-checkbox-25" role="switch" type="checkbox"/><label for="toctree-checkbox-25"><div class="visually-hidden">Toggle navigation of settings</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/settings/admin/index.html">settings.admin</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/settings/apps/index.html">settings.apps</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/settings/forms/index.html">settings.forms</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/settings/management/index.html">settings.management</a><input class="toctree-checkbox" id="toctree-checkbox-26" name="toctree-checkbox-26" role="switch" type="checkbox"/><label for="toctree-checkbox-26"><div class="visually-hidden">Toggle navigation of settings.management</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4 has-children"><a class="reference internal" href="../../autoapi/settings/management/commands/index.html">settings.management.commands</a><input class="toctree-checkbox" id="toctree-checkbox-27" name="toctree-checkbox-27" role="switch" type="checkbox"/><label for="toctree-checkbox-27"><div class="visually-hidden">Toggle navigation of settings.management.commands</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/settings/management/commands/compilemsg/index.html">settings.management.commands.compilemsg</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/settings/management/commands/inittrustpoint/index.html">settings.management.commands.inittrustpoint</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/settings/management/commands/makemsg/index.html">settings.management.commands.makemsg</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/settings/management/commands/managestartup/index.html">settings.management.commands.managestartup</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/settings/management/commands/printversion/index.html">settings.management.commands.printversion</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/settings/management/commands/tls_cred/index.html">settings.management.commands.tls_cred</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/settings/management/commands/trustpointbackup/index.html">settings.management.commands.trustpointbackup</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/settings/management/commands/trustpointrestore/index.html">settings.management.commands.trustpointrestore</a></li>
+</ul>
+</li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/settings/management/managepy_override/index.html">settings.management.managepy_override</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/settings/models/index.html">settings.models</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/settings/security/index.html">settings.security</a><input class="toctree-checkbox" id="toctree-checkbox-28" name="toctree-checkbox-28" role="switch" type="checkbox"/><label for="toctree-checkbox-28"><div class="visually-hidden">Toggle navigation of settings.security</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/settings/security/decorators/index.html">settings.security.decorators</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/settings/security/features/index.html">settings.security.features</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/settings/security/manager/index.html">settings.security.manager</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/settings/security/mixins/index.html">settings.security.mixins</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/settings/tests/index.html">settings.tests</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/settings/urls/index.html">settings.urls</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/settings/views/index.html">settings.views</a><input class="toctree-checkbox" id="toctree-checkbox-29" name="toctree-checkbox-29" role="switch" type="checkbox"/><label for="toctree-checkbox-29"><div class="visually-hidden">Toggle navigation of settings.views</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/settings/views/backup/index.html">settings.views.backup</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/settings/views/help_support/index.html">settings.views.help_support</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/settings/views/language/index.html">settings.views.language</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/settings/views/logging/index.html">settings.views.logging</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/settings/views/security/index.html">settings.views.security</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/settings/views/tls/index.html">settings.views.tls</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/commands/index.html">commands</a><input class="toctree-checkbox" id="toctree-checkbox-30" name="toctree-checkbox-30" role="switch" type="checkbox"/><label for="toctree-checkbox-30"><div class="visually-hidden">Toggle navigation of commands</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/add_domains_and_devices/index.html">commands.add_domains_and_devices</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/base_commands/index.html">commands.base_commands</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/check_certificate_validity/index.html">commands.check_certificate_validity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/check_domain_issuing_ca/index.html">commands.check_domain_issuing_ca</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/check_for_insufficient_key_length/index.html">commands.check_for_insufficient_key_length</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/check_for_security_vulnerabilities/index.html">commands.check_for_security_vulnerabilities</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/check_for_weak_ecc_curves/index.html">commands.check_for_weak_ecc_curves</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/check_for_weak_signature_algorithms/index.html">commands.check_for_weak_signature_algorithms</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/check_issuing_ca_validity/index.html">commands.check_issuing_ca_validity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/check_non_onboarded_devices/index.html">commands.check_non_onboarded_devices</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/check_system_health/index.html">commands.check_system_health</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/create_and_validate_test_certs/index.html">commands.create_and_validate_test_certs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/create_multiple_test_issuing_cas/index.html">commands.create_multiple_test_issuing_cas</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/create_single_test_issuing_ca/index.html">commands.create_single_test_issuing_ca</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/create_test_cross_signed/index.html">commands.create_test_cross_signed</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/create_test_issuing_ca/index.html">commands.create_test_issuing_ca</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/create_test_long_chain_p12/index.html">commands.create_test_long_chain_p12</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/create_tls_certs/index.html">commands.create_tls_certs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/custom_runserver_plus/index.html">commands.custom_runserver_plus</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/execute_all_notifications/index.html">commands.execute_all_notifications</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/import_idevid_truststores/index.html">commands.import_idevid_truststores</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/initialize_notification_config/index.html">commands.initialize_notification_config</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/reset_db/index.html">commands.reset_db</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/reset_notifications_db/index.html">commands.reset_notifications_db</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/commands/trustpoint_setup_notifications/index.html">commands.trustpoint_setup_notifications</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/features/index.html">features</a><input class="toctree-checkbox" id="toctree-checkbox-31" name="toctree-checkbox-31" role="switch" type="checkbox"/><label for="toctree-checkbox-31"><div class="visually-hidden">Toggle navigation of features</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/features/environment/index.html">features.environment</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/features/steps/index.html">features.steps</a><input class="toctree-checkbox" id="toctree-checkbox-32" name="toctree-checkbox-32" role="switch" type="checkbox"/><label for="toctree-checkbox-32"><div class="visually-hidden">Toggle navigation of features.steps</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/features/steps/common_steps/index.html">features.steps.common_steps</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/features/steps/f_001_steps/index.html">features.steps.f_001_steps</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/features/steps/r_001_steps/index.html">features.steps.r_001_steps</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/features/steps/r_003_steps/index.html">features.steps.r_003_steps</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/features/steps/r_004_steps/index.html">features.steps.r_004_steps</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/features/steps/r_006_steps/index.html">features.steps.r_006_steps</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/features/steps/r_007_steps/index.html">features.steps.r_007_steps</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/features/steps/r_008_steps/index.html">features.steps.r_008_steps</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/features/steps/r_010_r_11_steps/index.html">features.steps.r_010_r_11_steps</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/features/steps/r_012_steps/index.html">features.steps.r_012_steps</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/features/steps/r_013_steps/index.html">features.steps.r_013_steps</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/features/steps/r_101_steps/index.html">features.steps.r_101_steps</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/features/steps/r_102_steps/index.html">features.steps.r_102_steps</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/trustpoint/index.html">trustpoint</a><input class="toctree-checkbox" id="toctree-checkbox-33" name="toctree-checkbox-33" role="switch" type="checkbox"/><label for="toctree-checkbox-33"><div class="visually-hidden">Toggle navigation of trustpoint</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/trustpoint/asgi/index.html">trustpoint.asgi</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/trustpoint/forms/index.html">trustpoint.forms</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/trustpoint/logger/index.html">trustpoint.logger</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/trustpoint/middleware/index.html">trustpoint.middleware</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/trustpoint/settings/index.html">trustpoint.settings</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/trustpoint/tests/index.html">trustpoint.tests</a><input class="toctree-checkbox" id="toctree-checkbox-34" name="toctree-checkbox-34" role="switch" type="checkbox"/><label for="toctree-checkbox-34"><div class="visually-hidden">Toggle navigation of trustpoint.tests</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/trustpoint/tests/test_asgi/index.html">trustpoint.tests.test_asgi</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/trustpoint/tests/test_forms/index.html">trustpoint.tests.test_forms</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/trustpoint/tests/test_logger/index.html">trustpoint.tests.test_logger</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/trustpoint/tests/test_middleware/index.html">trustpoint.tests.test_middleware</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/trustpoint/tests/test_settings/index.html">trustpoint.tests.test_settings</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/trustpoint/tests/test_urls/index.html">trustpoint.tests.test_urls</a></li>
+<li class="toctree-l4 has-children"><a class="reference internal" href="../../autoapi/trustpoint/tests/test_views/index.html">trustpoint.tests.test_views</a><input class="toctree-checkbox" id="toctree-checkbox-35" name="toctree-checkbox-35" role="switch" type="checkbox"/><label for="toctree-checkbox-35"><div class="visually-hidden">Toggle navigation of trustpoint.tests.test_views</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/trustpoint/tests/test_views/test_context_data/index.html">trustpoint.tests.test_views.test_context_data</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/trustpoint/tests/test_views/test_index_view/index.html">trustpoint.tests.test_views.test_index_view</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/trustpoint/tests/test_views/test_list_in_detail_view/index.html">trustpoint.tests.test_views.test_list_in_detail_view</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../autoapi/trustpoint/tests/test_views/test_sortable_table/index.html">trustpoint.tests.test_views.test_sortable_table</a></li>
+</ul>
+</li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/trustpoint/tests/test_wsgi/index.html">trustpoint.tests.test_wsgi</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/trustpoint/urls/index.html">trustpoint.urls</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/trustpoint/views/index.html">trustpoint.views</a><input class="toctree-checkbox" id="toctree-checkbox-36" name="toctree-checkbox-36" role="switch" type="checkbox"/><label for="toctree-checkbox-36"><div class="visually-hidden">Toggle navigation of trustpoint.views</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/trustpoint/views/base/index.html">trustpoint.views.base</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/trustpoint/wsgi/index.html">trustpoint.wsgi</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/test_backup/index.html">test_backup</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/setup_wizard/index.html">setup_wizard</a><input class="toctree-checkbox" id="toctree-checkbox-37" name="toctree-checkbox-37" role="switch" type="checkbox"/><label for="toctree-checkbox-37"><div class="visually-hidden">Toggle navigation of setup_wizard</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/setup_wizard/apps/index.html">setup_wizard.apps</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/setup_wizard/forms/index.html">setup_wizard.forms</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/setup_wizard/tls_credential/index.html">setup_wizard.tls_credential</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/setup_wizard/urls/index.html">setup_wizard.urls</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/setup_wizard/views/index.html">setup_wizard.views</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/notifications/index.html">notifications</a><input class="toctree-checkbox" id="toctree-checkbox-38" name="toctree-checkbox-38" role="switch" type="checkbox"/><label for="toctree-checkbox-38"><div class="visually-hidden">Toggle navigation of notifications</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/notifications/admin/index.html">notifications.admin</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/notifications/apps/index.html">notifications.apps</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/notifications/models/index.html">notifications.models</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/notifications/tests/index.html">notifications.tests</a><input class="toctree-checkbox" id="toctree-checkbox-39" name="toctree-checkbox-39" role="switch" type="checkbox"/><label for="toctree-checkbox-39"><div class="visually-hidden">Toggle navigation of notifications.tests</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/notifications/tests/conftest/index.html">notifications.tests.conftest</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/notifications/tests/test_models/index.html">notifications.tests.test_models</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/notifications/urls/index.html">notifications.urls</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/notifications/views/index.html">notifications.views</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for notifications.models</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Module that contains all models corresponding to the devices app.&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">cast</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">devices.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeviceModel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">django.db</span><span class="w"> </span><span class="kn">import</span> <span class="n">models</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">django.utils.encoding</span><span class="w"> </span><span class="kn">import</span> <span class="n">force_str</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">django.utils.translation</span><span class="w"> </span><span class="kn">import</span> <span class="n">gettext_lazy</span> <span class="k">as</span> <span class="n">_</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">django_stubs_ext.db.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">TypedModelMeta</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pki.models.certificate</span><span class="w"> </span><span class="kn">import</span> <span class="n">CertificateModel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pki.models.domain</span><span class="w"> </span><span class="kn">import</span> <span class="n">DomainModel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pki.models.issuing_ca</span><span class="w"> </span><span class="kn">import</span> <span class="n">IssuingCaModel</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">django_stubs_ext</span><span class="w"> </span><span class="kn">import</span> <span class="n">StrOrPromise</span>
+
+<div class="viewcode-block" id="log">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.log">[docs]</a>
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;tp.home&#39;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="NotificationStatus">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">NotificationStatus</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Model representing a status a notification can have.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="NotificationStatus.StatusChoices">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.StatusChoices">[docs]</a>
+    <span class="k">class</span><span class="w"> </span><span class="nc">StatusChoices</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">TextChoices</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Status Types.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="NotificationStatus.StatusChoices.NEW">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.StatusChoices.NEW">[docs]</a>
+        <span class="n">NEW</span> <span class="o">=</span> <span class="s1">&#39;NEW&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;New&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationStatus.StatusChoices.CONFIRMED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.StatusChoices.CONFIRMED">[docs]</a>
+        <span class="n">CONFIRMED</span> <span class="o">=</span> <span class="s1">&#39;CONF&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Confirmed&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationStatus.StatusChoices.IN_PROGRESS">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.StatusChoices.IN_PROGRESS">[docs]</a>
+        <span class="n">IN_PROGRESS</span> <span class="o">=</span> <span class="s1">&#39;PROG&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;In Progress&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationStatus.StatusChoices.SOLVED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.StatusChoices.SOLVED">[docs]</a>
+        <span class="n">SOLVED</span> <span class="o">=</span> <span class="s1">&#39;SOLV&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Solved&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationStatus.StatusChoices.NOT_SOLVED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.StatusChoices.NOT_SOLVED">[docs]</a>
+        <span class="n">NOT_SOLVED</span> <span class="o">=</span> <span class="s1">&#39;NOSOL&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Not Solved&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationStatus.StatusChoices.ESCALATED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.StatusChoices.ESCALATED">[docs]</a>
+        <span class="n">ESCALATED</span> <span class="o">=</span> <span class="s1">&#39;ESC&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Escalated&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationStatus.StatusChoices.SUSPENDED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.StatusChoices.SUSPENDED">[docs]</a>
+        <span class="n">SUSPENDED</span> <span class="o">=</span> <span class="s1">&#39;SUS&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Suspended&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationStatus.StatusChoices.REJECTED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.StatusChoices.REJECTED">[docs]</a>
+        <span class="n">REJECTED</span> <span class="o">=</span> <span class="s1">&#39;REJ&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Rejected&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationStatus.StatusChoices.DELETED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.StatusChoices.DELETED">[docs]</a>
+        <span class="n">DELETED</span> <span class="o">=</span> <span class="s1">&#39;DEL&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Deleted&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationStatus.StatusChoices.CLOSED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.StatusChoices.CLOSED">[docs]</a>
+        <span class="n">CLOSED</span> <span class="o">=</span> <span class="s1">&#39;CLO&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Closed&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationStatus.StatusChoices.ACKNOWLEDGED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.StatusChoices.ACKNOWLEDGED">[docs]</a>
+        <span class="n">ACKNOWLEDGED</span> <span class="o">=</span> <span class="s1">&#39;ACK&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Acknowledged&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationStatus.StatusChoices.FAILED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.StatusChoices.FAILED">[docs]</a>
+        <span class="n">FAILED</span> <span class="o">=</span> <span class="s1">&#39;FAIL&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Failed&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationStatus.StatusChoices.EXPIRED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.StatusChoices.EXPIRED">[docs]</a>
+        <span class="n">EXPIRED</span> <span class="o">=</span> <span class="s1">&#39;EXP&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Expired&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationStatus.StatusChoices.PENDING">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.StatusChoices.PENDING">[docs]</a>
+        <span class="n">PENDING</span> <span class="o">=</span> <span class="s1">&#39;PEND&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Pending&#39;</span><span class="p">)</span></div>
+</div>
+
+
+<div class="viewcode-block" id="NotificationStatus.status">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.status">[docs]</a>
+    <span class="n">status</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CharField</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="n">StatusChoices</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+    <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+
+<div class="viewcode-block" id="NotificationStatus.get_status_display">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.get_status_display">[docs]</a>
+        <span class="k">def</span><span class="w"> </span><span class="nf">get_status_display</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;Gets the status as human-readable string for displaying in the front-end.</span>
+
+<span class="sd">            Returns:</span>
+<span class="sd">                Human-readable string for displaying in the front-end.</span>
+<span class="sd">            &quot;&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="NotificationStatus.Meta">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.Meta">[docs]</a>
+    <span class="k">class</span><span class="w"> </span><span class="nc">Meta</span><span class="p">(</span><span class="n">TypedModelMeta</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Meta class configuration.&quot;&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="NotificationStatus.__str__">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationStatus.__str__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns a human-readable string.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The status.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_status_display</span><span class="p">())</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="NotificationMessageModel">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationMessageModel">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">NotificationMessageModel</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Message Model for Notifications with Short and Optional Long Descriptions.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="NotificationMessageModel.short_description">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationMessageModel.short_description">[docs]</a>
+    <span class="n">short_description</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CharField</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">255</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationMessageModel.long_description">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationMessageModel.long_description">[docs]</a>
+    <span class="n">long_description</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CharField</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">65536</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s1">&#39;No description provided&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationMessageModel.Meta">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationMessageModel.Meta">[docs]</a>
+    <span class="k">class</span><span class="w"> </span><span class="nc">Meta</span><span class="p">(</span><span class="n">TypedModelMeta</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Meta class configuration.&quot;&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="NotificationMessageModel.__str__">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationMessageModel.__str__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns a human-readable string.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The short description.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">short_description</span><span class="p">[:</span><span class="mi">50</span><span class="p">]</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="NotificationMessage">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationMessage">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">NotificationMessage</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Class for notification content with short and optional long descriptions.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="NotificationMessage.short_description">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationMessage.short_description">[docs]</a>
+    <span class="n">short_description</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="NotificationMessage.long_description">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationMessage.long_description">[docs]</a>
+    <span class="n">long_description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;No description provided&#39;</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">short_description</span><span class="p">:</span> <span class="n">StrOrPromise</span><span class="p">,</span> <span class="n">long_description</span><span class="p">:</span> <span class="n">StrOrPromise</span> <span class="o">=</span> <span class="s1">&#39;No description provided&#39;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initializes a NotificationMessage instance.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            It returns nothing.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">short_description</span> <span class="o">=</span> <span class="n">force_str</span><span class="p">(</span><span class="n">short_description</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">long_description</span> <span class="o">=</span> <span class="n">force_str</span><span class="p">(</span><span class="n">long_description</span><span class="p">)</span>
+
+<div class="viewcode-block" id="NotificationMessage.__str__">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationMessage.__str__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns a human-readable string.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The short description.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">short_description</span><span class="p">[:</span><span class="mi">50</span><span class="p">]</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="NotificationMessage.short">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationMessage.short">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">short</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the short description.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The short description.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">short_description</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="NotificationMessage.long">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationMessage.long">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">long</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the long description.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The long description.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">long_description</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="NotificationModel">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">NotificationModel</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Notifications Model.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="NotificationModel.NotificationTypes">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationTypes">[docs]</a>
+    <span class="k">class</span><span class="w"> </span><span class="nc">NotificationTypes</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">TextChoices</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Supported Notification Types.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="NotificationModel.NotificationTypes.SETUP">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationTypes.SETUP">[docs]</a>
+        <span class="n">SETUP</span> <span class="o">=</span> <span class="s1">&#39;SET&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;SETUP&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationTypes.INFO">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationTypes.INFO">[docs]</a>
+        <span class="n">INFO</span> <span class="o">=</span> <span class="s1">&#39;INF&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;INFO&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationTypes.WARNING">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationTypes.WARNING">[docs]</a>
+        <span class="n">WARNING</span> <span class="o">=</span> <span class="s1">&#39;WAR&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;WARNING&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationTypes.CRITICAL">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationTypes.CRITICAL">[docs]</a>
+        <span class="n">CRITICAL</span> <span class="o">=</span> <span class="s1">&#39;CRI&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;CRITICAL&#39;</span><span class="p">)</span></div>
+</div>
+
+
+<div class="viewcode-block" id="NotificationModel.NotificationSource">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationSource">[docs]</a>
+    <span class="k">class</span><span class="w"> </span><span class="nc">NotificationSource</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">TextChoices</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Origin of the Notification.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="NotificationModel.NotificationSource.SYSTEM">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationSource.SYSTEM">[docs]</a>
+        <span class="n">SYSTEM</span> <span class="o">=</span> <span class="s1">&#39;S&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;System&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationSource.DOMAIN">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationSource.DOMAIN">[docs]</a>
+        <span class="n">DOMAIN</span> <span class="o">=</span> <span class="s1">&#39;D&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Domain&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationSource.DEVICE">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationSource.DEVICE">[docs]</a>
+        <span class="n">DEVICE</span> <span class="o">=</span> <span class="s1">&#39;E&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Device&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationSource.ISSUING_CA">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationSource.ISSUING_CA">[docs]</a>
+        <span class="n">ISSUING_CA</span> <span class="o">=</span> <span class="s1">&#39;I&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Issuing CA&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationSource.CERTIFICATE">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationSource.CERTIFICATE">[docs]</a>
+        <span class="n">CERTIFICATE</span> <span class="o">=</span> <span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Certificate&#39;</span><span class="p">)</span></div>
+</div>
+
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType">[docs]</a>
+    <span class="k">class</span><span class="w"> </span><span class="nc">NotificationMessageType</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">TextChoices</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Types of messages (aka. unique strings to that particular notification).&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.CUSTOM">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.CUSTOM">[docs]</a>
+        <span class="n">CUSTOM</span> <span class="o">=</span> <span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;custom&#39;</span>  <span class="c1"># custom message, i.e. strings are stored in the database. Can not be translated.</span></div>
+
+        <span class="c1"># Test notifications, generated by create_notifications.py</span>
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.ISSUING_CA_TEST">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.ISSUING_CA_TEST">[docs]</a>
+        <span class="n">ISSUING_CA_TEST</span> <span class="o">=</span> <span class="s1">&#39;TEST_CA&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.DOMAIN_TEST">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.DOMAIN_TEST">[docs]</a>
+        <span class="n">DOMAIN_TEST</span> <span class="o">=</span> <span class="s1">&#39;TEST_DOMAIN&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.CERT_TEST">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.CERT_TEST">[docs]</a>
+        <span class="n">CERT_TEST</span> <span class="o">=</span> <span class="s1">&#39;TEST_CERT&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.DEVICE_TEST">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.DEVICE_TEST">[docs]</a>
+        <span class="n">DEVICE_TEST</span> <span class="o">=</span> <span class="s1">&#39;TEST_DEVICE&#39;</span></div>
+
+        <span class="c1"># Welcome notifications</span>
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.WELCOME_POPULATE_TEST_DATA">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.WELCOME_POPULATE_TEST_DATA">[docs]</a>
+        <span class="n">WELCOME_POPULATE_TEST_DATA</span> <span class="o">=</span> <span class="s1">&#39;POP_TEST_DATA&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.TRUSTPOINT_DOCUMENTATION">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.TRUSTPOINT_DOCUMENTATION">[docs]</a>
+        <span class="n">TRUSTPOINT_DOCUMENTATION</span> <span class="o">=</span> <span class="s1">&#39;TP_DOCS&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.TRUSTPOINT_PROJECT_INFO">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.TRUSTPOINT_PROJECT_INFO">[docs]</a>
+        <span class="n">TRUSTPOINT_PROJECT_INFO</span> <span class="o">=</span> <span class="s1">&#39;TP_INFO&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.WELCOME_MESSAGE">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.WELCOME_MESSAGE">[docs]</a>
+        <span class="n">WELCOME_MESSAGE</span> <span class="o">=</span> <span class="s1">&#39;WELCOME&#39;</span></div>
+
+        <span class="c1"># Periodic task notifications</span>
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.SYSTEM_NOT_HEALTHY">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.SYSTEM_NOT_HEALTHY">[docs]</a>
+        <span class="n">SYSTEM_NOT_HEALTHY</span> <span class="o">=</span> <span class="s1">&#39;SYS_NOT_HEALTHY&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.VULNERABILITY">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.VULNERABILITY">[docs]</a>
+        <span class="n">VULNERABILITY</span> <span class="o">=</span> <span class="s1">&#39;VULNERABILITY&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.CERT_EXPIRING">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.CERT_EXPIRING">[docs]</a>
+        <span class="n">CERT_EXPIRING</span> <span class="o">=</span> <span class="s1">&#39;CERT_EXPIRING&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.CERT_EXPIRED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.CERT_EXPIRED">[docs]</a>
+        <span class="n">CERT_EXPIRED</span> <span class="o">=</span> <span class="s1">&#39;CERT_EXPIRED&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.ISSUING_CA_EXPIRING">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.ISSUING_CA_EXPIRING">[docs]</a>
+        <span class="n">ISSUING_CA_EXPIRING</span> <span class="o">=</span> <span class="s1">&#39;CA_EXPIRING&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.ISSUING_CA_EXPIRED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.ISSUING_CA_EXPIRED">[docs]</a>
+        <span class="n">ISSUING_CA_EXPIRED</span> <span class="o">=</span> <span class="s1">&#39;CA_EXPIRED&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.DOMAIN_NO_ISSUING_CA">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.DOMAIN_NO_ISSUING_CA">[docs]</a>
+        <span class="n">DOMAIN_NO_ISSUING_CA</span> <span class="o">=</span> <span class="s1">&#39;DOMAIN_NO_CA&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.DEVICE_NOT_ONBOARDED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.DEVICE_NOT_ONBOARDED">[docs]</a>
+        <span class="n">DEVICE_NOT_ONBOARDED</span> <span class="o">=</span> <span class="s1">&#39;DEV_NOT_ONBRD&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.DEVICE_ONBOARDING_FAILED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.DEVICE_ONBOARDING_FAILED">[docs]</a>
+        <span class="n">DEVICE_ONBOARDING_FAILED</span> <span class="o">=</span> <span class="s1">&#39;DEV_ONBRD_FAIL&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.DEVICE_CERT_REVOKED">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.DEVICE_CERT_REVOKED">[docs]</a>
+        <span class="n">DEVICE_CERT_REVOKED</span> <span class="o">=</span> <span class="s1">&#39;DEV_CERT_REV&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.WEAK_SIGNATURE_ALGORITHM">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.WEAK_SIGNATURE_ALGORITHM">[docs]</a>
+        <span class="n">WEAK_SIGNATURE_ALGORITHM</span> <span class="o">=</span> <span class="s1">&#39;WEAK_SIG_ALGO&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.INSUFFICIENT_KEY_LENGTH">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.INSUFFICIENT_KEY_LENGTH">[docs]</a>
+        <span class="n">INSUFFICIENT_KEY_LENGTH</span> <span class="o">=</span> <span class="s1">&#39;INSUFF_KEY_LEN&#39;</span></div>
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.WEAK_ECC_CURVE">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.WEAK_ECC_CURVE">[docs]</a>
+        <span class="n">WEAK_ECC_CURVE</span> <span class="o">=</span> <span class="s1">&#39;WEAK_ECC_CURVE&#39;</span></div>
+
+
+<div class="viewcode-block" id="NotificationModel.NotificationMessageType.get_message">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.NotificationMessageType.get_message">[docs]</a>
+        <span class="k">def</span><span class="w"> </span><span class="nf">get_message</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NotificationMessage</span><span class="p">:</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;Returns the message for the given type.</span>
+
+<span class="sd">            Returns:</span>
+<span class="sd">                The notification message.</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+            <span class="n">message_dict</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">CUSTOM</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span><span class="n">_</span><span class="p">(</span><span class="s1">&#39;Custom Message&#39;</span><span class="p">)),</span>
+                <span class="c1"># Test notifications, generated by create_notifications.py</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">ISSUING_CA_TEST</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Test for Issuing CA: </span><span class="si">{ca}</span><span class="s1">&#39;</span><span class="p">),</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Notification for Issuing CA: </span><span class="si">{ca}</span><span class="s1">&#39;</span><span class="p">)</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">DOMAIN_TEST</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Test for Domain: </span><span class="si">{domain}</span><span class="s1">&#39;</span><span class="p">),</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Notification for Domain: </span><span class="si">{domain}</span><span class="s1">&#39;</span><span class="p">)</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">CERT_TEST</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Test for Certificate: </span><span class="si">{cn}</span><span class="s1">&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Notification for Certificate: Common Name </span><span class="si">{cn}</span><span class="s1"> with Serial Number </span><span class="si">{sn}</span><span class="s1">&#39;</span><span class="p">),</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">DEVICE_TEST</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Test for Device: </span><span class="si">{device}</span><span class="s1">&#39;</span><span class="p">),</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Notification for Device: </span><span class="si">{device}</span><span class="s1">&#39;</span><span class="p">)</span>
+                <span class="p">),</span>
+                <span class="c1"># Welcome notifications</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">WELCOME_POPULATE_TEST_DATA</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Populate test data&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Click &lt;a href=&quot;</span><span class="si">{url}</span><span class="s1">&quot;&gt;here&lt;/a&gt; to add test issuing CAs, domains and devices.&#39;</span><span class="p">),</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">TRUSTPOINT_DOCUMENTATION</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Access the Trustpoint Documentation&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;You can find the official Trustpoint documentation here: </span><span class="si">{link}</span><span class="s1">&#39;</span><span class="p">),</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">TRUSTPOINT_PROJECT_INFO</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Explore the Trustpoint project&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span>
+                        <span class="s1">&#39;Visit the Trustpoint GitHub repository for more information: &#39;</span>
+                        <span class="s1">&#39;&lt;a href=&quot;</span><span class="si">{url_github}</span><span class="s1">&quot; target=&quot;_blank&quot;&gt;Trustpoint GitHub&lt;/a&gt;&lt;br&gt;&#39;</span>
+                        <span class="s1">&#39;Learn more about industrial security and the Trustpoint project on our &#39;</span>
+                        <span class="s1">&#39;&lt;a href=&quot;</span><span class="si">{url_homepage}</span><span class="s1">&quot; target=&quot;_blank&quot;&gt;homepage&lt;/a&gt;&#39;</span>
+                    <span class="p">),</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">WELCOME_MESSAGE</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Welcome to Trustpoint!&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span>
+                        <span class="s1">&#39;Thank you for setting up Trustpoint. &#39;</span>
+                        <span class="s1">&#39;This system will help you manage your certificates and secure your environment.&#39;</span>
+                    <span class="p">),</span>
+                <span class="p">),</span>
+                <span class="c1"># Periodic task notifications</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">SYSTEM_NOT_HEALTHY</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;System health check failed&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span>
+                        <span class="s1">&#39;The system health check detected an issue with one or more services. &#39;</span>
+                        <span class="s1">&#39;Please investigate immediately.&#39;</span>
+                    <span class="p">),</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">VULNERABILITY</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Security vulnerability detected&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span>
+                        <span class="s1">&#39;A security vulnerability affecting system components has been detected. &#39;</span>
+                        <span class="s1">&#39;Immediate attention required.&#39;</span>
+                    <span class="p">),</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">CERT_EXPIRING</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Certificate </span><span class="si">{common_name}</span><span class="s1"> is expiring soon&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;The certificate </span><span class="si">{common_name}</span><span class="s1"> is set to expire on </span><span class="si">{not_valid_after}</span><span class="s1">.&#39;</span><span class="p">),</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">CERT_EXPIRED</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Certificate </span><span class="si">{common_name}</span><span class="s1"> has expired&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;The certificate </span><span class="si">{common_name}</span><span class="s1"> expired on </span><span class="si">{not_valid_after}</span><span class="s1">.&#39;</span><span class="p">),</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">ISSUING_CA_EXPIRING</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Issuing CA </span><span class="si">{unique_name}</span><span class="s1"> is expiring soon&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;The issuing CA </span><span class="si">{unique_name}</span><span class="s1"> is set to expire on </span><span class="si">{not_valid_after}</span><span class="s1">.&#39;</span><span class="p">),</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">ISSUING_CA_EXPIRED</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Issuing CA </span><span class="si">{unique_name}</span><span class="s1"> has expired&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;The issuing CA </span><span class="si">{unique_name}</span><span class="s1"> expired on </span><span class="si">{not_valid_after}</span><span class="s1">.&#39;</span><span class="p">),</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">DOMAIN_NO_ISSUING_CA</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Domain </span><span class="si">{unique_name}</span><span class="s1"> has no Issuing CA assigned&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;The domain </span><span class="si">{unique_name}</span><span class="s1"> currently has no Issuing CA assigned.&#39;</span><span class="p">),</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">DEVICE_NOT_ONBOARDED</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Device </span><span class="si">{device}</span><span class="s1"> is not onboarded in </span><span class="si">{domain}</span><span class="s1">&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;The device </span><span class="si">{device}</span><span class="s1"> has not completed onboarding.&#39;</span><span class="p">),</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">DEVICE_ONBOARDING_FAILED</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Device </span><span class="si">{device}</span><span class="s1"> onboarding failed&#39;</span><span class="p">),</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;The device </span><span class="si">{device}</span><span class="s1"> failed onboarding.&#39;</span><span class="p">)</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">DEVICE_CERT_REVOKED</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Device </span><span class="si">{device}</span><span class="s1"> certificate revoked&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;The device </span><span class="si">{device}</span><span class="s1"> has had its certificate revoked. The device may no longer be trusted.&#39;</span><span class="p">),</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">WEAK_SIGNATURE_ALGORITHM</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Certificate </span><span class="si">{common_name}</span><span class="s1"> uses a weak signature algorithm&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;The certificate </span><span class="si">{common_name}</span><span class="s1"> is signed using </span><span class="si">{signature_algorithm}</span><span class="s1">, which is considered weak.&#39;</span><span class="p">),</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">INSUFFICIENT_KEY_LENGTH</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Certificate </span><span class="si">{common_name}</span><span class="s1"> uses insufficient key length&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span>
+                        <span class="s1">&#39;The certificate </span><span class="si">{common_name}</span><span class="s1"> uses an RSA key size of </span><span class="si">{spki_key_size}</span><span class="s1"> bits, &#39;</span>
+                        <span class="s1">&#39;which is less than the recommended 2048 bits.&#39;</span>
+                    <span class="p">),</span>
+                <span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">WEAK_ECC_CURVE</span><span class="p">:</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                    <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Certificate </span><span class="si">{common_name}</span><span class="s1"> uses a weak ECC curve&#39;</span><span class="p">),</span>
+                    <span class="n">_</span><span class="p">(</span>
+                        <span class="s1">&#39;The certificate </span><span class="si">{common_name}</span><span class="s1"> is using the </span><span class="si">{spki_ec_curve}</span><span class="s1"> ECC curve, &#39;</span>
+                        <span class="s1">&#39;which is no longer recommended.&#39;</span>
+                    <span class="p">),</span>
+                <span class="p">),</span>
+            <span class="p">}</span>
+
+            <span class="n">default</span> <span class="o">=</span> <span class="n">NotificationMessage</span><span class="p">(</span>
+                <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Unknown Notification message string.&#39;</span><span class="p">),</span>
+                <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Guess we messed up. Type of this notification is </span><span class="si">%(type)s</span><span class="s1">&#39;</span><span class="p">)</span> <span class="o">%</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="p">},</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">message_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">default</span><span class="p">)</span></div>
+</div>
+
+
+<div class="viewcode-block" id="NotificationModel.notification_type">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.notification_type">[docs]</a>
+    <span class="n">notification_type</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CharField</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="n">NotificationTypes</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">NotificationTypes</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationModel.notification_source">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.notification_source">[docs]</a>
+    <span class="n">notification_source</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CharField</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="n">NotificationSource</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">NotificationSource</span><span class="o">.</span><span class="n">SYSTEM</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationModel.message_type">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.message_type">[docs]</a>
+    <span class="n">message_type</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CharField</span><span class="p">(</span>
+        <span class="n">max_length</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="n">NotificationMessageType</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">NotificationMessageType</span><span class="o">.</span><span class="n">CUSTOM</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationModel.message_data">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.message_data">[docs]</a>
+    <span class="n">message_data</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">JSONField</span><span class="p">(</span><span class="n">blank</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationModel.domain">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.domain">[docs]</a>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">ForeignKey</span><span class="p">(</span>
+        <span class="n">DomainModel</span><span class="p">,</span> <span class="n">on_delete</span><span class="o">=</span><span class="n">models</span><span class="o">.</span><span class="n">SET_NULL</span><span class="p">,</span> <span class="n">blank</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">null</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">related_name</span><span class="o">=</span><span class="s1">&#39;notifications&#39;</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationModel.certificate">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.certificate">[docs]</a>
+    <span class="n">certificate</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">ForeignKey</span><span class="p">(</span>
+        <span class="n">CertificateModel</span><span class="p">,</span> <span class="n">on_delete</span><span class="o">=</span><span class="n">models</span><span class="o">.</span><span class="n">SET_NULL</span><span class="p">,</span> <span class="n">blank</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">null</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">related_name</span><span class="o">=</span><span class="s1">&#39;notifications&#39;</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationModel.device">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.device">[docs]</a>
+    <span class="n">device</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">ForeignKey</span><span class="p">(</span>
+        <span class="n">DeviceModel</span><span class="p">,</span> <span class="n">on_delete</span><span class="o">=</span><span class="n">models</span><span class="o">.</span><span class="n">SET_NULL</span><span class="p">,</span> <span class="n">blank</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">null</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">related_name</span><span class="o">=</span><span class="s1">&#39;notifications&#39;</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationModel.issuing_ca">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.issuing_ca">[docs]</a>
+    <span class="n">issuing_ca</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">ForeignKey</span><span class="p">(</span>
+        <span class="n">IssuingCaModel</span><span class="p">,</span> <span class="n">on_delete</span><span class="o">=</span><span class="n">models</span><span class="o">.</span><span class="n">SET_NULL</span><span class="p">,</span> <span class="n">blank</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">null</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">related_name</span><span class="o">=</span><span class="s1">&#39;notifications&#39;</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationModel.event">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.event">[docs]</a>
+    <span class="n">event</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CharField</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">255</span><span class="p">,</span> <span class="n">blank</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationModel.message">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.message">[docs]</a>
+    <span class="n">message</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">ForeignKey</span><span class="p">(</span>  <span class="c1"># only for custom messages</span>
+        <span class="n">NotificationMessageModel</span><span class="p">,</span> <span class="n">on_delete</span><span class="o">=</span><span class="n">models</span><span class="o">.</span><span class="n">CASCADE</span><span class="p">,</span> <span class="n">null</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">related_name</span><span class="o">=</span><span class="s1">&#39;notifications&#39;</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationModel.statuses">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.statuses">[docs]</a>
+    <span class="n">statuses</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">ManyToManyField</span><span class="p">(</span><span class="n">NotificationStatus</span><span class="p">,</span> <span class="n">related_name</span><span class="o">=</span><span class="s1">&#39;notifications&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationModel.created_at">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.created_at">[docs]</a>
+    <span class="n">created_at</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">DateTimeField</span><span class="p">(</span><span class="n">auto_now_add</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">verbose_name</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s1">&#39;Created at&#39;</span><span class="p">))</span></div>
+
+
+    <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+
+<div class="viewcode-block" id="NotificationModel.get_notification_type_display">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.get_notification_type_display">[docs]</a>
+        <span class="k">def</span><span class="w"> </span><span class="nf">get_notification_type_display</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;Gets the notification type as human-readable string for displaying in the front-end.</span>
+
+<span class="sd">            Returns:</span>
+<span class="sd">                Human-readable string for displaying in the front-end.</span>
+<span class="sd">            &quot;&quot;&quot;</span></div>
+
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">get_notification_source_display</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;Gets the notification source as human-readable string for displaying in the front-end.</span>
+
+<span class="sd">            Returns:</span>
+<span class="sd">                Human-readable string for displaying in the front-end.</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">get_message_type_display</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;Gets the message type as human-readable string for displaying in the front-end.</span>
+
+<span class="sd">            Returns:</span>
+<span class="sd">                Human-readable string for displaying in the front-end.</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="NotificationModel.Meta">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.Meta">[docs]</a>
+    <span class="k">class</span><span class="w"> </span><span class="nc">Meta</span><span class="p">(</span><span class="n">TypedModelMeta</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Meta class configuration.&quot;&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="NotificationModel.__str__">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.__str__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns a human-readable string.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The notification type to display with message description if available.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">message_text</span> <span class="o">=</span> <span class="s1">&#39;No message&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">message</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">message</span><span class="p">,</span> <span class="s1">&#39;short_description&#39;</span><span class="p">):</span>
+            <span class="n">message_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">message</span><span class="o">.</span><span class="n">short_description</span><span class="p">[:</span><span class="mi">20</span><span class="p">]</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">get_notification_type_display</span><span class="p">()</span><span class="si">}</span><span class="s1"> - </span><span class="si">{</span><span class="n">message_text</span><span class="si">}</span><span class="s1">&#39;</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="NotificationModel.short_translated">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.short_translated">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">short_translated</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the translated short description.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The translated short description.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">message_type</span> <span class="o">==</span> <span class="n">NotificationModel</span><span class="o">.</span><span class="n">NotificationMessageType</span><span class="o">.</span><span class="n">CUSTOM</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">message</span><span class="o">.</span><span class="n">short_description</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">message_string</span> <span class="o">=</span> <span class="n">NotificationModel</span><span class="o">.</span><span class="n">NotificationMessageType</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">message_type</span><span class="p">)</span><span class="o">.</span><span class="n">get_message</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">force_str</span><span class="p">(</span><span class="n">_</span><span class="p">(</span><span class="s1">&#39;Unknown Notification message type.&#39;</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">message_string</span><span class="o">.</span><span class="n">short</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">message_data</span><span class="p">)</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="NotificationModel.long_translated">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationModel.long_translated">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">long_translated</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the translated long description.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The translated long description.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">message_type</span> <span class="o">==</span> <span class="n">NotificationModel</span><span class="o">.</span><span class="n">NotificationMessageType</span><span class="o">.</span><span class="n">CUSTOM</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">message</span><span class="o">.</span><span class="n">long_description</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">message_string</span> <span class="o">=</span> <span class="n">NotificationModel</span><span class="o">.</span><span class="n">NotificationMessageType</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">message_type</span><span class="p">)</span><span class="o">.</span><span class="n">get_message</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Guess we messed up. Type of this notification is </span><span class="si">%(type)s</span><span class="s1">&#39;</span><span class="p">)</span> <span class="o">%</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">message_type</span><span class="p">}</span>
+        <span class="k">return</span> <span class="n">message_string</span><span class="o">.</span><span class="n">long</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">message_data</span><span class="p">)</span></div>
+</div>
+
+
+<div class="viewcode-block" id="WeakECCCurve">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakECCCurve">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WeakECCCurve</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Represents a weak or deprecated ECC curve.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="WeakECCCurve.objects">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakECCCurve.objects">[docs]</a>
+    <span class="n">objects</span><span class="p">:</span> <span class="n">models</span><span class="o">.</span><span class="n">Manager</span><span class="p">[</span><span class="s1">&#39;WeakECCCurve&#39;</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="WeakECCCurve.ECCCurveChoices">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakECCCurve.ECCCurveChoices">[docs]</a>
+    <span class="k">class</span><span class="w"> </span><span class="nc">ECCCurveChoices</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">TextChoices</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Enumeration of weak or deprecated ECC curve OIDs.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="WeakECCCurve.ECCCurveChoices.SECP160R1">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakECCCurve.ECCCurveChoices.SECP160R1">[docs]</a>
+        <span class="n">SECP160R1</span> <span class="o">=</span> <span class="s1">&#39;1.3.132.0.8&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;SECP160R1&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="WeakECCCurve.ECCCurveChoices.SECP192R1">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakECCCurve.ECCCurveChoices.SECP192R1">[docs]</a>
+        <span class="n">SECP192R1</span> <span class="o">=</span> <span class="s1">&#39;1.2.840.10045.3.1.1&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;SECP192R1&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="WeakECCCurve.ECCCurveChoices.SECP224R1">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakECCCurve.ECCCurveChoices.SECP224R1">[docs]</a>
+        <span class="n">SECP224R1</span> <span class="o">=</span> <span class="s1">&#39;1.3.132.0.33&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;SECP224R1&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="WeakECCCurve.ECCCurveChoices.SECP256K1">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakECCCurve.ECCCurveChoices.SECP256K1">[docs]</a>
+        <span class="n">SECP256K1</span> <span class="o">=</span> <span class="s1">&#39;1.3.132.0.10&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;SECP256K1&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="WeakECCCurve.ECCCurveChoices.SECT163K1">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakECCCurve.ECCCurveChoices.SECT163K1">[docs]</a>
+        <span class="n">SECT163K1</span> <span class="o">=</span> <span class="s1">&#39;1.3.132.0.1&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;SECT163K1&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="WeakECCCurve.ECCCurveChoices.SECT163R2">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakECCCurve.ECCCurveChoices.SECT163R2">[docs]</a>
+        <span class="n">SECT163R2</span> <span class="o">=</span> <span class="s1">&#39;1.3.132.0.15&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;SECT163R2&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="WeakECCCurve.ECCCurveChoices.SECT233K1">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakECCCurve.ECCCurveChoices.SECT233K1">[docs]</a>
+        <span class="n">SECT233K1</span> <span class="o">=</span> <span class="s1">&#39;1.3.132.0.26&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;SECT233K1&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="WeakECCCurve.ECCCurveChoices.SECT233R1">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakECCCurve.ECCCurveChoices.SECT233R1">[docs]</a>
+        <span class="n">SECT233R1</span> <span class="o">=</span> <span class="s1">&#39;1.3.132.0.27&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;SECT233R1&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="WeakECCCurve.ECCCurveChoices.SECT283K1">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakECCCurve.ECCCurveChoices.SECT283K1">[docs]</a>
+        <span class="n">SECT283K1</span> <span class="o">=</span> <span class="s1">&#39;1.3.132.0.16&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;SECT283K1&#39;</span><span class="p">)</span></div>
+</div>
+
+
+<div class="viewcode-block" id="WeakECCCurve.oid">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakECCCurve.oid">[docs]</a>
+    <span class="n">oid</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CharField</span><span class="p">(</span>
+        <span class="n">max_length</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span>
+        <span class="n">choices</span><span class="o">=</span><span class="n">ECCCurveChoices</span><span class="o">.</span><span class="n">choices</span><span class="p">,</span>
+        <span class="n">unique</span><span class="o">=</span><span class="kc">True</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="WeakECCCurve.__str__">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakECCCurve.__str__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the human-readable name for the ECC curve.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ECCCurveChoices</span><span class="o">.</span><span class="n">choices</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">oid</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">oid</span><span class="p">))</span> <span class="c1"># type: ignore[misc]</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="WeakSignatureAlgorithm">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakSignatureAlgorithm">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WeakSignatureAlgorithm</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Represents a weak or deprecated signature algorithm.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="WeakSignatureAlgorithm.objects">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakSignatureAlgorithm.objects">[docs]</a>
+    <span class="n">objects</span><span class="p">:</span> <span class="n">models</span><span class="o">.</span><span class="n">Manager</span><span class="p">[</span><span class="n">WeakSignatureAlgorithm</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="WeakSignatureAlgorithm.SignatureChoices">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakSignatureAlgorithm.SignatureChoices">[docs]</a>
+    <span class="k">class</span><span class="w"> </span><span class="nc">SignatureChoices</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">TextChoices</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Enumeration of weak or deprecated signature algorithm OIDs.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="WeakSignatureAlgorithm.SignatureChoices.MD5">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakSignatureAlgorithm.SignatureChoices.MD5">[docs]</a>
+        <span class="n">MD5</span> <span class="o">=</span> <span class="s1">&#39;1.2.840.113549.2.5&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;MD5&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="WeakSignatureAlgorithm.SignatureChoices.SHA1">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakSignatureAlgorithm.SignatureChoices.SHA1">[docs]</a>
+        <span class="n">SHA1</span> <span class="o">=</span> <span class="s1">&#39;1.3.14.3.2.26&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;SHA-1&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="WeakSignatureAlgorithm.SignatureChoices.SHA224">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakSignatureAlgorithm.SignatureChoices.SHA224">[docs]</a>
+        <span class="n">SHA224</span> <span class="o">=</span> <span class="s1">&#39;2.16.840.1.101.3.4.2.4&#39;</span><span class="p">,</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;SHA-224&#39;</span><span class="p">)</span></div>
+</div>
+
+
+<div class="viewcode-block" id="WeakSignatureAlgorithm.oid">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakSignatureAlgorithm.oid">[docs]</a>
+    <span class="n">oid</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CharField</span><span class="p">(</span>
+        <span class="n">max_length</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span>
+        <span class="n">choices</span><span class="o">=</span><span class="n">SignatureChoices</span><span class="o">.</span><span class="n">choices</span><span class="p">,</span>
+        <span class="n">unique</span><span class="o">=</span><span class="kc">True</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="WeakSignatureAlgorithm.__str__">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.WeakSignatureAlgorithm.__str__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the human-readable name for the weak signature algorithm.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">SignatureChoices</span><span class="o">.</span><span class="n">choices</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">oid</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">oid</span><span class="p">))</span> <span class="c1"># type: ignore[misc]</span></div>
+</div>
+
+
+<div class="viewcode-block" id="NotificationConfig">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationConfig">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">NotificationConfig</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Stores global configuration for notification thresholds and behaviors.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="NotificationConfig.objects">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationConfig.objects">[docs]</a>
+    <span class="n">objects</span><span class="p">:</span> <span class="n">models</span><span class="o">.</span><span class="n">Manager</span><span class="p">[</span><span class="n">NotificationConfig</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="NotificationConfig.cert_expiry_warning_days">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationConfig.cert_expiry_warning_days">[docs]</a>
+    <span class="n">cert_expiry_warning_days</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">PositiveIntegerField</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
+        <span class="n">help_text</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s2">&quot;Number of days before a certificate&#39;s expiration to trigger a &#39;Certificate Expiring&#39; warning.&quot;</span><span class="p">)</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationConfig.issuing_ca_expiry_warning_days">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationConfig.issuing_ca_expiry_warning_days">[docs]</a>
+    <span class="n">issuing_ca_expiry_warning_days</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">PositiveIntegerField</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
+        <span class="n">help_text</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s2">&quot;Number of days before an issuing CA&#39;s certificate expiration to trigger a warning.&quot;</span><span class="p">)</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationConfig.rsa_minimum_key_size">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationConfig.rsa_minimum_key_size">[docs]</a>
+    <span class="n">rsa_minimum_key_size</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">PositiveIntegerField</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">2048</span><span class="p">,</span>
+        <span class="n">help_text</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s1">&#39;Minimum RSA key size (in bits) that certificates must meet to avoid being flagged as insecure.&#39;</span><span class="p">)</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationConfig.weak_ecc_curves">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationConfig.weak_ecc_curves">[docs]</a>
+    <span class="n">weak_ecc_curves</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">ManyToManyField</span><span class="p">(</span>
+        <span class="n">WeakECCCurve</span><span class="p">,</span>
+        <span class="n">blank</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">help_text</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s1">&#39;Select ECC curves considered weak or deprecated.&#39;</span><span class="p">)</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NotificationConfig.weak_signature_algorithms">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationConfig.weak_signature_algorithms">[docs]</a>
+    <span class="n">weak_signature_algorithms</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">ManyToManyField</span><span class="p">(</span>
+        <span class="n">WeakSignatureAlgorithm</span><span class="p">,</span>
+        <span class="n">blank</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">help_text</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s1">&#39;Select signature algorithms considered weak or deprecated.&#39;</span><span class="p">)</span>
+    <span class="p">)</span> <span class="c1"># type: ignore</span></div>
+
+
+<div class="viewcode-block" id="NotificationConfig.Meta">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationConfig.Meta">[docs]</a>
+    <span class="k">class</span><span class="w"> </span><span class="nc">Meta</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Meta class configuration.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="NotificationConfig.Meta.verbose_name">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationConfig.Meta.verbose_name">[docs]</a>
+        <span class="n">verbose_name</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s1">&#39;Notification Configuration&#39;</span><span class="p">)</span></div>
+</div>
+
+
+<div class="viewcode-block" id="NotificationConfig.__str__">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationConfig.__str__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the human-readable name for the notification configuration.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="s1">&#39;Notification Settings&#39;</span></div>
+
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="NotificationConfig.get">
+<a class="viewcode-back" href="../../autoapi/notifications/models/index.html#notifications.models.NotificationConfig.get">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NotificationConfig</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Ensure there&#39;s always one settings object to use.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">first</span><span class="p">()</span> <span class="ow">or</span> <span class="bp">cls</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">create</span><span class="p">()</span></div>
+</div>
+
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2025, Trustpoint Project
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../_static/documentation_options.js?v=cbbe7d37"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/scripts/furo.js?v=5fa4622c"></script>
+    </body>
+</html>

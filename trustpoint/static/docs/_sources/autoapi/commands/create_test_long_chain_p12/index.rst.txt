@@ -1,0 +1,41 @@
+commands.create_test_long_chain_p12
+===================================
+
+.. py:module:: commands.create_test_long_chain_p12
+
+.. autoapi-nested-parse::
+
+   Management command for generating a long test PKI chain.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.create_test_long_chain_p12.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`commands.base_commands.CertificateCreationCommandMixin`, :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Django management command for generating a long test PKI chain.
+
+
+   .. py:attribute:: help
+      :value: 'Generate a long certificate chain with 4 Intermediate CAs.'
+
+
+
+   .. py:method:: handle(*_args, **_kwargs)
+
+      Executes the command.
+
+
+

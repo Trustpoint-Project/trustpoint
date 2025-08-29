@@ -1,0 +1,76 @@
+notifications.views
+===================
+
+.. py:module:: notifications.views
+
+.. autoapi-nested-parse::
+
+   Defines views for the notifications application.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   notifications.views.RefreshNotificationsView
+   notifications.views.NotificationDeleteView
+
+
+Module Contents
+---------------
+
+.. py:class:: RefreshNotificationsView(**kwargs)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`django.views.generic.TemplateView`
+
+
+   View to execute all notifications and redirect back to dashboard.
+
+
+   .. py:method:: get(request, *args, **kwargs)
+
+      Handles GET requests and redirects to the dashboard.
+
+      :param request: The HTTP request object.
+      :param \*args: Additional positional arguments.
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: dashboard.
+      :rtype: The response that redirects the user to home
+
+
+
+.. py:class:: NotificationDeleteView
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`django.views.generic.DeleteView`\ [\ :py:obj:`notifications.models.NotificationModel`\ , :py:obj:`Any`\ ]
+
+
+   View to delete a notification.
+
+
+   .. py:attribute:: model
+      :type:  Type[notifications.models.NotificationModel]
+
+
+   .. py:attribute:: template_name
+      :value: 'home/notification_confirm_delete.html'
+
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:method:: delete(request, *args, **kwargs)
+
+      Override delete method to add a success message.
+
+      :param request: The HTTP request object.
+      :param \*args: Additional positional arguments.
+      :param \*\*kwargs: Keyword arguments passed to super().delete.
+
+      :returns: The HTTP response redirecting to success_url.
+
+
+

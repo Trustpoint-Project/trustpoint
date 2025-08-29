@@ -1,0 +1,134 @@
+features.steps.r_007_steps
+==========================
+
+.. py:module:: features.steps.r_007_steps
+
+.. autoapi-nested-parse::
+
+   Python steps file for R_007.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   features.steps.r_007_steps.step_when_admin_performs_action
+   features.steps.r_007_steps.step_then_system_logs_action
+   features.steps.r_007_steps.step_when_admin_retrieves_logs
+   features.steps.r_007_steps.step_then_system_displays_logs
+   features.steps.r_007_steps.step_then_logs_can_be_filtered
+   features.steps.r_007_steps.step_when_admin_modifies_logging
+   features.steps.r_007_steps.step_then_system_applies_logging_config
+   features.steps.r_007_steps.step_then_logs_reflect_log_level
+   features.steps.r_007_steps.step_when_system_restarts
+   features.steps.r_007_steps.step_then_previous_logs_are_accessible
+   features.steps.r_007_steps.step_then_unauthorized_users_cannot_modify_logs
+
+
+Module Contents
+---------------
+
+.. py:function:: step_when_admin_performs_action(context, action)
+
+   Simulates the admin performing a specified action (create, update, delete).
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param action: The action being performed.
+   :type action: str
+
+
+.. py:function:: step_then_system_logs_action(context, action)
+
+   Verifies that the system logs the specified action with relevant details.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param action: The action that should be logged.
+   :type action: str
+
+
+.. py:function:: step_when_admin_retrieves_logs(context, time_range)
+
+   Simulates the admin retrieving logs for a specific time range.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param time_range: The time range for filtering logs.
+   :type time_range: str
+
+
+.. py:function:: step_then_system_displays_logs(context, time_range)
+
+   Verifies that the system correctly displays logs within the specified time range.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param time_range: The expected time range of logs.
+   :type time_range: str
+
+
+.. py:function:: step_then_logs_can_be_filtered(context, filter_criteria)
+
+   Ensures that logs can be filtered using specific criteria.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param filter_criteria: The filtering criteria (e.g., user, event type).
+   :type filter_criteria: str
+
+
+.. py:function:: step_when_admin_modifies_logging(context, log_level)
+
+   Simulates the admin modifying the logging configuration.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param log_level: The new logging verbosity level.
+   :type log_level: str
+
+
+.. py:function:: step_then_system_applies_logging_config(context)
+
+   Verifies that the system applies the updated logging configuration.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_logs_reflect_log_level(context, log_level)
+
+   Ensures logs reflect the newly configured verbosity level.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param log_level: The expected verbosity level.
+   :type log_level: str
+
+
+.. py:function:: step_when_system_restarts(context)
+
+   Simulates a system restart.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_previous_logs_are_accessible(context)
+
+   Verifies that logs remain accessible after a system restart.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_unauthorized_users_cannot_modify_logs(context)
+
+   Ensures unauthorized users cannot delete or modify logs.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+

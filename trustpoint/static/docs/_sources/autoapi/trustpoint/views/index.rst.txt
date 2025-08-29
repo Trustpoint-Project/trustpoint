@@ -1,0 +1,15 @@
+trustpoint.views
+================
+
+.. py:module:: trustpoint.views
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/trustpoint/views/base/index
+
+

@@ -1,0 +1,81 @@
+pki.tests.test_idevid_verifier
+==============================
+
+.. py:module:: pki.tests.test_idevid_verifier
+
+.. autoapi-nested-parse::
+
+   Tests for the IDevID verifier.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   pki.tests.test_idevid_verifier.get_mock_truststore
+   pki.tests.test_idevid_verifier.test_tls_client_cert_verification
+   pki.tests.test_idevid_verifier.test_tls_client_cert_verification_self_signed
+   pki.tests.test_idevid_verifier.test_tls_client_cert_verification_not_in_truststore
+   pki.tests.test_idevid_verifier.test_tls_client_cert_verification_chain
+   pki.tests.test_idevid_verifier.test_tls_client_cert_chain_too_long
+   pki.tests.test_idevid_verifier.test_tls_client_cert_idevid_in_truststore
+   pki.tests.test_idevid_verifier.test_tls_client_cert_idevid_expired
+   pki.tests.test_idevid_verifier.test_tls_client_cert_ca_expired
+   pki.tests.test_idevid_verifier.test_tls_client_cert_attributes
+
+
+Module Contents
+---------------
+
+.. py:function:: get_mock_truststore(certificates)
+
+   Get a mock truststore for testing.
+
+
+.. py:function:: test_tls_client_cert_verification()
+
+   Tests the TLS client certificate verification with the direct Issuing CA in the Truststore.
+
+
+.. py:function:: test_tls_client_cert_verification_self_signed()
+
+   Tests the TLS client certificate verification with a self-signed client certificate.
+
+
+.. py:function:: test_tls_client_cert_verification_not_in_truststore()
+
+   Tests the TLS client certificate verification fails if no matching certificate in the Truststore.
+
+
+.. py:function:: test_tls_client_cert_verification_chain(client_includes_root_ca)
+
+   Tests the TLS client certificate verification with an intermediate CA.
+
+
+.. py:function:: test_tls_client_cert_chain_too_long()
+
+   Tests the TLS client certificate verification fails with a too long chain.
+
+
+.. py:function:: test_tls_client_cert_idevid_in_truststore()
+
+   Tests that verification works with just the IDevID directly in the Truststore (not the CA).
+
+
+.. py:function:: test_tls_client_cert_idevid_expired()
+
+   Tests that verification fails if the IDevID certificate is expired.
+
+
+.. py:function:: test_tls_client_cert_ca_expired()
+
+   Tests that verification fails if the CA certificate is expired.
+
+
+.. py:function:: test_tls_client_cert_attributes()
+
+   Tests that verification fails if the client cert has no subject serial number.
+
+

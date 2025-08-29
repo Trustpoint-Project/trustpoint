@@ -1,0 +1,29 @@
+notifications.urls
+==================
+
+.. py:module:: notifications.urls
+
+.. autoapi-nested-parse::
+
+   Defines URL patterns for the NOTIFICATIONS application, mapping views to URLs.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   notifications.urls.app_name
+   notifications.urls.urlpatterns
+
+
+Module Contents
+---------------
+
+.. py:data:: app_name
+   :value: 'notifications'
+
+
+.. py:data:: urlpatterns
+

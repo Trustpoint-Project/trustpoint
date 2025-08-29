@@ -1,0 +1,123 @@
+util.sftp
+=========
+
+.. py:module:: util.sftp
+
+.. autoapi-nested-parse::
+
+   Wrapper around Paramiko SFTP functionality and related exceptions.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   util.sftp.SftpError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   util.sftp.SftpClient
+
+
+Module Contents
+---------------
+
+.. py:exception:: SftpError
+
+   Bases: :py:obj:`Exception`
+
+
+   Custom exception for any SFTP-related failures.
+
+
+.. py:class:: SftpClient(overrides = None)
+
+   Wrapper around Paramiko SFTP functionality.
+
+   If instantiated without overrides, reads settings from BackupOptions(pk=1).
+   Optionally, an overrides dict can supply:
+     host, port, user, auth_method, password, private_key, key_passphrase,
+     local_storage, remote_directory.
+
+
+   .. py:attribute:: host
+      :type:  str
+
+
+   .. py:attribute:: port
+      :type:  int
+
+
+   .. py:attribute:: username
+      :type:  str
+
+
+   .. py:attribute:: auth_method
+      :type:  str
+
+
+   .. py:attribute:: password
+      :type:  str | None
+
+
+   .. py:attribute:: private_key_text
+      :type:  str | None
+
+
+   .. py:attribute:: passphrase
+      :type:  str | None
+
+
+   .. py:attribute:: store_locally
+      :type:  bool
+
+
+   .. py:attribute:: remote_directory
+      :type:  str
+
+
+   .. py:method:: _load_private_key()
+
+      Load a Paramiko PKey from the stored private_key_text and passphrase.
+
+      :returns: A Paramiko PKey object.
+
+      :raises SftpError: If key loading fails or no key provided.
+
+
+
+   .. py:method:: _connect_sftp()
+
+      Establish an SFTP connection and return the Transport and SFTPClient.
+
+      :returns: A tuple of (Transport, SFTPClient).
+
+      :raises SftpError: If no auth_method is set or authentication/SSH errors occur.
+
+
+
+   .. py:method:: test_connection()
+
+      Attempt an SFTP connection with the current settings.
+
+      :raises SftpError: If no auth_method, authentication fails, or any SSH error.
+
+
+
+   .. py:method:: upload_file(local_filepath, remote_path)
+
+      Upload a single local file to the remote_path via SFTP.
+
+      :param local_filepath: Path to the local file to upload.
+      :param remote_path: Full remote path (including filename) at the server.
+
+      :raises SftpError: If no auth_method, local file missing, or any SSH/SFTP error.
+
+
+

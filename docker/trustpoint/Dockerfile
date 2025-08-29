@@ -14,7 +14,7 @@ EXPOSE 80 443
 # Update apt repository and install required dependencies from apt
 RUN apt-get update && \
     apt-get upgrade -y && \
-        apt-get install -y --no-install-recommends \ 
+        apt-get install -y --no-install-recommends \
         sudo \
         apt-utils \
         apache2 \
@@ -38,7 +38,7 @@ ENV LANG=en_US.UTF-8 \
 WORKDIR /var/www/html/trustpoint/
 
 ARG BRANCH=""
-COPY --chown=www-data:www-data ./ ./
+COPY --chown=www-data:www-data . ./
 
 # this allows you to use an argument if you want to build a specific branch, e.g. to build the main branch:
 # docker compose build --build-arg BRANCH=main
@@ -55,6 +55,10 @@ RUN if [ "${BRANCH}" != "" ]; then \
 USER www-data
 RUN uv sync --python-preference only-system
 RUN uv pip install mod_wsgi
+
+RUN uv pip install sphinx sphinx-rtd-theme myst-parser
+RUN mkdir -p trustpoint/trustpoint/static/docs
+
 USER root
 
 RUN uv run mod_wsgi-express install-module \

@@ -1,0 +1,40 @@
+settings.security.decorators
+============================
+
+.. py:module:: settings.security.decorators
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   settings.security.decorators.security_level
+
+
+Module Contents
+---------------
+
+.. py:function:: security_level(feature_name)
+
+   A decorator that checks whether a specific security feature is allowed based on the current security level.
+
+   This decorator uses the SecurityManager to determine if the provided feature is permitted under the current
+   security level. If the feature is not allowed, it raises a PermissionDenied exception.
+
+   Parameters:
+   -----------
+   feature_name : SecurityFeatures
+       The feature to check against the current security level.
+
+   Returns:
+   --------
+   function
+       The wrapped function that will only execute if the feature is allowed.
+
+   Raises:
+   -------
+   PermissionDenied
+       If the security level does not permit the requested feature.
+
+

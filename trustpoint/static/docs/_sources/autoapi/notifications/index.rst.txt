@@ -1,0 +1,25 @@
+notifications
+=============
+
+.. py:module:: notifications
+
+.. autoapi-nested-parse::
+
+   Module that handles Trustpoint notifications components.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/notifications/admin/index
+   /autoapi/notifications/apps/index
+   /autoapi/notifications/models/index
+   /autoapi/notifications/tests/index
+   /autoapi/notifications/urls/index
+   /autoapi/notifications/views/index
+
+

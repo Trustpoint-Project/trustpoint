@@ -1,0 +1,602 @@
+notifications.models
+====================
+
+.. py:module:: notifications.models
+
+.. autoapi-nested-parse::
+
+   Module that contains all models corresponding to the devices app.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   notifications.models.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   notifications.models.NotificationStatus
+   notifications.models.NotificationMessageModel
+   notifications.models.NotificationMessage
+   notifications.models.NotificationModel
+   notifications.models.WeakECCCurve
+   notifications.models.WeakSignatureAlgorithm
+   notifications.models.NotificationConfig
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:class:: NotificationStatus(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Model representing a status a notification can have.
+
+
+   .. py:class:: StatusChoices(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Status Types.
+
+
+      .. py:attribute:: NEW
+
+
+      .. py:attribute:: CONFIRMED
+
+
+      .. py:attribute:: IN_PROGRESS
+
+
+      .. py:attribute:: SOLVED
+
+
+      .. py:attribute:: NOT_SOLVED
+
+
+      .. py:attribute:: ESCALATED
+
+
+      .. py:attribute:: SUSPENDED
+
+
+      .. py:attribute:: REJECTED
+
+
+      .. py:attribute:: DELETED
+
+
+      .. py:attribute:: CLOSED
+
+
+      .. py:attribute:: ACKNOWLEDGED
+
+
+      .. py:attribute:: FAILED
+
+
+      .. py:attribute:: EXPIRED
+
+
+      .. py:attribute:: PENDING
+
+
+
+   .. py:attribute:: status
+
+
+   .. py:method:: get_status_display()
+
+      Gets the status as human-readable string for displaying in the front-end.
+
+      :returns: Human-readable string for displaying in the front-end.
+
+
+
+   .. py:class:: Meta
+
+      Bases: :py:obj:`django_stubs_ext.db.models.TypedModelMeta`
+
+
+      Meta class configuration.
+
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string.
+
+      :returns: The status.
+
+
+
+.. py:class:: NotificationMessageModel(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Message Model for Notifications with Short and Optional Long Descriptions.
+
+
+   .. py:attribute:: short_description
+
+
+   .. py:attribute:: long_description
+
+
+   .. py:class:: Meta
+
+      Bases: :py:obj:`django_stubs_ext.db.models.TypedModelMeta`
+
+
+      Meta class configuration.
+
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string.
+
+      :returns: The short description.
+
+
+
+.. py:class:: NotificationMessage(short_description, long_description = 'No description provided')
+
+   Class for notification content with short and optional long descriptions.
+
+
+   .. py:attribute:: short_description
+      :type:  str
+
+
+   .. py:attribute:: long_description
+      :type:  str
+      :value: 'No description provided'
+
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string.
+
+      :returns: The short description.
+
+
+
+   .. py:property:: short
+      :type: str
+
+
+      Returns the short description.
+
+      :returns: The short description.
+
+
+   .. py:property:: long
+      :type: str
+
+
+      Returns the long description.
+
+      :returns: The long description.
+
+
+.. py:class:: NotificationModel(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Notifications Model.
+
+
+   .. py:class:: NotificationTypes(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Supported Notification Types.
+
+
+      .. py:attribute:: SETUP
+
+
+      .. py:attribute:: INFO
+
+
+      .. py:attribute:: WARNING
+
+
+      .. py:attribute:: CRITICAL
+
+
+
+   .. py:class:: NotificationSource(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Origin of the Notification.
+
+
+      .. py:attribute:: SYSTEM
+
+
+      .. py:attribute:: DOMAIN
+
+
+      .. py:attribute:: DEVICE
+
+
+      .. py:attribute:: ISSUING_CA
+
+
+      .. py:attribute:: CERTIFICATE
+
+
+
+   .. py:class:: NotificationMessageType(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Types of messages (aka. unique strings to that particular notification).
+
+
+      .. py:attribute:: CUSTOM
+         :value: ('C', 'custom')
+
+
+
+      .. py:attribute:: ISSUING_CA_TEST
+         :value: 'TEST_CA'
+
+
+
+      .. py:attribute:: DOMAIN_TEST
+         :value: 'TEST_DOMAIN'
+
+
+
+      .. py:attribute:: CERT_TEST
+         :value: 'TEST_CERT'
+
+
+
+      .. py:attribute:: DEVICE_TEST
+         :value: 'TEST_DEVICE'
+
+
+
+      .. py:attribute:: WELCOME_POPULATE_TEST_DATA
+         :value: 'POP_TEST_DATA'
+
+
+
+      .. py:attribute:: TRUSTPOINT_DOCUMENTATION
+         :value: 'TP_DOCS'
+
+
+
+      .. py:attribute:: TRUSTPOINT_PROJECT_INFO
+         :value: 'TP_INFO'
+
+
+
+      .. py:attribute:: WELCOME_MESSAGE
+         :value: 'WELCOME'
+
+
+
+      .. py:attribute:: SYSTEM_NOT_HEALTHY
+         :value: 'SYS_NOT_HEALTHY'
+
+
+
+      .. py:attribute:: VULNERABILITY
+         :value: 'VULNERABILITY'
+
+
+
+      .. py:attribute:: CERT_EXPIRING
+         :value: 'CERT_EXPIRING'
+
+
+
+      .. py:attribute:: CERT_EXPIRED
+         :value: 'CERT_EXPIRED'
+
+
+
+      .. py:attribute:: ISSUING_CA_EXPIRING
+         :value: 'CA_EXPIRING'
+
+
+
+      .. py:attribute:: ISSUING_CA_EXPIRED
+         :value: 'CA_EXPIRED'
+
+
+
+      .. py:attribute:: DOMAIN_NO_ISSUING_CA
+         :value: 'DOMAIN_NO_CA'
+
+
+
+      .. py:attribute:: DEVICE_NOT_ONBOARDED
+         :value: 'DEV_NOT_ONBRD'
+
+
+
+      .. py:attribute:: DEVICE_ONBOARDING_FAILED
+         :value: 'DEV_ONBRD_FAIL'
+
+
+
+      .. py:attribute:: DEVICE_CERT_REVOKED
+         :value: 'DEV_CERT_REV'
+
+
+
+      .. py:attribute:: WEAK_SIGNATURE_ALGORITHM
+         :value: 'WEAK_SIG_ALGO'
+
+
+
+      .. py:attribute:: INSUFFICIENT_KEY_LENGTH
+         :value: 'INSUFF_KEY_LEN'
+
+
+
+      .. py:attribute:: WEAK_ECC_CURVE
+         :value: 'WEAK_ECC_CURVE'
+
+
+
+      .. py:method:: get_message()
+
+         Returns the message for the given type.
+
+         :returns: The notification message.
+
+
+
+
+   .. py:attribute:: notification_type
+
+
+   .. py:attribute:: notification_source
+
+
+   .. py:attribute:: message_type
+
+
+   .. py:attribute:: message_data
+
+
+   .. py:attribute:: domain
+
+
+   .. py:attribute:: certificate
+
+
+   .. py:attribute:: device
+
+
+   .. py:attribute:: issuing_ca
+
+
+   .. py:attribute:: event
+
+
+   .. py:attribute:: message
+
+
+   .. py:attribute:: statuses
+
+
+   .. py:attribute:: created_at
+
+
+   .. py:method:: get_notification_type_display()
+
+      Gets the notification type as human-readable string for displaying in the front-end.
+
+      :returns: Human-readable string for displaying in the front-end.
+
+
+
+   .. py:class:: Meta
+
+      Bases: :py:obj:`django_stubs_ext.db.models.TypedModelMeta`
+
+
+      Meta class configuration.
+
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string.
+
+      :returns: The notification type to display with message description if available.
+
+
+
+   .. py:property:: short_translated
+      :type: Any
+
+
+      Returns the translated short description.
+
+      :returns: The translated short description.
+
+
+   .. py:property:: long_translated
+      :type: Any
+
+
+      Returns the translated long description.
+
+      :returns: The translated long description.
+
+
+.. py:class:: WeakECCCurve(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Represents a weak or deprecated ECC curve.
+
+
+   .. py:attribute:: objects
+      :type:  django.db.models.Manager[WeakECCCurve]
+
+
+   .. py:class:: ECCCurveChoices(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Enumeration of weak or deprecated ECC curve OIDs.
+
+
+      .. py:attribute:: SECP160R1
+
+
+      .. py:attribute:: SECP192R1
+
+
+      .. py:attribute:: SECP224R1
+
+
+      .. py:attribute:: SECP256K1
+
+
+      .. py:attribute:: SECT163K1
+
+
+      .. py:attribute:: SECT163R2
+
+
+      .. py:attribute:: SECT233K1
+
+
+      .. py:attribute:: SECT233R1
+
+
+      .. py:attribute:: SECT283K1
+
+
+
+   .. py:attribute:: oid
+
+
+   .. py:method:: __str__()
+
+      Return the human-readable name for the ECC curve.
+
+
+
+.. py:class:: WeakSignatureAlgorithm(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Represents a weak or deprecated signature algorithm.
+
+
+   .. py:attribute:: objects
+      :type:  django.db.models.Manager[WeakSignatureAlgorithm]
+
+
+   .. py:class:: SignatureChoices(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Enumeration of weak or deprecated signature algorithm OIDs.
+
+
+      .. py:attribute:: MD5
+
+
+      .. py:attribute:: SHA1
+
+
+      .. py:attribute:: SHA224
+
+
+
+   .. py:attribute:: oid
+
+
+   .. py:method:: __str__()
+
+      Return the human-readable name for the weak signature algorithm.
+
+
+
+.. py:class:: NotificationConfig(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Stores global configuration for notification thresholds and behaviors.
+
+
+   .. py:attribute:: objects
+      :type:  django.db.models.Manager[NotificationConfig]
+
+
+   .. py:attribute:: cert_expiry_warning_days
+
+
+   .. py:attribute:: issuing_ca_expiry_warning_days
+
+
+   .. py:attribute:: rsa_minimum_key_size
+
+
+   .. py:attribute:: weak_ecc_curves
+
+
+   .. py:attribute:: weak_signature_algorithms
+
+
+   .. py:class:: Meta
+
+      Meta class configuration.
+
+
+      .. py:attribute:: verbose_name
+
+
+
+   .. py:method:: __str__()
+
+      Return the human-readable name for the notification configuration.
+
+
+
+   .. py:method:: get()
+      :classmethod:
+
+
+      Ensure there's always one settings object to use.
+
+
+

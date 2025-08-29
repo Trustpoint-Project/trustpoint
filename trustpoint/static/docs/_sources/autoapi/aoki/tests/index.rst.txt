@@ -1,0 +1,21 @@
+aoki.tests
+==========
+
+.. py:module:: aoki.tests
+
+.. autoapi-nested-parse::
+
+   AOKI testing directory.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/aoki/tests/client/index
+   /autoapi/aoki/tests/cmp_client/index
+
+

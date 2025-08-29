@@ -1,0 +1,83 @@
+settings.views.tls
+==================
+
+.. py:module:: settings.views.tls
+
+.. autoapi-nested-parse::
+
+   TLS setting specific views.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.views.tls.TlsSettingsContextMixin
+   settings.views.tls.TlsView
+
+
+Module Contents
+---------------
+
+.. py:class:: TlsSettingsContextMixin
+
+   Mixin which adds data to the context for the TLS settings application.
+
+
+   .. py:attribute:: extra_context
+      :type:  ClassVar
+
+
+.. py:class:: TlsView
+
+   Bases: :py:obj:`TlsSettingsContextMixin`, :py:obj:`django.views.generic.FormView`\ [\ :py:obj:`settings.forms.IPv4AddressForm`\ ]
+
+
+   View to display certificate details, including Subject Alternative Name (SAN) and associated IP addresses.
+
+
+   .. py:attribute:: template_name
+      :value: 'settings/tls.html'
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:method:: get_form_kwargs()
+
+      Pass additional arguments (e.g., SAN IPs) to the form.
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Add certificate information, including SAN data and issuer details, to the context for display.
+
+
+
+   .. py:method:: form_valid(form)
+
+      Handle valid form submissions.
+
+
+
+   .. py:method:: form_invalid(form)
+
+      Handle invalid form submissions.
+
+
+
+   .. py:method:: get_san_ips()
+
+      Fetches IPv4 addresses from the Subject Alternative Name (SAN) extension of the active TLS certificate.
+
+      :returns: A list of IPv4 addresses (as strings) or an empty list if none are found.
+
+
+

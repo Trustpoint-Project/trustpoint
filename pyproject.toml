@@ -112,3 +112,12 @@ md_report_output = 'md-report.md'
 'behave.formatter.html-pretty.title_string' = 'TrustPoint Test Report'
 'behave.formatter.html-pretty.show_summary' = 'true'
 'behave.formatter.html-pretty.collapse' = 'all'
+
+[project.optional-dependencies]
+docs = [
+  "sphinx>=7",
+  "sphinx-rtd-theme",
+  "furo",
+  "myst-parser",
+  "sphinx-copybutton"
+]

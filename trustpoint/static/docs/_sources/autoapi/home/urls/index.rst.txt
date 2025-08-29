@@ -1,0 +1,29 @@
+home.urls
+=========
+
+.. py:module:: home.urls
+
+.. autoapi-nested-parse::
+
+   Defines URL patterns for the Home application, mapping views to URLs.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   home.urls.app_name
+   home.urls.urlpatterns
+
+
+Module Contents
+---------------
+
+.. py:data:: app_name
+   :value: 'home'
+
+
+.. py:data:: urlpatterns
+

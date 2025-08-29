@@ -1,0 +1,25 @@
+settings.management.commands.compilemsg
+=======================================
+
+.. py:module:: settings.management.commands.compilemsg
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.management.commands.compilemsg.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.commands.compilemessages.Command`
+
+
+   A shorter alias to run compilemessages to compile translation .po files into .mo files.
+
+

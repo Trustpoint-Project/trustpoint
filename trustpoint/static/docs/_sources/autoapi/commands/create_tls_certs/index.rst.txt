@@ -1,0 +1,57 @@
+commands.create_tls_certs
+=========================
+
+.. py:module:: commands.create_tls_certs
+
+.. autoapi-nested-parse::
+
+   Django management command for creating a self-signed TLS server credential.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   commands.create_tls_certs.BASE_PATH
+   commands.create_tls_certs.SERVER_CERT_PATH
+   commands.create_tls_certs.SERVER_KEY_PATH
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.create_tls_certs.Command
+
+
+Module Contents
+---------------
+
+.. py:data:: BASE_PATH
+
+.. py:data:: SERVER_CERT_PATH
+
+.. py:data:: SERVER_KEY_PATH
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Django management command for creating a self-signed TLS server credential.
+
+
+   .. py:attribute:: help
+      :value: 'Creates a TLS Server Certificate as required.'
+
+
+
+   .. py:method:: handle(*_args, **_kwargs)
+
+      Executes the command.
+
+
+

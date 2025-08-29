@@ -1,0 +1,53 @@
+settings.management.commands.managestartup
+==========================================
+
+.. py:module:: settings.management.commands.managestartup
+
+.. autoapi-nested-parse::
+
+   Management command to check and update the Trustpoint database version.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.management.commands.managestartup.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   A Django management command to check and update the Trustpoint version.
+
+
+   .. py:attribute:: help
+      :value: 'Updates app version'
+
+
+
+   .. py:method:: handle(**_options)
+
+      Entrypoint for the command.
+
+
+
+   .. py:method:: manage_startup()
+
+      Checks current state of trustpoint and acts accordingly.
+
+
+
+   .. py:method:: _parse_versions(db_version_str, current_version_str)
+
+      Parse the version strings into Version objects.
+
+
+

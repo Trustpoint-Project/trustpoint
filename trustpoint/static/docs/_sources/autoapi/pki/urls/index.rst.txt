@@ -1,0 +1,29 @@
+pki.urls
+========
+
+.. py:module:: pki.urls
+
+.. autoapi-nested-parse::
+
+   URL configuration for the PKI application.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   pki.urls.app_name
+   pki.urls.urlpatterns
+
+
+Module Contents
+---------------
+
+.. py:data:: app_name
+   :value: 'pki'
+
+
+.. py:data:: urlpatterns
+

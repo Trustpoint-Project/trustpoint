@@ -1,0 +1,54 @@
+commands.create_and_validate_test_certs
+=======================================
+
+.. py:module:: commands.create_and_validate_test_certs
+
+.. autoapi-nested-parse::
+
+   Management command to create some certificates for testing and verifying them using OpenSSL.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.create_and_validate_test_certs.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`commands.base_commands.CertificateCreationCommandMixin`, :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Creates a certificate chain and validates it uing OpenSSL.
+
+
+   .. py:attribute:: help
+      :value: 'Creates a certificate chain and validates it uing OpenSSL.'
+
+
+
+   .. py:method:: _create_cert_chain(algorithm, path)
+
+
+   .. py:method:: _create_certificate(common_name, algorithm, path, issuer = None, issuer_priv_key = None, validity_days = 365)
+      :classmethod:
+
+
+
+   .. py:method:: _create_trust_store(algorithms, path)
+      :staticmethod:
+
+
+
+   .. py:method:: handle(*_args, **_kwargs)
+
+      Executes the command.
+
+
+

@@ -1,0 +1,48 @@
+devices.admin
+=============
+
+.. py:module:: devices.admin
+
+.. autoapi-nested-parse::
+
+   Registrations for Django Admin.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   devices.admin.DeviceModelAdmin
+   devices.admin.IssuedCredentialModelAdmin
+   devices.admin.RemoteDeviceCredentialDownloadModelAdmin
+
+
+Module Contents
+---------------
+
+.. py:class:: DeviceModelAdmin
+
+   Bases: :py:obj:`django.contrib.admin.ModelAdmin`\ [\ :py:obj:`devices.models.DeviceModel`\ ]
+
+
+   Registers the DeviceModel with Django Admin.
+
+
+.. py:class:: IssuedCredentialModelAdmin
+
+   Bases: :py:obj:`django.contrib.admin.ModelAdmin`\ [\ :py:obj:`devices.models.IssuedCredentialModel`\ ]
+
+
+   Registers the IssuedCredentialModelAdmin with Django Admin.
+
+
+.. py:class:: RemoteDeviceCredentialDownloadModelAdmin
+
+   Bases: :py:obj:`django.contrib.admin.ModelAdmin`\ [\ :py:obj:`devices.models.RemoteDeviceCredentialDownloadModel`\ ]
+
+
+   Registers the RemoteDeviceCredentialDownloadModel with Django Admin.
+
+

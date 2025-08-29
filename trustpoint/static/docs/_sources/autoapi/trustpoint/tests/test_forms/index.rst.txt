@@ -1,0 +1,54 @@
+trustpoint.tests.test_forms
+===========================
+
+.. py:module:: trustpoint.tests.test_forms
+
+.. autoapi-nested-parse::
+
+   Tests for the forms module.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   trustpoint.tests.test_forms.DummyForm
+   trustpoint.tests.test_forms.TestCleanedDataNotNoneMixin
+
+
+Module Contents
+---------------
+
+.. py:class:: DummyForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`trustpoint.forms.CleanedDataNotNoneMixin`, :py:obj:`django.forms.Form`
+
+
+   The main implementation of all the Form logic. Note that this class is
+   different than Form. See the comments by the Form class for more info. Any
+   improvements to the form API should be made to this class, not to the Form
+   class.
+
+
+   .. py:attribute:: field
+
+
+.. py:class:: TestCleanedDataNotNoneMixin
+
+   Test cases for CleanedDataNotNoneMixin.
+
+
+   .. py:method:: test_clean_returns_cleaned_data()
+
+      Verify clean method returns valid cleaned_data.
+
+
+
+   .. py:method:: test_clean_raises_error_for_empty_data()
+
+      Check clean raises ValidationError if data is invalid.
+
+
+

@@ -1,0 +1,70 @@
+settings.security.manager
+=========================
+
+.. py:module:: settings.security.manager
+
+.. autoapi-nested-parse::
+
+   Logic managing the security level setting of the Trustpoint.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.security.manager.SecurityManager
+
+
+Module Contents
+---------------
+
+.. py:class:: SecurityManager
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`
+
+
+   Manages the security level setting of the Trustpoint.
+
+
+   .. py:method:: is_feature_allowed(feature, target_level = None)
+
+      Checks if the specified feature is allowed under the given security level.
+
+      If 'target_level' is None, the current security level is used.
+
+
+
+   .. py:method:: get_security_level()
+
+      Returns the string representation of the security_mode, e.g. '0', '1', etc.
+
+
+
+   .. py:method:: get_features_to_disable(sec_level)
+      :classmethod:
+
+
+      Returns a list of features that must be disabled at the given security level.
+
+
+
+   .. py:method:: reset_settings(new_sec_mode)
+
+      Disables any feature that is not allowed by the new security mode.
+
+
+
+   .. py:method:: get_security_config_model()
+
+      Returns the model holding the security settings.
+
+
+
+   .. py:method:: enable_feature(feature, *args)
+
+      Enables a feature if it is allowed at the current security level.
+
+
+

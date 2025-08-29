@@ -1,0 +1,187 @@
+pki.models.truststore
+=====================
+
+.. py:module:: pki.models.truststore
+
+.. autoapi-nested-parse::
+
+   This module defines models for managing trustpoints, including server credentials and truststores.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.models.truststore.ActiveTrustpointTlsServerCredentialModel
+   pki.models.truststore.TruststoreModel
+   pki.models.truststore.TruststoreOrderModel
+
+
+Module Contents
+---------------
+
+.. py:class:: ActiveTrustpointTlsServerCredentialModel(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Represents the currently active TLS server credential.
+
+   This model tracks the active server credential, ensuring that it is always
+   up-to-date and linked to a specific `CredentialModel` instance.
+
+
+   .. py:attribute:: credential
+
+
+   .. py:class:: Meta
+
+      Bases: :py:obj:`django_stubs_ext.db.models.TypedModelMeta`
+
+
+      Meta class configuration.
+
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string representation of the active credential.
+
+      :returns: Description of the active TLS server credential.
+      :rtype: str
+
+
+
+   .. py:method:: save(*args, **kwargs)
+
+      Ensures the model instance always has an ID of 1 to enforce singleton-like behavior.
+
+      :returns: None
+
+
+
+.. py:class:: TruststoreModel(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Represents a truststore, which is a collection of certificates used for specific purposes.
+
+   This model allows organizing certificates into a logical grouping for specific
+   intended usages such as `IDevID`, `TLS`, or `Generic`. Each truststore is identified
+   by a unique name and supports operations like retrieving the number of certificates
+   or serializing its content.
+
+
+   .. py:class:: IntendedUsage(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.IntegerChoices`
+
+
+      Intended Usage of the Truststore.
+
+
+      .. py:attribute:: IDEVID
+
+
+      .. py:attribute:: TLS
+
+
+      .. py:attribute:: GENERIC
+
+
+      .. py:attribute:: DEVICE_OWNER_ID
+
+
+
+   .. py:attribute:: unique_name
+
+
+   .. py:attribute:: certificates
+
+
+   .. py:attribute:: intended_usage
+
+
+   .. py:attribute:: created_at
+
+
+   .. py:class:: Meta
+
+      Bases: :py:obj:`django_stubs_ext.db.models.TypedModelMeta`
+
+
+      Meta class configuration.
+
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string representation of the TruststoreModel.
+
+
+
+   .. py:method:: save(**kwargs)
+
+      Ensures the model is valid before saving.
+
+
+
+   .. py:property:: number_of_certificates
+      :type: int
+
+
+      Returns the number of certificates in the truststore.
+
+
+   .. py:method:: get_certificate_collection_serializer()
+
+      Returns a serializer for all certificates in the truststore.
+
+      This method gathers all the certificates associated with the truststore,
+      serializes them using `CertificateCollectionSerializer`, and returns
+      the serialized result.
+
+      :returns: The serialized representation of the certificates.
+
+
+
+.. py:class:: TruststoreOrderModel(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Represents the order of certificates in a truststore.
+
+
+   .. py:attribute:: order
+
+
+   .. py:attribute:: certificate
+
+
+   .. py:attribute:: trust_store
+
+
+   .. py:class:: Meta
+
+      Bases: :py:obj:`django_stubs_ext.db.models.TypedModelMeta`
+
+
+      Meta class configuration.
+
+
+      .. py:attribute:: unique_together
+         :value: ('order', 'trust_store')
+
+
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string representation of the TruststoreOrderModel.
+
+
+

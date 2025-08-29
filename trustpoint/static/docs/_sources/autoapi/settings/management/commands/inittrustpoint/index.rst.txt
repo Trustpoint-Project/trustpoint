@@ -1,0 +1,55 @@
+settings.management.commands.inittrustpoint
+===========================================
+
+.. py:module:: settings.management.commands.inittrustpoint
+
+.. autoapi-nested-parse::
+
+   Management command to initialize the Trustpoint on container startup.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.management.commands.inittrustpoint.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   A Django management command to initialize the Trustpoint.
+
+   Called by the 'managestartup' command
+
+
+   .. py:attribute:: help
+      :value: 'Initializes the Trustpoint on container startup.'
+
+
+
+   .. py:method:: add_arguments(parser)
+
+      Adds command arguments/options.
+
+
+
+   .. py:method:: handle(**options)
+
+      Entrypoint for the command.
+
+
+
+   .. py:method:: init_trustpoint(**options)
+
+      Run migrations (if enabled) and preparatory Django management cmds.
+
+
+

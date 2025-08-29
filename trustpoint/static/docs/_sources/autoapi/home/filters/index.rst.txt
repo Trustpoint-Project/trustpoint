@@ -1,0 +1,96 @@
+home.filters
+============
+
+.. py:module:: home.filters
+
+.. autoapi-nested-parse::
+
+   Contains custom filter sets to filter model data based on various criteria.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   home.filters.NotificationFilter
+
+
+Module Contents
+---------------
+
+.. py:class:: NotificationFilter(data=None, queryset=None, *, request=None, prefix=None)
+
+   Bases: :py:obj:`django_filters.FilterSet`
+
+
+   Filters notifications based on various criteria such as date range and status.
+
+
+   .. py:attribute:: notification_type
+
+
+   .. py:attribute:: notification_source
+
+
+   .. py:attribute:: date_range
+
+
+   .. py:class:: Meta
+
+      Configures the filter set's model and fields for filtering.
+
+
+      .. py:attribute:: model
+
+
+      .. py:attribute:: fields
+         :type:  ClassVar[list[str]]
+         :value: ['notification_type', 'notification_source']
+
+
+
+
+   .. py:method:: filter_by_multiple_types(queryset, _, value)
+      :staticmethod:
+
+
+      Split the comma-separated values into a list for types.
+
+      :param queryset: The queryset of `NotificationModel`.
+      :param _: A placeholder parameter for type.
+      :param value: The value to filter the queryset by.
+
+      :returns: The filtered queryset based on the provided value.
+
+
+
+   .. py:method:: filter_by_multiple_sources(queryset, _, value)
+      :staticmethod:
+
+
+      Split the comma-separated values into a list for sources.
+
+      :param queryset: The queryset of `NotificationModel`.
+      :param _: A placeholder parameter for type.
+      :param value: The value to filter the queryset by.
+
+      :returns: The filtered queryset based on the provided value.
+
+
+
+   .. py:method:: filter_by_date_range(queryset, _, value)
+      :staticmethod:
+
+
+      Filter the given QuerySet by date range.
+
+      :param queryset: The queryset of `NotificationModel`.
+      :param _: A placeholder parameter for type.
+      :param value: The value to filter the queryset by.
+
+      :returns: The filtered queryset based on the provided value.
+
+
+

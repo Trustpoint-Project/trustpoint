@@ -1,0 +1,28 @@
+settings
+========
+
+.. py:module:: settings
+
+.. autoapi-nested-parse::
+
+   Init
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/settings/admin/index
+   /autoapi/settings/apps/index
+   /autoapi/settings/forms/index
+   /autoapi/settings/management/index
+   /autoapi/settings/models/index
+   /autoapi/settings/security/index
+   /autoapi/settings/tests/index
+   /autoapi/settings/urls/index
+   /autoapi/settings/views/index
+
+

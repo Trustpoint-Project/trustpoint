@@ -1,0 +1,24 @@
+pki.tests.test_models
+=====================
+
+.. py:module:: pki.tests.test_models
+
+.. autoapi-nested-parse::
+
+   Init for the PKI model tests.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/pki/tests/test_models/test_certificate_extensions/index
+   /autoapi/pki/tests/test_models/test_certificate_model/index
+   /autoapi/pki/tests/test_models/test_certificate_values/index
+   /autoapi/pki/tests/test_models/test_domain_model/index
+   /autoapi/pki/tests/test_models/test_issuing_ca_model/index
+
+

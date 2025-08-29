@@ -1,0 +1,69 @@
+commands.check_certificate_validity
+===================================
+
+.. py:module:: commands.check_certificate_validity
+
+.. autoapi-nested-parse::
+
+   Management command to check the validity of certificates.
+
+   This module defines a Django management command that checks for expiring
+   or expired certificates stored in the database. Expiring certificates
+   trigger a WARNING notification, while expired certificates trigger a
+   CRITICAL notification. Notifications are created only if they do not
+   already exist for the given certificate and event.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.check_certificate_validity.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Management command to check for expiring or expired certificates.
+
+   Expiring certificates trigger a WARNING notification, while expired certificates trigger a CRITICAL notification.
+
+
+   .. py:attribute:: help
+      :value: 'Check for expiring or expired certificates.'
+
+
+
+   .. py:method:: handle(*args, **kwargs)
+
+      Entrypoint for the command.Args.
+
+      :param \*args: Additional positional arguments.
+      :param \*\*kwargs: Additional keyword arguments.
+
+
+
+   .. py:method:: _check_certificate_validity()
+
+      Check for certificates that are expiring soon or have already expired.
+
+      Expiring certificates: Within the next 30 days.
+      Expired certificates: Already past their `not_valid_after` date.
+
+
+
+   .. py:method:: _create_notification(certificate, event, notification_type, message_type, new_status)
+
+      Helper function to create a notification for a certificate.
+
+      Skips notification creation if one already exists for the given event and certificate.
+
+
+

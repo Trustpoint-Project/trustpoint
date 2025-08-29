@@ -1,0 +1,27 @@
+API Reference
+=============
+
+This page contains auto-generated API reference documentation [#f1]_.
+
+.. toctree::
+   :titlesonly:
+
+   /autoapi/cmp/index
+   /autoapi/est/index
+   /autoapi/pki/index
+   /autoapi/home/index
+   /autoapi/util/index
+   /autoapi/aoki/index
+   /autoapi/users/index
+   /autoapi/manage/index
+   /autoapi/devices/index
+   /autoapi/conftest/index
+   /autoapi/settings/index
+   /autoapi/commands/index
+   /autoapi/features/index
+   /autoapi/trustpoint/index
+   /autoapi/test_backup/index
+   /autoapi/setup_wizard/index
+   /autoapi/notifications/index
+
+.. [#f1] Created with `sphinx-autoapi <https://github.com/readthedocs/sphinx-autoapi>`_

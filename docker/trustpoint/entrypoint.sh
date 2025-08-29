@@ -14,6 +14,14 @@ echo "PostgreSQL database is available!"
 
 run_as_www_data "uv run trustpoint/manage.py managestartup"
 
+# --- Build docs (uv + make + fallback), then copy into static/ ---
+# 1) sync docs deps
+# 2) clean + build (prefers Makefile; falls back to 'uv run -m sphinx.cmd.build -M html source build')
+# 3) copy HTML into trustpoint/static/docs so Django can serve offline
+run_as_www_data "uv run trustpoint/manage.py build_docs --clean \
+    --docs-dir /var/www/html/trustpoint/trustpoint/docs \
+    --static-dest /var/www/html/trustpoint/trustpoint/static/docs"
+
 # 12) Configure apache
 /etc/trustpoint/wizard/transition/configure_apache.sh
 

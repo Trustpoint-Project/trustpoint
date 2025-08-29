@@ -1,0 +1,21 @@
+features
+========
+
+.. py:module:: features
+
+.. autoapi-nested-parse::
+
+   Python package for the behave feature and step files.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/features/environment/index
+   /autoapi/features/steps/index
+
+

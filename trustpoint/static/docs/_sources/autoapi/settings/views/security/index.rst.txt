@@ -1,0 +1,65 @@
+settings.views.security
+=======================
+
+.. py:module:: settings.views.security
+
+.. autoapi-nested-parse::
+
+   Django Views
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.views.security.SecurityView
+
+
+Module Contents
+---------------
+
+.. py:class:: SecurityView(security_feature = None, *args, **kwargs)
+
+   Bases: :py:obj:`settings.security.mixins.SecurityLevelMixin`, :py:obj:`django.views.generic.edit.FormView`
+
+
+   A mixin that provides security feature checks for Django views.
+
+
+   .. py:attribute:: template_name
+      :value: 'settings/security.html'
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:method:: get_form_kwargs()
+
+      Return the keyword arguments for instantiating the form.
+
+
+
+   .. py:method:: form_valid(form)
+
+      If the form is valid, redirect to the supplied URL.
+
+
+
+   .. py:method:: form_invalid(form)
+
+      If the form is invalid, render the invalid form.
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Insert the form into the context dict.
+
+
+

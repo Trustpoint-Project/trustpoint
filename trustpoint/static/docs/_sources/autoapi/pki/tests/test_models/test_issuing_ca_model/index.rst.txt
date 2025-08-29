@@ -1,0 +1,62 @@
+pki.tests.test_models.test_issuing_ca_model
+===========================================
+
+.. py:module:: pki.tests.test_models.test_issuing_ca_model
+
+.. autoapi-nested-parse::
+
+   Tests for the IssuingCaModel class.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   pki.tests.test_models.test_issuing_ca_model.COMMON_NAME
+   pki.tests.test_models.test_issuing_ca_model.UNIQUE_NAME
+   pki.tests.test_models.test_issuing_ca_model.CA_TYPE
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   pki.tests.test_models.test_issuing_ca_model.test_attributes_and_properties
+   pki.tests.test_models.test_issuing_ca_model.test_issue_crl
+   pki.tests.test_models.test_issuing_ca_model.test_revoke_all_issued_certificates_and_crl
+   pki.tests.test_models.test_issuing_ca_model.test_issuing_ca_delete
+
+
+Module Contents
+---------------
+
+.. py:data:: COMMON_NAME
+   :value: 'Root CA'
+
+
+.. py:data:: UNIQUE_NAME
+   :value: ''
+
+
+.. py:data:: CA_TYPE
+
+.. py:function:: test_attributes_and_properties(issuing_ca_instance)
+
+   Test that the common_name property returns the certificate's common name.
+
+
+.. py:function:: test_issue_crl(issuing_ca_instance)
+
+.. py:function:: test_revoke_all_issued_certificates_and_crl(issuing_ca_instance)
+
+   Test that revoke_all_issued_certificates method and if crl is build correctly.
+
+
+.. py:function:: test_issuing_ca_delete(issuing_ca_instance, domain_instance)
+
+   Tests that the issuing CA can be deleted only if it has no associated domains.
+
+

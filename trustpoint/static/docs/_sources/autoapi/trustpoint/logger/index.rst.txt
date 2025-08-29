@@ -1,0 +1,39 @@
+trustpoint.logger
+=================
+
+.. py:module:: trustpoint.logger
+
+.. autoapi-nested-parse::
+
+   Contains logging utilities for the trustpoint project.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   trustpoint.logger.LoggerMixin
+
+
+Module Contents
+---------------
+
+.. py:class:: LoggerMixin
+
+   Mixin that adds log features to the subclass.
+
+
+   .. py:attribute:: logger
+      :type:  logging.Logger
+
+
+   .. py:method:: __init_subclass__(**kwargs)
+      :classmethod:
+
+
+      Adds an appropriate logger to the subclass and makes it available through cls.logger.
+
+
+

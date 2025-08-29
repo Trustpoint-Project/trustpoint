@@ -1,0 +1,27 @@
+devices.tests.test_issuer.test_tls_server_credential
+====================================================
+
+.. py:module:: devices.tests.test_issuer.test_tls_server_credential
+
+.. autoapi-nested-parse::
+
+   Test suite for validating the TLS Server Credential functionality.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   devices.tests.test_issuer.test_tls_server_credential.test_issue_tls_server_credential
+
+
+Module Contents
+---------------
+
+.. py:function:: test_issue_tls_server_credential(device_instance)
+
+   Test that issuing a TLS server credential works without mocks.
+
+

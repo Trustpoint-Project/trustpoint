@@ -1,0 +1,602 @@
+pki.models.certificate
+======================
+
+.. py:module:: pki.models.certificate
+
+.. autoapi-nested-parse::
+
+   Module that contains the CertificateModel.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.models.certificate.CertificateModel
+   pki.models.certificate.RevokedCertificateModel
+
+
+Module Contents
+---------------
+
+.. py:class:: CertificateModel(*args, **kwargs)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`util.db.CustomDeleteActionModel`
+
+
+   X509 Certificate Model.
+
+   See RFC5280 for more information.
+
+
+   .. py:class:: CertificateStatus(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      CertificateModel status.
+
+
+      .. py:attribute:: OK
+
+
+      .. py:attribute:: REVOKED
+
+
+      .. py:attribute:: EXPIRED
+
+
+      .. py:attribute:: NOT_YET_VALID
+
+
+
+   .. py:class:: Version(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.IntegerChoices`
+
+
+      X509 RFC 5280 - Certificate Version.
+
+
+      .. py:attribute:: V3
+
+
+
+   .. py:class:: SignatureAlgorithmOidChoices(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Signature Algorithm OIDs.
+
+
+      .. py:attribute:: RSA_MD5
+
+
+      .. py:attribute:: RSA_SHA1
+
+
+      .. py:attribute:: RSA_SHA1_ALT
+
+
+      .. py:attribute:: RSA_SHA224
+
+
+      .. py:attribute:: RSA_SHA256
+
+
+      .. py:attribute:: RSA_SHA384
+
+
+      .. py:attribute:: RSA_SHA512
+
+
+      .. py:attribute:: RSA_SHA3_224
+
+
+      .. py:attribute:: RSA_SHA3_256
+
+
+      .. py:attribute:: RSA_SHA3_384
+
+
+      .. py:attribute:: RSA_SHA3_512
+
+
+      .. py:attribute:: ECDSA_SHA1
+
+
+      .. py:attribute:: ECDSA_SHA224
+
+
+      .. py:attribute:: ECDSA_SHA256
+
+
+      .. py:attribute:: ECDSA_SHA384
+
+
+      .. py:attribute:: ECDSA_SHA512
+
+
+      .. py:attribute:: ECDSA_SHA3_224
+
+
+      .. py:attribute:: ECDSA_SHA3_256
+
+
+      .. py:attribute:: ECDSA_SHA3_384
+
+
+      .. py:attribute:: ECDSA_SHA3_512
+
+
+      .. py:attribute:: PASSWORD_BASED_MAC
+
+
+
+   .. py:class:: PublicKeyAlgorithmOidChoices(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Public Key Algorithm OIDs.
+
+
+      .. py:attribute:: ECC
+
+
+      .. py:attribute:: RSA
+
+
+
+   .. py:class:: PublicKeyEcCurveOidChoices(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Public Key EC Curve OIDs.
+
+
+      .. py:attribute:: NONE
+         :value: ''
+
+
+
+      .. py:attribute:: SECP192R1
+
+
+      .. py:attribute:: SECP224R1
+
+
+      .. py:attribute:: SECP256K1
+
+
+      .. py:attribute:: SECP256R1
+
+
+      .. py:attribute:: SECP384R1
+
+
+      .. py:attribute:: SECP521R1
+
+
+      .. py:attribute:: BRAINPOOLP256R1
+
+
+      .. py:attribute:: BRAINPOOLP384R1
+
+
+      .. py:attribute:: BRAINPOOLP512R1
+
+
+      .. py:attribute:: SECT163K1
+
+
+      .. py:attribute:: SECT163R2
+
+
+      .. py:attribute:: SECT233K1
+
+
+      .. py:attribute:: SECT233R1
+
+
+      .. py:attribute:: SECT283K1
+
+
+      .. py:attribute:: SECT283R1
+
+
+      .. py:attribute:: SECT409K1
+
+
+      .. py:attribute:: SECT409R1
+
+
+      .. py:attribute:: SECT571K1
+
+
+      .. py:attribute:: SECT571R1
+
+
+
+   .. py:attribute:: is_self_signed
+
+
+   .. py:attribute:: common_name
+
+
+   .. py:attribute:: sha256_fingerprint
+
+
+   .. py:attribute:: signature_algorithm_oid
+
+
+   .. py:attribute:: signature_value
+
+
+   .. py:attribute:: version
+
+
+   .. py:attribute:: serial_number
+
+
+   .. py:attribute:: issuer
+
+
+   .. py:attribute:: issuer_public_bytes
+
+
+   .. py:attribute:: not_valid_before
+
+
+   .. py:attribute:: not_valid_after
+
+
+   .. py:attribute:: subject
+
+
+   .. py:attribute:: subject_public_bytes
+
+
+   .. py:attribute:: spki_algorithm_oid
+
+
+   .. py:attribute:: spki_algorithm
+
+
+   .. py:attribute:: spki_key_size
+
+
+   .. py:attribute:: spki_ec_curve_oid
+
+
+   .. py:attribute:: spki_ec_curve
+
+
+   .. py:attribute:: cert_pem
+
+
+   .. py:attribute:: public_key_pem
+
+
+   .. py:attribute:: created_at
+
+
+   .. py:attribute:: key_usage_extension
+
+
+   .. py:attribute:: subject_alternative_name_extension
+
+
+   .. py:attribute:: issuer_alternative_name_extension
+
+
+   .. py:attribute:: basic_constraints_extension
+
+
+   .. py:attribute:: authority_key_identifier_extension
+
+
+   .. py:attribute:: subject_key_identifier_extension
+
+
+   .. py:attribute:: certificate_policies_extension
+
+
+   .. py:attribute:: extended_key_usage_extension
+
+
+   .. py:attribute:: name_constraints_extension
+
+
+   .. py:attribute:: crl_distribution_points_extension
+
+
+   .. py:attribute:: authority_information_access_extension
+
+
+   .. py:attribute:: subject_information_access_extension
+
+
+   .. py:attribute:: inhibit_any_policy_extension
+
+
+   .. py:attribute:: policy_constraints_extension
+
+
+   .. py:attribute:: subject_directory_attributes_extension
+
+
+   .. py:attribute:: freshest_crl_extension
+
+
+   .. py:class:: Meta
+
+      Bases: :py:obj:`django_stubs_ext.db.models.TypedModelMeta`
+
+
+      Meta class configuration.
+
+
+
+   .. py:method:: __repr__()
+
+      Representation of the CertificateModel instance.
+
+
+
+   .. py:method:: __str__()
+
+      Human-readable representation of the CertificateModel instance.
+
+
+
+   .. py:method:: save(*_args, **_kwargs)
+
+      Save method must not be called directly to protect the integrity.
+
+      This method makes sure save() is not called by mistake.
+
+      :raises NotImplementedError:
+
+
+
+   .. py:property:: signature_algorithm
+      :type: str
+
+
+      Name of the signature algorithm.
+
+
+   .. py:property:: signature_algorithm_padding_scheme
+      :type: str
+
+
+      Padding scheme if RSA is used, otherwise None.
+
+
+   .. py:property:: signature_suite
+      :type: trustpoint_core.oid.SignatureSuite
+
+
+      Signature Suite of the certificate.
+
+
+   .. py:property:: public_key_info
+      :type: trustpoint_core.oid.PublicKeyInfo
+
+
+      Public Key Info of the certificate.
+
+
+   .. py:property:: certificate_status
+      :type: CertificateStatus
+
+
+      Status of the certificate.
+
+
+   .. py:property:: is_ca
+      :type: bool
+
+
+      Check if the certificate is a CA certificate.
+
+
+   .. py:property:: is_root_ca
+      :type: bool
+
+
+      Check if the certificate is a root CA certificate.
+
+
+   .. py:property:: is_end_entity
+      :type: bool
+
+
+      Check if the certificate is an end entity certificate.
+
+
+   .. py:method:: get_cert_by_sha256_fingerprint(sha256_fingerprint)
+      :classmethod:
+
+
+      Get a CertificateModel instance by its SHA256 fingerprint.
+
+
+
+   .. py:method:: _get_subject(cert)
+      :staticmethod:
+
+
+
+   .. py:method:: _get_issuer(cert)
+      :staticmethod:
+
+
+
+   .. py:method:: _get_spki_info(cert)
+      :staticmethod:
+
+
+
+   .. py:method:: get_certificate_serializer()
+
+      Get the serializer for the certificate.
+
+
+
+   .. py:method:: get_public_key_serializer()
+
+      Get the serializer for the certificate's public key.
+
+
+
+   .. py:method:: _save(**kwargs)
+
+
+   .. py:method:: _save_certificate(certificate)
+      :classmethod:
+
+
+
+   .. py:method:: _save_attribute_and_value_pairs(oid, value)
+      :staticmethod:
+
+
+
+   .. py:method:: _save_subject(cert_model, subject)
+      :classmethod:
+
+
+
+   .. py:method:: _save_issuer(cert_model, issuer)
+      :classmethod:
+
+
+
+   .. py:attribute:: EXTENSION_MAP
+
+
+   .. py:method:: _save_extensions(cert_model, cert)
+      :staticmethod:
+
+
+
+   .. py:method:: _atomic_save(cert_model, certificate, subject, issuer)
+      :classmethod:
+
+
+
+   .. py:method:: save_certificate(certificate)
+      :classmethod:
+
+
+      Store the certificate in the database.
+
+      :returns: The certificate object that has just been saved.
+      :rtype: trustpoint.pki.models.Certificate
+
+
+
+   .. py:method:: pre_delete()
+
+      Store the related objects before deletion.
+
+
+
+   .. py:method:: post_delete()
+
+      Clean up related orphaned extension models.
+
+
+
+   .. py:method:: subjects_match(other_subject)
+
+      Check if the provided subject is identical to the one of this certificate.
+
+      :param other_subject: The subject to compare to.
+      :type other_subject: x509.Name
+
+      :returns: True if the subjects match, False otherwise.
+      :rtype: bool
+
+
+
+.. py:class:: RevokedCertificateModel(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Model to store revoked certificates.
+
+
+   .. py:class:: ReasonCode(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Revocation reasons per RFC 5280.
+
+
+      .. py:attribute:: UNSPECIFIED
+
+
+      .. py:attribute:: KEY_COMPROMISE
+
+
+      .. py:attribute:: CA_COMPROMISE
+
+
+      .. py:attribute:: AFFILIATION_CHANGED
+
+
+      .. py:attribute:: SUPERSEDED
+
+
+      .. py:attribute:: CESSATION
+
+
+      .. py:attribute:: CERTIFICATE_HOLD
+
+
+      .. py:attribute:: PRIVILEGE_WITHDRAWN
+
+
+      .. py:attribute:: AA_COMPROMISE
+
+
+      .. py:attribute:: REMOVE_FROM_CRL
+
+
+
+   .. py:attribute:: certificate
+
+
+   .. py:attribute:: revoked_at
+
+
+   .. py:attribute:: revocation_reason
+
+
+   .. py:attribute:: ca
+
+
+   .. py:class:: Meta
+
+      Bases: :py:obj:`django_stubs_ext.db.models.TypedModelMeta`
+
+
+      Meta class configuration.
+
+
+
+   .. py:method:: __str__()
+
+      String representation of the RevokedCertificateModel instance.
+
+
+

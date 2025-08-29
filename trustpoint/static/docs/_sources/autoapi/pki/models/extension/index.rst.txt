@@ -1,0 +1,690 @@
+pki.models.extension
+====================
+
+.. py:module:: pki.models.extension
+
+.. autoapi-nested-parse::
+
+   Module that contains X.509 Extension Models.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.models.extension.AttributeTypeAndValue
+   pki.models.extension.GeneralNameRFC822Name
+   pki.models.extension.GeneralNameDNSName
+   pki.models.extension.GeneralNameDirectoryName
+   pki.models.extension.GeneralNameUniformResourceIdentifier
+   pki.models.extension.GeneralNameIpAddress
+   pki.models.extension.GeneralNameRegisteredId
+   pki.models.extension.GeneralNameOtherName
+   pki.models.extension.CertificateExtension
+   pki.models.extension.BasicConstraintsExtension
+   pki.models.extension.KeyUsageExtension
+   pki.models.extension.GeneralNamesModel
+   pki.models.extension.IssuerAlternativeNameExtension
+   pki.models.extension.SubjectAlternativeNameExtension
+   pki.models.extension.PolicyConstraintsExtension
+
+
+Module Contents
+---------------
+
+.. py:class:: AttributeTypeAndValue(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   AttributeTypeAndValue Model.
+
+   Used for subject entries as well as the GeneralNameDirectoryName entries within
+   the SubjectAlternativeName and IssuerAlternativeName.
+
+   See RFC5280 for more information.
+
+
+   .. py:attribute:: oid
+
+
+   .. py:attribute:: value
+
+
+   .. py:class:: Meta
+
+      .. py:attribute:: unique_together
+         :value: ('oid', 'value')
+
+
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the attribute type and value.
+
+
+
+   .. py:property:: abbreviation
+      :type: str
+
+
+      Returns the abbreviation of the attribute's OID.
+
+
+   .. py:property:: verbose_name
+      :type: str
+
+
+      Returns the verbose name of the attribute's OID.
+
+
+.. py:class:: GeneralNameRFC822Name(*args, **kwargs)
+
+   Bases: :py:obj:`util.db.OrphanDeletionMixin`, :py:obj:`django.db.models.Model`
+
+
+   GeneralNameRFC822Name Model.
+
+   Entries of either SubjectAlternativeNames or IssuerAlternativeNames.
+
+   See RFC5280 for more information.
+
+
+   .. py:attribute:: value
+
+
+   .. py:attribute:: check_references_on_delete
+      :value: ('general_names_set',)
+
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the GeneralNameRFC822Name.
+
+
+
+.. py:class:: GeneralNameDNSName(*args, **kwargs)
+
+   Bases: :py:obj:`util.db.OrphanDeletionMixin`, :py:obj:`django.db.models.Model`
+
+
+   GeneralNameDNSName Model.
+
+   See RFC5280 for more information.
+
+
+   .. py:attribute:: value
+
+
+   .. py:attribute:: check_references_on_delete
+      :value: ('general_names_set',)
+
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the GeneralNameDNSName.
+
+
+
+.. py:class:: GeneralNameDirectoryName(*args, **kwargs)
+
+   Bases: :py:obj:`util.db.OrphanDeletionMixin`, :py:obj:`django.db.models.Model`
+
+
+   GeneralNameDirectoryName Model.
+
+   Entries of either SubjectAlternativeNames or IssuerAlternativeNames.
+
+   See RFC5280 for more information.
+
+
+   .. py:attribute:: names
+
+
+   .. py:attribute:: check_references_on_delete
+      :value: ('general_names_set',)
+
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the GeneralNameDirectoryName.
+
+
+
+.. py:class:: GeneralNameUniformResourceIdentifier(*args, **kwargs)
+
+   Bases: :py:obj:`util.db.OrphanDeletionMixin`, :py:obj:`django.db.models.Model`
+
+
+   GeneralNameUniformResourceIdentifier Model.
+
+   Entries of either SubjectAlternativeNames or IssuerAlternativeNames.
+
+   See RFC5280 for more information.
+
+
+   .. py:attribute:: value
+
+
+   .. py:attribute:: check_references_on_delete
+      :value: ('general_names_set',)
+
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the GeneralNameUniformResourceIdentifier.
+
+
+
+.. py:class:: GeneralNameIpAddress(*args, **kwargs)
+
+   Bases: :py:obj:`util.db.OrphanDeletionMixin`, :py:obj:`django.db.models.Model`
+
+
+   GeneralNameIpAddress Model.
+
+   Entries of either SubjectAlternativeNames or IssuerAlternativeNames.
+
+   See RFC5280 for more information.
+
+
+   .. py:class:: IpType(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Class for creating enumerated string choices.
+
+
+      .. py:attribute:: IPV4_ADDRESS
+
+
+      .. py:attribute:: IPV6_ADDRESS
+
+
+      .. py:attribute:: IPV4_NETWORK
+
+
+      .. py:attribute:: IPV6_NETWORK
+
+
+
+   .. py:attribute:: ip_type
+
+
+   .. py:attribute:: value
+
+
+   .. py:attribute:: check_references_on_delete
+      :value: ('general_names_set',)
+
+
+
+   .. py:class:: Meta
+
+      .. py:attribute:: unique_together
+         :value: ('ip_type', 'value')
+
+
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the GeneralNameIpAddress.
+
+
+
+.. py:class:: GeneralNameRegisteredId(*args, **kwargs)
+
+   Bases: :py:obj:`util.db.OrphanDeletionMixin`, :py:obj:`django.db.models.Model`
+
+
+   GeneralNameRegisteredId Model.
+
+   Entries of either SubjectAlternativeNames or IssuerAlternativeNames.
+
+   See RFC5280 for more information.
+
+
+   .. py:attribute:: value
+
+
+   .. py:attribute:: check_references_on_delete
+      :value: ('general_names_set',)
+
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the GeneralNameRegisteredId.
+
+
+
+.. py:class:: GeneralNameOtherName(*args, **kwargs)
+
+   Bases: :py:obj:`util.db.OrphanDeletionMixin`, :py:obj:`django.db.models.Model`
+
+
+   GeneralNameOtherName Model.
+
+   Entries of either SubjectAlternativeNames or IssuerAlternativeNames.
+
+   See RFC5280 for more information.
+
+
+   .. py:attribute:: type_id
+
+
+   .. py:attribute:: value
+
+
+   .. py:attribute:: check_references_on_delete
+      :value: ('general_names_set',)
+
+
+
+   .. py:class:: Meta
+
+      .. py:attribute:: unique_together
+         :value: ('type_id', 'value')
+
+
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the GeneralNameOtherName.
+
+
+
+.. py:class:: CertificateExtension(*args, **kwargs)
+
+   Bases: :py:obj:`util.db.OrphanDeletionMixin`
+
+
+   Abstract Base Class of Extension Models.
+
+   Due to a Metaclass conflict, this class is not derived from abc.ABC on purpose.
+   # TODO: check if this can be rectified
+
+
+   .. py:attribute:: _extension_oid
+      :type:  str
+
+
+   .. py:property:: extension_oid
+      :type: str
+
+
+      Returns the OID of the extension.
+
+
+   .. py:method:: save_from_crypto_extensions(extension)
+      :classmethod:
+
+      :abstractmethod:
+
+
+      Stores the extension in the database.
+
+      Meant to be called within an atomic transaction while storing a certificate.
+
+      :param extension: The X.509 extension object.
+      :type extension: x509.Extension
+
+      :returns: The instance of the saved extension.
+      :rtype: CertificateExtension
+
+
+
+   .. py:method:: delete_if_orphaned(instance)
+      :classmethod:
+
+
+      Removes the Extension instance if no longer referenced.
+
+      Since all extension classes are only referenced by the Certificate model with on_delete=models.PROTECT,
+      we can rely on the database protection to remove the instance if it is no longer referenced.
+      This saves an extra query to check if the 'certificates' reverse relation still exists.
+
+
+
+.. py:class:: BasicConstraintsExtension(*args, **kwargs)
+
+   Bases: :py:obj:`CertificateExtension`, :py:obj:`django.db.models.Model`
+
+
+   Represents the BasicConstraints extension in X.509 certificates.
+
+   This extension indicates whether a certificate is a CA and its path length.
+
+
+   .. py:attribute:: critical
+
+
+   .. py:attribute:: ca
+
+
+   .. py:attribute:: path_length_constraint
+
+
+   .. py:class:: Meta
+
+      .. py:attribute:: unique_together
+         :value: ('critical', 'ca', 'path_length_constraint')
+
+
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the extension.
+
+
+
+   .. py:attribute:: _extension_oid
+
+
+   .. py:method:: save_from_crypto_extensions(crypto_basic_constraints_extension)
+      :classmethod:
+
+
+      Stores the BasicConstraintsExtension in the database.
+
+      :param crypto_basic_constraints_extension: The X.509 extension containing BasicConstraints.
+      :type crypto_basic_constraints_extension: x509.Extension
+
+      :returns: The instance of the saved extension.
+      :rtype: BasicConstraintsExtension
+
+
+
+.. py:class:: KeyUsageExtension(*args, **kwargs)
+
+   Bases: :py:obj:`CertificateExtension`, :py:obj:`django.db.models.Model`
+
+
+   Represents the KeyUsage extension in X.509 certificates.
+
+   Specifies the permitted usage of the certificate's public key.
+
+
+   .. py:attribute:: critical
+
+
+   .. py:attribute:: digital_signature
+
+
+   .. py:attribute:: content_commitment
+
+
+   .. py:attribute:: key_encipherment
+
+
+   .. py:attribute:: data_encipherment
+
+
+   .. py:attribute:: key_agreement
+
+
+   .. py:attribute:: key_cert_sign
+
+
+   .. py:attribute:: crl_sign
+
+
+   .. py:attribute:: encipher_only
+
+
+   .. py:attribute:: decipher_only
+
+
+   .. py:class:: Meta
+
+      .. py:attribute:: unique_together
+         :value: ('digital_signature', 'content_commitment', 'key_encipherment', 'data_encipherment',...
+
+
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the extension.
+
+
+
+   .. py:attribute:: _extension_oid
+
+
+   .. py:method:: save_from_crypto_extensions(crypto_basic_constraints_extension)
+      :classmethod:
+
+
+      Stores the KeyUsage extension in the database.
+
+      :param crypto_basic_constraints_extension: The X.509 extension containing KeyUsage.
+      :type crypto_basic_constraints_extension: x509.Extension
+
+      :returns: The instance of the saved extension.
+      :rtype: KeyUsageExtension
+
+
+
+.. py:class:: GeneralNamesModel(*args, **kwargs)
+
+   Bases: :py:obj:`util.db.OrphanDeletionMixin`, :py:obj:`util.db.CustomDeleteActionModel`
+
+
+   Represents a collection of general names as per RFC5280.
+
+   Used for both SubjectAlternativeName and IssuerAlternativeName extensions.
+
+
+   .. py:attribute:: _alternative_name_extension_type
+      :type:  str
+
+
+   .. py:attribute:: rfc822_names
+
+
+   .. py:attribute:: dns_names
+
+
+   .. py:attribute:: directory_names
+
+
+   .. py:attribute:: uniform_resource_identifiers
+
+
+   .. py:attribute:: ip_addresses
+
+
+   .. py:attribute:: registered_ids
+
+
+   .. py:attribute:: other_names
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the GeneralNamesModel.
+
+
+
+   .. py:method:: _save_rfc822_name(entry)
+
+
+   .. py:method:: _save_dns_name(entry)
+
+
+   .. py:method:: _save_ip_address(entry)
+
+
+   .. py:method:: _save_uri(entry)
+
+
+   .. py:method:: _save_registered_id(entry)
+
+
+   .. py:method:: _save_other_name(entry)
+
+
+   .. py:method:: _save_directory_name(entry)
+
+
+   .. py:method:: save_general_names(general_names)
+
+      Stores general names in the database.
+
+      :param general_names: The X.509 general names extension or a list of general names.
+      :type general_names: x509.Extension | list[x509.GeneralName]
+
+      :returns: The instance of the saved general names.
+      :rtype: GeneralNamesModel
+
+
+
+.. py:class:: IssuerAlternativeNameExtension(*args, **kwargs)
+
+   Bases: :py:obj:`CertificateExtension`, :py:obj:`util.db.CustomDeleteActionModel`
+
+
+   IssuerAlternativeNameExtension Model.
+
+   See RFC5280 for more information.
+
+
+   .. py:attribute:: critical
+
+
+   .. py:attribute:: issuer_alt_name
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the IssuerAlternativeName extension.
+
+
+
+   .. py:attribute:: _extension_oid
+
+
+   .. py:method:: post_delete()
+
+      Clean up related orphaned extension field models.
+
+
+
+   .. py:method:: save_from_crypto_extensions(extension)
+      :classmethod:
+
+
+      Stores the IssuerAlternativeNameExtension in the database.
+
+      Meant to be called within an atomic transaction while storing a certificate.
+
+      :param extension: The x509.Extension object that contains all extensions of the certificate.
+      :type extension: x509.Extension
+
+      :returns: The instance of the saved IssuerAlternativeNameExtension.
+      :rtype: trustpoint.pki.models.IssuerAlternativeNameExtension
+
+
+
+.. py:class:: SubjectAlternativeNameExtension(*args, **kwargs)
+
+   Bases: :py:obj:`CertificateExtension`, :py:obj:`util.db.CustomDeleteActionModel`
+
+
+   Represents the SubjectAlternativeName extension in X.509 certificates.
+
+   Stores alternative names for the certificate's subject.
+
+
+   .. py:attribute:: critical
+
+
+   .. py:attribute:: subject_alt_name
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the SubjectAlternativeName extension.
+
+
+
+   .. py:attribute:: _extension_oid
+
+
+   .. py:method:: post_delete()
+
+      Clean up related orphaned extension field models.
+
+
+
+   .. py:method:: save_from_crypto_extensions(extension)
+      :classmethod:
+
+
+      Stores the SubjectAlternativeName extension in the database.
+
+      :param extension: The X.509 extension containing SubjectAlternativeName.
+      :type extension: x509.Extension
+
+      :returns: The instance of the saved extension.
+      :rtype: SubjectAlternativeNameExtension
+
+
+
+.. py:class:: PolicyConstraintsExtension(*args, **kwargs)
+
+   Bases: :py:obj:`CertificateExtension`, :py:obj:`django.db.models.Model`
+
+
+   Represents the PolicyConstraints extension in X.509 certificates.
+
+   This extension specifies whether an explicit policy is required and whether policy mapping is inhibited.
+
+
+   .. py:attribute:: critical
+
+
+   .. py:attribute:: require_explicit_policy
+
+
+   .. py:attribute:: inhibit_policy_mapping
+
+
+   .. py:attribute:: objects
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the PolicyConstraintsExtension.
+
+
+
+   .. py:attribute:: _extension_oid
+
+
+   .. py:method:: save_from_crypto_extensions(extension)
+      :classmethod:
+
+
+      Stores the PolicyMappingsExtension in the database.
+
+      :param extension: The x509.Extension object containing PolicyConstraints.
+      :type extension: x509.Extension
+
+      :returns: The saved instance of PolicyConstraintsExtension or None.
+      :rtype: PolicyConstraintsExtension
+
+
+

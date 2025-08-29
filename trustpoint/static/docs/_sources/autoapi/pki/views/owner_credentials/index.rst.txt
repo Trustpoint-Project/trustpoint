@@ -1,0 +1,173 @@
+pki.views.owner_credentials
+===========================
+
+.. py:module:: pki.views.owner_credentials
+
+.. autoapi-nested-parse::
+
+   Views for Owner Credential (DevOwnerID) management.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.views.owner_credentials.OwnerCredentialContextMixin
+   pki.views.owner_credentials.OwnerCredentialTableView
+   pki.views.owner_credentials.OwnerCredentialDetailView
+   pki.views.owner_credentials.OwnerCredentialAddView
+   pki.views.owner_credentials.OwnerCredentialBulkDeleteConfirmView
+
+
+Module Contents
+---------------
+
+.. py:class:: OwnerCredentialContextMixin
+
+   Bases: :py:obj:`trustpoint.views.base.ContextDataMixin`
+
+
+   Mixin which adds context_data for the PKI -> Issuing CAs pages.
+
+
+   .. py:attribute:: context_page_category
+      :value: 'pki'
+
+
+
+   .. py:attribute:: context_page_name
+      :value: 'owner_credentials'
+
+
+
+.. py:class:: OwnerCredentialTableView
+
+   Bases: :py:obj:`OwnerCredentialContextMixin`, :py:obj:`trustpoint.views.base.SortableTableMixin`, :py:obj:`django.views.generic.list.ListView`\ [\ :py:obj:`pki.models.OwnerCredentialModel`\ ]
+
+
+   Owner Credential Table View.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/owner_credentials/owner_credentials.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'owner_credential'
+
+
+
+   .. py:attribute:: paginate_by
+
+
+   .. py:attribute:: default_sort_param
+      :value: 'unique_name'
+
+
+
+.. py:class:: OwnerCredentialDetailView
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`OwnerCredentialContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`pki.models.OwnerCredentialModel`\ ]
+
+
+   View to display the details of an Issuing CA.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/owner_credentials/details.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'owner_credential'
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds the issued certificates to the context.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data()
+
+      :returns: The context to render the page.
+
+
+
+.. py:class:: OwnerCredentialAddView
+
+   Bases: :py:obj:`OwnerCredentialContextMixin`, :py:obj:`django.views.generic.edit.FormView`\ [\ :py:obj:`pki.forms.OwnerCredentialFileImportForm`\ ]
+
+
+   View to import a DevOwnerID from separate PEM files.
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/owner_credentials/add.html'
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:method:: form_valid(form)
+
+      Handle the case where the form is valid.
+
+
+
+.. py:class:: OwnerCredentialBulkDeleteConfirmView(**kwargs)
+
+   Bases: :py:obj:`OwnerCredentialContextMixin`, :py:obj:`trustpoint.views.base.BulkDeleteView`
+
+
+   View to confirm the deletion of multiple owner credentials.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/owner_credentials/confirm_delete.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'owner_credentials'
+
+
+
+   .. py:method:: form_valid(form)
+
+      Delete the selected credentials on valid form.
+
+
+

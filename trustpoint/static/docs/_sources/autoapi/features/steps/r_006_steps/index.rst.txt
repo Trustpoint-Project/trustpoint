@@ -1,0 +1,106 @@
+features.steps.r_006_steps
+==========================
+
+.. py:module:: features.steps.r_006_steps
+
+.. autoapi-nested-parse::
+
+   Python steps file for R_006.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   features.steps.r_006_steps.step_when_admin_initiates_backup
+   features.steps.r_006_steps.step_then_system_confirms_backup
+   features.steps.r_006_steps.step_then_backup_file_is_valid
+   features.steps.r_006_steps.step_when_admin_uploads_backup
+   features.steps.r_006_steps.step_then_system_restores_data
+   features.steps.r_006_steps.step_then_data_is_consistent
+   features.steps.r_006_steps.step_when_admin_triggers_update
+   features.steps.r_006_steps.step_then_system_applies_update
+   features.steps.r_006_steps.step_then_system_verifies_integrity
+
+
+Module Contents
+---------------
+
+.. py:function:: step_when_admin_initiates_backup(context)
+
+   Simulates the admin initiating a system backup.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_system_confirms_backup(context)
+
+   Verifies that the system confirms the backup process has completed successfully.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_backup_file_is_valid(context, backup_file)
+
+   Ensures the backup file is retrievable and valid.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param backup_file: The name of the backup file.
+   :type backup_file: str
+
+
+.. py:function:: step_when_admin_uploads_backup(context, backup_file)
+
+   Simulates the admin uploading a backup file for restoration.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param backup_file: The name of the backup file.
+   :type backup_file: str
+
+
+.. py:function:: step_then_system_restores_data(context)
+
+   Verifies that the system restores data successfully.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_data_is_consistent(context)
+
+   Ensures the restored data is consistent with the original backup file contents.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_admin_triggers_update(context)
+
+   Simulates the admin triggering a system update.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_system_applies_update(context)
+
+   Verifies that the system downloads and applies the update.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_system_verifies_integrity(context)
+
+   Ensures the system verifies its integrity and functionality after an update.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+

@@ -1,0 +1,49 @@
+commands.import_idevid_truststores
+==================================
+
+.. py:module:: commands.import_idevid_truststores
+
+.. autoapi-nested-parse::
+
+   Imports Truststores from specific PEM files in tests/data/idevid_hierarchies.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.import_idevid_truststores.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Imports Truststores from specific PEM files in tests/data/idevid_hierarchies.
+
+
+   .. py:attribute:: help
+      :value: 'Imports Truststores from specific PEM files in tests/data/idevid_hierarchies'
+
+
+
+   .. py:attribute:: TRUSTSTORE_RELATIVE_PATHS
+
+
+   .. py:method:: handle(*_args, **_kwargs)
+
+      Execute the command.
+
+
+
+   .. py:method:: _save_trust_store(unique_name, intended_usage, certificates)
+      :staticmethod:
+
+
+

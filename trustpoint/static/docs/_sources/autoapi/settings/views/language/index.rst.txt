@@ -1,0 +1,29 @@
+settings.views.language
+=======================
+
+.. py:module:: settings.views.language
+
+.. autoapi-nested-parse::
+
+   Django Views
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   settings.views.language.language
+
+
+Module Contents
+---------------
+
+.. py:function:: language(request)
+
+   Handle language Configuration
+
+   Returns: HTTPResponse
+
+

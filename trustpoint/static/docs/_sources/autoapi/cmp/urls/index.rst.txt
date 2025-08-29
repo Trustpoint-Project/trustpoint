@@ -1,0 +1,29 @@
+cmp.urls
+========
+
+.. py:module:: cmp.urls
+
+.. autoapi-nested-parse::
+
+   URLs for the Django CMP Application.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   cmp.urls.app_name
+   cmp.urls.urlpatterns
+
+
+Module Contents
+---------------
+
+.. py:data:: app_name
+   :value: 'cmp'
+
+
+.. py:data:: urlpatterns
+

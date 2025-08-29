@@ -1,0 +1,284 @@
+pki.views.certificates
+======================
+
+.. py:module:: pki.views.certificates
+
+.. autoapi-nested-parse::
+
+   This module contains all views concerning the PKI -> Certificates section.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.views.certificates.CertificatesRedirectView
+   pki.views.certificates.CertificatesContextMixin
+   pki.views.certificates.CertificateTableView
+   pki.views.certificates.CertificateDetailView
+   pki.views.certificates.CmpIssuingCaCertificateDownloadView
+   pki.views.certificates.CertificateDownloadView
+   pki.views.certificates.CertificateMultipleDownloadView
+   pki.views.certificates.TlsServerCertificateDownloadView
+
+
+Module Contents
+---------------
+
+.. py:class:: CertificatesRedirectView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.base.RedirectView`
+
+
+   View that redirects to the index of the PKI Issuing CA application: Issuing CAs.
+
+
+   .. py:attribute:: permanent
+      :value: False
+
+
+
+   .. py:attribute:: pattern_name
+      :value: 'pki:certificates'
+
+
+
+.. py:class:: CertificatesContextMixin
+
+   Mixin which adds some extra context for the PKI Views.
+
+
+   .. py:attribute:: extra_context
+      :type:  ClassVar
+
+
+.. py:class:: CertificateTableView
+
+   Bases: :py:obj:`CertificatesContextMixin`, :py:obj:`trustpoint.views.base.SortableTableMixin`, :py:obj:`django.views.generic.list.ListView`\ [\ :py:obj:`pki.models.CertificateModel`\ ]
+
+
+   Certificate Table View.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/certificates/certificates.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'certificates'
+
+
+
+   .. py:attribute:: paginate_by
+
+
+   .. py:attribute:: default_sort_param
+      :value: 'common_name'
+
+
+
+.. py:class:: CertificateDetailView
+
+   Bases: :py:obj:`CertificatesContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`pki.models.CertificateModel`\ ]
+
+
+   The certificate detail view.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/certificates/details.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'cert'
+
+
+
+.. py:class:: CmpIssuingCaCertificateDownloadView
+
+   Bases: :py:obj:`CertificatesContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`pki.models.CertificateModel`\ ]
+
+
+   View for downloading a single certificate.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: context_object_name
+      :value: 'certificate'
+
+
+
+   .. py:method:: get(_request, pk = None, *_args, **_kwargs)
+
+      HTTP GET Method.
+
+      If only the certificate primary key are passed in the url, the download summary will be displayed.
+      If value for file_format is also provided, a file download will be performed.
+
+      Compare the re_path regex in the pki.urls package.
+
+      :param request: The HttpRequest object.
+      :param pk: A string containing the certificate primary key.
+      :param \*args: Positional arguments.
+      :param \*\*kwargs: Keyword arguments.
+
+      :returns: The HTTP response with either the download summary or a file download.
+      :rtype: HttpResponse
+
+      :raises Http404:
+
+
+
+.. py:class:: CertificateDownloadView
+
+   Bases: :py:obj:`CertificatesContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`pki.models.CertificateModel`\ ]
+
+
+   View for downloading a single certificate.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/certificates/download.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'certificate'
+
+
+
+   .. py:method:: get(request, pk = None, file_format = None, *args, **kwargs)
+
+      HTTP GET Method.
+
+      If only the certificate primary key are passed in the url, the download summary will be displayed.
+      If value for file_format is also provided, a file download will be performed.
+
+      Compare the re_path regex in the pki.urls package.
+
+      :param request: The HttpRequest object.
+      :param pk: A string containing the certificate primary key.
+      :param file_format: The format of the certificate to download.
+      :param \*args: Positional arguments.
+      :param \*\*kwargs: Keyword arguments.
+
+      :returns: The HTTP response with either the download summary or a file download.
+      :rtype: HttpResponse
+
+      :raises Http404:
+
+
+
+.. py:class:: CertificateMultipleDownloadView
+
+   Bases: :py:obj:`CertificatesContextMixin`, :py:obj:`trustpoint.views.base.PrimaryKeyListFromPrimaryKeyString`, :py:obj:`django.views.generic.list.ListView`\ [\ :py:obj:`pki.models.CertificateModel`\ ]
+
+
+   View for downloading multiple certificates at once as archived files.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/certificates/download_multiple.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'certificates'
+
+
+
+   .. py:method:: get_context_data(*args, **kwargs)
+
+      Adding the part of the url to the context, that contains the certificate primary keys.
+
+      This is used for the {% url }% tags in the template to download files.
+
+      :param \*args: Positional arguments passed to super().get_context_data().
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data().
+
+      :returns: The context data.
+      :rtype: dict
+
+
+
+   .. py:method:: get(request, pks = None, file_format = None, archive_format = None, *args, **kwargs)
+
+      HTTP GET Method.
+
+      If only certificate primary keys are passed in the url, the download summary will be displayed.
+      If value for file_format and archive_format are also provided, a file download will be performed.
+
+      Compare the re_path regex in the pki.urls package.
+
+      :param request: The HttpRequest object.
+      :param pks: A string containing the certificate primary keys, e.g. 1/2/3/4/5
+      :param file_format: The format of the archived certificate files.
+      :param archive_format: The archive format that will be provided as download.
+      :param \*args: Positional arguments.
+      :param \*\*kwargs: Keyword arguments.
+
+      :returns: The HTTP response with either the download summary or a file download.
+      :rtype: HttpResponse
+
+      :raises Http404:
+
+
+
+.. py:class:: TlsServerCertificateDownloadView
+
+   Bases: :py:obj:`CertificatesContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`pki.models.CertificateModel`\ ]
+
+
+   View for downloading the TLS server certificate of trustpoint.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: context_object_name
+      :value: 'certificate'
+
+
+
+   .. py:method:: get(_request, pk = None, *_args, **_kwargs)
+
+      Download the active Trustpoint TLS server certificate
+
+
+

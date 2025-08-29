@@ -1,0 +1,176 @@
+features.steps.r_004_steps
+==========================
+
+.. py:module:: features.steps.r_004_steps
+
+.. autoapi-nested-parse::
+
+   Python steps file for R_004.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   features.steps.r_004_steps.logger
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   features.steps.r_004_steps.step_post_identity
+   features.steps.r_004_steps.step_get_identity
+   features.steps.r_004_steps.step_put_identity
+   features.steps.r_004_steps.step_delete_identity
+   features.steps.r_004_steps.step_get_without_auth
+   features.steps.r_004_steps.step_verify_created_identity
+   features.steps.r_004_steps.step_verify_retrieved_identity
+   features.steps.r_004_steps.step_identity_exists
+   features.steps.r_004_steps.step_get_identity_by_name
+   features.steps.r_004_steps.step_put_identity_by_name
+   features.steps.r_004_steps.step_verify_updated_identity
+   features.steps.r_004_steps.step_delete_identity_by_name
+   features.steps.r_004_steps.step_verify_identity_deletion
+
+
+Module Contents
+---------------
+
+.. py:data:: logger
+
+.. py:function:: step_post_identity(context, payload)
+
+   Sends a POST request to the REST API to create a new identity.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param payload: The payload containing the identity fields.
+   :type payload: Any
+
+
+.. py:function:: step_get_identity(context, identifier)
+
+   Sends a GET request to the REST API to retrieve an identity by its identifier.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param identifier: The unique identifier of the identity.
+   :type identifier: str
+
+
+.. py:function:: step_put_identity(context, identifier, payload)
+
+   Sends a PUT request to update an existing identity.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param identifier: The unique identifier of the identity.
+   :type identifier: str
+   :param payload: The payload containing the updated identity fields.
+   :type payload: Any
+
+
+.. py:function:: step_delete_identity(context, identifier)
+
+   Sends a DELETE request to remove an identity by its identifier.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param identifier: The unique identifier of the identity.
+   :type identifier: str
+
+
+.. py:function:: step_get_without_auth(context)
+
+   Sends a GET request to the REST API without authentication.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_verify_created_identity(context, payload)
+
+   Verifies the response payload includes the expected fields for a newly created identity.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param payload: Expected identity fields.
+   :type payload: Any
+
+
+.. py:function:: step_verify_retrieved_identity(context, payload)
+
+   Verifies the response payload includes the expected fields for the retrieved identity.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param payload: Expected identity fields.
+   :type payload: Any
+
+
+.. py:function:: step_identity_exists(context, identity)
+
+   Ensures the identity exists.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param identity: The identity name.
+   :type identity: str
+
+
+.. py:function:: step_get_identity_by_name(context, identity)
+
+   Sends a GET request for an identity by name.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param identity: The identity name.
+   :type identity: str
+
+
+.. py:function:: step_put_identity_by_name(context, identity, payload)
+
+   Updates an identity by name.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param identity: The identity name.
+   :type identity: str
+   :param payload: Updated identity data.
+   :type payload: Any
+
+
+.. py:function:: step_verify_updated_identity(context, payload)
+
+   Verifies the response payload contains the updated identity.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param payload: Expected updated identity data.
+   :type payload: Any
+
+
+.. py:function:: step_delete_identity_by_name(context, identity)
+
+   Deletes an identity by name.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param identity: The identity name.
+   :type identity: str
+
+
+.. py:function:: step_verify_identity_deletion(context, identity)
+
+   Checks if an identity no longer exists.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param identity: The identity name.
+   :type identity: str
+
+

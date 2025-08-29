@@ -1,0 +1,22 @@
+devices.tests.test_models
+=========================
+
+.. py:module:: devices.tests.test_models
+
+.. autoapi-nested-parse::
+
+   Init file for the test_models package.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/devices/tests/test_models/test_device_model/index
+   /autoapi/devices/tests/test_models/test_issued_credential/index
+   /autoapi/devices/tests/test_models/test_remote_device_credential/index
+
+

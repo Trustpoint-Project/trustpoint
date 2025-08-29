@@ -1,0 +1,52 @@
+trustpoint.forms
+================
+
+.. py:module:: trustpoint.forms
+
+.. autoapi-nested-parse::
+
+   This module provides utility methods for forms in the overall project.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   trustpoint.forms._TypingForm
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   trustpoint.forms.CleanedDataNotNoneMixin
+
+
+Module Contents
+---------------
+
+.. py:data:: _TypingForm
+
+.. py:class:: CleanedDataNotNoneMixin(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`_TypingForm`
+
+
+   The main implementation of all the Form logic. Note that this class is
+   different than Form. See the comments by the Form class for more info. Any
+   improvements to the form API should be made to this class, not to the Form
+   class.
+
+
+   .. py:method:: clean()
+
+      Hook for doing any extra form-wide cleaning after Field.clean() has been
+      called on every field. Any ValidationError raised by this method will
+      not be associated with a particular field; it will have a special-case
+      association with the field named '__all__'.
+
+
+

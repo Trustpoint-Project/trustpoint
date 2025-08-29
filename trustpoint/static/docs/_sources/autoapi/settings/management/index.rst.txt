@@ -1,0 +1,21 @@
+settings.management
+===================
+
+.. py:module:: settings.management
+
+.. autoapi-nested-parse::
+
+   Management commands for Trustpoint settings and general DB/startup handling.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/settings/management/commands/index
+   /autoapi/settings/management/managepy_override/index
+
+

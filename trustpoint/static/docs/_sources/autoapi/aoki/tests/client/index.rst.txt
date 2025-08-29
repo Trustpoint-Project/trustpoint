@@ -1,0 +1,192 @@
+aoki.tests.client
+=================
+
+.. py:module:: aoki.tests.client
+
+.. autoapi-nested-parse::
+
+   AOKI Client for testing purposes.
+
+   Please run from /rootdir/trustpoint with "uv run -m aoki.tests.client" for paths and imports to work.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   aoki.tests.client.log
+   aoki.tests.client.CURRENT_DIR
+   aoki.tests.client.CERTS_DIR
+   aoki.tests.client.HTTP_STATUS_OK
+   aoki.tests.client.client
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   aoki.tests.client.AokiClientInitResponseError
+   aoki.tests.client.AokiClientNoSupportedProtocolError
+   aoki.tests.client.AokiClientOwnerIdCertVerificationError
+   aoki.tests.client.AokiClientSignatureError
+   aoki.tests.client.AokiClientCertLoadError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   aoki.tests.client.AokiClient
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:data:: CURRENT_DIR
+
+.. py:data:: CERTS_DIR
+
+.. py:data:: HTTP_STATUS_OK
+   :value: 200
+
+
+.. py:exception:: AokiClientInitResponseError
+
+   Bases: :py:obj:`Exception`
+
+
+   Exception raised when the AOKI client initialization response is invalid.
+
+
+.. py:exception:: AokiClientNoSupportedProtocolError
+
+   Bases: :py:obj:`Exception`
+
+
+   Exception raised when no PKI protocol supported by this client is found in the AOKI client init response.
+
+
+.. py:exception:: AokiClientOwnerIdCertVerificationError
+
+   Bases: :py:obj:`Exception`
+
+
+   Exception raised when the provided Owner ID certificate is invalid or not corresponding to the IDevID.
+
+
+.. py:exception:: AokiClientSignatureError
+
+   Bases: :py:obj:`Exception`
+
+
+   Exception raised when signature by the Owner ID private key provided by the server could not be verified.
+
+
+.. py:exception:: AokiClientCertLoadError
+
+   Bases: :py:obj:`Exception`
+
+
+   Exception raised when a certificate could not be loaded from the provided path.
+
+
+.. py:class:: AokiClient(server_url, cert_file, key_file, owner_truststore_file, *args, **kwargs)
+
+   AOKI Client for testing purposes.
+
+
+   .. py:attribute:: idevid_subj_sn
+      :type:  str
+      :value: '_'
+
+
+
+   .. py:method:: _load_certificate(cert_path)
+      :staticmethod:
+
+
+
+   .. py:method:: _load_certificates(cert_path)
+      :staticmethod:
+
+
+
+   .. py:method:: _parse_json_pem_cert(pem_str)
+      :staticmethod:
+
+
+      Parse a PEM certificate from a JSON string.
+
+
+
+   .. py:method:: _get_idevid_owner_san_uri(idevid_cert)
+
+      Get the Owner ID SAN URI corresponding to a IDevID certificate.
+
+      Formatted as "dev-owner:<idevid_subj_sn>.<idevid_x509_sn>.<idevid_sha256_fingerprint>"
+
+
+
+   .. py:method:: _verify_matches_idevid_cert(owner_id_cert, idevid_cert)
+
+      Verify the Owner ID certificate is valid for the device IDevID.
+
+
+
+   .. py:method:: _verify_owner_id_cert(owner_id_cert, truststore, idevid_cert)
+
+      Verify the Owner ID certificate against the provided truststore.
+
+
+
+   .. py:method:: _verify_owner_signature(signature, owner_key, data)
+
+      Verify the signature using the Owner ID public key.
+
+
+
+   .. py:method:: _get_aoki_signature_headers(response)
+      :staticmethod:
+
+
+      Get the AOKI Signature HTTP headers from the server init response.
+
+
+
+   .. py:method:: _parse_aoki_init_json(json_data)
+
+
+   .. py:attribute:: server_url
+
+
+   .. py:attribute:: cert_file
+
+
+   .. py:attribute:: key_file
+
+
+   .. py:attribute:: owner_truststore_file
+
+
+   .. py:attribute:: args
+      :value: ()
+
+
+
+   .. py:attribute:: kwargs
+
+
+   .. py:method:: onboard()
+
+      Run the AOKI Zero-Touch Device Onboarding process.
+
+
+
+.. py:data:: client
+

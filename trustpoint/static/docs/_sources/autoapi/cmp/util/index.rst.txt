@@ -1,0 +1,138 @@
+cmp.util
+========
+
+.. py:module:: cmp.util
+
+.. autoapi-nested-parse::
+
+   This module provides some utility functions regarding CMP.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   cmp.util.PkiMessageType
+   cmp.util.GeneralNameType
+   cmp.util.Popo
+   cmp.util.NameParser
+
+
+Module Contents
+---------------
+
+.. py:class:: PkiMessageType(*args, **kwds)
+
+   Bases: :py:obj:`enum.Enum`
+
+
+   PKI Message Type (CMP) Enum.
+
+
+   .. py:attribute:: IR
+      :value: 'ir'
+
+
+
+.. py:class:: GeneralNameType(*args, **kwds)
+
+   Bases: :py:obj:`enum.Enum`
+
+
+   General Name Type Enum.
+
+
+   .. py:attribute:: RFC822_NAME
+      :value: 'rfc822Name'
+
+
+
+   .. py:attribute:: DNS_NAME
+      :value: 'dNSName'
+
+
+
+   .. py:attribute:: DIRECTORY_NAME
+      :value: 'directoryName'
+
+
+
+   .. py:attribute:: UNIFORM_RESOURCE_IDENTIFIER
+      :value: 'uniformResourceIdentifier'
+
+
+
+   .. py:attribute:: IP_ADDRESS
+      :value: 'iPAddress'
+
+
+
+   .. py:attribute:: REGISTERED_ID
+      :value: 'registeredID'
+
+
+
+   .. py:attribute:: OTHER_NAME
+      :value: 'otherName'
+
+
+
+.. py:class:: Popo(*args, **kwds)
+
+   Bases: :py:obj:`enum.Enum`
+
+
+   Proof of Possession Enum.
+
+
+   .. py:attribute:: RA_VERIFIED
+      :value: 'raVerified'
+
+
+
+   .. py:attribute:: SIGNATURE
+      :value: 'signature'
+
+
+
+   .. py:attribute:: KEY_ENCIPHERMENT
+      :value: 'keyEncipherment'
+
+
+
+   .. py:attribute:: KEY_AGREEMENT
+      :value: 'keyAgreement'
+
+
+
+.. py:class:: NameParser
+
+   Provides class methods to transform pyasn1 (General)Names into x509.(General)Names.
+
+
+   .. py:method:: parse_general_name(general_name)
+      :classmethod:
+
+
+      Parses the pyasn1_modules.rfc2459.GeneralName object and transforms it into a x509.GeneralName object.
+
+      :param general_name: The pyasn1_modules.rfc2459.GeneralName object to parse.
+
+      :returns: The cryptography.x509.Name object.
+
+
+
+   .. py:method:: parse_name(name)
+      :staticmethod:
+
+
+      Parses the pyasn1_modules.rfc2459.Name object and transforms it into a x509.Name object.
+
+      :param name: The pyasn1_modules.rfc2459.Name object to parse.
+
+      :returns: The cryptography.x509.Name object.
+
+
+

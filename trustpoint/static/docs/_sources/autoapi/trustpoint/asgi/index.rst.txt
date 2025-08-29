@@ -1,0 +1,29 @@
+trustpoint.asgi
+===============
+
+.. py:module:: trustpoint.asgi
+
+.. autoapi-nested-parse::
+
+   ASGI config for trustpoint project.
+
+   It exposes the ASGI callable as a module-level variable named ``application``.
+
+   For more information on this file, see
+   https://docs.djangoproject.com/en/5.0/howto/deployment/asgi/
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   trustpoint.asgi.application
+
+
+Module Contents
+---------------
+
+.. py:data:: application
+

@@ -1,0 +1,41 @@
+commands.add_domains_and_devices
+================================
+
+.. py:module:: commands.add_domains_and_devices
+
+.. autoapi-nested-parse::
+
+   Adds Issuing CAs, Domains and Devices with different onboarding protocols.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.add_domains_and_devices.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Add domains and associated device names with random onboarding protocol and serial number.
+
+
+   .. py:attribute:: help
+      :value: 'Add domains and associated device names with random onboarding protocol and serial number'
+
+
+
+   .. py:method:: handle(*_args, **_kwargs)
+
+      Execute the command.
+
+
+

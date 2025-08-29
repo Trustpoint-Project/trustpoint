@@ -1,0 +1,50 @@
+commands.check_for_weak_signature_algorithms
+============================================
+
+.. py:module:: commands.check_for_weak_signature_algorithms
+
+.. autoapi-nested-parse::
+
+   Management command to check for weak signature algorithms.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.check_for_weak_signature_algorithms.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Custom Django management command to check certificates for weak signature algorithms.
+
+
+   .. py:attribute:: help
+      :value: 'Check certificates with weak or deprecated signature algorithms.'
+
+
+
+   .. py:method:: handle(*args, **kwargs)
+
+      Entrypoint for the command.
+
+      :param \*args: Additional positional arguments.
+      :param \*\*kwargs: Additional keyword arguments.
+
+
+
+   .. py:method:: _check_for_weak_signature_algorithms()
+
+      Task to check if any certificates are using weak or deprecated signature algorithms.
+
+
+

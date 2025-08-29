@@ -1,0 +1,1508 @@
+pki.models
+==========
+
+.. py:module:: pki.models
+
+.. autoapi-nested-parse::
+
+   Package that contains all models of the PKI App.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/pki/models/certificate/index
+   /autoapi/pki/models/credential/index
+   /autoapi/pki/models/devid_registration/index
+   /autoapi/pki/models/domain/index
+   /autoapi/pki/models/extension/index
+   /autoapi/pki/models/issuing_ca/index
+   /autoapi/pki/models/truststore/index
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   pki.models.CredentialAlreadyExistsError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.models.AttributeTypeAndValue
+   pki.models.CertificateExtension
+   pki.models.GeneralNameIpAddress
+   pki.models.CertificateModel
+   pki.models.RevokedCertificateModel
+   pki.models.IssuingCaModel
+   pki.models.CredentialModel
+   pki.models.OwnerCredentialModel
+   pki.models.DomainModel
+   pki.models.DevIdRegistration
+   pki.models.TruststoreModel
+   pki.models.TruststoreOrderModel
+
+
+Package Contents
+----------------
+
+.. py:class:: AttributeTypeAndValue(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   AttributeTypeAndValue Model.
+
+   Used for subject entries as well as the GeneralNameDirectoryName entries within
+   the SubjectAlternativeName and IssuerAlternativeName.
+
+   See RFC5280 for more information.
+
+
+   .. py:attribute:: oid
+
+
+   .. py:attribute:: value
+
+
+   .. py:class:: Meta
+
+      .. py:attribute:: unique_together
+         :value: ('oid', 'value')
+
+
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the attribute type and value.
+
+
+
+   .. py:property:: abbreviation
+      :type: str
+
+
+      Returns the abbreviation of the attribute's OID.
+
+
+   .. py:property:: verbose_name
+      :type: str
+
+
+      Returns the verbose name of the attribute's OID.
+
+
+.. py:class:: CertificateExtension(*args, **kwargs)
+
+   Bases: :py:obj:`util.db.OrphanDeletionMixin`
+
+
+   Abstract Base Class of Extension Models.
+
+   Due to a Metaclass conflict, this class is not derived from abc.ABC on purpose.
+   # TODO: check if this can be rectified
+
+
+   .. py:attribute:: _extension_oid
+      :type:  str
+
+
+   .. py:property:: extension_oid
+      :type: str
+
+
+      Returns the OID of the extension.
+
+
+   .. py:method:: save_from_crypto_extensions(extension)
+      :classmethod:
+
+      :abstractmethod:
+
+
+      Stores the extension in the database.
+
+      Meant to be called within an atomic transaction while storing a certificate.
+
+      :param extension: The X.509 extension object.
+      :type extension: x509.Extension
+
+      :returns: The instance of the saved extension.
+      :rtype: CertificateExtension
+
+
+
+   .. py:method:: delete_if_orphaned(instance)
+      :classmethod:
+
+
+      Removes the Extension instance if no longer referenced.
+
+      Since all extension classes are only referenced by the Certificate model with on_delete=models.PROTECT,
+      we can rely on the database protection to remove the instance if it is no longer referenced.
+      This saves an extra query to check if the 'certificates' reverse relation still exists.
+
+
+
+.. py:class:: GeneralNameIpAddress(*args, **kwargs)
+
+   Bases: :py:obj:`util.db.OrphanDeletionMixin`, :py:obj:`django.db.models.Model`
+
+
+   GeneralNameIpAddress Model.
+
+   Entries of either SubjectAlternativeNames or IssuerAlternativeNames.
+
+   See RFC5280 for more information.
+
+
+   .. py:class:: IpType(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Class for creating enumerated string choices.
+
+
+      .. py:attribute:: IPV4_ADDRESS
+
+
+      .. py:attribute:: IPV6_ADDRESS
+
+
+      .. py:attribute:: IPV4_NETWORK
+
+
+      .. py:attribute:: IPV6_NETWORK
+
+
+
+   .. py:attribute:: ip_type
+
+
+   .. py:attribute:: value
+
+
+   .. py:attribute:: check_references_on_delete
+      :value: ('general_names_set',)
+
+
+
+   .. py:class:: Meta
+
+      .. py:attribute:: unique_together
+         :value: ('ip_type', 'value')
+
+
+
+
+   .. py:method:: __str__()
+
+      Returns a string representation of the GeneralNameIpAddress.
+
+
+
+.. py:class:: CertificateModel(*args, **kwargs)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`util.db.CustomDeleteActionModel`
+
+
+   X509 Certificate Model.
+
+   See RFC5280 for more information.
+
+
+   .. py:class:: CertificateStatus(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      CertificateModel status.
+
+
+      .. py:attribute:: OK
+
+
+      .. py:attribute:: REVOKED
+
+
+      .. py:attribute:: EXPIRED
+
+
+      .. py:attribute:: NOT_YET_VALID
+
+
+
+   .. py:class:: Version(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.IntegerChoices`
+
+
+      X509 RFC 5280 - Certificate Version.
+
+
+      .. py:attribute:: V3
+
+
+
+   .. py:class:: SignatureAlgorithmOidChoices(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Signature Algorithm OIDs.
+
+
+      .. py:attribute:: RSA_MD5
+
+
+      .. py:attribute:: RSA_SHA1
+
+
+      .. py:attribute:: RSA_SHA1_ALT
+
+
+      .. py:attribute:: RSA_SHA224
+
+
+      .. py:attribute:: RSA_SHA256
+
+
+      .. py:attribute:: RSA_SHA384
+
+
+      .. py:attribute:: RSA_SHA512
+
+
+      .. py:attribute:: RSA_SHA3_224
+
+
+      .. py:attribute:: RSA_SHA3_256
+
+
+      .. py:attribute:: RSA_SHA3_384
+
+
+      .. py:attribute:: RSA_SHA3_512
+
+
+      .. py:attribute:: ECDSA_SHA1
+
+
+      .. py:attribute:: ECDSA_SHA224
+
+
+      .. py:attribute:: ECDSA_SHA256
+
+
+      .. py:attribute:: ECDSA_SHA384
+
+
+      .. py:attribute:: ECDSA_SHA512
+
+
+      .. py:attribute:: ECDSA_SHA3_224
+
+
+      .. py:attribute:: ECDSA_SHA3_256
+
+
+      .. py:attribute:: ECDSA_SHA3_384
+
+
+      .. py:attribute:: ECDSA_SHA3_512
+
+
+      .. py:attribute:: PASSWORD_BASED_MAC
+
+
+
+   .. py:class:: PublicKeyAlgorithmOidChoices(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Public Key Algorithm OIDs.
+
+
+      .. py:attribute:: ECC
+
+
+      .. py:attribute:: RSA
+
+
+
+   .. py:class:: PublicKeyEcCurveOidChoices(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Public Key EC Curve OIDs.
+
+
+      .. py:attribute:: NONE
+         :value: ''
+
+
+
+      .. py:attribute:: SECP192R1
+
+
+      .. py:attribute:: SECP224R1
+
+
+      .. py:attribute:: SECP256K1
+
+
+      .. py:attribute:: SECP256R1
+
+
+      .. py:attribute:: SECP384R1
+
+
+      .. py:attribute:: SECP521R1
+
+
+      .. py:attribute:: BRAINPOOLP256R1
+
+
+      .. py:attribute:: BRAINPOOLP384R1
+
+
+      .. py:attribute:: BRAINPOOLP512R1
+
+
+      .. py:attribute:: SECT163K1
+
+
+      .. py:attribute:: SECT163R2
+
+
+      .. py:attribute:: SECT233K1
+
+
+      .. py:attribute:: SECT233R1
+
+
+      .. py:attribute:: SECT283K1
+
+
+      .. py:attribute:: SECT283R1
+
+
+      .. py:attribute:: SECT409K1
+
+
+      .. py:attribute:: SECT409R1
+
+
+      .. py:attribute:: SECT571K1
+
+
+      .. py:attribute:: SECT571R1
+
+
+
+   .. py:attribute:: is_self_signed
+
+
+   .. py:attribute:: common_name
+
+
+   .. py:attribute:: sha256_fingerprint
+
+
+   .. py:attribute:: signature_algorithm_oid
+
+
+   .. py:attribute:: signature_value
+
+
+   .. py:attribute:: version
+
+
+   .. py:attribute:: serial_number
+
+
+   .. py:attribute:: issuer
+
+
+   .. py:attribute:: issuer_public_bytes
+
+
+   .. py:attribute:: not_valid_before
+
+
+   .. py:attribute:: not_valid_after
+
+
+   .. py:attribute:: subject
+
+
+   .. py:attribute:: subject_public_bytes
+
+
+   .. py:attribute:: spki_algorithm_oid
+
+
+   .. py:attribute:: spki_algorithm
+
+
+   .. py:attribute:: spki_key_size
+
+
+   .. py:attribute:: spki_ec_curve_oid
+
+
+   .. py:attribute:: spki_ec_curve
+
+
+   .. py:attribute:: cert_pem
+
+
+   .. py:attribute:: public_key_pem
+
+
+   .. py:attribute:: created_at
+
+
+   .. py:attribute:: key_usage_extension
+
+
+   .. py:attribute:: subject_alternative_name_extension
+
+
+   .. py:attribute:: issuer_alternative_name_extension
+
+
+   .. py:attribute:: basic_constraints_extension
+
+
+   .. py:attribute:: authority_key_identifier_extension
+
+
+   .. py:attribute:: subject_key_identifier_extension
+
+
+   .. py:attribute:: certificate_policies_extension
+
+
+   .. py:attribute:: extended_key_usage_extension
+
+
+   .. py:attribute:: name_constraints_extension
+
+
+   .. py:attribute:: crl_distribution_points_extension
+
+
+   .. py:attribute:: authority_information_access_extension
+
+
+   .. py:attribute:: subject_information_access_extension
+
+
+   .. py:attribute:: inhibit_any_policy_extension
+
+
+   .. py:attribute:: policy_constraints_extension
+
+
+   .. py:attribute:: subject_directory_attributes_extension
+
+
+   .. py:attribute:: freshest_crl_extension
+
+
+   .. py:class:: Meta
+
+      Bases: :py:obj:`django_stubs_ext.db.models.TypedModelMeta`
+
+
+      Meta class configuration.
+
+
+
+   .. py:method:: __repr__()
+
+      Representation of the CertificateModel instance.
+
+
+
+   .. py:method:: __str__()
+
+      Human-readable representation of the CertificateModel instance.
+
+
+
+   .. py:method:: save(*_args, **_kwargs)
+
+      Save method must not be called directly to protect the integrity.
+
+      This method makes sure save() is not called by mistake.
+
+      :raises NotImplementedError:
+
+
+
+   .. py:property:: signature_algorithm
+      :type: str
+
+
+      Name of the signature algorithm.
+
+
+   .. py:property:: signature_algorithm_padding_scheme
+      :type: str
+
+
+      Padding scheme if RSA is used, otherwise None.
+
+
+   .. py:property:: signature_suite
+      :type: trustpoint_core.oid.SignatureSuite
+
+
+      Signature Suite of the certificate.
+
+
+   .. py:property:: public_key_info
+      :type: trustpoint_core.oid.PublicKeyInfo
+
+
+      Public Key Info of the certificate.
+
+
+   .. py:property:: certificate_status
+      :type: CertificateStatus
+
+
+      Status of the certificate.
+
+
+   .. py:property:: is_ca
+      :type: bool
+
+
+      Check if the certificate is a CA certificate.
+
+
+   .. py:property:: is_root_ca
+      :type: bool
+
+
+      Check if the certificate is a root CA certificate.
+
+
+   .. py:property:: is_end_entity
+      :type: bool
+
+
+      Check if the certificate is an end entity certificate.
+
+
+   .. py:method:: get_cert_by_sha256_fingerprint(sha256_fingerprint)
+      :classmethod:
+
+
+      Get a CertificateModel instance by its SHA256 fingerprint.
+
+
+
+   .. py:method:: _get_subject(cert)
+      :staticmethod:
+
+
+
+   .. py:method:: _get_issuer(cert)
+      :staticmethod:
+
+
+
+   .. py:method:: _get_spki_info(cert)
+      :staticmethod:
+
+
+
+   .. py:method:: get_certificate_serializer()
+
+      Get the serializer for the certificate.
+
+
+
+   .. py:method:: get_public_key_serializer()
+
+      Get the serializer for the certificate's public key.
+
+
+
+   .. py:method:: _save(**kwargs)
+
+
+   .. py:method:: _save_certificate(certificate)
+      :classmethod:
+
+
+
+   .. py:method:: _save_attribute_and_value_pairs(oid, value)
+      :staticmethod:
+
+
+
+   .. py:method:: _save_subject(cert_model, subject)
+      :classmethod:
+
+
+
+   .. py:method:: _save_issuer(cert_model, issuer)
+      :classmethod:
+
+
+
+   .. py:attribute:: EXTENSION_MAP
+
+
+   .. py:method:: _save_extensions(cert_model, cert)
+      :staticmethod:
+
+
+
+   .. py:method:: _atomic_save(cert_model, certificate, subject, issuer)
+      :classmethod:
+
+
+
+   .. py:method:: save_certificate(certificate)
+      :classmethod:
+
+
+      Store the certificate in the database.
+
+      :returns: The certificate object that has just been saved.
+      :rtype: trustpoint.pki.models.Certificate
+
+
+
+   .. py:method:: pre_delete()
+
+      Store the related objects before deletion.
+
+
+
+   .. py:method:: post_delete()
+
+      Clean up related orphaned extension models.
+
+
+
+   .. py:method:: subjects_match(other_subject)
+
+      Check if the provided subject is identical to the one of this certificate.
+
+      :param other_subject: The subject to compare to.
+      :type other_subject: x509.Name
+
+      :returns: True if the subjects match, False otherwise.
+      :rtype: bool
+
+
+
+.. py:class:: RevokedCertificateModel(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Model to store revoked certificates.
+
+
+   .. py:class:: ReasonCode(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Revocation reasons per RFC 5280.
+
+
+      .. py:attribute:: UNSPECIFIED
+
+
+      .. py:attribute:: KEY_COMPROMISE
+
+
+      .. py:attribute:: CA_COMPROMISE
+
+
+      .. py:attribute:: AFFILIATION_CHANGED
+
+
+      .. py:attribute:: SUPERSEDED
+
+
+      .. py:attribute:: CESSATION
+
+
+      .. py:attribute:: CERTIFICATE_HOLD
+
+
+      .. py:attribute:: PRIVILEGE_WITHDRAWN
+
+
+      .. py:attribute:: AA_COMPROMISE
+
+
+      .. py:attribute:: REMOVE_FROM_CRL
+
+
+
+   .. py:attribute:: certificate
+
+
+   .. py:attribute:: revoked_at
+
+
+   .. py:attribute:: revocation_reason
+
+
+   .. py:attribute:: ca
+
+
+   .. py:class:: Meta
+
+      Bases: :py:obj:`django_stubs_ext.db.models.TypedModelMeta`
+
+
+      Meta class configuration.
+
+
+
+   .. py:method:: __str__()
+
+      String representation of the RevokedCertificateModel instance.
+
+
+
+.. py:class:: IssuingCaModel(*args, **kwargs)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`util.db.CustomDeleteActionModel`
+
+
+   Issuing CA Model.
+
+   This model contains the configurations of all Issuing CAs available within the Trustpoint.
+
+
+   .. py:class:: IssuingCaTypeChoice(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.IntegerChoices`
+
+
+      The IssuingCaTypeChoice defines the type of Issuing CA.
+
+      Depending on the type other fields may be set, e.g. a credential will only be available for local
+      Issuing CAs.
+
+
+      .. py:attribute:: AUTOGEN_ROOT
+
+
+      .. py:attribute:: AUTOGEN
+
+
+      .. py:attribute:: LOCAL_UNPROTECTED
+
+
+      .. py:attribute:: LOCAL_PKCS11
+
+
+      .. py:attribute:: REMOTE_EST
+
+
+      .. py:attribute:: REMOTE_CMP
+
+
+
+   .. py:attribute:: unique_name
+
+
+   .. py:attribute:: credential
+      :type:  pki.models.credential.CredentialModel
+
+
+   .. py:attribute:: issuing_ca_type
+
+
+   .. py:attribute:: is_active
+
+
+   .. py:attribute:: created_at
+
+
+   .. py:attribute:: updated_at
+
+
+   .. py:attribute:: last_crl_issued_at
+
+
+   .. py:attribute:: crl_pem
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string that represents this IssuingCaModel entry.
+
+      :returns: Human-readable string that represents this IssuingCaModel entry.
+      :rtype: str
+
+
+
+   .. py:method:: __repr__()
+
+      Returns a string representation of the IssuingCaModel instance.
+
+
+
+   .. py:property:: common_name
+      :type: str
+
+
+      Returns common name.
+
+
+   .. py:method:: create_new_issuing_ca(unique_name, credential_serializer, issuing_ca_type)
+      :classmethod:
+
+
+      Creates a new Issuing CA model and returns it.
+
+      :param unique_name: The unique name that will be used to identify the Issuing CA.
+      :param credential_serializer: The credential as CredentialSerializer instance.
+                                    It will be normalized and validated, if it is a valid credential to be used as an Issuing CA.
+      :param issuing_ca_type: The Issuing CA type.
+
+      :returns: The newly created Issuing CA model.
+      :rtype: IssuingCaModel
+
+
+
+   .. py:method:: issue_crl()
+
+      Issues a CRL with revoked certificates issued by this CA.
+
+
+
+   .. py:property:: signature_suite
+      :type: trustpoint_core.oid.SignatureSuite
+
+
+      The signature suite for the CA public key certificate.
+
+
+   .. py:property:: public_key_info
+      :type: trustpoint_core.oid.PublicKeyInfo
+
+
+      The public key info for the CA certificate's public key.
+
+
+   .. py:method:: get_issued_certificates()
+
+      Returns certificates issued by this CA, except its own in case of a self-signed CA.
+
+      This goes through all active certificates and checks issuance by this CA
+      based on cert.issuer_public_bytes == ca.subject_public_bytes
+      WARNING: This means that it may inadvertently return certificates
+      that were issued by a different CA with the same subject name
+
+
+
+   .. py:method:: revoke_all_issued_certificates(reason = RevokedCertificateModel.ReasonCode.UNSPECIFIED)
+
+      Revokes all certificates issued by this CA.
+
+
+
+   .. py:method:: pre_delete()
+
+      Check for unexpired certificates issued by this CA before deleting it.
+
+
+
+   .. py:method:: post_delete()
+
+      Deletes the credential of this CA after deleting it.
+
+
+
+.. py:exception:: CredentialAlreadyExistsError(*args, **kwargs)
+
+   Bases: :py:obj:`django.core.exceptions.ValidationError`
+
+
+   The CredentialAlreadyExistsError is raised if a credential already exists in the database.
+
+
+.. py:class:: CredentialModel(*args, **kwargs)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`util.db.CustomDeleteActionModel`
+
+
+   The CredentialModel that holds all local credentials used by the Trustpoint.
+
+   This model holds both local unprotected credentials, for which the keys and certificates are stored
+   in the DB, but also credentials that are stored within an HSM or TPM utilizing PKCS#11.
+
+   PKCS#11 credentials are not yet supported.
+
+
+   .. py:class:: CredentialTypeChoice(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.IntegerChoices`
+
+
+      The CredentialTypeChoice defines the type of the credential and thus implicitly restricts its usage.
+
+      It is intended to limit the credential usage to specific cases, e.g. usage as Issuing CA.
+      The abstractions using the CredentialModel are responsible to check that the credential has
+      the correct and expected CredentialTypeChoice.
+
+
+      .. py:attribute:: TRUSTPOINT_TLS_SERVER
+
+
+      .. py:attribute:: ROOT_CA
+
+
+      .. py:attribute:: ISSUING_CA
+
+
+      .. py:attribute:: ISSUED_CREDENTIAL
+
+
+      .. py:attribute:: DEV_OWNER_ID
+
+
+
+   .. py:attribute:: credential_type
+
+
+   .. py:attribute:: private_key
+
+
+   .. py:attribute:: certificate
+
+
+   .. py:attribute:: certificates
+
+
+   .. py:attribute:: certificate_chain
+
+
+   .. py:attribute:: created_at
+
+
+   .. py:method:: __repr__()
+
+      Returns a string representation of this CredentialModel entry.
+
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string that represents this CredentialModel entry.
+
+      :returns: Human-readable string that represents this CredentialModel entry.
+      :rtype: str
+
+
+
+   .. py:method:: clean()
+
+      Validates the CredentialModel instance.
+
+
+
+   .. py:method:: save_credential_serializer(credential_serializer, credential_type)
+      :classmethod:
+
+
+      This method will try to normalize the credential_serializer and then save it to the database.
+
+      :param credential_serializer: The credential serializer to store in the database.
+      :param credential_type: The credential type to set.
+
+      :returns: The stored credential model.
+      :rtype: CredentialModel
+
+
+
+   .. py:property:: ordered_certificate_chain_queryset
+      :type: django.db.models.QuerySet[CertificateChainOrderModel]
+
+
+      Gets the ordered certificate chain queryset.
+
+
+   .. py:method:: _save_normalized_credential_serializer(normalized_credential_serializer, credential_type)
+      :classmethod:
+
+
+      This method will store a credential that is expected to be normalized..
+
+      :param normalized_credential_serializer: The normalized credential serializer to store in the database.
+      :param credential_type: The credential type to set.
+
+      :returns: The stored credential model.
+      :rtype: CredentialModel
+
+
+
+   .. py:method:: save_keyless_credential(certificate, certificate_chain, credential_type)
+      :classmethod:
+
+
+      Stores a credential without a private key.
+
+
+
+   .. py:method:: update_keyless_credential(certificate, certificate_chain)
+
+      Updates the primary certificate and certificate chain of the credential.
+
+      Previous certificates are kept as part of the credential.
+
+
+
+   .. py:method:: pre_delete()
+
+      Deletes related models, only allow deletion if there are no more active certificates.
+
+
+
+   .. py:method:: get_private_key()
+
+      Gets an abstraction of the credential private key.
+
+      Note, in the case of keys stored in an HSM or TPM using PKCS#11, it will only be possible to use the
+      key abstraction to sign and verify, but not to export the key in any way.
+
+      :returns: The credential private key abstraction.
+      :rtype: PrivateKey
+
+
+
+   .. py:method:: get_private_key_serializer()
+
+      Gets a serializer of the credential private key.
+
+      :returns: The credential private key abstraction.
+      :rtype: PrivateKey
+
+
+
+   .. py:method:: get_certificate()
+
+      Gets the credential certificate as x509.Certificate instance.
+
+      :returns: The credential certificate.
+      :rtype: x509.Certificate
+
+
+
+   .. py:method:: get_certificate_chain()
+
+      Gets the credential certificate chain as a list of x509.Certificate instances.
+
+      :returns: The credential certificate chain as list of x509.Certificate instances.
+      :rtype: list[x509.Certificate]
+
+
+
+   .. py:method:: get_certificate_serializer()
+
+      Gets the credential certificate as a CertificateSerializer instance.
+
+      :returns: The credential certificate.
+      :rtype: CertificateSerializer
+
+
+
+   .. py:method:: get_certificate_chain_serializer()
+
+      Gets the credential certificate chain as a CertificateCollectionSerializer instance.
+
+      :returns: The credential certificate chain.
+      :rtype: CertificateCollectionSerializer
+
+
+
+   .. py:method:: get_root_ca_certificate()
+
+      Gets the root CA certificate of the credential certificate chain.
+
+
+
+   .. py:method:: get_root_ca_certificate_serializer()
+
+      Gets the root CA certificate serializer.
+
+
+
+   .. py:method:: get_credential_serializer()
+
+      Gets the serializer for this credential.
+
+
+
+   .. py:property:: signature_suite
+      :type: trustpoint_core.oid.SignatureSuite
+
+
+      Returns the signature suite used by the current credential primary certificate.
+
+
+   .. py:property:: public_key_info
+      :type: trustpoint_core.oid.PublicKeyInfo
+
+
+      Returns the PublicKeyInfo the current credential primary certificate.
+
+
+   .. py:property:: hash_algorithm
+      :type: cryptography.hazmat.primitives.hashes.HashAlgorithm | None
+
+
+      Returns the hash algorithm used by the current credential.
+
+
+   .. py:method:: is_valid_issued_credential()
+
+      Determines if this issued credential is valid.
+
+      This method performs the following checks:
+        1. The credential must be of type ISSUED_CREDENTIAL.
+        2. A primary certificate must exist.
+        3. The certificate's status must be 'OK'.
+
+      :returns:
+
+                A tuple where:
+                              - The first value is True if the credential meets all criteria, False otherwise.
+                              - The second value is a reason string explaining why the credential is invalid.
+      :rtype: tuple[bool, str]
+
+
+
+.. py:class:: OwnerCredentialModel(*args, **kwargs)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`util.db.CustomDeleteActionModel`
+
+
+   Device owner credential model.
+
+   This model is a wrapper to store a DevOwnerID Credential for use by devices to trust the Trustpoint.
+
+
+   .. py:attribute:: unique_name
+
+
+   .. py:attribute:: credential
+      :type:  CredentialModel
+
+
+   .. py:attribute:: created_at
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string that represents this OwnerCredentialModel entry.
+
+      :returns: Human-readable string that represents this OwnerCredentialModel entry.
+      :rtype: str
+
+
+
+   .. py:method:: __repr__()
+
+      Returns a string representation of the OwnerCredentialModel instance.
+
+
+
+   .. py:method:: create_new_owner_credential(unique_name, credential_serializer)
+      :classmethod:
+
+
+      Creates a new owner credential model and returns it.
+
+      :param unique_name: The unique name that will be used to identify the Owner Credential.
+      :param credential_serializer: The credential as CredentialSerializer instance.
+
+      :returns: The newly created owner credential model.
+      :rtype: OwnerCredentialModel
+
+
+
+   .. py:method:: post_delete()
+
+      Deletes the credential of this owner credential after deleting it.
+
+
+
+.. py:class:: DomainModel(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Domain Model.
+
+
+   .. py:attribute:: unique_name
+
+
+   .. py:attribute:: issuing_ca
+
+
+   .. py:attribute:: is_active
+
+
+   .. py:attribute:: created_at
+
+
+   .. py:attribute:: updated_at
+
+
+   .. py:attribute:: auto_create_new_device
+
+
+   .. py:attribute:: allow_username_password_registration
+
+
+   .. py:attribute:: allow_idevid_registration
+
+
+   .. py:attribute:: domain_credential_auth
+
+
+   .. py:attribute:: username_password_auth
+
+
+   .. py:attribute:: allow_app_certs_without_domain
+
+
+   .. py:method:: __repr__()
+
+      Machine-readable representation of the Domain model instance.
+
+      :returns:     Machine-readable representation of the Domain model model instance.
+      :rtype: str
+
+
+
+   .. py:method:: __str__()
+
+      Human-readable representation of the Domain model instance.
+
+      :returns:     Human-readable representation of the Domain model model instance.
+      :rtype: str
+
+
+
+   .. py:method:: save(**kwargs)
+
+      Save the Domain model instance.
+
+
+
+   .. py:property:: signature_suite
+      :type: trustpoint_core.oid.SignatureSuite
+
+
+      Get the signature suite for the domain (based on its Issuing CA).
+
+
+   .. py:property:: public_key_info
+      :type: trustpoint_core.oid.PublicKeyInfo
+
+
+      Get the public key info for the domain (based on its Issuing CA).
+
+
+   .. py:method:: clean()
+
+      Validate that the issuing CA is not an auto-generated root CA.
+
+
+
+   .. py:method:: get_issuing_ca_or_value_error()
+
+      Gets the corresponding Issuing CA.
+
+      :returns: The corresponding Issuing CA.
+
+      :raises ValueError: If no Issuing CA is set.
+
+
+
+.. py:class:: DevIdRegistration(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Represents a DevID Registration, linking a Truststore, Domain, unique name, and a serial number regex pattern.
+
+
+   .. py:attribute:: unique_name
+
+
+   .. py:attribute:: truststore
+
+
+   .. py:attribute:: domain
+
+
+   .. py:attribute:: serial_number_pattern
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string representation of the DevIdRegistration instance.
+
+
+
+   .. py:method:: save(**kwargs)
+
+      Ensures the model is valid and enforces validations before saving.
+
+
+
+.. py:class:: TruststoreModel(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Represents a truststore, which is a collection of certificates used for specific purposes.
+
+   This model allows organizing certificates into a logical grouping for specific
+   intended usages such as `IDevID`, `TLS`, or `Generic`. Each truststore is identified
+   by a unique name and supports operations like retrieving the number of certificates
+   or serializing its content.
+
+
+   .. py:class:: IntendedUsage(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.IntegerChoices`
+
+
+      Intended Usage of the Truststore.
+
+
+      .. py:attribute:: IDEVID
+
+
+      .. py:attribute:: TLS
+
+
+      .. py:attribute:: GENERIC
+
+
+      .. py:attribute:: DEVICE_OWNER_ID
+
+
+
+   .. py:attribute:: unique_name
+
+
+   .. py:attribute:: certificates
+
+
+   .. py:attribute:: intended_usage
+
+
+   .. py:attribute:: created_at
+
+
+   .. py:class:: Meta
+
+      Bases: :py:obj:`django_stubs_ext.db.models.TypedModelMeta`
+
+
+      Meta class configuration.
+
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string representation of the TruststoreModel.
+
+
+
+   .. py:method:: save(**kwargs)
+
+      Ensures the model is valid before saving.
+
+
+
+   .. py:property:: number_of_certificates
+      :type: int
+
+
+      Returns the number of certificates in the truststore.
+
+
+   .. py:method:: get_certificate_collection_serializer()
+
+      Returns a serializer for all certificates in the truststore.
+
+      This method gathers all the certificates associated with the truststore,
+      serializes them using `CertificateCollectionSerializer`, and returns
+      the serialized result.
+
+      :returns: The serialized representation of the certificates.
+
+
+
+.. py:class:: TruststoreOrderModel(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Represents the order of certificates in a truststore.
+
+
+   .. py:attribute:: order
+
+
+   .. py:attribute:: certificate
+
+
+   .. py:attribute:: trust_store
+
+
+   .. py:class:: Meta
+
+      Bases: :py:obj:`django_stubs_ext.db.models.TypedModelMeta`
+
+
+      Meta class configuration.
+
+
+      .. py:attribute:: unique_together
+         :value: ('order', 'trust_store')
+
+
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string representation of the TruststoreOrderModel.
+
+
+

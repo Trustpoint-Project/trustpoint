@@ -57,10 +57,24 @@
                         Documentation
                     </h5>
                     <p class="text-muted">Find setup instructions, tutorials, and advanced topics.</p>
-                    <a href="https://trustpoint.readthedocs.io/en/latest/" 
-                       target="_blank" class="btn btn-primary" aria-label="Visit the Trustpoint homepage">
-                        View Documentation
-                    </a>
+
+                    {% if LOCAL_DOCS_AVAILABLE %}
+                        <a href="{% url 'local_docs_index' %}"
+                            class="btn btn-primary"
+                            aria-label="Open local documentation (served offline)">
+                            Open Documentation
+                        </a>
+                        <span class="badge text-bg-secondary align-middle ms-2">local</span>
+                    {% else %}
+                        <a href="https://trustpoint.readthedocs.io/en/latest/"
+                            target="_blank" rel="noopener"
+                            class="btn btn-primary"
+                            aria-label="Open online documentation on ReadTheDocs">
+                            Open Documentation
+                        </a>
+                        <span class="badge text-bg-secondary align-middle ms-2">online</span>
+                    {% endif %}
+
                 </div>
             </div>
         </div>

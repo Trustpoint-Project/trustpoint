@@ -1,0 +1,82 @@
+features.environment
+====================
+
+.. py:module:: features.environment
+
+.. autoapi-nested-parse::
+
+   Environment file for behave tests.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   features.environment.original_step
+   features.environment.original_given
+   features.environment.original_when
+   features.environment.original_then
+   features.environment.step
+   features.environment.given
+   features.environment.when
+   features.environment.then
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   features.environment.fail_on_exception
+   features.environment.patched_step
+   features.environment.patched_given
+   features.environment.patched_when
+   features.environment.patched_then
+
+
+Module Contents
+---------------
+
+.. py:function:: fail_on_exception(func)
+
+   Wrapper that ensures uncaught exceptions fail the scenario and are logged to the HTML report.
+
+
+.. py:data:: original_step
+
+.. py:data:: original_given
+
+.. py:data:: original_when
+
+.. py:data:: original_then
+
+.. py:function:: patched_step(*args, **kwargs)
+
+   Monkey-patched step decorator that wraps the step function to fail on any exception.
+
+
+.. py:function:: patched_given(*args, **kwargs)
+
+   Monkey-patched given decorator that wraps the step function to fail on any exception.
+
+
+.. py:function:: patched_when(*args, **kwargs)
+
+   Monkey-patched when decorator that wraps the step function to fail on any exception.
+
+
+.. py:function:: patched_then(*args, **kwargs)
+
+   Monkey-patched then decorator that wraps the step function to fail on any exception.
+
+
+.. py:data:: step
+
+.. py:data:: given
+
+.. py:data:: when
+
+.. py:data:: then
+

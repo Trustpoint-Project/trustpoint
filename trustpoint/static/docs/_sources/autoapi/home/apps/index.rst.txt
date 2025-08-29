@@ -1,0 +1,40 @@
+home.apps
+=========
+
+.. py:module:: home.apps
+
+.. autoapi-nested-parse::
+
+   Configures the Home application and its settings for inclusion in the Django project.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   home.apps.HomeConfig
+
+
+Module Contents
+---------------
+
+.. py:class:: HomeConfig(app_name, app_module)
+
+   Bases: :py:obj:`django.apps.AppConfig`
+
+
+   Configures the Home application, including its name and other settings for Django.
+
+
+   .. py:attribute:: default_auto_field
+      :value: 'django.db.models.BigAutoField'
+
+
+
+   .. py:attribute:: name
+      :value: 'home'
+
+
+

@@ -1,0 +1,114 @@
+util.db
+=======
+
+.. py:module:: util.db
+
+.. autoapi-nested-parse::
+
+   Database model utilities for Trustpoint.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   util.db.CustomDeleteActionManager
+   util.db.CustomDeleteActionModel
+   util.db.CustomDeleteActionQuerySet
+
+
+Module Contents
+---------------
+
+.. py:class:: CustomDeleteActionManager
+
+   Bases: :py:obj:`django.db.models.Manager`\ [\ :py:obj:`CustomDeleteActionManager.T`\ ]
+
+
+   Default manager for CustomDeleteActionModel.
+
+   It ensures the CustomDeleteActionQuerySet is the default queryset.
+
+
+   .. py:method:: get_queryset()
+
+      Return the queryset with individual delete.
+
+
+
+.. py:class:: CustomDeleteActionModel(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Model that provides the pre_delete() and post_delete() methods to implement custom deletion logic.
+
+   It uses a custom manager to ensure the methods are called both on individual and bulk (queryset) deletes.
+
+
+
+   .. py:attribute:: objects
+
+
+   .. py:class:: Meta
+
+      Metaclass configuration.
+
+
+      .. py:attribute:: abstract
+         :value: True
+
+
+
+
+   .. py:method:: pre_delete()
+
+      Pre-delete hook for custom logic before actual deletion.
+
+      This can for example be used to check if deletion prerequisites are met.
+
+
+
+   .. py:method:: post_delete()
+
+      Post-delete hook for custom logic after actual deletion.
+
+      This can for example be used to clean up orphaned related objects.
+      Keep in mind the model is no longer in the database at the time this function is called.
+
+
+
+   .. py:method:: delete(*args, **kwargs)
+
+      Delete the object and run pre_delete() and post_delete() hooks.
+
+
+
+.. py:class:: CustomDeleteActionQuerySet(model=None, query=None, using=None, hints=None)
+
+   Bases: :py:obj:`django.db.models.QuerySet`\ [\ :py:obj:`CustomDeleteActionQuerySet._Model`\ , :py:obj:`CustomDeleteActionQuerySet._Row`\ ]
+
+
+   Overrides a model's queryset to invoke pre- and post-delete hooks.
+
+   This ensures the pre_delete() and post_delete() methods are called on each object in the queryset.
+
+
+   .. py:method:: delete(*args, **kwargs)
+
+      Runs pre_delete() on each object, bulk deletes the queryset and runs post_delete() on each object.
+
+      :param \*args: Positional arguments passed to super().delete().
+      :param \*\*kwargs: Keyword arguments, for reference check, and passed to super().delete().
+
+      :returns:
+
+                A tuple of:
+                    a) the total number of objects deleted and
+                    b) a dictionary with the model name and the count.
+      :rtype: tuple[int, dict[str, int]]
+
+
+

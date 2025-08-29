@@ -1,0 +1,41 @@
+settings.views.help_support
+===========================
+
+.. py:module:: settings.views.help_support
+
+.. autoapi-nested-parse::
+
+   View for the help page.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.views.help_support.HelpView
+
+
+Module Contents
+---------------
+
+.. py:class:: HelpView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.TemplateView`
+
+
+   View for rendering the help page.
+
+
+   .. py:attribute:: template_name
+      :value: 'settings/help.html'
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Add context data for the help page.
+
+
+

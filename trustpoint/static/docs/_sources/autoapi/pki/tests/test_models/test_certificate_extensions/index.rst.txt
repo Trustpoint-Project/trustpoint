@@ -1,0 +1,131 @@
+pki.tests.test_models.test_certificate_extensions
+=================================================
+
+.. py:module:: pki.tests.test_models.test_certificate_extensions
+
+.. autoapi-nested-parse::
+
+   Tests for the parsing and handling of certificate extensions.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   pki.tests.test_models.test_certificate_extensions.test_key_usage_ext
+   pki.tests.test_models.test_certificate_extensions.test_san_ext
+   pki.tests.test_models.test_certificate_extensions.test_ian_ext
+   pki.tests.test_models.test_certificate_extensions.test_basic_constraints_ext
+   pki.tests.test_models.test_certificate_extensions.test_authority_key_identifier_ext
+   pki.tests.test_models.test_certificate_extensions.test_subject_key_identifier_ext
+   pki.tests.test_models.test_certificate_extensions.test_certificate_policies_multiple_entries
+   pki.tests.test_models.test_certificate_extensions.test_extended_key_usage_ext
+   pki.tests.test_models.test_certificate_extensions.test_name_constraints_ext
+   pki.tests.test_models.test_certificate_extensions.test_authority_information_access_extension
+   pki.tests.test_models.test_certificate_extensions.test_subject_information_access_extension
+   pki.tests.test_models.test_certificate_extensions.test_inhibit_any_policy
+   pki.tests.test_models.test_certificate_extensions.test_policy_constraints
+   pki.tests.test_models.test_certificate_extensions.test_freshest_crl
+   pki.tests.test_models.test_certificate_extensions.test_extension_deletion
+   pki.tests.test_models.test_certificate_extensions.test_extension_deletion
+   pki.tests.test_models.test_certificate_extensions.test_multi_extension_deletion
+   pki.tests.test_models.test_certificate_extensions.test_basic_certificate_deletion
+
+
+Module Contents
+---------------
+
+.. py:function:: test_key_usage_ext(self_signed_cert_with_ext)
+
+   Test that the KeyUsage extension is parsed and stored correctly in the database.
+
+
+.. py:function:: test_san_ext(self_signed_cert_with_ext)
+
+   Test that the SubjectAlternativeName extension is parsed and stored correctly in the database.
+
+
+.. py:function:: test_ian_ext(self_signed_cert_with_ext)
+
+   Test that the IssuerAlternativeName extension is parsed and stored correctly in the database.
+
+
+.. py:function:: test_basic_constraints_ext(self_signed_cert_with_ext)
+
+   Test that the BasicConstraints extension is parsed and stored correctly in the database.
+
+
+.. py:function:: test_authority_key_identifier_ext(self_signed_cert_with_ext)
+
+   Test that the AuthorityKeyIdentifier extension is parsed and stored correctly in the database.
+
+
+.. py:function:: test_subject_key_identifier_ext(self_signed_cert_with_ext)
+
+   Test that the SubjectKeyIdentifier extension is parsed and stored correctly in the database.
+
+
+.. py:function:: test_certificate_policies_multiple_entries(self_signed_cert_with_ext)
+
+   Test that policy extensions with multiple qualifier entries are parsed and stored correctly in the database.
+
+
+.. py:function:: test_extended_key_usage_ext(self_signed_cert_with_ext)
+
+   Test that the ExtendedKeyUsage extension is parsed and stored correctly in the database.
+
+
+.. py:function:: test_name_constraints_ext(self_signed_cert_with_ext)
+
+   Test that the NameConstraints extension is parsed and stored correctly in the database.
+
+
+.. py:function:: test_authority_information_access_extension(self_signed_cert_with_ext)
+
+   Test that the AIA extension is parsed and stored correctly in the database.
+
+
+.. py:function:: test_subject_information_access_extension(self_signed_cert_with_ext)
+
+   Test that the SIA extension is parsed and stored correctly in the database.
+
+
+.. py:function:: test_inhibit_any_policy(self_signed_cert_with_ext)
+
+   Test that the Inhibit anyPolicy extension is parsed and stored correctly in the database.
+
+
+.. py:function:: test_policy_constraints(self_signed_cert_with_ext)
+
+   Test that the Inhibit anyPolicy extension is parsed and stored correctly in the database.
+
+
+.. py:function:: test_freshest_crl(self_signed_cert_with_ext)
+
+   Test that the freshest crl extension is parsed and stored correctly in the database.
+
+
+.. py:function:: test_extension_deletion(self_signed_cert_with_ext, self_signed_cert_basic)
+
+   Test that all extensions are deleted when the certificate is deleted.
+
+
+.. py:function:: test_extension_deletion(self_signed_cert_with_ext)
+
+   Test that all extensions are deleted when the certificate is deleted.
+
+
+.. py:function:: test_multi_extension_deletion(self_signed_cert_with_ext, self_signed_cert_basic)
+
+   Test that extensions that are shared are not deleted.
+
+   (if there is another certificate with those exact extension values)
+
+
+.. py:function:: test_basic_certificate_deletion(self_signed_cert_basic)
+
+   Test that the basic certificate is deleted without exceptions.
+
+

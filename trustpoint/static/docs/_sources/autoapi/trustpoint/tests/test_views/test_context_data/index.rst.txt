@@ -1,0 +1,98 @@
+trustpoint.tests.test_views.test_context_data
+=============================================
+
+.. py:module:: trustpoint.tests.test_views.test_context_data
+
+.. autoapi-nested-parse::
+
+   Tests for the ContextDataMixin class.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   trustpoint.tests.test_views.test_context_data.MockView
+   trustpoint.tests.test_views.test_context_data.ContextDataMixinTestMixin
+   trustpoint.tests.test_views.test_context_data.ContextDataMixinTests
+
+
+Module Contents
+---------------
+
+.. py:class:: MockView(**kwargs)
+
+   Bases: :py:obj:`trustpoint.views.base.ContextDataMixin`, :py:obj:`django.views.generic.TemplateView`
+
+
+   Mock view for testing ContextDataMixin.
+
+
+   .. py:attribute:: template_name
+      :value: 'example_template.html'
+
+
+
+   .. py:attribute:: context_page_category
+      :value: 'test_category'
+
+
+
+   .. py:attribute:: context_page_name
+      :value: 'test_name'
+
+
+
+   .. py:attribute:: context_custom_field
+      :value: 'custom_value'
+
+
+
+.. py:class:: ContextDataMixinTestMixin
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Override get_context_data to simulate ContextDataMixin behavior.
+
+
+
+.. py:class:: ContextDataMixinTests(methodName='runTest')
+
+   Bases: :py:obj:`django.test.TestCase`
+
+
+   Test cases for ContextDataMixin.
+
+
+   .. py:method:: setUp()
+
+      Hook method for setting up the test fixture before exercising it.
+
+
+
+   .. py:method:: test_context_attributes_added()
+
+      Test that 'context_' prefixed attributes are added to the context data.
+
+
+
+   .. py:method:: test_no_unprefixed_attributes_added()
+
+      Test that attributes without 'context_' prefix are not added to the context data.
+
+
+
+   .. py:method:: test_overridden_context_does_not_change()
+
+      Test that existing context keys are not overridden by 'context_' prefixed attributes.
+
+
+
+   .. py:method:: test_context_data_with_additional_kwargs()
+
+      Test that additional kwargs passed to get_context_data are included in the context.
+
+
+

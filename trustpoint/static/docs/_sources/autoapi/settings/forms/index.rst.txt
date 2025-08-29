@@ -1,0 +1,117 @@
+settings.forms
+==============
+
+.. py:module:: settings.forms
+
+.. autoapi-nested-parse::
+
+   Forms definition.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.forms.SecurityConfigForm
+   settings.forms.BackupOptionsForm
+   settings.forms.IPv4AddressForm
+
+
+Module Contents
+---------------
+
+.. py:class:: SecurityConfigForm(*args, **kwargs)
+
+   Bases: :py:obj:`django.forms.ModelForm`
+
+
+   Security configuration model form.
+
+
+   .. py:attribute:: FEATURE_TO_FIELDS
+      :type:  dict[type[settings.security.features.SecurityFeature], list[str]]
+
+
+   .. py:attribute:: helper
+
+
+   .. py:attribute:: security_mode
+
+
+   .. py:attribute:: auto_gen_pki
+
+
+   .. py:attribute:: auto_gen_pki_key_algorithm
+
+
+   .. py:class:: Meta
+
+      .. py:attribute:: model
+
+
+      .. py:attribute:: fields
+         :type:  ClassVar[list[str]]
+         :value: ['security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm']
+
+
+
+
+   .. py:method:: clean_auto_gen_pki_key_algorithm()
+
+      Keep the current value of `auto_gen_pki_key_algorithm` from the instance if the field was disabled.
+
+
+
+.. py:class:: BackupOptionsForm
+
+   Bases: :py:obj:`django.forms.ModelForm`\ [\ :py:obj:`settings.models.BackupOptions`\ ]
+
+
+   Form for editing BackupOptions settings.
+
+
+   .. py:class:: Meta
+
+      ModelForm Meta configuration for BackupOptions.
+
+
+      .. py:attribute:: model
+
+
+      .. py:attribute:: fields
+         :type:  ClassVar[list[str]]
+         :value: ['local_storage', 'sftp_storage', 'host', 'port', 'user', 'auth_method', 'password',...
+
+
+
+      .. py:attribute:: widgets
+         :type:  ClassVar[dict[str, Any]]
+
+
+
+   .. py:method:: clean()
+
+      Validate required fields based on selected authentication method.
+
+
+
+.. py:class:: IPv4AddressForm(*args, **kwargs)
+
+   Bases: :py:obj:`django.forms.Form`
+
+
+   A form for selecting and updating an IPv4 address.
+
+   This form provides an interface for selecting an IPv4 address from
+   a list of Subject Alternative Names (SANs).
+
+   .. attribute:: ipv4_address
+
+      A choice field for selecting the IPv4 address.
+
+
+   .. py:attribute:: ipv4_address
+
+

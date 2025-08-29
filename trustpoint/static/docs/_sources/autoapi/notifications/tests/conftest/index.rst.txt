@@ -1,0 +1,51 @@
+notifications.tests.conftest
+============================
+
+.. py:module:: notifications.tests.conftest
+
+.. autoapi-nested-parse::
+
+   Fixtures for the NotificationModel model and related functionality in the notifications app.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   notifications.tests.conftest.setup_test_issuing_ca
+   notifications.tests.conftest.test_domain
+   notifications.tests.conftest.test_device
+   notifications.tests.conftest.test_message
+   notifications.tests.conftest.test_status
+
+
+Module Contents
+---------------
+
+.. py:function:: setup_test_issuing_ca()
+
+   Use custom management command to create a test Issuing CA.
+
+
+.. py:function:: test_domain(setup_test_issuing_ca)
+
+   Create a domain linked to the test issuing CA.
+
+
+.. py:function:: test_device(test_domain)
+
+   Create a test device fixture.
+
+
+.. py:function:: test_message()
+
+   Create a NotificationMessageModel used for custom notifications.
+
+
+.. py:function:: test_status()
+
+   Create a notification status object.
+
+

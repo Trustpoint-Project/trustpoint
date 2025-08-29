@@ -1,0 +1,29 @@
+setup_wizard.urls
+=================
+
+.. py:module:: setup_wizard.urls
+
+.. autoapi-nested-parse::
+
+   URL configuration for the users application.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   setup_wizard.urls.app_name
+   setup_wizard.urls.urlpatterns
+
+
+Module Contents
+---------------
+
+.. py:data:: app_name
+   :value: 'setup_wizard'
+
+
+.. py:data:: urlpatterns
+

@@ -1,0 +1,138 @@
+pki.tests.test_models.test_certificate_values
+=============================================
+
+.. py:module:: pki.tests.test_models.test_certificate_values
+
+.. autoapi-nested-parse::
+
+   Tests that verify the correctness of certificate property values.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   pki.tests.test_models.test_certificate_values.CertificateTuple
+   pki.tests.test_models.test_certificate_values.ONE_MINUTE
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   pki.tests.test_models.test_certificate_values.test_certificate_status
+   pki.tests.test_models.test_certificate_values.test_is_self_signed
+   pki.tests.test_models.test_certificate_values.test_common_name
+   pki.tests.test_models.test_certificate_values.test_fingerprint
+   pki.tests.test_models.test_certificate_values.test_signature_algorithm_oid
+   pki.tests.test_models.test_certificate_values.test_signature_value
+   pki.tests.test_models.test_certificate_values.test_certificate_version
+   pki.tests.test_models.test_certificate_values.test_serial_number
+   pki.tests.test_models.test_certificate_values.test_issuer_attributes
+   pki.tests.test_models.test_certificate_values.test_issuer_public_bytes
+   pki.tests.test_models.test_certificate_values.test_validity_period
+   pki.tests.test_models.test_certificate_values.test_subject_attributes
+   pki.tests.test_models.test_certificate_values.test_certificate_pem
+   pki.tests.test_models.test_certificate_values.test_public_key_pem
+   pki.tests.test_models.test_certificate_values.test_subject_public_bytes
+   pki.tests.test_models.test_certificate_values.test_created_at_timestamp
+   pki.tests.test_models.test_certificate_values.test_ca_attributes
+
+
+Module Contents
+---------------
+
+.. py:data:: CertificateTuple
+
+.. py:function:: test_certificate_status(self_signed_cert_basic)
+
+   Test if the certificate status is correctly set to OK.
+
+
+.. py:function:: test_is_self_signed(self_signed_cert_basic)
+
+   Test if the certificate is correctly identified as self-signed.
+
+
+.. py:function:: test_common_name(self_signed_cert_basic)
+
+   Test if the common name is correctly saved in the certificate model.
+
+
+.. py:function:: test_fingerprint(self_signed_cert_basic)
+
+   Test if the SHA256 fingerprint is correctly saved.
+
+
+.. py:function:: test_signature_algorithm_oid(self_signed_cert_basic)
+
+   Test if the signature algorithm OID is correctly stored.
+
+
+.. py:function:: test_signature_value(self_signed_cert_basic)
+
+   Test if the certificate signature value is correctly saved.
+
+
+.. py:function:: test_certificate_version(self_signed_cert_basic)
+
+   Test if the certificate version is correctly stored.
+
+
+.. py:function:: test_serial_number(self_signed_cert_basic)
+
+   Test if the serial number is correctly saved.
+
+
+.. py:function:: test_issuer_attributes(self_signed_cert_basic)
+
+   Test if test_issuer attributes are correctly stored.
+
+
+.. py:function:: test_issuer_public_bytes(self_signed_cert_basic)
+
+   Test if the test_issuer public bytes are correctly saved.
+
+
+.. py:function:: test_validity_period(self_signed_cert_basic)
+
+   Test if the validity period is correctly stored.
+
+
+.. py:function:: test_subject_attributes(self_signed_cert_basic)
+
+   Test if subject attributes are correctly stored.
+
+
+.. py:function:: test_certificate_pem(self_signed_cert_basic)
+
+   Test if the PEM-encoded certificate is correctly saved.
+
+
+.. py:function:: test_public_key_pem(self_signed_cert_basic)
+
+   Test if the PEM-encoded public key is correctly saved.
+
+
+.. py:function:: test_subject_public_bytes(self_signed_cert_basic)
+
+   Test if the subject public bytes are correctly saved.
+
+
+.. py:data:: ONE_MINUTE
+   :value: 60
+
+
+.. py:function:: test_created_at_timestamp(self_signed_cert_basic)
+
+   Test if the creation timestamp is set correctly.
+
+
+.. py:function:: test_ca_attributes(self_signed_cert_basic)
+
+   Test if CA-related attributes are correctly stored.
+
+

@@ -1,0 +1,83 @@
+setup_wizard
+============
+
+.. py:module:: setup_wizard
+
+.. autoapi-nested-parse::
+
+   This Package contains the setup wizard django application.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/setup_wizard/apps/index
+   /autoapi/setup_wizard/forms/index
+   /autoapi/setup_wizard/tls_credential/index
+   /autoapi/setup_wizard/urls/index
+   /autoapi/setup_wizard/views/index
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   setup_wizard.WIZARD_STATE_PATH
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   setup_wizard.SetupWizardState
+
+
+Package Contents
+----------------
+
+.. py:data:: WIZARD_STATE_PATH
+
+.. py:class:: SetupWizardState(*args, **kwds)
+
+   Bases: :py:obj:`enum.Enum`
+
+
+   This enum represents the current setup wizard state of the trustpoint.
+
+
+   .. py:attribute:: WIZARD_INITIAL
+
+
+   .. py:attribute:: WIZARD_RESTORE
+
+
+   .. py:attribute:: WIZARD_TLS_SERVER_CREDENTIAL_APPLY
+
+
+   .. py:attribute:: WIZARD_DEMO_DATA
+
+
+   .. py:attribute:: WIZARD_CREATE_SUPER_USER
+
+
+   .. py:attribute:: WIZARD_COMPLETED
+
+
+   .. py:method:: get_current_state()
+      :classmethod:
+
+
+      Gets the current setup wizard state of the trustpoint.
+
+      :returns: The current setup wizard state.
+
+      :raises RuntimeError: If the current setup wizard state cannot be determined.
+
+
+

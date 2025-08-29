@@ -1,0 +1,607 @@
+pki.forms
+=========
+
+.. py:module:: pki.forms
+
+.. autoapi-nested-parse::
+
+   Module for managing PKI-related forms in the TrustPoint application.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.forms.DevIdAddMethodSelectForm
+   pki.forms.DevIdRegistrationForm
+   pki.forms.TruststoreAddForm
+   pki.forms.TruststoreDownloadForm
+   pki.forms.CertificateDownloadForm
+   pki.forms.IssuingCaAddMethodSelectForm
+   pki.forms.IssuingCaFileTypeSelectForm
+   pki.forms.IssuingCaAddFileImportPkcs12Form
+   pki.forms.IssuingCaAddFileImportSeparateFilesForm
+   pki.forms.OwnerCredentialFileImportForm
+
+
+Module Contents
+---------------
+
+.. py:class:: DevIdAddMethodSelectForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`django.forms.Form`
+
+
+   Form for selecting the method to add an DevID Onboarding Pattern.
+
+   .. attribute:: method_select
+
+      A dropdown to select the method for adding an Issuing CA.
+      - `import_truststore`: Import a new truststore prior to configuring a new pattern.
+      - `configure_pattern`: Use an existing truststore to define a new pattern.
+
+      :type: ChoiceField
+
+
+   .. py:attribute:: method_select
+
+
+.. py:class:: DevIdRegistrationForm
+
+   Bases: :py:obj:`django.forms.ModelForm`\ [\ :py:obj:`pki.models.DevIdRegistration`\ ]
+
+
+   Form to create a new DevIdRegistration.
+
+
+   .. py:class:: Meta
+
+      .. py:attribute:: model
+
+
+      .. py:attribute:: fields
+         :type:  ClassVar[list[str]]
+         :value: ['unique_name', 'truststore', 'domain', 'serial_number_pattern']
+
+
+
+      .. py:attribute:: widgets
+         :type:  ClassVar[dict[str, Any]]
+
+
+      .. py:attribute:: labels
+         :type:  ClassVar[dict[str, str]]
+
+
+
+.. py:class:: TruststoreAddForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`django.forms.Form`
+
+
+   Form for adding a new truststore.
+
+   This form handles the creation of a truststore by validating the unique name,
+   intended usage, and uploaded file. It ensures the unique name is not already
+   used and validates the truststore file content before saving.
+
+   .. attribute:: unique_name
+
+      A unique name for the truststore.
+
+      :type: CharField
+
+   .. attribute:: intended_usage
+
+      Specifies the intended usage of the truststore.
+
+      :type: ChoiceField
+
+   .. attribute:: trust_store_file
+
+      The PEM or PKCS#7 file to be uploaded.
+
+      :type: FileField
+
+
+   .. py:attribute:: unique_name
+
+
+   .. py:attribute:: intended_usage
+
+
+   .. py:attribute:: trust_store_file
+
+
+   .. py:method:: clean_unique_name()
+
+      Validates the uniqueness of the truststore name.
+
+      :raises ValidationError: If the name is already used by an existing truststore.
+
+
+
+   .. py:method:: clean()
+
+      Cleans and validates the form data.
+
+      Ensures the uploaded file can be read and validates the unique name
+      and intended usage fields. If validation passes, initializes and saves
+      the truststore.
+
+      :raises ValidationError: If the truststore file cannot be read, the unique name
+      :raises is not unique, or an unexpected error occurs during initialization.:
+
+
+
+   .. py:method:: _save_trust_store(unique_name, intended_usage, certificates)
+      :staticmethod:
+
+
+
+.. py:class:: TruststoreDownloadForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`django.forms.Form`
+
+
+   Form for downloading truststores in various formats.
+
+   This form provides options to customize the download of truststores, allowing
+   users to specify the container type, inclusion of certificate chains, and
+   the file format. It ensures flexibility in exporting truststores for
+   various use cases and environments.
+
+   .. attribute:: cert_file_container
+
+      Specifies the container type for the truststore.
+      - `single_file`: The entire truststore in a single file.
+      - `zip`: Certificates as separate files in a `.zip` archive.
+      - `tar_gz`: Certificates as separate files in a `.tar.gz` archive.
+
+      :type: ChoiceField
+
+   .. attribute:: cert_chain_incl
+
+      Specifies whether to include certificate chains.
+      - `cert_only`: Only the selected certificates.
+      - `chain_incl`: Include certificate chains.
+
+      :type: ChoiceField
+
+   .. attribute:: cert_file_format
+
+      Specifies the file format for the truststore.
+      - `pem`: PEM format (.pem, .crt, .ca-bundle).
+      - `der`: DER format (.der, .cer).
+      - `pkcs7_pem`: PKCS#7 format in PEM encoding (.p7b, .p7c, .keystore).
+      - `pkcs7_der`: PKCS#7 format in DER encoding (.p7b, .p7c, .keystore).
+
+      :type: ChoiceField
+
+
+   .. py:attribute:: cert_file_container
+
+
+   .. py:attribute:: cert_chain_incl
+
+
+   .. py:attribute:: cert_file_format
+
+
+.. py:class:: CertificateDownloadForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`django.forms.Form`
+
+
+   Form for downloading certificates in various formats.
+
+   This form allows users to customize the download options for certificates,
+   including the container type, inclusion of certificate chains, and the
+   file format. It provides flexibility to download certificates in the
+   desired structure and format for different use cases.
+
+   .. attribute:: cert_file_container
+
+      Specifies the container type for the downloaded certificates.
+      - `single_file`: All certificates in a single file.
+      - `zip`: Certificates as separate files in a `.zip` archive.
+      - `tar_gz`: Certificates as separate files in a `.tar.gz` archive.
+
+      :type: ChoiceField
+
+   .. attribute:: cert_chain_incl
+
+      Specifies whether to include certificate chains.
+      - `cert_only`: Only the selected certificates.
+      - `chain_incl`: Include certificate chains.
+
+      :type: ChoiceField
+
+   .. attribute:: cert_file_format
+
+      Specifies the file format for the certificates.
+      - `pem`: PEM format (.pem, .crt, .ca-bundle).
+      - `der`: DER format (.der, .cer).
+      - `pkcs7_pem`: PKCS#7 format in PEM encoding (.p7b, .p7c, .keystore).
+      - `pkcs7_der`: PKCS#7 format in DER encoding (.p7b, .p7c, .keystore).
+
+      :type: ChoiceField
+
+
+   .. py:attribute:: cert_file_container
+
+
+   .. py:attribute:: cert_chain_incl
+
+
+   .. py:attribute:: cert_file_format
+
+
+.. py:class:: IssuingCaAddMethodSelectForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`django.forms.Form`
+
+
+   Form for selecting the method to add an Issuing Certificate Authority (CA).
+
+   This form provides options to choose the method for adding a new Issuing CA.
+   Users can select between importing from a file, generating a key pair and
+   requesting an Issuing CA certificate, or configuring a remote Issuing CA.
+
+   .. attribute:: method_select
+
+      A dropdown to select the method for adding an Issuing CA.
+      - `local_file_import`: Import a new Issuing CA from a file.
+      - `local_request`: Generate a key-pair and request a certificate.
+      - `remote_est`: Configure a remote Issuing CA.
+
+      :type: ChoiceField
+
+
+   .. py:attribute:: method_select
+
+
+.. py:class:: IssuingCaFileTypeSelectForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`django.forms.Form`
+
+
+   Form for selecting the file type when importing an Issuing CA.
+
+   This form allows users to choose the type of file to use for importing an
+   Issuing Certificate Authority (CA). Supported formats include PKCS#12 and
+   other common certificate formats such as PEM, PKCS#1, PKCS#7, and PKCS#8.
+
+   .. attribute:: method_select
+
+      A dropdown to select the file type for the Issuing CA.
+
+      :type: ChoiceField
+
+
+   .. py:attribute:: method_select
+
+
+.. py:class:: IssuingCaAddFileImportPkcs12Form(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`django.forms.Form`
+
+
+   Form for importing an Issuing CA using a PKCS#12 file.
+
+   This form allows the user to upload a PKCS#12 file containing the private key
+   and certificate chain, along with an optional password. It validates the
+   uploaded file and its contents and ensures the unique name is not already
+   used by another Issuing CA.
+
+   .. attribute:: unique_name
+
+      A unique name for the Issuing CA.
+
+      :type: CharField
+
+   .. attribute:: pkcs12_file
+
+      The PKCS#12 file containing the private key and certificates.
+
+      :type: FileField
+
+   .. attribute:: pkcs12_password
+
+      An optional password for the PKCS#12 file.
+
+      :type: CharField
+
+
+   .. py:attribute:: unique_name
+
+
+   .. py:attribute:: pkcs12_file
+
+
+   .. py:attribute:: pkcs12_password
+
+
+   .. py:method:: clean_unique_name()
+
+      Validates the unique name to ensure it is not already in use.
+
+      :raises ValidationError: If the unique name is already associated with an existing Issuing CA.
+
+
+
+   .. py:method:: clean()
+
+      Cleans and validates the entire form.
+
+      This method performs additional validation on the cleaned data to ensure
+      all required fields are valid and consistent. It checks the uploaded PKCS#12
+      file and its password (if provided) and validates that the unique name
+      does not conflict with existing entries. Any issues during validation
+      raise appropriate errors.
+
+      :raises ValidationError: If the data is invalid, such as when the unique name
+      :raises is already taken or the PKCS#12 file cannot be read or parsed.:
+
+
+
+.. py:class:: IssuingCaAddFileImportSeparateFilesForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`django.forms.Form`
+
+
+   Form for importing an Issuing CA using separate files.
+
+   This form allows the user to upload a private key file, its password (optional),
+   an Issuing CA certificate file, and an optional certificate chain. The form
+   validates the uploaded files, ensuring they are correctly formatted, within
+   size limits, and not already associated with an existing Issuing CA.
+
+   .. attribute:: unique_name
+
+      A unique name for the Issuing CA.
+
+      :type: CharField
+
+   .. attribute:: private_key_file
+
+      The private key file (.key, .pem).
+
+      :type: FileField
+
+   .. attribute:: private_key_file_password
+
+      An optional password for the private key.
+
+      :type: CharField
+
+   .. attribute:: ca_certificate
+
+      The Issuing CA certificate file (.cer, .der, .pem, .p7b, .p7c).
+
+      :type: FileField
+
+   .. attribute:: ca_certificate_chain
+
+      An optional certificate chain file.
+
+      :type: FileField
+
+
+   .. py:attribute:: unique_name
+
+
+   .. py:attribute:: ca_certificate
+
+
+   .. py:attribute:: ca_certificate_chain
+
+
+   .. py:attribute:: private_key_file
+
+
+   .. py:attribute:: private_key_file_password
+
+
+   .. py:method:: clean_unique_name()
+
+      Validates the unique name to ensure it does not already exist in the database.
+
+      :raises ValidationError: If an Issuing CA with the provided name already exists.
+
+
+
+   .. py:method:: clean_private_key_file()
+
+      Validates and parses the uploaded private key file.
+
+      This method checks if the private key file is provided, ensures it meets
+      size constraints, and validates its contents. If a password is provided,
+      it is used to decrypt the private key. Raises validation errors for missing,
+      oversized, or corrupted private key files.
+
+      :returns: A serializer containing the parsed private key.
+      :rtype: PrivateKeySerializer
+
+      :raises ValidationError: If the private key file is missing, too large, or
+      :raises corrupted, or if the password is invalid or incompatible.:
+
+
+
+   .. py:method:: clean_ca_certificate()
+
+      Validates and parses the uploaded Issuing CA certificate file.
+
+      This method ensures the provided Issuing CA certificate file is valid and
+      not already associated with an existing Issuing CA in the database. If the
+      file is too large, corrupted, or already in use, a validation error is raised.
+
+      :returns: A serializer containing the parsed certificate.
+      :rtype: CertificateSerializer
+
+      :raises ValidationError: If the file is missing, too large, corrupted, or already
+      :raises associated with an existing Issuing CA.:
+
+
+
+   .. py:method:: clean_ca_certificate_chain()
+
+      Validates and parses the uploaded Issuing CA certificate chain file.
+
+      This method checks if the optional certificate chain file is provided.
+      If present, it validates and attempts to parse the file into a collection
+      of certificates. Raises a validation error if parsing fails or the file
+      appears corrupted.
+
+      :returns: A serializer containing the parsed
+                certificate chain if provided.
+      :rtype: CertificateCollectionSerializer
+
+      :raises ValidationError: If the certificate chain cannot be parsed.
+
+
+
+   .. py:method:: clean()
+
+      Cleans and validates the form data.
+
+      This method performs additional validation on the provided data,
+      such as ensuring the unique name, private key file, and certificates
+      are valid. It also initializes and saves the issuing CA configuration
+      if all checks pass.
+
+      :raises ValidationError: If the form data is invalid or there is an error during processing.
+
+
+
+.. py:class:: OwnerCredentialFileImportForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`django.forms.Form`
+
+
+   Form for importing an DevOwnerID using separate files.
+
+   This form allows the user to upload a private key file, its password (optional),
+   an DevOwnerID certificate file, and an optional certificate chain. The form
+   validates the uploaded files, ensuring they are correctly formatted and within
+   size limits.
+
+   .. attribute:: unique_name
+
+      A unique name for the Owner Credential.
+
+      :type: CharField
+
+   .. attribute:: private_key_file
+
+      The private key file (.key, .pem).
+
+      :type: FileField
+
+   .. attribute:: private_key_file_password
+
+      An optional password for the private key.
+
+      :type: CharField
+
+   .. attribute:: owner_certificate
+
+      The DevOwnerID certificate file (.cer, .der, .pem, .p7b, .p7c).
+
+      :type: FileField
+
+   .. attribute:: owner_certificate_chain
+
+      An optional certificate chain file.
+
+      :type: FileField
+
+
+   .. py:attribute:: unique_name
+
+
+   .. py:attribute:: certificate
+
+
+   .. py:attribute:: certificate_chain
+
+
+   .. py:attribute:: private_key_file
+
+
+   .. py:attribute:: private_key_file_password
+
+
+   .. py:method:: clean_unique_name()
+
+      Validates the unique name to ensure it does not already exist in the database.
+
+      :raises ValidationError: If an Issuing CA with the provided name already exists.
+
+
+
+   .. py:method:: clean_private_key_file()
+
+      Validates and parses the uploaded private key file.
+
+      This method checks if the private key file is provided, ensures it meets
+      size constraints, and validates its contents. If a password is provided,
+      it is used to decrypt the private key. Raises validation errors for missing,
+      oversized, or corrupted private key files.
+
+      :returns: A serializer containing the parsed private key.
+      :rtype: PrivateKeySerializer
+
+      :raises ValidationError: If the private key file is missing, too large, or
+      :raises corrupted, or if the password is invalid or incompatible.:
+
+
+
+   .. py:method:: clean_certificate()
+
+      Validates and parses the uploaded certificate file.
+
+      This method ensures the provided certificate file is valid and
+      not already associated with an existing DevOwnerID in the database. If the
+      file is too large, corrupted, or already in use, a validation error is raised.
+
+      :returns: A serializer containing the parsed certificate.
+      :rtype: CertificateSerializer
+
+      :raises ValidationError: If the file is missing, too large, corrupted, or already
+      :raises associated with an existing Issuing CA.:
+
+
+
+   .. py:method:: clean_certificate_chain()
+
+      Validates and parses the uploaded certificate chain file.
+
+      This method checks if the optional certificate chain file is provided.
+      If present, it validates and attempts to parse the file into a collection
+      of certificates. Raises a validation error if parsing fails or the file
+      appears corrupted.
+
+      :returns: A serializer containing the parsed
+                certificate chain if provided.
+      :rtype: CertificateCollectionSerializer
+
+      :raises ValidationError: If the certificate chain cannot be parsed.
+
+
+
+   .. py:method:: clean()
+
+      Cleans and validates the form data.
+
+      This method performs additional validation on the provided data,
+      such as ensuring the unique name, private key file, and certificates
+      are valid. It also initializes and saves the OwnerCredential configuration
+      if all checks pass.
+
+      :raises ValidationError: If the form data is invalid or there is an error during processing.
+
+
+

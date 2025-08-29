@@ -1,0 +1,102 @@
+pki.tests
+=========
+
+.. py:module:: pki.tests
+
+.. autoapi-nested-parse::
+
+   Test module for the PKI app.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/pki/tests/conftest/index
+   /autoapi/pki/tests/fixtures/index
+   /autoapi/pki/tests/test_auto_gen_pki/index
+   /autoapi/pki/tests/test_idevid_verifier/index
+   /autoapi/pki/tests/test_models/index
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   pki.tests.COMMON_NAME
+   pki.tests.COUNTRY_NAME
+   pki.tests.ORGANIZATION_NAME
+   pki.tests.RFC822_EMAIL
+   pki.tests.DNS_NAME_VALUE
+   pki.tests.URI_VALUE
+   pki.tests.REGISTERED_ID_OID
+   pki.tests.IP_ADDRESS_VALUE
+   pki.tests.OTHER_NAME_OID
+   pki.tests.OTHER_NAME_CONTENT
+   pki.tests.INHIBIT_ANY_POLICY_VALUE
+   pki.tests.INHIBIT_POLICY_MAPPING
+   pki.tests.REQUIRE_EXPLICIT_POLICY
+   pki.tests.KEY_USAGE_FLAGS
+
+
+Package Contents
+----------------
+
+.. py:data:: COMMON_NAME
+   :value: 'example common name'
+
+
+.. py:data:: COUNTRY_NAME
+   :value: 'DE'
+
+
+.. py:data:: ORGANIZATION_NAME
+   :value: 'Example Org'
+
+
+.. py:data:: RFC822_EMAIL
+   :value: 'user@example.com'
+
+
+.. py:data:: DNS_NAME_VALUE
+   :value: 'example.com'
+
+
+.. py:data:: URI_VALUE
+   :value: 'http://example.com'
+
+
+.. py:data:: REGISTERED_ID_OID
+   :value: '1.2.3.4.5'
+
+
+.. py:data:: IP_ADDRESS_VALUE
+   :value: '192.168.0.1'
+
+
+.. py:data:: OTHER_NAME_OID
+   :value: '1.3.6.1.4.1.311.20.2.3'
+
+
+.. py:data:: OTHER_NAME_CONTENT
+   :value: 'Trustpoint to the top'
+
+
+.. py:data:: INHIBIT_ANY_POLICY_VALUE
+   :value: 5
+
+
+.. py:data:: INHIBIT_POLICY_MAPPING
+   :value: 4
+
+
+.. py:data:: REQUIRE_EXPLICIT_POLICY
+   :value: 5
+
+
+.. py:data:: KEY_USAGE_FLAGS
+

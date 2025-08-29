@@ -1,0 +1,157 @@
+settings.security
+=================
+
+.. py:module:: settings.security
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/settings/security/decorators/index
+   /autoapi/settings/security/features/index
+   /autoapi/settings/security/manager/index
+   /autoapi/settings/security/mixins/index
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   settings.security.HIGHEST_FEATURES
+   settings.security.HIGH_FEATURES
+   settings.security.MEDIUM_FEATURES
+   settings.security.LOW_FEATURES
+   settings.security.DEV_FEATURES
+   settings.security.LEVEL_FEATURE_MAP
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.security.SecurityConfig
+   settings.security.AutoGenPkiFeature
+
+
+Package Contents
+----------------
+
+.. py:class:: SecurityConfig(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Security Configuration model.
+
+
+   .. py:class:: SecurityModeChoices(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Types of security modes.
+
+
+      .. py:attribute:: DEV
+
+
+      .. py:attribute:: LOW
+
+
+      .. py:attribute:: MEDIUM
+
+
+      .. py:attribute:: HIGH
+
+
+      .. py:attribute:: HIGHEST
+
+
+
+   .. py:attribute:: security_mode
+
+
+   .. py:attribute:: auto_gen_pki
+
+
+   .. py:attribute:: auto_gen_pki_key_algorithm
+
+
+   .. py:attribute:: NOTIFICATION_CONFIGURATIONS
+      :type:  ClassVar[dict]
+
+
+   .. py:attribute:: notification_config
+
+
+   .. py:method:: __str__()
+
+      Output as string.
+
+
+
+   .. py:method:: apply_security_settings()
+
+      Apply appropriate configuration values based on the security mode.
+
+
+
+.. py:class:: AutoGenPkiFeature
+
+   Bases: :py:obj:`SecurityFeature`
+
+
+   Manages the auto-generated local CAs (PKI).
+
+
+   .. py:attribute:: verbose_name
+      :value: 'Local Auto-Generated PKI'
+
+
+
+   .. py:attribute:: db_field_name
+      :value: 'auto_gen_pki'
+
+
+
+   .. py:method:: is_enabled()
+      :staticmethod:
+
+
+      Returns True if the auto-generated PKI is enabled.
+
+
+
+   .. py:method:: enable(key_alg)
+      :staticmethod:
+
+
+      Starts a thread that enables the auto-generated PKI.Pass thread arguments as a tuple to avoid any issues.
+
+
+
+   .. py:method:: disable()
+      :staticmethod:
+
+
+      Starts a thread that disables the auto-generated PKI.
+
+
+
+.. py:data:: HIGHEST_FEATURES
+
+.. py:data:: HIGH_FEATURES
+
+.. py:data:: MEDIUM_FEATURES
+
+.. py:data:: LOW_FEATURES
+
+.. py:data:: DEV_FEATURES
+
+.. py:data:: LEVEL_FEATURE_MAP
+

@@ -1,0 +1,29 @@
+devices
+=======
+
+.. py:module:: devices
+
+.. autoapi-nested-parse::
+
+   Application responsible for device management.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/devices/admin/index
+   /autoapi/devices/apps/index
+   /autoapi/devices/forms/index
+   /autoapi/devices/issuer/index
+   /autoapi/devices/models/index
+   /autoapi/devices/revocation/index
+   /autoapi/devices/tests/index
+   /autoapi/devices/urls/index
+   /autoapi/devices/views/index
+   /autoapi/devices/widgets/index
+
+

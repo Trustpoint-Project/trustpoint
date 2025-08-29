@@ -1,0 +1,97 @@
+pki.util.keys
+=============
+
+.. py:module:: pki.util.keys
+
+.. autoapi-nested-parse::
+
+   Utility methods for private key generation and hash algorithm retrieval.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.util.keys.AutoGenPkiKeyAlgorithm
+   pki.util.keys.KeyGenerator
+   pki.util.keys.CryptographyUtils
+
+
+Module Contents
+---------------
+
+.. py:class:: AutoGenPkiKeyAlgorithm(*args, **kwds)
+
+   Bases: :py:obj:`django.db.models.TextChoices`
+
+
+   The key algorithms supported by the AutoGenPKI.
+
+
+   .. py:attribute:: RSA2048
+      :value: ('RSA2048SHA256', 'RSA2048')
+
+
+
+   .. py:attribute:: RSA4096
+      :value: ('RSA4096SHA256', 'RSA4096')
+
+
+
+   .. py:attribute:: SECP256R1
+      :value: ('SECP256R1SHA256', 'SECP256R1')
+
+
+
+   .. py:method:: to_public_key_info()
+
+      Gets the corresponding public key info for the key algorithm.
+
+
+
+.. py:class:: KeyGenerator
+
+   Utility class for generating private keys.
+
+
+   .. py:method:: generate_private_key_for_public_key_info(key_info)
+      :staticmethod:
+
+
+      Generates a private key for a public key info.
+
+      :returns: The generated private key.
+
+
+
+   .. py:method:: generate_private_key(domain)
+      :staticmethod:
+
+
+      Generates a key pair of the type corresponding to the domain model.
+
+      :param domain: The domain to consider.
+
+      :returns: The generated private key / key pair serializer.
+
+
+
+.. py:class:: CryptographyUtils
+
+   Utilities methods for cryptography corresponding to Trustpoint models.
+
+
+   .. py:method:: get_hash_algorithm_for_private_key(private_key)
+      :staticmethod:
+
+
+      Gets a suitable hash algorithm for a given private key.
+
+      :param private_key: The private key to consider.
+
+      :returns: The hash algorithm to use.
+
+
+

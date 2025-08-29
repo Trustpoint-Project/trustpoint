@@ -1,0 +1,47 @@
+devices.widgets
+===============
+
+.. py:module:: devices.widgets
+
+.. autoapi-nested-parse::
+
+   This module contains widgets used in the devices app.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   devices.widgets.DisableSelectOptionsWidget
+
+
+Module Contents
+---------------
+
+.. py:class:: DisableSelectOptionsWidget(disabled_values = None, *args, **kwargs)
+
+   Bases: :py:obj:`django.forms.Select`
+
+
+   Allows to disable options within a select input.
+
+
+   .. py:attribute:: disabled_values
+      :type:  list[str]
+
+
+   .. py:method:: create_option(name, value, *args, **kwargs)
+
+      Creates the options in the select and disables the desired ones.
+
+      :param name: The name of the option.
+      :param value: The value of the option.
+      :param \*args: Positional arguments passed to forms.Select.create_option.
+      :param \*\*kwargs: Positional arguments passed to forms.Select.create_option.
+
+      :returns: The option dictionary.
+
+
+

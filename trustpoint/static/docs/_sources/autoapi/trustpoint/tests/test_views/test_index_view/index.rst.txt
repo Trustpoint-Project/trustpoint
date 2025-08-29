@@ -1,0 +1,48 @@
+trustpoint.tests.test_views.test_index_view
+===========================================
+
+.. py:module:: trustpoint.tests.test_views.test_index_view
+
+.. autoapi-nested-parse::
+
+   Tests for the IndexView class.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   trustpoint.tests.test_views.test_index_view.TestIndexView
+
+
+Module Contents
+---------------
+
+.. py:class:: TestIndexView(methodName='runTest')
+
+   Bases: :py:obj:`django.test.TestCase`
+
+
+   Test cases for the IndexView.
+
+
+   .. py:method:: setUp()
+
+      Set up test environment, including a test user and request factory.
+
+
+
+   .. py:method:: test_index_view_redirection_authenticated()
+
+      Test that IndexView redirects an authenticated user to the expected URL.
+
+
+
+   .. py:method:: test_index_view_url_resolves_correctly()
+
+      Test that the IndexView resolves to the correct view class.
+
+
+

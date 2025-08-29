@@ -1,0 +1,72 @@
+pki.admin
+=========
+
+.. py:module:: pki.admin
+
+.. autoapi-nested-parse::
+
+   Django admin configuration for the PKI app.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.admin.DevIdRegistrationAdmin
+   pki.admin.CertificateModelAdmin
+   pki.admin.CredentialModelAdmin
+   pki.admin.CertificateChainOrderModelAdmin
+   pki.admin.IssuingCaModelAdmin
+
+
+Module Contents
+---------------
+
+.. py:class:: DevIdRegistrationAdmin
+
+   Bases: :py:obj:`django.contrib.admin.ModelAdmin`\ [\ :py:obj:`pki.models.devid_registration.DevIdRegistration`\ ]
+
+
+   Admin configuration for the DevIdRegistrationModel.
+
+
+.. py:class:: CertificateModelAdmin
+
+   Bases: :py:obj:`django.contrib.admin.ModelAdmin`\ [\ :py:obj:`pki.models.CertificateModel`\ ]
+
+
+   Admin configuration for the CertificateModel.
+
+
+   .. py:method:: get_readonly_fields(_request, _obj = None)
+
+      Sets all fields as read-only.
+
+
+
+.. py:class:: CredentialModelAdmin
+
+   Bases: :py:obj:`django.contrib.admin.ModelAdmin`\ [\ :py:obj:`pki.models.CredentialModel`\ ]
+
+
+   Admin configuration for the CredentialModel.
+
+
+.. py:class:: CertificateChainOrderModelAdmin
+
+   Bases: :py:obj:`django.contrib.admin.ModelAdmin`\ [\ :py:obj:`pki.models.CertificateChainOrderModel`\ ]
+
+
+   Admin configuration for the CertificateChainOrderModel.
+
+
+.. py:class:: IssuingCaModelAdmin
+
+   Bases: :py:obj:`django.contrib.admin.ModelAdmin`\ [\ :py:obj:`pki.models.IssuingCaModel`\ ]
+
+
+   Admin configuration for the IssuingCaModel.
+
+

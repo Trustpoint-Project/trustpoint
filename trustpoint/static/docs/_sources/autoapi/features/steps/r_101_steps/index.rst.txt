@@ -1,0 +1,127 @@
+features.steps.r_101_steps
+==========================
+
+.. py:module:: features.steps.r_101_steps
+
+.. autoapi-nested-parse::
+
+   Python steps file for R_101.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   features.steps.r_101_steps.step_given_component_selected
+   features.steps.r_101_steps.step_given_component_has_security_level
+   features.steps.r_101_steps.step_when_admin_sets_security_level
+   features.steps.r_101_steps.step_when_system_restarts
+   features.steps.r_101_steps.step_when_unauthorized_access_attempted
+   features.steps.r_101_steps.step_then_system_applies_security_level
+   features.steps.r_101_steps.step_then_reject_invalid_input
+   features.steps.r_101_steps.step_then_security_level_persists
+   features.steps.r_101_steps.step_then_access_denied
+   features.steps.r_101_steps.step_then_log_security_change
+
+
+Module Contents
+---------------
+
+.. py:function:: step_given_component_selected(context, component)
+
+   Simulates selecting a TrustPoint component in the security configuration panel.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param component: The selected TrustPoint component.
+   :type component: str
+
+
+.. py:function:: step_given_component_has_security_level(context, component, security_level)
+
+   Ensures that the TrustPoint component has a specified security level.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param component: The TrustPoint component.
+   :type component: str
+   :param security_level: The current security level.
+   :type security_level: str
+
+
+.. py:function:: step_when_admin_sets_security_level(context, security_level)
+
+   Simulates an admin setting a security level for a component.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param security_level: The new security level to be set.
+   :type security_level: str
+
+
+.. py:function:: step_when_system_restarts(context)
+
+   Simulates restarting the system.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_unauthorized_access_attempted(context)
+
+   Simulates an unauthorized user attempting to access a system component.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_system_applies_security_level(context, security_level)
+
+   Ensures that the system applies the specified security level.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param security_level: The expected security level applied.
+   :type security_level: str
+
+
+.. py:function:: step_then_reject_invalid_input(context, error_message)
+
+   Ensures that an invalid security level input is rejected with an error.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param error_message: The expected error message.
+   :type error_message: str
+
+
+.. py:function:: step_then_security_level_persists(context, component, security_level)
+
+   Ensures that the security level persists after a system restart.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param component: The TrustPoint component.
+   :type component: str
+   :param security_level: The expected security level after restart.
+   :type security_level: str
+
+
+.. py:function:: step_then_access_denied(context)
+
+   Ensures that access is denied based on security level settings.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_log_security_change(context)
+
+   Ensures that changes to security levels are logged.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+

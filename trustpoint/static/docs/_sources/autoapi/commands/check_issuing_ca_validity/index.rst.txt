@@ -1,0 +1,64 @@
+commands.check_issuing_ca_validity
+==================================
+
+.. py:module:: commands.check_issuing_ca_validity
+
+.. autoapi-nested-parse::
+
+   Management command to check the validity of Issuing CAs.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.check_issuing_ca_validity.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   A Django management command to check for expiring or expired issuing CAs.
+
+   This command identifies Issuing Certificate Authorities (CAs) with certificates
+   that are either expiring or expired and generates appropriate notifications for
+   them in the system.
+
+
+   .. py:attribute:: help
+      :value: 'Check for expiring or expired issuing CAs.'
+
+
+
+   .. py:method:: handle(*args, **kwargs)
+
+      Entrypoint for the command.
+
+      :param \*args: Additional positional arguments.
+      :param \*\*kwargs: Additional keyword arguments.
+
+
+
+   .. py:method:: _check_issuing_ca_validity()
+
+      Task to check for both expiring and expired Issuing CAs.
+
+      Expiring CAs trigger a WARNING notification, while expired CAs trigger a CRITICAL notification.
+
+
+
+   .. py:method:: _create_notification(issuing_ca, event, notification_type, message_type, new_status)
+
+      Helper function to create a notification for an Issuing CA.
+
+      Skips notification creation if one already exists for the given event and Issuing CA.
+
+
+

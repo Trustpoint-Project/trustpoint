@@ -1,0 +1,1604 @@
+devices.views
+=============
+
+.. py:module:: devices.views
+
+.. autoapi-nested-parse::
+
+   This module contains all views concerning the devices application.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   devices.views._DispatchableType
+   devices.views.CredentialFormClass
+   devices.views.TlsCredentialIssuerClass
+   devices.views.DeviceWithoutDomainErrorMsg
+   devices.views.PublicKeyInfoMissingErrorMsg
+   devices.views.NamedCurveMissingForEccErrorMsg
+   devices.views.ActiveTrustpointTlsServerCredentialModelMissingErrorMsg
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   devices.views.DeviceContextMixin
+   devices.views.DeviceTableView
+   devices.views.OpcUaGdsTableView
+   devices.views.AbstractCreateDeviceView
+   devices.views.CreateDeviceView
+   devices.views.CreateOpcUaGdsView
+   devices.views.DeviceDetailsView
+   devices.views.DeviceCertificateLifecycleManagementSummaryView
+   devices.views.DeviceIssueCredentialView
+   devices.views.DeviceIssueTlsClientCredential
+   devices.views.DeviceIssueTlsServerCredential
+   devices.views.DeviceIssueOpcUaClientCredential
+   devices.views.DeviceIssueOpcUaServerCredential
+   devices.views.HelpDispatchDomainCredentialView
+   devices.views.HelpDispatchDeviceTypeRedirectView
+   devices.views.HelpDispatchApplicationCredentialView
+   devices.views.HelpDispatchOpcUaGdsView
+   devices.views.HelpDispatchApplicationCredentialTemplateView
+   devices.views.HelpDomainCredentialCmpContextView
+   devices.views.HelpDomainCredentialEstContextView
+   devices.views.NoOnboardingEstUsernamePasswordHelpView
+   devices.views.NoOnboardingEstOpcUaGdsUsernamePasswordHelpView
+   devices.views.OnboardingEstUsernamePasswordHelpView
+   devices.views.OnboardingEstApplicationCredentialsHelpView
+   devices.views.OnboardingEstIdevidHelpView
+   devices.views.NoOnboardingCmpSharedSecretHelpView
+   devices.views.OnboardingCmpSharedSecretHelpView
+   devices.views.OnboardingCmpIdevidHelpView
+   devices.views.OnboardingCmpApplicationCredentialsHelpView
+   devices.views.OnboardingMethodSelectIdevidHelpView
+   devices.views.OnboardingIdevidRegistrationHelpView
+   devices.views.OnboardingCmpIdevidRegistrationHelpView
+   devices.views.OnboardingEstIdevidRegistrationHelpView
+   devices.views.DownloadPageDispatcherView
+   devices.views.CertificateDownloadView
+   devices.views.DeviceBaseCredentialDownloadView
+   devices.views.DeviceManualCredentialDownloadView
+   devices.views.DeviceBrowserOnboardingOTPView
+   devices.views.DeviceOnboardingBrowserLoginView
+   devices.views.DownloadTokenRequiredAuthenticationMixin
+   devices.views.DeviceBrowserCredentialDownloadView
+   devices.views.DeviceBrowserOnboardingCancelView
+   devices.views.DeviceRevocationView
+   devices.views.DeviceCredentialRevocationView
+   devices.views.DeviceBulkDeleteView
+
+
+Module Contents
+---------------
+
+.. py:data:: _DispatchableType
+
+.. py:data:: CredentialFormClass
+
+.. py:data:: TlsCredentialIssuerClass
+
+.. py:data:: DeviceWithoutDomainErrorMsg
+   :value: 'Device does not have an associated domain.'
+
+
+.. py:data:: PublicKeyInfoMissingErrorMsg
+   :value: 'Device does not have an associated domain.'
+
+
+.. py:data:: NamedCurveMissingForEccErrorMsg
+   :value: 'Failed to retrieve named curve for ECC algorithm.'
+
+
+.. py:data:: ActiveTrustpointTlsServerCredentialModelMissingErrorMsg
+   :value: 'No active trustpoint TLS server credential found.'
+
+
+.. py:class:: DeviceContextMixin
+
+   Mixin which adds data to the context for the devices application.
+
+
+   .. py:attribute:: extra_context
+      :type:  ClassVar
+
+
+.. py:class:: DeviceTableView
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`trustpoint.views.base.SortableTableMixin`, :py:obj:`django.views.generic.list.ListView`\ [\ :py:obj:`devices.models.DeviceModel`\ ]
+
+
+   Device Table View.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/devices.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'devices'
+
+
+
+   .. py:attribute:: paginate_by
+
+
+   .. py:attribute:: default_sort_param
+      :value: '-created_at'
+
+
+
+   .. py:method:: get_queryset()
+
+      Filter queryset to only include devices where opc_ua_gds is False.
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds the clm and revoke buttons to the context.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: The context to use for rendering the devices page.
+
+
+
+   .. py:method:: _get_clm_button_html(record)
+      :staticmethod:
+
+
+      Gets the HTML for the CLM button in the devices table.
+
+      :param record: The corresponding DeviceModel.
+
+      :returns: The HTML of the hyperlink for the CLM button.
+
+
+
+   .. py:method:: _get_revoke_button_html(record)
+      :staticmethod:
+
+
+      Gets the HTML for the revoke button in the devices table.
+
+      :param record: The corresponding DeviceModel.
+
+      :returns: the HTML of the hyperlink for the revoke button.
+
+
+
+   .. py:method:: _get_details_button_html(record)
+      :staticmethod:
+
+
+      Gets the HTML for the Details button in the devices table.
+
+      :param record: The corresponding DeviceModel.
+
+      :returns: the HTML of the hyperlink for the detail button.
+
+
+
+.. py:class:: OpcUaGdsTableView
+
+   Bases: :py:obj:`DeviceTableView`
+
+
+   Table View for devices where opc_ua_gds is True.
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/opc_ua_gds.html'
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds the page name to the context.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: The context to use for rendering the page.
+
+
+
+   .. py:method:: get_queryset()
+
+      Filter queryset to only include devices where opc_ua_gds is True.
+
+
+
+.. py:class:: AbstractCreateDeviceView
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.edit.CreateView`\ [\ :py:obj:`devices.models.DeviceModel`\ , :py:obj:`AbstractCreateDeviceView.T`\ ]
+
+
+   Abstract Device Create View.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get', 'post')
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: form_class
+      :type:  type[AbstractCreateDeviceView.T]
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/add.html'
+
+
+
+   .. py:method:: get_success_url()
+
+      Gets the success url to redirect to after successful processing of the POST data following a form submit.
+
+      :returns: The success url to redirect to after successful processing of the POST data following a form submit.
+
+
+
+.. py:class:: CreateDeviceView
+
+   Bases: :py:obj:`AbstractCreateDeviceView`\ [\ :py:obj:`devices.forms.CreateDeviceForm`\ ]
+
+
+   Device Create View.
+
+
+   .. py:attribute:: form_class
+
+
+.. py:class:: CreateOpcUaGdsView
+
+   Bases: :py:obj:`AbstractCreateDeviceView`\ [\ :py:obj:`devices.forms.CreateOpcUaGdsForm`\ ]
+
+
+   OPC UA GDS Create View.
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds the page name to the context.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: The context to use for rendering the page.
+
+
+
+   .. py:method:: form_valid(form)
+
+      Set opc_ua_gds to True before saving the device.
+
+
+
+.. py:class:: DeviceDetailsView
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`devices.models.DeviceModel`\ ]
+
+
+   Device Details View.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/details.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'device'
+
+
+
+.. py:class:: DeviceCertificateLifecycleManagementSummaryView
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`devices.models.DeviceModel`\ ]
+
+
+   This is the CLM summary view in the devices section.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/credentials/certificate_lifecycle_management.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'device'
+
+
+
+   .. py:attribute:: default_sort_param
+      :value: 'common_name'
+
+
+
+   .. py:attribute:: issued_creds_qs
+      :type:  django.db.models.QuerySet[devices.models.IssuedCredentialModel]
+
+
+   .. py:attribute:: domain_credentials_qs
+      :type:  django.db.models.QuerySet[devices.models.IssuedCredentialModel]
+
+
+   .. py:attribute:: application_credentials_qs
+      :type:  django.db.models.QuerySet[devices.models.IssuedCredentialModel]
+
+
+   .. py:method:: get_issued_creds_qs()
+
+      Gets a sorted queryset of all IssuedCredentialModels.
+
+      :returns: Sorted queryset of all IssuedCredentialModels.
+
+
+
+   .. py:method:: get_domain_credentials_qs()
+
+      Gets a sorted queryset of all IssuedCredentialModels that are domain credentials.
+
+      self.get_issued_creds_qs() must be called first!
+
+      :returns: Sorted queryset of all IssuedCredentialModels that are domain credentials
+
+
+
+   .. py:method:: get_application_credentials_qs()
+
+      Gets a sorted queryset of all IssuedCredentialModels that are application credentials.
+
+          self.get_issued_creds_qs() must be called first!
+      :returns: Sorted queryset of all IssuedCredentialModels that are application credentials.
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds the paginator and credential details to the context.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: The context to use for rendering the clm summary page.
+
+
+
+   .. py:method:: _get_expires_in(record)
+      :staticmethod:
+
+
+      Gets the remaining time until the credential expires as human-readable string.
+
+      :param record: The corresponding IssuedCredentialModel.
+
+      :returns: The remaining time until the credential expires as human-readable string.
+
+
+
+   .. py:method:: _get_revoke_button_html(record)
+      :staticmethod:
+
+
+      Gets the HTML for the revoke button in the devices table.
+
+      :param record: The corresponding DeviceModel.
+
+      :returns: the HTML of the hyperlink for the revoke button.
+
+
+
+.. py:class:: DeviceIssueCredentialView
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.SingleObjectMixin`\ [\ :py:obj:`devices.models.DeviceModel`\ ], :py:obj:`django.views.generic.edit.FormView`\ [\ :py:obj:`CredentialFormClass`\ ], :py:obj:`Generic`\ [\ :py:obj:`CredentialFormClass`\ , :py:obj:`TlsCredentialIssuerClass`\ ]
+
+
+   Base view to issue device credentials.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get', 'post')
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: context_object_name
+      :value: 'device'
+
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/credentials/issue_application_credential.html'
+
+
+
+   .. py:attribute:: form_class
+      :type:  type[CredentialFormClass]
+
+
+   .. py:attribute:: issuer_class
+      :type:  type[TlsCredentialIssuerClass]
+
+
+   .. py:attribute:: friendly_name
+      :type:  str
+
+
+   .. py:attribute:: object
+      :type:  devices.models.DeviceModel
+
+
+   .. py:method:: get_initial()
+
+      Gets the initial data for the corresponding form.
+
+      :returns: The initial data for the corresponding form.
+
+
+
+   .. py:method:: get_form_kwargs()
+
+      This method ads the concerning device model to the form kwargs and returns them.
+
+      :returns: The form kwargs including the concerning device model.
+
+
+
+   .. py:method:: get_success_url()
+
+      Gets the success url to redirect to after successful processing of the POST data following a form submit.
+
+      :returns: The success url to redirect to after successful processing of the POST data following a form submit.
+
+
+
+   .. py:method:: form_valid(form)
+
+      This method is executed if the form submit data was valid.
+
+      :param form: The form that was used to validate the data.
+
+      :returns: The HTTP Response object after successful validation of the form data.
+
+
+
+   .. py:method:: issue_credential(device, cleaned_data)
+      :abstractmethod:
+
+
+      Abstract method to issue a credential.
+
+      :param device: The device to be associated with the new credential.
+      :param cleaned_data: The validated form data.
+
+      :returns: The IssuedCredentialModel object that was created and saved.
+
+
+
+   .. py:method:: post(request, *args, **kwargs)
+
+      Adds the object model to the instance and forwards to super().post().
+
+      :param request: The Django request object.
+      :param \*args: Positional arguments passed to super().post().
+      :param \*\*kwargs: Keyword arguments passed to super().post().
+
+      :returns: The HttpResponseBase object returned by super().post().
+
+
+
+   .. py:method:: get(request, *args, **kwargs)
+
+      Adds the object model to the instance and forwards to super().get().
+
+      :param request: The Django request object.
+      :param \*args: Positional arguments passed to super().get().
+      :param \*\*kwargs: Keyword arguments passed to super().get().
+
+      :returns: The HttpResponseBase object returned by super().get().
+
+
+
+.. py:class:: DeviceIssueTlsClientCredential
+
+   Bases: :py:obj:`DeviceIssueCredentialView`\ [\ :py:obj:`devices.forms.IssueTlsClientCredentialForm`\ , :py:obj:`devices.issuer.LocalTlsClientCredentialIssuer`\ ]
+
+
+   View to issue a new TLS client credential.
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: issuer_class
+
+
+   .. py:attribute:: friendly_name
+      :value: 'TLS client credential'
+
+
+
+   .. py:method:: issue_credential(device, cleaned_data)
+
+      Issues an TLS client credential.
+
+      :param device: The device to be associated with the new credential.
+      :param cleaned_data: The validated form data.
+
+      :returns: The IssuedCredentialModel object that was created and saved.
+
+
+
+.. py:class:: DeviceIssueTlsServerCredential
+
+   Bases: :py:obj:`DeviceIssueCredentialView`\ [\ :py:obj:`devices.forms.IssueTlsServerCredentialForm`\ , :py:obj:`devices.issuer.LocalTlsServerCredentialIssuer`\ ]
+
+
+   View to issue a new TLS server credential.
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: issuer_class
+
+
+   .. py:attribute:: friendly_name
+      :value: 'TLS server credential'
+
+
+
+   .. py:method:: issue_credential(device, cleaned_data)
+
+      Issues an TLS server credential.
+
+      :param device: The device to be associated with the new credential.
+      :param cleaned_data: The validated form data.
+
+      :returns: The IssuedCredentialModel object that was created and saved.
+
+
+
+.. py:class:: DeviceIssueOpcUaClientCredential
+
+   Bases: :py:obj:`DeviceIssueCredentialView`\ [\ :py:obj:`devices.forms.IssueOpcUaClientCredentialForm`\ , :py:obj:`devices.issuer.OpcUaClientCredentialIssuer`\ ]
+
+
+   View to issue a new OPC UA client credential.
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: issuer_class
+
+
+   .. py:attribute:: friendly_name
+      :value: 'OPC UA client credential'
+
+
+
+   .. py:method:: issue_credential(device, cleaned_data)
+
+      Issues an OPC UA client credential.
+
+      :param device: The device to be associated with the new credential.
+      :param cleaned_data: The validated form data.
+
+      :returns: The IssuedCredentialModel object that was created and saved.
+
+
+
+.. py:class:: DeviceIssueOpcUaServerCredential
+
+   Bases: :py:obj:`DeviceIssueCredentialView`\ [\ :py:obj:`devices.forms.IssueOpcUaServerCredentialForm`\ , :py:obj:`devices.issuer.OpcUaServerCredentialIssuer`\ ]
+
+
+   View to issue a new OPC UA server credential.
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: issuer_class
+
+
+   .. py:attribute:: friendly_name
+      :value: 'OPC UA server credential'
+
+
+
+   .. py:method:: issue_credential(device, cleaned_data)
+
+      Issues an OPC UA server credential.
+
+      :param device: The device to be associated with the new credential.
+      :param cleaned_data: The validated form data.
+
+      :returns: The IssuedCredentialModel object that was created and saved.
+
+
+
+.. py:class:: HelpDispatchDomainCredentialView(**kwargs)
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.SingleObjectMixin`\ [\ :py:obj:`devices.models.DeviceModel`\ ], :py:obj:`django.views.generic.base.RedirectView`
+
+
+   Redirects to the required help pages depending on the onboarding protocol.
+
+   If no help page could be determined, it will redirect to the devices page.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+      :type:  type[devices.models.DeviceModel]
+
+
+   .. py:attribute:: permanent
+      :value: False
+
+
+
+   .. py:method:: get_redirect_url(*args, **kwargs)
+
+      Gets the redirection URL (Domain Credentials) for the required help page.
+
+      :param \*args: Positional arguments are discarded.
+      :param \*\*kwargs: Keyword arguments are discarded.
+
+      :returns: The redirection URL.
+
+
+
+.. py:class:: HelpDispatchDeviceTypeRedirectView(**kwargs)
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.SingleObjectMixin`\ [\ :py:obj:`devices.models.DeviceModel`\ ], :py:obj:`django.views.generic.base.RedirectView`
+
+
+   Redirects based on the device type: OPC UA GDS or standard device.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+      :type:  type[devices.models.DeviceModel]
+
+
+   .. py:attribute:: permanent
+      :value: False
+
+
+
+   .. py:method:: get_redirect_url(*args, **kwargs)
+
+      Determines the redirect URL based on the device type.
+
+      :param \*args: Ignored positional arguments.
+      :param \*\*kwargs: Should include 'pk' of the device to identify it.
+
+      :returns: The URL to redirect to.
+      :rtype: str
+
+
+
+.. py:class:: HelpDispatchApplicationCredentialView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.TemplateView`
+
+
+   Renders the application credential selection page for the given device.
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/help/generic_details/application_credential_selection.html'
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds device-related context to the template.
+
+      :param \*\*kwargs: Keyword arguments containing the device's primary key (`pk`).
+
+      :returns: A dictionary with context variables for the template.
+
+
+
+.. py:class:: HelpDispatchOpcUaGdsView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.base.RedirectView`
+
+
+   Redirects to the required help page for OPC UA GDS devices.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+      :type:  type[devices.models.DeviceModel]
+
+
+   .. py:attribute:: permanent
+      :value: False
+
+
+
+   .. py:method:: get_redirect_url(*args, **kwargs)
+
+      Gets the redirection URL for OPC UA GDS-specific help pages.
+
+      :param \*args: Ignored positional arguments.
+      :param \*\*kwargs: Keyword arguments containing the device's primary key ('pk').
+
+      :returns: The URL for the appropriate help page.
+      :rtype: str
+
+      :raises Http404: If the device is not an OPC UA GDS device.
+
+
+
+.. py:class:: HelpDispatchApplicationCredentialTemplateView(**kwargs)
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.SingleObjectMixin`\ [\ :py:obj:`devices.models.DeviceModel`\ ], :py:obj:`django.views.generic.base.RedirectView`
+
+
+   Redirects to the required help pages depending on PKI protocol.
+
+   If no help page could be determined, it will redirect to the devices page.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+      :type:  type[devices.models.DeviceModel]
+
+
+   .. py:attribute:: permanent
+      :value: False
+
+
+
+   .. py:method:: get_redirect_url(*args, **kwargs)
+
+      Gets the redirection URL (Application Credentials) for the required help page.
+
+      :param \*args: Positional arguments are discarded.
+      :param \*\*kwargs: Keyword arguments are discarded.
+
+      :returns: The redirection URL.
+
+
+
+.. py:class:: HelpDomainCredentialCmpContextView
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`devices.models.DeviceModel`\ ]
+
+
+   Base view for CMP help views concerning the domain credential, not intended to be used directly.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: context_object_name
+      :value: 'device'
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds information about the required OpenSSL commands to the context.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: The context to render the page.
+
+
+
+   .. py:method:: _get_domain_credential_cmp_context(device)
+      :staticmethod:
+
+
+      Provides the context for cmp commands using client based authentication.
+
+      :param device: The corresponding device model.
+
+      :returns: The required context.
+
+
+
+.. py:class:: HelpDomainCredentialEstContextView
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`devices.models.DeviceModel`\ ]
+
+
+   Base view for CMP help views concerning the domain credential, not intended to be used directly.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: context_object_name
+      :value: 'device'
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds information about the required OpenSSL commands to the context.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: The context to render the page.
+
+
+
+   .. py:method:: _get_domain_credential_est_context(device)
+      :staticmethod:
+
+
+      Provides the context for est commands using client based authentication.
+
+      :param device: The corresponding device model.
+
+      :returns: The required context.
+
+
+
+.. py:class:: NoOnboardingEstUsernamePasswordHelpView
+
+   Bases: :py:obj:`HelpDomainCredentialEstContextView`
+
+
+   View to provide help information for EST username/password authentication with no onboarding.
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/help/no_onboarding/est_username_password.html'
+
+
+
+.. py:class:: NoOnboardingEstOpcUaGdsUsernamePasswordHelpView
+
+   Bases: :py:obj:`HelpDomainCredentialEstContextView`
+
+
+   View to provide help information for EST username/password authentication with no onboarding and OPC UA GDS.
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/help/no_onboarding/est_gds_username_password.html'
+
+
+
+.. py:class:: OnboardingEstUsernamePasswordHelpView
+
+   Bases: :py:obj:`HelpDomainCredentialEstContextView`
+
+
+   View to provide help information for EST username/password authentication for onboarding.
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/help/onboarding/est_username_password.html'
+
+
+
+.. py:class:: OnboardingEstApplicationCredentialsHelpView
+
+   Bases: :py:obj:`HelpDomainCredentialEstContextView`
+
+
+   View to provide help information for EST domain credential authentication.
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/help/onboarding/est_application_credentials.html'
+
+
+
+.. py:class:: OnboardingEstIdevidHelpView
+
+   Bases: :py:obj:`HelpDomainCredentialEstContextView`
+
+
+   View to provide help information for EST IDevID enrollment.
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/help/onboarding/est_idevid.html'
+
+
+
+.. py:class:: NoOnboardingCmpSharedSecretHelpView
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`devices.models.DeviceModel`\ ]
+
+
+   Help view for the case of no onboarding using CMP shared-secret.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/help/no_onboarding/cmp_shared_secret.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'device'
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds information about the required OpenSSL commands to the context.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: The context to render the page.
+
+
+
+.. py:class:: OnboardingCmpSharedSecretHelpView
+
+   Bases: :py:obj:`HelpDomainCredentialCmpContextView`
+
+
+   Help view for the onboarding cmp-shared secret case.
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/help/onboarding/cmp_shared_secret.html'
+
+
+
+.. py:class:: OnboardingCmpIdevidHelpView
+
+   Bases: :py:obj:`HelpDomainCredentialCmpContextView`
+
+
+   Help view for the onboarding IDeviD case.
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/help/onboarding/cmp_idevid.html'
+
+
+
+.. py:class:: OnboardingCmpApplicationCredentialsHelpView
+
+   Bases: :py:obj:`HelpDomainCredentialCmpContextView`
+
+
+   Help view for enrolling application credentials via CMP.
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/help/onboarding/cmp_application_credentials.html'
+
+
+
+.. py:class:: OnboardingMethodSelectIdevidHelpView
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`pki.models.devid_registration.DevIdRegistration`\ ]
+
+
+   View to select the protocol for IDevID enrollment.
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/help/onboarding/idevid_method_select.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'devid_registration'
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Add the required context for the template.
+
+
+
+.. py:class:: OnboardingIdevidRegistrationHelpView
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`pki.models.devid_registration.DevIdRegistration`\ ]
+
+
+   Help view for the IDevID Registration, which displays the required OpenSSL commands.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: context_object_name
+      :value: 'devid_registration'
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds information about the required OpenSSL commands to the context.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: The context to render the page.
+
+
+
+.. py:class:: OnboardingCmpIdevidRegistrationHelpView
+
+   Bases: :py:obj:`OnboardingIdevidRegistrationHelpView`
+
+
+   Help view for the CMP IDevID Registration, which displays the required OpenSSL commands.
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/help/onboarding/cmp_idevid.html'
+
+
+
+.. py:class:: OnboardingEstIdevidRegistrationHelpView
+
+   Bases: :py:obj:`OnboardingIdevidRegistrationHelpView`
+
+
+   Help view for the EST IDevID Registration, which displays the required OpenSSL commands.
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/help/onboarding/est_idevid.html'
+
+
+
+.. py:class:: DownloadPageDispatcherView(**kwargs)
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.SingleObjectMixin`\ [\ :py:obj:`devices.models.IssuedCredentialModel`\ ], :py:obj:`django.views.generic.base.RedirectView`
+
+
+   Redirects depending on the type of credential, that is if a private key is available or not.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+      :type:  type[devices.models.IssuedCredentialModel]
+
+
+   .. py:attribute:: permanent
+      :value: False
+
+
+
+   .. py:method:: get_redirect_url(*args, **kwargs)
+
+      Gets the redirection URL depending on the type credential, that is if a private key is available or not.
+
+      :param \*args: Positional arguments are discarded.
+      :param \*\*kwargs: Keyword arguments are discarded.
+
+      :returns: The redirect URL.
+
+
+
+.. py:class:: CertificateDownloadView
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`devices.models.IssuedCredentialModel`\ ]
+
+
+   View for downloading certificates.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+      :type:  type[devices.models.IssuedCredentialModel]
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/credentials/certificate_download.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'issued_credential'
+
+
+
+.. py:class:: DeviceBaseCredentialDownloadView
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`devices.models.IssuedCredentialModel`\ ], :py:obj:`django.views.generic.edit.FormView`\ [\ :py:obj:`devices.forms.CredentialDownloadForm`\ ]
+
+
+   View to download a password protected application credential in the desired format.
+
+   Inherited by the domain and application credential download views. It is not intended for direct use.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get', 'post')
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/credentials/credential_download.html'
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: context_object_name
+      :value: 'credential'
+
+
+
+   .. py:attribute:: is_browser_download
+      :value: False
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds information about the credential to the context.
+
+      :param \*\*kwargs: Keyword arguments are passed to super().get_context_data(**kwargs).
+
+      :returns: The context data for the view.
+
+
+
+   .. py:method:: form_valid(form)
+
+      Processing the valid form data.
+
+      This will use the contained form data to start the download process of the desired file.
+
+      :param form: The valid form including the cleaned data.
+
+      :returns: If successful, this will start the file download. Otherwise, a Http404 will be raised and displayed.
+
+
+
+.. py:class:: DeviceManualCredentialDownloadView
+
+   Bases: :py:obj:`DeviceBaseCredentialDownloadView`
+
+
+   View to download a password protected domain or application credential in the desired format.
+
+
+.. py:class:: DeviceBrowserOnboardingOTPView
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`devices.models.IssuedCredentialModel`\ ]
+
+
+   View to display the OTP for remote credential download (aka. browser onboarding).
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/credentials/onboarding/browser/otp_view.html'
+
+
+
+   .. py:attribute:: redirection_view
+      :value: 'devices:devices'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'credential'
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds information about the credential and otp for the browser download process.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: The context to render the page.
+
+
+
+.. py:class:: DeviceOnboardingBrowserLoginView
+
+   Bases: :py:obj:`django.views.generic.edit.FormView`\ [\ :py:obj:`devices.forms.BrowserLoginForm`\ ]
+
+
+   View to handle certificate download requests.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get', 'post')
+
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/credentials/onboarding/browser/login.html'
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: cleaned_data
+      :type:  dict[str, Any]
+
+
+   .. py:method:: get_success_url()
+
+      Gets the success url to redirect to after successful processing of the POST data following a form submit.
+
+      :returns: The success url to redirect to after successful processing of the POST data following a form submit.
+
+
+
+   .. py:method:: form_invalid(form)
+
+      Adds an error message in the case of an invalid OTP.
+
+      :param form: The corresponding form object.
+
+      :returns: The Django HttpResponse object.
+
+
+
+   .. py:method:: form_valid(form)
+
+      Performed if the form was validated successfully and adds the cleaned data to the instance.
+
+      :param form: The corresponding form object.
+
+      :returns: The Django HttpResponse object.
+
+
+
+.. py:class:: DownloadTokenRequiredAuthenticationMixin(**kwargs)
+
+   Bases: :py:obj:`_DispatchableType`
+
+
+   Mixin which checks the token included in the URL for browser download views.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get', 'post')
+
+
+
+   .. py:attribute:: credential_download
+      :type:  devices.models.RemoteDeviceCredentialDownloadModel
+
+
+   .. py:method:: dispatch(request, *args, **kwargs)
+
+      Checks the validity of the token included in the URL for browser download views and redirects if invalid.
+
+      :param request: The django request object.
+      :param \*args: Positional arguments passed to super().dispatch().
+      :param \*\*kwargs: Keyword arguments passed to super().dispatch().
+
+      :returns: A Django HttpResponseBase object.
+
+
+
+.. py:class:: DeviceBrowserCredentialDownloadView(**kwargs)
+
+   Bases: :py:obj:`DownloadTokenRequiredAuthenticationMixin`, :py:obj:`DeviceBaseCredentialDownloadView`
+
+
+   View to download a password protected domain or app credential in the desired format from a remote client.
+
+
+   .. py:attribute:: is_browser_download
+      :value: True
+
+
+
+.. py:class:: DeviceBrowserOnboardingCancelView(**kwargs)
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.SingleObjectMixin`\ [\ :py:obj:`devices.models.IssuedCredentialModel`\ ], :py:obj:`django.views.generic.base.RedirectView`
+
+
+   View to cancel the browser onboarding process and delete the associated RemoteDeviceCredentialDownloadModel.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: context_object_name
+      :value: 'credential'
+
+
+
+   .. py:attribute:: object
+      :type:  devices.models.IssuedCredentialModel
+
+
+   .. py:attribute:: permanent
+      :value: False
+
+
+
+   .. py:method:: get_redirect_url(*args, **kwargs)
+
+      Gets the redirection URL.
+
+      :param \*args: Positional arguments are discarded.
+      :param \*\*kwargs: Keyword arguments are discarded.
+
+      :returns: The redirect URL.
+
+
+
+   .. py:method:: get(request, *args, **kwargs)
+
+      Cancels the browser onboarding process and deletes the associated RemoteDeviceCredentialDownloadModel.
+
+      :param request: The Django request object.
+      :param \*args: Positional arguments passed to super().get().
+      :param \*\*kwargs: Keyword arguments passed to super().get().
+
+      :returns: The HttpResponseBase object with the desired redirection URL.
+
+
+
+.. py:class:: DeviceRevocationView
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.edit.FormMixin`\ [\ :py:obj:`devices.forms.CredentialRevocationForm`\ ], :py:obj:`django.views.generic.list.ListView`\ [\ :py:obj:`devices.models.IssuedCredentialModel`\ ]
+
+
+   Revokes all active credentials for a given device.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get', 'post')
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/revoke.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'credentials'
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: device
+      :type:  devices.models.DeviceModel
+
+
+   .. py:method:: get_queryset()
+
+      Gets the queryset of all active credentials for the device.
+
+
+
+   .. py:method:: post(request, *args, **kwargs)
+
+      Handle POST request on form submission.
+
+
+
+   .. py:method:: form_valid(form)
+
+      Performed if the form was validated successfully and revokes the credentials.
+
+      :param form: The corresponding form object.
+
+      :returns: The Django HttpResponse object.
+
+
+
+.. py:class:: DeviceCredentialRevocationView
+
+   Bases: :py:obj:`DeviceContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`devices.models.IssuedCredentialModel`\ ], :py:obj:`django.views.generic.edit.FormView`\ [\ :py:obj:`devices.forms.CredentialRevocationForm`\ ]
+
+
+   Revokes a specific issued credential.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get', 'post')
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/revoke.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'credential'
+
+
+
+   .. py:attribute:: pk_url_kwarg
+      :value: 'credential_pk'
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds the credential information to be revoked to the context.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: The context to render the page.
+
+
+
+   .. py:method:: get_success_url()
+
+      Gets the success url to redirect to after successful processing of the POST data following a form submit.
+
+      :returns: The success url to redirect to after successful processing of the POST data following a form submit.
+
+
+
+   .. py:method:: form_valid(form)
+
+      Performed if the form was validated successfully and revokes the credential.
+
+      :param form: The corresponding form object.
+
+      :returns: The Django HttpResponse object.
+
+
+
+.. py:class:: DeviceBulkDeleteView(**kwargs)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`DeviceContextMixin`, :py:obj:`trustpoint.views.base.BulkDeleteView`
+
+
+   View to confirm the deletion of multiple Domains.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: template_name
+      :value: 'devices/confirm_delete.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'devices'
+
+
+
+   .. py:method:: form_valid(form)
+
+      Attempt to delete devices if the form is valid.
+
+
+

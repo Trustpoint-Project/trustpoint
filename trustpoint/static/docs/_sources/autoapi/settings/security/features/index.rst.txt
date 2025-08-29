@@ -1,0 +1,102 @@
+settings.security.features
+==========================
+
+.. py:module:: settings.security.features
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.security.features.SecurityFeature
+   settings.security.features.AutoGenPkiFeature
+
+
+Module Contents
+---------------
+
+.. py:class:: SecurityFeature
+
+   Bases: :py:obj:`abc.ABC`
+
+
+   Abstract base class for a security feature.
+
+
+   .. py:attribute:: verbose_name
+      :value: None
+
+
+
+   .. py:attribute:: db_field_name
+      :value: None
+
+
+
+   .. py:method:: enable(*_args)
+      :abstractmethod:
+
+
+      Enables the feature.
+
+
+
+   .. py:method:: disable(*_args)
+      :abstractmethod:
+
+
+      Disables the feature.
+
+
+
+   .. py:method:: is_enabled()
+      :abstractmethod:
+
+
+      Returns True if the feature is currently enabled.
+
+
+
+.. py:class:: AutoGenPkiFeature
+
+   Bases: :py:obj:`SecurityFeature`
+
+
+   Manages the auto-generated local CAs (PKI).
+
+
+   .. py:attribute:: verbose_name
+      :value: 'Local Auto-Generated PKI'
+
+
+
+   .. py:attribute:: db_field_name
+      :value: 'auto_gen_pki'
+
+
+
+   .. py:method:: is_enabled()
+      :staticmethod:
+
+
+      Returns True if the auto-generated PKI is enabled.
+
+
+
+   .. py:method:: enable(key_alg)
+      :staticmethod:
+
+
+      Starts a thread that enables the auto-generated PKI.Pass thread arguments as a tuple to avoid any issues.
+
+
+
+   .. py:method:: disable()
+      :staticmethod:
+
+
+      Starts a thread that disables the auto-generated PKI.
+
+
+

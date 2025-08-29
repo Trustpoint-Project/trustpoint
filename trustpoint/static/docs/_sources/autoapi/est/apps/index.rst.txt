@@ -1,0 +1,40 @@
+est.apps
+========
+
+.. py:module:: est.apps
+
+.. autoapi-nested-parse::
+
+   The Django EST Application Configuration.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   est.apps.EstConfig
+
+
+Module Contents
+---------------
+
+.. py:class:: EstConfig(app_name, app_module)
+
+   Bases: :py:obj:`django.apps.AppConfig`
+
+
+   EST Configuration.
+
+
+   .. py:attribute:: default_auto_field
+      :value: 'django.db.models.BigAutoField'
+
+
+
+   .. py:attribute:: name
+      :value: 'est'
+
+
+

@@ -1,0 +1,50 @@
+settings.management.commands.trustpointrestore
+==============================================
+
+.. py:module:: settings.management.commands.trustpointrestore
+
+.. autoapi-nested-parse::
+
+   Management command to restore the Trustpoint container (Apache TLS + wizard).
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.management.commands.trustpointrestore.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   A Django management command to restore the Trustpoint container.
+
+   This restores the Apache TLS certificate and the wizard state.
+   It is unrelated to the restore of a database backup.
+
+
+   .. py:attribute:: help
+      :value: 'Restores Trustpoint container.'
+
+
+
+   .. py:method:: handle(**_options)
+
+      Entrypoint for the command.
+
+
+
+   .. py:method:: restore_trustpoint()
+
+      Restore trustpoint (Apache TLS and wizard state) if DB is there.
+
+
+

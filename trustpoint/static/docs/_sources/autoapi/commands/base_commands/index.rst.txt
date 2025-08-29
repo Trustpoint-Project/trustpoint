@@ -1,0 +1,70 @@
+commands.base_commands
+======================
+
+.. py:module:: commands.base_commands
+
+.. autoapi-nested-parse::
+
+   Contains common functionality for PKI management commands.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.base_commands.CertificateCreationCommandMixin
+
+
+Module Contents
+---------------
+
+.. py:class:: CertificateCreationCommandMixin
+
+   Bases: :py:obj:`pki.util.x509.CertificateGenerator`
+
+
+   Mixin for management commands that create certificates.
+
+
+   .. py:method:: store_issuing_ca(issuing_ca_cert, chain, private_key, filename)
+      :classmethod:
+
+
+      Store the Issuing CA certificate and private key in a PKCS12 file.
+
+
+
+   .. py:method:: store_ee_certs(certs)
+      :staticmethod:
+
+
+      Store the end entity certificates as .pem files.
+
+
+
+   .. py:method:: store_ee_keys(keys)
+      :staticmethod:
+
+
+      Store the end entity keys as .pem files.
+
+
+
+   .. py:method:: save_ee_certs(certs)
+      :staticmethod:
+
+
+      Save the end entity certificates in the database.
+
+
+
+   .. py:method:: create_csr(number)
+      :staticmethod:
+
+
+      Create a number of test Certificate Signing Requests.
+
+
+

@@ -1,0 +1,50 @@
+settings.apps
+=============
+
+.. py:module:: settings.apps
+
+.. autoapi-nested-parse::
+
+   Django Settings apps.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   settings.apps.logger
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.apps.SettingsConfig
+
+
+Module Contents
+---------------
+
+.. py:data:: logger
+
+.. py:class:: SettingsConfig(app_name, app_module)
+
+   Bases: :py:obj:`django.apps.AppConfig`
+
+
+   Settings application configuration.
+
+
+   .. py:attribute:: name
+      :value: 'settings'
+
+
+
+   .. py:attribute:: default_auto_field
+      :value: 'django.db.models.BigAutoField'
+
+
+

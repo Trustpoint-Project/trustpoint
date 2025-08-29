@@ -1,0 +1,29 @@
+users.urls
+==========
+
+.. py:module:: users.urls
+
+.. autoapi-nested-parse::
+
+   URL configuration for the users application.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   users.urls.app_name
+   users.urls.urlpatterns
+
+
+Module Contents
+---------------
+
+.. py:data:: app_name
+   :value: 'users'
+
+
+.. py:data:: urlpatterns
+

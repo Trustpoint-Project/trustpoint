@@ -1,0 +1,27 @@
+devices.tests.test_urls.test_urls
+=================================
+
+.. py:module:: devices.tests.test_urls.test_urls
+
+.. autoapi-nested-parse::
+
+   Tests for the devices urls.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   devices.tests.test_urls.test_urls.test_url_resolves
+
+
+Module Contents
+---------------
+
+.. py:function:: test_url_resolves(url_name, kwargs, view_class)
+
+   Test that each URL resolves to the correct view.
+
+

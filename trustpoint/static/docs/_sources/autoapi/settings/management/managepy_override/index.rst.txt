@@ -1,0 +1,33 @@
+settings.management.managepy_override
+=====================================
+
+.. py:module:: settings.management.managepy_override
+
+.. autoapi-nested-parse::
+
+   Override the default makemigrations to get Trustpoint naming and additional checks.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   settings.management.managepy_override._check_migration_name_duplicates
+   settings.management.managepy_override.override_makemigrations
+
+
+Module Contents
+---------------
+
+.. py:function:: _check_migration_name_duplicates(migration_name, base_path, *_args)
+
+   Check for multiple migration files and warn if found.
+
+
+.. py:function:: override_makemigrations(cmd_args)
+
+   Override the default makemigrations command to use Trustpoint naming.
+
+

@@ -1,0 +1,40 @@
+cmp.apps
+========
+
+.. py:module:: cmp.apps
+
+.. autoapi-nested-parse::
+
+   The Django CMP Application Configuration.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   cmp.apps.CmpConfig
+
+
+Module Contents
+---------------
+
+.. py:class:: CmpConfig(app_name, app_module)
+
+   Bases: :py:obj:`django.apps.AppConfig`
+
+
+   Cmp Configuration.
+
+
+   .. py:attribute:: default_auto_field
+      :value: 'django.db.models.BigAutoField'
+
+
+
+   .. py:attribute:: name
+      :value: 'cmp'
+
+
+

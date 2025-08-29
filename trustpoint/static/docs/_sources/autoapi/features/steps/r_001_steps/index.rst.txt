@@ -1,0 +1,170 @@
+features.steps.r_001_steps
+==========================
+
+.. py:module:: features.steps.r_001_steps
+
+.. autoapi-nested-parse::
+
+   Python steps file for R_001.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   features.steps.r_001_steps.step_identity_exists
+   features.steps.r_001_steps.step_navigate_identity_details
+   features.steps.r_001_steps.step_display_identity_details
+   features.steps.r_001_steps.step_navigate_create_identity
+   features.steps.r_001_steps.step_fill_identity_details
+   features.steps.r_001_steps.step_submit_form
+   features.steps.r_001_steps.step_identity_in_list
+   features.steps.r_001_steps.step_update_identity
+   features.steps.r_001_steps.step_save_changes
+   features.steps.r_001_steps.step_verify_updated_identity
+   features.steps.r_001_steps.step_delete_identity
+   features.steps.r_001_steps.step_verify_identity_deletion
+   features.steps.r_001_steps.step_attempt_view_nonexistent
+
+
+Module Contents
+---------------
+
+.. py:function:: step_identity_exists(context, name, identifier)
+
+   Ensures that an identity with the specified name and identifier exists in the system.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param name: The name of the identity.
+   :type name: str
+   :param identifier: The ID of the identity.
+   :type identifier: str
+
+
+.. py:function:: step_navigate_identity_details(context, name)
+
+   The admin user navigates to the identity details page.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param name: The name of the identity.
+   :type name: str
+
+
+.. py:function:: step_display_identity_details(context, name, identifier)
+
+   Verifies that the correct identity details are displayed.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param name: The name of the identity.
+   :type name: str
+   :param identifier: The ID of the identity.
+   :type identifier: str
+
+
+.. py:function:: step_navigate_create_identity(context)
+
+   Navigates to the "Create Identity" page.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_fill_identity_details(context, name, identifier)
+
+   Fills in the identity creation form.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param name: The name of the identity.
+   :type name: str
+   :param identifier: The ID of the identity.
+   :type identifier: str
+
+
+.. py:function:: step_submit_form(context)
+
+   Submits the identity creation form.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_identity_in_list(context, name, identifier)
+
+   Verifies that the new identity appears in the identity list.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param name: The name of the identity.
+   :type name: str
+   :param identifier: The ID of the identity.
+   :type identifier: str
+
+
+.. py:function:: step_update_identity(context, name, identifier)
+
+   Updates the identity details.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param name: The new name of the identity.
+   :type name: str
+   :param identifier: The new ID of the identity.
+   :type identifier: str
+
+
+.. py:function:: step_save_changes(context)
+
+   Saves the updated identity details.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_verify_updated_identity(context, name, identifier)
+
+   Verifies that the updated identity appears in the identity list.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param name: The updated name of the identity.
+   :type name: str
+   :param identifier: The updated ID of the identity.
+   :type identifier: str
+
+
+.. py:function:: step_delete_identity(context, name)
+
+   Deletes an identity by name.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param name: The name of the identity to be deleted.
+   :type name: str
+
+
+.. py:function:: step_verify_identity_deletion(context, name)
+
+   Verifies that the identity no longer appears in the list.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param name: The name of the identity.
+   :type name: str
+
+
+.. py:function:: step_attempt_view_nonexistent(context, non_existent_id)
+
+   Attempts to view details of a non-existent identity.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param non_existent_id: The ID of the non-existent identity.
+   :type non_existent_id: str
+
+
