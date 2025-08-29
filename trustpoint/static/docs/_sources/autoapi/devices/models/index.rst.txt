@@ -1,0 +1,403 @@
+devices.models
+==============
+
+.. py:module:: devices.models
+
+.. autoapi-nested-parse::
+
+   This modules contains all models specific to the device abstractions.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   devices.models.DeviceModel
+   devices.models.IssuedCredentialModel
+   devices.models.RemoteDeviceCredentialDownloadModel
+
+
+Module Contents
+---------------
+
+.. py:class:: DeviceModel(*args, **kwargs)
+
+   Bases: :py:obj:`util.db.CustomDeleteActionModel`
+
+
+   The DeviceModel.
+
+
+   .. py:attribute:: id
+
+
+   .. py:attribute:: common_name
+
+
+   .. py:attribute:: serial_number
+
+
+   .. py:attribute:: domain
+
+
+   .. py:attribute:: domain_credential_onboarding
+
+
+   .. py:class:: OnboardingStatus(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.IntegerChoices`
+
+
+      The onboarding status.
+
+
+      .. py:attribute:: NO_ONBOARDING
+
+
+      .. py:attribute:: PENDING
+
+
+      .. py:attribute:: ONBOARDED
+
+
+
+   .. py:attribute:: onboarding_status
+
+
+   .. py:class:: OnboardingProtocol(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.IntegerChoices`
+
+
+      Choices of onboarding protocols.
+
+
+      .. py:attribute:: NO_ONBOARDING
+
+
+      .. py:attribute:: EST_PASSWORD
+
+
+      .. py:attribute:: EST_IDEVID
+
+
+      .. py:attribute:: CMP_SHARED_SECRET
+
+
+      .. py:attribute:: CMP_IDEVID
+
+
+      .. py:attribute:: AOKI
+
+
+      .. py:attribute:: BRSKI
+
+
+
+   .. py:attribute:: onboarding_protocol
+
+
+   .. py:class:: PkiProtocol(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.IntegerChoices`
+
+
+      Choices of pki protocols.
+
+
+      .. py:attribute:: MANUAL
+
+
+      .. py:attribute:: EST_PASSWORD
+
+
+      .. py:attribute:: EST_CLIENT_CERTIFICATE
+
+
+      .. py:attribute:: CMP_SHARED_SECRET
+
+
+      .. py:attribute:: CMP_CLIENT_CERTIFICATE
+
+
+
+   .. py:attribute:: pki_protocol
+
+
+   .. py:attribute:: est_password
+
+
+   .. py:attribute:: cmp_shared_secret
+
+
+   .. py:class:: DeviceType(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.IntegerChoices`
+
+
+      Enum for device type.
+
+
+      .. py:attribute:: GENERIC_DEVICE
+
+
+      .. py:attribute:: OPC_UA_GDS
+
+
+
+   .. py:attribute:: device_type
+
+
+   .. py:attribute:: created_at
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string representation.
+
+
+
+   .. py:method:: pre_delete()
+
+      Delete all issued credentials for this device before deleting the device itself.
+
+
+
+   .. py:property:: est_username
+      :type: str
+
+
+      Gets the EST username.
+
+
+   .. py:property:: signature_suite
+      :type: trustpoint_core.oid.SignatureSuite | None
+
+
+      Gets the corresponding SignatureSuite object.
+
+
+   .. py:property:: public_key_info
+      :type: trustpoint_core.oid.PublicKeyInfo | None
+
+
+      Gets the corresponding PublicKeyInfo object.
+
+
+.. py:class:: IssuedCredentialModel(*args, **kwargs)
+
+   Bases: :py:obj:`util.db.CustomDeleteActionModel`
+
+
+   Model for all credentials and certificates that have been issued or requested by the Trustpoint.
+
+
+   .. py:class:: IssuedCredentialType(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.IntegerChoices`
+
+
+      The type of the credential.
+
+
+      .. py:attribute:: DOMAIN_CREDENTIAL
+
+
+      .. py:attribute:: APPLICATION_CREDENTIAL
+
+
+
+   .. py:class:: IssuedCredentialPurpose(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.IntegerChoices`
+
+
+      The purpose of the issued credential.
+
+
+      .. py:attribute:: DOMAIN_CREDENTIAL
+
+
+      .. py:attribute:: GENERIC
+
+
+      .. py:attribute:: TLS_CLIENT
+
+
+      .. py:attribute:: TLS_SERVER
+
+
+      .. py:attribute:: OPCUA_CLIENT
+
+
+      .. py:attribute:: OPCUA_SERVER
+
+
+
+   .. py:attribute:: id
+
+
+   .. py:attribute:: common_name
+
+
+   .. py:attribute:: issued_credential_type
+
+
+   .. py:attribute:: issued_credential_purpose
+
+
+   .. py:attribute:: credential
+
+
+   .. py:attribute:: device
+
+
+   .. py:attribute:: domain
+
+
+   .. py:attribute:: created_at
+
+
+   .. py:class:: Meta
+
+      Bases: :py:obj:`django_stubs_ext.db.models.TypedModelMeta`
+
+
+      Meta class configuration.
+
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string representation.
+
+
+
+   .. py:method:: revoke()
+
+      Revokes all active certificates associated with this credential.
+
+
+
+   .. py:method:: pre_delete()
+
+      Revoke all active certificates and delete the credential.
+
+
+
+   .. py:method:: is_valid_domain_credential()
+
+      Determines if this issued credential is valid for enrolling new application credentials.
+
+      This method performs the following checks:
+        1. The IssuedCredentialModel type must be of type DOMAIN_CREDENTIAL.
+        2. The credential must be of type ISSUED_CREDENTIAL.
+        3. A primary certificate must exist.
+        4. The certificate's status must be 'OK'.
+
+      :returns:
+
+                A tuple where:
+                              - The first value is True if the credential meets all criteria, False otherwise.
+                              - The second value is a reason string explaining why the credential is invalid.
+      :rtype: tuple[bool, str]
+
+
+
+   .. py:method:: get_credential_for_certificate(cert)
+      :staticmethod:
+
+
+      Retrieve an IssuedCredentialModel instance for the given certificate.
+
+      :param cert: x509.Certificate to search for.
+      :return: The corresponding IssuedCredentialModel instance.
+      :raises ClientCertificateAuthenticationError: if no matching issued credential is found.
+
+
+
+.. py:class:: RemoteDeviceCredentialDownloadModel(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Model to associate a credential model with an OTP and token for unauthenticated remoted download.
+
+
+   .. py:attribute:: BROWSER_MAX_OTP_ATTEMPTS
+      :value: 3
+
+
+
+   .. py:attribute:: TOKEN_VALIDITY
+
+
+   .. py:attribute:: issued_credential_model
+
+
+   .. py:attribute:: otp
+
+
+   .. py:attribute:: device
+
+
+   .. py:attribute:: attempts
+
+
+   .. py:attribute:: download_token
+
+
+   .. py:attribute:: token_created_at
+
+
+   .. py:class:: Meta
+
+      Bases: :py:obj:`django_stubs_ext.db.models.TypedModelMeta`
+
+
+      Meta class configuration.
+
+
+
+   .. py:method:: __str__()
+
+      Return a string representation of the model.
+
+
+
+   .. py:method:: save(*args, **kwargs)
+
+      Generates a new random OTP on initial save of the model.
+
+
+
+   .. py:method:: get_otp_display()
+
+      Return the OTP in the format 'credential_id.otp' for display within the admin view.
+
+      :returns: The str to display.
+
+
+
+   .. py:method:: check_otp(otp)
+
+      Check if the provided OTP matches the stored OTP.
+
+      :param otp: The OTP to check.
+
+      :returns: True if the OTP is valid, False otherwise.
+
+
+
+   .. py:method:: check_token(token)
+
+      Check if the provided token matches the stored token and whether it is still valid.
+
+      :param token: The token to check.
+
+      :returns: True if the token is valid, false otherwise.
+
+
+

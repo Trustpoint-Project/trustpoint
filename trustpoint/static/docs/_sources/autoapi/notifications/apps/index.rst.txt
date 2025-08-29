@@ -1,0 +1,40 @@
+notifications.apps
+==================
+
+.. py:module:: notifications.apps
+
+.. autoapi-nested-parse::
+
+   Configures the Notifications application and its settings for inclusion in the Django project.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   notifications.apps.NotificationsConfig
+
+
+Module Contents
+---------------
+
+.. py:class:: NotificationsConfig(app_name, app_module)
+
+   Bases: :py:obj:`django.apps.AppConfig`
+
+
+   Configures the Notifications application, including its name and other settings for Django.
+
+
+   .. py:attribute:: default_auto_field
+      :value: 'django.db.models.BigAutoField'
+
+
+
+   .. py:attribute:: name
+      :value: 'notifications'
+
+
+

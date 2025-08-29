@@ -1,0 +1,36 @@
+trustpoint.middleware
+=====================
+
+.. py:module:: trustpoint.middleware
+
+.. autoapi-nested-parse::
+
+   This module contains custom middleware.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   trustpoint.middleware.TrustpointLoginRequiredMiddleware
+
+
+Module Contents
+---------------
+
+.. py:class:: TrustpointLoginRequiredMiddleware(get_response)
+
+   Bases: :py:obj:`django.contrib.auth.middleware.LoginRequiredMiddleware`
+
+
+   Middleware that redirects all unauthenticated requests to a login page.
+
+
+   .. py:method:: process_view(request, view_func, view_args, view_kwargs)
+
+      Allow unauthenticated access to public paths, else redirect to login page.
+
+
+

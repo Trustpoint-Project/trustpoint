@@ -1,0 +1,168 @@
+features.steps.r_013_steps
+==========================
+
+.. py:module:: features.steps.r_013_steps
+
+.. autoapi-nested-parse::
+
+   Python steps file for R_013.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   features.steps.r_013_steps.HTTP_OK
+   features.steps.r_013_steps.HTTP_FOUND
+   features.steps.r_013_steps.logger
+   features.steps.r_013_steps.MIN_OTP_LENGTH
+   features.steps.r_013_steps.MAX_OTP_LENGTH
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   features.steps.r_013_steps.step_given_issued_credential_exists
+   features.steps.r_013_steps.step_when_admin_visits_the_given_view
+   features.steps.r_013_steps.step_then_an_otp_is_displayed
+   features.steps.r_013_steps.step_given_an_otp
+   features.steps.r_013_steps.step_when_user_visits_endpoint
+   features.steps.r_013_steps.step_then_they_will_receive_page_to_select_the_format
+   features.steps.r_013_steps.step_given_an_incorrect_otp
+   features.steps.r_013_steps.step_then_they_will_receive_a_warning
+   features.steps.r_013_steps.step_given_the_user_is_on_the_page
+   features.steps.r_013_steps.step_given_the_download_is_not_yet_expired
+   features.steps.r_013_steps.step_when_the_user_enters_a_pw_to_encrypt_the_cred_priv_key
+   features.steps.r_013_steps.step_when_user_selects_a_file
+   features.steps.r_013_steps.step_then_the_cred_will_be_downloaded
+
+
+Module Contents
+---------------
+
+.. py:data:: HTTP_OK
+   :value: 200
+
+
+.. py:data:: HTTP_FOUND
+   :value: 302
+
+
+.. py:data:: logger
+
+.. py:function:: step_given_issued_credential_exists(context)
+
+   Ensures a (mocked) issued credential exists.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_admin_visits_the_given_view(context)
+
+   Ensures the admin visits the given view.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:data:: MIN_OTP_LENGTH
+   :value: 8
+
+
+.. py:data:: MAX_OTP_LENGTH
+   :value: 32
+
+
+.. py:function:: step_then_an_otp_is_displayed(context)
+
+   Ensures that a one-time password is displayed which can be used to download the credential from a remote device.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_given_an_otp(context)
+
+   Ensures that a correct one-time password is given.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_user_visits_endpoint(context)
+
+   Ensures that the user visits the "/devices/browser" endpoint and enters the OTP.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_they_will_receive_page_to_select_the_format(context)
+
+   Ensures that they will receive a page to select the format for the credential download.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_given_an_incorrect_otp(context)
+
+   Ensures that an incorrect one-time password is given.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_they_will_receive_a_warning(context)
+
+   Ensures that they will receive a warning saying the OTP is incorrect.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_given_the_user_is_on_the_page(context)
+
+   Ensures that the user is on the credential download page.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_given_the_download_is_not_yet_expired(context)
+
+   Ensures that the download token is not yet expired.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_the_user_enters_a_pw_to_encrypt_the_cred_priv_key(context)
+
+   Ensures that the user enters a password to encrypt the credential private key.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_user_selects_a_file(context)
+
+   Ensures that the user selects a file format.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_the_cred_will_be_downloaded(context)
+
+   Ensures that the credential will be downloaded to their browser in the requested format.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+

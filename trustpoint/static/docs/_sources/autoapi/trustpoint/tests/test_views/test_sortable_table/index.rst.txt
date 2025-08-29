@@ -1,0 +1,107 @@
+trustpoint.tests.test_views.test_sortable_table
+===============================================
+
+.. py:module:: trustpoint.tests.test_views.test_sortable_table
+
+.. autoapi-nested-parse::
+
+   Tests for the SortableTableMixin class.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   trustpoint.tests.test_views.test_sortable_table.SortableTableView
+   trustpoint.tests.test_views.test_sortable_table.TestSortableTableMixin
+
+
+Module Contents
+---------------
+
+.. py:class:: SortableTableView(queryset = None, model = None, default_sort_param = 'id')
+
+   Bases: :py:obj:`trustpoint.views.base.SortableTableMixin`
+
+
+   Simple view class inheriting from SortableTableMixin.
+
+
+   .. py:attribute:: queryset
+      :value: None
+
+
+
+   .. py:attribute:: model
+      :value: None
+
+
+
+   .. py:attribute:: default_sort_param
+      :value: 'id'
+
+
+
+   .. py:attribute:: request
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Call get_context_data from SortableTableMixin.
+
+
+
+.. py:class:: TestSortableTableMixin(methodName='runTest')
+
+   Bases: :py:obj:`django.test.TestCase`
+
+
+   Test cases for SortableTableMixin.
+
+
+   .. py:method:: setUpTestData()
+      :classmethod:
+
+
+      Create test data for the test class.
+
+
+
+   .. py:method:: setUp()
+
+      Set up the test environment for each test case.
+
+
+
+   .. py:method:: test_sort_queryset_ascending()
+
+      Test sorting of queryset in ascending order.
+
+
+
+   .. py:method:: test_sort_queryset_descending()
+
+      Test sorting of queryset in descending order.
+
+
+
+   .. py:method:: test_sort_list_of_dicts()
+
+      Test sorting of a list of dictionaries.
+
+
+
+   .. py:method:: test_sort_list_of_dicts_descending()
+
+      Test sorting of a list of dictionaries in descending order.
+
+
+
+   .. py:method:: test_default_sort_param()
+
+      Test sorting using the default sort parameter.
+
+
+

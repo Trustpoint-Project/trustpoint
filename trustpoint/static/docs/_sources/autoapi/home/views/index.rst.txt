@@ -1,0 +1,404 @@
+home.views
+==========
+
+.. py:module:: home.views
+
+.. autoapi-nested-parse::
+
+   Contains views that handle HTTP requests and return appropriate responses for the application.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   home.views.SUCCESS
+   home.views.ERROR
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   home.views.IndexView
+   home.views.DashboardView
+   home.views.NotificationDetailsView
+   home.views.NotificationMarkSolvedView
+   home.views.AddDomainsAndDevicesView
+   home.views.DashboardChartsAndCountsView
+
+
+Module Contents
+---------------
+
+.. py:data:: SUCCESS
+   :value: 25
+
+
+.. py:data:: ERROR
+   :value: 40
+
+
+.. py:class:: IndexView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.base.RedirectView`
+
+
+   Redirects authenticated users to the dashboard page.
+
+
+   .. py:attribute:: permanent
+      :value: False
+
+
+
+   .. py:attribute:: pattern_name
+      :value: 'home:dashboard'
+
+
+
+.. py:class:: DashboardView(*args, **kwargs)
+
+   Bases: :py:obj:`trustpoint.views.base.SortableTableMixin`, :py:obj:`django.views.generic.list.ListView`\ [\ :py:obj:`notifications.models.NotificationModel`\ ]
+
+
+   Renders the dashboard page for authenticated users. Uses the 'home/dashboard.html' template.
+
+
+   .. py:attribute:: template_name
+      :value: 'home/dashboard.html'
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: context_object_name
+      :value: 'notifications'
+
+
+
+   .. py:attribute:: default_sort_param
+      :value: '-created_at'
+
+
+
+   .. py:attribute:: paginate_by
+
+
+   .. py:attribute:: last_week_dates
+
+
+   .. py:method:: generate_last_week_dates()
+      :staticmethod:
+
+
+      Generates date strings for last one week.
+
+      :returns: A list of date strings from last one week.
+
+
+
+   .. py:method:: get_queryset()
+
+      Returns a queryset of NotificationModel instances.
+
+      :returns: A `QuerySet` containing filtered notifications.
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Fetch context data.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: The context to render the page.
+
+
+
+   .. py:method:: _render_created_at(record)
+      :staticmethod:
+
+
+      Render the created_at field with a badge if the status is 'New'.
+
+      :param record: The corresponding NotificationModel.
+
+      :returns: The HTML of the created at display span.
+
+
+
+   .. py:method:: _render_notification_type(record)
+      :staticmethod:
+
+
+      Render the notification type with a badge according to the type.
+
+      :param record: The corresponding NotificationModel.
+
+      :returns: The HTML of the span with class badge to display notification type.
+
+
+
+.. py:class:: NotificationDetailsView
+
+   Bases: :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`notifications.models.NotificationModel`\ ]
+
+
+   Renders the notification details page for authenticated users.
+
+
+   .. py:attribute:: template_name
+      :value: 'home/notification_details.html'
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: context_object_name
+      :value: 'notification'
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds information about the statuses of the Notification.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: The context to render the page.
+
+
+
+.. py:class:: NotificationMarkSolvedView
+
+   Bases: :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`notifications.models.NotificationModel`\ ]
+
+
+   Mark notification as solved when viewed in the notification details page.
+
+
+   .. py:attribute:: template_name
+      :value: 'home/notification_details.html'
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: context_object_name
+      :value: 'notification'
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds information about the solved status of the notification.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: The context to render the page.
+
+
+
+.. py:class:: AddDomainsAndDevicesView(**kwargs)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`django.views.generic.base.TemplateView`
+
+
+   View to execute the add_domains_and_devices management command and pass status to the template.
+
+
+   .. py:method:: get(request, *args, **kwargs)
+
+      Handles GET requests and redirects to the dashboard.
+
+      :param request: The HTTP request object.
+      :param \*args: Additional positional arguments.
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: dashboard.
+      :rtype: The response that redirects the user to home
+
+
+
+.. py:class:: DashboardChartsAndCountsView(**kwargs)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`django.views.generic.base.TemplateView`
+
+
+   View to mark the notification as Solved.
+
+
+   .. py:method:: get(request, *args, **kwargs)
+
+      Get dashboard data for panels, tables and charts.
+
+      :param request: The HTTP request object.
+      :param \*args: Additional positional arguments.
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data.
+
+      :returns: The JSON response containing dashboard data.
+
+
+
+   .. py:method:: get_device_charts_data(dashboard_data, start_date)
+
+      Fetch data from database for device charts and add to dashboard data object.
+
+      :param dashboard_data: The dashboard data object.
+      :param start_date: The start date for fetching device data.
+
+      :returns: It returns nothing. It adds the device related data in dashboard_data object.
+
+
+
+   .. py:method:: get_cert_charts_data(dashboard_data, start_date)
+
+      Fetch data from database for certificate charts and add to dashboard data object.
+
+      :param dashboard_data: The dashboard data object.
+      :param start_date: The start date for fetching certificate data.
+
+      :returns: It returns nothing. It adds the certificate related data in dashboard_data object.
+
+
+
+   .. py:method:: get_ca_charts_data(dashboard_data, start_date)
+
+      Fetch data from database for issuing ca charts and add to dashboard data object.
+
+      :param dashboard_data: The dashboard data object.
+      :param start_date: The start date for fetching issuing ca data.
+
+      :returns: It returns nothing. It adds the issuing ca related data in dashboard_data object.
+
+
+
+   .. py:method:: get_device_count_by_onboarding_status(start_date)
+
+      Fetch device count by onboarding status from database.
+
+      :param start_date: The start date for fetching data.
+
+      :returns: It returns device counts grouped by device onboarding status.
+
+
+
+   .. py:method:: get_cert_counts()
+
+      Fetch certificate count from database.
+
+      :returns: It returns certificate counts.
+
+
+
+   .. py:method:: get_cert_counts_by_status_and_date()
+
+      Fetch certificate counts grouped by issue date and certificate status from database.
+
+      :returns: It returns certificate counts grouped by issue date and certificate status.
+
+
+
+   .. py:method:: get_cert_counts_by_status(start_date)
+
+      Fetch certs count by onboarding status from database.
+
+      :param start_date: The start date for fetching data.
+
+      :returns: It returns device counts grouped by device onboarding status.
+
+
+
+   .. py:method:: get_issuing_ca_counts()
+
+      Fetch issuing CA count from database.
+
+      :returns: It returns total, active and expired issuing CA counts.
+
+
+
+   .. py:method:: get_device_counts_by_date_and_status()
+
+      Fetch device count by date and onboarding status from database.
+
+      :returns: It returns device count grouped by date and onboarding status.
+
+
+
+   .. py:method:: get_device_count_by_onboarding_protocol(start_date)
+
+      Fetch device count by onboarding protocol from database.
+
+      :param start_date: The start date for fetching data.
+
+      :returns: It returns device count by onboarding protocol.
+
+
+
+   .. py:method:: get_device_count_by_domain(start_date)
+
+      Fetch onboarded devices count grouped by domain from database.
+
+      :param start_date: The start date for fetching data.
+
+      :returns: It returns onboarded devices count grouped by domain.
+
+
+
+   .. py:method:: get_cert_counts_by_issuing_ca(start_date)
+
+      Fetch certificate count grouped by issuing ca from database.
+
+      :param start_date: The start date for fetching data.
+
+      :returns: It returns certificate count grouped by issuing ca.
+
+
+
+   .. py:method:: get_cert_counts_by_issuing_ca_and_date(start_date)
+
+      Fetch certificate count grouped by issuing ca and date from database.
+
+      :param start_date: The start date for fetching data.
+
+      :returns: It returns certificate count grouped by issuing ca and date.
+
+
+
+   .. py:method:: get_cert_counts_by_domain(start_date)
+
+      Fetch certificate count grouped by domain from database.
+
+      :param start_date: The start date for fetching data.
+
+      :returns: It returns certificate count grouped by domain.
+
+
+
+   .. py:method:: get_cert_counts_by_template(start_date)
+
+      Fetch certificate count grouped by template from database.
+
+      :param start_date: The start date for fetching data.
+
+      :returns: It returns certificate count grouped by template.
+
+
+
+   .. py:method:: get_issuing_ca_counts_by_type(start_date)
+
+      Fetch issuing ca counts grouped by type from database.
+
+      :param start_date: The start date for fetching data.
+
+      :returns: It returns issuing ca counts grouped by type.
+
+
+

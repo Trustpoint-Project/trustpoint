@@ -1,0 +1,183 @@
+settings.views.logging
+======================
+
+.. py:module:: settings.views.logging
+
+.. autoapi-nested-parse::
+
+   Logging setting specific views.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.views.logging.IndexView
+   settings.views.logging.LoggingContextMixin
+   settings.views.logging.LoggingFilesTableView
+   settings.views.logging.LoggingFilesDetailsView
+   settings.views.logging.LoggingFilesDownloadView
+   settings.views.logging.LoggingFilesDownloadMultipleView
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   settings.views.logging.language
+
+
+Module Contents
+---------------
+
+.. py:class:: IndexView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.base.RedirectView`
+
+
+   Index view
+
+
+   .. py:attribute:: permanent
+      :value: True
+
+
+
+   .. py:attribute:: pattern_name
+      :value: 'settings:language'
+
+
+
+.. py:function:: language(request)
+
+   Handle language Configuration
+
+   Returns: HTTPResponse
+
+
+.. py:class:: LoggingContextMixin
+
+   Mixin which adds extra menu context for the Logging Views.
+
+
+   .. py:attribute:: extra_context
+      :type:  ClassVar[dict]
+
+
+.. py:class:: LoggingFilesTableView(**kwargs)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`LoggingContextMixin`, :py:obj:`trustpoint.views.base.SortableTableMixin`, :py:obj:`django.views.generic.list.ListView`
+
+
+   View to display all log files in the log directory in a table.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: template_name
+      :value: 'settings/logging/logging_files.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'log_files'
+
+
+
+   .. py:attribute:: default_sort_param
+      :value: 'filename'
+
+
+
+   .. py:attribute:: paginate_by
+
+
+   .. py:method:: _get_first_and_last_entry_date(log_file_path)
+      :staticmethod:
+
+
+
+   .. py:method:: _get_log_file_data(log_filename)
+      :classmethod:
+
+
+
+   .. py:method:: get_queryset()
+
+      Gets a queryset of all valid Trustpoint log files in the log directory.
+
+
+
+.. py:class:: LoggingFilesDetailsView(**kwargs)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`LoggingContextMixin`, :py:obj:`django.views.generic.TemplateView`
+
+
+   Log file detail view, allows to view the content of a single log file without download.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: template_name
+      :value: 'settings/logging/logging_files_details.html'
+
+
+
+   .. py:attribute:: log_directory
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Get the context data for the view.
+
+
+
+.. py:class:: LoggingFilesDownloadView(**kwargs)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`LoggingContextMixin`, :py:obj:`django.views.generic.TemplateView`
+
+
+   View to download a single log file
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:method:: get(*_args, **kwargs)
+
+      The HTTP GET method for the view.
+
+
+
+.. py:class:: LoggingFilesDownloadMultipleView(**kwargs)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`LoggingContextMixin`, :py:obj:`django.views.generic.View`
+
+
+   View to download multiple log files as a single archive.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:method:: get(*_args, **kwargs)
+      :classmethod:
+
+
+      The HTTP GET method for the view.
+
+
+

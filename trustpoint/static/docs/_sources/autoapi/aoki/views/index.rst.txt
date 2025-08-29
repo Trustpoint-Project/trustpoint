@@ -1,0 +1,67 @@
+aoki.views
+==========
+
+.. py:module:: aoki.views
+
+.. autoapi-nested-parse::
+
+   This module contains the AOKI endpoints (views).
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   aoki.views.AokiServiceMixin
+   aoki.views.AokiInitializationRequestView
+
+
+Module Contents
+---------------
+
+.. py:class:: AokiServiceMixin
+
+   Mixin for AOKI functionality.
+
+
+   .. py:method:: get_idevid_owner_san_uri(idevid_cert)
+      :staticmethod:
+
+
+      Get the Owner ID SAN URI corresponding to a IDevID certificate.
+
+      Formatted as 'dev-owner:<IDevID_Subj_SN>.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>'
+
+
+
+   .. py:method:: get_owner_credential(idevid_cert)
+      :staticmethod:
+
+
+      Get the Device Owner ID credential corresponding to a IDevID cert, or None if it does not exist in the DB.
+
+      This does not perform any authentication or validation of the IDevID certificate! Use IDevIDAuthenticator first.
+
+
+
+.. py:class:: AokiInitializationRequestView(**kwargs)
+
+   Bases: :py:obj:`AokiServiceMixin`, :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`django.views.View`
+
+
+   View for handling AOKI initialization requests.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:method:: get(request, *args, **kwargs)
+
+      Handle GET requests for AOKI initialization.
+
+
+

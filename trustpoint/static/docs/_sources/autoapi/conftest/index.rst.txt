@@ -1,0 +1,100 @@
+conftest
+========
+
+.. py:module:: conftest
+
+.. autoapi-nested-parse::
+
+   pytest configuration for the tests in the PKI app.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   conftest.CA_COMMON_NAME
+   conftest.UNIQUE_NAME
+   conftest.CA_TYPE
+   conftest.DOMAIN_UNIQUE_NAME
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   conftest.enable_db_access_for_all_tests
+   conftest.rsa_private_key
+   conftest.ec_private_key
+   conftest.issuing_ca_instance
+   conftest.domain_instance
+   conftest.device_instance
+   conftest.tls_client_credential_instance
+   conftest.remote_device_credential_download_instance
+   conftest.credential_instance
+
+
+Module Contents
+---------------
+
+.. py:function:: enable_db_access_for_all_tests(db)
+
+   Fixture to enable database access for all tests.
+
+
+.. py:function:: rsa_private_key()
+
+   Generate a reusable RSA private key.
+
+
+.. py:function:: ec_private_key()
+
+   Generate a reusable EC private key.
+
+
+.. py:data:: CA_COMMON_NAME
+   :value: 'Root CA'
+
+
+.. py:data:: UNIQUE_NAME
+   :value: ''
+
+
+.. py:data:: CA_TYPE
+
+.. py:data:: DOMAIN_UNIQUE_NAME
+   :value: 'domain_name'
+
+
+.. py:function:: issuing_ca_instance()
+
+   Fixture for a testing IssuingCaModel instance.
+
+
+.. py:function:: domain_instance(issuing_ca_instance)
+
+   Fixture for a DomainModel instance using a valid issuing CA.
+
+
+.. py:function:: device_instance(domain_instance)
+
+   Fixture to create a test device linked with a domain.
+
+
+.. py:function:: tls_client_credential_instance(device_instance)
+
+   Fixture to issue a TLS client credential for a specific device.
+
+
+.. py:function:: remote_device_credential_download_instance(tls_client_credential_instance)
+
+   Fixture to create a RemoteDeviceCredentialDownloadModel.
+
+
+.. py:function:: credential_instance(issuing_ca_instance)
+
+   Fixture to create a CredentialModel instance linked to a valid end-entity certificate.
+
+

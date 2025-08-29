@@ -1,0 +1,74 @@
+trustpoint.tests.test_views.test_list_in_detail_view
+====================================================
+
+.. py:module:: trustpoint.tests.test_views.test_list_in_detail_view
+
+.. autoapi-nested-parse::
+
+   Tests for the ListInDetailView class.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   trustpoint.tests.test_views.test_list_in_detail_view.TestListInDetailView
+
+
+Module Contents
+---------------
+
+.. py:class:: TestListInDetailView(methodName='runTest')
+
+   Bases: :py:obj:`django.test.TestCase`
+
+
+   Test cases for ListInDetailView using existing models.
+
+
+   .. py:method:: setUpTestData()
+      :classmethod:
+
+
+      Set up test data shared across all test methods.
+
+
+
+   .. py:method:: setUp()
+
+      Set up instance-specific data.
+
+
+
+   .. py:method:: test_get_object_success()
+
+      Test that get_object retrieves the correct DeviceModel instance.
+
+
+
+   .. py:method:: test_get_object_invalid_pk()
+
+      Test get_object raises Http404 for nonexistent DeviceModel instance (invalid pk).
+
+
+
+   .. py:method:: test_get_context_data_with_children()
+
+      Test that context contains both the parent object and the child list.
+
+
+
+   .. py:method:: test_get_object_missing_pk()
+
+      Ensure get_object raises AttributeError when pk is missing.
+
+
+
+   .. py:method:: test_context_data_without_children()
+
+      Test context when no children exist for the parent.
+
+
+

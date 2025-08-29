@@ -1,0 +1,219 @@
+features.steps.r_010_r_11_steps
+===============================
+
+.. py:module:: features.steps.r_010_r_11_steps
+
+.. autoapi-nested-parse::
+
+   Python steps file for R_010 and R_011.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   features.steps.r_010_r_11_steps.OnboardingProtocol
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   features.steps.r_010_r_11_steps.step_given_endpoint_available
+   features.steps.r_010_r_11_steps.step_given_new_device
+   features.steps.r_010_r_11_steps.step_when_device_requests_certificate
+   features.steps.r_010_r_11_steps.step_then_system_issues_certificate
+   features.steps.r_010_r_11_steps.step_then_device_stores_certificate
+   features.steps.r_010_r_11_steps.step_given_onboarded_device
+   features.steps.r_010_r_11_steps.step_when_device_renews_certificate
+   features.steps.r_010_r_11_steps.step_then_device_replaces_certificate
+   features.steps.r_010_r_11_steps.step_given_invalid_device
+   features.steps.r_010_r_11_steps.step_when_invalid_device_requests
+   features.steps.r_010_r_11_steps.step_then_reject_unauthorized_request
+   features.steps.r_010_r_11_steps.step_given_registered_device
+   features.steps.r_010_r_11_steps.step_when_admin_revokes_certificate
+   features.steps.r_010_r_11_steps.step_then_revocation_list_updated
+   features.steps.r_010_r_11_steps.step_then_device_should_no_longer_auth_using_cert
+   features.steps.r_010_r_11_steps.step_given_devices_requesting_certs
+   features.steps.r_010_r_11_steps.step_when_the_protocol_endpoint_processes_the_req
+   features.steps.r_010_r_11_steps.step_then_all_certs_should_be_issued_within_time
+
+
+Module Contents
+---------------
+
+.. py:data:: OnboardingProtocol
+
+.. py:function:: step_given_endpoint_available(context, endpoint)
+
+   Ensures that the endpoint is accessible before testing.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param endpoint: The endpoint.
+   :type endpoint: str
+
+
+.. py:function:: step_given_new_device(context, device_id)
+
+   Simulates a new device before sending a CMP request.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param device_id: Unique identifier for the new device.
+   :type device_id: str
+
+
+.. py:function:: step_when_device_requests_certificate(context, onboarding_protocol)
+
+   Simulates a new device requesting a certificate via the CMP endpoint.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param onboarding_protocol: The onboarding protocol.
+   :type onboarding_protocol: OnboardingProtocol
+
+
+.. py:function:: step_then_system_issues_certificate(context, device_id)
+
+   Ensures that the system issues a certificate for a requesting device.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param device_id: Unique identifier for the device.
+   :type device_id: str
+
+
+.. py:function:: step_then_device_stores_certificate(context)
+
+   Ensures that the device successfully stores its issued certificate.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_given_onboarded_device(context, device_id)
+
+   Ensures that a device is onboarded and has an active certificate.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param device_id: Unique identifier for the onboarded device.
+   :type device_id: str
+
+
+.. py:function:: step_when_device_renews_certificate(context, onboarding_protocol)
+
+   Simulates a device requesting a certificate renewal.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param onboarding_protocol: The onboarding protocol.
+   :type onboarding_protocol: OnboardingProtocol
+
+
+.. py:function:: step_then_device_replaces_certificate(context)
+
+   Ensures that the device updates its certificate upon renewal.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_given_invalid_device(context)
+
+   Simulates a device with incorrect authentication details.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_invalid_device_requests(context, onboarding_protocol)
+
+   Simulates an unauthorized device attempting to access the CMP endpoint.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param onboarding_protocol: The onboarding protocol.
+   :type onboarding_protocol: OnboardingProtocol
+
+
+.. py:function:: step_then_reject_unauthorized_request(context)
+
+   Ensures that the system rejects the request.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_given_registered_device(context, device_id)
+
+   Ensures that a device is registered and has a valid certificate.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param device_id: Unique identifier for the device.
+   :type device_id: str
+
+
+.. py:function:: step_when_admin_revokes_certificate(context, device_id)
+
+   Simulates an admin revoking a device's certificate.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param device_id: Unique identifier for the device.
+   :type device_id: str
+
+
+.. py:function:: step_then_revocation_list_updated(context)
+
+   Ensures that the system updates its revocation list upon certificate revocation.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_device_should_no_longer_auth_using_cert(context)
+
+   Ensures that the device should no longer authenticate using its certificate.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_given_devices_requesting_certs(context, num_devices, onboarding_protocol)
+
+   A number of device are requesting certificates simultaneously.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param num_devices: The number of devices.
+   :type num_devices: int
+   :param onboarding_protocol: The onboarding protocol.
+   :type onboarding_protocol: OnboardingProtocol
+
+
+.. py:function:: step_when_the_protocol_endpoint_processes_the_req(context, onboarding_protocol)
+
+   The protocol processes the request.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param onboarding_protocol: The onboarding protocol.
+   :type onboarding_protocol: OnboardingProtocol
+
+
+.. py:function:: step_then_all_certs_should_be_issued_within_time(context, max_response_time)
+
+   All certificates should be issued within a given time.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param max_response_time: The number of devices.
+   :type max_response_time: int
+
+

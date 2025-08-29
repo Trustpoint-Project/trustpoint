@@ -1,0 +1,398 @@
+devices.issuer
+==============
+
+.. py:module:: devices.issuer
+
+.. autoapi-nested-parse::
+
+   Module for issuing and managing TLS and OPC UA credentials.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   devices.issuer.SaveCredentialToDbMixin
+   devices.issuer.BaseTlsCredentialIssuer
+   devices.issuer.LocalTlsClientCredentialIssuer
+   devices.issuer.LocalTlsServerCredentialIssuer
+   devices.issuer.LocalDomainCredentialIssuer
+   devices.issuer.OpcUaServerCredentialIssuer
+   devices.issuer.OpcUaClientCredentialIssuer
+
+
+Module Contents
+---------------
+
+.. py:class:: SaveCredentialToDbMixin
+
+   Mixin to handle saving credentials to the database.
+
+
+   .. py:property:: device
+      :type: devices.models.DeviceModel
+
+      :abstractmethod:
+
+
+      Abstract property that has to be implemented by the derived class.
+
+
+   .. py:property:: domain
+      :type: pki.models.domain.DomainModel
+
+      :abstractmethod:
+
+
+      Abstract property that has to be implemented by the derived class.
+
+
+   .. py:method:: _save(credential, common_name, issued_credential_type, issued_credential_purpose)
+
+      Saves the issued credential in the database.
+
+      :param credential: The credential serializer instance.
+      :param common_name: The common name for the credential.
+      :param issued_credential_type: The type of issued credential.
+      :param issued_credential_purpose: The purpose of the issued credential.
+
+      :returns: The saved issued credential model.
+
+
+
+   .. py:method:: _save_keyless_credential(certificate, certificate_chain, common_name, issued_credential_type, issued_credential_purpose)
+
+
+.. py:class:: BaseTlsCredentialIssuer(device, domain)
+
+   Bases: :py:obj:`SaveCredentialToDbMixin`
+
+
+   Base class for issuing TLS credentials.
+
+   This class provides common functionality for creating and saving TLS certificates
+   and key pairs for different use cases, including TLS client, server, domain, and
+   OPC UA credentials.
+
+
+   .. py:attribute:: _pseudonym
+      :type:  str
+
+
+   .. py:attribute:: _device
+      :type:  devices.models.DeviceModel
+
+
+   .. py:attribute:: _domain
+      :type:  pki.models.domain.DomainModel
+
+
+   .. py:attribute:: _credential
+      :type:  None | trustpoint_core.serializer.CredentialSerializer
+      :value: None
+
+
+
+   .. py:attribute:: _credential_model
+      :type:  None | pki.models.credential.CredentialModel
+      :value: None
+
+
+
+   .. py:attribute:: _issued_application_credential_model
+      :type:  None | devices.models.IssuedCredentialModel
+      :value: None
+
+
+
+   .. py:property:: device
+      :type: devices.models.DeviceModel
+
+
+      Gets the device associated with this credential issuer.
+
+      :returns: The device linked to the issued credential.
+      :rtype: DeviceModel
+
+
+   .. py:property:: domain
+      :type: pki.models.domain.DomainModel
+
+
+      Gets the domain associated with this credential issuer.
+
+      :returns: The domain linked to the issued credential.
+      :rtype: DomainModel
+
+
+   .. py:property:: serial_number
+      :type: str
+
+
+      Gets the serial number of the associated device.
+
+      :returns: The serial number of the device.
+      :rtype: str
+
+
+   .. py:property:: domain_component
+      :type: str
+
+
+      Gets the unique name of the domain component.
+
+      :returns: The unique name of the domain.
+      :rtype: str
+
+
+   .. py:property:: pseudonym
+      :type: str
+
+
+      Gets the pseudonym associated with this issuer.
+
+      :returns: The predefined pseudonym for the credential issuer.
+      :rtype: str
+
+
+   .. py:method:: get_fixed_values(device, domain)
+      :classmethod:
+
+
+      Retrieves a dictionary of fixed values related to the device and domain.
+
+      :param device: The device for which credentials are issued.
+      :param domain: The domain associated with the credentials.
+
+      :returns: A dictionary containing the pseudonym, domain component,
+                and serial number of the device.
+
+
+
+   .. py:method:: _build_certificate(common_name, public_key, validity_days, extra_extensions = None)
+
+      Builds an X.509 certificate with the specified parameters.
+
+      :param common_name: The common name (CN) for the certificate subject.
+      :param public_key: The public key associated with the certificate.
+      :param validity_days: The number of days the certificate should be valid.
+      :param extra_extensions: Additional extensions to be added.
+
+      :returns: The generated X.509 certificate.
+
+
+
+.. py:class:: LocalTlsClientCredentialIssuer(device, domain)
+
+   Bases: :py:obj:`BaseTlsCredentialIssuer`
+
+
+   Handles issuing TLS client credentials.
+
+
+   .. py:attribute:: _pseudonym
+      :value: 'Trustpoint Application Credential - TLS Client'
+
+
+
+   .. py:method:: issue_tls_client_credential(common_name, validity_days)
+
+      Issues a TLS client credential.
+
+      :param common_name: The common name for the certificate.
+      :param validity_days: The validity period in days.
+      :param public_key: The public key to be included in the certificate.
+
+      :returns: The issued credential model.
+
+
+
+   .. py:method:: issue_tls_client_certificate(common_name, validity_days, public_key)
+
+      Issues a TLS client certificate without a private key.
+
+      :param common_name: Certificate common name.
+      :param validity_days: Certificate validity period.
+      :param public_key: Public key for the certificate.
+
+      :returns: The issued TLS client certificate.
+
+
+
+.. py:class:: LocalTlsServerCredentialIssuer(device, domain)
+
+   Bases: :py:obj:`BaseTlsCredentialIssuer`
+
+
+   Handles issuing TLS server credentials.
+
+
+   .. py:attribute:: _pseudonym
+      :value: 'Trustpoint Application Credential - TLS Server'
+
+
+
+   .. py:method:: _build_san_extension(ipv4_addresses, ipv6_addresses, domain_names)
+
+      Builds the Subject Alternative Name (SAN) extension.
+
+
+
+   .. py:method:: issue_tls_server_credential(common_name, ipv4_addresses, ipv6_addresses, domain_names, validity_days, *, san_critical = False)
+
+      Issues a TLS server credential with a private key.
+
+      Generates a TLS server certificate and private key, including SAN extensions,
+      and saves the credential in the database.
+
+      :param common_name: Certificate common name.
+      :param ipv4_addresses: IPv4 addresses for SAN.
+      :param ipv6_addresses: IPv6 addresses for SAN.
+      :param domain_names: Domain names for SAN.
+      :param validity_days: Certificate validity period.
+      :param san_critical: Whether SAN is critical. Defaults to False.
+
+      :returns: The issued TLS server credential.
+
+
+
+   .. py:method:: issue_tls_server_certificate(common_name, ipv4_addresses, ipv6_addresses, domain_names, validity_days, public_key, *, san_critical = False)
+
+      Issues a TLS server certificate without a private key.
+
+      :param common_name: Certificate common name.
+      :param ipv4_addresses: IPv4 addresses for SAN.
+      :param ipv6_addresses: IPv6 addresses for SAN.
+      :param domain_names: Domain names for SAN.
+      :param validity_days: Certificate validity period.
+      :param public_key: Public key for the certificate.
+      :param san_critical: Whether SAN is critical. Defaults to False.
+
+      :returns: The issued TLS server certificate.
+
+
+
+.. py:class:: LocalDomainCredentialIssuer(device, domain)
+
+   Bases: :py:obj:`BaseTlsCredentialIssuer`
+
+
+   Handles issuing domain credentials.
+
+
+   .. py:attribute:: DOMAIN_CREDENTIAL_CN
+      :value: 'Trustpoint Domain Credential'
+
+
+
+   .. py:attribute:: _pseudonym
+      :value: 'Trustpoint Domain Credential'
+
+
+
+   .. py:method:: issue_domain_credential()
+
+      Issues a domain credential for a device.
+
+      :returns: The issued domain credential model.
+
+
+
+   .. py:method:: issue_domain_credential_certificate(public_key)
+
+      Issues a domain credential certificate.
+
+      :param public_key: The public key associated with the issued certificate.
+
+      :returns: The issued domain credential certificate model.
+
+
+
+.. py:class:: OpcUaServerCredentialIssuer(device, domain)
+
+   Bases: :py:obj:`BaseTlsCredentialIssuer`
+
+
+   Issues OPC UA server credentials.
+
+
+   .. py:attribute:: _pseudonym
+      :value: 'Trustpoint OPC UA Server Credential'
+
+
+
+   .. py:method:: _build_san_extension(application_uri, ipv4_addresses, ipv6_addresses, domain_names)
+
+      Builds the Subject Alternative Name (SAN) extension for OPC UA server certificates.
+
+
+
+   .. py:method:: _get_key_usage(public_key)
+
+      Determines Key Usage based on RSA vs ECC.
+
+
+
+   .. py:method:: _validate_application_uri(application_uri)
+
+      Validates the Uniform resource identifier according to OPC UA specification.
+
+
+
+   .. py:method:: issue_opcua_server_credential(common_name, application_uri, ipv4_addresses, ipv6_addresses, domain_names, validity_days = 365)
+
+      Issues an OPC UA server credential (certificate + private key) following OPC UA security standards.
+
+
+
+   .. py:method:: issue_opcua_server_certificate(common_name, application_uri, ipv4_addresses, ipv6_addresses, domain_names, validity_days, public_key)
+
+      Issues an OPC UA server certificate (no private key) following OPC UA security standards.
+
+
+
+.. py:class:: OpcUaClientCredentialIssuer(device, domain)
+
+   Bases: :py:obj:`BaseTlsCredentialIssuer`
+
+
+   Issues OPC UA client credentials.
+
+
+   .. py:attribute:: _pseudonym
+      :value: 'Trustpoint OPC UA Client Credential'
+
+
+
+   .. py:method:: _build_san_extension(application_uri)
+
+      Builds the Subject Alternative Name (SAN) extension for OPC UA client certificates.
+
+
+
+   .. py:method:: _get_key_usage(public_key)
+
+      Determines Key Usage based on RSA vs ECC.
+
+
+
+   .. py:method:: _validate_application_uri(application_uri)
+
+      Validates the Uniform resource identifier according to OPC UA specification.
+
+
+
+   .. py:method:: issue_opcua_client_credential(common_name, application_uri, validity_days = 365)
+
+      Issues an OPC UA client credential (certificate + private key) following OPC UA security standards.
+
+
+
+   .. py:method:: issue_opcua_client_certificate(common_name, application_uri, validity_days, public_key)
+
+      Issues an OPC UA client certificate (no private key) following OPC UA security standards.
+
+
+

@@ -1,0 +1,54 @@
+commands.trustpoint_setup_notifications
+=======================================
+
+.. py:module:: commands.trustpoint_setup_notifications
+
+.. autoapi-nested-parse::
+
+   This module contains a Django management command to generate setup related notifications.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.trustpoint_setup_notifications.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Django management command to set up initial Trustpoint notifications.
+
+   This command initializes and sets up necessary notifications for Trustpoint.
+
+
+   .. py:attribute:: help
+      :value: 'Set up initial Trustpoint notifications.'
+
+
+
+   .. py:method:: handle(*args, **kwargs)
+
+      Entrypoint for the command.
+
+      :param \*args: Additional positional arguments.
+      :param \*\*kwargs: Additional keyword arguments.
+
+
+
+   .. py:method:: _trustpoint_setup_notifications()
+
+      Task to create initial setup notifications for a new Trustpoint instance.
+
+      This includes a welcome notification and links to the project's GitHub repository and homepage.
+
+
+

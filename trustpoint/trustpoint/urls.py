@@ -27,6 +27,7 @@ from django.views.decorators.vary import vary_on_cookie
 from django.views.i18n import JavaScriptCatalog
 from pki.views.issuing_cas import CrlDownloadView
 
+from django.views.generic import RedirectView
 from .views import base
 
 last_modified_date = timezone.now()
@@ -56,5 +57,13 @@ urlpatterns += [
         vary_on_cookie(last_modified(lambda req, **kw: last_modified_date)(JavaScriptCatalog.as_view())),
         name='javascript-catalog',
     ),
+    
     path('', base.IndexView.as_view()),
+
+    # Local Docs entrypoint (redirects to built Sphinx docs)
+    path(
+        "docs/",
+        RedirectView.as_view(url="/static/docs/index.html", permanent=False),
+        name="local_docs_index",
+    ),
 ]

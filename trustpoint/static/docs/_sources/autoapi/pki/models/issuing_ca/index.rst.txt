@@ -1,0 +1,174 @@
+pki.models.issuing_ca
+=====================
+
+.. py:module:: pki.models.issuing_ca
+
+.. autoapi-nested-parse::
+
+   Module that contains the IssuingCaModel.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.models.issuing_ca.IssuingCaModel
+
+
+Module Contents
+---------------
+
+.. py:class:: IssuingCaModel(*args, **kwargs)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`util.db.CustomDeleteActionModel`
+
+
+   Issuing CA Model.
+
+   This model contains the configurations of all Issuing CAs available within the Trustpoint.
+
+
+   .. py:class:: IssuingCaTypeChoice(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.IntegerChoices`
+
+
+      The IssuingCaTypeChoice defines the type of Issuing CA.
+
+      Depending on the type other fields may be set, e.g. a credential will only be available for local
+      Issuing CAs.
+
+
+      .. py:attribute:: AUTOGEN_ROOT
+
+
+      .. py:attribute:: AUTOGEN
+
+
+      .. py:attribute:: LOCAL_UNPROTECTED
+
+
+      .. py:attribute:: LOCAL_PKCS11
+
+
+      .. py:attribute:: REMOTE_EST
+
+
+      .. py:attribute:: REMOTE_CMP
+
+
+
+   .. py:attribute:: unique_name
+
+
+   .. py:attribute:: credential
+      :type:  pki.models.credential.CredentialModel
+
+
+   .. py:attribute:: issuing_ca_type
+
+
+   .. py:attribute:: is_active
+
+
+   .. py:attribute:: created_at
+
+
+   .. py:attribute:: updated_at
+
+
+   .. py:attribute:: last_crl_issued_at
+
+
+   .. py:attribute:: crl_pem
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string that represents this IssuingCaModel entry.
+
+      :returns: Human-readable string that represents this IssuingCaModel entry.
+      :rtype: str
+
+
+
+   .. py:method:: __repr__()
+
+      Returns a string representation of the IssuingCaModel instance.
+
+
+
+   .. py:property:: common_name
+      :type: str
+
+
+      Returns common name.
+
+
+   .. py:method:: create_new_issuing_ca(unique_name, credential_serializer, issuing_ca_type)
+      :classmethod:
+
+
+      Creates a new Issuing CA model and returns it.
+
+      :param unique_name: The unique name that will be used to identify the Issuing CA.
+      :param credential_serializer: The credential as CredentialSerializer instance.
+                                    It will be normalized and validated, if it is a valid credential to be used as an Issuing CA.
+      :param issuing_ca_type: The Issuing CA type.
+
+      :returns: The newly created Issuing CA model.
+      :rtype: IssuingCaModel
+
+
+
+   .. py:method:: issue_crl()
+
+      Issues a CRL with revoked certificates issued by this CA.
+
+
+
+   .. py:property:: signature_suite
+      :type: trustpoint_core.oid.SignatureSuite
+
+
+      The signature suite for the CA public key certificate.
+
+
+   .. py:property:: public_key_info
+      :type: trustpoint_core.oid.PublicKeyInfo
+
+
+      The public key info for the CA certificate's public key.
+
+
+   .. py:method:: get_issued_certificates()
+
+      Returns certificates issued by this CA, except its own in case of a self-signed CA.
+
+      This goes through all active certificates and checks issuance by this CA
+      based on cert.issuer_public_bytes == ca.subject_public_bytes
+      WARNING: This means that it may inadvertently return certificates
+      that were issued by a different CA with the same subject name
+
+
+
+   .. py:method:: revoke_all_issued_certificates(reason = RevokedCertificateModel.ReasonCode.UNSPECIFIED)
+
+      Revokes all certificates issued by this CA.
+
+
+
+   .. py:method:: pre_delete()
+
+      Check for unexpired certificates issued by this CA before deleting it.
+
+
+
+   .. py:method:: post_delete()
+
+      Deletes the credential of this CA after deleting it.
+
+
+

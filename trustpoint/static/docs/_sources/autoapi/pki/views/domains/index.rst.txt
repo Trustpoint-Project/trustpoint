@@ -1,0 +1,421 @@
+pki.views.domains
+=================
+
+.. py:module:: pki.views.domains
+
+.. autoapi-nested-parse::
+
+   Views for managing Domains.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.views.domains.DomainContextMixin
+   pki.views.domains.DomainTableView
+   pki.views.domains.DomainCreateView
+   pki.views.domains.DomainUpdateView
+   pki.views.domains.DomainDevIdRegistrationTableMixin
+   pki.views.domains.DomainConfigView
+   pki.views.domains.DomainDetailView
+   pki.views.domains.DomainCaBulkDeleteConfirmView
+   pki.views.domains.DevIdRegistrationCreateView
+   pki.views.domains.DevIdRegistrationDeleteView
+   pki.views.domains.DevIdMethodSelectView
+   pki.views.domains.IssuedCertificatesView
+
+
+Module Contents
+---------------
+
+.. py:class:: DomainContextMixin
+
+   Bases: :py:obj:`trustpoint.views.base.ContextDataMixin`
+
+
+   Mixin which adds context_data for the PKI -> Issuing CAs pages.
+
+
+   .. py:attribute:: context_page_category
+      :value: 'pki'
+
+
+
+   .. py:attribute:: context_page_name
+      :value: 'domains'
+
+
+
+.. py:class:: DomainTableView
+
+   Bases: :py:obj:`DomainContextMixin`, :py:obj:`trustpoint.views.base.SortableTableMixin`, :py:obj:`django.views.generic.list.ListView`\ [\ :py:obj:`pki.models.DomainModel`\ ]
+
+
+   Domain Table View.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/domains/domain.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'domain-new'
+
+
+
+   .. py:attribute:: paginate_by
+
+
+   .. py:attribute:: default_sort_param
+      :value: 'unique_name'
+
+
+
+.. py:class:: DomainCreateView
+
+   Bases: :py:obj:`DomainContextMixin`, :py:obj:`django.views.generic.edit.CreateView`\ [\ :py:obj:`pki.models.DomainModel`\ , :py:obj:`django.forms.BaseModelForm`\ [\ :py:obj:`pki.models.DomainModel`\ ]\ ]
+
+
+   View to create a new domain.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: fields
+      :value: '__all__'
+
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/domains/add.html'
+
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:method:: get_form(_form_class = None)
+
+      Override get_form to filter out autogen root CAs.
+
+
+
+   .. py:method:: form_valid(form)
+
+      Handle the case where the form is valid.
+
+
+
+.. py:class:: DomainUpdateView
+
+   Bases: :py:obj:`DomainContextMixin`, :py:obj:`django.views.generic.edit.UpdateView`\ [\ :py:obj:`pki.models.DomainModel`\ ]
+
+
+   View to edit a domain.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: fields
+      :value: '__all__'
+
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/domains/add.html'
+
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+.. py:class:: DomainDevIdRegistrationTableMixin(**kwargs)
+
+   Bases: :py:obj:`trustpoint.views.base.SortableTableMixin`, :py:obj:`trustpoint.views.base.ListInDetailView`
+
+
+   Mixin to add a table of DevID Registrations to the domain config view.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: paginate_by
+
+
+   .. py:attribute:: context_object_name
+      :value: 'devid_registrations'
+
+
+
+   .. py:attribute:: default_sort_param
+      :value: 'unique_name'
+
+
+
+   .. py:method:: get_queryset()
+
+      Gets the queryset for the DevID Registration table.
+
+
+
+.. py:class:: DomainConfigView(**kwargs)
+
+   Bases: :py:obj:`DomainContextMixin`, :py:obj:`DomainDevIdRegistrationTableMixin`, :py:obj:`trustpoint.views.base.ListInDetailView`
+
+
+   View to configure a domain, allows adding DevID registration patterns.
+
+
+   .. py:attribute:: detail_model
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/domains/config.html'
+
+
+
+   .. py:attribute:: detail_context_object_name
+      :value: 'domain'
+
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds (no) additional context data.
+
+
+
+   .. py:method:: post(request, *args, **kwargs)
+
+      Handle config form submission.
+
+
+
+.. py:class:: DomainDetailView(**kwargs)
+
+   Bases: :py:obj:`DomainContextMixin`, :py:obj:`DomainDevIdRegistrationTableMixin`, :py:obj:`trustpoint.views.base.ListInDetailView`
+
+
+   View to display domain details.
+
+
+   .. py:attribute:: detail_model
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/domains/details.html'
+
+
+
+   .. py:attribute:: detail_context_object_name
+      :value: 'domain'
+
+
+
+.. py:class:: DomainCaBulkDeleteConfirmView(**kwargs)
+
+   Bases: :py:obj:`DomainContextMixin`, :py:obj:`trustpoint.views.base.BulkDeleteView`
+
+
+   View to confirm the deletion of multiple Domains.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/domains/confirm_delete.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'domains'
+
+
+
+   .. py:method:: form_valid(form)
+
+      Attempt to delete domains if the form is valid.
+
+
+
+.. py:class:: DevIdRegistrationCreateView
+
+   Bases: :py:obj:`DomainContextMixin`, :py:obj:`django.views.generic.edit.FormView`\ [\ :py:obj:`pki.forms.DevIdRegistrationForm`\ ]
+
+
+   View to create a new DevID Registration.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get', 'post')
+
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/devid_registration/add.html'
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Add additional context data.
+
+
+
+   .. py:method:: get_initial()
+
+      Initialize the form with default values.
+
+
+
+   .. py:method:: get_form_kwargs()
+
+      Provide additional arguments to the form.
+
+
+
+   .. py:method:: get_domain()
+
+      Fetch the domain based on the primary key passed in the URL.
+
+
+
+   .. py:method:: get_truststore(truststore_id)
+
+      Fetch the domain based on the primary key passed in the URL.
+
+
+
+   .. py:method:: form_valid(form)
+
+      Handle the case where the form is valid.
+
+
+
+   .. py:method:: get_success_url()
+
+      Return the URL to redirect to upon successful form submission.
+
+
+
+.. py:class:: DevIdRegistrationDeleteView(**kwargs)
+
+   Bases: :py:obj:`DomainContextMixin`, :py:obj:`django.views.generic.DeleteView`
+
+
+   View to delete a DevID Registration.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/devid_registration/confirm_delete.html'
+
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:method:: delete(request, *args, **kwargs)
+
+      Override delete method to add a success message.
+
+
+
+.. py:class:: DevIdMethodSelectView(**kwargs)
+
+   Bases: :py:obj:`DomainContextMixin`, :py:obj:`django.views.generic.edit.FormView`
+
+
+   View to select the method to add a DevID Registration pattern.
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/devid_registration/method_select.html'
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Add additional context data.
+
+
+
+   .. py:method:: form_valid(form)
+
+      Redirect to the view for the selected method.
+
+
+
+.. py:class:: IssuedCertificatesView
+
+   Bases: :py:obj:`trustpoint.views.base.ContextDataMixin`, :py:obj:`django.views.generic.list.ListView`\ [\ :py:obj:`pki.models.CertificateModel`\ ]
+
+
+   View to list certificates issued by a specific Issuing CA for a Domain.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/domains/issued_certificates.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'issued_certificates'
+
+
+
+   .. py:method:: get_queryset()
+
+      Return only certificates associated with the domain's issued credentials.
+
+
+
+   .. py:method:: get_domain()
+
+      Get the domain object based on the URL parameter.
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Pass additional context data to the template.
+
+
+

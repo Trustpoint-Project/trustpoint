@@ -1,0 +1,166 @@
+features.steps.r_102_steps
+==========================
+
+.. py:module:: features.steps.r_102_steps
+
+.. autoapi-nested-parse::
+
+   Python steps file for R_104.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   features.steps.r_102_steps.step_given_user_role
+   features.steps.r_102_steps.step_given_certificate_template_exists
+   features.steps.r_102_steps.step_when_user_attempts_access_templates
+   features.steps.r_102_steps.step_when_user_attempts_modify_template
+   features.steps.r_102_steps.step_when_unauthorized_access_attempted
+   features.steps.r_102_steps.step_when_non_admin_attempts_delete
+   features.steps.r_102_steps.step_when_admin_exports_template
+   features.steps.r_102_steps.step_when_non_admin_attempts_export
+   features.steps.r_102_steps.step_then_access_outcome
+   features.steps.r_102_steps.step_then_modification_outcome
+   features.steps.r_102_steps.step_then_deletion_rejected
+   features.steps.r_102_steps.step_then_error_message_shown
+   features.steps.r_102_steps.step_then_export_encrypted
+   features.steps.r_102_steps.step_then_export_denied
+   features.steps.r_102_steps.step_then_attempt_should_be_logged
+
+
+Module Contents
+---------------
+
+.. py:function:: step_given_user_role(context, role)
+
+   Ensures the user has a specified role.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param role: The role assigned to the user.
+   :type role: str
+
+
+.. py:function:: step_given_certificate_template_exists(context, template_name)
+
+   Ensures that a specific certificate template exists.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param template_name: The name of the certificate template.
+   :type template_name: str
+
+
+.. py:function:: step_when_user_attempts_access_templates(context)
+
+   Simulates a user attempting to access certificate templates.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_user_attempts_modify_template(context)
+
+   Simulates a user attempting to modify a certificate template.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_unauthorized_access_attempted(context)
+
+   Simulates an unauthorized user attempting to access a sensitive certificate template.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_non_admin_attempts_delete(context)
+
+   Simulates a non-admin user attempting to delete a certificate template.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_admin_exports_template(context)
+
+   Simulates an admin exporting a certificate template.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_when_non_admin_attempts_export(context)
+
+   Simulates a non-admin user attempting to export a certificate template.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_access_outcome(context, access_outcome)
+
+   Ensures that access to certificate templates is correctly granted or denied.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param access_outcome: The expected access outcome ('granted' or 'denied').
+   :type access_outcome: str
+
+
+.. py:function:: step_then_modification_outcome(context, modification_outcome)
+
+   Ensures that modification attempts are correctly handled.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param modification_outcome: The expected modification outcome ('allowed' or 'denied').
+   :type modification_outcome: str
+
+
+.. py:function:: step_then_deletion_rejected(context)
+
+   Ensures that unauthorized deletion attempts are rejected.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_error_message_shown(context, error_message)
+
+   Ensures that an appropriate error message is shown for unauthorized actions.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param error_message: The expected error message.
+   :type error_message: str
+
+
+.. py:function:: step_then_export_encrypted(context)
+
+   Ensures that exported certificate templates are encrypted.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_export_denied(context)
+
+   Ensures that unauthorized export attempts are denied.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_then_attempt_should_be_logged(context)
+
+   Ensures that unauthorized actions are logged.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+

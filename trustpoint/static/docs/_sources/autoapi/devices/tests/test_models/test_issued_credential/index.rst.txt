@@ -1,0 +1,51 @@
+devices.tests.test_models.test_issued_credential
+================================================
+
+.. py:module:: devices.tests.test_models.test_issued_credential
+
+.. autoapi-nested-parse::
+
+   Tests for the IssuedCredential model.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   devices.tests.test_models.test_issued_credential.test_issued_credential_creation
+   devices.tests.test_models.test_issued_credential.test_is_valid_domain_credential
+   devices.tests.test_models.test_issued_credential.test_revoke_issued_credential
+   devices.tests.test_models.test_issued_credential.test_get_credential_for_certificate
+   devices.tests.test_models.test_issued_credential.test_pre_delete_issued_credential
+
+
+Module Contents
+---------------
+
+.. py:function:: test_issued_credential_creation(credential_instance, device_instance)
+
+   Test the creation of an IssuedCredentialModel linked to a valid credential.
+
+
+.. py:function:: test_is_valid_domain_credential(credential_instance, device_instance)
+
+   Test the validity of an IssuedCredentialModel instance as a domain credential.
+
+
+.. py:function:: test_revoke_issued_credential(credential_instance, device_instance)
+
+   Test the revocation of all certificates associated with an IssuedCredentialModel.
+
+
+.. py:function:: test_get_credential_for_certificate(credential_instance, device_instance)
+
+   Test retrieving the IssuedCredentialModel for a given certificate.
+
+
+.. py:function:: test_pre_delete_issued_credential(credential_instance, device_instance)
+
+   Test the `pre_delete` method for IssuedCredentialModel.
+
+

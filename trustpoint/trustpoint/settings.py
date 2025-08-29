@@ -44,14 +44,16 @@ LOCALE_PATHS = [BASE_DIR / Path('trustpoint/locale')]
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 
 MEDIA_ROOT = BASE_DIR / Path('media')
 MEDIA_URL = '/media/'
 
-STATICFILES_DIRS = [BASE_DIR / Path('static')]
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-STATIC_ROOT = Path(__file__).parent.parent / Path('collected_static')
+STATIC_ROOT = BASE_DIR / "collected_static"
+
+STATICFILES_DIRS = [BASE_DIR / "static"]
 
 LOG_DIR_PATH = BASE_DIR / Path('media/log/')
 LOG_DIR_PATH.mkdir(parents=True, exist_ok=True)
@@ -65,6 +67,7 @@ PUBLIC_PATHS = [
     '/.well-known/est',
     '/aoki',
     '/crl',
+    '/docs',
 ]
 
 # ------------- Functions --------------
@@ -217,6 +220,7 @@ if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -240,6 +244,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'trustpoint.settings.app_version',
+                'trustpoint.context_processors.docs_flags',
             ],
         },
     },

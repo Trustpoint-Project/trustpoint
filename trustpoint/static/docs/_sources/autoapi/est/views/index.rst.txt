@@ -1,0 +1,486 @@
+est.views
+=========
+
+.. py:module:: est.views
+
+.. autoapi-nested-parse::
+
+   Views for EST (Enrollment over Secure Transport) handling authentication and certificate issuance.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   est.views.THRESHOLD_LOGGER
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   est.views.UsernamePasswordAuthenticationError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   est.views.LoggedHttpResponse
+   est.views.Dispatchable
+   est.views.CredentialRequest
+   est.views.EstAuthenticationMixin
+   est.views.EstHttpMixin
+   est.views.EstRequestedDomainExtractorMixin
+   est.views.EstRequestedCertTemplateExtractorMixin
+   est.views.EstPkiMessageSerializerMixin
+   est.views.DeviceHandlerMixin
+   est.views.CredentialIssuanceMixin
+   est.views.OnboardingMixin
+   est.views.EstSimpleEnrollmentView
+   est.views.EstSimpleReEnrollmentView
+   est.views.EstCACertsView
+   est.views.EstCsrAttrsView
+
+
+Module Contents
+---------------
+
+.. py:exception:: UsernamePasswordAuthenticationError
+
+   Bases: :py:obj:`Exception`
+
+
+   Exception raised for username and password authentication failures.
+
+
+.. py:data:: THRESHOLD_LOGGER
+   :type:  int
+   :value: 400
+
+
+.. py:class:: LoggedHttpResponse(content = b'', status = None, *args, **kwargs)
+
+   Bases: :py:obj:`django.http.HttpResponse`, :py:obj:`trustpoint.logger.LoggerMixin`
+
+
+   Custom HttpResponse that logs and prints error messages automatically.
+
+
+.. py:class:: Dispatchable
+
+   Bases: :py:obj:`Protocol`
+
+
+   Protocol defining a dispatch method for handling HTTP requests.
+
+
+   .. py:method:: dispatch(request, *args, **kwargs)
+
+      Handle the dispatching of an HTTP request.
+
+
+
+.. py:class:: CredentialRequest
+
+   Encapsulates the details extracted from a CSR.
+
+
+   .. py:attribute:: common_name
+      :type:  str
+
+
+   .. py:attribute:: serial_number
+      :type:  str | None
+
+
+   .. py:attribute:: uniform_resource_identifiers
+      :type:  list[str]
+
+
+   .. py:attribute:: ipv4_addresses
+      :type:  list[ipaddress.IPv4Address]
+
+
+   .. py:attribute:: ipv6_addresses
+      :type:  list[ipaddress.IPv6Address]
+
+
+   .. py:attribute:: dns_names
+      :type:  list[str]
+
+
+   .. py:attribute:: public_key
+      :type:  cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey | cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey
+
+
+   .. py:attribute:: request_format
+      :type:  str
+
+
+.. py:class:: EstAuthenticationMixin
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`
+
+
+   Checks for HTTP Basic Authentication before processing the request.
+
+
+   .. py:method:: authenticate_username_password(request)
+      :staticmethod:
+
+
+      Authenticate a user using HTTP Basic credentials and return associated DeviceModel.
+
+      :param request: Django HttpRequest containing the headers.
+      :return: Authenticated DeviceModel instance.
+      :raises UsernamePasswordAuthenticationError: if authentication fails.
+
+
+
+   .. py:method:: authenticate_domain_credential(request)
+
+      Authenticate client using a Domain Credential TLS cert (Mutual TLS), return the associated DeviceModel.
+
+
+
+   .. py:method:: authenticate_reenrollment_application_credential(request, csr)
+
+      Authenticate client using an Application Credential. This is only allowed for reenrolling.
+
+      Only authenticates if subject and SAN in both client cert and CSR match the existing issued credential.
+
+
+
+   .. py:method:: authenticate_request(request, domain, cert_template_str, csr = None)
+
+      Authenticate the request and return a DeviceModel if authentication succeeds.
+
+
+
+   .. py:method:: _authenticate_domain_credential_request(request, domain)
+
+      Authenticate requests for 'domaincredential' certificates and return the associated DeviceModel.
+
+
+
+   .. py:method:: _authenticate_application_certificate_request(request, domain, csr)
+
+      Authenticate requests for application certificate templates and return the associated DeviceModel.
+
+
+
+.. py:class:: EstHttpMixin
+
+   Mixin for processing HTTP requests for EST endpoints.
+
+   This mixin reads the raw message from the request, verifies that the payload:
+     - Does not exceed the maximum allowed size.
+     - Contains the expected content type.
+     - Is optionally decoded from base64 if required.
+
+   Upon successful validation, the mixin delegates the request handling to the parent dispatch method.
+
+
+   .. py:attribute:: expected_content_type
+      :value: 'application/pkcs10'
+
+
+
+   .. py:attribute:: max_payload_size
+      :value: 131072
+
+
+
+   .. py:attribute:: raw_message
+      :type:  bytes
+
+
+   .. py:method:: process_http_request(request)
+
+      Process the incoming HTTP request for EST enrollment.
+
+      The method performs the following checks in order:
+        1. Reads the raw request message and ensures it does not exceed the maximum allowed size.
+        2. Verifies that the request contains a Content-Type header matching the expected type.
+        3. If the request includes a 'Content-Transfer-Encoding' header set to 'base64',
+           decodes the raw message from base64.
+        4. Delegates the remaining request processing to the parent class's dispatch method.
+
+      :param request: The incoming HttpRequest.
+      :return: An LoggedHttpResponse, either an error response or the result of the parent dispatch.
+
+
+
+.. py:class:: EstRequestedDomainExtractorMixin
+
+   Mixin to extract the requested domain.
+
+   This mixin sets:
+     - self.requested_domain: The DomainModel instance based on the 'domain' parameter.
+     - self.issuing_ca_certificate: The CA certificate for the requested domain.
+     - self.signature_suite: The signature suite derived from the CA certificate.
+
+
+   .. py:attribute:: requested_domain
+      :type:  pki.models.domain.DomainModel | None
+
+
+   .. py:method:: extract_requested_domain(domain_name)
+
+      Extracts the requested domain and sets the relevant certificate and signature suite.
+
+      :return: The response from the parent class's dispatch method.
+
+
+
+.. py:class:: EstRequestedCertTemplateExtractorMixin
+
+   Mixin to extract and validate the certificate template from request parameters.
+
+
+   .. py:attribute:: requested_cert_template_str
+      :type:  str
+
+
+   .. py:attribute:: allowed_cert_templates
+      :type:  ClassVar[list[str]]
+      :value: ['tls-server', 'tls-client', 'opcua-client', 'opcua-server', 'domaincredential']
+
+
+
+   .. py:attribute:: cert_template_classes
+      :type:  ClassVar[dict[str, type[object]]]
+
+
+   .. py:method:: extract_cert_template(cert_template)
+
+      Extract and validate the 'certtemplate' parameter, then delegate request processing.
+
+
+
+.. py:class:: EstPkiMessageSerializerMixin
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`
+
+
+   Mixin to handle serialization and deserialization of PKCS#10 certificate signing requests.
+
+
+   .. py:method:: extract_details_from_csr(csr, request_format)
+
+      Loads the CSR (x509.CertificateSigningRequest) and extracts subject and SAN.
+
+
+
+   .. py:method:: _extract_serial_number(subject_attributes)
+
+
+   .. py:method:: _extract_common_name(subject_attributes)
+
+      Extracts the common name from the subject attributes.
+
+
+
+   .. py:method:: _extract_san(csr)
+
+      Extract SAN (Subject Alternative Name) extension values.
+
+
+
+   .. py:method:: deserialize_pki_message(data)
+
+      Deserializes a DER-encoded PKCS#10 certificate signing request.
+
+      :param data: DER-encoded PKCS#10 request bytes.
+      :param requested_cert_template: Certificate template string.
+      :return: An CredentialRequest object.
+      :raises ValueError: If deserialization fails.
+
+
+
+   .. py:method:: verify_csr_signature(csr)
+
+      Verifies that the CSR's signature is valid by using the public key contained in the CSR.
+
+      Supports RSA, ECDSA, and DSA public keys.
+
+
+
+.. py:class:: DeviceHandlerMixin
+
+   Extract the serial number from an X.509 CSR and retrieve or create a DeviceModel instance.
+
+   This mixin assumes the CSR is already deserialized into a cryptography.x509.CertificateSigningRequest object.
+
+
+   .. py:method:: get_or_create_device_from_csr(credential_request, domain, cert_template, device)
+
+      Retrieves a DeviceModel instance using the serial number extracted from the provided CSR.
+
+      If a device with that serial number does not exist, a new one is created.
+
+      :param csr: A cryptography.x509.CertificateSigningRequest instance.
+      :param domain: The DomainModel instance associated with this device.
+      :param cert_template: The X509 Certificate Template to use for this device.
+      :param device: The DeviceModel instance associated with this device.
+      :return: A DeviceModel instance corresponding to the extracted serial number.
+
+
+
+.. py:class:: CredentialIssuanceMixin
+
+   Mixin to handle issuing credentials based on a given certificate template input.
+
+   Required inputs for the `issue_credential` method:
+     - cert_template_str: A string indicating the certificate template type.
+         Supported values: 'tls-server', 'tls-client', or 'domaincredential'.
+     - cert_template_class: The class responsible for issuing the credential.
+     - device: The device instance for which the credential is issued.
+     - domain: The domain instance used during credential issuance.
+     - csr: The certificate signing request (used only for 'domaincredential').
+
+   Additional parameters are used by the specific issuance methods:
+     - common_name: Used for 'tls-client' and 'tls-server' credentials.
+     - validity_days: Used for 'tls-client' and 'tls-server' credentials.
+     - ipv4_addresses, ipv6_addresses, domain_names: Used for 'tls-server' credentials.
+
+
+   .. py:attribute:: cert_template_classes
+      :type:  ClassVar[dict[str, type]]
+
+
+   .. py:method:: _validate_subject_attributes(subject_attributes, allowed_subject_oids)
+
+      Helper method to validate subject attributes.
+
+
+
+   .. py:method:: issue_credential(cert_template_str, device, domain, credential_request)
+
+      Issues a credential based on the specified certificate template and CSR.
+
+      This method handles the credential issuance process, which includes extracting
+      the necessary details from the CSR and domain, and then issuing the requested
+      certificate. The method supports both new certificate issuance and reenrollment.
+
+      :param cert_template_str: The certificate template string indicating the type
+                                of certificate to issue (e.g., 'tls-server', 'tls-client', etc.).
+      :type cert_template_str: str
+      :param device: The device for which the certificate is being issued.
+      :type device: DeviceModel
+      :param domain: The domain associated with the certificate issuance.
+      :type domain: DomainModel
+      :param credential_request: A CredentialRequest object containing processed information
+                                 about the CSR
+      :type credential_request: CredentialRequest
+
+      :returns: The issued credential model that contains the issued certificate and related data.
+      :rtype: IssuedCredentialModel
+
+      :raises ValueError: If the certificate template is invalid or any other error occurs during issuance.
+
+
+
+   .. py:method:: _issue_simpleenroll(device, domain, requested_cert_template_str, credential_request)
+
+      Handles the credential issuance and raises an error if issuance fails.
+
+
+
+   .. py:method:: _issue_based_on_template(cert_template_str, credential_request, device, domain)
+
+      Issues the credential based on the selected template.
+
+
+
+.. py:class:: OnboardingMixin(content = b'', status = None, *args, **kwargs)
+
+   Bases: :py:obj:`LoggedHttpResponse`
+
+
+   A mixin that provides onboarding validation logic for issuing credentials.
+
+
+   .. py:method:: _validate_onboarding(device, credential_request, requested_cert_template_str)
+
+      Validates if the device's onboarding status is appropriate for credential issuance.
+
+
+
+.. py:class:: EstSimpleEnrollmentView(content = b'', status = None, *args, **kwargs)
+
+   Bases: :py:obj:`EstAuthenticationMixin`, :py:obj:`EstHttpMixin`, :py:obj:`EstRequestedDomainExtractorMixin`, :py:obj:`EstRequestedCertTemplateExtractorMixin`, :py:obj:`EstPkiMessageSerializerMixin`, :py:obj:`DeviceHandlerMixin`, :py:obj:`CredentialIssuanceMixin`, :py:obj:`OnboardingMixin`, :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`django.views.View`
+
+
+   Handles simple EST (Enrollment over Secure Transport) enrollment requests.
+
+   This view processes certificate signing requests (CSRs), authenticates the client using
+   either Mutual TLS or username/password, validates the device, and issues the requested certificate
+   based on the certificate template specified in the request.
+
+
+   .. py:method:: post(request, *args, **kwargs)
+
+      Handle POST requests for simple enrollment.
+
+
+
+.. py:class:: EstSimpleReEnrollmentView(content = b'', status = None, *args, **kwargs)
+
+   Bases: :py:obj:`EstAuthenticationMixin`, :py:obj:`EstHttpMixin`, :py:obj:`EstRequestedDomainExtractorMixin`, :py:obj:`EstRequestedCertTemplateExtractorMixin`, :py:obj:`EstPkiMessageSerializerMixin`, :py:obj:`DeviceHandlerMixin`, :py:obj:`CredentialIssuanceMixin`, :py:obj:`OnboardingMixin`, :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`django.views.View`
+
+
+   Handles simple EST (Enrollment over Secure Transport) reenrollment requests.
+
+   This view processes certificate signing requests (CSRs), authenticates the client using
+   either Mutual TLS or username/password, validates the device, and issues the requested certificate
+   based on the certificate template specified in the request.
+
+
+   .. py:method:: post(request, *args, **kwargs)
+
+      Handle POST requests for simple enrollment.
+
+
+
+.. py:class:: EstCACertsView(**kwargs)
+
+   Bases: :py:obj:`EstAuthenticationMixin`, :py:obj:`EstRequestedDomainExtractorMixin`, :py:obj:`django.views.View`, :py:obj:`trustpoint.logger.LoggerMixin`
+
+
+   View to handle the EST /cacerts endpoint.
+
+   Returns the CA certificate chain in a (simplified) PKCS#7 MIME format.
+
+   URL pattern should supply the 'domain' parameter (e.g., /cacerts/<domain>/)
+
+
+   .. py:method:: get(request, *args, **kwargs)
+
+      Handle GET requests for the /cacerts endpoint.
+
+      This method retrieves the CA certificate chain and returns it in PKCS#7 MIME format.
+
+
+
+.. py:class:: EstCsrAttrsView(**kwargs)
+
+   Bases: :py:obj:`django.views.View`, :py:obj:`trustpoint.logger.LoggerMixin`
+
+
+   View to handle the EST /csrattrs endpoint.
+
+   This endpoint is not supported and returns 404 Not Found.
+
+
+   .. py:method:: get(request, *args, **kwargs)
+
+      Handle GET requests for the /csrattrs endpoint.
+
+
+

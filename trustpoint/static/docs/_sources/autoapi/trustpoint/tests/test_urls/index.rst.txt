@@ -1,0 +1,81 @@
+trustpoint.tests.test_urls
+==========================
+
+.. py:module:: trustpoint.tests.test_urls
+
+.. autoapi-nested-parse::
+
+   Tests for the url module.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   trustpoint.tests.test_urls.TestUrls
+
+
+Module Contents
+---------------
+
+.. py:class:: TestUrls
+
+   Test cases for the main `urls.py` of the project.
+
+
+   .. py:method:: test_admin_url_resolves(settings)
+
+      Test that the admin panel URL resolves correctly to the admin site.
+
+
+
+   .. py:method:: test_users_url_included()
+
+      Test that the 'users/' URL pattern is included and resolves to the correct namespace.
+
+
+
+   .. py:method:: test_home_index_url_resolves()
+
+      Test that the home index URL resolves to the correct view.
+
+
+
+   .. py:method:: test_crl_download_url_resolves()
+
+      Test that the CRL download URL pattern resolves to `CrlDownloadView`.
+
+
+
+   .. py:method:: test_setup_wizard_url_included()
+
+      Test that the 'setup-wizard/' URL pattern is included and resolves correctly.
+
+
+
+   .. py:method:: test_devices_url_included()
+
+      Test that the 'devices/' URL pattern is included and resolves correctly.
+
+
+
+   .. py:method:: test_est_url_included()
+
+      Test that the 'est/' URL pattern is included and resolves correctly.
+
+
+
+   .. py:method:: test_cmp_url_included()
+
+      Test that the 'cmp/' URL pattern is included and resolves to the correct namespace.
+
+
+
+   .. py:method:: test_jsi18n_url_resolves()
+
+      Test that the JavaScript Catalog (jsi18n) URL resolves correctly.
+
+
+

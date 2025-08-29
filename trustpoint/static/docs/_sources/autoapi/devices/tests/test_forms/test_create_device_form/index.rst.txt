@@ -1,0 +1,27 @@
+devices.tests.test_forms.test_create_device_form
+================================================
+
+.. py:module:: devices.tests.test_forms.test_create_device_form
+
+.. autoapi-nested-parse::
+
+   Test suite for validating the CreateDeviceForm.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   devices.tests.test_forms.test_create_device_form.test_create_device_form_valid_data
+
+
+Module Contents
+---------------
+
+.. py:function:: test_create_device_form_valid_data(domain_instance)
+
+   Test CreateDeviceForm with valid data.
+
+

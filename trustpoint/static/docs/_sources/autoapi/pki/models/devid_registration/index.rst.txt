@@ -1,0 +1,54 @@
+pki.models.devid_registration
+=============================
+
+.. py:module:: pki.models.devid_registration
+
+.. autoapi-nested-parse::
+
+   Model for the DevID Registration.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.models.devid_registration.DevIdRegistration
+
+
+Module Contents
+---------------
+
+.. py:class:: DevIdRegistration(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Represents a DevID Registration, linking a Truststore, Domain, unique name, and a serial number regex pattern.
+
+
+   .. py:attribute:: unique_name
+
+
+   .. py:attribute:: truststore
+
+
+   .. py:attribute:: domain
+
+
+   .. py:attribute:: serial_number_pattern
+
+
+   .. py:method:: __str__()
+
+      Returns a human-readable string representation of the DevIdRegistration instance.
+
+
+
+   .. py:method:: save(**kwargs)
+
+      Ensures the model is valid and enforces validations before saving.
+
+
+

@@ -1,0 +1,65 @@
+commands.reset_db
+=================
+
+.. py:module:: commands.reset_db
+
+.. autoapi-nested-parse::
+
+   Management command to reset the database and migrations.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.reset_db.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.BaseCommand`
+
+
+   Management command to reset the database and migrations.
+
+
+   .. py:attribute:: help
+      :value: 'Resets the database by deleting current version migrations, dropping the database, then running...
+
+
+
+   .. py:method:: add_arguments(parser)
+
+      Adds command arguments/options.
+
+
+
+   .. py:method:: handle(*_args, **options)
+
+      Executes the command.
+
+
+
+   .. py:method:: _remove_migration_files(base_path, *_args, keep_established)
+
+      Removes all Django migration files.
+
+
+
+   .. py:method:: _reset_sqlite(base_path)
+
+      Deletes the SQLite database file.
+
+
+
+   .. py:method:: _reset_postgresql()
+
+      Drops and recreates the PostgreSQL database.
+
+
+

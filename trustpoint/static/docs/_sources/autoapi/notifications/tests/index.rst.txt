@@ -1,0 +1,21 @@
+notifications.tests
+===================
+
+.. py:module:: notifications.tests
+
+.. autoapi-nested-parse::
+
+   Test module for the Notifications app.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/notifications/tests/conftest/index
+   /autoapi/notifications/tests/test_models/index
+
+

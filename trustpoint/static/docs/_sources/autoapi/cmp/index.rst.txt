@@ -1,0 +1,23 @@
+cmp
+===
+
+.. py:module:: cmp
+
+.. autoapi-nested-parse::
+
+   Django CMP Application Package.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/cmp/apps/index
+   /autoapi/cmp/urls/index
+   /autoapi/cmp/util/index
+   /autoapi/cmp/views/index
+
+

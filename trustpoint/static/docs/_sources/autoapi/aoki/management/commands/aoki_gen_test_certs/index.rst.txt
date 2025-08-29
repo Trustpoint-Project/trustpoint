@@ -1,0 +1,103 @@
+aoki.management.commands.aoki_gen_test_certs
+============================================
+
+.. py:module:: aoki.management.commands.aoki_gen_test_certs
+
+.. autoapi-nested-parse::
+
+   Generates a testing IDevID PKI and associated Owner Certificate PKI for AOKI testing.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   aoki.management.commands.aoki_gen_test_certs.TEST_SERIAL_NUMBER
+   aoki.management.commands.aoki_gen_test_certs.CURRENT_DIR
+   aoki.management.commands.aoki_gen_test_certs.CERTS_DIR
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   aoki.management.commands.aoki_gen_test_certs.Command
+   aoki.management.commands.aoki_gen_test_certs.AokiTestCertGenerator
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   aoki.management.commands.aoki_gen_test_certs.write_private_key
+   aoki.management.commands.aoki_gen_test_certs.write_cert_pem
+
+
+Module Contents
+---------------
+
+.. py:data:: TEST_SERIAL_NUMBER
+   :value: '4212'
+
+
+.. py:data:: CURRENT_DIR
+
+.. py:data:: CERTS_DIR
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Command to check for certificates using insufficient RSA key lengths.
+
+
+   .. py:attribute:: help
+      :value: 'Check certificates with insufficient key lengths.'
+
+
+
+   .. py:method:: handle(*args, **kwargs)
+
+      Entrypoint for the command.
+
+      :param \*args: Additional positional arguments.
+      :param \*\*kwargs: Additional keyword arguments.
+
+
+
+.. py:function:: write_private_key(key, file)
+
+   Write the private key to a PEM file.
+
+
+.. py:function:: write_cert_pem(cert, file)
+
+   Write the certificate to a PEM file.
+
+
+.. py:class:: AokiTestCertGenerator
+
+   Generates a testing IDevID PKI and associated Owner Certificate PKI for AOKI testing.
+
+
+   .. py:method:: generate_idevid_pki()
+      :staticmethod:
+
+
+      Generates a testing IDevID PKI.
+
+
+
+   .. py:method:: generate_owner_id_cert(idevid_cert)
+      :staticmethod:
+
+
+      Generate the DeviceOwnerID certificate.
+
+
+

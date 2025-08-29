@@ -1,0 +1,50 @@
+commands.check_for_weak_ecc_curves
+==================================
+
+.. py:module:: commands.check_for_weak_ecc_curves
+
+.. autoapi-nested-parse::
+
+   Management command to check for weak ECC curves.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.check_for_weak_ecc_curves.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Custom Django management command to check certificates for deprecated or weak ECC curves.
+
+
+   .. py:attribute:: help
+      :value: 'Check certificates using weak or deprecated ECC curves.'
+
+
+
+   .. py:method:: handle(*args, **kwargs)
+
+      Entrypoint for the command.
+
+      :param \*args: Additional positional arguments.
+      :param \*\*kwargs: Additional keyword arguments.
+
+
+
+   .. py:method:: _check_for_weak_ecc_curves()
+
+      Task to check if any certificates are using deprecated or weak ECC curves.
+
+
+

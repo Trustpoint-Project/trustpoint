@@ -1,0 +1,133 @@
+notifications.tests.test_models
+===============================
+
+.. py:module:: notifications.tests.test_models
+
+.. autoapi-nested-parse::
+
+   Tests for the NotificationModel model and related functionality in the notifications app.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   notifications.tests.test_models.DEFAULT_EXPIRY_WARNING_DAYS
+   notifications.tests.test_models.DEFAULT_RSA_KEY_SIZE
+   notifications.tests.test_models.EXPECTED_STATUS_COUNT
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   notifications.tests.test_models.test_create_notification_with_issuing_ca
+   notifications.tests.test_models.test_create_notification_with_domain
+   notifications.tests.test_models.test_notification_translations_for_builtins
+   notifications.tests.test_models.test_unknown_message_type_fallback
+   notifications.tests.test_models.test_notification_with_multiple_statuses
+   notifications.tests.test_models.test_notification_str_fallback_missing_message
+   notifications.tests.test_models.test_notification_str_with_long_message
+   notifications.tests.test_models.test_notification_str_with_empty_message
+   notifications.tests.test_models.test_notification_str_with_special_characters
+   notifications.tests.test_models.test_notification_for_issuing_ca_creation
+   notifications.tests.test_models.test_create_notification_with_device
+   notifications.tests.test_models.test_notification_config_defaults
+   notifications.tests.test_models.test_notification_created_at_auto_now
+   notifications.tests.test_models.test_notification_event_filtering
+   notifications.tests.test_models.test_custom_message_with_empty_descriptions
+
+
+Module Contents
+---------------
+
+.. py:data:: DEFAULT_EXPIRY_WARNING_DAYS
+   :value: 30
+
+
+.. py:data:: DEFAULT_RSA_KEY_SIZE
+   :value: 2048
+
+
+.. py:data:: EXPECTED_STATUS_COUNT
+   :value: 2
+
+
+.. py:function:: test_create_notification_with_issuing_ca(test_message, test_status, setup_test_issuing_ca)
+
+   Test creation of a NotificationModel linked to an Issuing CA.
+
+
+.. py:function:: test_create_notification_with_domain(test_message, test_status, test_domain)
+
+   Test creation of a NotificationModel linked to a domain.
+
+
+.. py:function:: test_notification_translations_for_builtins(test_status)
+
+   Test translated messages for built-in (non-CUSTOM) notification types.
+
+
+.. py:function:: test_unknown_message_type_fallback(test_status)
+
+   Test fallback behavior when an unknown message_type is provided.
+
+
+.. py:function:: test_notification_with_multiple_statuses(test_message, test_domain)
+
+   Test that multiple statuses can be added to a NotificationModel.
+
+
+.. py:function:: test_notification_str_fallback_missing_message(test_domain)
+
+   Test that __str__ handles missing message (should not raise).
+
+
+.. py:function:: test_notification_str_with_long_message(test_domain)
+
+   Test that __str__ properly truncates long messages to 20 characters.
+
+
+.. py:function:: test_notification_str_with_empty_message(test_domain)
+
+   Test that __str__ handles empty message description properly.
+
+
+.. py:function:: test_notification_str_with_special_characters(test_domain)
+
+   Test that __str__ handles messages with special characters properly.
+
+
+.. py:function:: test_notification_for_issuing_ca_creation(test_message, test_status, setup_test_issuing_ca)
+
+   Test notification creation when a new issuing CA is created.
+
+
+.. py:function:: test_create_notification_with_device(test_message, test_status, test_device)
+
+   Test creation of a NotificationModel linked to a device.
+
+
+.. py:function:: test_notification_config_defaults()
+
+   Test NotificationConfig default values and singleton behavior.
+
+
+.. py:function:: test_notification_created_at_auto_now()
+
+   Test that created_at is automatically set when creating a notification.
+
+
+.. py:function:: test_notification_event_filtering()
+
+   Test that notifications can be filtered by event.
+
+
+.. py:function:: test_custom_message_with_empty_descriptions()
+
+   Test custom notification message with empty descriptions.
+
+

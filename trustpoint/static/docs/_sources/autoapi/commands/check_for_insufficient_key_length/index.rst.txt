@@ -1,0 +1,50 @@
+commands.check_for_insufficient_key_length
+==========================================
+
+.. py:module:: commands.check_for_insufficient_key_length
+
+.. autoapi-nested-parse::
+
+   Management command to check certificates with insufficient key lengths.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.check_for_insufficient_key_length.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Command to check for certificates using insufficient RSA key lengths.
+
+
+   .. py:attribute:: help
+      :value: 'Check certificates with insufficient key lengths.'
+
+
+
+   .. py:method:: handle(*args, **kwargs)
+
+      Entrypoint for the command.
+
+      :param \*args: Additional positional arguments.
+      :param \*\*kwargs: Additional keyword arguments.
+
+
+
+   .. py:method:: _check_for_insufficient_key_length()
+
+      Task to check if any certificates are using insufficient key lengths.
+
+
+

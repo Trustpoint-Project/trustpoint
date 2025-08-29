@@ -1,0 +1,40 @@
+aoki.apps
+=========
+
+.. py:module:: aoki.apps
+
+.. autoapi-nested-parse::
+
+   Django application configuration for the AOKI app.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   aoki.apps.AokiConfig
+
+
+Module Contents
+---------------
+
+.. py:class:: AokiConfig(app_name, app_module)
+
+   Bases: :py:obj:`django.apps.AppConfig`
+
+
+   Configuration for the AOKI app.
+
+
+   .. py:attribute:: default_auto_field
+      :value: 'django.db.models.BigAutoField'
+
+
+
+   .. py:attribute:: name
+      :value: 'aoki'
+
+
+

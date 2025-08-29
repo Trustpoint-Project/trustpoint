@@ -1,0 +1,52 @@
+pki.tests.test_models.test_domain_model
+=======================================
+
+.. py:module:: pki.tests.test_models.test_domain_model
+
+.. autoapi-nested-parse::
+
+   Test the DomainModel class.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   pki.tests.test_models.test_domain_model.COMMON_NAME
+   pki.tests.test_models.test_domain_model.UNIQUE_NAME
+   pki.tests.test_models.test_domain_model.CA_TYPE
+   pki.tests.test_models.test_domain_model.DOMAIN_UNIQUE_NAME
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   pki.tests.test_models.test_domain_model.test_attributes_and_properties
+
+
+Module Contents
+---------------
+
+.. py:data:: COMMON_NAME
+   :value: 'Root CA'
+
+
+.. py:data:: UNIQUE_NAME
+   :value: ''
+
+
+.. py:data:: CA_TYPE
+
+.. py:data:: DOMAIN_UNIQUE_NAME
+   :value: 'domain_name'
+
+
+.. py:function:: test_attributes_and_properties(domain_instance)
+
+   Test that the common_name property returns the certificate's common name.
+
+

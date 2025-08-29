@@ -1,0 +1,46 @@
+pki.apps
+========
+
+.. py:module:: pki.apps
+
+.. autoapi-nested-parse::
+
+   Configuration for the PKI app.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.apps.PkiConfig
+
+
+Module Contents
+---------------
+
+.. py:class:: PkiConfig(app_name, app_module)
+
+   Bases: :py:obj:`django.apps.AppConfig`
+
+
+   Configuration for the PKI app.
+
+
+   .. py:attribute:: default_auto_field
+      :value: 'django.db.models.BigAutoField'
+
+
+
+   .. py:attribute:: name
+      :value: 'pki'
+
+
+
+   .. py:method:: ready()
+
+      PKI app initialization.
+
+
+

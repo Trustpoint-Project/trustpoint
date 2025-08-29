@@ -1,0 +1,22 @@
+settings.management.commands
+============================
+
+.. py:module:: settings.management.commands
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/settings/management/commands/compilemsg/index
+   /autoapi/settings/management/commands/inittrustpoint/index
+   /autoapi/settings/management/commands/makemsg/index
+   /autoapi/settings/management/commands/managestartup/index
+   /autoapi/settings/management/commands/printversion/index
+   /autoapi/settings/management/commands/tls_cred/index
+   /autoapi/settings/management/commands/trustpointbackup/index
+   /autoapi/settings/management/commands/trustpointrestore/index
+
+

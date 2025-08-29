@@ -1,0 +1,73 @@
+settings.security.mixins
+========================
+
+.. py:module:: settings.security.mixins
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.security.mixins.SecurityLevelMixin
+   settings.security.mixins.SecurityLevelMixinRedirect
+
+
+Module Contents
+---------------
+
+.. py:class:: SecurityLevelMixin(security_feature = None, *args, **kwargs)
+
+   A mixin that provides security feature checks for Django views.
+
+
+   .. py:attribute:: sec
+
+
+   .. py:attribute:: security_feature
+      :value: None
+
+
+
+   .. py:method:: get_security_level()
+
+      Returns the security mode of the current security level instance.
+
+      Returns:
+      --------
+      str
+          The security mode of the current security level instance.
+
+
+
+.. py:class:: SecurityLevelMixinRedirect(disabled_by_security_level_url=None, *args, **kwargs)
+
+   Bases: :py:obj:`SecurityLevelMixin`
+
+
+   A mixin that provides security feature checks for Django views with redirect feature.
+
+
+   .. py:attribute:: disabled_by_security_level_url
+      :value: None
+
+
+
+   .. py:method:: dispatch(request, *args, **kwargs)
+
+      If the feature is not allowed, the user is redirected to the disabled_by_security_level_url with an error message.
+
+      Parameters:
+      -----------
+      request : HttpRequest
+          The HTTP request object.
+      *args, **kwargs:
+          Additional arguments passed to the dispatch method.
+
+      Returns:
+      --------
+      HttpResponse or HttpResponseRedirect
+          The HTTP response object, either continuing to the requested view or redirecting.
+
+
+

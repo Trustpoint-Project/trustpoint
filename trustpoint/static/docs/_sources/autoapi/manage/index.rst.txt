@@ -1,0 +1,27 @@
+manage
+======
+
+.. py:module:: manage
+
+.. autoapi-nested-parse::
+
+   Django's command-line utility for administrative tasks.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   manage.main
+
+
+Module Contents
+---------------
+
+.. py:function:: main()
+
+   Run administrative tasks.
+
+

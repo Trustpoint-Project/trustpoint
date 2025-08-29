@@ -1,0 +1,280 @@
+features.steps.f_001_steps
+==========================
+
+.. py:module:: features.steps.f_001_steps
+
+.. autoapi-nested-parse::
+
+   Python steps for F_001.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   features.steps.f_001_steps.step_given_nteu_credentials
+   features.steps.f_001_steps.step_when_user_attempts_login
+   features.steps.f_001_steps.step_then_login_outcome
+   features.steps.f_001_steps.step_given_nteu_logged_in
+   features.steps.f_001_steps.step_when_nteu_navigates_to_identity_creation
+   features.steps.f_001_steps.step_when_nteu_enters_identity_details
+   features.steps.f_001_steps.step_when_nteu_submits_form
+   features.steps.f_001_steps.step_then_identity_created
+   features.steps.f_001_steps.step_when_nteu_navigates_to_identity_list
+   features.steps.f_001_steps.step_when_nteu_selects_identity
+   features.steps.f_001_steps.step_then_identity_details_displayed
+   features.steps.f_001_steps.step_when_nteu_edits_identity
+   features.steps.f_001_steps.step_then_identity_updated
+   features.steps.f_001_steps.step_when_nteu_deletes_identity
+   features.steps.f_001_steps.step_then_identity_removed
+   features.steps.f_001_steps.step_when_nteu_starts_onboarding
+   features.steps.f_001_steps.step_then_system_uses_zto_protocol
+   features.steps.f_001_steps.step_then_onboarding_successful
+   features.steps.f_001_steps.step_given_digital_identity_exists
+   features.steps.f_001_steps.step_given_nteu_is_on_any_action_page
+   features.steps.f_001_steps.step_when_nteu_enters_invalid_information
+   features.steps.f_001_steps.step_then_system_should_display_clear_error_msg
+   features.steps.f_001_steps.step_then_provide_guidance_for_correction
+
+
+Module Contents
+---------------
+
+.. py:function:: step_given_nteu_credentials(context, username, password)
+
+   Sets up NTEU login credentials.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+   :param username: The NTEU username.
+   :type username: str
+   :param password: The NTEU password.
+   :type password: str
+
+   :returns: None
+
+
+.. py:function:: step_when_user_attempts_login(context)
+
+   Simulates an NTEU attempting to log in.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_then_login_outcome(context, login_outcome)
+
+   Verifies the login outcome.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+   :param login_outcome: The expected login outcome.
+   :type login_outcome: str
+
+   :returns: None
+
+
+.. py:function:: step_given_nteu_logged_in(context)
+
+   Ensures the NTEU is logged into the system.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_when_nteu_navigates_to_identity_creation(context)
+
+   Simulates NTEU navigating to the identity creation page.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_when_nteu_enters_identity_details(context)
+
+   Simulates NTEU entering valid identity details.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_when_nteu_submits_form(context)
+
+   Simulates NTEU submitting a form.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_then_identity_created(context)
+
+   Verifies that the identity was created successfully.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_when_nteu_navigates_to_identity_list(context)
+
+   Simulates NTEU navigating to the identity list.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_when_nteu_selects_identity(context)
+
+   Simulates NTEU selecting an identity.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_then_identity_details_displayed(context)
+
+   Verifies that identity details are displayed.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_when_nteu_edits_identity(context)
+
+   Simulates NTEU editing identity details.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_then_identity_updated(context)
+
+   Verifies that the identity was updated successfully.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_when_nteu_deletes_identity(context)
+
+   Simulates NTEU deleting an identity.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_then_identity_removed(context)
+
+   Verifies that the identity was removed.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_when_nteu_starts_onboarding(context)
+
+   Simulates NTEU initiating device onboarding.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_then_system_uses_zto_protocol(context)
+
+   Verifies that the system uses a zero-touch onboarding protocol.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_then_onboarding_successful(context)
+
+   Verifies that the onboarding process completes successfully.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_given_digital_identity_exists(context)
+
+   Assesses whether a digital identity exists.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_given_nteu_is_on_any_action_page(context)
+
+   Verifies that the NTEU is on any action page.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_when_nteu_enters_invalid_information(context)
+
+   Simulates NTEU entering invalid information.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_then_system_should_display_clear_error_msg(context)
+
+   Verifies that the system displays a clear error message.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+
+.. py:function:: step_then_provide_guidance_for_correction(context)
+
+   Verifies that the system provides guidance for correction.
+
+   :param context: The Behave context.
+   :type context: runner.Context
+
+   :returns: None
+
+

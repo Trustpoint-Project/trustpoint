@@ -1,0 +1,76 @@
+pki.tests.conftest
+==================
+
+.. py:module:: pki.tests.conftest
+
+.. autoapi-nested-parse::
+
+   pytest configuration for the tests in the PKI app.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   pki.tests.conftest.CA_COMMON_NAME
+   pki.tests.conftest.UNIQUE_NAME
+   pki.tests.conftest.CA_TYPE
+   pki.tests.conftest.DOMAIN_UNIQUE_NAME
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   pki.tests.conftest.enable_db_access_for_all_tests
+   pki.tests.conftest.rsa_private_key
+   pki.tests.conftest.ec_private_key
+   pki.tests.conftest.issuing_ca_instance
+   pki.tests.conftest.domain_instance
+
+
+Module Contents
+---------------
+
+.. py:function:: enable_db_access_for_all_tests(db)
+
+   Fixture to enable database access for all tests.
+
+
+.. py:function:: rsa_private_key()
+
+   Generate a reusable RSA private key.
+
+
+.. py:function:: ec_private_key()
+
+   Generate a reusable EC private key.
+
+
+.. py:data:: CA_COMMON_NAME
+   :value: 'Root CA'
+
+
+.. py:data:: UNIQUE_NAME
+   :value: ''
+
+
+.. py:data:: CA_TYPE
+
+.. py:data:: DOMAIN_UNIQUE_NAME
+   :value: 'domain_name'
+
+
+.. py:function:: issuing_ca_instance()
+
+   Fixture for a testing IssuingCaModel instance.
+
+
+.. py:function:: domain_instance(issuing_ca_instance)
+
+   Fixture for a DomainModel instance using a valid issuing CA.
+
+

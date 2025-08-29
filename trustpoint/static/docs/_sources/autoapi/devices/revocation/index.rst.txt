@@ -1,0 +1,35 @@
+devices.revocation
+==================
+
+.. py:module:: devices.revocation
+
+.. autoapi-nested-parse::
+
+   Module to handle revocation logic for devices and device credentials.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   devices.revocation.DeviceCredentialRevocation
+
+
+Module Contents
+---------------
+
+.. py:class:: DeviceCredentialRevocation
+
+   Class to handle revocation logic for devices and device credentials.
+
+
+   .. py:method:: revoke_certificate(issued_credential_id, reason)
+      :staticmethod:
+
+
+      Revokes a certificate given an ID of an IssuedCredentialModel instance.
+
+
+

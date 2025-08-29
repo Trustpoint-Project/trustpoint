@@ -1,0 +1,111 @@
+features.steps.common_steps
+===========================
+
+.. py:module:: features.steps.common_steps
+
+.. autoapi-nested-parse::
+
+   File for steps which are used more often across multiple feature files.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   features.steps.common_steps.HTTP_OK
+   features.steps.common_steps.logger
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   features.steps.common_steps.step_tpc_web_running
+   features.steps.common_steps.commentary_step
+   features.steps.common_steps.step_admin_logged_in
+   features.steps.common_steps.step_confirmation_message
+   features.steps.common_steps.step_error_message
+   features.steps.common_steps.step_api_client_authenticated
+   features.steps.common_steps.step_verify_status_code
+   features.steps.common_steps.step_verify_error_message
+
+
+Module Contents
+---------------
+
+.. py:data:: HTTP_OK
+   :value: 200
+
+
+.. py:data:: logger
+
+.. py:function:: step_tpc_web_running(context)
+
+   Verifies that the TPC_Web application is running.
+
+   This step checks that the TPC_Web application is running and accessible at the expected URL.
+
+   :param context: the behave context
+
+
+.. py:function:: commentary_step(context)
+
+   Provides annotation "@Commentary" inside feature files for additional text explanation.
+
+   :param context: the behave context
+
+
+.. py:function:: step_admin_logged_in(context)
+
+   Logs the admin user into the TPC_Web interface.
+
+   This step sets up the initial state for all scenarios, ensuring the admin is authenticated and on the TPC_Web
+   dashboard.
+
+   :param context: the behave context
+
+
+.. py:function:: step_confirmation_message(context)
+
+   Verifies that the system displays a success message after an action.
+
+   :param context: the behave context
+
+
+.. py:function:: step_error_message(context, error_message)
+
+   Verifies that the system displays a specific error message.
+
+   :param context: the behave context
+   :param error_message: The expected error message text.
+   :type error_message: str
+
+
+.. py:function:: step_api_client_authenticated(context)
+
+   Authenticates the API client to enable authorized interactions with the REST API.
+
+   :param context: the behave context
+
+
+.. py:function:: step_verify_status_code(context, status_code)
+
+   Verifies the API response status code.
+
+   :param context: the behave context
+   :param status_code: The expected status code.
+   :type status_code: str
+
+
+.. py:function:: step_verify_error_message(context, error_message)
+
+   Verifies the response payload includes the specified error message.
+
+   :param context: the behave context
+   :param error_message: The expected error message text.
+   :type error_message: str
+
+

@@ -1,0 +1,466 @@
+cmp.views
+=========
+
+.. py:module:: cmp.views
+
+.. autoapi-nested-parse::
+
+   This module contains the CMP endpoints (views).
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   cmp.views.UTC_TIME_THRESHOLD
+   cmp.views.UTC_TIME_CORRECTION
+   cmp.views.CERT_TEMPLATE_VERSION
+   cmp.views.DEFAULT_VALIDITY_DAYS
+   cmp.views.CMP_MESSAGE_VERSION
+   cmp.views.SENDER_NONCE_LENGTH
+   cmp.views.TRANSACTION_ID_LENGTH
+   cmp.views.IMPLICIT_CONFIRM_OID
+   cmp.views.IMPLICIT_CONFIRM_STR_VALUE
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   cmp.views.ApplicationCertificateTemplateNames
+   cmp.views.Dispatchable
+   cmp.views.CmpHttpMixin
+   cmp.views.CmpRequestedDomainExtractorMixin
+   cmp.views.CmpPkiMessageSerializerMixin
+   cmp.views.CmpRequestTemplateExtractorMixin
+   cmp.views.CmpResponseBuilderMixin
+   cmp.views.CmpInitializationRequestView
+   cmp.views.CmpCertificationRequestView
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   cmp.views.is_supported_public_key
+   cmp.views.load_supported_public_key_type
+   cmp.views.get_encoded_protected_part
+   cmp.views.convert_rfc2459_time
+
+
+Module Contents
+---------------
+
+.. py:data:: UTC_TIME_THRESHOLD
+   :value: 2050
+
+
+.. py:data:: UTC_TIME_CORRECTION
+   :value: 100
+
+
+.. py:data:: CERT_TEMPLATE_VERSION
+   :value: 2
+
+
+.. py:data:: DEFAULT_VALIDITY_DAYS
+   :value: 10
+
+
+.. py:data:: CMP_MESSAGE_VERSION
+   :value: 2
+
+
+.. py:data:: SENDER_NONCE_LENGTH
+   :value: 16
+
+
+.. py:data:: TRANSACTION_ID_LENGTH
+   :value: 16
+
+
+.. py:function:: is_supported_public_key(public_key)
+
+   TypeGuard function that narrows down the public key type.
+
+   :param public_key: The loaded public key to check if it is supported.
+
+   :returns: True if it is supported, False otherwise.
+
+
+.. py:function:: load_supported_public_key_type(der_bytes)
+
+   Tries to load the public key from bytes and checks if it is a supported key.
+
+   :param der_bytes: The bytes containing the key.
+
+   :raises ValueError: If loading of the public key failed.
+   :raises TypeError: If the loaded public key is of an unsupported type.
+
+   :returns: The loaded public key.
+
+
+.. py:class:: ApplicationCertificateTemplateNames(*args, **kwds)
+
+   Bases: :py:obj:`enum.Enum`
+
+
+   Application Certificate Template.
+
+
+   .. py:attribute:: TLS_CLIENT
+      :value: 'tls-client'
+
+
+
+   .. py:attribute:: TLS_SERVER
+      :value: 'tls-server'
+
+
+
+   .. py:attribute:: OPCUA_SERVER
+      :value: 'opcua-server'
+
+
+
+   .. py:attribute:: OPCUA_CLIENT
+      :value: 'opcua-client'
+
+
+
+.. py:data:: IMPLICIT_CONFIRM_OID
+   :value: '1.3.6.1.5.5.7.4.13'
+
+
+.. py:data:: IMPLICIT_CONFIRM_STR_VALUE
+   :value: '0x0500'
+
+
+.. py:class:: Dispatchable
+
+   Bases: :py:obj:`Protocol`
+
+
+   Dispatchable Protocol.
+
+
+   .. py:method:: dispatch(request, *args, **kwargs)
+
+      Dispatch method.
+
+
+
+.. py:class:: CmpHttpMixin
+
+   CMP Http Validations.
+
+
+   .. py:attribute:: expected_content_type
+      :value: 'application/pkixcmp'
+
+
+
+   .. py:attribute:: max_payload_size
+      :value: 131072
+
+
+
+   .. py:attribute:: raw_message
+      :type:  bytes
+
+
+   .. py:method:: dispatch(request, *args, **kwargs)
+
+      Dispatch method.
+
+
+
+.. py:class:: CmpRequestedDomainExtractorMixin
+
+   Domain name extractor.
+
+
+   .. py:attribute:: requested_domain
+      :type:  pki.models.domain.DomainModel
+
+
+   .. py:attribute:: is_aoki
+      :type:  bool
+      :value: False
+
+
+
+   .. py:method:: dispatch(request, *args, **kwargs)
+
+      Dispatch method.
+
+
+
+.. py:class:: CmpPkiMessageSerializerMixin
+
+   CMP message serialization.
+
+
+   .. py:attribute:: raw_message
+      :type:  bytes
+
+
+   .. py:attribute:: serialized_pyasn1_message
+      :type:  None | pyasn1_modules.rfc4210.PKIMessage
+
+
+   .. py:method:: dispatch(request, *args, **kwargs)
+
+      Dispatch method.
+
+
+
+.. py:class:: CmpRequestTemplateExtractorMixin
+
+   CMP template extractor.
+
+
+   .. py:attribute:: application_certificate_template
+      :type:  ApplicationCertificateTemplateNames | None
+      :value: None
+
+
+
+   .. py:method:: dispatch(request, *args, **kwargs)
+
+      Dispatch method.
+
+
+
+   .. py:method:: _check_header(serialized_pyasn1_message)
+      :staticmethod:
+
+
+      Checks some parts of the header.
+
+
+
+   .. py:method:: _extract_cert_req_template(pki_body)
+
+      Extracts the certificate request template from the PKI (IR/CR) message body.
+
+
+
+   .. py:method:: get_subject_common_name(cert_req_template)
+      :staticmethod:
+
+
+      Extracts the common name from the subject in the certificate request template.
+
+
+
+   .. py:method:: _load_cert_req_public_key(cert_req_template)
+
+
+   .. py:method:: _verify_protection_shared_secret(serialized_pyasn1_message, shared_secret)
+      :staticmethod:
+
+
+      Verifies the HMAC-based protection of a CMP message using a shared secret.
+
+      Returns a new HMAC object that can be used to sign the response message.
+
+
+
+   .. py:method:: _verify_protection_signature(serialized_pyasn1_message, cmp_signer_cert)
+      :staticmethod:
+
+
+      Verifies the message signature of a CMP message using signature-based protection.
+
+
+
+.. py:class:: CmpResponseBuilderMixin
+
+   Mixin for CMP response message building shared between request types.
+
+
+   .. py:method:: _parse_san_extension(cert_req_template)
+      :staticmethod:
+
+
+      Parses the (mandatory) SAN extension from the certificate request template.
+
+      Returns a dictionary with the following keys:
+          - 'dns_names': List of DNS/domain names.
+          - 'ipv4_addresses': List of IPv4 addresses.
+          - 'ipv6_addresses': List of IPv6 addresses.
+          - 'uris': List of URIs.
+          - 'san_critical': Boolean indicating if the SAN extension is critical.
+
+
+
+   .. py:method:: _issue_application_credential(cert_req_template, public_key, device, application_certificate_template)
+      :staticmethod:
+
+
+      Issues an application certificate for CMP CR.
+
+
+
+   .. py:method:: _build_response_message_header(serialized_pyasn1_message, sender_kid, issuer_credential)
+      :staticmethod:
+
+
+      Builds the PKI response message header for the IP and CP response messages.
+
+
+
+   .. py:method:: _add_protection_shared_secret(pki_message, hmac_gen)
+      :staticmethod:
+
+
+      Adds HMAC-based shared-secret protection to the base PKI message.
+
+
+
+   .. py:method:: _sign_pki_message(pki_message, signer_credential)
+
+      Applies signature-based protection to the base PKI message.
+
+
+
+.. py:function:: get_encoded_protected_part(cmp_message)
+
+   Encode the protected part of the CMP message.
+
+
+.. py:class:: CmpInitializationRequestView(**kwargs)
+
+   Bases: :py:obj:`CmpHttpMixin`, :py:obj:`CmpRequestedDomainExtractorMixin`, :py:obj:`CmpPkiMessageSerializerMixin`, :py:obj:`CmpRequestTemplateExtractorMixin`, :py:obj:`CmpResponseBuilderMixin`, :py:obj:`django.views.generic.base.View`
+
+
+   Handles CMP Initialization Request Messages.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('post',)
+
+
+
+   .. py:attribute:: raw_message
+      :type:  bytes
+
+
+   .. py:attribute:: serialized_pyasn1_message
+      :type:  pyasn1_modules.rfc4210.PKIMessage
+
+
+   .. py:attribute:: requested_domain
+      :type:  pki.models.domain.DomainModel
+
+
+   .. py:attribute:: device
+      :type:  None | devices.models.DeviceModel
+      :value: None
+
+
+
+   .. py:method:: _extract_ir_body()
+
+
+   .. py:method:: _build_base_ip_message(issued_cred, issuer_credential, sender_kid, signer_credential = None)
+
+      Builds the IP response message (without the protection).
+
+
+
+   .. py:method:: _handle_shared_secret_initialization_request()
+
+      Handles IR for initial certificate requests with shared secret protection.
+
+
+
+   .. py:method:: _handle_signature_based_initialization_request()
+
+      Handles IR for initial certificate requests with signature-based protection.
+
+
+
+   .. py:method:: post(request, *args, **kwargs)
+
+      Handles the POST requests to the CMP IR endpoint.
+
+
+
+.. py:class:: CmpCertificationRequestView(**kwargs)
+
+   Bases: :py:obj:`CmpHttpMixin`, :py:obj:`CmpRequestedDomainExtractorMixin`, :py:obj:`CmpPkiMessageSerializerMixin`, :py:obj:`CmpRequestTemplateExtractorMixin`, :py:obj:`CmpResponseBuilderMixin`, :py:obj:`django.views.generic.base.View`
+
+
+   Handles CMP Certification Request Messages.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('post',)
+
+
+
+   .. py:attribute:: raw_message
+      :type:  bytes
+
+
+   .. py:attribute:: serialized_pyasn1_message
+      :type:  pyasn1_modules.rfc4210.PKIMessage
+
+
+   .. py:attribute:: requested_domain
+      :type:  pki.models.domain.DomainModel
+
+
+   .. py:attribute:: device
+      :type:  devices.models.DeviceModel
+
+
+   .. py:attribute:: application_certificate_template
+      :type:  None | ApplicationCertificateTemplateNames
+      :value: None
+
+
+
+   .. py:method:: _extract_cr_body()
+
+
+   .. py:method:: _build_base_cp_message(issued_cred, issuer_credential, sender_kid)
+
+      Builds the CR response message (without the protection).
+
+
+
+   .. py:method:: _handle_shared_secret_certificate_request()
+
+      Handles CMP CR for application certificates with shared secret protection.
+
+
+
+   .. py:method:: _handle_signature_based_certificate_request()
+
+
+   .. py:method:: post(request, *args, **kwargs)
+
+      Handles the POST requests to the CMP CR endpoint.
+
+
+
+.. py:function:: convert_rfc2459_time(time_obj)
+
+   Convert a pyasn1_modules.rfc2459.Time object to a timezone-aware datetime (UTC).
+
+   The Time object is a CHOICE between:
+     - utcTime:  YYMMDDHHMMSSZ
+     - generalizedTime: YYYYMMDDHHMMSSZ
+
+   :returns: A datetime object in UTC.
+
+   :raises ValueError: If the time format is unexpected.
+
+

@@ -1,0 +1,41 @@
+commands.create_test_cross_signed
+=================================
+
+.. py:module:: commands.create_test_cross_signed
+
+.. autoapi-nested-parse::
+
+   Command for generating test cross-signed CA certificates.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.create_test_cross_signed.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`commands.base_commands.CertificateCreationCommandMixin`, :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Django management command for adding issuing CA test data.
+
+
+   .. py:attribute:: help
+      :value: 'Generates two cross-signed certificate chains.'
+
+
+
+   .. py:method:: handle(*_args, **_kwargs)
+
+      Executes the command.
+
+
+

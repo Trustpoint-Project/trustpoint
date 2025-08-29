@@ -1,0 +1,45 @@
+devices.tests.test_credential_download
+======================================
+
+.. py:module:: devices.tests.test_credential_download
+
+.. autoapi-nested-parse::
+
+   Test cases for Remote Device Credential Download.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   devices.tests.test_credential_download.test_otp_generation
+   devices.tests.test_credential_download.test_token_invalidation
+   devices.tests.test_credential_download.test_otp_use_once
+   devices.tests.test_credential_download.test_otp_max_attempts
+
+
+Module Contents
+---------------
+
+.. py:function:: test_otp_generation(mock_models)
+
+   Test that a valid OTP is generated on save.
+
+
+.. py:function:: test_token_invalidation(mock_models)
+
+   Test that a download token is no longer valid after the token validity period.
+
+
+.. py:function:: test_otp_use_once(mock_models)
+
+   Test that an OTP can only be used once.
+
+
+.. py:function:: test_otp_max_attempts(mock_models)
+
+   Test that the OTP is invalidated after too many incorrect attempts.
+
+

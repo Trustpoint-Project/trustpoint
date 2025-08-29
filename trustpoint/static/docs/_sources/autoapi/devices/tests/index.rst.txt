@@ -1,0 +1,27 @@
+devices.tests
+=============
+
+.. py:module:: devices.tests
+
+.. autoapi-nested-parse::
+
+   This package contains the pytest unittests for the devices application.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/devices/tests/conftest/index
+   /autoapi/devices/tests/test_credential_download/index
+   /autoapi/devices/tests/test_forms/index
+   /autoapi/devices/tests/test_issuer/index
+   /autoapi/devices/tests/test_model_delete/index
+   /autoapi/devices/tests/test_models/index
+   /autoapi/devices/tests/test_revocation/index
+   /autoapi/devices/tests/test_urls/index
+
+

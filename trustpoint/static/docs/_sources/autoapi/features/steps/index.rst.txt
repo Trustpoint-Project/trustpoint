@@ -1,0 +1,32 @@
+features.steps
+==============
+
+.. py:module:: features.steps
+
+.. autoapi-nested-parse::
+
+   Python package for all step files used by the feature files.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/features/steps/common_steps/index
+   /autoapi/features/steps/f_001_steps/index
+   /autoapi/features/steps/r_001_steps/index
+   /autoapi/features/steps/r_003_steps/index
+   /autoapi/features/steps/r_004_steps/index
+   /autoapi/features/steps/r_006_steps/index
+   /autoapi/features/steps/r_007_steps/index
+   /autoapi/features/steps/r_008_steps/index
+   /autoapi/features/steps/r_010_r_11_steps/index
+   /autoapi/features/steps/r_012_steps/index
+   /autoapi/features/steps/r_013_steps/index
+   /autoapi/features/steps/r_101_steps/index
+   /autoapi/features/steps/r_102_steps/index
+
+

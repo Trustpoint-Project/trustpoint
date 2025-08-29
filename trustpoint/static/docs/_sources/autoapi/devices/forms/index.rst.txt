@@ -1,0 +1,372 @@
+devices.forms
+=============
+
+.. py:module:: devices.forms
+
+.. autoapi-nested-parse::
+
+   Forms exclusively used in the device application.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   devices.forms.PASSWORD_MIN_LENGTH
+   devices.forms.OTP_SPLIT_PARTS
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   devices.forms.IssueDomainCredentialForm
+   devices.forms.CredentialDownloadForm
+   devices.forms.BaseCredentialForm
+   devices.forms.BaseServerCredentialForm
+   devices.forms.IssueTlsClientCredentialForm
+   devices.forms.IssueTlsServerCredentialForm
+   devices.forms.ApplicationUriFormMixin
+   devices.forms.IssueOpcUaClientCredentialForm
+   devices.forms.IssueOpcUaServerCredentialForm
+   devices.forms.BrowserLoginForm
+   devices.forms.CredentialRevocationForm
+   devices.forms.CreateDeviceForm
+   devices.forms.CreateOpcUaGdsForm
+
+
+Module Contents
+---------------
+
+.. py:data:: PASSWORD_MIN_LENGTH
+   :value: 12
+
+
+.. py:data:: OTP_SPLIT_PARTS
+   :value: 2
+
+
+.. py:class:: IssueDomainCredentialForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`django.forms.Form`
+
+
+   Form to issue a new domain credential.
+
+
+   .. py:attribute:: common_name
+
+
+   .. py:attribute:: domain_component
+
+
+   .. py:attribute:: serial_number
+
+
+.. py:class:: CredentialDownloadForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`trustpoint.forms.CleanedDataNotNoneMixin`, :py:obj:`django.forms.Form`
+
+
+   Form to download a credential.
+
+
+   .. py:attribute:: password
+
+
+   .. py:attribute:: confirm_password
+
+
+   .. py:method:: clean()
+
+      Checks if the passwords match and if the password is long enough.
+
+
+
+.. py:class:: BaseCredentialForm(*args, device, **kwargs)
+
+   Bases: :py:obj:`django.forms.Form`
+
+
+   Base form for issuing credentials.
+
+
+   .. py:attribute:: common_name
+
+
+   .. py:attribute:: pseudonym
+
+
+   .. py:attribute:: domain_component
+
+
+   .. py:attribute:: serial_number
+
+
+   .. py:attribute:: validity
+
+
+   .. py:attribute:: device
+
+
+   .. py:method:: clean_common_name()
+
+      Checks the common name.
+
+
+
+   .. py:method:: clean_validity()
+
+      Checks the validity.
+
+
+
+.. py:class:: BaseServerCredentialForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`trustpoint.forms.CleanedDataNotNoneMixin`, :py:obj:`BaseCredentialForm`
+
+
+   Base form for issuing server credentials.
+
+
+   .. py:attribute:: ipv4_addresses
+
+
+   .. py:attribute:: ipv6_addresses
+
+
+   .. py:attribute:: domain_names
+
+
+   .. py:method:: clean_ipv4_addresses()
+
+      Checks the IPv4 addresses.
+
+
+
+   .. py:method:: clean_ipv6_addresses()
+
+      Checks the IPv6 addresses.
+
+
+
+   .. py:method:: clean_domain_names()
+
+      Checks the domain names.
+
+
+
+   .. py:method:: clean()
+
+      Ensures at least one SAN entry is set.
+
+
+
+.. py:class:: IssueTlsClientCredentialForm(*args, device, **kwargs)
+
+   Bases: :py:obj:`BaseCredentialForm`
+
+
+   Form to issue a new TLS client credential.
+
+
+.. py:class:: IssueTlsServerCredentialForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`BaseServerCredentialForm`
+
+
+   Form to issue a new TLS server credential.
+
+
+.. py:class:: ApplicationUriFormMixin(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`django.forms.Form`
+
+
+   Adds a application_uri field to the form.
+
+
+   .. py:attribute:: application_uri
+
+
+   .. py:method:: clean_application_uri()
+
+      Checks if the application uri was set properly.
+
+      :returns: The application uri.
+
+
+
+.. py:class:: IssueOpcUaClientCredentialForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`trustpoint.forms.CleanedDataNotNoneMixin`, :py:obj:`ApplicationUriFormMixin`, :py:obj:`BaseCredentialForm`
+
+
+   Form to issue a new OPC UA client credential.
+
+
+.. py:class:: IssueOpcUaServerCredentialForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`ApplicationUriFormMixin`, :py:obj:`BaseServerCredentialForm`
+
+
+   Form to issue a new OPC UA server credential.
+
+
+.. py:class:: BrowserLoginForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`trustpoint.forms.CleanedDataNotNoneMixin`, :py:obj:`django.forms.Form`
+
+
+   Form for the browser login via OTP for remote credential download.
+
+
+   .. py:attribute:: otp
+
+
+   .. py:method:: clean()
+
+      Cleans the form data, extracting the credential ID and OTP.
+
+
+
+.. py:class:: CredentialRevocationForm
+
+   Bases: :py:obj:`django.forms.ModelForm`\ [\ :py:obj:`pki.models.certificate.RevokedCertificateModel`\ ]
+
+
+   Form to revoke a device credential.
+
+
+   .. py:class:: Meta
+
+      Meta class configuration.
+
+
+      .. py:attribute:: model
+
+
+      .. py:attribute:: fields
+         :type:  ClassVar
+         :value: ['revocation_reason']
+
+
+
+
+.. py:class:: CreateDeviceForm(*args, **kwargs)
+
+   Bases: :py:obj:`trustpoint.forms.CleanedDataNotNoneMixin`, :py:obj:`django.forms.ModelForm`\ [\ :py:obj:`devices.models.DeviceModel`\ ]
+
+
+   The CreateDeviceForm class.
+
+
+   .. py:class:: Meta
+
+      Meta class configuration.
+
+
+      .. py:attribute:: model
+
+
+      .. py:attribute:: fields
+         :type:  ClassVar
+         :value: ['common_name', 'serial_number', 'domain', 'domain_credential_onboarding',...
+
+
+
+      .. py:attribute:: labels
+         :type:  ClassVar
+
+
+
+   .. py:attribute:: domain_queryset
+      :type:  django.db.models.query.QuerySet[pki.models.domain.DomainModel]
+
+
+   .. py:attribute:: domain
+
+
+   .. py:attribute:: onboarding_and_pki_configuration
+
+
+   .. py:attribute:: pki_configuration
+
+
+   .. py:attribute:: helper
+
+
+   .. py:method:: clean_device_name(device_name)
+      :staticmethod:
+
+
+      Validates the device name, i.e. checks if it is unique.
+
+      :param device_name: The desired name of the new device.
+
+      :returns: The device name if it passed the checks.
+
+
+
+   .. py:method:: clean()
+
+      Cleans the form data.
+
+      :returns: The cleaned form data.
+
+
+
+   .. py:method:: _handle_no_onboarding(cleaned_data, instance)
+
+      Handles cleaning non-onboarding-related data.
+
+
+
+   .. py:method:: _handle_domain_credential_onboarding(cleaned_data, instance)
+
+      Handles cleaning domain credential onboarding-related data.
+
+
+
+.. py:class:: CreateOpcUaGdsForm(*args, **kwargs)
+
+   Bases: :py:obj:`CreateDeviceForm`
+
+
+   Form for creating OPC UA GDS devices with a limited set of fields.
+
+
+   .. py:class:: Meta
+
+      Bases: :py:obj:`CreateDeviceForm`
+
+
+      Meta class configuration.
+
+
+      .. py:attribute:: model
+
+
+      .. py:attribute:: fields
+         :type:  ClassVar
+         :value: ['common_name', 'domain', 'domain_credential_onboarding', 'onboarding_and_pki_configuration',...
+
+
+
+      .. py:attribute:: labels
+         :type:  ClassVar
+
+
+
+   .. py:attribute:: onboarding_and_pki_configuration
+
+
+   .. py:attribute:: pki_configuration
+
+
+   .. py:attribute:: helper
+
+

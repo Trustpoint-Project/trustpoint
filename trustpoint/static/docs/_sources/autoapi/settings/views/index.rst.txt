@@ -1,0 +1,54 @@
+settings.views
+==============
+
+.. py:module:: settings.views
+
+.. autoapi-nested-parse::
+
+   Package that contains all Django Views of the settings App.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/settings/views/backup/index
+   /autoapi/settings/views/help_support/index
+   /autoapi/settings/views/language/index
+   /autoapi/settings/views/logging/index
+   /autoapi/settings/views/security/index
+   /autoapi/settings/views/tls/index
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.views.IndexView
+
+
+Package Contents
+----------------
+
+.. py:class:: IndexView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.base.RedirectView`
+
+
+   Index view
+
+
+   .. py:attribute:: permanent
+      :value: True
+
+
+
+   .. py:attribute:: pattern_name
+      :value: 'settings:language'
+
+
+

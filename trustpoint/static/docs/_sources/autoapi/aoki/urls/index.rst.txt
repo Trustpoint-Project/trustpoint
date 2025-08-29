@@ -1,0 +1,29 @@
+aoki.urls
+=========
+
+.. py:module:: aoki.urls
+
+.. autoapi-nested-parse::
+
+   URLs for the Django AOKI Application.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   aoki.urls.app_name
+   aoki.urls.urlpatterns
+
+
+Module Contents
+---------------
+
+.. py:data:: app_name
+   :value: 'aoki'
+
+
+.. py:data:: urlpatterns
+

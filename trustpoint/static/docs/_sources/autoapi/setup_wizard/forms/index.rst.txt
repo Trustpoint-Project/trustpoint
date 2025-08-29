@@ -1,0 +1,86 @@
+setup_wizard.forms
+==================
+
+.. py:module:: setup_wizard.forms
+
+.. autoapi-nested-parse::
+
+   This module contains forms for the setup wizard app.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   setup_wizard.forms.EmptyForm
+   setup_wizard.forms.StartupWizardTlsCertificateForm
+
+
+Module Contents
+---------------
+
+.. py:class:: EmptyForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`django.forms.Form`
+
+
+   A form without any fields.
+
+
+.. py:class:: StartupWizardTlsCertificateForm(data=None, files=None, auto_id='id_%s', prefix=None, initial=None, error_class=ErrorList, label_suffix=None, empty_permitted=False, field_order=None, use_required_attribute=None, renderer=None)
+
+   Bases: :py:obj:`django.forms.Form`
+
+
+   The Setup Wizard TLS Certificate Form.
+
+
+   .. py:attribute:: ipv4_addresses
+
+
+   .. py:attribute:: ipv6_addresses
+
+
+   .. py:attribute:: domain_names
+
+
+   .. py:method:: clean_ipv4_addresses()
+
+      Splits the IPv4 addresses and returns them as a list of strings.
+
+      :returns: A list of the IPv4 addresses or an empty list.
+
+      :raises ValidationError: If it contains a term that is not a valid IPv4 address.
+
+
+
+   .. py:method:: clean_ipv6_addresses()
+
+      Splits the IPv6 addresses and returns them as a list of strings.
+
+      :returns: A list of the IPv6 addresses or an empty list.
+
+      :raises ValidationError: If it contains a term that is not a valid IPv6 address.
+
+
+
+   .. py:method:: clean_domain_names()
+
+      Splits the domain names and returns them as a list of strings.
+
+      :returns: A list of the domain names or an empty list.
+
+
+
+   .. py:method:: clean()
+
+      Checks that at least one SAN entry is set.
+
+      :returns: The cleaned data.
+
+      :raises ValidationError: If no SAN entry is set.
+
+
+

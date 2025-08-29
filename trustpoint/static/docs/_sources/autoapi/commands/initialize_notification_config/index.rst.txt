@@ -1,0 +1,41 @@
+commands.initialize_notification_config
+=======================================
+
+.. py:module:: commands.initialize_notification_config
+
+.. autoapi-nested-parse::
+
+   Management command to check for initializing the notifications configuration.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.initialize_notification_config.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Management command to initialize NotificationConfig with default weak ECC curves and signature algorithms.
+
+
+   .. py:attribute:: help
+      :value: 'Initializes default NotificationConfig with known weak ECC curves and signature algorithms.'
+
+
+
+   .. py:method:: handle(*args, **kwargs)
+
+      Create or update NotificationConfig with default weak ECC curves and signature algorithms.
+
+
+

@@ -1,0 +1,92 @@
+est.tests.test_est_interface
+============================
+
+.. py:module:: est.tests.test_est_interface
+
+.. autoapi-nested-parse::
+
+   Tests for the EST interface endpoints.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   est.tests.test_est_interface.request_factory
+   est.tests.test_est_interface.est_simple_enrollment_view
+   est.tests.test_est_interface.est_cacerts_view
+   est.tests.test_est_interface.get_mock_truststore
+   est.tests.test_est_interface.test_get_credential_for_certificate
+   est.tests.test_est_interface.test_authenticate_username_password_success
+   est.tests.test_est_interface.test_authenticate_username_password_missing_header
+   est.tests.test_est_interface.test_post_authentication_failure
+   est.tests.test_est_interface.test_issue_credential_invalid_template
+   est.tests.test_est_interface.test_tls_client_cert_verification_no_cert
+   est.tests.test_est_interface.test_tls_client_cert_domain_credential_enrollment
+   est.tests.test_est_interface.test_tls_client_cert_enrollment_twice
+   est.tests.test_est_interface.test_tls_client_cert_application_credential_enrollment
+   est.tests.test_est_interface.test_tls_reenrollment_valid
+   est.tests.test_est_interface.test_tls_reenrollment_mismatched
+
+
+Module Contents
+---------------
+
+.. py:function:: request_factory()
+
+.. py:function:: est_simple_enrollment_view()
+
+.. py:function:: est_cacerts_view()
+
+.. py:function:: get_mock_truststore(certificates)
+
+   Get a mock truststore for testing.
+
+
+.. py:function:: test_get_credential_for_certificate(mock_get, mock_filter)
+
+   Test the get_credential_for_certificate method.
+
+
+.. py:function:: test_authenticate_username_password_success(mock_filter, request_factory, est_simple_enrollment_view)
+
+.. py:function:: test_authenticate_username_password_missing_header(request_factory, est_simple_enrollment_view)
+
+.. py:function:: test_post_authentication_failure(mock_get_device, mock_deserialize, mock_auth, mock_extract_domain, request_factory, est_simple_enrollment_view)
+
+.. py:function:: test_issue_credential_invalid_template(mock_issue, est_simple_enrollment_view)
+
+.. py:function:: test_tls_client_cert_verification_no_cert(est_simple_enrollment_view)
+
+   Tests the TLS client certificate verification if no valid PEM is passed.
+
+
+.. py:function:: test_tls_client_cert_domain_credential_enrollment()
+
+   Tests that an issued credential can be enrolled via EST simpleenroll using an IDevID.
+
+
+.. py:function:: test_tls_client_cert_enrollment_twice()
+
+   Tests that the same domain credential cannot be enrolled twice via EST simpleenroll using an IDevID.
+
+
+.. py:function:: test_tls_client_cert_application_credential_enrollment()
+
+   Tests that an application credential cannot directly be enrolled via EST simpleenroll using an IDevID.
+
+
+.. py:function:: test_tls_reenrollment_valid()
+
+   Tests that an issued credential can be re-enrolled via EST simplereenroll.
+
+
+.. py:function:: test_tls_reenrollment_mismatched()
+
+   Tests that an issued credential cannot be re-enrolled if the TLS client cert does not match the issued cred.
+
+   For this example, it is attempted to re-enroll a domain credential with an application credential.
+
+

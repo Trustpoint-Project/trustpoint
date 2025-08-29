@@ -1,0 +1,55 @@
+commands.check_system_health
+============================
+
+.. py:module:: commands.check_system_health
+
+.. autoapi-nested-parse::
+
+   Management command to perform a system health check and generate notifications for issues.
+
+   This command assesses the health of the system by performing various checks (to be implemented).
+   If any issues are found, a critical notification is generated in the system to alert administrators.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.check_system_health.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Management command to check the system's health and notify if issues are detected.
+
+
+   .. py:attribute:: help
+      :value: 'Check system health and create notifications if issues are found.'
+
+
+
+   .. py:method:: handle(*args, **kwargs)
+
+      Entrypoint for the command.
+
+      :param \*args: Additional positional arguments.
+      :param \*\*kwargs: Additional keyword arguments.
+
+
+
+   .. py:method:: _check_system_health()
+      :staticmethod:
+
+
+      Task to perform a system health check.
+
+
+

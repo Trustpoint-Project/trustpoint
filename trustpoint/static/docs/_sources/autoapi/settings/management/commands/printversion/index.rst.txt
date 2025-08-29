@@ -1,0 +1,41 @@
+settings.management.commands.printversion
+=========================================
+
+.. py:module:: settings.management.commands.printversion
+
+.. autoapi-nested-parse::
+
+   Management command to print the trustpoint version.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.management.commands.printversion.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   A Django management command to print the trustpoint version.
+
+
+   .. py:attribute:: help
+      :value: 'Prints the current TrustPoint application version.'
+
+
+
+   .. py:method:: handle(**_options)
+
+      Entrypoint for the command.
+
+
+

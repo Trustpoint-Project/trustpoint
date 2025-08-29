@@ -1,0 +1,81 @@
+trustpoint.tests.test_settings
+==============================
+
+.. py:module:: trustpoint.tests.test_settings
+
+.. autoapi-nested-parse::
+
+   Tests for the settings module.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   trustpoint.tests.test_settings.set_test_env
+   trustpoint.tests.test_settings.test_debug_setting
+   trustpoint.tests.test_settings.test_database_settings
+   trustpoint.tests.test_settings.test_database_fallback_to_sqlite
+   trustpoint.tests.test_settings.test_secret_key
+   trustpoint.tests.test_settings.test_installed_apps
+   trustpoint.tests.test_settings.test_logging_configuration
+   trustpoint.tests.test_settings.test_static_and_media_settings
+   trustpoint.tests.test_settings.test_public_paths
+   trustpoint.tests.test_settings.test_language_settings
+
+
+Module Contents
+---------------
+
+.. py:function:: set_test_env(monkeypatch)
+
+   Set environment variables for tests.
+
+
+.. py:function:: test_debug_setting()
+
+   Ensure DEBUG is correctly set for development.
+
+
+.. py:function:: test_database_settings(monkeypatch)
+
+   Ensure database settings are set correctly.
+
+
+.. py:function:: test_database_fallback_to_sqlite(monkeypatch)
+
+   Ensure database falls back to SQLite when PostgreSQL is unavailable.
+
+
+.. py:function:: test_secret_key()
+
+   Ensure the secret key is defined.
+
+
+.. py:function:: test_installed_apps()
+
+   Check if critical apps are installed.
+
+
+.. py:function:: test_logging_configuration()
+
+   Ensure logging configuration is properly configured.
+
+
+.. py:function:: test_static_and_media_settings()
+
+   Verify static and media file settings.
+
+
+.. py:function:: test_public_paths()
+
+   Ensure PUBLIC_PATHS is defined and contains expected values.
+
+
+.. py:function:: test_language_settings()
+
+   Verify language and internationalization settings.
+
+

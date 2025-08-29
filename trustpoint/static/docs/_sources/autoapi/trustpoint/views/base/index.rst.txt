@@ -1,0 +1,239 @@
+trustpoint.views.base
+=====================
+
+.. py:module:: trustpoint.views.base
+
+.. autoapi-nested-parse::
+
+   Contains some global views that are not specific to a single app.
+
+   This module contains some general redirect and error views (e.g. 404) as well as specific mixins and view classes
+   which can be used within the apps.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   trustpoint.views.base.THRESHOLD_LOGGER_HTTP_STATUS
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   trustpoint.views.base.IndexView
+   trustpoint.views.base.ListInDetailView
+   trustpoint.views.base.SortableTableMixin
+   trustpoint.views.base.ContextDataMixin
+   trustpoint.views.base.BaseBulkDeleteView
+   trustpoint.views.base.PrimaryKeyListFromPrimaryKeyString
+   trustpoint.views.base.PrimaryKeyQuerysetFromUrlMixin
+   trustpoint.views.base.BulkDeleteView
+   trustpoint.views.base.LoggedHttpResponse
+
+
+Module Contents
+---------------
+
+.. py:class:: IndexView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.base.RedirectView`
+
+
+   View that redirects to the index home page.
+
+
+   .. py:attribute:: permanent
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: pattern_name
+      :type:  str
+      :value: 'home:dashboard'
+
+
+
+.. py:class:: ListInDetailView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.list.ListView`
+
+
+   Helper view that combines a DetailView and a ListView.
+
+   This is useful for displaying a list within a DetailView.
+   Note that 'model' and 'context_object_name' refer to the ListView.
+   Use 'detail_model' and 'detail_context_object_name' for the DetailView.
+
+
+   .. py:attribute:: detail_context_object_name
+      :value: 'object'
+
+
+
+   .. py:attribute:: object
+      :type:  django.db.models.Model
+
+
+   .. py:method:: get(*args, **kwargs)
+
+
+   .. py:method:: get_queryset_for_object()
+
+
+   .. py:method:: get_object()
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Get the context for this view.
+
+
+
+.. py:class:: SortableTableMixin
+
+   Adds utility for sorting a ListView query by URL parameters.
+
+   default_sort_param must be set in the view to specify default sorting order.
+
+
+   .. py:method:: _sort_list_of_dicts(list_of_dicts, sort_param)
+      :staticmethod:
+
+
+      Sorts a list of dictionaries by the given sort parameter.
+
+      :param list_of_dicts: List of dictionaries to sort.
+      :param sort_param: The parameter to sort by. Prefix with '-' for descending order.
+
+      :returns: The sorted list of dictionaries.
+
+
+
+   .. py:method:: get_queryset()
+
+
+   .. py:method:: get_context_data(*args, **kwargs)
+
+
+.. py:class:: ContextDataMixin
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds attributes prefixed with context_ to the context_data if it does not exist.
+
+      .. note::
+
+         If another succeeding class in the MRO has another get_context_data method,
+         this method will be called after setting the attributes to the context_data.
+
+      .. rubric:: Example
+
+      Lets consider context_page_category.
+      Then the attribute page_category with the value of context_page_category is
+      added to the context_data if page_category does not already exist in the context_data.
+
+      .. rubric:: Example
+
+      The following Mixin will add 'page_category': 'pki', and 'page_name': 'endpoint_profiles'
+       to the context data.
+
+      class EndpointProfilesExtraContextMixin(ContextDataMixin):
+          """Mixin which adds context_data for the PKI -> Endpoint Profiles pages."""
+
+          context_page_category = 'pki'
+          context_page_name = 'endpoint_profiles'
+
+
+
+.. py:class:: BaseBulkDeleteView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.edit.FormMixin`, :py:obj:`django.views.generic.list.BaseListView`
+
+
+   Base view for bulk deletion of objects.
+
+
+   .. py:attribute:: queryset
+      :type:  Any
+
+
+   .. py:attribute:: get_queryset
+      :type:  collections.abc.Callable
+
+      Return the list of items for this view.
+
+      The return value must be an iterable and may be an instance of
+      `QuerySet` in which case `QuerySet` specific behavior will be enabled.
+
+
+   .. py:attribute:: success_url
+      :value: None
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:method:: post(*_args, **_kwargs)
+
+      Handles POST requests to the BulkDeleteView.
+
+
+
+   .. py:method:: form_valid(_form)
+
+      Delete the selected objects on valid form.
+
+
+
+   .. py:method:: get_success_url()
+
+      Returns the URL to redirect to after a successful deletion.
+
+
+
+.. py:class:: PrimaryKeyListFromPrimaryKeyString
+
+   .. py:method:: get_pks_as_list(pks)
+      :staticmethod:
+
+
+
+.. py:class:: PrimaryKeyQuerysetFromUrlMixin
+
+   Bases: :py:obj:`PrimaryKeyListFromPrimaryKeyString`
+
+
+   .. py:method:: get_pks_path()
+
+
+   .. py:method:: get_queryset()
+
+
+.. py:class:: BulkDeleteView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.list.MultipleObjectTemplateResponseMixin`, :py:obj:`PrimaryKeyQuerysetFromUrlMixin`, :py:obj:`BaseBulkDeleteView`
+
+
+   Mixin for responding with a template and list of objects.
+
+
+.. py:data:: THRESHOLD_LOGGER_HTTP_STATUS
+   :type:  int
+   :value: 400
+
+
+.. py:class:: LoggedHttpResponse(content = b'', status = None, *args, **kwargs)
+
+   Bases: :py:obj:`django.http.HttpResponse`, :py:obj:`trustpoint.logger.LoggerMixin`
+
+
+   Custom HttpResponse that logs and prints error messages automatically.
+
+

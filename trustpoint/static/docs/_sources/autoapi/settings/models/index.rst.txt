@@ -1,0 +1,214 @@
+settings.models
+===============
+
+.. py:module:: settings.models
+
+.. autoapi-nested-parse::
+
+   Models concerning the Trustpoint settings.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.models.SecurityConfig
+   settings.models.TlsSettings
+   settings.models.AppVersion
+   settings.models.BackupOptions
+
+
+Module Contents
+---------------
+
+.. py:class:: SecurityConfig(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Security Configuration model.
+
+
+   .. py:class:: SecurityModeChoices(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Types of security modes.
+
+
+      .. py:attribute:: DEV
+
+
+      .. py:attribute:: LOW
+
+
+      .. py:attribute:: MEDIUM
+
+
+      .. py:attribute:: HIGH
+
+
+      .. py:attribute:: HIGHEST
+
+
+
+   .. py:attribute:: security_mode
+
+
+   .. py:attribute:: auto_gen_pki
+
+
+   .. py:attribute:: auto_gen_pki_key_algorithm
+
+
+   .. py:attribute:: NOTIFICATION_CONFIGURATIONS
+      :type:  ClassVar[dict]
+
+
+   .. py:attribute:: notification_config
+
+
+   .. py:method:: __str__()
+
+      Output as string.
+
+
+
+   .. py:method:: apply_security_settings()
+
+      Apply appropriate configuration values based on the security mode.
+
+
+
+.. py:class:: TlsSettings(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   TLS settings model
+
+
+   .. py:attribute:: ipv4_address
+
+
+   .. py:method:: get_first_ipv4_address()
+      :classmethod:
+
+
+      Get the first IPv4 address or a default value.
+
+
+
+.. py:class:: AppVersion(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Make subclasses preserve the alters_data attribute on overridden methods.
+
+
+   .. py:attribute:: objects
+      :type:  django.db.models.Manager[AppVersion]
+
+
+   .. py:attribute:: version
+
+
+   .. py:attribute:: last_updated
+
+
+   .. py:class:: Meta
+
+      .. py:attribute:: verbose_name
+         :value: 'App Version'
+
+
+
+
+   .. py:method:: __str__()
+
+
+.. py:class:: BackupOptions(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   A singleton model (we always operate with pk=1) for backup settings.
+   We store host/port/user/local_storage, plus either a password or an SSH key.
+
+
+   .. py:class:: AuthMethod(*args, **kwds)
+
+      Bases: :py:obj:`django.db.models.TextChoices`
+
+
+      Class for creating enumerated string choices.
+
+
+      .. py:attribute:: PASSWORD
+         :value: ('password', 'Password')
+
+
+
+      .. py:attribute:: SSH_KEY
+         :value: ('ssh_key', 'SSH Key')
+
+
+
+
+   .. py:attribute:: local_storage
+
+
+   .. py:attribute:: sftp_storage
+
+
+   .. py:attribute:: host
+
+
+   .. py:attribute:: port
+
+
+   .. py:attribute:: user
+
+
+   .. py:attribute:: auth_method
+
+
+   .. py:attribute:: password
+
+
+   .. py:attribute:: private_key
+
+
+   .. py:attribute:: key_passphrase
+
+
+   .. py:attribute:: remote_directory
+
+
+   .. py:method:: save(*args, **kwargs)
+
+      Ensure only one instance exists (singleton pattern).
+
+
+
+   .. py:method:: clean()
+
+      Prevent the creation of more than one instance.
+
+
+
+   .. py:class:: Meta
+
+      .. py:attribute:: verbose_name
+         :value: 'Backup Option'
+
+
+
+
+   .. py:method:: __str__()
+
+

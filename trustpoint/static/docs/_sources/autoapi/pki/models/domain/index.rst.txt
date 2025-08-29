@@ -1,0 +1,117 @@
+pki.models.domain
+=================
+
+.. py:module:: pki.models.domain
+
+.. autoapi-nested-parse::
+
+   Module that contains the DomainModel.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.models.domain.DomainModel
+
+
+Module Contents
+---------------
+
+.. py:class:: DomainModel(*args, **kwargs)
+
+   Bases: :py:obj:`django.db.models.Model`
+
+
+   Domain Model.
+
+
+   .. py:attribute:: unique_name
+
+
+   .. py:attribute:: issuing_ca
+
+
+   .. py:attribute:: is_active
+
+
+   .. py:attribute:: created_at
+
+
+   .. py:attribute:: updated_at
+
+
+   .. py:attribute:: auto_create_new_device
+
+
+   .. py:attribute:: allow_username_password_registration
+
+
+   .. py:attribute:: allow_idevid_registration
+
+
+   .. py:attribute:: domain_credential_auth
+
+
+   .. py:attribute:: username_password_auth
+
+
+   .. py:attribute:: allow_app_certs_without_domain
+
+
+   .. py:method:: __repr__()
+
+      Machine-readable representation of the Domain model instance.
+
+      :returns:     Machine-readable representation of the Domain model model instance.
+      :rtype: str
+
+
+
+   .. py:method:: __str__()
+
+      Human-readable representation of the Domain model instance.
+
+      :returns:     Human-readable representation of the Domain model model instance.
+      :rtype: str
+
+
+
+   .. py:method:: save(**kwargs)
+
+      Save the Domain model instance.
+
+
+
+   .. py:property:: signature_suite
+      :type: trustpoint_core.oid.SignatureSuite
+
+
+      Get the signature suite for the domain (based on its Issuing CA).
+
+
+   .. py:property:: public_key_info
+      :type: trustpoint_core.oid.PublicKeyInfo
+
+
+      Get the public key info for the domain (based on its Issuing CA).
+
+
+   .. py:method:: clean()
+
+      Validate that the issuing CA is not an auto-generated root CA.
+
+
+
+   .. py:method:: get_issuing_ca_or_value_error()
+
+      Gets the corresponding Issuing CA.
+
+      :returns: The corresponding Issuing CA.
+
+      :raises ValueError: If no Issuing CA is set.
+
+
+

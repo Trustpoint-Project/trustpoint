@@ -1,0 +1,59 @@
+users.views
+===========
+
+.. py:module:: users.views
+
+.. autoapi-nested-parse::
+
+   Views for the users application.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   users.views.TrustpointLoginView
+
+
+Module Contents
+---------------
+
+.. py:class:: TrustpointLoginView(**kwargs)
+
+   Bases: :py:obj:`django.contrib.auth.views.LoginView`
+
+
+   Login view for the trustpoint application.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get', 'post')
+
+
+
+   .. py:method:: get(request, *args, **kwargs)
+
+      Redirects to the appropriate startup wizard section if the setup wizard is not completed.
+
+      :param request: The django request object.
+      :param \*args: All positional arguments are passed to super().get().
+      :param \*\*kwargs: All keyword arguments are passed to super().get().
+
+      :returns: The HttpResponse object, which may be a redirect.
+
+
+
+   .. py:method:: post(request, *args, **kwargs)
+
+      Redirects to the appropriate startup wizard section if the setup wizard is not completed.
+
+      :param request: The django request object.
+      :param \*args: All positional arguments are passed to super().post().
+      :param \*\*kwargs: All keyword arguments are passed to super().post().
+
+      :returns: The HttpResponse object, which may be a redirect.
+
+
+

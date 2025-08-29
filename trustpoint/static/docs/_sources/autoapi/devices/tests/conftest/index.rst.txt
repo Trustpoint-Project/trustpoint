@@ -1,0 +1,39 @@
+devices.tests.conftest
+======================
+
+.. py:module:: devices.tests.conftest
+
+.. autoapi-nested-parse::
+
+   pytest configuration for the tests in the devices app.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   devices.tests.conftest.enable_db_access_for_all_tests
+   devices.tests.conftest.mock_models
+   devices.tests.conftest.create_mock_models
+
+
+Module Contents
+---------------
+
+.. py:function:: enable_db_access_for_all_tests(db)
+
+   Fixture to enable database access for all tests.
+
+
+.. py:function:: mock_models()
+
+   Creates mock models.
+
+
+.. py:function:: create_mock_models()
+
+   Fixture to create mock CA, domain, device, and credential models for testing.
+
+

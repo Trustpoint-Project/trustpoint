@@ -1,0 +1,50 @@
+commands.check_domain_issuing_ca
+================================
+
+.. py:module:: commands.check_domain_issuing_ca
+
+.. autoapi-nested-parse::
+
+   Management command to check domains without Issuing CA assignments.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.check_domain_issuing_ca.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   A Django management command to identify domains without an Issuing CA and create notifications for them.
+
+
+   .. py:attribute:: help
+      :value: 'Check domains without issuing CA assignments.'
+
+
+
+   .. py:method:: handle(*args, **kwargs)
+
+      Entrypoint for the command.
+
+      :param \*args: Additional positional arguments.
+      :param \*\*kwargs: Additional keyword arguments.
+
+
+
+   .. py:method:: _check_domain_issuing_ca()
+
+      Create notifications for domains without an Issuing CA.
+
+
+

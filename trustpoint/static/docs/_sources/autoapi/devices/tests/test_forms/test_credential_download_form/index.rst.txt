@@ -1,0 +1,33 @@
+devices.tests.test_forms.test_credential_download_form
+======================================================
+
+.. py:module:: devices.tests.test_forms.test_credential_download_form
+
+.. autoapi-nested-parse::
+
+   Test suite for validating the CredentialDownloadForm.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   devices.tests.test_forms.test_credential_download_form.test_credential_download_form_clean
+   devices.tests.test_forms.test_credential_download_form.test_credential_download_form_empty_fields
+
+
+Module Contents
+---------------
+
+.. py:function:: test_credential_download_form_clean(password, confirm_password, expected_errors)
+
+   Test the form's validation logic for password matching and length.
+
+
+.. py:function:: test_credential_download_form_empty_fields()
+
+   Test that the form raises errors when fields are empty.
+
+

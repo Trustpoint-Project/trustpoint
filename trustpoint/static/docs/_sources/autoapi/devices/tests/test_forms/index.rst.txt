@@ -1,0 +1,22 @@
+devices.tests.test_forms
+========================
+
+.. py:module:: devices.tests.test_forms
+
+.. autoapi-nested-parse::
+
+   Init file for the test_forms package.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/devices/tests/test_forms/test_browser_login/index
+   /autoapi/devices/tests/test_forms/test_create_device_form/index
+   /autoapi/devices/tests/test_forms/test_credential_download_form/index
+
+

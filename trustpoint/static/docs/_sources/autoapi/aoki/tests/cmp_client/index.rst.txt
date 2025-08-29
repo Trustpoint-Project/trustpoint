@@ -1,0 +1,133 @@
+aoki.tests.cmp_client
+=====================
+
+.. py:module:: aoki.tests.cmp_client
+
+.. autoapi-nested-parse::
+
+   AOKI Client for testing AOKI via CMP.
+
+   Please run from /rootdir/trustpoint with "uv run -m aoki.tests.cmp_client" for paths and imports to work.
+   This only works if your system OpenSSL version is 3.x.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   aoki.tests.cmp_client.log
+   aoki.tests.cmp_client.CURRENT_DIR
+   aoki.tests.cmp_client.CERTS_DIR
+   aoki.tests.cmp_client.client
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   aoki.tests.cmp_client.AokiClientOwnerIdCertVerificationError
+   aoki.tests.cmp_client.AokiClientCertLoadError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   aoki.tests.cmp_client.AokiCmpClient
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:data:: CURRENT_DIR
+
+.. py:data:: CERTS_DIR
+
+.. py:exception:: AokiClientOwnerIdCertVerificationError
+
+   Bases: :py:obj:`Exception`
+
+
+   Exception raised when the provided Owner ID certificate is invalid or not corresponding to the IDevID.
+
+
+.. py:exception:: AokiClientCertLoadError
+
+   Bases: :py:obj:`Exception`
+
+
+   Exception raised when a certificate could not be loaded from the provided path.
+
+
+.. py:class:: AokiCmpClient(server_url, cert_file, key_file, owner_truststore_file, idevid_truststore_file, *args, **kwargs)
+
+   AOKI-CMP Client for testing purposes.
+
+
+   .. py:attribute:: idevid_subj_sn
+      :type:  str
+      :value: '_'
+
+
+
+   .. py:method:: _load_certificate(cert_path)
+      :staticmethod:
+
+
+
+   .. py:method:: _load_certificates(cert_path)
+      :staticmethod:
+
+
+
+   .. py:method:: _get_idevid_owner_san_uri(idevid_cert)
+
+      Get the Owner ID SAN URI corresponding to a IDevID certificate.
+
+      Formatted as "dev-owner:<idevid_subj_sn>.<idevid_x509_sn>.<idevid_sha256_fingerprint>"
+
+
+
+   .. py:method:: _verify_matches_idevid_cert(owner_id_cert, idevid_cert)
+
+      Verify the Owner ID certificate is valid for the device IDevID.
+
+
+
+   .. py:attribute:: server_url
+
+
+   .. py:attribute:: cert_file
+
+
+   .. py:attribute:: key_file
+
+
+   .. py:attribute:: owner_truststore_file
+
+
+   .. py:attribute:: idevid_truststore_file
+
+
+   .. py:attribute:: args
+      :value: ()
+
+
+
+   .. py:attribute:: kwargs
+
+
+   .. py:method:: onboard()
+
+      Run the AOKI-CMP Zero-Touch Device Onboarding process.
+
+
+
+.. py:data:: client
+

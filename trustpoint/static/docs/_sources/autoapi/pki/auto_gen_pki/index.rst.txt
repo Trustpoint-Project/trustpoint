@@ -1,0 +1,70 @@
+pki.auto_gen_pki
+================
+
+.. py:module:: pki.auto_gen_pki
+
+.. autoapi-nested-parse::
+
+   Manages the auto-generated local PKI.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   pki.auto_gen_pki.log
+   pki.auto_gen_pki.UNIQUE_NAME
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.auto_gen_pki.AutoGenPki
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:data:: UNIQUE_NAME
+   :value: 'AutoGenPKI_Issuing_CA'
+
+
+.. py:class:: AutoGenPki
+
+   Handles enabling and disabling of auto-generated PKI.
+
+
+   .. py:attribute:: _lock
+      :type:  threading.Lock
+
+
+   .. py:method:: get_auto_gen_pki()
+      :classmethod:
+
+
+      Retrieves the auto-generated PKI Issuing CA, if it exists.
+
+
+
+   .. py:method:: enable_auto_gen_pki(key_alg)
+      :classmethod:
+
+
+      Enables the auto-generated PKI.
+
+
+
+   .. py:method:: disable_auto_gen_pki()
+      :classmethod:
+
+
+      Disables the auto-generated PKI.
+
+
+

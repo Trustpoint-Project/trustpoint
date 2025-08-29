@@ -1,0 +1,25 @@
+home
+====
+
+.. py:module:: home
+
+.. autoapi-nested-parse::
+
+   Home Django Application.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/home/admin/index
+   /autoapi/home/apps/index
+   /autoapi/home/filters/index
+   /autoapi/home/tests/index
+   /autoapi/home/urls/index
+   /autoapi/home/views/index
+
+

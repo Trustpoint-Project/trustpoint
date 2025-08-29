@@ -1,0 +1,76 @@
+trustpoint.tests.test_middleware
+================================
+
+.. py:module:: trustpoint.tests.test_middleware
+
+.. autoapi-nested-parse::
+
+   Tests for the middleware module.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   trustpoint.tests.test_middleware.TestTrustpointLoginRequiredMiddleware
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   trustpoint.tests.test_middleware.middleware
+   trustpoint.tests.test_middleware.http_request
+
+
+Module Contents
+---------------
+
+.. py:function:: middleware()
+
+   Fixture to instantiate TrustpointLoginRequiredMiddleware with a mock get_response.
+
+
+.. py:function:: http_request()
+
+   Fixture to generate a basic HttpRequest.
+
+
+.. py:class:: TestTrustpointLoginRequiredMiddleware
+
+   Test cases for the TrustpointLoginRequiredMiddleware.
+
+
+   .. py:method:: setup_public_paths(settings)
+
+      Set test PUBLIC_PATHS in settings.
+
+
+
+   .. py:method:: test_unauthenticated_access_to_public_path(middleware, http_request)
+
+      Ensure unauthenticated users can access public paths.
+
+
+
+   .. py:method:: test_unauthenticated_access_to_private_path(middleware, http_request)
+
+      Ensure unauthenticated users accessing private paths are redirected to the login page.
+
+
+
+   .. py:method:: test_authenticated_user_access(middleware, http_request)
+
+      Ensure authenticated users can access any path without redirection.
+
+
+
+   .. py:method:: test_no_public_paths_defined(middleware, http_request, settings)
+
+      Ensure middleware behaves correctly when no PUBLIC_PATHS are defined.
+
+
+

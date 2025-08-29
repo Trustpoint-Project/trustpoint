@@ -1,0 +1,33 @@
+pki.tests.test_models.test_certificate_model
+============================================
+
+.. py:module:: pki.tests.test_models.test_certificate_model
+
+.. autoapi-nested-parse::
+
+   Tests for the CertificateModel class.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   pki.tests.test_models.test_certificate_model.test_save_certificate_method
+   pki.tests.test_models.test_certificate_model.test_save_certificate_with_serializer
+
+
+Module Contents
+---------------
+
+.. py:function:: test_save_certificate_method(self_signed_cert_with_ext)
+
+   Test that save_certificate method creates and stores a certificate model instance.
+
+
+.. py:function:: test_save_certificate_with_serializer(self_signed_cert_with_ext)
+
+   Test saving a certificate using a CertificateSerializer instead of a raw x509.Certificate.
+
+

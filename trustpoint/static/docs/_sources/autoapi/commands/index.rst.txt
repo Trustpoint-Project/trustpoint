@@ -1,0 +1,44 @@
+commands
+========
+
+.. py:module:: commands
+
+.. autoapi-nested-parse::
+
+   Django management commands for the PKI application.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/commands/add_domains_and_devices/index
+   /autoapi/commands/base_commands/index
+   /autoapi/commands/check_certificate_validity/index
+   /autoapi/commands/check_domain_issuing_ca/index
+   /autoapi/commands/check_for_insufficient_key_length/index
+   /autoapi/commands/check_for_security_vulnerabilities/index
+   /autoapi/commands/check_for_weak_ecc_curves/index
+   /autoapi/commands/check_for_weak_signature_algorithms/index
+   /autoapi/commands/check_issuing_ca_validity/index
+   /autoapi/commands/check_non_onboarded_devices/index
+   /autoapi/commands/check_system_health/index
+   /autoapi/commands/create_and_validate_test_certs/index
+   /autoapi/commands/create_multiple_test_issuing_cas/index
+   /autoapi/commands/create_single_test_issuing_ca/index
+   /autoapi/commands/create_test_cross_signed/index
+   /autoapi/commands/create_test_issuing_ca/index
+   /autoapi/commands/create_test_long_chain_p12/index
+   /autoapi/commands/create_tls_certs/index
+   /autoapi/commands/custom_runserver_plus/index
+   /autoapi/commands/execute_all_notifications/index
+   /autoapi/commands/import_idevid_truststores/index
+   /autoapi/commands/initialize_notification_config/index
+   /autoapi/commands/reset_db/index
+   /autoapi/commands/reset_notifications_db/index
+   /autoapi/commands/trustpoint_setup_notifications/index
+
+

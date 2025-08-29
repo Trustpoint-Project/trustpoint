@@ -1,0 +1,40 @@
+devices.apps
+============
+
+.. py:module:: devices.apps
+
+.. autoapi-nested-parse::
+
+   Django application configuration.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   devices.apps.DevicesConfig
+
+
+Module Contents
+---------------
+
+.. py:class:: DevicesConfig(app_name, app_module)
+
+   Bases: :py:obj:`django.apps.AppConfig`
+
+
+   Devices application configuration.
+
+
+   .. py:attribute:: default_auto_field
+      :value: 'django.db.models.BigAutoField'
+
+
+
+   .. py:attribute:: name
+      :value: 'devices'
+
+
+

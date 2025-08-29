@@ -1,0 +1,29 @@
+settings.urls
+=============
+
+.. py:module:: settings.urls
+
+.. autoapi-nested-parse::
+
+   URL configuration for the settings application.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   settings.urls.app_name
+   settings.urls.urlpatterns
+
+
+Module Contents
+---------------
+
+.. py:data:: app_name
+   :value: 'settings'
+
+
+.. py:data:: urlpatterns
+

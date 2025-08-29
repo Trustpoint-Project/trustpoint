@@ -1,0 +1,11 @@
+home.tests
+==========
+
+.. py:module:: home.tests
+
+.. autoapi-nested-parse::
+
+   Contains test cases to ensure the functionality and correctness of the Home application.
+
+
+

@@ -1,0 +1,63 @@
+settings.tests
+==============
+
+.. py:module:: settings.tests
+
+.. autoapi-nested-parse::
+
+   Tests for the settings module.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.tests.TestTlsSettingsIpv4
+
+
+Module Contents
+---------------
+
+.. py:class:: TestTlsSettingsIpv4
+
+   Test cases for the TlsSettings model's IPv4 address field.
+
+
+   .. py:method:: test_ipv4_address_valid()
+
+      Test creating a TlsSettings instance with a valid IPv4 address.
+
+
+
+   .. py:method:: test_ipv4_address_null()
+
+      Test creating a TlsSettings instance with a null IPv4 address.
+
+
+
+   .. py:method:: test_ipv4_address_blank()
+
+      Test creating a TlsSettings instance with a blank IPv4 address.
+
+
+
+   .. py:method:: test_invalid_ipv4_address()
+
+      Test creating a TlsSettings instance with an invalid IPv4 address.
+
+
+
+   .. py:method:: test_partial_update_of_ipv4_address()
+
+      Test updating the `ipv4_address` after creating the model.
+
+
+
+   .. py:method:: test_ipv4_address_reject_ipv6()
+
+      Test the field rejects an IPv6 address.
+
+
+

@@ -1,0 +1,64 @@
+trustpoint.tests.test_logger
+============================
+
+.. py:module:: trustpoint.tests.test_logger
+
+.. autoapi-nested-parse::
+
+   Tests for the logger module.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   trustpoint.tests.test_logger.TestLoggerMixin
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   trustpoint.tests.test_logger.sample_class
+
+
+Module Contents
+---------------
+
+.. py:function:: sample_class()
+
+   Fixture providing a sample class that uses LoggerMixin.
+
+
+.. py:class:: TestLoggerMixin
+
+   Pytest-based test suite for LoggerMixin.
+
+
+   .. py:method:: test_logger_initialization(sample_class)
+
+      Verify that LoggerMixin initializes a logger correctly.
+
+
+
+   .. py:method:: test_logger_hierarchy(sample_class)
+
+      Verify that the logger hierarchy is set up correctly.
+
+
+
+   .. py:method:: test_logger_different_classes_have_different_loggers(sample_class)
+
+      Ensure that separate classes using LoggerMixin have distinct loggers.
+
+
+
+   .. py:method:: test_logger_correct_in_nested_modules()
+
+      Verify proper logger hierarchy in nested modules.
+
+
+

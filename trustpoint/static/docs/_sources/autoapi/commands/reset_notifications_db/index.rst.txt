@@ -1,0 +1,52 @@
+commands.reset_notifications_db
+===============================
+
+.. py:module:: commands.reset_notifications_db
+
+.. autoapi-nested-parse::
+
+   This module defines a Django management command to delete all existing notifications.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.reset_notifications_db.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   A Django management command to delete all existing notifications.
+
+   If running inside a Docker container, the command deletes notifications
+   without user confirmation. Otherwise, it prompts the user for confirmation.
+
+
+   .. py:attribute:: help
+      :value: 'Deletes all existing notifications'
+
+
+
+   .. py:method:: handle(**options)
+
+      Entrypoint for the command.
+
+      :param \*\*options: A variable-length argument.
+
+
+
+   .. py:method:: delete_notifications()
+
+      Deletes all notifications and reports the result.
+
+
+

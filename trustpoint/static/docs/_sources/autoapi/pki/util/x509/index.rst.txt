@@ -1,0 +1,113 @@
+pki.util.x509
+=============
+
+.. py:module:: pki.util.x509
+
+.. autoapi-nested-parse::
+
+   Handles certificate creation for Issuing CA certificates.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   pki.util.x509.logger
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   pki.util.x509.ClientCertificateAuthenticationError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.util.x509.CertificateGenerator
+   pki.util.x509.ApacheTLSClientCertExtractor
+
+
+Module Contents
+---------------
+
+.. py:data:: logger
+
+.. py:class:: CertificateGenerator
+
+   Methods for generating X.509 certificates.
+
+
+   .. py:method:: create_root_ca(cn, validity_days = 7300, private_key = None, hash_algorithm = None)
+      :staticmethod:
+
+
+      Creates a root CA certificate for testing and AutoGenPKI.
+
+
+
+   .. py:method:: create_issuing_ca(issuer_private_key, issuer_cn, subject_cn, private_key = None, validity_days = 3650, hash_algorithm = None)
+      :staticmethod:
+
+
+      Creates an issuing CA certificate + key pair.
+
+
+
+   .. py:method:: create_ee(issuer_private_key, issuer_cn, subject_name, private_key = None, extensions = None, validity_days = 365)
+      :staticmethod:
+
+
+      Creates a generic end entity certificate + key pair.
+
+
+
+   .. py:method:: create_test_pki(chain_depth = 0)
+      :staticmethod:
+
+
+      Get a test PKI chain with a specified depth (excluding root CA). depth=0 is a self-signed EE.
+
+
+
+   .. py:method:: save_issuing_ca(issuing_ca_cert, chain, private_key, unique_name = 'issuing_ca', ca_type = IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED)
+      :staticmethod:
+
+
+      Saves an Issuing CA certificate to the database.
+
+
+
+.. py:exception:: ClientCertificateAuthenticationError
+
+   Bases: :py:obj:`Exception`
+
+
+   Exception raised for general client certificate authentication failures.
+
+
+.. py:class:: ApacheTLSClientCertExtractor
+
+   Extracts the TLS client certificate from the request.
+
+
+   .. py:method:: get_client_cert_as_x509(request)
+      :staticmethod:
+
+
+      Retrieve the client certificate from the request and convert it to an x509.Certificate object.
+
+      :param request: Django HttpRequest containing the headers.
+
+      :returns: x509.Certificate object.
+
+      :raises ClientCertificateAuthenticationError: if no client certificate found or it is not a valid PEM-encoded cert.
+
+
+

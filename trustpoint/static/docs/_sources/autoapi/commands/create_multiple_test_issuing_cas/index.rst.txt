@@ -1,0 +1,41 @@
+commands.create_multiple_test_issuing_cas
+=========================================
+
+.. py:module:: commands.create_multiple_test_issuing_cas
+
+.. autoapi-nested-parse::
+
+   Django management command for adding issuing CA test data.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.create_multiple_test_issuing_cas.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`commands.base_commands.CertificateCreationCommandMixin`, :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Adds a Root CA and three issuing CAs to the database.
+
+
+   .. py:attribute:: help
+      :value: 'Adds a Root CA and three issuing CAs to the database.'
+
+
+
+   .. py:method:: handle(*_args, **_kwargs)
+
+      Adds a Root CA and three issuing CAs to the database.
+
+
+

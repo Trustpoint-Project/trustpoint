@@ -1,0 +1,45 @@
+devices.tests.test_model_delete
+===============================
+
+.. py:module:: devices.tests.test_model_delete
+
+.. autoapi-nested-parse::
+
+   Test cases for Trustpoint model deletion.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   devices.tests.test_model_delete.test_device_delete_revocation
+   devices.tests.test_model_delete.test_multi_device_delete
+   devices.tests.test_model_delete.test_domain_delete
+   devices.tests.test_model_delete.test_ca_delete_with_issued_certificates
+
+
+Module Contents
+---------------
+
+.. py:function:: test_device_delete_revocation(mock_models)
+
+   Tests that credentials issued to a device are deleted and certificates revoked on device deletion.
+
+
+.. py:function:: test_multi_device_delete(mock_models)
+
+   Tests that multiple devices can be deleted and pre_delete is called even on a QuerySet of DeviceModels.
+
+
+.. py:function:: test_domain_delete(mock_models)
+
+   Tests that a domain can be deleted only if it has no associated devices.
+
+
+.. py:function:: test_ca_delete_with_issued_certificates(mock_models)
+
+   Tests that a CA can be deleted only if it has no associated domains and no issued unexpired certificates.
+
+

@@ -1,0 +1,73 @@
+settings.management.commands.tls_cred
+=====================================
+
+.. py:module:: settings.management.commands.tls_cred
+
+.. autoapi-nested-parse::
+
+   This module defines a Django management command to generate a TLS credential for use in the dev environment.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   settings.management.commands.tls_cred.APACHE_KEY_PATH
+   settings.management.commands.tls_cred.APACHE_CERT_PATH
+   settings.management.commands.tls_cred.APACHE_CERT_CHAIN_PATH
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.management.commands.tls_cred.Command
+
+
+Module Contents
+---------------
+
+.. py:data:: APACHE_KEY_PATH
+
+.. py:data:: APACHE_CERT_PATH
+
+.. py:data:: APACHE_CERT_CHAIN_PATH
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   [DEV ONLY]: A Django management command to create and store tls credential in dev env.
+
+
+   .. py:attribute:: help
+      :value: 'Creates TLS cert'
+
+
+
+   .. py:method:: add_arguments(parser)
+
+      Adds command arguments/options.
+
+
+
+   .. py:method:: handle(**options)
+
+      Entrypoint for the command.
+
+      :param \*\*options: A variable-length argument.
+
+
+
+   .. py:method:: tls_cred(**options)
+
+      Generate a new TLS Server Credential and set it as the active credential in Trustpoint.
+
+      For use in the non-Apache development environment.
+
+
+

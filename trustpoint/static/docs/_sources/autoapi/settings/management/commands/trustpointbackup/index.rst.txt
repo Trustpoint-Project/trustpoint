@@ -1,0 +1,53 @@
+settings.management.commands.trustpointbackup
+=============================================
+
+.. py:module:: settings.management.commands.trustpointbackup
+
+.. autoapi-nested-parse::
+
+   Management command to check and update the Trustpoint database version.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.management.commands.trustpointbackup.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   A Django management command to check and update the Trustpoint version.
+
+
+   .. py:attribute:: help
+      :value: 'Updates app version'
+
+
+
+   .. py:method:: add_arguments(parser)
+
+      Adds command arguments/options.
+
+
+
+   .. py:method:: handle(*_args, **options)
+
+      Executes the command.
+
+
+
+   .. py:method:: backup_trustpoint(filename)
+
+      Checks current state of trustpoint and acts accordingly.
+
+
+

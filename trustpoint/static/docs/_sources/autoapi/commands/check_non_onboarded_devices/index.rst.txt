@@ -1,0 +1,54 @@
+commands.check_non_onboarded_devices
+====================================
+
+.. py:module:: commands.check_non_onboarded_devices
+
+.. autoapi-nested-parse::
+
+   Management command to check for not onboarded devices.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   commands.check_non_onboarded_devices.Command
+
+
+Module Contents
+---------------
+
+.. py:class:: Command(stdout=None, stderr=None, no_color=False, force_color=False)
+
+   Bases: :py:obj:`django.core.management.base.BaseCommand`
+
+
+   Management command to check for devices not onboarded.
+
+   This command identifies devices that have not been onboarded (status: `NO_ONBOARDING`)
+   and generates informational notifications for each device. If a notification for
+   a specific device already exists, it will be skipped.
+
+
+   .. py:attribute:: help
+      :value: 'Check for devices not onboarded.'
+
+
+
+   .. py:method:: handle(*args, **kwargs)
+
+      Entrypoint for the command.
+
+      :param \*args: Additional positional arguments.
+      :param \*\*kwargs: Additional keyword arguments.
+
+
+
+   .. py:method:: _check_non_onboarded_devices()
+
+      Task to create an info notification if a device is not onboarded.
+
+
+

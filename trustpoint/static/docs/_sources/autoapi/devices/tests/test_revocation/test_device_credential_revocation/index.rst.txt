@@ -1,0 +1,39 @@
+devices.tests.test_revocation.test_device_credential_revocation
+===============================================================
+
+.. py:module:: devices.tests.test_revocation.test_device_credential_revocation
+
+.. autoapi-nested-parse::
+
+   Tests for the DeviceCredentialRevocation model.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   devices.tests.test_revocation.test_device_credential_revocation.test_revoke_certificate_success
+   devices.tests.test_revocation.test_device_credential_revocation.test_revoke_certificate_already_revoked
+   devices.tests.test_revocation.test_device_credential_revocation.test_revoke_certificate_invalid_id
+
+
+Module Contents
+---------------
+
+.. py:function:: test_revoke_certificate_success(tls_client_credential_instance)
+
+   Test that a TLS client credential is successfully revoked for a valid issued credential.
+
+
+.. py:function:: test_revoke_certificate_already_revoked(tls_client_credential_instance)
+
+   Test that revoking a certificate that is already revoked returns the appropriate message.
+
+
+.. py:function:: test_revoke_certificate_invalid_id()
+
+   Test that revoking a certificate with an invalid `issued_credential_id` fails with the appropriate error.
+
+

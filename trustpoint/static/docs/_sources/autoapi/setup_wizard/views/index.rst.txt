@@ -1,0 +1,697 @@
+setup_wizard.views
+==================
+
+.. py:module:: setup_wizard.views
+
+.. autoapi-nested-parse::
+
+   Views for the users application.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   setup_wizard.views.APACHE_PATH
+   setup_wizard.views.APACHE_KEY_PATH
+   setup_wizard.views.APACHE_CERT_PATH
+   setup_wizard.views.APACHE_CERT_CHAIN_PATH
+   setup_wizard.views.STATE_FILE_DIR
+   setup_wizard.views.SCRIPT_WIZARD_INITIAL
+   setup_wizard.views.SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY
+   setup_wizard.views.SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY_CANCEL
+   setup_wizard.views.SCRIPT_WIZARD_DEMO_DATA
+   setup_wizard.views.SCRIPT_WIZARD_CREATE_SUPER_USER
+   setup_wizard.views.SCRIPT_WIZARD_RESTORE
+   setup_wizard.views.logger
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   setup_wizard.views.TrustpointWizardError
+   setup_wizard.views.TrustpointTlsServerCredentialError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   setup_wizard.views.StartupWizardRedirect
+   setup_wizard.views.SetupWizardInitialView
+   setup_wizard.views.SetupWizardOptionsView
+   setup_wizard.views.BackupRestoreView
+   setup_wizard.views.SetupWizardGenerateTlsServerCredentialView
+   setup_wizard.views.SetupWizardImportTlsServerCredentialView
+   setup_wizard.views.SetupWizardTlsServerCredentialApplyView
+   setup_wizard.views.SetupWizardTlsServerCredentialApplyCancelView
+   setup_wizard.views.SetupWizardDemoDataView
+   setup_wizard.views.SetupWizardCreateSuperUserView
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   setup_wizard.views.execute_shell_script
+
+
+Module Contents
+---------------
+
+.. py:data:: APACHE_PATH
+
+.. py:data:: APACHE_KEY_PATH
+
+.. py:data:: APACHE_CERT_PATH
+
+.. py:data:: APACHE_CERT_CHAIN_PATH
+
+.. py:data:: STATE_FILE_DIR
+
+.. py:data:: SCRIPT_WIZARD_INITIAL
+
+.. py:data:: SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY
+
+.. py:data:: SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY_CANCEL
+
+.. py:data:: SCRIPT_WIZARD_DEMO_DATA
+
+.. py:data:: SCRIPT_WIZARD_CREATE_SUPER_USER
+
+.. py:data:: SCRIPT_WIZARD_RESTORE
+
+.. py:data:: logger
+
+.. py:exception:: TrustpointWizardError
+
+   Bases: :py:obj:`Exception`
+
+
+   Custom exception for Trustpoint wizard-related issues.
+
+
+.. py:exception:: TrustpointTlsServerCredentialError(message = 'Trustpoint TLS Server Credential error occurred.')
+
+   Bases: :py:obj:`Exception`
+
+
+   Custom exception for errors related to Trustpoint TLS Server Credentials.
+
+   This exception is raised when specific issues with the TLS Server Credentials
+   occur, such as missing credentials.
+
+
+.. py:function:: execute_shell_script(script)
+
+   Execute a shell script.
+
+   :param script: The path to the shell script to execute.
+   :type script: Path
+
+   :raises FileNotFoundError: If the script does not exist.
+   :raises ValueError: If the script path is not a valid file.
+   :raises subprocess.CalledProcessError: If the script fails to execute.
+
+
+.. py:class:: StartupWizardRedirect
+
+   Handles redirection logic based on the current state of the setup wizard.
+
+   This class provides a static method for determining the appropriate redirection
+   URL based on the wizard's state, ensuring users are guided through the setup process.
+
+
+   .. py:method:: redirect_by_state(wizard_state)
+      :staticmethod:
+
+
+      Redirects the user to the appropriate setup wizard page based on the current state.
+
+      :param wizard_state: The current state of the setup wizard.
+      :type wizard_state: SetupWizardState
+
+      :returns: A redirection response to the appropriate page.
+      :rtype: HttpResponseRedirect
+
+      :raises ValueError: If the wizard state is unrecognized or invalid.
+
+
+
+.. py:class:: SetupWizardInitialView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.TemplateView`
+
+
+   View for the initial step of the setup wizard.
+
+   This view is responsible for displaying the initial setup wizard page. It
+   ensures that the application is running in a Docker container and that the
+   setup wizard is in the initial state. If either condition is not met, the
+   user is redirected to the appropriate page, such as the login page or the
+   next setup step.
+
+   .. attribute:: http_method_names
+
+      List of HTTP methods allowed for this view.
+
+      :type: ClassVar[list[str]]
+
+   .. attribute:: template_name
+
+      Path to the template used for rendering the initial page.
+
+      :type: str
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: template_name
+      :value: 'setup_wizard/initial.html'
+
+
+
+   .. py:method:: get(*args, **kwargs)
+
+      Handle GET requests for the initial setup wizard page.
+
+      This method validates the current state of the setup wizard and redirects
+      the user to the appropriate page. If the application is not running in a
+      Docker container, the user is redirected to the login page.
+
+      :param \*args: Additional positional arguments.
+      :type \*args: Any
+      :param \*\*kwargs: Additional keyword arguments.
+      :type \*\*kwargs: Any
+
+      :returns:
+
+                A redirect response to the appropriate setup wizard page
+                              or the login page if the setup is not in a Docker container.
+      :rtype: HttpResponse
+
+
+
+.. py:class:: SetupWizardOptionsView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.TemplateView`
+
+
+   View for the restore option during initialization.
+
+   .. attribute:: http_method_names
+
+      List of HTTP methods allowed for this view.
+
+      :type: ClassVar[list[str]]
+
+   .. attribute:: template_name
+
+      Path to the template used for rendering the initial page.
+
+      :type: str
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: template_name
+      :value: 'setup_wizard/options.html'
+
+
+
+   .. py:method:: get(*args, **kwargs)
+
+      Handle GET requests for the initial setup wizard page.
+
+      This method validates the current state of the setup wizard and redirects
+      the user to the appropriate page. If the application is not running in a
+      Docker container, the user is redirected to the login page.
+
+      :param \*args: Additional positional arguments.
+      :type \*args: Any
+      :param \*\*kwargs: Additional keyword arguments.
+      :type \*\*kwargs: Any
+
+      :returns:
+
+                A redirect response to the appropriate setup wizard page
+                              or the login page if the setup is not in a Docker container.
+      :rtype: HttpResponse
+
+
+
+.. py:class:: BackupRestoreView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.View`
+
+
+   Upload a dump file and restore the database from it.
+
+
+   .. py:method:: post(request)
+
+
+.. py:class:: SetupWizardGenerateTlsServerCredentialView
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`django.views.generic.FormView`\ [\ :py:obj:`setup_wizard.forms.StartupWizardTlsCertificateForm`\ ]
+
+
+   View for generating TLS Server Credentials in the setup wizard.
+
+   This view handles the generation of TLS Server Credentials as part of the
+   setup wizard. It provides a form for the user to input necessary information
+   such as IP addresses and domain names, and processes the data to generate
+   the required TLS certificates.
+
+   .. attribute:: http_method_names
+
+      HTTP methods allowed for this view.
+
+      :type: ClassVar[list[str]]
+
+   .. attribute:: template_name
+
+      Path to the template used for rendering the form.
+
+      :type: str
+
+   .. attribute:: form_class
+
+      The form class used to validate user input.
+
+      :type: Form
+
+   .. attribute:: success_url
+
+      The URL to redirect to upon successful credential generation.
+
+      :type: str
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get', 'post')
+
+
+
+   .. py:attribute:: template_name
+      :value: 'setup_wizard/generate_tls_server_credential.html'
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:method:: dispatch(request, *args, **kwargs)
+
+      Override the dispatch method to enforce wizard state validation.
+
+      This method ensures that the user is redirected appropriately based on the
+      current wizard state. If the application is not running in a Docker container,
+      the user is redirected to the login page.
+
+      :param request: The incoming HTTP request.
+      :type request: HttpRequest
+      :param \*args: Additional positional arguments.
+      :type \*args: Any
+      :param \*\*kwargs: Additional keyword arguments.
+      :type \*\*kwargs: Any
+
+      :returns:
+
+                A redirect response to the appropriate page or
+                              the next handler in the dispatch chain.
+      :rtype: HttpResponse
+
+
+
+   .. py:method:: form_valid(form)
+
+      Handle a valid form submission for TLS Server Credential generation.
+
+      :param form: The validated form containing user input
+                   for generating the TLS Server Credential.
+
+      :returns:
+
+                Redirect to the success URL upon successful
+                                      credential generation, or an error page if
+                                      an exception occurs.
+      :rtype: HttpResponseRedirect
+
+      :raises TrustpointTlsServerCredentialError: If no TLS server credential is found.
+      :raises subprocess.CalledProcessError: If the associated shell script fails.
+
+
+
+   .. py:method:: _get_error_message_from_return_code(return_code)
+
+      Maps return codes to error messages.
+
+
+
+.. py:class:: SetupWizardImportTlsServerCredentialView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.View`
+
+
+   View for handling the import of TLS Server Credentials.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:method:: get()
+
+      Handle GET requests for importing TLS Server Credentials.
+
+      :returns:
+
+                A redirect to the initial setup wizard page if the
+                              import feature is not implemented or the wizard state
+                              is incorrect.
+      :rtype: HttpResponse
+
+
+
+.. py:class:: SetupWizardTlsServerCredentialApplyView
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`django.views.generic.FormView`\ [\ :py:obj:`setup_wizard.forms.EmptyForm`\ ]
+
+
+   View for handling the application of TLS Server Credentials in the setup wizard.
+
+   .. attribute:: http_method_names
+
+      Allowed HTTP methods for this view ('get' and 'post').
+
+      :type: list[str]
+
+   .. attribute:: form_class
+
+      The form used for processing TLS Server Credential application.
+
+      :type: Form
+
+   .. attribute:: template_name
+
+      The template used to render the view.
+
+      :type: str
+
+   .. attribute:: success_url
+
+      The URL to redirect to upon successful form submission.
+
+      :type: str
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get', 'post')
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: template_name
+      :value: 'setup_wizard/tls_server_credential_apply.html'
+
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:method:: get(request, *args, **kwargs)
+
+      Handle GET requests for the TLS Server Credential application view.
+
+      :param request: The HTTP request object.
+      :type request: HttpRequest
+      :param \*args: Positional arguments passed to the method.
+      :type \*args: Any
+      :param \*\*kwargs: Keyword arguments passed to the method.
+      :type \*\*kwargs: Any
+
+      :returns: A redirect response to the appropriate wizard state or the requested page.
+      :rtype: HttpResponse
+
+
+
+   .. py:method:: post(*args, **kwargs)
+
+      Handle POST requests for the TLS Server Credential application view.
+
+      :param \*args: Positional arguments passed to the method.
+      :type \*args: Any
+      :param \*\*kwargs: Keyword arguments passed to the method.
+      :type \*\*kwargs: Any
+
+      :returns: A redirect response to the appropriate page based on the wizard state.
+      :rtype: HttpResponse
+
+
+
+   .. py:method:: form_valid(form)
+
+      Process a valid form submission during the TLS Server Credential application.
+
+      :param form: The form instance containing the submitted data.
+
+      :returns: Redirect to the next step or an error page based on the outcome.
+      :rtype: HttpResponseRedirect
+
+
+
+   .. py:method:: _raise_tls_credential_error(message)
+
+      Raise a TrustpointTlsServerCredentialError with a given message.
+
+      :param message: The error message to include in the exception.
+
+
+
+   .. py:method:: _map_exit_code_to_message(return_code)
+
+      Maps shell script exit codes to user-friendly error messages.
+
+
+
+   .. py:method:: _generate_trust_store_response(file_format)
+
+      Generate a response containing the trust store in the requested format.
+
+      :param file_format: The desired file format for the trust store (e.g., 'pem', 'pkcs7_der', 'pkcs7_pem').
+
+      :returns: A response with the trust store content or an error message.
+      :rtype: HttpResponse
+
+
+
+   .. py:method:: _get_trust_store_and_content_type(file_format, certificate_serializer)
+      :staticmethod:
+
+
+      Tries to get the certificate in the requested format and adds the corresponding content type.
+
+      :param file_format: The file format requested.
+      :param certificate_serializer: The certificate serializer.
+
+      :returns: The tuple of the certificate in the requested format and the content type.
+
+
+
+   .. py:method:: _write_pem_files(credential_model)
+      :staticmethod:
+
+
+      Writes the private key, certificate, and trust store PEM files to disk.
+
+      :param credential_model: The credential model instance containing the keys and certificates.
+      :type credential_model: CredentialModel
+
+
+
+.. py:class:: SetupWizardTlsServerCredentialApplyCancelView(**kwargs)
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`django.views.generic.View`
+
+
+   View for handling the cancellation of TLS Server Credential application.
+
+   .. attribute:: http_method_names
+
+      Allowed HTTP methods for this view.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:method:: get(request)
+
+      Handle GET requests for the TLS Server Credential import view.
+
+      :param request: The HTTP request object.
+
+      :returns: A redirect to the next step or an error response.
+      :rtype: HttpResponse
+
+
+
+   .. py:method:: _clear_credential_and_certificate_data_and_execute(request)
+
+      Clear the credential and certificate data and executes the corresponding action suing a shell script.
+
+      :param request: The HTTP request object.
+
+
+
+   .. py:method:: _clear_credential_and_certificate_data()
+
+      Clears all credential and certificate data if canceled in the 'WIZARD_TLS_SERVER_CREDENTIAL_APPLY' state.
+
+
+
+   .. py:method:: _map_exit_code_to_message(return_code)
+
+      Maps shell script exit codes to user-friendly error messages.
+
+
+
+.. py:class:: SetupWizardDemoDataView
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`django.views.generic.FormView`\ [\ :py:obj:`setup_wizard.forms.EmptyForm`\ ]
+
+
+   View for handling the demo data setup during the setup wizard.
+
+   This view allows the user to either add demo data to the database or proceed without
+   it. It validates the current wizard state and transitions to the next state upon
+   successful completion.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get', 'post')
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: template_name
+      :value: 'setup_wizard/demo_data.html'
+
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:method:: dispatch(request, *args, **kwargs)
+
+      Handle request dispatch and wizard state validation.
+
+
+
+   .. py:method:: form_valid(form)
+
+      Handle form submission for demo data setup.
+
+
+
+   .. py:method:: _add_demo_data()
+
+      Add demo data to the database.
+
+
+
+   .. py:method:: _execute_notifications()
+
+      Creating notifications.
+
+
+
+   .. py:method:: _map_exit_code_to_message(return_code)
+      :staticmethod:
+
+
+      Map script exit codes to meaningful error messages.
+
+      :param return_code: The exit code returned by the script.
+
+      :returns: A descriptive error message corresponding to the exit code.
+      :rtype: str
+
+
+
+.. py:class:: SetupWizardCreateSuperUserView
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`django.views.generic.FormView`\ [\ :py:obj:`django.contrib.auth.forms.UserCreationForm`\ [\ :py:obj:`django.contrib.auth.models.User`\ ]\ ]
+
+
+   View for handling the creation of a superuser during the setup wizard.
+
+   This view is part of the setup wizard process. It allows an admin to create a
+   superuser account, ensuring that the application has at least one administrative
+   user configured. The view validates the input using the `UserCreationForm`
+   and transitions the wizard state upon successful completion.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get', 'post')
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: template_name
+      :value: 'setup_wizard/create_super_user.html'
+
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:method:: dispatch(request, *args, **kwargs)
+
+      Handle request dispatch and wizard state validation.
+
+
+
+   .. py:method:: form_valid(form)
+
+      Handle form submission for creating a superuser.
+
+      :param form: The form containing the data for the superuser creation.
+
+      :returns: Redirect to the next step or login page.
+      :rtype: HttpResponseRedirect
+
+
+
+   .. py:method:: _map_exit_code_to_message(return_code)
+      :staticmethod:
+
+
+      Map script exit codes to meaningful error messages.
+
+
+

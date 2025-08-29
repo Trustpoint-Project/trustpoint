@@ -1,0 +1,358 @@
+pki.views.issuing_cas
+=====================
+
+.. py:module:: pki.views.issuing_cas
+
+.. autoapi-nested-parse::
+
+   Views for Issuing CA management.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   pki.views.issuing_cas.IssuingCaContextMixin
+   pki.views.issuing_cas.IssuingCaTableView
+   pki.views.issuing_cas.IssuingCaAddMethodSelectView
+   pki.views.issuing_cas.IssuingCaAddFileImportPkcs12View
+   pki.views.issuing_cas.IssuingCaAddFileImportSeparateFilesView
+   pki.views.issuing_cas.IssuingCaConfigView
+   pki.views.issuing_cas.IssuedCertificatesListView
+   pki.views.issuing_cas.IssuingCaDetailView
+   pki.views.issuing_cas.IssuingCaBulkDeleteConfirmView
+   pki.views.issuing_cas.IssuingCaCrlGenerationView
+   pki.views.issuing_cas.CrlDownloadView
+
+
+Module Contents
+---------------
+
+.. py:class:: IssuingCaContextMixin
+
+   Bases: :py:obj:`trustpoint.views.base.ContextDataMixin`
+
+
+   Mixin which adds context_data for the PKI -> Issuing CAs pages.
+
+
+   .. py:attribute:: context_page_category
+      :value: 'pki'
+
+
+
+   .. py:attribute:: context_page_name
+      :value: 'issuing_cas'
+
+
+
+.. py:class:: IssuingCaTableView
+
+   Bases: :py:obj:`IssuingCaContextMixin`, :py:obj:`trustpoint.views.base.SortableTableMixin`, :py:obj:`django.views.generic.list.ListView`\ [\ :py:obj:`pki.models.IssuingCaModel`\ ]
+
+
+   Issuing CA Table View.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/issuing_cas/issuing_cas.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'issuing_ca'
+
+
+
+   .. py:attribute:: paginate_by
+
+
+   .. py:attribute:: default_sort_param
+      :value: 'unique_name'
+
+
+
+.. py:class:: IssuingCaAddMethodSelectView
+
+   Bases: :py:obj:`IssuingCaContextMixin`, :py:obj:`django.views.generic.edit.FormView`\ [\ :py:obj:`pki.forms.IssuingCaAddMethodSelectForm`\ ]
+
+
+   View to select the method to add an Issuing CA.
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/issuing_cas/add/method_select.html'
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:method:: form_valid(form)
+
+      Redirect to the next step based on the selected method.
+
+
+
+.. py:class:: IssuingCaAddFileImportPkcs12View
+
+   Bases: :py:obj:`IssuingCaContextMixin`, :py:obj:`django.views.generic.edit.FormView`\ [\ :py:obj:`pki.forms.IssuingCaAddFileImportPkcs12Form`\ ]
+
+
+   View to import an Issuing CA from a PKCS12 file.
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/issuing_cas/add/file_import.html'
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:method:: form_valid(form)
+
+      Handle the case where the form is valid.
+
+
+
+.. py:class:: IssuingCaAddFileImportSeparateFilesView
+
+   Bases: :py:obj:`IssuingCaContextMixin`, :py:obj:`django.views.generic.edit.FormView`\ [\ :py:obj:`pki.forms.IssuingCaAddFileImportSeparateFilesForm`\ ]
+
+
+   View to import an Issuing CA from separate PEM files.
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/issuing_cas/add/file_import.html'
+
+
+
+   .. py:attribute:: form_class
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:method:: form_valid(form)
+
+      Handle the case where the form is valid.
+
+
+
+.. py:class:: IssuingCaConfigView
+
+   Bases: :py:obj:`trustpoint.logger.LoggerMixin`, :py:obj:`IssuingCaContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`pki.models.IssuingCaModel`\ ]
+
+
+   View to display the details of an Issuing CA.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/issuing_cas/config.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'issuing_ca'
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds the issued certificates to the context.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data()
+
+      :returns: The context to render the page.
+
+
+
+.. py:class:: IssuedCertificatesListView
+
+   Bases: :py:obj:`IssuingCaContextMixin`, :py:obj:`django.views.generic.list.ListView`\ [\ :py:obj:`pki.models.CertificateModel`\ ]
+
+
+   View to display all certificates issued by a specific Issuing CA.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/issuing_cas/issued_certificates.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'issued_certificates'
+
+
+
+   .. py:method:: get_queryset()
+
+      Gets the required and filtered QuerySet.
+
+      :returns: The filtered QuerySet.
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Adds the issuing ca model object to the context.
+
+      :param \*\*kwargs: Keyword arguments passed to super().get_context_data()
+
+      :returns: The context to render the page.
+
+
+
+.. py:class:: IssuingCaDetailView
+
+   Bases: :py:obj:`IssuingCaContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`pki.models.IssuingCaModel`\ ]
+
+
+   Detail view for an Issuing CA.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/issuing_cas/details.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'issuing_ca'
+
+
+
+.. py:class:: IssuingCaBulkDeleteConfirmView(**kwargs)
+
+   Bases: :py:obj:`IssuingCaContextMixin`, :py:obj:`trustpoint.views.base.BulkDeleteView`
+
+
+   View to confirm the deletion of multiple Issuing CAs.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: template_name
+      :value: 'pki/issuing_cas/confirm_delete.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'issuing_cas'
+
+
+
+   .. py:method:: form_valid(form)
+
+      Delete the selected Issuing CAs on valid form.
+
+
+
+.. py:class:: IssuingCaCrlGenerationView
+
+   Bases: :py:obj:`IssuingCaContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`pki.models.IssuingCaModel`\ ]
+
+
+   View to manually generate a CRL for an Issuing CA.
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: context_object_name
+      :value: 'issuing_ca'
+
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:method:: get(request, *args, **kwargs)
+
+      Generate a CRL for the Issuing CA (should be POST!).
+
+
+
+.. py:class:: CrlDownloadView
+
+   Bases: :py:obj:`IssuingCaContextMixin`, :py:obj:`django.views.generic.detail.DetailView`\ [\ :py:obj:`pki.models.IssuingCaModel`\ ]
+
+
+   Unauthenticated view to download the certificate revocation list of an Issuing CA.
+
+
+   .. py:attribute:: http_method_names
+      :value: ('get',)
+
+
+
+   .. py:attribute:: model
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:attribute:: ignore_url
+
+
+   .. py:attribute:: context_object_name
+      :value: 'issuing_ca'
+
+
+
+   .. py:method:: get(request, *args, **kwargs)
+
+      Download the CRL of the Issuing CA.
+
+
+

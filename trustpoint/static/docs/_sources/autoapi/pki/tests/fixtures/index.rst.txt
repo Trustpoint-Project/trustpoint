@@ -1,0 +1,35 @@
+pki.tests.fixtures
+==================
+
+.. py:module:: pki.tests.fixtures
+
+.. autoapi-nested-parse::
+
+   Fixtures for the PKI pytest suite.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   pki.tests.fixtures.self_signed_cert_basic
+   pki.tests.fixtures.self_signed_cert_with_ext
+
+
+Module Contents
+---------------
+
+.. py:function:: self_signed_cert_basic(rsa_private_key)
+
+   Creates a self-signed CA certificate with minimal extensions and saves it to the database once per module.
+
+   We manually unblock the DB because this fixture has 'module' scope.
+
+
+.. py:function:: self_signed_cert_with_ext(rsa_private_key)
+
+   Create a self-signed certificate with multiple extensions.
+
+

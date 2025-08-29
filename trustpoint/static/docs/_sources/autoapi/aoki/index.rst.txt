@@ -1,0 +1,24 @@
+aoki
+====
+
+.. py:module:: aoki
+
+.. autoapi-nested-parse::
+
+   Application implementing the Automated Onboarding Key Infrastructure (AOKI) protocol.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/aoki/apps/index
+   /autoapi/aoki/management/index
+   /autoapi/aoki/tests/index
+   /autoapi/aoki/urls/index
+   /autoapi/aoki/views/index
+
+

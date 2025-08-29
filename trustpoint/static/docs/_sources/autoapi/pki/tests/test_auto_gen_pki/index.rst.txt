@@ -1,0 +1,27 @@
+pki.tests.test_auto_gen_pki
+===========================
+
+.. py:module:: pki.tests.test_auto_gen_pki
+
+.. autoapi-nested-parse::
+
+   Tests for the auto-generated PKI.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   pki.tests.test_auto_gen_pki.test_auto_gen_pki
+
+
+Module Contents
+---------------
+
+.. py:function:: test_auto_gen_pki(key_alg)
+
+   Test that the auto-generated PKI can be correctly enabled, used and disabled.
+
+

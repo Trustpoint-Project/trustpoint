@@ -1,0 +1,111 @@
+est.tests.client
+================
+
+.. py:module:: est.tests.client
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   est.tests.client.dc_client
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   est.tests.client.ESTClient
+
+
+Module Contents
+---------------
+
+.. py:class:: ESTClient(est_url, auth_type, domain=None, cert_template=None, username=None, password=None, cert_path=None, key_path=None, ca_cert_path=None, out_cert_path=None, out_key_path=None)
+
+   .. py:attribute:: est_url
+
+
+   .. py:attribute:: auth_type
+
+
+   .. py:attribute:: domain
+      :value: None
+
+
+
+   .. py:attribute:: cert_template
+      :value: None
+
+
+
+   .. py:attribute:: username
+      :value: None
+
+
+
+   .. py:attribute:: password
+      :value: None
+
+
+
+   .. py:attribute:: cert_path
+      :value: None
+
+
+
+   .. py:attribute:: key_path
+      :value: None
+
+
+
+   .. py:attribute:: ca_cert_path
+      :value: None
+
+
+
+   .. py:attribute:: out_cert_path
+      :value: None
+
+
+
+   .. py:attribute:: out_key_path
+      :value: None
+
+
+
+   .. py:attribute:: session
+
+
+   .. py:method:: _get_auth()
+
+      Returns authentication parameters based on the chosen method.
+
+
+
+   .. py:method:: enroll(common_name, serial_number, save_key=True)
+
+      Performs EST enrollment to obtain a new certificate, with an option to store the private key.
+
+
+
+   .. py:method:: reenroll(cert_path, key_path=None, generate_new_key=False)
+
+      Performs EST reenrollment using an existing certificate.
+
+      :param cert_path: Path to the existing certificate
+      :param key_path: Path to the existing private key (if using existing key)
+      :param generate_new_key: Boolean to determine if a new key should be generated
+
+
+
+   .. py:method:: get_ca_certificates()
+
+      Retrieves CA certificates from the EST /cacerts endpoint.
+
+
+
+.. py:data:: dc_client
+

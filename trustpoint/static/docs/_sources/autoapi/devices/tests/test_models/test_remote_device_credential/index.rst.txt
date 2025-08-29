@@ -1,0 +1,105 @@
+devices.tests.test_models.test_remote_device_credential
+=======================================================
+
+.. py:module:: devices.tests.test_models.test_remote_device_credential
+
+.. autoapi-nested-parse::
+
+   Tests for the RemoteDeviceCredential model.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   devices.tests.test_models.test_remote_device_credential.test_create_remote_device_credential_from_tls_client_credential
+   devices.tests.test_models.test_remote_device_credential.test_save_generates_otp_if_not_set
+   devices.tests.test_models.test_remote_device_credential.test_save_does_not_modify_existing_otp
+   devices.tests.test_models.test_remote_device_credential.test_check_token_valid
+   devices.tests.test_models.test_remote_device_credential.test_check_token_missing_token
+   devices.tests.test_models.test_remote_device_credential.test_check_token_wrong_token
+   devices.tests.test_models.test_remote_device_credential.test_check_token_expired
+   devices.tests.test_models.test_remote_device_credential.test_check_otp_valid
+   devices.tests.test_models.test_remote_device_credential.test_check_otp_invalid
+   devices.tests.test_models.test_remote_device_credential.test_check_otp_exceed_max_attempts
+   devices.tests.test_models.test_remote_device_credential.test_check_otp_resets_on_max_attempts
+   devices.tests.test_models.test_remote_device_credential.test_check_otp_creates_download_token
+   devices.tests.test_models.test_remote_device_credential.test_get_otp_display_valid_otp
+   devices.tests.test_models.test_remote_device_credential.test_get_otp_display_invalidated_otp
+
+
+Module Contents
+---------------
+
+.. py:function:: test_create_remote_device_credential_from_tls_client_credential(tls_client_credential_instance)
+
+   Test the creation of a RemoteDeviceCredentialDownloadModel instance using the `tls_client_credential` fixture.
+
+
+.. py:function:: test_save_generates_otp_if_not_set(remote_device_credential_download_instance)
+
+   Test that `save` generates a new OTP if no OTP is set.
+
+
+.. py:function:: test_save_does_not_modify_existing_otp(remote_device_credential_download_instance)
+
+   Test that `save` does not modify the OTP if it is already set.
+
+
+.. py:function:: test_check_token_valid(remote_device_credential_download_instance)
+
+   Test that `check_token` returns True for a valid token within the validity period.
+
+
+.. py:function:: test_check_token_missing_token(remote_device_credential_download_instance)
+
+   Test that `check_token` returns False if no token is set.
+
+
+.. py:function:: test_check_token_wrong_token(remote_device_credential_download_instance)
+
+   Test that `check_token` returns False for an incorrect token.
+
+
+.. py:function:: test_check_token_expired(remote_device_credential_download_instance)
+
+   Test that `check_token` returns False for an expired token.
+
+
+.. py:function:: test_check_otp_valid(remote_device_credential_download_instance)
+
+   Test that `check_otp` returns True for a valid OTP and invalidates it afterward.
+
+
+.. py:function:: test_check_otp_invalid(remote_device_credential_download_instance)
+
+   Test that `check_otp` returns False for an invalid OTP.
+
+
+.. py:function:: test_check_otp_exceed_max_attempts(remote_device_credential_download_instance)
+
+   Test that the OTP is invalidated after exceeding the maximum number of allowed attempts.
+
+
+.. py:function:: test_check_otp_resets_on_max_attempts(remote_device_credential_download_instance)
+
+   Test that the object is deleted after exceeding max OTP attempts.
+
+
+.. py:function:: test_check_otp_creates_download_token(remote_device_credential_download_instance)
+
+   Test that a valid OTP generates a download token and sets the creation time.
+
+
+.. py:function:: test_get_otp_display_valid_otp(remote_device_credential_download_instance)
+
+   Test that `get_otp_display` returns the OTP in the correct format when the OTP is valid.
+
+
+.. py:function:: test_get_otp_display_invalidated_otp(remote_device_credential_download_instance)
+
+   Test that `get_otp_display` returns 'OTP no longer valid' when the OTP is invalidated.
+
+

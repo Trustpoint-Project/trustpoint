@@ -1,0 +1,11 @@
+settings.admin
+==============
+
+.. py:module:: settings.admin
+
+.. autoapi-nested-parse::
+
+   Admin
+
+
+

@@ -1,0 +1,44 @@
+setup_wizard.apps
+=================
+
+.. py:module:: setup_wizard.apps
+
+.. autoapi-nested-parse::
+
+   Configuration for the setup wizard app.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   setup_wizard.apps.SetupWizardConfig
+
+
+Module Contents
+---------------
+
+.. py:class:: SetupWizardConfig(*args, **kwargs)
+
+   Bases: :py:obj:`django.apps.AppConfig`
+
+
+   Configuration for the setup wizard app.
+
+
+   .. py:attribute:: default_auto_field
+      :value: 'django.db.models.BigAutoField'
+
+
+
+   .. py:attribute:: name
+      :value: 'setup_wizard'
+
+
+
+   .. py:attribute:: logger
+      :type:  logging.Logger
+
+

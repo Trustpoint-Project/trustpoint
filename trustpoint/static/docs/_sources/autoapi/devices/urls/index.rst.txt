@@ -1,0 +1,29 @@
+devices.urls
+============
+
+.. py:module:: devices.urls
+
+.. autoapi-nested-parse::
+
+   URL configuration for the devices' application.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   devices.urls.app_name
+   devices.urls.urlpatterns
+
+
+Module Contents
+---------------
+
+.. py:data:: app_name
+   :value: 'devices'
+
+
+.. py:data:: urlpatterns
+

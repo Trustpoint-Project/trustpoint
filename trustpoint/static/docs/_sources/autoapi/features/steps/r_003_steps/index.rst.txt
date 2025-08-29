@@ -1,0 +1,131 @@
+features.steps.r_003_steps
+==========================
+
+.. py:module:: features.steps.r_003_steps
+
+.. autoapi-nested-parse::
+
+   Python steps file for R_003.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   features.steps.r_003_steps.step_certificate_near_expiration
+   features.steps.r_003_steps.step_certificate_active
+   features.steps.r_003_steps.step_certificate_revoked
+   features.steps.r_003_steps.step_navigate_certificate_management
+   features.steps.r_003_steps.step_initiate_certificate_renewal
+   features.steps.r_003_steps.step_initiate_certificate_revocation
+   features.steps.r_003_steps.step_certificate_updated_expiration
+   features.steps.r_003_steps.step_certificate_status_revoked
+   features.steps.r_003_steps.step_attempt_nonexistent_certificate
+   features.steps.r_003_steps.step_attempt_certificate_action
+
+
+Module Contents
+---------------
+
+.. py:function:: step_certificate_near_expiration(context, certificate_id)
+
+   Sets up a certificate that is near expiration.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param certificate_id: The ID of the certificate.
+   :type certificate_id: str
+
+
+.. py:function:: step_certificate_active(context, certificate_id)
+
+   Ensures a certificate exists in an active state.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param certificate_id: The ID of the certificate.
+   :type certificate_id: str
+
+
+.. py:function:: step_certificate_revoked(context, certificate_id)
+
+   Ensures a certificate exists and is in a revoked state.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param certificate_id: The ID of the certificate.
+   :type certificate_id: str
+
+
+.. py:function:: step_navigate_certificate_management(context, certificate_id)
+
+   Navigates to the certificate management page for a given certificate.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param certificate_id: The ID of the certificate.
+   :type certificate_id: str
+
+
+.. py:function:: step_initiate_certificate_renewal(context)
+
+   Initiates the renewal process for a certificate.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_initiate_certificate_revocation(context)
+
+   Initiates the revocation process for a certificate.
+
+   :param context: Behave context.
+   :type context: runner.Context
+
+
+.. py:function:: step_certificate_updated_expiration(context, certificate_id)
+
+   Verifies the certificate's expiration date has been updated.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param certificate_id: The ID of the certificate.
+   :type certificate_id: str
+
+
+.. py:function:: step_certificate_status_revoked(context, certificate_id)
+
+   Verifies the certificate's status is marked as "revoked".
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param certificate_id: The ID of the certificate.
+   :type certificate_id: str
+
+
+.. py:function:: step_attempt_nonexistent_certificate(context, renew_revoke, non_existent)
+
+   Attempts to renew or revoke a non-existent certificate.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param renew_revoke: Action to perform (renew or revoke).
+   :type renew_revoke: str
+   :param non_existent: The non-existent certificate ID.
+   :type non_existent: str
+
+
+.. py:function:: step_attempt_certificate_action(context, renew_revoke, cert)
+
+   Attempts to renew or revoke a certificate.
+
+   :param context: Behave context.
+   :type context: runner.Context
+   :param renew_revoke: Action to perform (renew or revoke).
+   :type renew_revoke: str
+   :param cert: The certificate ID.
+   :type cert: str
+
+

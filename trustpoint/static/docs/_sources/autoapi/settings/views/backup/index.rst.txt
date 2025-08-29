@@ -1,0 +1,217 @@
+settings.views.backup
+=====================
+
+.. py:module:: settings.views.backup
+
+.. autoapi-nested-parse::
+
+   Django backup view.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   settings.views.backup.logger
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   settings.views.backup.BackupManageView
+   settings.views.backup.BackupFileDownloadView
+   settings.views.backup.BackupFilesDownloadMultipleView
+   settings.views.backup.BackupFilesDeleteMultipleView
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   settings.views.backup.get_backup_file_data
+   settings.views.backup.create_db_backup
+
+
+Module Contents
+---------------
+
+.. py:data:: logger
+
+.. py:function:: get_backup_file_data(filename)
+
+   Retrieve metadata for a single backup file.
+
+   :param filename: Name of the backup file.
+
+   :returns:   - filename: str
+               - created_at: str (formatted 'YYYY-MM-DD HH:MM:SS' in UTC)
+               - modified_at: str (formatted 'YYYY-MM-DD HH:MM:SS' in UTC)
+               - size_kb: str (size in KB to one decimal place)
+
+             Returns an empty dict if the file does not exist or is not a regular file.
+   :rtype: A dict with keys
+
+
+.. py:function:: create_db_backup(path)
+
+   Create a compressed database backup file in the given directory.
+
+   The command `manage.py dbbackup -o <filename> -z` is used, producing a `.dump.gz` file under `path`.
+
+   :param path: Directory where backups should be stored.
+
+   :returns: The filename of the created backup file.
+
+   :raises OSError: If `path` cannot be created.
+   :raises CalledProcessError: If the `dbbackup` command fails.
+
+
+.. py:class:: BackupManageView
+
+   Bases: :py:obj:`trustpoint.views.base.SortableTableMixin`, :py:obj:`django.views.generic.ListView`\ [\ :py:obj:`Any`\ ]
+
+
+   Display existing backups and handle backup-related actions.
+
+   GET:
+     - Renders a table of existing backup files.
+     - Includes a form for editing SFTP/backup settings.
+
+   POST:
+     Depending on which button was clicked, performs one of:
+       - create_backup: Creates a new database backup (and optionally uploads via SFTP).
+       - test_sftp_connection: Validates SFTP credentials without saving them.
+       - save_backup_settings: Saves or updates BackupOptions.
+       - reset_backup_settings: Deletes existing BackupOptions, reverting to defaults.
+
+
+   .. py:attribute:: template_name
+      :value: 'settings/backups/manage_backups.html'
+
+
+
+   .. py:attribute:: context_object_name
+      :value: 'backup_files'
+
+
+
+   .. py:attribute:: paginate_by
+      :value: 20
+
+
+
+   .. py:attribute:: default_sort_param
+      :value: 'filename'
+
+
+
+   .. py:attribute:: success_url
+
+
+   .. py:method:: get_queryset()
+
+      Collect metadata for all backup_*.dump.gz files under BACKUP_FILE_PATH.
+
+
+
+   .. py:method:: get_context_data(**kwargs)
+
+      Add the BackupOptions form to the template context.
+
+
+
+   .. py:method:: post(request, *_args, **_kwargs)
+
+      Handle form submissions for backup or SFTP settings.
+
+
+
+   .. py:method:: _handle_create_backup(request)
+
+      Logic for creating a new backup and possibly uploading via SFTP.
+
+
+
+   .. py:method:: _handle_test_sftp(request)
+
+      Logic for testing SFTP connection without saving settings.
+
+
+
+   .. py:method:: _handle_save_settings(request)
+
+      Logic for saving or updating backup/SFTP settings.
+
+
+
+   .. py:method:: _handle_reset_settings(request)
+
+      Logic for resetting (deleting) backup/SFTP settings.
+
+
+
+.. py:class:: BackupFileDownloadView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.View`
+
+
+   Serve a single backup file for download.
+
+
+   .. py:method:: get(_request, filename)
+
+      Return the requested backup file as an attachment.
+
+      :param _request: The HTTP request (unused).
+      :param filename: Name of the backup file to download.
+
+      :returns: An HttpResponse with the file contents.
+
+      :raises Http404: If the requested file does not exist.
+
+
+
+.. py:class:: BackupFilesDownloadMultipleView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.View`
+
+
+   Download multiple selected backup files as a ZIP or tar.gz archive.
+
+
+   .. py:method:: post(request, archive_format)
+
+      Bundle selected backups into an archive.
+
+      :param request: The HTTP request, containing POST data 'selected' (a list of filenames).
+      :param archive_format: Either 'zip' or 'tar.gz'.
+
+      :returns: An HttpResponse containing the archive.
+
+      :raises Redirect to settings: backups with an error if no valid files are selected.
+
+
+
+.. py:class:: BackupFilesDeleteMultipleView(**kwargs)
+
+   Bases: :py:obj:`django.views.generic.View`
+
+
+   Delete multiple selected backup files and notify the user.
+
+
+   .. py:method:: post(request)
+
+      Delete the selected backup files.
+
+      :param request: The HTTP request, containing POST data 'selected' (list of filenames).
+
+      :returns: An HttpResponse redirecting back to the backups page.
+
+
+
