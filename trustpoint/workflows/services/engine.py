@@ -1,107 +1,123 @@
+"""Workflow engine: advancing instances through their nodes."""
+
 from __future__ import annotations
 
+from typing import Any
+
 from workflows.models import WorkflowInstance
-from workflows.services.executors import ExecStatus, NodeExecutorFactory, NodeResult
+from workflows.services.executors.factory import NodeExecutorFactory
+from workflows.services.types import ExecStatus, NodeResult
 
 
-def advance_instance(
-    instance: WorkflowInstance,
-    signal: str | None = None,
-) -> None:
-    """Drive an instance forward until.
+def _current_node(instance: WorkflowInstance) -> dict[str, Any]:
+    """Return the current node metadata by id."""
+    for n in instance.get_steps():
+        if n['id'] == instance.current_step:
+            return n
+    msg = f'Unknown current_step {instance.current_step!r}'
+    raise ValueError(msg)
 
-      • an executor asks us to WAIT (e.g. Approval),
-      • an executor returns a terminal status (APPROVED / REJECTED / COMPLETED / FAIL),
-      • or we reach the end of nodes (COMPLETED).
 
-    Executors are responsible for business outcomes (e.g., deciding “this is REJECTED”
-    or “this is APPROVED (terminal)”). The engine interprets those outcomes and
-    moves the pointer / sets state accordingly.
+def _advance_pointer(instance: WorkflowInstance) -> bool:
+    """Move to the next node if any; set state=Running; persist. Return True if advanced."""
+    nxt = instance.get_next_step()
+    if nxt:
+        instance.current_step = nxt
+        instance.state = WorkflowInstance.STATE_RUNNING
+        instance.save(update_fields=['current_step', 'state'])
+        return True
+    return False
+
+
+def _persist_step_context(instance: WorkflowInstance, result: NodeResult) -> None:
+    """Persist per-step context if provided by the executor."""
+    if result.context is None:
+        return
+    sc = dict(instance.step_contexts or {})
+    sc[str(instance.current_step)] = dict(result.context)
+    instance.step_contexts = sc
+    instance.save(update_fields=['step_contexts'])
+
+
+def _handle_passed(instance: WorkflowInstance) -> bool:
+    """Handle ExecStatus.PASSED. Return True if engine should continue looping."""
+    if _advance_pointer(instance):
+        return True  # continue with next node in same call
+    instance.finalize(WorkflowInstance.STATE_COMPLETED)
+    return False
+
+
+def _handle_waiting(instance: WorkflowInstance, node_type: str, wait_state: str | None) -> None:
+    """Handle ExecStatus.WAITING by pausing the instance."""
+    default_wait = WorkflowInstance.STATE_AWAITING if node_type == 'Approval' else WorkflowInstance.STATE_RUNNING
+    instance.state = wait_state or default_wait
+    instance.save(update_fields=['state'])
+
+
+def _handle_terminal(instance: WorkflowInstance, status: ExecStatus) -> None:
+    """Handle terminal statuses (APPROVED/REJECTED/COMPLETED/FAIL)."""
+    if status is ExecStatus.APPROVED:
+        # terminal approved - do not finalize; caller (EST view) may issue and then finalize
+        instance.state = WorkflowInstance.STATE_APPROVED
+        instance.save(update_fields=['state'])
+    elif status is ExecStatus.REJECTED:
+        # terminal rejected - do not finalize; caller may finalize
+        instance.state = WorkflowInstance.STATE_REJECTED
+        instance.save(update_fields=['state'])
+    elif status is ExecStatus.COMPLETED:
+        instance.finalize(WorkflowInstance.STATE_COMPLETED)
+    elif status is ExecStatus.FAIL:
+        instance.finalize(WorkflowInstance.STATE_FAILED)
+    else:
+        # Defensive fallback
+        instance.finalize(WorkflowInstance.STATE_FAILED)
+
+
+def advance_instance(instance: WorkflowInstance, signal: str | None = None) -> None:
+    """Advance a workflow run until it must pause or reach a terminal outcome.
+
+    The engine advances through nodes until one of the following occurs:
+      • a node returns WAITING  -> pause (e.g., Approval),
+      • a node returns terminal -> stop (APPROVED/REJECTED/COMPLETED/FAIL),
+      • or there are no more nodes -> COMPLETE + finalize.
+
+    Notes:
+      - APPROVED: engine does not finalize (caller may issue and then finalize).
+      - REJECTED: engine does not finalize (caller may finalize).
+      - COMPLETED/FAIL: engine finalizes immediately.
     """
     if instance.finalized:
         return
 
-    # Kick off if brand new
+    # Kick off brand-new runs
     if instance.state == WorkflowInstance.STATE_STARTING:
         instance.state = WorkflowInstance.STATE_RUNNING
         instance.save(update_fields=['state'])
 
-    # Main driver loop
-    while True:
-        print('Inside while loop')
-        nodes = instance.definition.definition.get('nodes', [])
-        print('Nodes: ')
-        print(nodes)
-        try:
-            node_meta = next(n for n in nodes if n['id'] == instance.current_step)
-        except StopIteration:
-            # Safety: no such node → treat as completed
-            instance.state = WorkflowInstance.STATE_COMPLETED
-            break
+    # Safety ceiling (prevents accidental infinite progress)
+    steps_len = len(instance.get_steps())
+    guard = steps_len + 8
 
-        node_type = node_meta.get('type')
+    for _ in range(guard):
+        node_meta = _current_node(instance)
+        node_type = node_meta.get('type', '')
 
-        print('Node type: ', node_type)
         executor = NodeExecutorFactory.create(node_type)
-        print('executor: ', executor)
         result: NodeResult = executor.execute(instance, signal)
-        print('result: ', result)
 
-        # Stash per-step context if provided
-        if result.context is not None:
-            print('result.None: ', result.context)
-            sc = dict(instance.step_contexts or {})
-            sc[str(instance.current_step)] = result.context
-            instance.step_contexts = sc
-            instance.save(update_fields=['step_contexts'])
+        _persist_step_context(instance, result)
 
-        # Interpret result
-        if result.status == ExecStatus.PASSED:
-            print('result.PASSED: ', result.status)
-            # proceed to next node (if any) and keep running
-            next_step = instance.get_next_step()
-            if next_step:
-                instance.current_step = next_step
-                instance.state = WorkflowInstance.STATE_RUNNING
-                instance.save(update_fields=['current_step', 'state'])
+        status = result.status
+
+        if status is ExecStatus.PASSED:
+            if _handle_passed(instance):
                 signal = None  # one-shot
                 continue
-
-            # End of nodes (no approvals are involved at this point)
-            instance.state = WorkflowInstance.STATE_COMPLETED
             break
 
-        if result.status == ExecStatus.WAITING:
-            print('result.WAITING: ', result.status)
-            # Pause. Approval nodes set AwaitingApproval; others may set generic waits later.
-            if node_type == 'Approval':
-                instance.state = WorkflowInstance.STATE_AWAITING
-                instance.save(update_fields=['state'])
+        if status is ExecStatus.WAITING:
+            _handle_waiting(instance, node_type, result.wait_state)
             break
 
-        if result.status == ExecStatus.APPROVED:
-            print('result.APPROVED: ', result.status)
-            # Terminal approval: mark Approved and *prepare* to continue later.
-            # Move pointer to the NEXT node now so a later call resumes seamlessly.
-            next_step = instance.get_next_step()
-            if next_step:
-                instance.current_step = next_step
-                instance.save(update_fields=['current_step'])
-            instance.state = WorkflowInstance.STATE_APPROVED
-            instance.save(update_fields=['state'])
-            continue
-
-        if result.status == ExecStatus.REJECTED:
-            print('result.REJECTED: ', result.status)
-            instance.state = WorkflowInstance.STATE_REJECTED
-            instance.save(update_fields=['state'])
-            continue
-
-        if result.status == ExecStatus.COMPLETED:
-            print('result.COMPLETED: ', result.status)
-            instance.state = WorkflowInstance.STATE_COMPLETED
-            break
-
-        # result.status == FAIL (generic failure)
-        instance.state = WorkflowInstance.STATE_FAILED
+        _handle_terminal(instance, status)
         break

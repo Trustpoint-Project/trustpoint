@@ -1,14 +1,21 @@
-# workflows/triggers.py
+"""Trigger definitions for the workflows app.
+
+This module centralizes the set of supported workflow triggers and provides
+helpers to enumerate protocols and operations.
+"""
 
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class Trigger:
-    """Represents a single event trigger:
-    - key: internal name 
-    - protocol/operation for filtering 
-    - handler: the service key that will process it
+    """Represents a single event trigger.
+
+    Attributes:
+        key: Internal name for the trigger.
+        protocol: Protocol name (e.g., "EST", "CMP", "SCEP"); may be empty.
+        operation: Protocol operation (e.g., "simpleenroll"); may be empty.
+        handler: Service key that will process the trigger.
     """
     key: str
     protocol: str

@@ -879,7 +879,7 @@ class EstSimpleEnrollmentView(
         # Fallback error
         if http_response is None:
             http_response = LoggedHttpResponse(
-                'Something went wrong during EST simpleenroll. Have fun debugging <3',
+                f'Something went wrong during EST simpleenroll. Have fun debugging <3 status:  {info}',
                 status=500,
             )
 

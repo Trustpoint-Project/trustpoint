@@ -1,15 +1,23 @@
+"""Workflow views for TrustPoint.
+
+This module provides Django class-based views for:
+- Listing and retrieving workflow definitions, domains, devices, and CAs.
+- Managing workflows via a wizard and delete endpoint.
+- Displaying pending approvals and workflow instance details.
+- Signaling workflow instances (approve/reject).
+"""
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from cryptography import x509
-from cryptography.x509.oid import ExtensionOID, NameOID
+from cryptography.x509.extensions import ExtensionNotFound
+from cryptography.x509.oid import NameOID
 from devices.models import DeviceModel
 from django.contrib import messages
 from django.db import IntegrityError
-from django.db.models import QuerySet
 from django.http import (
     HttpRequest,
     HttpResponse,
@@ -20,6 +28,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.views.generic import ListView
 from pki.models import DomainModel, IssuingCaModel
+from trustpoint_core.oid import AlgorithmIdentifier
 from util.email import MailTemplates
 
 from workflows.models import (
@@ -31,34 +40,24 @@ from workflows.services.engine import advance_instance
 from workflows.services.wizard import transform_to_definition_schema
 from workflows.triggers import Triggers
 
+if TYPE_CHECKING:
+    from django.db.models import QuerySet
+
 
 class MailTemplateListView(View):
-    """Return email templates grouped for the wizard.
-
-    Response:
-    {
-      "groups": [
-        {
-          "key": "user",
-          "label": "User",
-          "templates": [
-            {"key":"user_welcome","label":"User Welcome"},
-            {"key":"user_delete","label":"User Delete"}
-          ]
-        },
-        {
-          "key": "certificate",
-          "label": "Certificate",
-          "templates": [
-            {"key":"certificate_issued","label":"Certificate Issued"},
-            {"key":"certificate_revoked","label":"Certificate Revoked"}
-          ]
-        }
-      ]
-    }
-    """
+    """Return email templates grouped for the wizard."""
 
     def get(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
+        """Return JSON grouping available mail templates.
+
+        Args:
+            _request: The HTTP request.
+            *_args: Unused positional args.
+            **_kwargs: Unused keyword args.
+
+        Returns:
+            A JsonResponse containing grouped mail templates.
+        """
         groups = []
         for group_key, tpl_tuple in MailTemplates.GROUPS.items():
             groups.append({
@@ -70,20 +69,19 @@ class MailTemplateListView(View):
 
 
 class TriggerListView(View):
-    """API endpoint returning all triggers.
+    """API endpoint returning all triggers."""
 
-    Response JSON format:
-    {
-      "est_simpleenroll": {
-         "protocol": "EST",
-         "operation": "simpleenroll",
-         "handler": "certificate_request"
-      },
-      ...
-    }
-    """
+    def get(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
+        """Return JSON with all available triggers.
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        Args:
+            _request: The HTTP request.
+            *_args: Unused positional args.
+            **_kwargs: Unused keyword args.
+
+        Returns:
+            A JsonResponse containing triggers keyed by trigger ID.
+        """
         data = {
             t.key: {
                 'protocol':  t.protocol,
@@ -98,7 +96,17 @@ class TriggerListView(View):
 class CAListView(View):
     """Return all issuing CAs as JSON."""
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+    def get(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
+        """Return a list of active issuing CAs.
+
+        Args:
+            _request: The HTTP request.
+            *_args: Unused positional args.
+            **_kwargs: Unused keyword args.
+
+        Returns:
+            A JsonResponse with CA IDs and names.
+        """
         cas = IssuingCaModel.objects.filter(is_active=True)
         data = [{'id': str(c.id), 'name': c.unique_name} for c in cas]
         return JsonResponse(data, safe=False)
@@ -107,7 +115,17 @@ class CAListView(View):
 class DomainListView(View):
     """Return all domains as JSON."""
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+    def get(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
+        """Return a list of active domains.
+
+        Args:
+            _request: The HTTP request.
+            *_args: Unused positional args.
+            **_kwargs: Unused keyword args.
+
+        Returns:
+            A JsonResponse with domain IDs and names.
+        """
         doms = DomainModel.objects.filter(is_active=True)
         data = [{'id': str(d.id), 'name': d.unique_name} for d in doms]
         return JsonResponse(data, safe=False)
@@ -116,7 +134,17 @@ class DomainListView(View):
 class DeviceListView(View):
     """Return all devices as JSON."""
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+    def get(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
+        """Return a list of devices.
+
+        Args:
+            _request: The HTTP request.
+            *_args: Unused positional args.
+            **_kwargs: Unused keyword args.
+
+        Returns:
+            A JsonResponse with device IDs and names.
+        """
         devs = DeviceModel.objects.select_related('domain').all()
         data = [{'id': str(d.id), 'name': d.common_name} for d in devs]
         return JsonResponse(data, safe=False)
@@ -125,7 +153,18 @@ class DeviceListView(View):
 class DefinitionDetailView(View):
     """Return JSON for a single WorkflowDefinition (for editing in wizard)."""
 
-    def get(self, request: HttpRequest, pk: UUID, *args: Any, **kwargs: Any) -> JsonResponse:
+    def get(self, _request: HttpRequest, pk: UUID, *_args: Any, **_kwargs: Any) -> JsonResponse:
+        """Return details of a single WorkflowDefinition.
+
+        Args:
+            _request: The HTTP request.
+            pk: The workflow definition UUID.
+            *_args: Unused positional args.
+            **_kwargs: Unused keyword args.
+
+        Returns:
+            A JsonResponse with workflow definition metadata.
+        """
         wf = get_object_or_404(WorkflowDefinition, pk=pk)
         meta = wf.definition
 
@@ -182,6 +221,7 @@ class WorkflowDefinitionListView(ListView[WorkflowDefinition]):
     context_object_name = 'definitions'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add page metadata to context."""
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'workflows'
         context['page_name'] = 'definitions'
@@ -194,6 +234,7 @@ class WorkflowWizardView(View):
     template_name = 'workflows/definition_wizard.html'
 
     def get(self, request: HttpRequest) -> HttpResponse:
+        """Render workflow wizard UI."""
         return render(
             request,
             self.template_name,
@@ -204,6 +245,7 @@ class WorkflowWizardView(View):
         )
 
     def post(self, request: HttpRequest) -> JsonResponse:
+        """Create or update a workflow definition."""
         try:
             data: dict[str, Any] = json.loads(request.body)
         except json.JSONDecodeError:
@@ -221,12 +263,15 @@ class WorkflowWizardView(View):
         # Build flat scopes list from grouped input
         scopes_list: list[dict[str, Any]] = []
         if isinstance(scopes_in, dict):
-            for ca in scopes_in.get('ca_ids', []):
-                scopes_list.append({'ca_id': ca, 'domain_id': None, 'device_id': None})
-            for dom in scopes_in.get('domain_ids', []):
-                scopes_list.append({'ca_id': None, 'domain_id': dom, 'device_id': None})
-            for dev in scopes_in.get('device_ids', []):
-                scopes_list.append({'ca_id': None, 'domain_id': None, 'device_id': dev})
+            scopes_list.extend(
+                {'ca_id': ca, 'domain_id': None, 'device_id': None} for ca in scopes_in.get('ca_ids', [])
+            )
+            scopes_list.extend(
+                {'ca_id': None, 'domain_id': dom, 'device_id': None} for dom in scopes_in.get('domain_ids', [])
+            )
+            scopes_list.extend(
+                {'ca_id': None, 'domain_id': None, 'device_id': dev} for dev in scopes_in.get('device_ids', [])
+            )
         elif isinstance(scopes_in, list):
             scopes_list = scopes_in
         else:
@@ -264,18 +309,17 @@ class WorkflowWizardView(View):
 
 
 class WorkflowDefinitionDeleteView(View):
-    """POST-only: deletes the WorkflowDefinition if no non-finalized
-    WorkflowInstance exists for it.
-    """
+    """POST-only: deletes the WorkflowDefinition if no non-finalized WorkflowInstance exists for it."""
 
-    def post(self, request: HttpRequest, pk: UUID, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
+    def post(self, request: HttpRequest, pk: UUID, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        """Delete a workflow definition by ID."""
         wf = get_object_or_404(WorkflowDefinition, pk=pk)
         # if WorkflowInstance.objects.filter(definition=wf, finalized=False).exists():
         #     messages.error(
         #         request,
-        #         f'Cannot delete "{wf.name}" — active instances remain.'
-        #     )
-        # else:
+        #         f'Cannot delete "{wf.name}" — active instances remain.'  # noqa: ERA001
+        #     )  # noqa: ERA001, RUF100
+        # else:  # noqa: ERA001
         wf.delete()
         messages.success(request, f'Workflow "{wf.name}" deleted.')
         return redirect('workflows:definition_list')
@@ -289,9 +333,18 @@ class PendingApprovalsView(ListView[WorkflowInstance]):
     context_object_name = 'instances'
 
     def get_queryset(self) -> QuerySet[WorkflowInstance]:
+        """Filter queryset to only include pending workflow instances."""
         return WorkflowInstance.objects.filter(state=WorkflowInstance.STATE_AWAITING, finalized=False)
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the page category and name to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the page.
+        """
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'workflows'
         context['page_name'] = 'pending'
@@ -303,7 +356,8 @@ class WorkflowInstanceDetailView(View):
 
     template_name = 'workflows/pending_detail.html'
 
-    def get(self, request: HttpRequest, instance_id: UUID, *args: Any, **kwargs: Any) -> HttpResponse:
+    def get(self, request: HttpRequest, instance_id: UUID, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle GET request for pending workflow detail view."""
         inst = get_object_or_404(WorkflowInstance, pk=instance_id)
         payload = inst.payload or {}
 
@@ -334,18 +388,21 @@ class WorkflowInstanceDetailView(View):
                 cn = cn_attrs[0].value if cn_attrs else None
                 # SANs
                 try:
-                    san_ext = csr_obj.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
-                    sans = san_ext.value.get_values_for_type(x509.DNSName)
-                except Exception:
+                    san_ext = csr_obj.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+                    dns_sans = san_ext.value.get_values_for_type(x509.DNSName)
+                    ip_sans = [str(ip) for ip in san_ext.value.get_values_for_type(x509.IPAddress)]
+                    sans = [*dns_sans, *ip_sans]
+                except ExtensionNotFound:
                     sans = []
+                sig_alg = AlgorithmIdentifier.from_dotted_string(csr_obj.signature_algorithm_oid.dotted_string)
                 csr_info = {
                     'subject': csr_obj.subject.rfc4514_string(),
                     'common_name': cn,
                     'sans': sans,
                     'key_algorithm': csr_obj.public_key().__class__.__name__,
-                    'signature_algorithm': csr_obj.signature_algorithm_oid._name,
+                    'signature_algorithm': f'{sig_alg.verbose_name}, {sig_alg.dotted_string}',
                 }
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 csr_info = {'error': f'Failed to parse CSR: {e!s}'}
 
         context = {
@@ -364,26 +421,17 @@ class WorkflowInstanceDetailView(View):
 class SignalInstanceView(View):
     """Endpoint to signal (approve/reject) a workflow instance via POST."""
 
-    def post(self, request: HttpRequest, instance_id: UUID, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
+    def post(self, request: HttpRequest, instance_id: UUID, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        """Approve or reject a workflow instance."""
         inst = get_object_or_404(WorkflowInstance, pk=instance_id)
-        print('post: 1')
         action = request.POST.get('action')
-        print('post: 2')
         if action not in {'Approved', 'Rejected'}:
             messages.error(request, f'Invalid action: {action!r}')
-            print('post: 3')
             return redirect('workflows:pending_list')
-        print('post: 4')
         advance_instance(inst, signal=action)
-        print('post: 5')
         if action == 'Approved':
-            print('post: 6')
             messages.success(request, f'Workflow {inst.id} approved and advanced.')
-            print('post: 7')
         else:
-            print('post: 8')
             messages.warning(request, f'Workflow {inst.id} was rejected.')
-            print('post: 9')
 
-        print('post: 10')
         return redirect('workflows:pending_list')

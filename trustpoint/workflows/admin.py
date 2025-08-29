@@ -1,7 +1,6 @@
 # Register your models here.
 """Django admin configuration for the PKI app."""
 from django.contrib import admin
-from django.http import HttpRequest
 
 from workflows.models import WorkflowDefinition, WorkflowInstance, WorkflowScope
 

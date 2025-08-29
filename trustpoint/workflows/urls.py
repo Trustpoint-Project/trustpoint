@@ -1,3 +1,9 @@
+"""URL configuration for the workflows app.
+
+Defines API endpoints and UI views for managing workflows,
+including scope pickers, workflow definitions, approvals,
+and signaling workflow instances.
+"""
 from django.urls import path
 
 from workflows.views import (
