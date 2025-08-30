@@ -1,3 +1,5 @@
+"""Management command for compile message."""
+
 from django.core.management.commands.compilemessages import Command as CompileMessagesCommand
 
 

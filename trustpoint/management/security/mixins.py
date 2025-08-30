@@ -1,6 +1,8 @@
+"""Security mixin."""
+
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
 from django.shortcuts import redirect
@@ -9,13 +11,15 @@ from django.utils.translation import gettext as _
 from management.security.manager import SecurityManager
 
 if TYPE_CHECKING:
+    from django.http.request import HttpRequest
+
     from management.security import SecurityFeature
 
 
 class SecurityLevelMixin:
     """A mixin that provides security feature checks for Django views."""
 
-    def __init__(self, security_feature: SecurityFeature = None, *args, **kwargs) -> None:
+    def __init__(self, security_feature: SecurityFeature = None, *args: Any, **kwargs: Any) -> None:
         """Initializes the SecurityLevelMixin with the specified security feature and redirect URL.
 
         Parameters:
@@ -45,7 +49,7 @@ class SecurityLevelMixin:
 class SecurityLevelMixinRedirect(SecurityLevelMixin):
     """A mixin that provides security feature checks for Django views with redirect feature."""
 
-    def __init__(self, disabled_by_security_level_url=None, *args, **kwargs) -> None:
+    def __init__(self, disabled_by_security_level_url=None, *args: Any, **kwargs: Any) -> None:
         """Initializes the SecurityLevelMixin with the specified security feature and redirect URL.
 
         Parameters:
@@ -60,7 +64,7 @@ class SecurityLevelMixinRedirect(SecurityLevelMixin):
         super().__init__(*args, **kwargs)
         self.disabled_by_security_level_url = disabled_by_security_level_url
 
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any):
         """If the feature is not allowed, the user is redirected to the disabled_by_security_level_url with an error message.
 
         Parameters:

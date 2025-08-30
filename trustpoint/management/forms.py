@@ -2,25 +2,25 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Fieldset, Layout
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+from pki.models import CredentialModel
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.keys import AutoGenPkiKeyAlgorithm
+from pki.util.x509 import CertificateVerifier
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
-    PrivateKeySerializer
+    PrivateKeySerializer,
 )
 
 from management.models import BackupOptions, SecurityConfig
-from pki.models import CredentialModel, IssuingCaModel
-from pki.models.certificate import CertificateModel
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from trustpoint.logger import LoggerMixin
@@ -36,7 +36,7 @@ class SecurityConfigForm(forms.ModelForm):
         AutoGenPkiFeature: ['auto_gen_pki', 'auto_gen_pki_key_algorithm'],
     }
 
-    def __init__(self, *args: Any, **kwargs: Any):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the SecurityConfigForm."""
         super().__init__(*args, **kwargs)
 
@@ -97,6 +97,7 @@ class SecurityConfigForm(forms.ModelForm):
     )
 
     class Meta:
+        """Metadata for the SecurityConfig form, linking the form to its model and specifying included fields."""
         model = SecurityConfig
         fields: ClassVar[list[str]] = ['security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm']
 
@@ -204,7 +205,7 @@ class IPv4AddressForm(forms.Form):
 
         super().__init__(*args, **kwargs)
 
-        ipv4_field = cast(forms.ChoiceField, self.fields['ipv4_address'])
+        ipv4_field = cast('forms.ChoiceField', self.fields['ipv4_address'])
         ipv4_field.choices = [(ip, ip) for ip in san_ips]
 
 class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
@@ -422,18 +423,21 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
                 return
 
             private_key_serializer = cleaned_data.get('private_key_file')
-            ca_certificate_serializer = cleaned_data.get('tls_certificate')
-            ca_certificate_chain_serializer = (
+            tls_certificate_serializer = cleaned_data.get('tls_certificate')
+            tls_certificate_chain_serializer = (
                 cleaned_data.get('tls_certificate_chain') if cleaned_data.get('tls_certificate_chain') else None
             )
 
-            if not private_key_serializer or not ca_certificate_serializer:
+            if not private_key_serializer or not tls_certificate_serializer:
                 return
+
+            CertificateVerifier.verify_server_cert(tls_certificate_serializer,
+                'localhost', tls_certificate_chain_serializer)
 
             credential_serializer = CredentialSerializer.from_serializers(
                 private_key_serializer= private_key_serializer,
-                certificate_serializer=ca_certificate_serializer,
-                certificate_collection_serializer=ca_certificate_chain_serializer
+                certificate_serializer=tls_certificate_serializer,
+                certificate_collection_serializer=tls_certificate_chain_serializer
             )
 
             trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(

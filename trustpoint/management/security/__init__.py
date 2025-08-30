@@ -1,3 +1,5 @@
+"""Management App security init."""
+
 from management.models import SecurityConfig
 from management.security.features import AutoGenPkiFeature
 

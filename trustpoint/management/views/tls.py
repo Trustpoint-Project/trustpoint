@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext as _
-from django.views.generic import FormView, View, TemplateView
+from django.views.generic import FormView, TemplateView, View
 from pki.models import GeneralNameIpAddress
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, CredentialModel, CertificateModel
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, CertificateModel, CredentialModel
 from setup_wizard.forms import StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 
@@ -22,7 +22,7 @@ from trustpoint.logger import LoggerMixin
 if TYPE_CHECKING:
     from typing import Any, ClassVar
 
-    from django.http import HttpResponse
+    from django.http import HttpRequest, HttpResponse
 
 
 class TlsSettingsContextMixin:
@@ -68,7 +68,7 @@ class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
 
         san_ips = []
         san_dns_names = []
-        issuer_details: dict[str, Optional[str]] = {
+        issuer_details: dict[str, str | None] = {
             'country': None,
             'organization': None,
             'common_name': None,
@@ -186,7 +186,7 @@ class GenerateTlsCertificateView(LoggerMixin, FormView[StartupWizardTlsCertifica
         """Handle a valid form submission for TLS Server Credential generation.
 
         Args:
-            form: The validated form containing user input 
+            form: The validated form containing user input
                   for generating the TLS Server Credential.
 
         Returns:
@@ -259,7 +259,8 @@ class TlsAddFileImportSeparateFilesView(TlsSettingsContextMixin, FormView[TlsAdd
 class ActivateTlsServerView(View):
     """Activate a TLS server certificate."""
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request: HttpRequest, *args: Any, **kwargs: dict[str, Any]) -> HttpResponse:
+        """Handle a valid form submission for TLS Server Credential activation."""
         cert_id = kwargs['pk']
         tls_certificate = CredentialModel.objects.get(
             certificate__id=cert_id)
@@ -267,7 +268,7 @@ class ActivateTlsServerView(View):
         active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
         active_tls.credential = tls_certificate
         active_tls.save()
-        messages.success(request, f"TLS Server certificate activated successfully")
+        messages.success(request, 'TLS Server certificate activated successfully')
         return redirect(reverse('management:tls'))
 
 

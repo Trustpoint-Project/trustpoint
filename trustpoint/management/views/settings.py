@@ -2,33 +2,33 @@
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
 from typing import TYPE_CHECKING
 
 from django.contrib import messages
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.encoding import force_str
 from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic.edit import FormView
-from django import forms
 from notifications.models import NotificationConfig, WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 from management.forms import SecurityConfigForm
-from management.models import SecurityConfig, LoggingConfig
+from management.models import LoggingConfig, SecurityConfig
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
 
 if TYPE_CHECKING:
     from typing import Any
+
     from django.http import HttpRequest, HttpResponse
 
 
-def settings(request: HttpRequest, ) -> HttpResponse:
-    """Handle settings Configuration
+def settings(request: HttpRequest ) -> HttpResponse:
+    """Handle settings Configuration.
 
     Returns: HTTPResponse
     """
@@ -36,11 +36,17 @@ def settings(request: HttpRequest, ) -> HttpResponse:
 
 LOG_LEVELS=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
 class SettingsView(SecurityLevelMixin, FormView):
+    """Base view to settings."""
     template_name = 'management/settings.html'
     form_class = SecurityConfigForm
     success_url = reverse_lazy('management:settings')
 
-    def get_form_kwargs(self):
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """This method ads the instance to the form kwargs and returns them.
+
+        Returns:
+            The form kwargs including the concerning device model.
+        """
         kwargs = super().get_form_kwargs()
         try:
             security_config = SecurityConfig.objects.get(id=1)
@@ -51,7 +57,15 @@ class SettingsView(SecurityLevelMixin, FormView):
         kwargs['instance'] = security_config
         return kwargs
 
-    def form_valid(self, form: SecurityConfigForm):
+    def form_valid(self, form: SecurityConfigForm) -> HttpResponse:
+        """Performed if the form was validated successfully.
+
+        Args:
+            form: The corresponding form object.
+
+        Returns:
+            The Django HttpResponse object.
+        """
         old_conf = SecurityConfig.objects.get(pk=form.instance.pk) if form.instance.pk else None
         form.save()
 
@@ -84,11 +98,27 @@ class SettingsView(SecurityLevelMixin, FormView):
         messages.success(self.request, _('Your changes were saved successfully.'))
         return super().form_valid(form)
 
-    def form_invalid(self, form: SecurityConfigForm):
+    def form_invalid(self, form: SecurityConfigForm) -> HttpResponse:
+        """Adds an error message if form is invalid.
+
+        Args:
+            form: The corresponding form object.
+
+        Returns:
+            The Django HttpResponse object.
+        """
         messages.error(self.request, _('Error saving the configuration'))
         return self.render_to_response(self.get_context_data(form=form))
 
     def get_context_data(self, **kwargs: dict) -> dict[str, Any]:
+        """Adds information about the notification, signature and loglevels.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to render the page.
+        """
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'management'
         context['page_name'] = 'settings'
@@ -107,18 +137,21 @@ class SettingsView(SecurityLevelMixin, FormView):
             ]
 
         context['notification_configurations_json'] = json.dumps(notification_configurations)
-        context["loglevels"] = LOG_LEVELS
+        context['loglevels'] = LOG_LEVELS
         current_level_num = logging.getLogger().getEffectiveLevel()
-        context["current_loglevel"] = logging.getLevelName(current_level_num)
+        context['current_loglevel'] = logging.getLevelName(current_level_num)
 
         return context
 
 
 class ChangeLogLevelView(View):
-    def post(self, request):
+    """Change Log level."""
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """Handle a change log level request."""
         level = request.POST.get('loglevel', '').upper()
         if level not in LOG_LEVELS:
-            messages.error(request, f"Invalid log level: {level}")
+            messages.error(request, f'Invalid log level: {level}')
         else:
             logger = logging.getLogger()
             logger.setLevel(getattr(logging, level))
@@ -126,6 +159,6 @@ class ChangeLogLevelView(View):
                 id=1,
                 defaults={'log_level': level}
             )
-            messages.success(request, f"Log level set to {level}")
+            messages.success(request, f'Log level set to {level}')
 
         return redirect(reverse('management:settings'))
