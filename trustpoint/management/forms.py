@@ -8,6 +8,7 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Fieldset, Layout
 from django import forms
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
 from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -227,6 +228,15 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         label=_('[Optional] PKCS#12 password'),
         required=False,
     )
+    domain_name = forms.CharField(
+        label=_('Domain-Name'), initial='localhost', required=False,
+            validators=[
+              RegexValidator(
+                  regex=r"^localhost$|^(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$",
+                  message="Enter a valid domain name (e.g. example.com)."
+              )
+        ]
+    )
 
     def clean(self) -> None:
         """Cleans and validates the entire form.
@@ -247,6 +257,7 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         try:
             pkcs12_raw = cleaned_data.get('pkcs12_file').read()
             pkcs12_password = cleaned_data.get('pkcs12_password')
+            domain_name = cleaned_data.get("domain_name")
         except (OSError, AttributeError) as original_exception:
             # These exceptions are likely to occur if the file cannot be read or is missing attributes.
             error_message = _(
@@ -270,6 +281,8 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             raise ValidationError(err_msg) from exception
 
         try:
+            CertificateVerifier.verify_server_cert(tls_credential_serializer.certificate,
+                domain_name)
             trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
                 credential_serializer=tls_credential_serializer,
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
@@ -281,6 +294,7 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         except ValidationError:
             raise
         except Exception as exception:
+            print(exception)
             err_msg = str(exception)
             raise ValidationError(err_msg) from exception
 
@@ -307,6 +321,15 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         widget=forms.PasswordInput(attrs={'autocomplete': 'one-time-code'}),
         label=_('[Optional] Private Key File Password'),
         required=False,
+    )
+    domain_name = forms.CharField(
+        label=_('Domain-Name'), initial='localhost', required=False,
+            validators=[
+              RegexValidator(
+                  regex=r"^localhost$|^(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$",
+                  message="Enter a valid domain name (e.g. example.com)."
+              )
+        ]
     )
 
     def clean_private_key_file(self) -> PrivateKeySerializer:
@@ -427,18 +450,20 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             tls_certificate_chain_serializer = (
                 cleaned_data.get('tls_certificate_chain') if cleaned_data.get('tls_certificate_chain') else None
             )
+            domain_name = cleaned_data.get('domain_name')
 
             if not private_key_serializer or not tls_certificate_serializer:
                 return
-
-            CertificateVerifier.verify_server_cert(tls_certificate_serializer,
-                'localhost', tls_certificate_chain_serializer)
 
             credential_serializer = CredentialSerializer.from_serializers(
                 private_key_serializer= private_key_serializer,
                 certificate_serializer=tls_certificate_serializer,
                 certificate_collection_serializer=tls_certificate_chain_serializer
             )
+
+
+            CertificateVerifier.verify_server_cert(credential_serializer.certificate,
+                domain_name)
 
             trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
                 credential_serializer=credential_serializer,
