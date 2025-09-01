@@ -41,6 +41,21 @@ def test_prohibited_cn_present() -> None:
     with pytest.raises(ProfileValidationError, match="Field 'common_name' is prohibited in the profile."):
         verifier.apply_profile_to_request(request)
 
+def test_prohibited_cn_present_no_reject() -> None:
+    """Test that a request with a prohibited CN is removed when reject_mods is False."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': None},
+        'reject_mods': False
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com', 'ou': 'IT'}
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    print('Validated Request: ', validated_request)
+    assert 'common_name' not in validated_request['subject']
+
 def test_allowed_cn_present() -> None:
     """Test that a request with an allowed CN passes verification."""
     profile = {
@@ -69,8 +84,8 @@ def test_allowed_cn_alias_present() -> None:
     print('Validated Request: ', validated_request)
     assert validated_request['subject']['common_name'] == 'example.com'
 
-def test_unspecified_cn_present() -> None:
-    """Test that a request with a not explicitly allowed CN and without implicit allow fails verification."""
+def test_unspecified_cn_present_no_reject() -> None:
+    """Test that a not explicitly allowed CN without implicit allow is removed from the request."""
     profile = {
         'type': 'cert_profile',
         'subj': {'allow': ['pamajauke']},
@@ -80,8 +95,21 @@ def test_unspecified_cn_present() -> None:
         'subj': {'cn': 'example.com'}
     }
     validated_request = verifier.apply_profile_to_request(request)
-    print('Validated Request: ', validated_request)
     assert 'common_name' not in validated_request['subject']
+
+def test_unspecified_cn_present_reject() -> None:
+    """Test that a not explicitly allowed CN with reject_mods=True fails verification."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'allow': ['pamajauke']},
+        'reject_mods': True
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'}
+    }
+    with pytest.raises(ProfileValidationError, match="Field 'common_name' is not explicitly allowed in the profile."):
+        verifier.apply_profile_to_request(request)
 
 def test_default_cn_present_in_request() -> None:
     """Test that the request CN takes precedence over the profile's default CN."""
@@ -133,6 +161,47 @@ def test_implicit_allow_unknown_field() -> None:
         #'type': None
     }
     assert verifier.apply_profile_to_request(request)
+
+def test_required_cn_absent() -> None:
+    """Test that a request missing a required CN fails verification."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': {'required': True}},
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'ou': 'IT'}
+    }
+    with pytest.raises(ProfileValidationError, match="Field 'common_name' is required but not present in the request."):
+        verifier.apply_profile_to_request(request)
+
+def test_incompatible_request_cn() -> None:
+    """Test that a request with a CN incompatible with the profile and reject_mods fails verification."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'onlyallowed.com'},
+        'reject_mods': True
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'}
+    }
+    with pytest.raises(ProfileValidationError, match="Field 'common_name' is not mutable in the profile."):
+        verifier.apply_profile_to_request(request)
+
+def test_incompatible_request_cn_no_reject_mods() -> None:
+    """Test that a request with a CN incompatible with the profile and no reject_mods uses the CN from the profile."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'onlyallowed.com'},
+        'reject_mods': False
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'}
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    assert validated_request['subject']['common_name'] == 'onlyallowed.com'
 
 def test_request_normalization() -> None:
     """Test that a request is normalized correctly."""

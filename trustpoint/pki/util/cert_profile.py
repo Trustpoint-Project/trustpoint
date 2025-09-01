@@ -6,21 +6,18 @@ Profiles define allowed fields, prohibited fields, and other constraints for cer
 They can also specify default values for fields and validate the request against these rules.
 """
 
-from typing import Annotated, Any, Literal
+import logging
+from typing import Any, Literal
 
 from pydantic import (
     AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
-    ValidationError,
-    create_model,
     field_validator,
-    model_validator,
-    AfterValidator
 )
 
-
+logger = logging.getLogger(__name__)
 
 class ProfileValidationError(Exception):
     """Raised when the request is well-formed but does not match the profile constraints."""
@@ -99,19 +96,15 @@ class CertProfileBaseModel(BaseModel):
     This allows for granular control over allowed fields and constraints at each level.
     """
     allow: list[str] | Literal['*'] | None = None
-    #allow: list[str] | Literal['*'] | None = Annotated[None, AfterValidator(normalize_allow)]
-    #allow: Annotated[list[str] | Literal['*'] | None, AfterValidator(normalize_allow)] = None
     reject_mods: bool = Field(default=False)
 
     @field_validator('allow', mode='before')
     @classmethod
     def normalize_allow(cls, value: list[str] | Literal['*'] | None) -> list[str] | Literal['*'] | None:
         """Normalize the allow list by replacing aliases with their canonical names."""
-        print('Normalizing allow list:', value)
         if not isinstance(value, list):
             return value
         normalized = []
-        print('Alias map:', alias_map)
         for item in value:
             try:
                 normalized.append(alias_map[item])
@@ -157,10 +150,10 @@ class JSONProfileVerifier:
         """Initialize the verifier with a certificate profile."""
         validated_profile = CertProfileModel.model_validate(profile)
         self.profile = validated_profile
-        print('Profile:', self.profile)
+        logger.debug('Profile: %s', self.profile)
 
         self.profile_dict = validated_profile.model_dump(exclude_unset=True)
-        print('Profile Dict:', self.profile_dict)
+        logger.debug('Profile Dict: %s', self.profile_dict)
 
     @staticmethod
     def validate_request(request: dict[str, Any]) -> dict[str, Any]:
@@ -233,7 +226,7 @@ class JSONProfileVerifier:
         filtered_profile = {k: v for k, v in profile.items() if k not in skip_keys}
 
         for field, profile_value in filtered_profile.items():
-            print('Processing field:', field, 'Profile value:', profile_value, 'Request:', request)
+            logger.debug('Processing field: %s Profile value: %s Request: %s', field, profile_value, request)
             request_value = request.get(field)
             if profile_value is None and request_value is not None:
                 # Field is not allowed in the profile, but present in the request
@@ -243,7 +236,7 @@ class JSONProfileVerifier:
                 del request[field]
                 continue
             if field not in request:
-                print(f'Field {field} not in request {request}')
+                logger.debug('Field %s not in request %s', field, request)
                 if isinstance(profile_value, dict):
                 # check for default and required fields
                     if 'value' in profile_value:
@@ -252,7 +245,7 @@ class JSONProfileVerifier:
                         continue
                     if 'default' in profile_value:
                         # Set default value from profile
-                        print(f"Setting default for field '{field}' to {profile_value['default']}")
+                        logger.debug("Setting default for field '%s' to %s", field, profile_value['default'])
                         request[field] = profile_value['default']
                         continue
                     if 'required' in profile_value:
@@ -261,11 +254,12 @@ class JSONProfileVerifier:
                         raise ProfileValidationError(msg)
                     # 're' case
                     # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
-                    request[field] = self._apply_profile_rules(request.setdefault(field, {}), profile_value, profile_config)
+                    request[field] = self._apply_profile_rules(
+                        request.setdefault(field, {}), profile_value, profile_config)
                 elif JSONProfileVerifier._is_simple_type(profile_value):
                     request[field] = profile_value
                 else:
-                    print(f"Warning: Field '{field}' in profile is of type {type(profile_value).__name__}, skipping.")
+                    logger.warning("Field '%s' in profile has type %s, skipping.", field, type(profile_value).__name__)
                 continue
             # Field is present in both request and profile
             if isinstance(profile_value, dict):
@@ -284,41 +278,15 @@ class JSONProfileVerifier:
                     raise ProfileValidationError(msg)
                 request[field] = profile_value
             else:
-                print(f"Warning: Field '{field}' in profile is of type {type(profile_value).__name__}, skipping.")
+                logger.warning("Field '%s' in profile has type %s, skipping.", field, type(profile_value).__name__)
                 continue
 
-        print(f'Resulting request at profile level {profile}:', request)
+        logger.debug('Resulting request at profile level %s: %s', profile, request)
 
         return request
 
     def apply_profile_to_request(self, request: dict[str, Any]) -> dict[str, Any]:
         """Apply the profile to a certificate request and return the modified request."""
         validated_request = self.validate_request(request=request)
-        print('Validated Request before profile rules:', validated_request)
+        logger.debug('Validated Request before profile rules: %s', validated_request)
         return self._apply_profile_rules(validated_request, self.profile_dict)
-        # For each field in the request, check on the same hierarchy level in the profile if:
-        # - it is allowed.
-        # - any default values are set
-        # - it is mutable
-        # - it is required
-
-        # if (field null in profile and field in request)
-        # - if reject_mods is True, raise ValidationError
-        # - if reject_mods is False, remove field from request
-
-        # if (field not in profile and field in request)
-        # - if implicitly allowed '*' or in explicit allow list, keep it
-        # - /!\ need to normalize the allow list too!
-        # - if not allowed
-        # - - if reject_mods is True, raise ValidationError
-        # - - if reject_mods is False, remove field from request
-
-        # if (field in profile and field not in request)
-        # - set in request the default value from the profile if it exists
-
-        # if (field in profile and field in request)
-        # - if default, keep the value from the request
-        # - if not mutable
-        # - - if reject_mods is True, raise ValidationError
-        # - - if reject_mods is False, set from profile
-
