@@ -23,7 +23,7 @@ from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from settings.models import PKCS11Token
 
 from setup_wizard import SetupWizardState
-from setup_wizard.forms import EmptyForm, HsmSetupForm, StartupWizardTlsCertificateForm
+from setup_wizard.forms import BackupPasswordForm, EmptyForm, HsmSetupForm, StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
@@ -39,6 +39,7 @@ APACHE_CERT_CHAIN_PATH = APACHE_PATH / Path('apache-tls-server-cert-chain.pem')
 STATE_FILE_DIR = Path('/etc/trustpoint/wizard/transition/')
 SCRIPT_WIZARD_INITIAL = STATE_FILE_DIR / Path('wizard_initial.sh')
 SCRIPT_WIZARD_SETUP_HSM = STATE_FILE_DIR / Path('wizard_setup_hsm.sh')
+SCRIPT_WIZARD_BACKUP_PASSWORD = STATE_FILE_DIR / Path('wizard_backup_password.sh')
 SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY = STATE_FILE_DIR / Path('wizard_tls_server_credential_apply.sh')
 SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY_CANCEL = STATE_FILE_DIR / Path('wizard_tls_server_credential_apply_cancel.sh')
 SCRIPT_WIZARD_DEMO_DATA = STATE_FILE_DIR / Path('wizard_demo_data.sh')
@@ -125,6 +126,8 @@ class StartupWizardRedirect:
             return redirect('setup_wizard:initial', permanent=False)
         if wizard_state == SetupWizardState.WIZARD_SETUP_HSM:
             return redirect('setup_wizard:hsm_setup', permanent=False)
+        if wizard_state == SetupWizardState.WIZARD_BACKUP_PASSWORD:
+            return redirect('setup_wizard:backup_password', permanent=False)
         if wizard_state == SetupWizardState.WIZARD_TLS_SERVER_CREDENTIAL_APPLY:
             return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
         if wizard_state == SetupWizardState.WIZARD_DEMO_DATA:
@@ -226,7 +229,7 @@ class SetupWizardHsmSetupView(LoggerMixin, FormView):
 
     http_method_names = ('get', 'post')
     template_name = 'setup_wizard/hsm_setup.html'
-    success_url = reverse_lazy('setup_wizard:demo_data')
+    success_url = reverse_lazy('setup_wizard:backup_password')
     form_class = HsmSetupForm
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
@@ -364,7 +367,7 @@ class SetupWizardHsmSetupView(LoggerMixin, FormView):
             10: 'Failed to initialize user PIN for HSM.',
             11: 'Failed to access HSM with configured PIN.',
             12: 'Failed to remove the WIZARD_SETUP_HSM state file',
-            13: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
+            13: 'Failed to create the WIZARD_BACKUP_PASSWORD state file.',
             14: 'Failed to set ownership of token files to www-data.',
             15: 'Failed to set permissions on token files.',
             16: 'Failed to access HSM as www-data user after permission fix.',
@@ -372,8 +375,105 @@ class SetupWizardHsmSetupView(LoggerMixin, FormView):
         return error_messages.get(return_code, 'An unknown error occurred during HSM setup.')
 
 
-class BackupRestoreView(View):
-    """Upload a dump file and restore the database from it."""
+class SetupWizardBackupPasswordView(LoggerMixin, FormView):
+    """View for setting up backup password for PKCS#11 token during the setup wizard.
+
+    This view allows users to set a backup password that can be used to recover
+    the DEK (Data Encryption Key) in case the HSM becomes unavailable. The password
+    is used to derive a BEK (Backup Encryption Key) using Argon2.
+    """
+
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/backup_password.html'
+    success_url = reverse_lazy('setup_wizard:tls_server_credential_apply')
+    form_class = BackupPasswordForm
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle request dispatch and wizard state validation."""
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_BACKUP_PASSWORD:
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs: Any) -> dict:
+        """Add additional context data."""
+        return super().get_context_data(**kwargs)
+
+
+    def form_valid(self, form: BackupPasswordForm) -> HttpResponse:
+        """Handle valid form submission."""
+        password = form.cleaned_data.get('password')
+
+        try:
+            # Get the first (and should be only) PKCS11Token
+            token = PKCS11Token.objects.first()
+            if not token:
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    'No PKCS#11 token found. Please complete HSM setup first.'
+                )
+                return redirect('setup_wizard:hsm_setup', permanent=False)
+
+            # Set the backup password
+            token.set_backup_password(password)
+            execute_shell_script(SCRIPT_WIZARD_BACKUP_PASSWORD)
+
+            messages.add_message(
+                self.request,
+                messages.SUCCESS,
+                'Backup password set successfully.'
+            )
+            self.logger.info('Backup password set for token: %s', token.label)
+            return super().form_valid(form)
+
+        except Exception as exc:
+            error_mapping = {
+                subprocess.CalledProcessError: lambda e: (
+                    f'Backup password script failed: '
+                    f'{self._map_exit_code_to_message(e.returncode)}'
+                ),
+                FileNotFoundError: lambda _: f'Backup password script not found: {SCRIPT_WIZARD_BACKUP_PASSWORD}',
+                PKCS11Token.DoesNotExist: lambda e: str(e),
+                ValueError: lambda e: f'Invalid input: {e!s}',
+                RuntimeError: lambda e: f'Failed to set backup password: {e!s}',
+            }
+            err_msg = error_mapping.get(type(exc), lambda _:
+                                        'An unexpected error occurred while setting up backup password.')(exc)
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+
+            if isinstance(exc, (ValueError, RuntimeError)):
+                return self.form_invalid(form)
+            return redirect('setup_wizard:backup_password', permanent=False)
+
+    def form_invalid(self, form: BackupPasswordForm) -> HttpResponse:
+        """Handle invalid form submission."""
+        messages.add_message(
+            self.request,
+            messages.ERROR,
+            'Please correct the errors below and try again.'
+        )
+        return super().form_invalid(form)
+
+    @staticmethod
+    def _map_exit_code_to_message(return_code: int) -> str:
+        """Map script exit codes to meaningful error messages."""
+        error_messages = {
+            1: 'Invalid arguments provided to backup password script.',
+            2: 'Trustpoint is not in the WIZARD_BACKUP_PASSWORD state.',
+            3: 'Found multiple wizard state files. The wizard state seems to be corrupted.',
+            4: 'Failed to remove the WIZARD_BACKUP_PASSWORD state file.',
+            5: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred during backup password setup.')
+
+class BackupRestoreView(LoggerMixin, View):
+    """Upload a dump file and restore the database from it with optional backup password."""
 
     def post(self, request: HttpRequest) -> HttpResponse:
         """Handle POST requests to upload a backup file and restore the database.
@@ -384,32 +484,147 @@ class BackupRestoreView(View):
         Returns:
             HttpResponse: A redirect to the appropriate page based on the outcome.
         """
-        backup_file = request.FILES.get('backup_file')
-        if not backup_file:
-            messages.error(request, 'No file uploaded for restore.')
+        from setup_wizard.forms import BackupRestoreForm
+
+        form = BackupRestoreForm(request.POST, request.FILES)
+
+        if not form.is_valid():
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.add_message(request, messages.ERROR, f'{field}: {error}')
             return redirect('setup_wizard:options')
-        if not isinstance(backup_file.name, str):
-            messages.error(request, 'File corrupt, please provide valid name.')
-            return redirect('setup_wizard:options')
+
+        backup_file = form.cleaned_data['backup_file']
+        backup_password = form.cleaned_data.get('backup_password')
 
         temp_dir = settings.BACKUP_FILE_PATH
         temp_path = temp_dir / backup_file.name
-        # save upload
-
-        with temp_path.open('wb+') as f:
-            for chunk in backup_file.chunks():
-                f.write(chunk)
 
         try:
-            call_command('dbrestore',  '-z', '--noinput', '-I', str(temp_path))
+            # Save uploaded file
+            with temp_path.open('wb+') as f:
+                for chunk in backup_file.chunks():
+                    f.write(chunk)
+
+            # Restore database
+            call_command('dbrestore', '-z', '--noinput', '-I', str(temp_path))
+
+            # Handle backup password for DEK recovery if provided
+            if backup_password:
+                success = self._handle_backup_password_recovery(backup_password)
+                if not success:
+                    messages.add_message(
+                        request, 
+                        messages.WARNING, 
+                        'Database restored successfully, but backup password recovery failed. '
+                        'You may need to reconfigure HSM settings.'
+                    )
+
+            # Execute trustpoint restore command
             call_command('trustpointrestore')
-            messages.success(request, f'Trustpoint restored from {backup_file.name}')
+
+            messages.add_message(
+                request,
+                messages.SUCCESS,
+                f'Trustpoint restored successfully from {backup_file.name}'
+            )
+
+            self.logger.info('Backup restore completed successfully from file: %s', backup_file.name)
+
         except Exception as e:
-            messages.error(request, 'Error restoring.')
-            msg = f'Exception restoring database: {e}'
-            logger.exception(msg)
+            messages.add_message(request, messages.ERROR, 'Error occurred during restore operation.')
+            self.logger.exception('Exception restoring database from %s: %s', backup_file.name, e)
+            return redirect('setup_wizard:options')
+        finally:
+            # Clean up temporary file
+            try:
+                if temp_path.exists():
+                    temp_path.unlink()
+            except Exception as e:  # noqa: BLE001
+                self.logger.warning('Failed to clean up temporary file %s: %s', temp_path, e)
 
         return redirect('users:login')
+
+    def _handle_backup_password_recovery(self, backup_password: str) -> bool:
+        """Handle DEK recovery using backup password.
+
+        Uses the existing KEK to wrap the recovered DEK and stores everything 
+        in the model for normal operation.
+
+        Args:
+            backup_password: The backup password provided by user
+
+        Returns:
+            bool: True if recovery was successful, False otherwise
+        """
+        try:
+            # Get the PKCS11Token (should exist after database restore)
+            token = PKCS11Token.objects.first()
+            if not token:
+                self.logger.warning('No PKCS11Token found after restore for backup password recovery')
+                return False
+
+            if not token.has_backup_encryption():
+                self.logger.info('No backup encryption found for token %s, skipping password recovery', token.label)
+                return True  # Not an error, just no backup encryption was used
+
+            # Verify the backup password and recover the DEK
+            try:
+                dek_bytes = token.get_dek_with_backup_password(backup_password)
+            except (RuntimeError, ValueError) as e:
+                self.logger.exception('Invalid backup password provided for token %s', token.label)
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    'Invalid backup password provided. DEK recovery failed.'
+                )
+                return False
+
+            # Wrap the recovered DEK with the existing KEK (no new KEK generation)
+            try:
+                wrapped_dek = token.wrap_dek(dek_bytes)
+
+                # Update the token with the newly wrapped DEK
+                token.encrypted_dek = wrapped_dek
+                token.save(update_fields=['encrypted_dek'])
+
+                self.logger.info('Successfully wrapped recovered DEK with existing KEK for token %s', token.label)
+
+            except RuntimeError as e:
+                self.logger.exception('Failed to wrap recovered DEK for token %s', token.label)
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    f'Failed to wrap recovered DEK with existing KEK: {e}'
+                )
+                return False
+
+            try:
+                cached_dek = token.get_dek()
+                if cached_dek:
+                    self.logger.info('DEK successfully cached for token %s after backup recovery', token.label)
+                else:
+                    self.logger.warning('Failed to cache DEK for token %s after backup recovery', token.label)
+
+            except Exception as e:  # noqa: BLE001
+                self.logger.warning('Failed to cache DEK for token %s: %s', token.label, e)
+
+        except Exception as e:
+            self.logger.exception('Unexpected error during backup password recovery: %s', e)
+            messages.add_message(
+                self.request,
+                messages.ERROR,
+                f'Unexpected error during backup password recovery: {e}'
+            )
+            return False
+        else:
+            self.logger.info('Successfully completed backup password recovery for token %s', token.label)
+            messages.add_message(
+                self.request,
+                messages.SUCCESS,
+                'DEK successfully recovered using backup password and re-secured with new HSM key.'
+            )
+            return True
 
 
 class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWizardTlsCertificateForm]):
@@ -844,7 +1059,7 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
         """Clears all credential and certificate data if canceled in the 'WIZARD_TLS_SERVER_CREDENTIAL_APPLY' state."""
         IssuingCaModel.objects.all().delete()
         CredentialModel.objects.all().delete()
-        #ActiveTrustpointTlsServerCredentialModel.objects.all().delete()
+        #ActiveTrustpointTlsServerCredentialModel.objects.all().delete()  # noqa: ERA001
         CertificateModel.objects.all().delete()
 
     def _map_exit_code_to_message(self, return_code: int) -> str:

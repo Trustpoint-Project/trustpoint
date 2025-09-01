@@ -441,16 +441,26 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
 
         pkcs11_private_key = None
 
-        if (credential_type in [cls.CredentialTypeChoice.ROOT_CA | cls.CredentialTypeChoice.ISSUING_CA] and
-                normalized_credential_serializer.private_key_reference.location == PrivateKeyLocation.SOFTWARE):
-            err_msg = 'Credentials of type Root CA and Issuing CA need to be stored in an HSM'
+        is_ca_credential = credential_type in [cls.CredentialTypeChoice.ROOT_CA, cls.CredentialTypeChoice.ISSUING_CA]
+        is_software_location = normalized_credential_serializer.private_key_reference.location == PrivateKeyLocation.SOFTWARE
+        token_config = PKCS11Token.objects.first()
+        is_softhsm = token_config and token_config.get_hsm_type() == PKCS11Token.HSMType.SOFTHSM if token_config else False
+
+
+        if is_ca_credential and is_software_location and not is_softhsm:
+            err_msg = 'Credentials of type Root CA and Issuing CA need to be stored in an HSM (except for SoftHSM)'
             raise ValueError(err_msg)
 
         private_key_serializer = normalized_credential_serializer.get_private_key_serializer()
         if private_key_serializer is None:
             msg = 'Private key serializer cannot be None'
             raise ValueError(msg)
-        private_key_pem = private_key_serializer.as_pkcs8_pem().decode()
+        store_private_key_in_model = (
+            is_software_location or
+            (is_ca_credential and is_softhsm)
+        )
+
+        private_key_pem = private_key_serializer.as_pkcs8_pem().decode() if store_private_key_in_model else ''
 
         if normalized_credential_serializer.private_key_reference.location in [PrivateKeyLocation.HSM_GENERATED,
                                                                                PrivateKeyLocation.HSM_PROVIDED]:

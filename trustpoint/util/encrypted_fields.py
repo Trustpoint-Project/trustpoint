@@ -51,13 +51,13 @@ class EncryptedTextField(models.TextField[str, str]):
             raise ValidationError(_('Failed to retrieve DEK from PKCS#11 token: %s') % e) from e
 
     def encrypt_value(self, value: str) -> str:
-        """Encrypt a string value using AES-256-CBC with the PKCS#11 DEK.
+        """Encrypt a string value using AES-256-GCM with the PKCS#11 DEK.
 
         Args:
             value: The plaintext string to encrypt.
 
         Returns:
-            str: Base64-encoded encrypted data in format: iv:ciphertext
+            str: Base64-encoded encrypted data in format: nonce:tag:ciphertext
         """
         if not value:
             return value
@@ -65,23 +65,26 @@ class EncryptedTextField(models.TextField[str, str]):
         try:
             dek = self.get_dek()
 
-            # Generate a random IV
-            iv = os.urandom(16)  # AES block size is 16 bytes
+            # Generate a random nonce for GCM
+            nonce = os.urandom(12)  # 12 bytes for GCM
+
+            # Add random padding to obscure length patterns
+            padding_length = os.urandom(1)[0] % 16  # 0-15 random bytes
+            padded_value = value + '\x00' * padding_length + chr(padding_length)
 
             # Create cipher
-            cipher = Cipher(algorithms.AES(dek), modes.CBC(iv))
+            cipher = Cipher(algorithms.AES(dek), modes.GCM(nonce))
             encryptor = cipher.encryptor()
 
-            # Apply PKCS7 padding
-            padder = padding.PKCS7(128).padder()  # AES block size is 128 bits
-            padded_data = padder.update(value.encode('utf-8'))
-            padded_data += padder.finalize()
+            # Encrypt (no padding needed for GCM)
+            ciphertext = encryptor.update(padded_value.encode('utf-8'))
+            encryptor.finalize()
 
-            # Encrypt
-            ciphertext = encryptor.update(padded_data) + encryptor.finalize()
+            # Get authentication tag
+            tag = encryptor.tag
 
-            # Return base64-encoded IV + ciphertext
-            combined = iv + ciphertext
+            # Return base64-encoded nonce + tag + ciphertext
+            combined = nonce + tag + ciphertext
             return base64.b64encode(combined).decode('ascii')
 
         except Exception as e:
@@ -105,21 +108,23 @@ class EncryptedTextField(models.TextField[str, str]):
             # Decode from base64
             combined = base64.b64decode(encrypted_value.encode('ascii'))
 
-            # Extract IV and ciphertext
-            iv = combined[:16]  # First 16 bytes are IV
-            ciphertext = combined[16:]  # Rest is ciphertext
+            # Extract nonce, tag, and ciphertext
+            nonce = combined[:12]       # First 12 bytes are nonce
+            tag = combined[12:28]       # Next 16 bytes are auth tag
+            ciphertext = combined[28:]  # Rest is ciphertext
 
-            # Create cipher
-            cipher = Cipher(algorithms.AES(dek), modes.CBC(iv))
+            # Create cipher with tag for authentication
+            cipher = Cipher(algorithms.AES(dek), modes.GCM(nonce, tag))
             decryptor = cipher.decryptor()
 
-            # Decrypt
-            padded_data = decryptor.update(ciphertext) + decryptor.finalize()
+            # Decrypt and verify authenticity
+            padded_data = decryptor.update(ciphertext)
+            decryptor.finalize()  # Raises exception if authentication fails
 
-            # Remove PKCS7 padding
-            unpadder = padding.PKCS7(128).unpadder()
-            data = unpadder.update(padded_data)
-            data += unpadder.finalize()
+            # Remove random padding
+            padding_length = ord(padded_data[-1:])
+            max_padding_length = 16
+            data = padded_data[:-padding_length - 1] if padding_length < max_padding_length else padded_data
 
             return data.decode('utf-8')
 
@@ -192,31 +197,33 @@ class EncryptedCharField(models.CharField[str, str]):
         except Exception as e:
             raise ValidationError(_('Failed to retrieve DEK from PKCS#11 token: %s') % e) from e
 
-    def encrypt_value(self, value: str) -> str:
-        """Encrypt a string value using AES-256-CBC with the PKCS#11 DEK."""
+        """Encrypt a string value using AES-256-GCM with the PKCS#11 DEK."""
         if not value:
             return value
 
         try:
             dek = self.get_dek()
 
-            # Generate a random IV
-            iv = os.urandom(16)
+            # Generate a random nonce for GCM
+            nonce = os.urandom(12)  # 12 bytes for GCM
+
+            # Add random padding to obscure length patterns
+            padding_length = os.urandom(1)[0] % 16  # 0-15 random bytes
+            padded_value = value + '\x00' * padding_length + chr(padding_length)
 
             # Create cipher
-            cipher = Cipher(algorithms.AES(dek), modes.CBC(iv))
+            cipher = Cipher(algorithms.AES(dek), modes.GCM(nonce))
             encryptor = cipher.encryptor()
 
-            # Apply PKCS7 padding
-            padder = padding.PKCS7(128).padder()
-            padded_data = padder.update(value.encode('utf-8'))
-            padded_data += padder.finalize()
+            # Encrypt (no padding needed for GCM)
+            ciphertext = encryptor.update(padded_value.encode('utf-8'))
+            encryptor.finalize()
 
-            # Encrypt
-            ciphertext = encryptor.update(padded_data) + encryptor.finalize()
+            # Get authentication tag
+            tag = encryptor.tag
 
-            # Return base64-encoded IV + ciphertext
-            combined = iv + ciphertext
+            # Return base64-encoded nonce + tag + ciphertext
+            combined = nonce + tag + ciphertext
             return base64.b64encode(combined).decode('ascii')
 
         except Exception as e:
@@ -233,21 +240,23 @@ class EncryptedCharField(models.CharField[str, str]):
             # Decode from base64
             combined = base64.b64decode(encrypted_value.encode('ascii'))
 
-            # Extract IV and ciphertext
-            iv = combined[:16]
-            ciphertext = combined[16:]
+            # Extract nonce, tag, and ciphertext
+            nonce = combined[:12]       # First 12 bytes are nonce
+            tag = combined[12:28]       # Next 16 bytes are auth tag
+            ciphertext = combined[28:]  # Rest is ciphertext
 
-            # Create cipher
-            cipher = Cipher(algorithms.AES(dek), modes.CBC(iv))
+            # Create cipher with tag for authentication
+            cipher = Cipher(algorithms.AES(dek), modes.GCM(nonce, tag))
             decryptor = cipher.decryptor()
 
-            # Decrypt
-            padded_data = decryptor.update(ciphertext) + decryptor.finalize()
+            # Decrypt and verify authenticity
+            padded_data = decryptor.update(ciphertext)
+            decryptor.finalize()  # Raises exception if authentication fails
 
-            # Remove PKCS7 padding
-            unpadder = padding.PKCS7(128).unpadder()
-            data = unpadder.update(padded_data)
-            data += unpadder.finalize()
+            # Remove random padding
+            padding_length = ord(padded_data[-1:])
+            max_padding_length = 16
+            data = padded_data[:-padding_length - 1] if padding_length < max_padding_length else padded_data
 
             return data.decode('utf-8')
 

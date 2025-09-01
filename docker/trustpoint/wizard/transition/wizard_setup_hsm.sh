@@ -5,7 +5,7 @@
 
 STATE_FILE_DIR="/etc/trustpoint/wizard/state/"
 WIZARD_SETUP_HSM="/etc/trustpoint/wizard/state/WIZARD_SETUP_HSM"
-WIZARD_TLS_SERVER_CREDENTIAL_APPLY="/etc/trustpoint/wizard/state/WIZARD_TLS_SERVER_CREDENTIAL_APPLY"
+WIZARD_BACKUP_PASSWORD="/etc/trustpoint/wizard/state/WIZARD_BACKUP_PASSWORD"
 
 # HSM pin files from Docker Compose secrets
 HSM_SO_PIN_FILE="${HSM_SO_PIN_FILE:-/run/secrets/hsm_so_pin}"
@@ -143,13 +143,13 @@ then
     exit 12
 fi
 
-if ! touch "$WIZARD_TLS_SERVER_CREDENTIAL_APPLY"
+if ! touch "$WIZARD_BACKUP_PASSWORD"
 then
-    echo "ERROR: Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file."
+    echo "ERROR: Failed to create the WIZARD_BACKUP_PASSWORD state file."
     exit 13
 fi
 
-echo "SUCCESS: Transitioned to WIZARD_TLS_SERVER_CREDENTIAL_APPLY state."
+echo "SUCCESS: Transitioned to WIZARD_BACKUP_PASSWORD state."
 
 log "HSM setup completed successfully."
 exit 0

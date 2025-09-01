@@ -4,74 +4,94 @@
 {% load crispy_forms_filters %}
 {% block content %}
 
-    {% if messages %}
-        <div class="messages tp-messages text-center">
-            {% for message in messages %}
-                <div class="tp-message alert
+{% if messages %}
+<div class="messages tp-messages text-center">
+    {% for message in messages %}
+    <div class="tp-message alert
                     {% if message.tags %}
-                        {% if message.tags == "error" %}
-                            alert-danger
-                        {% else %}
-                            alert-{{ message.tags }}
-                        {% endif %}
-                    {% endif %} d-flex role="alert">
+                        {% if message.tags == " error" %} alert-danger {% else %} alert-{{ message.tags }} {% endif %}
+        {% endif %} d-flex role="alert">
 
-                    <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="{{ message.tags }}:">
-                        <use xlink:href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use></svg>
-                    <div>
-                        {{ message }}
+        <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img"
+            aria-label="{{ message.tags }}:">
+            <use xlink:href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use>
+        </svg>
+        <div>
+            {{ message }}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="card tp-card-setup-wizard text-center">
+    <div class="card-header">
+        <h1>{% trans "Trustpoint - Setup Wizard" %}</h1>
+    </div>
+    <div class="card-body pt-3 pb-4">
+        <h2>{% trans 'Restore Database backup' %}</h2>
+        <hr class="mb-4">
+
+        <a href="" class="btn btn-secondary primary d-flex justify-content-center disabled">{% trans 'Trustpoint update'
+            %}</a>
+        <a class="btn btn-primary d-flex justify-content-center" data-bs-toggle="modal" data-bs-target="#restoreModal">
+            {% trans 'Upload backup file' %}
+        </a>
+
+        <div class="modal fade" id="restoreModal" tabindex="-1" aria-labelledby="restoreModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="restoreModalLabel">{% trans "Restore database from backup" %}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"
+                            aria-label="{% trans 'Close' %}"></button>
                     </div>
-                </div>
-            {% endfor %}
-        </div>
-    {% endif %}
+                    <div class="modal-body">
+                        <form method="post" action="{% url 'setup_wizard:restore' %}" enctype="multipart/form-data">
+                            {% csrf_token %}
 
-    <div class="card tp-card-setup-wizard text-center">
-        <div class="card-header">
-            <h1>{% trans "Trustpoint - Setup Wizard" %}</h1>
-        </div>
-        <div class="card-body pt-3 pb-4">
-            <h2>{% trans 'Restore Database backup' %}</h2>
-            <hr class="mb-4">
+                            <div class="mb-3">
+                                <label for="backup_file" class="form-label">{% trans "Backup File" %}</label>
+                                <input type="file" name="backup_file" id="backup_file" accept=".dump,.gz,.sql,.zip"
+                                    required class="form-control" />
+                                <div class="form-text">{% trans "Select the backup file to restore from." %}</div>
+                            </div>
 
-            <a href="" class="btn btn-secondary primary d-flex justify-content-center disabled">{% trans 'Trustpoint update' %}</a>
-            <a class="btn btn-primary d-flex justify-content-center"
-                data-bs-toggle="modal"
-                data-bs-target="#restoreModal">
-                {% trans 'Upload backup file' %}
-            </a>
+                            <div class="mb-3">
+                                <label for="backup_password" class="form-label">
+                                    {% trans "Backup Password" %}
+                                    <small class="text-muted">({% trans "optional" %})</small>
+                                </label>
+                                <input type="password" name="backup_password" id="backup_password"
+                                    placeholder="{% trans 'Enter backup password if required' %}"
+                                    autocomplete="current-password" class="form-control" />
+                                <div class="form-text">Enter the backup password if the backup was created
+                                    with DEK encryption. Leave empty if no password was set.</div>
+                            </div>
 
-            <div class="modal fade" id="restoreModal" tabindex="-1" aria-labelledby="restoreModalLabel" aria-hidden="true">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="restoreModalLabel">{% trans "Restore database from backup" %}</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Close' %}"></button>
-                        </div>
-                        <div class="modal-body">
-                            <form method="post"
-                                action="{% url 'setup_wizard:restore' %}"
-                                enctype="multipart/form-data"
-                                class="d-flex align-items-center">
-                                {% csrf_token %}
-                                <div class="me-2">
-                                    <input type="file"
-                                        name="backup_file"
-                                        accept=".dump,.gz"
-                                        required
-                                        class="form-control"/>
-                                </div>
+                            <div class="alert alert-warning" role="alert">
+                                <small>
+                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                    <strong>{% trans "Warning:" %}</strong>
+                                    This operation will replace all current data. Make sure you have the
+                                    correct backup file and password.
+                                </small>
+                            </div>
+
+                            <div class="d-grid">
                                 <button type="submit" class="btn btn-warning">
+                                    <i class="fas fa-upload me-2"></i>
                                     {% trans "Restore from backup" %}
                                 </button>
-                            </form>
-                        </div>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
-            <hr class="mb-4">
-            <a href="{% url 'setup_wizard:initial' %}" class="btn btn-secondary w-100 mt-1">{% trans "Cancel" %}</a>
         </div>
+        <hr class="mb-4">
+        <a href="{% url 'setup_wizard:initial' %}" class="btn btn-secondary w-100 mt-1">{% trans "Cancel" %}</a>
     </div>
+</div>
 
 {% endblock content %}

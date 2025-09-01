@@ -163,6 +163,98 @@ UML Sequence Diagram
    
    @enduml
 
+Encryption Implementation Details
+---------------------------------
+
+Cryptographic Algorithm
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The system uses **AES-256-GCM** (Advanced Encryption Standard with 256-bit keys in Galois/Counter Mode) for field-level encryption:
+
+- **Algorithm**: AES-256
+- **Mode**: GCM (Galois/Counter Mode)
+- **Key Size**: 256 bits (32 bytes)
+- **Nonce Size**: 96 bits (12 bytes)
+- **Authentication Tag**: 128 bits (16 bytes)
+- **Padding**: Not required (GCM is a stream cipher mode)
+
+
+Security Properties
+~~~~~~~~~~~~~~~~~~~
+
+**Nonce**
+  - 12-byte random nonce generated for each encryption operation using ``os.urandom(12)``
+  - Ensures identical plaintexts produce different ciphertexts
+
+**Authentication**
+  - Built-in authentication prevents tampering
+  - 128-bit authentication tag provides strong integrity protection
+  - Eliminates padding oracle attacks
+
+**Key Management**
+  - 256-bit DEK provides strong cryptographic security
+  - KEK stored in HSM prevents key extraction
+  - AES Key Wrap (RFC 3394) used for DEK protection
+
+Field Encryption/Decryption Workflow
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. uml::
+
+   @startuml
+   !theme plain
+   
+   start
+   
+   if (Operation?) then (Encrypt)
+       :Receive plaintext value;
+       
+       if (Value empty?) then (yes)
+           :Return unchanged;
+           stop
+       endif
+       
+       :Get DEK from cache/HSM;
+       :Generate 12-byte random nonce;
+       :Add random padding (0-15 bytes);
+       :Create AES-256-GCM cipher;
+       :Encrypt padded data;
+       :Get 16-byte authentication tag;
+       :Combine: nonce + tag + ciphertext;
+       :Base64 encode result;
+       :Store in database;
+       
+   else (Decrypt)
+       :Receive encrypted value;
+       
+       if (Value empty?) then (yes)
+           :Return unchanged;
+           stop
+       endif
+       
+       :Get DEK from cache/HSM;
+       :Base64 decode value;
+       :Extract components:
+       - nonce (12 bytes)
+       - tag (16 bytes) 
+       - ciphertext (rest);
+       :Create AES-256-GCM cipher with tag;
+       :Decrypt and verify authentication;
+       
+       if (Authentication valid?) then (no)
+           :Raise ValidationError;
+           stop
+       endif
+       
+       :Remove random padding;
+       :Return plaintext;
+       
+   endif
+   
+   stop
+   
+   @enduml
+
 Error Handling and Recovery
 ---------------------------
 

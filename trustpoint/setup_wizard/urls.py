@@ -4,15 +4,16 @@ from django.urls import path
 
 from setup_wizard.views import (
     BackupRestoreView,
+    SetupWizardBackupPasswordView,
     SetupWizardCreateSuperUserView,
     SetupWizardDemoDataView,
     SetupWizardGenerateTlsServerCredentialView,
+    SetupWizardHsmSetupView,
     SetupWizardImportTlsServerCredentialView,
     SetupWizardInitialView,
     SetupWizardOptionsView,
     SetupWizardTlsServerCredentialApplyCancelView,
     SetupWizardTlsServerCredentialApplyView,
-    SetupWizardHsmSetupView,
 )
 
 app_name = 'setup_wizard'
@@ -22,6 +23,11 @@ urlpatterns = [
         'hsm-setup/',
         SetupWizardHsmSetupView.as_view(),
         name='hsm_setup',
+    ),
+    path(
+        'backup-password/',
+        SetupWizardBackupPasswordView.as_view(),
+        name='backup_password',
     ),
     path(
         'generate-tls-server-credential/',
