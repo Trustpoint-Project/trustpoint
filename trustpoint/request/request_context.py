@@ -38,6 +38,11 @@ class RequestContext:
         """Serialize the context to a dictionary."""
         return {field.name: getattr(self, field.name) for field in fields(self)}
 
+    def clear(self) -> None:
+        """Reset all attributes to None."""
+        for field in fields(self):
+            setattr(self, field.name, None)
+
     def __str__(self) -> str:
         """String representation showing all context fields."""
         field_summary = ', '.join(f'{field.name}={getattr(self, field.name)}' for field in fields(self))

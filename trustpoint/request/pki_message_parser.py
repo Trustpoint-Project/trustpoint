@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from pki.models import DomainModel
 from pyasn1.codec.ber import decoder
 from pyasn1.codec.der import encoder
-from pyasn1_modules import rfc2459, rfc4210  # type: ignore[import-untyped]
+from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
 
 from request.request_context import RequestContext
 from trustpoint.logger import LoggerMixin
@@ -385,7 +385,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         if len(cert_req_messages) < 1:
             self._raise_value_error('No CertReqMessages found.')
 
-    def _validate_cert_request(self, cert_req_msg: rfc4210.CertReqMsg) -> x509.base.CertificateSigningRequestBuilder:
+    def _validate_cert_request(self, cert_req_msg: rfc2511.CertReqMsg) -> x509.base.CertificateSigningRequestBuilder:
         """Validate the certificate request message details."""
         if cert_req_msg['certReqId'] != 0:
             self._raise_validation_error('certReqId must be 0.')
@@ -403,8 +403,8 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
 
     def _cert_template_to_builder(
             self,
-                                  cert_template: rfc4210.CertTemplate
-                                  ) -> x509.base.CertificateSigningRequestBuilder:
+            cert_template: rfc2511.CertTemplate
+    ) -> x509.base.CertificateSigningRequestBuilder:
 
         if cert_template['subject'].hasValue():
             subject = self._parse_asn1_name_to_x509_name(cert_template['subject'])
@@ -482,9 +482,9 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
 
                 try:
                     if ext_oid == x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string:
-                        extension_obj = self._parse_subject_alternative_name(ext_value_bytes, is_critical)
+                        extension_obj = self._parse_subject_alternative_name(ext_value_bytes, critical=is_critical)
                     elif ext_oid == x509.ExtensionOID.CERTIFICATE_POLICIES.dotted_string:
-                        extension_obj = self._parse_certificate_policies(ext_value_bytes, is_critical)
+                        extension_obj = self._parse_certificate_policies(ext_value_bytes, critical=is_critical)
                     else:
                         self._raise_not_implemented_error(f'Extension with OID {ext_oid} is not supported')
                     if extension_obj:

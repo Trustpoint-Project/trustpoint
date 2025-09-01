@@ -98,84 +98,84 @@ class TestCMPHelper(LoggerMixin):
         assert True, 'Authorization passed as expected.'
 
 
-def test_est_with_onboarding_client_certificate_authentication(
-        self,
-        domain_credential_est_onboarding,
-        rsa_private_key
-) -> None:
-    """Test EST client certificate authentication for a device WITH onboarding."""
-    device = domain_credential_est_onboarding.get('device')
-    domain_credential = domain_credential_est_onboarding.get('domain_credential')
+    def test_est_with_onboarding_client_certificate_authentication(
+            self,
+            domain_credential_est_onboarding,
+            rsa_private_key
+    ) -> None:
+        """Test EST client certificate authentication for a device WITH onboarding."""
+        device = domain_credential_est_onboarding.get('device')
+        domain_credential = domain_credential_est_onboarding.get('domain_credential')
 
-    certtemplate_str = 'tls-client'
-    operation_str = 'simpleenroll'
-    protocol_str = 'est'
-    domain_str = device.domain.unique_name
+        certtemplate_str = 'tls-client'
+        operation_str = 'simpleenroll'
+        protocol_str = 'est'
+        domain_str = device.domain.unique_name
 
-    csr_builder = x509.CertificateSigningRequestBuilder().subject_name(
-        x509.Name([
-            x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Test TLS Client Certificate'),
-        ])
-    )
-    csr = csr_builder.sign(private_key=rsa_private_key, algorithm=hashes.SHA256())
+        csr_builder = x509.CertificateSigningRequestBuilder().subject_name(
+            x509.Name([
+                x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Test TLS Client Certificate'),
+            ])
+        )
+        csr = csr_builder.sign(private_key=rsa_private_key, algorithm=hashes.SHA256())
 
-    request_factory = RequestFactory()
-    cert_pem = domain_credential.credential.certificate.cert_pem
+        request_factory = RequestFactory()
+        cert_pem = domain_credential.credential.certificate.cert_pem
 
-    request = request_factory.post(
-        path=f'/.well-known/{protocol_str}/{domain_str}/{certtemplate_str}/{operation_str}',
-        data=csr.public_bytes(serialization.Encoding.DER),
-        content_type='application/pkcs10',
-        HTTP_SSL_CLIENT_CERT=cert_pem,
-    )
+        request = request_factory.post(
+            path=f'/.well-known/{protocol_str}/{domain_str}/{certtemplate_str}/{operation_str}',
+            data=csr.public_bytes(serialization.Encoding.DER),
+            content_type='application/pkcs10',
+            HTTP_SSL_CLIENT_CERT=cert_pem,
+        )
 
-    # Build mock context
-    mock_context = RequestContext(
-        raw_message=request,
-        domain_str=domain_str,
-        protocol=protocol_str,
-        operation=operation_str,
-        certificate_template=certtemplate_str,
-    )
+        # Build mock context
+        mock_context = RequestContext(
+            raw_message=request,
+            domain_str=domain_str,
+            protocol=protocol_str,
+            operation=operation_str,
+            certificate_template=certtemplate_str,
+        )
 
-    validator = EstHttpRequestValidator()
-    parser = EstMessageParser()
-    authenticator = EstAuthentication()
-    authorizer = EstAuthorization()
-    authorizer.add(CertificateTemplateAuthorization([certtemplate_str]))
-    authorizer.add(EstOperationAuthorization([operation_str]))
+        validator = EstHttpRequestValidator()
+        parser = EstMessageParser()
+        authenticator = EstAuthentication()
+        authorizer = EstAuthorization()
+        authorizer.add(CertificateTemplateAuthorization([certtemplate_str]))
+        authorizer.add(EstOperationAuthorization([operation_str]))
 
-    # Run request validation
-    validator.validate(mock_context)
+        # Run request validation
+        validator.validate(mock_context)
 
-    assert mock_context.client_certificate is not None, 'Client certificate not parsed'
+        assert mock_context.client_certificate is not None, 'Client certificate not parsed'
 
-    expected_certificate = domain_credential.credential.get_certificate()
+        expected_certificate = domain_credential.credential.get_certificate()
 
-    client_cert_cn = mock_context.client_certificate.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[
-        0].value
-    expected_cert_cn = expected_certificate.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
+        client_cert_cn = mock_context.client_certificate.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[
+            0].value
+        expected_cert_cn = expected_certificate.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
 
-    assert client_cert_cn == expected_cert_cn, \
-        f"Client certificate common name '{client_cert_cn}' does not match expected '{expected_cert_cn}'"
+        assert client_cert_cn == expected_cert_cn, \
+            f"Client certificate common name '{client_cert_cn}' does not match expected '{expected_cert_cn}'"
 
-    # Parse request
-    parser.parse(mock_context)
+        # Parse request
+        parser.parse(mock_context)
 
-    assert mock_context.cert_requested is not None
-    assert isinstance(mock_context.cert_requested, x509.CertificateSigningRequest), \
-        'Request CSR is invalid'
-    assert mock_context.domain == device.domain, \
-        'Domain in context does not match expected domain'
+        assert mock_context.cert_requested is not None
+        assert isinstance(mock_context.cert_requested, x509.CertificateSigningRequest), \
+            'Request CSR is invalid'
+        assert mock_context.domain == device.domain, \
+            'Domain in context does not match expected domain'
 
-    # Authenticate
-    authenticator.authenticate(mock_context)
+        # Authenticate
+        authenticator.authenticate(mock_context)
 
-    assert mock_context.device is not None, 'Authentication failed, device not linked'
-    assert mock_context.device.common_name == device.common_name, \
-        'Authenticated device common name does not match expected'
+        assert mock_context.device is not None, 'Authentication failed, device not linked'
+        assert mock_context.device.common_name == device.common_name, \
+            'Authenticated device common name does not match expected'
 
-    # Authorization
-    authorizer.authorize(mock_context)
+        # Authorization
+        authorizer.authorize(mock_context)
 
-    assert True, 'Authorization passed as expected'
+        assert True, 'Authorization passed as expected'

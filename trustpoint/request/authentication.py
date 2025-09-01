@@ -650,8 +650,9 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
         der_cmp_signer_cert = encoder.encode(cmp_signer_extra_cert)
         return x509.load_der_x509_certificate(der_cmp_signer_cert)
 
-    def _authenticate_device(self, cmp_signer_cert: x509.Certificate) -> DeviceModel:
+    def _authenticate_device(self, cmp_signer_cert: x509.Certificate, context: RequestContext) -> DeviceModel:
         """Authenticate the device using the CMP signer certificate."""
+        del context
         device_info = self._extract_device_info(cmp_signer_cert)
         device = self._lookup_device(device_info)
         self._validate_device(device, device_info, cmp_signer_cert)
