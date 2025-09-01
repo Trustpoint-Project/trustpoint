@@ -17,15 +17,27 @@ from pydantic import (
     create_model,
     field_validator,
     model_validator,
+    AfterValidator
 )
 
-from pydantic_core import PydanticUndefined
 
 
 class ProfileValidationError(Exception):
     """Raised when the request is well-formed but does not match the profile constraints."""
 
-ALIAS_CN = AliasChoices('common_name', 'cn', 'CN', 'commonName', '2.5.4.3')
+ALIASES = {
+    'common_name': AliasChoices('common_name', 'cn', 'CN', 'commonName', '2.5.4.3')
+}
+
+def build_alias_map() -> dict[str, str]:
+    """Build a mapping of all known aliases to their canonical field names."""
+    alias_map = {}
+    for canonical, alias in ALIASES.items():
+        for choice in alias.choices:
+            alias_map[choice] = canonical
+    return alias_map
+
+alias_map = build_alias_map()
 
 class ProfileValuePropertyModel(BaseModel):
     """Model for a profile value property."""
@@ -38,7 +50,7 @@ class ProfileValuePropertyModel(BaseModel):
 
 class SubjectModel(BaseModel):
     """Model for the subject DN of a certificate profile."""
-    common_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIAS_CN)
+    common_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES['common_name'])
     #organization: str | None = None
     #organizational_unit: str | None = None
     #country: str | None = None
@@ -87,12 +99,33 @@ class CertProfileBaseModel(BaseModel):
     This allows for granular control over allowed fields and constraints at each level.
     """
     allow: list[str] | Literal['*'] | None = None
+    #allow: list[str] | Literal['*'] | None = Annotated[None, AfterValidator(normalize_allow)]
+    #allow: Annotated[list[str] | Literal['*'] | None, AfterValidator(normalize_allow)] = None
     reject_mods: bool = Field(default=False)
+
+    @field_validator('allow', mode='before')
+    @classmethod
+    def normalize_allow(cls, value: list[str] | Literal['*'] | None) -> list[str] | Literal['*'] | None:
+        """Normalize the allow list by replacing aliases with their canonical names."""
+        print('Normalizing allow list:', value)
+        if not isinstance(value, list):
+            return value
+        normalized = []
+        print('Alias map:', alias_map)
+        for item in value:
+            try:
+                normalized.append(alias_map[item])
+            except KeyError:
+                normalized.append(item)
+        return normalized
+
+class ProfileSubjectModel(SubjectModel, CertProfileBaseModel):
+    """Model for the subject DN of a certificate profile, with profile constraints."""
 
 class CertProfileModel(CertProfileBaseModel):
     """Model for a certificate profile."""
     type: Literal['cert_profile']
-    subject: SubjectModel | None = Field(alias='subj', default=None)
+    subject: ProfileSubjectModel | None = Field(alias='subj', default=None)
     extensions: ExtensionsModel | None = Field(alias='ext', default=None)
 
 

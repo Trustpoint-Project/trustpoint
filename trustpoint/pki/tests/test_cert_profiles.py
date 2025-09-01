@@ -45,7 +45,21 @@ def test_allowed_cn_present() -> None:
     """Test that a request with an allowed CN passes verification."""
     profile = {
         'type': 'cert_profile',
-        'subj': {'allow': ['cn','common_name']}, # TODO: Normalize the Allow list!
+        'subj': {'allow': ['cn','common_name']},
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'}
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    print('Validated Request: ', validated_request)
+    assert validated_request['subject']['common_name'] == 'example.com'
+
+def test_allowed_cn_alias_present() -> None:
+    """Test that a request with an allowed CN passes verification (alias 'cn' for 'common_name')."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'allow': ['cn']},
     }
     verifier = JSONProfileVerifier(profile)
     request = {
@@ -59,7 +73,7 @@ def test_unspecified_cn_present() -> None:
     """Test that a request with a not explicitly allowed CN and without implicit allow fails verification."""
     profile = {
         'type': 'cert_profile',
-        'subj': {'allow': ['pamajauke']}, # TODO: Normalize the Allow list!
+        'subj': {'allow': ['pamajauke']},
     }
     verifier = JSONProfileVerifier(profile)
     request = {
