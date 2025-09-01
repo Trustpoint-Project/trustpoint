@@ -192,7 +192,8 @@ class ClientCertificateValidation(ValidationComponent, LoggerMixin):
 
             subject_cn = 'unknown'
             with contextlib.suppress(IndexError, AttributeError):
-                subject_cn = client_certificate.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
+                cn_value = client_certificate.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
+                subject_cn = cn_value if isinstance(cn_value, str) else cn_value.decode('utf-8')
 
             self.logger.debug(
                 "Client certificate validation successful: Certificate loaded for subject '%s'", subject_cn)

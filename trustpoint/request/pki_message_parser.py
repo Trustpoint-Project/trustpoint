@@ -7,6 +7,7 @@ from typing import Any
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+from cryptography.x509 import ExtensionOID
 from pki.models import DomainModel
 from pyasn1.codec.ber import decoder
 from pyasn1.codec.der import encoder
@@ -576,7 +577,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         """Raise a ValueError with the given message."""
         raise ValueError(message)
 
-    def _parse_certificate_policies(self, value: bytes, *, critical: bool) -> x509.Extension:
+    def _parse_certificate_policies(self, value: bytes, *, critical: bool) -> x509.Extension[x509.CertificatePolicies]:
         """Parse Certificate Policies extension manually."""
         try:
             cert_policies, _ = decoder.decode(value, asn1Spec=rfc2459.CertificatePolicies())
@@ -600,8 +601,15 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
                 policy_information_list.append(policy_info_obj)
 
             certificate_policies = x509.CertificatePolicies(policy_information_list)
+            oid = ExtensionOID.CERTIFICATE_POLICIES
+
+            if not isinstance(oid, ExtensionOID):
+                self.logger.warning('Invalid OID type: %(oid_type)s',
+                                    extra={'oid_type': type(oid).__name__})
+                self._raise_value_error('Invalid OID type')
+
             return x509.Extension(
-                oid=x509.ExtensionOID.CERTIFICATE_POLICIES,
+                oid=oid,
                 critical=critical,
                 value=certificate_policies
             )

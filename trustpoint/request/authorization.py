@@ -1,7 +1,8 @@
 """Provides the `AuthorizationComponent` class for authorization logic."""
 from abc import ABC, abstractmethod
+from typing import Never
 
-from pyasn1_modules.rfc4210 import PKIMessage
+from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 
 from request.request_context import RequestContext
 from trustpoint.logger import LoggerMixin
@@ -98,6 +99,11 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
                 extra={'operation': operation, 'allowed_operations': self.allowed_operations})
             raise ValueError(error_message)
 
+        if not isinstance(context.parsed_message, PKIMessage):
+            error_message = 'Parsed message is missing. Authorization denied.'
+            self.logger.warning('Operation authorization failed: Parsed message is missing or invalid')
+            self._raise_value_error(error_message)
+
         body_type = context.parsed_message['body'].getName()
 
         if context.operation == 'initialization' and body_type == 'ir':
@@ -112,6 +118,10 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
 
         self.logger.debug('Operation authorization successful for operation: %(operation)s',
                           extra={'operation': operation})
+    
+    def _raise_value_error(self, message: str) -> Never:
+        """Raise a ValueError with the given message."""
+        raise ValueError(message)
 
     def _authorize_asn1_body(self, serialized_pyasn1_message: PKIMessage, expected_body_type: str) -> None:
         """Extract and validate the specified body type from the CMP message.
