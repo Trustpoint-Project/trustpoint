@@ -1,25 +1,22 @@
-from abc import ABC, abstractmethod
-from typing import List, Dict, Any
 import os
+from abc import ABC, abstractmethod
+from typing import Any
 
 
 class CMPCommandComponent(ABC):
     """Abstract base class for CMP command components."""
 
     @abstractmethod
-    def build_args(self, context: Dict[str, Any]) -> List[str]:
+    def build_args(self, context: dict[str, Any]) -> list[str]:
         """Build command arguments for this component."""
-        pass
 
     @abstractmethod
-    def prepare_files(self, temp_dir: str, context: Dict[str, Any]) -> List[str]:
+    def prepare_files(self, temp_dir: str, context: dict[str, Any]) -> list[str]:
         """Prepare any files needed for this component. Returns list of created files."""
-        pass
 
     @abstractmethod
     def get_description(self) -> str:
         """Get human-readable description of this component."""
-        pass
 
 
 class BasicCMPArgs(CMPCommandComponent):
@@ -29,17 +26,17 @@ class BasicCMPArgs(CMPCommandComponent):
         self.cmd = cmd
         self.implicit_confirm = implicit_confirm
 
-    def build_args(self, context: Dict[str, Any]) -> List[str]:
+    def build_args(self, context: dict[str, Any]) -> list[str]:
         args = ['openssl', 'cmp', '-cmd', self.cmd]
         if self.implicit_confirm:
             args.append('-implicit_confirm')
         return args
 
-    def prepare_files(self, temp_dir: str, context: Dict[str, Any]) -> List[str]:
+    def prepare_files(self, temp_dir: str, context: dict[str, Any]) -> list[str]:
         return []
 
     def get_description(self) -> str:
-        return f"Basic CMP {self.cmd} command"
+        return f'Basic CMP {self.cmd} command'
 
 
 class ServerConfig(CMPCommandComponent):
@@ -49,18 +46,18 @@ class ServerConfig(CMPCommandComponent):
         self.server_url = server_url
         self.tls_used = tls_used
 
-    def build_args(self, context: Dict[str, Any]) -> List[str]:
+    def build_args(self, context: dict[str, Any]) -> list[str]:
         args = ['-server', self.server_url]
         if self.tls_used:
             args.append('-tls_used')
         return args
 
-    def prepare_files(self, temp_dir: str, context: Dict[str, Any]) -> List[str]:
+    def prepare_files(self, temp_dir: str, context: dict[str, Any]) -> list[str]:
         return []
 
     def get_description(self) -> str:
-        protocol = "HTTPS" if self.tls_used else "HTTP"
-        return f"{protocol} server at {self.server_url}"
+        protocol = 'HTTPS' if self.tls_used else 'HTTP'
+        return f'{protocol} server at {self.server_url}'
 
 
 class SharedSecretAuth(CMPCommandComponent):
@@ -70,14 +67,14 @@ class SharedSecretAuth(CMPCommandComponent):
         self.ref = ref
         self.secret = secret
 
-    def build_args(self, context: Dict[str, Any]) -> List[str]:
+    def build_args(self, context: dict[str, Any]) -> list[str]:
         return ['-ref', self.ref, '-secret', self.secret]
 
-    def prepare_files(self, temp_dir: str, context: Dict[str, Any]) -> List[str]:
+    def prepare_files(self, temp_dir: str, context: dict[str, Any]) -> list[str]:
         return []
 
     def get_description(self) -> str:
-        return f"Shared secret authentication (ref: {self.ref})"
+        return f'Shared secret authentication (ref: {self.ref})'
 
 
 class CertificateAuth(CMPCommandComponent):
@@ -85,17 +82,17 @@ class CertificateAuth(CMPCommandComponent):
 
     def __init__(self, cert_content: str = None, key_content: str = None,
                  cert_file: str = None, key_file: str = None):
-        self.cert_content = cert_content or "-----BEGIN CERTIFICATE-----\nMOCK_CERTIFICATE_DATA\n-----END CERTIFICATE-----\n"
-        self.key_content = key_content or "-----BEGIN PRIVATE KEY-----\nMOCK_KEY_DATA\n-----END PRIVATE KEY-----\n"
+        self.cert_content = cert_content or '-----BEGIN CERTIFICATE-----\nMOCK_CERTIFICATE_DATA\n-----END CERTIFICATE-----\n'
+        self.key_content = key_content or '-----BEGIN PRIVATE KEY-----\nMOCK_KEY_DATA\n-----END PRIVATE KEY-----\n'
         self.cert_file = cert_file or '/tmp/domain_credential_cert.pem'
         self.key_file = key_file or '/tmp/domain_credential_key.pem'
 
-    def build_args(self, context: Dict[str, Any]) -> List[str]:
+    def build_args(self, context: dict[str, Any]) -> list[str]:
         cert_file = context.get('cert_file', self.cert_file)
         key_file = context.get('key_file', self.key_file)
         return ['-cert', cert_file, '-key', key_file]
 
-    def prepare_files(self, temp_dir: str, context: Dict[str, Any]) -> List[str]:
+    def prepare_files(self, temp_dir: str, context: dict[str, Any]) -> list[str]:
         cert_file = os.path.join(temp_dir, self.cert_file)
         key_file = os.path.join(temp_dir, self.key_file)
 
@@ -110,7 +107,7 @@ class CertificateAuth(CMPCommandComponent):
         return [cert_file, key_file]
 
     def get_description(self) -> str:
-        return "Certificate-based authentication"
+        return 'Certificate-based authentication'
 
 
 class CertificateRequest(CMPCommandComponent):
@@ -125,7 +122,7 @@ class CertificateRequest(CMPCommandComponent):
         self.key_file = key_file or '/tmp/key.pem'
         self.cert_out_file = cert_out_file or '/tmp/cert.pem'
 
-    def build_args(self, context: Dict[str, Any]) -> List[str]:
+    def build_args(self, context: dict[str, Any]) -> list[str]:
         key_file = context.get('key_file', self.key_file)
         cert_out_file = context.get('cert_out_file', self.cert_out_file)
 
@@ -141,17 +138,17 @@ class CertificateRequest(CMPCommandComponent):
             args.extend(['-policy_oids', self.policy_oids])
         return args
 
-    def prepare_files(self, temp_dir: str, context: Dict[str, Any]) -> List[str]:
+    def prepare_files(self, temp_dir: str, context: dict[str, Any]) -> list[str]:
         cert_out_file = os.path.join(temp_dir, 'cert.pem')
         context['cert_out_file'] = cert_out_file
         return []
 
     def get_description(self) -> str:
-        desc = f"Certificate request for {self.subject} ({self.days} days)"
+        desc = f'Certificate request for {self.subject} ({self.days} days)'
         if self.sans:
-            desc += f" with SAN: {self.sans}"
+            desc += f' with SAN: {self.sans}'
         if self.policy_oids:
-            desc += f" with policy OIDs: {self.policy_oids}"
+            desc += f' with policy OIDs: {self.policy_oids}'
 
         return desc
 
@@ -160,14 +157,14 @@ class ServerCertificate(CMPCommandComponent):
     """Server certificate component."""
 
     def __init__(self, cert_content: str = None, srvcert_file: str = None):
-        self.cert_content = cert_content or "-----BEGIN CERTIFICATE-----\nMOCK_SRVCERT_DATA\n-----END CERTIFICATE-----\n"
+        self.cert_content = cert_content or '-----BEGIN CERTIFICATE-----\nMOCK_SRVCERT_DATA\n-----END CERTIFICATE-----\n'
         self.srvcert_file = srvcert_file or '/tmp/issuing_ca_cert.pem'
 
-    def build_args(self, context: Dict[str, Any]) -> List[str]:
+    def build_args(self, context: dict[str, Any]) -> list[str]:
         srvcert_file = context.get('srvcert_file', self.srvcert_file)
         return ['-srvcert', srvcert_file]
 
-    def prepare_files(self, temp_dir: str, context: Dict[str, Any]) -> List[str]:
+    def prepare_files(self, temp_dir: str, context: dict[str, Any]) -> list[str]:
         srvcert_file = os.path.join(temp_dir, 'issuing_ca_cert.pem')
 
         with open(srvcert_file, 'w') as f:
@@ -177,7 +174,7 @@ class ServerCertificate(CMPCommandComponent):
         return [srvcert_file]
 
     def get_description(self) -> str:
-        return "Server certificate validation"
+        return 'Server certificate validation'
 
 
 
@@ -191,7 +188,7 @@ class CertificateOutput(CMPCommandComponent):
         self.chain_out_file = chain_out_file or '/tmp/chain_without_root.pem'
         self.extra_certs_out_file = extra_certs_out_file or '/tmp/full_chain.pem'
 
-    def build_args(self, context: Dict[str, Any]) -> List[str]:
+    def build_args(self, context: dict[str, Any]) -> list[str]:
         args = []
         if self.chain_out:
             chain_out_file = context.get('chain_out_file', self.chain_out_file)
@@ -201,7 +198,7 @@ class CertificateOutput(CMPCommandComponent):
             args.extend(['-extracertsout', extra_certs_out_file])
         return args
 
-    def prepare_files(self, temp_dir: str, context: Dict[str, Any]) -> List[str]:
+    def prepare_files(self, temp_dir: str, context: dict[str, Any]) -> list[str]:
         files = []
         if self.chain_out:
             chain_out_file = os.path.join(temp_dir, 'chain_without_root.pem')
@@ -216,10 +213,10 @@ class CertificateOutput(CMPCommandComponent):
     def get_description(self) -> str:
         outputs = []
         if self.chain_out:
-            outputs.append("chain output")
+            outputs.append('chain output')
         if self.extra_certs_out:
-            outputs.append("full chain output")
-        return f"Certificate outputs: {', '.join(outputs)}" if outputs else "Basic certificate output"
+            outputs.append('full chain output')
+        return f"Certificate outputs: {', '.join(outputs)}" if outputs else 'Basic certificate output'
 
 
 
@@ -229,14 +226,14 @@ class CompositeCMPCommand(CMPCommandComponent):
     def __init__(self, name: str, description: str = None):
         self.name = name
         self.description = description or name
-        self.components: List[CMPCommandComponent] = []
+        self.components: list[CMPCommandComponent] = []
 
     def add_component(self, component: CMPCommandComponent) -> 'CompositeCMPCommand':
         """Add a component to this composite command."""
         self.components.append(component)
         return self
 
-    def build_args(self, context: Dict[str, Any] = None) -> List[str]:
+    def build_args(self, context: dict[str, Any] = None) -> list[str]:
         """Build complete command arguments from all components."""
         if context is None:
             context = {}
@@ -246,7 +243,7 @@ class CompositeCMPCommand(CMPCommandComponent):
             args.extend(component.build_args(context))
         return args
 
-    def prepare_files(self, temp_dir: str, context: Dict[str, Any]) -> List[str]:
+    def prepare_files(self, temp_dir: str, context: dict[str, Any]) -> list[str]:
         """Prepare all files needed by all components."""
         all_files = []
         for component in self.components:
@@ -268,19 +265,19 @@ class CompositeCMPCommand(CMPCommandComponent):
         return f"CompositeCMPCommand(name='{self.name}', components={len(self.components)})"
 
 
-if __name__ == "__main__":
-    command = (CompositeCMPCommand("tls_cert_auth", "TLS CMP with certificate authentication")
-               .add_component(BasicCMPArgs(cmd="cr"))
-               .add_component(ServerConfig("https://127.0.0.1:443/.well-known/cmp/certification/schmalz/tls-server/",
+if __name__ == '__main__':
+    command = (CompositeCMPCommand('tls_cert_auth', 'TLS CMP with certificate authentication')
+               .add_component(BasicCMPArgs(cmd='cr'))
+               .add_component(ServerConfig('https://127.0.0.1:443/.well-known/cmp/certification/schmalz/tls-server/',
                                            tls_used=True))
                .add_component(CertificateAuth())
-               .add_component(CertificateRequest("/CN=Trustpoint-TlsServer-Credential-1",
+               .add_component(CertificateRequest('/CN=Trustpoint-TlsServer-Credential-1',
                                                  10,
-                                                 "critical 127.0.0.1 ::1 localhost"))
+                                                 'critical 127.0.0.1 ::1 localhost'))
                .add_component(ServerCertificate())
                .add_component(CertificateOutput(chain_out=True, extra_certs_out=True)))
 
     cmd_args = command.build_args()
-    print(" ".join(cmd_args))
+    print(' '.join(cmd_args))
 
 

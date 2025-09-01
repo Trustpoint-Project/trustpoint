@@ -40,11 +40,11 @@ class RequestContext:
 
     def __str__(self) -> str:
         """String representation showing all context fields."""
-        field_summary = ", ".join(f"{field.name}={getattr(self, field.name)}" for field in fields(self))
-        return f"RequestContext({field_summary})"
+        field_summary = ', '.join(f'{field.name}={getattr(self, field.name)}' for field in fields(self))
+        return f'RequestContext({field_summary})'
 
 
     def __repr__(self) -> str:
         """Detailed representation for debugging."""
-        return f"RequestContext(protocol={self.protocol}, operation={self.operation}, domain_str={self.domain_str})"
+        return f'RequestContext(protocol={self.protocol}, operation={self.operation}, domain_str={self.domain_str})'
 

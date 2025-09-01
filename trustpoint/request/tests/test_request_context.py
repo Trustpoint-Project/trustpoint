@@ -1,16 +1,15 @@
 """Unit tests for the RequestContext class."""
 
-import pytest
 from dataclasses import fields
 from unittest.mock import Mock
 
 from cryptography import x509
 from cryptography.x509 import CertificateSigningRequest
+from devices.models import DeviceModel
 from django.http import HttpRequest
+from pki.models import DomainModel
 from pyasn1_modules.rfc4210 import PKIMessage
 
-from devices.models import DeviceModel
-from pki.models import DomainModel
 from request.request_context import RequestContext
 
 
@@ -28,9 +27,9 @@ class TestRequestContext:
     def test_init_with_values(self):
         """Test that RequestContext can be initialized with specific values."""
         raw_message = Mock(spec=HttpRequest)
-        domain_str = "example.com"
-        operation = "certificate_request"
-        protocol = "est"
+        domain_str = 'example.com'
+        operation = 'certificate_request'
+        protocol = 'est'
 
         context = RequestContext(
             raw_message=raw_message,
@@ -49,19 +48,19 @@ class TestRequestContext:
     def test_to_dict(self):
         """Test that to_dict returns a dictionary representation of the context."""
         context = RequestContext(
-            operation="test_operation",
-            protocol="test_protocol",
-            domain_str="test.domain.com",
-            est_username="test_user"
+            operation='test_operation',
+            protocol='test_protocol',
+            domain_str='test.domain.com',
+            est_username='test_user'
         )
 
         result = context.to_dict()
 
         assert isinstance(result, dict)
-        assert result['operation'] == "test_operation"
-        assert result['protocol'] == "test_protocol"
-        assert result['domain_str'] == "test.domain.com"
-        assert result['est_username'] == "test_user"
+        assert result['operation'] == 'test_operation'
+        assert result['protocol'] == 'test_protocol'
+        assert result['domain_str'] == 'test.domain.com'
+        assert result['est_username'] == 'test_user'
         # Check that None values are also included
         assert result['raw_message'] is None
         assert result['parsed_message'] is None
@@ -98,18 +97,18 @@ class TestRequestContext:
         """Test that clear() resets all attributes to None."""
         context = RequestContext(
             raw_message=Mock(spec=HttpRequest),
-            operation="test_operation",
-            protocol="est",
-            domain_str="example.com",
-            est_username="user",
-            est_password="password",
-            cmp_shared_secret="secret"
+            operation='test_operation',
+            protocol='est',
+            domain_str='example.com',
+            est_username='user',
+            est_password='password',
+            cmp_shared_secret='secret'
         )
 
         # Verify some fields are set
-        assert context.operation == "test_operation"
-        assert context.protocol == "est"
-        assert context.domain_str == "example.com"
+        assert context.operation == 'test_operation'
+        assert context.protocol == 'est'
+        assert context.domain_str == 'example.com'
 
         # Clear all fields
         context.clear()
@@ -132,18 +131,18 @@ class TestRequestContext:
         context = RequestContext(
             raw_message=mock_request,
             parsed_message=mock_csr,
-            operation="enroll",
-            protocol="est",
-            certificate_template="server_cert",
-            response_format="pkcs7",
-            est_encoding="base64",
-            domain_str="test.example.com",
+            operation='enroll',
+            protocol='est',
+            certificate_template='server_cert',
+            response_format='pkcs7',
+            est_encoding='base64',
+            domain_str='test.example.com',
             domain=mock_domain,
             device=mock_device,
             cert_requested=mock_csr,
-            est_username="test_user",
-            est_password="test_password",
-            cmp_shared_secret="shared_secret",
+            est_username='test_user',
+            est_password='test_password',
+            cmp_shared_secret='shared_secret',
             client_certificate=mock_cert,
             client_intermediate_certificate=mock_cert_list
         )
@@ -151,18 +150,18 @@ class TestRequestContext:
         # Verify all fields are set correctly
         assert context.raw_message == mock_request
         assert context.parsed_message == mock_csr
-        assert context.operation == "enroll"
-        assert context.protocol == "est"
-        assert context.certificate_template == "server_cert"
-        assert context.response_format == "pkcs7"
-        assert context.est_encoding == "base64"
-        assert context.domain_str == "test.example.com"
+        assert context.operation == 'enroll'
+        assert context.protocol == 'est'
+        assert context.certificate_template == 'server_cert'
+        assert context.response_format == 'pkcs7'
+        assert context.est_encoding == 'base64'
+        assert context.domain_str == 'test.example.com'
         assert context.domain == mock_domain
         assert context.device == mock_device
         assert context.cert_requested == mock_csr
-        assert context.est_username == "test_user"
-        assert context.est_password == "test_password"
-        assert context.cmp_shared_secret == "shared_secret"
+        assert context.est_username == 'test_user'
+        assert context.est_password == 'test_password'
+        assert context.cmp_shared_secret == 'shared_secret'
         assert context.client_certificate == mock_cert
         assert context.client_intermediate_certificate == mock_cert_list
 
@@ -179,13 +178,13 @@ class TestRequestContext:
         context = RequestContext()
 
         # Modify fields after creation
-        context.operation = "new_operation"
-        context.protocol = "cmp"
-        context.domain_str = "new_operation"
+        context.operation = 'new_operation'
+        context.protocol = 'cmp'
+        context.domain_str = 'new_operation'
 
-        assert context.operation == "new_operation"
-        assert context.protocol == "cmp"
-        assert context.domain_str == "new_operation"
+        assert context.operation == 'new_operation'
+        assert context.protocol == 'cmp'
+        assert context.domain_str == 'new_operation'
 
     def test_field_count(self):
         """Test that the expected number of fields are present."""
@@ -206,9 +205,9 @@ class TestRequestContext:
     def test_to_dict_after_clear(self):
         """Test that to_dict works correctly after clear()."""
         context = RequestContext(
-            operation="test",
-            protocol="est",
-            domain_str="domain"
+            operation='test',
+            protocol='est',
+            domain_str='domain'
         )
 
         context.clear()

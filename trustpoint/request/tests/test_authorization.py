@@ -1,20 +1,20 @@
 """Tests for authorization components."""
 import pytest
 from unittest.mock import Mock
+from devices.models import DeviceModel
+from pki.models.domain import DomainModel
 
 from request.authorization import (
     AuthorizationComponent,
-    ProtocolAuthorization,
-    OperationAuthorization,
     CertificateTemplateAuthorization,
-    DomainScopeValidation,
-    ManualAuthorization,
     CompositeAuthorization,
+    DomainScopeValidation,
     EstAuthorization,
+    ManualAuthorization,
+    EstOperationAuthorization,  # Changed from OperationAuthorization
+    ProtocolAuthorization,
 )
 from request.request_context import RequestContext
-from devices.models import DeviceModel
-from pki.models.domain import DomainModel
 
 
 class TestProtocolAuthorization:
@@ -43,7 +43,7 @@ class TestProtocolAuthorization:
             auth.authorize(context)
 
         assert "Unauthorized protocol: 'invalid_protocol'" in str(exc_info.value)
-        assert "Allowed protocols: est, cmp" in str(exc_info.value)
+        assert 'Allowed protocols: est, cmp' in str(exc_info.value)
 
     def test_protocol_authorization_failure_missing_protocol(self):
         """Test protocol authorization failure with missing protocol."""
@@ -56,7 +56,7 @@ class TestProtocolAuthorization:
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert "Protocol information is missing. Authorization denied." in str(exc_info.value)
+        assert 'Protocol information is missing. Authorization denied.' in str(exc_info.value)
 
     def test_protocol_authorization_failure_empty_protocol(self):
         """Test protocol authorization failure with empty protocol string."""
@@ -69,7 +69,7 @@ class TestProtocolAuthorization:
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert "Protocol information is missing. Authorization denied." in str(exc_info.value)
+        assert 'Protocol information is missing. Authorization denied.' in str(exc_info.value)
 
     def test_protocol_authorization_single_allowed_protocol(self):
         """Test protocol authorization with single allowed protocol."""
@@ -96,13 +96,13 @@ class TestProtocolAuthorization:
         assert "Unauthorized protocol: 'EST'" in str(exc_info.value)
 
 
-class TestOperationAuthorization:
-    """Test cases for OperationAuthorization."""
+class TestEstOperationAuthorization:  # Changed from TestOperationAuthorization
+    """Test cases for EstOperationAuthorization."""
 
     def test_operation_authorization_success(self):
         """Test successful operation authorization."""
         allowed_operations = ['simpleenroll', 'simplereenroll']
-        auth = OperationAuthorization(allowed_operations)
+        auth = EstOperationAuthorization(allowed_operations)  # Changed class name
 
         context = Mock(spec=RequestContext)
         context.operation = 'simpleenroll'
@@ -113,7 +113,7 @@ class TestOperationAuthorization:
     def test_operation_authorization_failure_invalid_operation(self):
         """Test operation authorization failure with invalid operation."""
         allowed_operations = ['simpleenroll', 'simplereenroll']
-        auth = OperationAuthorization(allowed_operations)
+        auth = EstOperationAuthorization(allowed_operations)  # Changed class name
 
         context = Mock(spec=RequestContext)
         context.operation = 'invalid_operation'
@@ -126,7 +126,7 @@ class TestOperationAuthorization:
     def test_operation_authorization_failure_missing_operation(self):
         """Test operation authorization failure with missing operation."""
         allowed_operations = ['simpleenroll']
-        auth = OperationAuthorization(allowed_operations)
+        auth = EstOperationAuthorization(allowed_operations)  # Changed class name
 
         context = Mock(spec=RequestContext)
         context.operation = None
@@ -134,12 +134,12 @@ class TestOperationAuthorization:
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert "Operation information is missing. Authorization denied." in str(exc_info.value)
+        assert 'Operation information is missing. Authorization denied.' in str(exc_info.value)
 
     def test_operation_authorization_failure_empty_operation(self):
         """Test operation authorization failure with empty operation string."""
         allowed_operations = ['simpleenroll']
-        auth = OperationAuthorization(allowed_operations)
+        auth = EstOperationAuthorization(allowed_operations)  # Changed class name
 
         context = Mock(spec=RequestContext)
         context.operation = ''
@@ -147,12 +147,12 @@ class TestOperationAuthorization:
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert "Operation information is missing. Authorization denied." in str(exc_info.value)
+        assert 'Operation information is missing. Authorization denied.' in str(exc_info.value)
 
     def test_operation_authorization_single_allowed_operation(self):
         """Test operation authorization with single allowed operation."""
         allowed_operations = ['simpleenroll']
-        auth = OperationAuthorization(allowed_operations)
+        auth = EstOperationAuthorization(allowed_operations)  # Changed class name
 
         context = Mock(spec=RequestContext)
         context.operation = 'simpleenroll'
@@ -187,7 +187,7 @@ class TestCertificateTemplateAuthorization:
             auth.authorize(context)
 
         assert "Unauthorized certificate template: 'invalid_template'" in str(exc_info.value)
-        assert "Allowed templates: tls-client, tls-server" in str(exc_info.value)
+        assert 'Allowed templates: tls-client, tls-server' in str(exc_info.value)
 
     def test_certificate_template_authorization_failure_missing_template(self):
         """Test certificate template authorization failure with missing template."""
@@ -200,7 +200,7 @@ class TestCertificateTemplateAuthorization:
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert "Certificate template is missing in the context. Authorization denied." in str(exc_info.value)
+        assert 'Certificate template is missing in the context. Authorization denied.' in str(exc_info.value)
 
     def test_certificate_template_authorization_failure_empty_template(self):
         """Test certificate template authorization failure with empty template string."""
@@ -213,7 +213,7 @@ class TestCertificateTemplateAuthorization:
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert "Certificate template is missing in the context. Authorization denied." in str(exc_info.value)
+        assert 'Certificate template is missing in the context. Authorization denied.' in str(exc_info.value)
 
     def test_certificate_template_authorization_single_template(self):
         """Test certificate template authorization with single allowed template."""
@@ -276,7 +276,7 @@ class TestDomainScopeValidation:
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert "Authenticated device is missing in the context. Authorization denied." in str(exc_info.value)
+        assert 'Authenticated device is missing in the context. Authorization denied.' in str(exc_info.value)
 
     def test_domain_scope_validation_failure_missing_domain(self, domain_instance):
         """Test domain scope validation failure with missing domain."""
@@ -292,7 +292,7 @@ class TestDomainScopeValidation:
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert "Requested domain is missing in the context. Authorization denied." in str(exc_info.value)
+        assert 'Requested domain is missing in the context. Authorization denied.' in str(exc_info.value)
 
     def test_domain_scope_validation_failure_device_has_no_domain(self, domain_instance):
         """Test domain scope validation failure when device has no associated domain."""
@@ -321,7 +321,7 @@ class TestManualAuthorization:
         context = Mock(spec=RequestContext)
 
         # Should not raise an exception since authorize method is empty
-        auth.authorize(context)
+        auth.authorize(context=context)
 
 
 class TestCompositeAuthorization:
@@ -352,7 +352,7 @@ class TestCompositeAuthorization:
         auth = CompositeAuthorization()
 
         mock_component = Mock(spec=AuthorizationComponent)
-        mock_component.authorize.side_effect = ValueError("Authorization failed")
+        mock_component.authorize.side_effect = ValueError('Authorization failed')
         auth.add(mock_component)
 
         context = Mock(spec=RequestContext)
@@ -360,7 +360,7 @@ class TestCompositeAuthorization:
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert "Authorization failed" in str(exc_info.value)
+        assert 'Authorization failed' in str(exc_info.value)
         mock_component.authorize.assert_called_once_with(context)
 
     def test_composite_authorization_multiple_components_success(self):
@@ -383,7 +383,7 @@ class TestCompositeAuthorization:
         auth = CompositeAuthorization()
 
         mock_component1 = Mock(spec=AuthorizationComponent)
-        mock_component1.authorize.side_effect = ValueError("First component failed")
+        mock_component1.authorize.side_effect = ValueError('First component failed')
         mock_component2 = Mock(spec=AuthorizationComponent)
 
         auth.add(mock_component1)
@@ -394,7 +394,7 @@ class TestCompositeAuthorization:
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert "First component failed" in str(exc_info.value)
+        assert 'First component failed' in str(exc_info.value)
         mock_component1.authorize.assert_called_once_with(context)
         # Second component should not be called since first one failed
         mock_component2.authorize.assert_not_called()
@@ -405,7 +405,7 @@ class TestCompositeAuthorization:
 
         mock_component1 = Mock(spec=AuthorizationComponent)
         mock_component2 = Mock(spec=AuthorizationComponent)
-        mock_component2.authorize.side_effect = ValueError("Second component failed")
+        mock_component2.authorize.side_effect = ValueError('Second component failed')
 
         auth.add(mock_component1)
         auth.add(mock_component2)
@@ -415,7 +415,7 @@ class TestCompositeAuthorization:
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert "Second component failed" in str(exc_info.value)
+        assert 'Second component failed' in str(exc_info.value)
         mock_component1.authorize.assert_called_once_with(context)
         mock_component2.authorize.assert_called_once_with(context)
 
@@ -441,208 +441,199 @@ class TestCompositeAuthorization:
         assert len(auth.components) == 0
 
     def test_composite_authorization_remove_nonexistent_component(self):
-        """Test removing a component that doesn't exist raises ValueError."""
+        """Test removing non-existent component raises ValueError."""
         auth = CompositeAuthorization()
         mock_component = Mock(spec=AuthorizationComponent)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError) as exc_info:
             auth.remove(mock_component)
+
+        assert 'Attempted to remove non-existent authorization component' in str(exc_info.value)
 
 
 class TestEstAuthorization:
     """Test cases for EstAuthorization."""
 
     def test_est_authorization_initialization(self):
-        """Test that EstAuthorization initializes with correct components."""
+        """Test EST authorization initialization with default components."""
         auth = EstAuthorization()
-
-        # Should have 5 components: CertificateTemplate, DomainScope, Manual, Protocol, Operation
+        
+        # Should have 5 components by default
         assert len(auth.components) == 5
-
+        
         # Check component types
-        component_types = [type(component).__name__ for component in auth.components]
+        component_types = [type(comp).__name__ for comp in auth.components]
         expected_types = [
             'CertificateTemplateAuthorization',
-            'DomainScopeValidation',
+            'DomainScopeValidation', 
             'ManualAuthorization',
             'ProtocolAuthorization',
-            'OperationAuthorization'
+            'EstOperationAuthorization'
         ]
         assert component_types == expected_types
 
     def test_est_authorization_protocol_component_configuration(self):
-        """Test that EstAuthorization configures protocol component correctly."""
+        """Test that EST authorization configures protocol component correctly."""
         auth = EstAuthorization()
-
+        
         # Find the protocol authorization component
-        protocol_auth = None
+        protocol_component = None
         for component in auth.components:
             if isinstance(component, ProtocolAuthorization):
-                protocol_auth = component
+                protocol_component = component
                 break
-
-        assert protocol_auth is not None
-        assert protocol_auth.allowed_protocols == ['est']
+        
+        assert protocol_component is not None
+        assert protocol_component.allowed_protocols == ['est']
 
     def test_est_authorization_operation_component_configuration(self):
-        """Test that EstAuthorization configures operation component correctly."""
+        """Test that EST authorization configures operation component correctly."""
         auth = EstAuthorization()
-
+        
         # Find the operation authorization component
-        operation_auth = None
+        operation_component = None
         for component in auth.components:
-            if isinstance(component, OperationAuthorization):
-                operation_auth = component
+            if isinstance(component, EstOperationAuthorization):
+                operation_component = component
                 break
-
-        assert operation_auth is not None
-        assert operation_auth.allowed_operations == ['simpleenroll']
+        
+        assert operation_component is not None
+        assert operation_component.allowed_operations == ['simpleenroll', 'simplereenroll']
 
     def test_est_authorization_certificate_template_component_configuration(self):
-        """Test that EstAuthorization configures certificate template component correctly."""
+        """Test that EST authorization configures certificate template component correctly."""
         auth = EstAuthorization()
-
+        
         # Find the certificate template authorization component
-        cert_template_auth = None
+        template_component = None
         for component in auth.components:
             if isinstance(component, CertificateTemplateAuthorization):
-                cert_template_auth = component
+                template_component = component
                 break
-
-        assert cert_template_auth is not None
-        assert cert_template_auth.allowed_templates == ['tls-client']
+        
+        assert template_component is not None
+        assert template_component.allowed_templates == ['tls-client']
 
     def test_est_authorization_full_success(self, domain_credential_est_onboarding):
-        """Test full EST authorization with all components succeeding."""
+        """Test full EST authorization success."""
         auth = EstAuthorization()
-
-        domain = domain_credential_est_onboarding['domain']
-        device = domain_credential_est_onboarding['device']
-
+        
+        # Create a context that should pass all authorization checks
         context = Mock(spec=RequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
         context.certificate_template = 'tls-client'
-        context.device = device
-        context.domain = domain
-
+        context.device = Mock()
+        context.device.domain = domain_credential_est_onboarding['domain']
+        context.device.common_name = 'test-device'
+        context.domain = domain_credential_est_onboarding['domain']
+        
         # Should not raise an exception
         auth.authorize(context)
 
     def test_est_authorization_protocol_failure(self, domain_credential_est_onboarding):
         """Test EST authorization failure due to wrong protocol."""
         auth = EstAuthorization()
-
-        domain = domain_credential_est_onboarding['domain']
-        device = domain_credential_est_onboarding['device']
-
+        
         context = Mock(spec=RequestContext)
         context.protocol = 'cmp'  # Wrong protocol
         context.operation = 'simpleenroll'
         context.certificate_template = 'tls-client'
-        context.device = device
-        context.domain = domain
-
+        context.device = Mock()
+        context.device.domain = domain_credential_est_onboarding['domain']
+        context.domain = domain_credential_est_onboarding['domain']
+        
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
-
+        
         assert "Unauthorized protocol: 'cmp'" in str(exc_info.value)
 
     def test_est_authorization_operation_failure(self, domain_credential_est_onboarding):
         """Test EST authorization failure due to wrong operation."""
         auth = EstAuthorization()
-
-        domain = domain_credential_est_onboarding['domain']
-        device = domain_credential_est_onboarding['device']
-
+        
         context = Mock(spec=RequestContext)
         context.protocol = 'est'
         context.operation = 'invalid_operation'  # Wrong operation
         context.certificate_template = 'tls-client'
-        context.device = device
-        context.domain = domain
-
+        context.device = Mock()
+        context.device.domain = domain_credential_est_onboarding['domain']
+        context.domain = domain_credential_est_onboarding['domain']
+        
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
-
+        
         assert "Unauthorized operation: 'invalid_operation'" in str(exc_info.value)
 
     def test_est_authorization_certificate_template_failure(self, domain_credential_est_onboarding):
         """Test EST authorization failure due to wrong certificate template."""
         auth = EstAuthorization()
-
-        domain = domain_credential_est_onboarding['domain']
-        device = domain_credential_est_onboarding['device']
-
+        
         context = Mock(spec=RequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
-        context.certificate_template = 'tls-server'  # Wrong template
-        context.device = device
-        context.domain = domain
-
+        context.certificate_template = 'invalid_template'  # Wrong template
+        context.device = Mock()
+        context.device.domain = domain_credential_est_onboarding['domain']
+        context.domain = domain_credential_est_onboarding['domain']
+        
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
-
-        assert "Unauthorized certificate template: 'tls-server'" in str(exc_info.value)
+        
+        assert "Unauthorized certificate template: 'invalid_template'" in str(exc_info.value)
 
     def test_est_authorization_domain_scope_failure(self, domain_credential_est_onboarding):
-        """Test EST authorization failure due to domain scope validation."""
+        """Test EST authorization failure due to domain scope mismatch."""
         auth = EstAuthorization()
-
-        domain = domain_credential_est_onboarding['domain']
-        device = domain_credential_est_onboarding['device']
-
-        different_domain = Mock(spec=DomainModel)
+        
+        different_domain = Mock()
         different_domain.unique_name = 'different_domain'
-
+        
         context = Mock(spec=RequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
         context.certificate_template = 'tls-client'
-        context.device = device
-        context.domain = different_domain  # Different domain
-
+        context.device = Mock()
+        context.device.domain = different_domain  # Different domain
+        context.domain = domain_credential_est_onboarding['domain']
+        
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
-
-        assert f"Unauthorized domain: '{different_domain}'" in str(exc_info.value)
+        
+        assert f"Unauthorized domain: '{domain_credential_est_onboarding['domain']}'" in str(exc_info.value)
 
     def test_est_authorization_missing_device(self, domain_credential_est_onboarding):
-        """Test EST authorization failure with missing device."""
+        """Test EST authorization failure due to missing device."""
         auth = EstAuthorization()
-
-        domain = domain_credential_est_onboarding['domain']
-
+        
         context = Mock(spec=RequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
         context.certificate_template = 'tls-client'
         context.device = None  # Missing device
-        context.domain = domain
-
+        context.domain = domain_credential_est_onboarding['domain']
+        
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
-
-        assert "Authenticated device is missing in the context. Authorization denied." in str(exc_info.value)
+        
+        assert 'Authenticated device is missing in the context. Authorization denied.' in str(exc_info.value)
 
     def test_est_authorization_missing_domain(self, domain_credential_est_onboarding):
-        """Test EST authorization failure with missing domain."""
+        """Test EST authorization failure due to missing domain."""
         auth = EstAuthorization()
-
-        device = domain_credential_est_onboarding['device']
-
+        
         context = Mock(spec=RequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
         context.certificate_template = 'tls-client'
-        context.device = device
+        context.device = Mock()
+        context.device.domain = domain_credential_est_onboarding['domain']
         context.domain = None  # Missing domain
-
+        
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
-
-        assert "Requested domain is missing in the context. Authorization denied." in str(exc_info.value)
+        
+        assert 'Requested domain is missing in the context. Authorization denied.' in str(exc_info.value)
 
 
 class TestAuthorizationComponentInterface:
@@ -655,23 +646,20 @@ class TestAuthorizationComponentInterface:
 
     def test_authorization_component_subclass_must_implement_authorize(self):
         """Test that subclasses must implement the authorize method."""
-
-        class IncompleteAuth(AuthorizationComponent):
+        
+        class IncompleteAuthorization(AuthorizationComponent):
             pass
-
+        
         with pytest.raises(TypeError):
-            IncompleteAuth()
+            IncompleteAuthorization()
 
     def test_authorization_component_subclass_with_authorize_method(self):
         """Test that subclasses with authorize method can be instantiated."""
-
-        class CompleteAuth(AuthorizationComponent):
+        
+        class CompleteAuthorization(AuthorizationComponent):
             def authorize(self, context: RequestContext) -> None:
                 pass
-
-        auth = CompleteAuth()
+        
+        # Should not raise an exception
+        auth = CompleteAuthorization()
         assert isinstance(auth, AuthorizationComponent)
-
-        # Test that the method can be called
-        context = Mock(spec=RequestContext)
-        auth.authorize(context)

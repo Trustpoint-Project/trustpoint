@@ -1,24 +1,16 @@
 """Unit tests for authentication components."""
 import datetime
+from unittest.mock import Mock, patch
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
-from cryptography.x509.oid import NameOID
+from devices.models import IssuedCredentialModel
 
 from request.authentication import (
-    AuthenticationComponent,
-    UsernamePasswordAuthentication,
     ClientCertificateAuthentication,
-    ReenrollmentAuthentication,
-    IDevIDAuthentication,
-    CompositeAuthentication,
-    EstAuthentication
+    UsernamePasswordAuthentication,
 )
 from request.request_context import RequestContext
-from devices.models import DeviceModel, IssuedCredentialModel
-from pki.util.idevid import IDevIDAuthenticationError
 
 
 class TestUsernamePasswordAuthentication:
@@ -43,25 +35,25 @@ class TestUsernamePasswordAuthentication:
         """Test authentication with invalid password."""
         device = device_instance['device']
         self.context.est_username = device.common_name
-        self.context.est_password = "wrongpass"
+        self.context.est_password = 'wrongpass'
 
         try:
             self.auth.authenticate(self.context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Authentication failed: Invalid username or password." in str(e)
+            assert 'Authentication failed: Invalid username or password.' in str(e)
 
     def test_authenticate_invalid_username(self, device_instance):
         """Test authentication with invalid username."""
         device = device_instance['device']
-        self.context.est_username = "wronguser"
+        self.context.est_username = 'wronguser'
         self.context.est_password = device.est_password
 
         try:
             self.auth.authenticate(self.context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Authentication failed: Invalid username or password." in str(e)
+            assert 'Authentication failed: Invalid username or password.' in str(e)
 
     def test_authenticate_missing_credentials(self):
         """Test authentication with missing credentials."""
@@ -122,7 +114,7 @@ class TestClientCertificateAuthentication:
                           side_effect=IssuedCredentialModel.DoesNotExist()):
             try:
                 self.auth.authenticate(self.context)
-                assert False, "Expected ValueError to be raised"
+                assert False, 'Expected ValueError to be raised'
             except ValueError:
                 pass
 
@@ -131,9 +123,9 @@ class TestClientCertificateAuthentication:
         device = domain_credential_est_onboarding['device']
 
         invalid_cert = x509.CertificateBuilder().subject_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, "Invalid Certificate")])
+            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Invalid Certificate')])
         ).issuer_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, "Invalid Certificate")])
+            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Invalid Certificate')])
         ).public_key(
             rsa_private_key.public_key()
         ).serial_number(
@@ -148,7 +140,7 @@ class TestClientCertificateAuthentication:
 
         try:
             self.auth.authenticate(self.context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError:
             pass
 

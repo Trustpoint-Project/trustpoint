@@ -1,18 +1,17 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import Any
+
 
 class KeyGenerationComponent(ABC):
     """Abstract base class for key generation components."""
 
     @abstractmethod
-    def build_args(self, context: Dict[str, Any]) -> List[str]:
+    def build_args(self, context: dict[str, Any]) -> list[str]:
         """Build command arguments for this component."""
-        pass
 
     @abstractmethod
     def get_description(self) -> str:
         """Get human-readable description of this component."""
-        pass
 
 
 class RSAKeyGenerator(KeyGenerationComponent):
@@ -20,14 +19,14 @@ class RSAKeyGenerator(KeyGenerationComponent):
 
     def __init__(self, key_size: int = 2048):
         if key_size not in [2048, 3072, 4096]:
-            raise ValueError("RSA key size should be one of: 2048, 3072, 4096")
+            raise ValueError('RSA key size should be one of: 2048, 3072, 4096')
         self.key_size = key_size
 
-    def build_args(self, context: Dict[str, Any]) -> List[str]:
+    def build_args(self, context: dict[str, Any]) -> list[str]:
         """Build OpenSSL genrsa command arguments."""
         return ['openssl', 'genrsa']
 
-    def get_key_size_args(self) -> List[str]:
+    def get_key_size_args(self) -> list[str]:
         """Get the key size argument that should come at the end."""
         return [str(self.key_size)]
 
@@ -44,10 +43,10 @@ class ECKeyGenerator(KeyGenerationComponent):
     def __init__(self, curve_name: str = 'secp256r1'):
         valid_curves = ['secp256r1', 'sect283r1', 'sect571r1', 'secp384r1', 'secp521r1']
         if curve_name not in valid_curves:
-            raise ValueError(f"Curve must be one of: {valid_curves}")
+            raise ValueError(f'Curve must be one of: {valid_curves}')
         self.curve_name = curve_name
 
-    def build_args(self, context: Dict[str, Any]) -> List[str]:
+    def build_args(self, context: dict[str, Any]) -> list[str]:
         """Build OpenSSL ecparam command arguments."""
         return ['openssl', 'ecparam', '-name', self.curve_name, '-genkey']
 
@@ -68,18 +67,18 @@ class ECKeyGenerator(KeyGenerationComponent):
 class KeyFileOutput(KeyGenerationComponent):
     """Component for specifying the output file (-out argument)."""
 
-    def __init__(self, file_path: Optional[str] = None, auto_generate_path: bool = True):
+    def __init__(self, file_path: str | None = None, auto_generate_path: bool = True):
         self.file_path = file_path or '/tmp/key.pem'
         self.auto_generate_path = auto_generate_path
 
-    def build_args(self, context: Dict[str, Any]) -> List[str]:
+    def build_args(self, context: dict[str, Any]) -> list[str]:
         """Build -out argument with file path."""
         return ['-out', self.file_path]
 
     def get_description(self) -> str:
         if self.file_path:
-            return f"Output to {self.file_path}"
-        return "Output file specification"
+            return f'Output to {self.file_path}'
+        return 'Output file specification'
 
     def get_priority(self) -> int:
         """Output should come before the key size."""
@@ -92,14 +91,14 @@ class CompositeKeyGenerator:
     def __init__(self, name: str, description: str = None):
         self.name = name
         self.description = description or name
-        self.components: List[KeyGenerationComponent] = []
+        self.components: list[KeyGenerationComponent] = []
 
     def add_component(self, component: KeyGenerationComponent) -> 'CompositeKeyGenerator':
         """Add a component to this composite generator."""
         self.components.append(component)
         return self
 
-    def build_command(self, context: Dict[str, Any] = None) -> List[str]:
+    def build_command(self, context: dict[str, Any] = None) -> list[str]:
         """Build the complete OpenSSL command from all components."""
         if context is None:
             context = {}
@@ -123,14 +122,14 @@ class CompositeKeyGenerator:
 
         return args
 
-    def _set_key_type_in_context(self, context: Dict[str, Any]) -> None:
+    def _set_key_type_in_context(self, context: dict[str, Any]) -> None:
         """Set the key type in context based on the generator component."""
         if 'key_type' not in context:
             for component in self.components:
                 if isinstance(component, RSAKeyGenerator):
                     context['key_type'] = f'rsa-{component.key_size}'
                     break
-                elif isinstance(component, ECKeyGenerator):
+                if isinstance(component, ECKeyGenerator):
                     context['key_type'] = f'ecc-{component.curve_name}'
                     break
 

@@ -1,14 +1,7 @@
 
 """Unit tests for the HTTP request validation module."""
 import base64
-import unittest.mock as mock
 from unittest.mock import MagicMock
-
-import pytest
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import NameOID
 
 from request.http_request_validator import (
     AcceptHeaderValidation,
@@ -48,7 +41,7 @@ class TestPayloadSizeValidation:
         validator = PayloadSizeValidation(max_payload_size=1024)
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.body = b"test payload"
+        context.raw_message.body = b'test payload'
 
         # Should not raise any exception
         validator.validate(context)
@@ -61,9 +54,9 @@ class TestPayloadSizeValidation:
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Raw message is missing from the context" in str(e)
+            assert 'Raw message is missing from the context' in str(e)
 
     def test_validate_missing_body(self):
         """Test ValueError when body is missing."""
@@ -74,22 +67,22 @@ class TestPayloadSizeValidation:
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Raw message is missing body" in str(e)
+            assert 'Raw message is missing body' in str(e)
 
     def test_validate_payload_too_large(self):
         """Test ValueError when payload exceeds max size."""
         validator = PayloadSizeValidation(max_payload_size=10)
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.body = b"this payload is too large"
+        context.raw_message.body = b'this payload is too large'
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Payload size exceeds maximum allowed size" in str(e)
+            assert 'Payload size exceeds maximum allowed size' in str(e)
 
 
 class TestContentTypeValidation:
@@ -97,67 +90,67 @@ class TestContentTypeValidation:
 
     def test_init(self):
         """Test initialization with expected_content_type."""
-        validator = ContentTypeValidation(expected_content_type="application/json")
-        assert validator.expected_content_type == "application/json"
+        validator = ContentTypeValidation(expected_content_type='application/json')
+        assert validator.expected_content_type == 'application/json'
 
     def test_validate_success(self):
         """Test successful validation with correct content type."""
-        validator = ContentTypeValidation(expected_content_type="application/json")
+        validator = ContentTypeValidation(expected_content_type='application/json')
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Content-Type": "application/json"}
+        context.raw_message.headers = {'Content-Type': 'application/json'}
 
         # Should not raise any exception
         validator.validate(context)
 
     def test_validate_missing_raw_message(self):
         """Test ValueError when raw_message is None."""
-        validator = ContentTypeValidation(expected_content_type="application/json")
+        validator = ContentTypeValidation(expected_content_type='application/json')
         context = RequestContext()
         context.raw_message = None
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Raw message is missing from the context" in str(e)
+            assert 'Raw message is missing from the context' in str(e)
 
     def test_validate_missing_headers(self):
         """Test ValueError when headers are missing."""
-        validator = ContentTypeValidation(expected_content_type="application/json")
+        validator = ContentTypeValidation(expected_content_type='application/json')
         context = RequestContext()
         context.raw_message = MagicMock()
         context.raw_message.headers = None
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Raw message is missing headers" in str(e)
+            assert 'Raw message is missing headers' in str(e)
 
     def test_validate_missing_content_type(self):
         """Test ValueError when Content-Type header is missing."""
-        validator = ContentTypeValidation(expected_content_type="application/json")
+        validator = ContentTypeValidation(expected_content_type='application/json')
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Other-Header": "value"}
+        context.raw_message.headers = {'Other-Header': 'value'}
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert "Missing 'Content-Type' header" in str(e)
 
     def test_validate_invalid_content_type(self):
         """Test ValueError when Content-Type doesn't match expected."""
-        validator = ContentTypeValidation(expected_content_type="application/json")
+        validator = ContentTypeValidation(expected_content_type='application/json')
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Content-Type": "text/plain"}
+        context.raw_message.headers = {'Content-Type': 'text/plain'}
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert "Invalid 'Content-Type' header" in str(e)
 
@@ -167,77 +160,77 @@ class TestAcceptHeaderValidation:
 
     def test_init(self):
         """Test initialization with allowed_content_types list."""
-        allowed_types = ["application/json", "application/xml"]
+        allowed_types = ['application/json', 'application/xml']
         validator = AcceptHeaderValidation(allowed_content_types=allowed_types)
         assert validator.allowed_content_types == allowed_types
 
     def test_validate_success_single_type(self):
         """Test successful validation with single matching type."""
-        validator = AcceptHeaderValidation(allowed_content_types=["application/json"])
+        validator = AcceptHeaderValidation(allowed_content_types=['application/json'])
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Accept": "application/json"}
+        context.raw_message.headers = {'Accept': 'application/json'}
 
         # Should not raise any exception
         validator.validate(context)
 
     def test_validate_success_multiple_types(self):
         """Test successful validation with multiple types."""
-        validator = AcceptHeaderValidation(allowed_content_types=["application/json", "application/xml"])
+        validator = AcceptHeaderValidation(allowed_content_types=['application/json', 'application/xml'])
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Accept": "application/json, application/xml"}
+        context.raw_message.headers = {'Accept': 'application/json, application/xml'}
 
         # Should not raise any exception
         validator.validate(context)
 
     def test_validate_missing_accept_header(self):
         """Test that missing Accept header passes validation."""
-        validator = AcceptHeaderValidation(allowed_content_types=["application/json"])
+        validator = AcceptHeaderValidation(allowed_content_types=['application/json'])
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Other-Header": "value"}
+        context.raw_message.headers = {'Other-Header': 'value'}
 
         # Should not raise any exception
         validator.validate(context)
 
     def test_validate_invalid_accept_header(self):
         """Test ValueError when Accept header doesn't match allowed types."""
-        validator = AcceptHeaderValidation(allowed_content_types=["application/json"])
+        validator = AcceptHeaderValidation(allowed_content_types=['application/json'])
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Accept": "text/plain"}
+        context.raw_message.headers = {'Accept': 'text/plain'}
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert "The provided 'Accept' header" in str(e)
 
     def test_validate_missing_raw_message(self):
         """Test ValueError when raw_message is None."""
-        validator = AcceptHeaderValidation(allowed_content_types=["application/json"])
+        validator = AcceptHeaderValidation(allowed_content_types=['application/json'])
         context = RequestContext()
         context.raw_message = None
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Raw message is missing from the context" in str(e)
+            assert 'Raw message is missing from the context' in str(e)
 
     def test_validate_missing_headers(self):
         """Test ValueError when headers are missing."""
-        validator = AcceptHeaderValidation(allowed_content_types=["application/json"])
+        validator = AcceptHeaderValidation(allowed_content_types=['application/json'])
         context = RequestContext()
         context.raw_message = MagicMock()
         context.raw_message.headers = None
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Raw message is missing headers" in str(e)
+            assert 'Raw message is missing headers' in str(e)
 
 
 class TestAuthorizationHeaderValidation:
@@ -250,20 +243,20 @@ class TestAuthorizationHeaderValidation:
         context.raw_message = MagicMock()
 
         # Create valid Basic auth header
-        credentials = "username:password"
+        credentials = 'username:password'
         encoded_credentials = base64.b64encode(credentials.encode()).decode()
-        context.raw_message.headers = {"Authorization": f"Basic {encoded_credentials}"}
+        context.raw_message.headers = {'Authorization': f'Basic {encoded_credentials}'}
 
         validator.validate(context)
-        assert context.est_username == "username"
-        assert context.est_password == "password"
+        assert context.est_username == 'username'
+        assert context.est_password == 'password'
 
     def test_validate_missing_authorization(self):
         """Test that missing Authorization header passes."""
         validator = AuthorizationHeaderValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Other-Header": "value"}
+        context.raw_message.headers = {'Other-Header': 'value'}
 
         # Should not raise any exception
         validator.validate(context)
@@ -273,11 +266,11 @@ class TestAuthorizationHeaderValidation:
         validator = AuthorizationHeaderValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Authorization": "Bearer token123"}
+        context.raw_message.headers = {'Authorization': 'Bearer token123'}
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert "Authorization header must start with 'Basic'." in str(e)
 
@@ -286,11 +279,11 @@ class TestAuthorizationHeaderValidation:
         validator = AuthorizationHeaderValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Authorization": "Basic invalid_base64!!!"}
+        context.raw_message.headers = {'Authorization': 'Basic invalid_base64!!!'}
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert "Malformed 'Authorization' header credentials" in str(e)
 
@@ -301,13 +294,13 @@ class TestAuthorizationHeaderValidation:
         context.raw_message = MagicMock()
 
         # Valid base64 but no colon separator
-        credentials = "usernamepassword"
+        credentials = 'usernamepassword'
         encoded_credentials = base64.b64encode(credentials.encode()).decode()
-        context.raw_message.headers = {"Authorization": f"Basic {encoded_credentials}"}
+        context.raw_message.headers = {'Authorization': f'Basic {encoded_credentials}'}
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert "Malformed 'Authorization' header credentials" in str(e)
 
@@ -319,9 +312,9 @@ class TestAuthorizationHeaderValidation:
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Raw message is missing from the context" in str(e)
+            assert 'Raw message is missing from the context' in str(e)
 
     def test_validate_missing_headers(self):
         """Test ValueError when headers are missing."""
@@ -332,9 +325,9 @@ class TestAuthorizationHeaderValidation:
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Raw message is missing headers" in str(e)
+            assert 'Raw message is missing headers' in str(e)
 
 
 class TestClientCertificateValidation:
@@ -342,13 +335,13 @@ class TestClientCertificateValidation:
 
     def test_validate_success(self, domain_credential_est_onboarding):
         """Test successful validation with valid PEM certificate."""
-        domain_credential = domain_credential_est_onboarding.get("domain_credential")
+        domain_credential = domain_credential_est_onboarding.get('domain_credential')
         cert_pem = domain_credential.credential.certificate.cert_pem
 
         validator = ClientCertificateValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"SSL_CLIENT_CERT": cert_pem}
+        context.raw_message.headers = {'SSL_CLIENT_CERT': cert_pem}
 
         validator.validate(context)
         assert context.client_certificate is not None
@@ -358,7 +351,7 @@ class TestClientCertificateValidation:
         validator = ClientCertificateValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Other-Header": "value"}
+        context.raw_message.headers = {'Other-Header': 'value'}
 
         validator.validate(context)
 
@@ -367,13 +360,13 @@ class TestClientCertificateValidation:
         validator = ClientCertificateValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"SSL_CLIENT_CERT": "invalid cert"}
+        context.raw_message.headers = {'SSL_CLIENT_CERT': 'invalid cert'}
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Invalid SSL_CLIENT_CERT header" in str(e)
+            assert 'Invalid SSL_CLIENT_CERT header' in str(e)
 
     def test_validate_missing_raw_message(self):
         """Test ValueError when raw_message is None."""
@@ -383,9 +376,9 @@ class TestClientCertificateValidation:
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Raw message is missing from the context" in str(e)
+            assert 'Raw message is missing from the context' in str(e)
 
     def test_validate_missing_headers(self):
         """Test ValueError when headers are missing."""
@@ -396,9 +389,9 @@ class TestClientCertificateValidation:
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Raw message is missing headers" in str(e)
+            assert 'Raw message is missing headers' in str(e)
 
 
 class TestIntermediateCertificatesValidation:
@@ -406,13 +399,13 @@ class TestIntermediateCertificatesValidation:
 
     def test_validate_success_single_cert(self, domain_credential_est_onboarding):
         """Test successful validation with single intermediate cert."""
-        domain_credential = domain_credential_est_onboarding.get("domain_credential")
+        domain_credential = domain_credential_est_onboarding.get('domain_credential')
         cert_pem = domain_credential.credential.certificate.cert_pem
 
         validator = IntermediateCertificatesValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.META = {"SSL_CLIENT_CERT_CHAIN_0": cert_pem}
+        context.raw_message.META = {'SSL_CLIENT_CERT_CHAIN_0': cert_pem}
 
         validator.validate(context)
         assert context.client_intermediate_certificate is not None
@@ -420,15 +413,15 @@ class TestIntermediateCertificatesValidation:
 
     def test_validate_success_multiple_certs(self, domain_credential_est_onboarding):
         """Test successful validation with multiple intermediate certs."""
-        domain_credential = domain_credential_est_onboarding.get("domain_credential")
+        domain_credential = domain_credential_est_onboarding.get('domain_credential')
         cert_pem = domain_credential.credential.certificate.cert_pem
 
         validator = IntermediateCertificatesValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
         context.raw_message.META = {
-            "SSL_CLIENT_CERT_CHAIN_0": cert_pem,
-            "SSL_CLIENT_CERT_CHAIN_1": cert_pem,
+            'SSL_CLIENT_CERT_CHAIN_0': cert_pem,
+            'SSL_CLIENT_CERT_CHAIN_1': cert_pem,
         }
 
         validator.validate(context)
@@ -450,13 +443,13 @@ class TestIntermediateCertificatesValidation:
         validator = IntermediateCertificatesValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.META = {"SSL_CLIENT_CERT_CHAIN_0": "invalid cert"}
+        context.raw_message.META = {'SSL_CLIENT_CERT_CHAIN_0': 'invalid cert'}
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Invalid SSL_CLIENT_CERT_CHAIN_0 PEM" in str(e)
+            assert 'Invalid SSL_CLIENT_CERT_CHAIN_0 PEM' in str(e)
 
     def test_validate_missing_raw_message(self):
         """Test ValueError when raw_message is None."""
@@ -466,9 +459,9 @@ class TestIntermediateCertificatesValidation:
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Raw message is missing from the context" in str(e)
+            assert 'Raw message is missing from the context' in str(e)
 
 
 class TestContentTransferEncodingValidation:
@@ -479,8 +472,8 @@ class TestContentTransferEncodingValidation:
         validator = ContentTransferEncodingValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Content-Transfer-Encoding": "base64"}
-        test_content = "Hello World"
+        context.raw_message.headers = {'Content-Transfer-Encoding': 'base64'}
+        test_content = 'Hello World'
         encoded_content = base64.b64encode(test_content.encode()).decode()
         context.raw_message.body = encoded_content
 
@@ -492,8 +485,8 @@ class TestContentTransferEncodingValidation:
         validator = ContentTransferEncodingValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Other-Header": "value"}
-        context.raw_message.body = b"test content"
+        context.raw_message.headers = {'Other-Header': 'value'}
+        context.raw_message.body = b'test content'
 
         # Should not raise any exception
         validator.validate(context)
@@ -503,8 +496,8 @@ class TestContentTransferEncodingValidation:
         validator = ContentTransferEncodingValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Content-Transfer-Encoding": "binary"}
-        context.raw_message.body = b"test content"
+        context.raw_message.headers = {'Content-Transfer-Encoding': 'binary'}
+        context.raw_message.body = b'test content'
 
         # Should not raise any exception
         validator.validate(context)
@@ -514,14 +507,14 @@ class TestContentTransferEncodingValidation:
         validator = ContentTransferEncodingValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Content-Transfer-Encoding": "base64"}
-        context.raw_message.body = "invalid base64 content with invalid characters: @#$%^&*()"
+        context.raw_message.headers = {'Content-Transfer-Encoding': 'base64'}
+        context.raw_message.body = 'invalid base64 content with invalid characters: @#$%^&*()'
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Invalid base64 encoding in message" in str(e)
+            assert 'Invalid base64 encoding in message' in str(e)
 
     def test_validate_missing_raw_message(self):
         """Test ValueError when raw_message is None."""
@@ -531,9 +524,9 @@ class TestContentTransferEncodingValidation:
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Raw message is missing from the context" in str(e)
+            assert 'Raw message is missing from the context' in str(e)
 
     def test_validate_missing_headers(self):
         """Test ValueError when headers are missing."""
@@ -544,23 +537,23 @@ class TestContentTransferEncodingValidation:
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Raw message is missing headers" in str(e)
+            assert 'Raw message is missing headers' in str(e)
 
     def test_validate_missing_body(self):
         """Test ValueError when body is missing."""
         validator = ContentTransferEncodingValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {"Content-Transfer-Encoding": "base64"}
+        context.raw_message.headers = {'Content-Transfer-Encoding': 'base64'}
         context.raw_message.body = None
 
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Raw message is missing body" in str(e)
+            assert 'Raw message is missing body' in str(e)
 
 
 class TestCompositeValidation:
@@ -608,16 +601,16 @@ class TestCompositeValidation:
         """Test that component failure propagates."""
         validator = CompositeValidation()
         mock_component = MagicMock()
-        mock_component.validate.side_effect = ValueError("Component failed")
+        mock_component.validate.side_effect = ValueError('Component failed')
 
         validator.add(mock_component)
 
         context = RequestContext()
         try:
             validator.validate(context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Component failed" in str(e)
+            assert 'Component failed' in str(e)
 
 
 class TestCmpHttpRequestValidator:
@@ -637,8 +630,8 @@ class TestCmpHttpRequestValidator:
         validator = CmpHttpRequestValidator()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.body = b"test cmp payload"
-        context.raw_message.headers = {"Content-Type": "application/pkixcmp"}
+        context.raw_message.body = b'test cmp payload'
+        context.raw_message.headers = {'Content-Type': 'application/pkixcmp'}
 
         # Should not raise any exception
         validator.validate(context)
@@ -664,10 +657,10 @@ class TestEstHttpRequestValidator:
         validator = EstHttpRequestValidator()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.body = b"test est payload"
+        context.raw_message.body = b'test est payload'
         context.raw_message.headers = {
-            "Content-Type": "application/pkcs10",
-            "Accept": "application/pkcs7-mime"
+            'Content-Type': 'application/pkcs10',
+            'Accept': 'application/pkcs7-mime'
         }
         context.raw_message.META = {}
 

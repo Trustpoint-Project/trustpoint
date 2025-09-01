@@ -1,6 +1,8 @@
 """Provides the `AuthorizationComponent` class for authorization logic."""
 from abc import ABC, abstractmethod
 
+from pyasn1_modules.rfc4210 import PKIMessage
+
 from request.request_context import RequestContext
 from trustpoint.logger import LoggerMixin
 
@@ -25,7 +27,7 @@ class ProtocolAuthorization(AuthorizationComponent, LoggerMixin):
 
         if not protocol:
             error_message = 'Protocol information is missing. Authorization denied.'
-            self.logger.warning("Protocol authorization failed: Protocol information is missing")
+            self.logger.warning('Protocol authorization failed: Protocol information is missing')
             raise ValueError(error_message)
 
         if protocol not in self.allowed_protocols:
@@ -34,10 +36,12 @@ class ProtocolAuthorization(AuthorizationComponent, LoggerMixin):
                 f"Allowed protocols: {', '.join(self.allowed_protocols)}."
             )
             self.logger.warning(
-                f"Protocol authorization failed: {protocol} not in allowed protocols {self.allowed_protocols}")
+                'Protocol authorization failed: %(protocol)s not in allowed protocols %(allowed_protocols)s',
+                extra={'protocol': protocol, 'allowed_protocols': self.allowed_protocols})
             raise ValueError(error_message)
 
-        self.logger.debug(f"Protocol authorization successful for protocol: {protocol}")
+        self.logger.debug('Protocol authorization successful for protocol: %(protocol)s',
+                          extra={'protocol': protocol})
 
 class EstOperationAuthorization(AuthorizationComponent, LoggerMixin):
     """Ensures the request is authorized for the specified operation."""
@@ -52,7 +56,7 @@ class EstOperationAuthorization(AuthorizationComponent, LoggerMixin):
 
         if not operation:
             error_message = 'Operation information is missing. Authorization denied.'
-            self.logger.warning("Operation authorization failed: Operation information is missing")
+            self.logger.warning('Operation authorization failed: Operation information is missing')
             raise ValueError(error_message)
 
         if operation not in self.allowed_operations:
@@ -60,10 +64,13 @@ class EstOperationAuthorization(AuthorizationComponent, LoggerMixin):
                 f"Unauthorized operation: '{operation}'. "
                 f"Allowed operations: {', '.join(self.allowed_operations)}."
             )
-            self.logger.warning(f"Operation authorization failed: {operation} not in allowed operations {self.allowed_operations}")
+            self.logger.warning(
+                'Operation authorization failed: %(operation)s not in allowed operations %(allowed_operations)s',
+                extra={'operation': operation, 'allowed_operations': self.allowed_operations})
             raise ValueError(error_message)
 
-        self.logger.debug(f"Operation authorization successful for operation: {operation}")
+        self.logger.debug('Operation authorization successful for operation: %(operation)s',
+                          extra={'operation': operation})
 
 class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
     """Ensures the request is authorized for the specified operation."""
@@ -78,7 +85,7 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
 
         if not operation:
             error_message = 'Operation information is missing. Authorization denied.'
-            self.logger.warning("Operation authorization failed: Operation information is missing")
+            self.logger.warning('Operation authorization failed: Operation information is missing')
             raise ValueError(error_message)
 
         if operation not in self.allowed_operations:
@@ -86,24 +93,27 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
                 f"Unauthorized operation: '{operation}'. "
                 f"Allowed operations: {', '.join(self.allowed_operations)}."
             )
-            self.logger.warning(f"Operation authorization failed: {operation} not in allowed operations {self.allowed_operations}")
+            self.logger.warning(
+                'Operation authorization failed: %(operation)s not in allowed operations %(allowed_operations)s',
+                extra={'operation': operation, 'allowed_operations': self.allowed_operations})
             raise ValueError(error_message)
 
         body_type = context.parsed_message['body'].getName()
 
         if context.operation == 'initialization' and body_type == 'ir':
             self._authorize_asn1_body(context.parsed_message, 'ir')
-            self.logger.info("CMP body type validation successful: IR body extracted")
+            self.logger.info('CMP body type validation successful: IR body extracted')
         elif context.operation == 'certification' and body_type == 'cr':
             self._authorize_asn1_body(context.parsed_message, 'cr')
-            self.logger.info("CMP body type validation successful: CR body extracted")
+            self.logger.info('CMP body type validation successful: CR body extracted')
         else:
             err_msg = f'Expected CMP {context.operation} body, but got CMP {body_type.upper()} body.'
             raise ValueError(err_msg)
 
-        self.logger.debug(f"Operation authorization successful for operation: {operation}")
+        self.logger.debug('Operation authorization successful for operation: %(operation)s',
+                          extra={'operation': operation})
 
-    def _authorize_asn1_body(self, serialized_pyasn1_message, expected_body_type: str) -> None:
+    def _authorize_asn1_body(self, serialized_pyasn1_message: PKIMessage, expected_body_type: str) -> None:
         """Extract and validate the specified body type from the CMP message.
 
         Args:
@@ -133,7 +143,7 @@ class CertificateTemplateAuthorization(AuthorizationComponent, LoggerMixin):
 
         if not requested_template:
             error_message = 'Certificate template is missing in the context. Authorization denied.'
-            self.logger.warning("Certificate template authorization failed: Template information is missing")
+            self.logger.warning('Certificate template authorization failed: Template information is missing')
             raise ValueError(error_message)
 
         if requested_template not in self.allowed_templates:
@@ -142,10 +152,17 @@ class CertificateTemplateAuthorization(AuthorizationComponent, LoggerMixin):
                 f"Allowed templates: {', '.join(self.allowed_templates)}."
             )
             self.logger.warning(
-                f"Certificate template authorization failed: {requested_template} not in allowed templates {self.allowed_templates}")
+                (
+                    'Certificate template authorization failed: %(requested_template)s not in '
+                    'allowed templates %(allowed_templates)s'
+                ),
+                extra={'requested_template': requested_template, 'allowed_templates': self.allowed_templates})
             raise ValueError(error_message)
 
-        self.logger.debug(f"Certificate template authorization successful for template: {requested_template}")
+        self.logger.debug(
+            'Certificate template authorization successful for template: %(template)s',
+            extra={'template': requested_template}
+        )
 
 
 class DomainScopeValidation(AuthorizationComponent, LoggerMixin):
@@ -158,12 +175,12 @@ class DomainScopeValidation(AuthorizationComponent, LoggerMixin):
 
         if not authenticated_device:
             error_message = 'Authenticated device is missing in the context. Authorization denied.'
-            self.logger.warning("Domain scope validation failed: Authenticated device is missing")
+            self.logger.warning('Domain scope validation failed: Authenticated device is missing')
             raise ValueError(error_message)
 
         if not requested_domain:
             error_message = 'Requested domain is missing in the context. Authorization denied.'
-            self.logger.warning("Domain scope validation failed: Requested domain is missing")
+            self.logger.warning('Domain scope validation failed: Requested domain is missing')
             raise ValueError(error_message)
 
         device_domain = authenticated_device.domain
@@ -174,13 +191,14 @@ class DomainScopeValidation(AuthorizationComponent, LoggerMixin):
                 f"Device domain: '{device_domain}'."
             )
             self.logger.warning(
-                f"Domain scope validation failed: Device domain {device_domain} "
-                f"doesn't match requested domain {requested_domain}")
+                "Domain scope validation failed: Device domain %(device_domain)s "
+                "doesn't match requested domain %(requested_domain)s",
+                extra={'device_domain': device_domain, 'requested_domain': requested_domain})
             raise ValueError(error_message)
 
         self.logger.debug(
-            f"Domain scope validation successful: Device {authenticated_device.common_name} "
-            f"authorized for domain {requested_domain}")
+            'Domain scope validation successful: Device %(device_name)s authorized for domain %(domain_name)s',
+            extra={'device_name': authenticated_device.common_name, 'domain_name': requested_domain})
 
 
 class ManualAuthorization(AuthorizationComponent, LoggerMixin):
@@ -188,7 +206,8 @@ class ManualAuthorization(AuthorizationComponent, LoggerMixin):
 
     def authorize(self, context: RequestContext) -> None:
         """Authorize the request based on manual authorization."""
-        self.logger.debug("Manual authorization check passed (placeholder implementation)")
+        del context
+        self.logger.debug('Manual authorization check passed (placeholder implementation)')
 
 
 
@@ -207,39 +226,60 @@ class CompositeAuthorization(AuthorizationComponent, LoggerMixin):
         """Remove an authorization component from the composite."""
         if component in self.components:
             self.components.remove(component)
-            self.logger.debug(f"Removed authorization component: {component.__class__.__name__}")
+            self.logger.debug('Removed authorization component', extra={'component_name': component.__class__.__name__})
         else:
-            error_message = f"Attempted to remove non-existent authorization component: {component.__class__.__name__}"
+            error_message = f'Attempted to remove non-existent authorization component: {component.__class__.__name__}'
             self.logger.warning(error_message)
             raise ValueError(error_message)
 
     def authorize(self, context: RequestContext) -> None:
         """Iterate through all child authorization components and execute their authorization logic."""
-        self.logger.debug(f"Starting composite authorization with {len(self.components)} components")
+        self.logger.debug('Starting composite authorization with %(component_count)d components',
+                          extra={'component_count': len(self.components)})
 
         for i, component in enumerate(self.components):
             try:
                 component.authorize(context)
-                self.logger.debug(f"Authorization component {component.__class__.__name__} passed")
+                self.logger.debug('Authorization component passed',
+                                  extra={'component_name': component.__class__.__name__})
             except ValueError as e:
-                error_message = f"{component.__class__.__name__}: {e}"
-                self.logger.warning(f"Authorization component {component.__class__.__name__} failed: {e}")
-                self.logger.error(
-                    f"Composite authorization failed at component {i + 1}/{len(self.components)}: {component.__class__.__name__}")
+                error_message = f'{component.__class__.__name__}: {e}'
+                self.logger.warning('Authorization component failed',
+                                    extra={'component_name': component.__class__.__name__, 'error_message': str(e)})
+                self.logger.exception(
+                    (
+                        'Composite authorization failed at component '
+                        '%(component_index)d/%(total_components)d: %(component_name)s'
+                    ),
+                    extra={'component_index': i + 1,
+                           'total_components': len(self.components),
+                           'component_name': component.__class__.__name__})
                 raise ValueError(error_message) from e
             except Exception as e:
-                error_message = f"Unexpected error in {component.__class__.__name__}: {e}"
-                self.logger.error(f"Unexpected error in authorization component {component.__class__.__name__}: {e}")
-                self.logger.error(
-                    f"Composite authorization failed at component {i + 1}/{len(self.components)}: {component.__class__.__name__}")
+                error_message = f'Unexpected error in {component.__class__.__name__}: {e}'
+                self.logger.exception(
+                    'Unexpected error in authorization component %(component_name)s: %(error_message)s',
+                    extra={'component_name': component.__class__.__name__, 'error_message': str(e)}
+                )
+                self.logger.exception(
+                    (
+                    'Composite authorization failed at component ',
+                    '%(component_index)d/%(total_components)d: %(component_name)s',
+                    ),
+                    extra={'component_index': i + 1,
+                           'total_components': len(self.components),
+                           'component_name': component.__class__.__name__})
                 raise ValueError(error_message) from e
 
-        self.logger.info(f"Composite authorization successful. All {len(self.components)} components passed")
+        self.logger.info(
+            'Composite authorization successful. All %(component_count)d components passed',
+            extra={'component_count': len(self.components)}
+        )
 
 
 class EstAuthorization(CompositeAuthorization):
     """Composite authorization handler for EST requests."""
-    def __init__(self, allowed_templates: list[str] = None, allowed_operations: list[str] = None) -> None:
+    def __init__(self, allowed_templates: list[str] | None = None, allowed_operations: list[str] | None = None) -> None:
         """Initialize the composite authorization handler with the default set of components.
 
         Args:
@@ -262,14 +302,13 @@ class EstAuthorization(CompositeAuthorization):
 
 class CmpAuthorization(CompositeAuthorization):
     """Composite authorization handler for EST requests."""
-    def __init__(self, allowed_templates: list[str] = None, allowed_operations: list[str] = None) -> None:
+    def __init__(self, allowed_templates: list[str] | None = None, allowed_operations: list[str] | None = None) -> None:
         """Initialize the composite authorization handler with the default set of components.
 
         Args:
             allowed_templates: List of allowed certificate templates. Defaults to ['tls-client'] if not provided.
             allowed_operations: List of allowed CMP operations. Defaults to ['cr', 'ir'] if not provided.
         """
-
         super().__init__()
 
         if allowed_templates is None:

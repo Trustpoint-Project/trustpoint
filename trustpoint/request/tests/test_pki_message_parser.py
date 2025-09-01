@@ -1,26 +1,23 @@
 """Unit tests for PKI message parser components."""
-import base64
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives import hashes
-from django.http import HttpResponse
-from pyasn1.codec.ber import decoder
-from pyasn1_modules import rfc4210
+from cryptography.hazmat.primitives.asymmetric import rsa
+from pki.models import DomainModel
 
 from request.pki_message_parser import (
-    EstPkiMessageParsing,
-    EstCsrSignatureVerification,
-    DomainParsing,
     CertTemplateParsing,
+    CmpMessageParser,
     CmpPkiMessageParsing,
     CompositeParsing,
-    CmpMessageParser,
+    DomainParsing,
+    EstCsrSignatureVerification,
     EstMessageParser,
+    EstPkiMessageParsing,
 )
 from request.request_context import RequestContext
-from pki.models import DomainModel
 
 
 class TestEstPkiMessageParsing:
@@ -91,7 +88,7 @@ class TestEstPkiMessageParsing:
 
         try:
             parser.parse(mock_context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert 'Raw message is missing from the context.' in str(e)
 
@@ -106,7 +103,7 @@ class TestEstPkiMessageParsing:
 
         try:
             parser.parse(mock_context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert 'Raw message is missing body.' in str(e)
 
@@ -121,9 +118,9 @@ class TestEstPkiMessageParsing:
 
         try:
             parser.parse(mock_context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert "Failed to parse the CSR." in str(e)
+            assert 'Failed to parse the CSR.' in str(e)
 
     def test_parse_exception_handling(self):
         """Test handling of parsing exceptions."""
@@ -137,7 +134,7 @@ class TestEstPkiMessageParsing:
         with patch('request.pki_message_parser.x509.load_pem_x509_csr', side_effect=Exception('Parse error')):
             try:
                 parser.parse(mock_context)
-                assert False, "Expected ValueError to be raised"
+                assert False, 'Expected ValueError to be raised'
             except ValueError as e:
                 assert 'Failed to parse the CSR.' in str(e)
 
@@ -164,7 +161,7 @@ class TestEstCsrSignatureVerification:
 
         try:
             verifier.parse(mock_context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert 'CSR not found in the parsing context.' in str(e)
 
@@ -179,7 +176,7 @@ class TestEstCsrSignatureVerification:
 
         try:
             verifier.parse(mock_context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert 'CSR does not contain a signature hash algorithm.' in str(e)
 
@@ -198,7 +195,7 @@ class TestEstCsrSignatureVerification:
 
         try:
             verifier.parse(mock_context)
-            assert False, "Expected TypeError to be raised"
+            assert False, 'Expected TypeError to be raised'
         except TypeError as e:
             assert 'Unsupported public key type for CSR signature verification.' in str(e)
 
@@ -222,7 +219,7 @@ class TestEstCsrSignatureVerification:
         with patch('request.pki_message_parser.padding.PKCS1v15'):
             try:
                 verifier.parse(mock_context)
-                assert False, "Expected ValueError to be raised"
+                assert False, 'Expected ValueError to be raised'
             except ValueError as e:
                 assert 'Failed to verify the CSR signature.' in str(e)
 
@@ -252,7 +249,7 @@ class TestDomainParsing:
 
         try:
             parser.parse(mock_context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert 'Domain is missing in the request context.' in str(e)
 
@@ -278,7 +275,7 @@ class TestDomainParsing:
                           side_effect=ValueError("Domain 'missing.domain.com' does not exist.")):
             try:
                 parser.parse(mock_context)
-                assert False, "Expected ValueError to be raised"
+                assert False, 'Expected ValueError to be raised'
             except ValueError as e:
                 assert "Domain 'missing.domain.com' does not exist." in str(e)
 
@@ -332,7 +329,7 @@ class TestCertTemplateParsing:
 
         try:
             parser.parse(mock_context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert 'Certificate template is missing in the request context.' in str(e)
 
@@ -364,7 +361,7 @@ class TestCmpPkiMessageParsing:
 
         try:
             parser.parse(mock_context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert 'Raw message is missing from the context.' in str(e)
 
@@ -379,7 +376,7 @@ class TestCmpPkiMessageParsing:
 
         try:
             parser.parse(mock_context)
-            assert False, "Expected ValueError to be raised"
+            assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert 'Raw message is missing body.' in str(e)
 
@@ -395,7 +392,7 @@ class TestCmpPkiMessageParsing:
         with patch('request.pki_message_parser.decoder.decode', side_effect=ValueError('Decode error')):
             try:
                 parser.parse(mock_context)
-                assert False, "Expected ValueError to be raised"
+                assert False, 'Expected ValueError to be raised'
             except ValueError as e:
                 assert 'Failed to parse the CMP message. It seems to be corrupted.' in str(e)
 
@@ -411,7 +408,7 @@ class TestCmpPkiMessageParsing:
         with patch('request.pki_message_parser.decoder.decode', side_effect=TypeError('Type error')):
             try:
                 parser.parse(mock_context)
-                assert False, "Expected ValueError to be raised"
+                assert False, 'Expected ValueError to be raised'
             except ValueError as e:
                 assert 'Failed to parse the CMP message. It seems to be corrupted.' in str(e)
 
@@ -522,7 +519,7 @@ class TestEstMessageParser:
                 patch.object(parser.components[3], 'parse') as mock_parse4:
             try:
                 parser.parse(mock_context)
-                assert False, "Expected ValueError to be raised"
+                assert False, 'Expected ValueError to be raised'
             except ValueError as e:
                 assert 'Test error' in str(e)
 
