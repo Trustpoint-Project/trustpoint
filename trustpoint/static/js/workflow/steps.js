@@ -1,62 +1,85 @@
 import {
-  state, addStep, removeStep, updateStepType, updateStepParam,
+  state, addStep, removeStep, updateStepType, updateStepParam, moveStep,
 } from './state.js';
 
-// minimal styles for chips (one-time)
-let stylesInjected = false;
-function injectStyles() {
-  if (stylesInjected) return;
-  stylesInjected = true;
+// Minimal styles for drag affordance (inserted once)
+let _stylesInjected = false;
+function injectStylesOnce() {
+  if (_stylesInjected) return;
+  _stylesInjected = true;
   const style = document.createElement('style');
   style.textContent = `
-    .chip-input { min-height: 2.375rem; display:flex; align-items:center; gap:.35rem; flex-wrap:wrap; padding:.375rem .5rem; border:1px solid var(--bs-border-color, #ced4da); border-radius:.375rem; background:#fff; }
-    .chip-input:focus-within { outline: 2px solid rgba(13,110,253,.2); }
-    .chip-input input { border:none; outline:none; min-width:12ch; flex:1 0 120px; padding:.25rem; }
-    .chip { display:inline-flex; align-items:center; gap:.35rem; border-radius:999px; padding:.15rem .5rem; background:#e9ecef; }
-    .chip .remove { border:none; background:transparent; cursor:pointer; font-size:1rem; line-height:1; padding:0 .1rem; opacity:.6; }
-    .chip .remove:hover { opacity:1; }
+    .ww-step-card { border-radius:.6rem; border:1px solid var(--bs-border-color,#dee2e6); }
+    .ww-step-header { background: var(--bs-light,#f8f9fa); border-radius:.5rem; padding:.5rem .75rem; }
+    .ww-drag-handle { cursor: grab; user-select:none; font-size:1.1rem; opacity:.7; }
+    .ww-dragging { opacity:.6; }
+    .ww-drop-indicator-top { box-shadow: 0 -2px 0 0 var(--bs-primary,#0d6efd) inset; }
+    .ww-drop-indicator-bottom { box-shadow: 0 2px 0 0 var(--bs-primary,#0d6efd) inset; }
   `;
   document.head.appendChild(style);
 }
 
 export function renderStepsUI({containerEl, addBtnEl, onChange}) {
-  injectStyles();
+  injectStylesOnce();
 
   containerEl.textContent = '';
   const frag = document.createDocumentFragment();
-  state.steps.forEach(step => frag.appendChild(stepCard(step, {containerEl, addBtnEl, onChange})));
+  state.steps.forEach((step, idx) => frag.appendChild(stepCard(step, idx, {containerEl, addBtnEl, onChange})));
   containerEl.appendChild(frag);
 
+  // Add new step
   addBtnEl.onclick = () => {
     addStep('Approval', {});
     renderStepsUI({containerEl, addBtnEl, onChange});
     onChange();
   };
+
+  // Enable drag/drop
+  enableDnD(containerEl, onChange);
 }
 
-function stepCard(step, ctx) {
+function stepCard(step, displayIndex, ctx) {
   const { containerEl, addBtnEl, onChange } = ctx;
 
   const card = document.createElement('div');
-  card.className = 'card mb-2 p-2';
+  card.className = 'card ww-step-card mb-2 p-2';
+  card.setAttribute('draggable', 'true');
+  card.dataset.stepId = String(step.id);
 
+  // Header with label + controls
   const header = document.createElement('div');
-  header.className = 'd-flex justify-content-between align-items-center mb-2';
-  header.innerHTML = `<strong>Step ${step.id}</strong>`;
-  console.log(step);
+  header.className = 'ww-step-header d-flex justify-content-between align-items-center mb-2';
+
+  // Left: drag handle + title (Step N • Type)
+  const left = document.createElement('div');
+  left.className = 'd-flex align-items-center gap-2';
+  const grip = document.createElement('span');
+  grip.className = 'ww-drag-handle';
+  grip.title = 'Drag to reorder';
+  grip.textContent = '⋮⋮';
+  const title = document.createElement('strong');
+  title.textContent = `Step ${displayIndex + 1} • ${step.type}`;
+  left.appendChild(grip);
+  left.appendChild(title);
+
+  // Right: remove button
   const rm = document.createElement('button');
-  rm.type = 'button'; rm.className = 'btn-close';
+  rm.type = 'button';
+  rm.className = 'btn-close';
   rm.onclick = () => {
     removeStep(step.id);
     renderStepsUI({containerEl, addBtnEl, onChange});
     onChange();
   };
+
+  header.appendChild(left);
   header.appendChild(rm);
   card.appendChild(header);
 
+  // Type selector
   const sel = document.createElement('select');
   sel.className = 'form-select form-select-sm mb-2';
-  ['Approval','Email','Webhook','Timer','Condition','IssueCertificate'].forEach(t => sel.add(new Option(t, t)));
+  ['Approval','Email','Webhook','Timer','Condition'].forEach(t => sel.add(new Option(t, t)));
   sel.value = step.type;
   sel.onchange = () => {
     updateStepType(step.id, sel.value);
@@ -65,11 +88,64 @@ function stepCard(step, ctx) {
   };
   card.appendChild(sel);
 
+  // Params area
   const paramsDiv = document.createElement('div');
   card.appendChild(paramsDiv);
-
   renderParams(step, paramsDiv, {containerEl, addBtnEl, onChange});
+
   return card;
+}
+
+function enableDnD(containerEl, onChange) {
+  let dragId = null;
+
+  containerEl.querySelectorAll('[draggable="true"]').forEach(card => {
+    card.ondragstart = (e) => {
+      dragId = Number(card.dataset.stepId);
+      card.classList.add('ww-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', String(dragId)); } catch {}
+    };
+    card.ondragend = () => {
+      card.classList.remove('ww-dragging', 'ww-drop-indicator-top', 'ww-drop-indicator-bottom');
+      dragId = null;
+    };
+    card.ondragover = (e) => {
+      if (!dragId) return;
+      e.preventDefault(); // allow drop
+      const rect = card.getBoundingClientRect();
+      const before = (e.clientY - rect.top) < rect.height / 2;
+      card.classList.toggle('ww-drop-indicator-top', before);
+      card.classList.toggle('ww-drop-indicator-bottom', !before);
+    };
+    card.ondragleave = () => {
+      card.classList.remove('ww-drop-indicator-top', 'ww-drop-indicator-bottom');
+    };
+    card.ondrop = (e) => {
+      e.preventDefault();
+      card.classList.remove('ww-drop-indicator-top', 'ww-drop-indicator-bottom');
+      if (!dragId) return;
+
+      const targetId = Number(card.dataset.stepId);
+      if (dragId === targetId) return;
+
+      const steps = state.steps;
+      const fromIndex = steps.findIndex(s => s.id === dragId);
+      const toIndexBase = steps.findIndex(s => s.id === targetId);
+
+      // Insert before/after depending on drop position
+      const rect = card.getBoundingClientRect();
+      const before = (e.clientY - rect.top) < rect.height / 2;
+      let toIndex = toIndexBase + (before ? 0 : 1);
+
+      // If moving forward and dropping after, account for removal shift
+      moveStep(dragId, toIndex > fromIndex ? toIndex - 1 : toIndex);
+
+      // Re-render and notify
+      renderStepsUI({containerEl, addBtnEl: document.getElementById('add-step-btn'), onChange});
+      onChange();
+    };
+  });
 }
 
 function renderParams(step, container, ctx) {
@@ -92,7 +168,6 @@ function renderParams(step, container, ctx) {
     ],
     Timer: [{ name:'delaySecs', label:'Delay (sec)', type:'number' }],
     Condition: [{ name:'expression', label:'Condition (JS expr)', type:'text' }],
-    IssueCertificate: [],
   }[step.type] || [];
 
   defs.forEach(def => {
@@ -122,16 +197,16 @@ function renderParams(step, container, ctx) {
   });
 }
 
-// -------- Email step (chips + template/custom) --------
+// -------- Email step --------
 function renderEmailParams(step, container, ctx) {
   const { onChange } = ctx;
-  container.textContent = ''; // avoid duplicate blocks
 
-  // Recipients (chips)
-  container.appendChild(chipField({
-    label: 'Recipients',
-    csv: step.params.recipients || '',
-    onChange: csv => { updateStepParam(step.id, 'recipients', csv); onChange(); },
+  // Clear container (important to avoid duplicates on mode toggle)
+  container.textContent = '';
+
+  // Recipients (csv)
+  container.appendChild(labeledTextArea('Recipients (comma-separated)', step.params.recipients || '', v => {
+    updateStepParam(step.id, 'recipients', v); onChange();
   }));
 
   // From / CC / BCC
@@ -139,20 +214,16 @@ function renderEmailParams(step, container, ctx) {
   row.appendChild(colNode(labeledInput('From (optional)', step.params.from_email || '', v => {
     updateStepParam(step.id, 'from_email', v); onChange();
   }, 'email')));
-  row.appendChild(colNode(chipField({
-    label: 'CC (optional)',
-    csv: step.params.cc || '',
-    onChange: csv => { updateStepParam(step.id, 'cc', csv); onChange(); },
+  row.appendChild(colNode(labeledInput('CC (optional, comma-separated)', step.params.cc || '', v => {
+    updateStepParam(step.id, 'cc', v); onChange();
   })));
-  row.appendChild(colNode(chipField({
-    label: 'BCC (optional)',
-    csv: step.params.bcc || '',
-    onChange: csv => { updateStepParam(step.id, 'bcc', csv); onChange(); },
+  row.appendChild(colNode(labeledInput('BCC (optional, comma-separated)', step.params.bcc || '', v => {
+    updateStepParam(step.id, 'bcc', v); onChange();
   })));
   container.appendChild(row);
 
   // Mode: template vs custom
-  const useTpl = !!step.params.template;
+  const useTpl = !!(step.params.template && String(step.params.template).trim());
   const modeWrap = document.createElement('div'); modeWrap.className = 'my-2';
   const tpl = radio('email-mode-'+step.id, 'Use template', useTpl, () => {
     // Switch to template → clear subject/body, ensure a template key
@@ -162,10 +233,11 @@ function renderEmailParams(step, container, ctx) {
       const first = firstTemplateKey();
       if (first) updateStepParam(step.id, 'template', first);
     }
-    renderEmailParams(step, container, ctx); // re-render this section only
+    renderEmailParams(step, container, ctx);
     onChange();
   });
   const custom = radio('email-mode-'+step.id, 'Write custom', !useTpl, () => {
+    // Switch to custom → clear template
     updateStepParam(step.id, 'template', '');
     renderEmailParams(step, container, ctx);
     onChange();
@@ -173,7 +245,7 @@ function renderEmailParams(step, container, ctx) {
   modeWrap.appendChild(tpl.wrap); modeWrap.appendChild(custom.wrap);
   container.appendChild(modeWrap);
 
-  // Template selectors
+  // Template selects
   const tplBlock = document.createElement('div'); tplBlock.className = useTpl ? '' : 'd-none';
   const groups = (state.mailTemplates && Array.isArray(state.mailTemplates.groups)) ? state.mailTemplates.groups : [];
 
@@ -227,7 +299,6 @@ function renderEmailParams(step, container, ctx) {
   }
 }
 
-// ---- small UI primitives ----
 function labeledInput(label, val, onInput, type='text') {
   const lbl = document.createElement('label');
   lbl.className = 'form-label small d-block';
@@ -267,45 +338,4 @@ function radio(name, text, checked, onChange) {
   const label = document.createElement('label'); label.className = 'form-check-label'; label.htmlFor = id; label.textContent = text;
   wrap.appendChild(input); wrap.appendChild(label);
   return { wrap, input };
-}
-
-// Chips
-function chipField({label, csv, onChange}) {
-  const lbl = document.createElement('label'); lbl.className = 'form-label small d-block';
-  lbl.textContent = label + ': ';
-  const holder = document.createElement('div'); holder.className = 'chip-input';
-  const input = document.createElement('input'); input.type = 'text'; input.placeholder = 'Type and Enter';
-  holder.appendChild(input);
-  lbl.appendChild(holder);
-
-  const tokens = [];
-  function sync() { onChange(tokens.join(', ')); }
-  function addChip(text) {
-    const val = (text || '').trim().replace(/,$/, '');
-    if (!val) return;
-    if (tokens.includes(val)) { input.value = ''; return; }
-    tokens.push(val);
-    const chip = document.createElement('span'); chip.className = 'chip'; chip.textContent = val;
-    const rm = document.createElement('button'); rm.type='button'; rm.className='remove'; rm.innerHTML='&times;';
-    rm.onclick = () => { const i = tokens.indexOf(val); if (i>=0) tokens.splice(i,1); chip.remove(); sync(); };
-    chip.appendChild(rm);
-    holder.insertBefore(chip, input);
-    input.value = '';
-    sync();
-  }
-  function seed(csv0) {
-    (csv0 || '').split(',').map(s => s.trim()).filter(Boolean).forEach(addChip);
-  }
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ',' || e.key === 'Tab') {
-      if (input.value.trim() !== '') { e.preventDefault(); addChip(input.value); }
-    } else if (e.key === 'Backspace' && input.value === '' && tokens.length) {
-      const lastChip = holder.querySelector('.chip:last-of-type');
-      if (lastChip) lastChip.querySelector('.remove').click();
-    }
-  });
-  input.addEventListener('blur', () => { if (input.value.trim()) addChip(input.value); });
-
-  seed(csv);
-  return lbl;
 }

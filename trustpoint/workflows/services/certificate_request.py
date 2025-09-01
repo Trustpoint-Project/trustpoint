@@ -15,7 +15,6 @@ from workflows.services.engine import advance_instance
 from workflows.services.handler_lookup import register_handler
 
 if TYPE_CHECKING:
-    # Used only for type annotations.
     from uuid import UUID
 
 logger = logging.getLogger(__name__)
@@ -25,14 +24,10 @@ logger = logging.getLogger(__name__)
 class CertificateRequestHandler:
     """Handle certificate-request events (e.g., EST simpleenroll).
 
-    Steps:
-        1. Compute a stable fingerprint over the CSR's CertificateRequestInfo.
-        2. Find published workflows whose scopes match (None = "any").
-        3. Match the (protocol, operation) trigger.
-        4. If a COMPLETED and not-finalized run exists -> finalize it and return COMPLETED.
-        5. If an in-flight run exists -> return its current state.
-        6. Otherwise create a new instance and advance it once -> return its new state.
-        7. If nothing matched -> return ``no_match``.
+    Contract: for a matching, published workflow this will ALWAYS advance a
+    brand-new or still-starting/running instance synchronously until the FIRST
+    stopping state, then return that state (AwaitingApproval/Approved/Rejected/
+    Completed/Failed). Callers will never see "Starting" from this handler.
     """
 
     def __call__(  # noqa: PLR0913
@@ -46,23 +41,7 @@ class CertificateRequestHandler:
         payload: dict[str, Any],
         **_: Any,
     ) -> dict[str, Any]:
-        """Process a certificate-request event and drive the matching workflow.
-
-        Args:
-            protocol: Protocol name (e.g., ``est``).
-            operation: Operation name (e.g., ``simpleenroll``).
-            ca_id: Certificate Authority identifier or None.
-            domain_id: Domain identifier or None.
-            device_id: Device identifier or None.
-            payload: Request payload, must include ``csr_pem``.
-
-        Returns:
-            A JSON-serializable dict with keys:
-                - ``status``: The resulting state or ``no_match``/``error``.
-                - ``instance_id``: The workflow instance ID when applicable.
-        """
-
-        # -- 1) Normalize incoming IDs to ints or None --
+        # -- normalize incoming IDs to ints or None --
         def _norm(val: int | UUID | None) -> int | None:
             if val is None:
                 return None
@@ -75,21 +54,22 @@ class CertificateRequestHandler:
         dom = _norm(domain_id)
         dev = _norm(device_id)
 
-        # -- 2) Load & fingerprint CSR PEM --
+        # -- load & fingerprint CSR PEM --
         csr_pem = payload.get('csr_pem')
         if not isinstance(csr_pem, str):
+            logger.error('certificate_request: missing csr_pem')
             return {'status': 'error', 'msg': 'Missing or invalid csr_pem'}
 
         try:
             csr = x509.load_pem_x509_csr(csr_pem.encode('utf-8'))
-        except Exception as exc:
-            logger.exception('Failed to parse CSR PEM')
+        except Exception as exc:  # noqa: BLE001
+            logger.exception('certificate_request: failed to parse CSR PEM')
             return {'status': 'error', 'msg': f'Invalid CSR: {exc!s}'}
 
         fingerprint = hashlib.sha256(csr.tbs_certrequest_bytes).hexdigest()
-        logger.debug('CSR fingerprint: %s', fingerprint)
+        logger.debug('certificate_request: CSR fingerprint=%s', fingerprint)
 
-        # -- 3) Scope filter (NULL means "any") --
+        # -- scope filter (NULL means "any") --
         definitions = (
             WorkflowDefinition.objects.filter(published=True)
             .filter(
@@ -99,57 +79,85 @@ class CertificateRequestHandler:
             )
             .distinct()
         )
-        logger.debug('Found %d workflows matching scope', definitions.count())
+        logger.info(
+            'certificate_request: matching definitions by scope -> %d candidates',
+            definitions.count(),
+        )
 
+        # -- try each candidate until one matches the trigger --
         for wf in definitions:
-            nodes = wf.definition.get('nodes', [])
+            meta = wf.definition or {}
+            nodes = meta.get('nodes', [])
             if not nodes:
-                logger.warning('Skipping %r: no nodes defined', wf.name)
+                logger.warning('certificate_request: skip %r (no nodes)', wf.name)
                 continue
 
-            triggers = wf.definition.get('triggers', [])
-            if not any(t.get('protocol') == protocol and t.get('operation') == operation for t in triggers):
+            triggers = meta.get('triggers', [])
+            matches = any(
+                (t.get('protocol') == protocol and t.get('operation') == operation)
+                for t in triggers
+            )
+            if not matches:
                 continue
 
-            wf_instance = (
+            logger.info(
+                'certificate_request: workflow match name=%r protocol=%s operation=%s',
+                wf.name, protocol, operation,
+            )
+
+            # Reuse existing instance (any non-finalized state), or create
+            inst = (
                 WorkflowInstance.objects.filter(
                     definition=wf,
                     payload__fingerprint=fingerprint,
                     finalized=False,
                 )
-                .exclude(
-                    state__in=[
-                        WorkflowInstance.STATE_RUNNING,
-                        WorkflowInstance.STATE_FAILED,
-                    ]
-                )
+                .order_by('-created_at')
                 .first()
             )
-            if wf_instance:
-                return {'status': wf_instance.state, 'instance_id': str(wf_instance.id)}
 
-            # -- 6) No existing -> create new instance at first node, then advance once --
-            first_step = nodes[0]['id']
-            full_payload = {
-                'protocol': protocol,
-                'operation': operation,
-                'ca_id': ca,
-                'domain_id': dom,
-                'device_id': dev,
-                'fingerprint': fingerprint,
-                **{k: v for k, v in payload.items() if k != 'csr_b64'},
-            }
-
-            with transaction.atomic():
-                inst = WorkflowInstance.objects.create(
-                    definition=wf,
-                    current_step=first_step,
-                    state=WorkflowInstance.STATE_STARTING,
-                    payload=full_payload,
+            if inst is None:
+                # Create new instance at first node
+                first_step = nodes[0]['id']
+                full_payload = {
+                    'protocol': protocol,
+                    'operation': operation,
+                    'ca_id': ca,
+                    'domain_id': dom,
+                    'device_id': dev,
+                    'fingerprint': fingerprint,
+                    **{k: v for k, v in payload.items()},
+                }
+                with transaction.atomic():
+                    inst = WorkflowInstance.objects.create(
+                        definition=wf,
+                        current_step=first_step,
+                        state=WorkflowInstance.STATE_STARTING,
+                        payload=full_payload,
+                    )
+                logger.info(
+                    'certificate_request: created instance id=%s workflow=%r step=%s',
+                    inst.id, wf.name, first_step,
+                )
+            else:
+                logger.info(
+                    'certificate_request: reusing instance id=%s state=%s',
+                    inst.id, inst.state,
                 )
 
-            advance_instance(inst)
+            # Advance fresh/active instances to first stopping state
+            if inst.state in {WorkflowInstance.STATE_STARTING, WorkflowInstance.STATE_RUNNING}:
+                logger.debug('certificate_request: advancing instance id=%s', inst.id)
+                advance_instance(inst)
+                inst.refresh_from_db()
+                logger.info(
+                    'certificate_request: advanced instance id=%s -> state=%s step=%s',
+                    inst.id, inst.state, inst.current_step,
+                )
+
+            # Return the (now stable) state for caller branching
             return {'status': inst.state, 'instance_id': str(inst.id)}
 
-        # -- 7) Nothing matched --
+        # -- nothing matched --
+        logger.info('certificate_request: no matching workflow for protocol=%s op=%s', protocol, operation)
         return {'status': 'no_match'}
