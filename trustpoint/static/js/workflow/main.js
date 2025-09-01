@@ -1,14 +1,15 @@
+// static/js/main.js
 import { api } from './api.js';
-import {
-  state, setName, addStep, buildPayload,
-} from './state.js';
+import { state, setName, buildPayload, addStep } from './state.js';
 import { renderTriggersUI } from './ui-triggers.js';
 import { renderStepsUI } from './steps.js';
 import { initScopesUI } from './scopes.js';
 import { renderPreview } from './preview.js';
+import { validateWizardState } from './validators.js';
+import { renderErrors, clearErrors } from './ui-errors.js';
 
 function getCookie(name) {
-  const m = document.cookie.match(new RegExp('(^| )'+name+'=([^;]+)'));
+  const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
   return m ? m.pop() : '';
 }
 
@@ -28,25 +29,40 @@ const els = {
   scopesListEl:   document.getElementById('scopes-list'),
   previewEl:      document.getElementById('json-preview'),
   saveBtnEl:      document.getElementById('save-btn'),
+  errorsEl:       document.getElementById('wizard-errors'),
 };
 
+// If the template forgot the error box, create one just above the preview.
+(function ensureErrorContainer() {
+  if (!els.errorsEl && els.previewEl && els.previewEl.parentNode) {
+    const host = document.createElement('div');
+    host.id = 'wizard-errors';
+    host.className = 'mb-3 d-none';
+    host.setAttribute('aria-live', 'polite');
+    host.setAttribute('aria-atomic', 'true');
+    els.previewEl.parentNode.insertBefore(host, els.previewEl);
+    els.errorsEl = host;
+  }
+})();
+
 function onAnyChange() {
+  clearErrors(els.errorsEl); // clear previous errors on any change
   renderPreview(els.previewEl);
 }
 
 async function init() {
-  // load catalogs
+  // Load catalogs
   const [trigs, mailTpls] = await Promise.all([
-    api.triggers().catch(()=> ({})),
-    api.mailTemplates().catch(()=> ({ groups: [] })),
+    api.triggers().catch(() => ({})),
+    api.mailTemplates().catch(() => ({ groups: [] })),
   ]);
   state.triggersMap   = trigs || {};
   state.mailTemplates = mailTpls && mailTpls.groups ? mailTpls : { groups: [] };
 
-  // bind name
+  // Bind name
   els.wfNameEl.oninput = () => { setName(els.wfNameEl.value); onAnyChange(); };
 
-  // triggers UI
+  // Triggers UI
   renderTriggersUI({
     els: {
       handlerEl: els.handlerEl,
@@ -58,14 +74,14 @@ async function init() {
     onChange: onAnyChange,
   });
 
-  // steps UI
+  // Steps UI
   renderStepsUI({
     containerEl: els.stepsListEl,
     addBtnEl: els.addStepBtnEl,
     onChange: onAnyChange,
   });
 
-  // scopes UI
+  // Scopes UI
   await initScopesUI({
     typeEl: els.scopeTypeEl,
     multiEl: els.scopeMultiEl,
@@ -74,25 +90,23 @@ async function init() {
     onChange: onAnyChange,
   });
 
-  // preload edit
+  // Preload edit
   if (state.editId) {
     const data = await api.definition(state.editId);
 
-    // name
+    // Name
     state.name = data.name || '';
     els.wfNameEl.value = state.name;
 
-    // handler/protocol/operation (fallback if handler not stored)
+    // Handler / protocol / operation (infer handler)
     const tr = (data.triggers && data.triggers[0]) || {};
     const match = Object.values(state.triggersMap).find(
       t => t.protocol === tr.protocol && t.operation === tr.operation
     );
-    const inferredHandler = match ? match.handler : (tr.handler || '');
-    // set in state + re-render UI to reflect defaults
-    // (we call renderTriggersUI again to guarantee consistency)
-    state.handler  = inferredHandler || '';
-    state.protocol = tr.protocol || '';
-    state.operation= tr.operation || '';
+    state.handler   = (match && match.handler) || '';
+    state.protocol  = tr.protocol || '';
+    state.operation = tr.operation || '';
+
     renderTriggersUI({
       els: {
         handlerEl: els.handlerEl,
@@ -104,7 +118,7 @@ async function init() {
       onChange: onAnyChange,
     });
 
-    // steps (reset then add)
+    // Steps (reset then add)
     state.steps = [];
     state.nextStepId = 1;
     (data.steps || []).forEach(s => addStep(s.type, s.params || {}));
@@ -114,23 +128,24 @@ async function init() {
       onChange: onAnyChange,
     });
 
-    // scopes (reset first)
-    state.scopes = { CA:new Set(), Domain:new Set(), Device:new Set() };
+    // Scopes
+    state.scopes = { CA: new Set(), Domain: new Set(), Device: new Set() };
     (data.scopes || []).forEach(sc => {
       if (sc.type && sc.id != null && state.scopes[sc.type]) {
         state.scopes[sc.type].add(String(sc.id));
       }
     });
-    // ensure choices cache has names for selected items
-    for (const kind of ['CA','Domain','Device']) {
+
+    // Best-effort cache of names
+    for (const kind of ['CA', 'Domain', 'Device']) {
       if (state.scopes[kind].size && state.scopesChoices[kind].size === 0) {
         try {
           const list = await api.scopes(kind);
           list.forEach(it => state.scopesChoices[kind].set(String(it.id), it.name));
-        } catch {}
+        } catch { /* ignore */ }
       }
     }
-    // re-init scopes UI to reflect current state
+    // Re-render scopes list (init re-binds events too)
     await initScopesUI({
       typeEl: els.scopeTypeEl,
       multiEl: els.scopeMultiEl,
@@ -140,36 +155,37 @@ async function init() {
     });
   }
 
-  // initial preview
+  // Initial preview
   renderPreview(els.previewEl);
 
-  // save (with validations)
+  // Save → client-side validate, then server save, then handle server errors
   els.saveBtnEl.onclick = async () => {
-    // validations
-    const scopesCount =
-      state.scopes.CA.size + state.scopes.Domain.size + state.scopes.Device.size;
-    if (scopesCount === 0) {
-      return alert('Please add at least one Scope (CA, Domain, or Device).');
-    }
-    const emailStepsMissingRecipients = state.steps.some(
-      s => s.type === 'Email' && !(s.params.recipients || '').trim()
-    );
-    if (emailStepsMissingRecipients) {
-      return alert('Every Email step must have at least one recipient.');
+    clearErrors(els.errorsEl);
+
+    const clientErrors = validateWizardState(state, state.triggersMap);
+    if (clientErrors.length) {
+      renderErrors(els.errorsEl, clientErrors);
+      return;
     }
 
     const payload = buildPayload();
-    const { ok, data } = await api.save(payload, getCookie('csrftoken'));
-    if (ok) {
-      window.location.href = `/workflows/?saved=${encodeURIComponent(data.id)}`;
-    } else {
-      alert('Error: ' + (data.error || 'Unknown'));
+
+    try {
+      const { ok, data } = await api.save(payload, getCookie('csrftoken'));
+      if (ok) {
+        window.location.href = `/workflows/?saved=${encodeURIComponent(data.id)}`;
+        return;
+      }
+      const serverErrors = Array.isArray(data.errors)
+        ? data.errors
+        : [data.error || data.message || 'Unknown error'];
+      renderErrors(els.errorsEl, serverErrors);
+    } catch (e) {
+      renderErrors(els.errorsEl, 'Network error while saving. Please try again.');
     }
   };
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  init().catch(err => {
-    console.error('Wizard init failed:', err);
-  });
+init().catch(err => {
+  console.error('Wizard init failed:', err);
 });

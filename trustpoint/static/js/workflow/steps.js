@@ -42,7 +42,8 @@ function stepCard(step, ctx) {
 
   const header = document.createElement('div');
   header.className = 'd-flex justify-content-between align-items-center mb-2';
-  header.innerHTML = '<strong>Step</strong>';
+  header.innerHTML = `<strong>Step ${step.id}</strong>`;
+  console.log(step);
   const rm = document.createElement('button');
   rm.type = 'button'; rm.className = 'btn-close';
   rm.onclick = () => {

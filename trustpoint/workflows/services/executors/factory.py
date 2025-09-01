@@ -81,3 +81,7 @@ class NodeExecutorFactory:
         except KeyError as exc:
             msg = f'No executor registered for node type {node_type!r}'
             raise ValueError(msg) from exc
+
+    @classmethod
+    def registered_types(cls) -> set[str]:
+        return set(cls._registry.keys())
