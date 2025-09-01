@@ -277,7 +277,7 @@ class CmpRequestTemplateExtractorMixin:
         # only local key-gen supported currently -> public key must be present
         asn1_public_key = cert_req_template['publicKey']
         if not asn1_public_key.hasValue():
-            err_msg = 'Public-missing in CertTemplate.'
+            err_msg = 'Public key missing in CertTemplate.'
             raise ValueError(err_msg)
 
         spki = rfc2511.SubjectPublicKeyInfo()
@@ -563,7 +563,7 @@ class CmpResponseBuilderMixin:
         return pki_message
 
     def _sign_pki_message(
-            self, pki_message: rfc4210.PKIMessage, signature_suite: SignatureSuite, signer_credential: CredentialModel
+            self, pki_message: rfc4210.PKIMessage, signer_credential: CredentialModel
             ) -> rfc4210.PKIMessage:
         """Applies signature-based protection to the base PKI message."""
         encoded_protected_part = get_encoded_protected_part(pki_message)
@@ -571,6 +571,7 @@ class CmpResponseBuilderMixin:
         private_key = load_pem_private_key(
             signer_credential.private_key.encode(), password=None
         )
+        signature_suite = SignatureSuite.from_certificate(signer_credential.get_certificate())
         hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
         if hash_algorithm is None:
             err_msg = 'Failed to get the corresponding hash algorithm.'
@@ -628,10 +629,6 @@ class CmpInitializationRequestView(
         message_body_name = self.serialized_pyasn1_message['body'].getName()
         if message_body_name != 'ir':
             err_msg = f'Expected CMP IR body, but got CMP {message_body_name.upper()} body.'
-            raise ValueError(err_msg)
-
-        if self.serialized_pyasn1_message['body'].getName() != 'ir':
-            err_msg = 'not ir message'
             raise ValueError(err_msg)
 
         ir_body = self.serialized_pyasn1_message['body']['ir']
@@ -784,7 +781,7 @@ class CmpInitializationRequestView(
         return HttpResponse(encoded_ip_message, content_type='application/pkixcmp', status=200)
 
 
-    def _handle_signature_based_initialization_request(
+    def _handle_signature_based_initialization_request(  # noqa: C901
             self) -> HttpResponse:
         """Handles IR for initial certificate requests with signature-based protection."""
         # different protection algorithm than password-based MAC - certificate-based protection
@@ -883,7 +880,7 @@ class CmpInitializationRequestView(
             signer_credential=signer_credential
         )
         pki_message = self._sign_pki_message(
-            pki_message=pki_message, signature_suite=signature_suite, signer_credential=signer_credential)
+            pki_message=pki_message, signer_credential=signer_credential)
 
         encoded_message = encoder.encode(pki_message)
         decoded_message, _ = decoder.decode(encoded_message, asn1Spec=rfc4210.PKIMessage())
@@ -965,10 +962,6 @@ class CmpCertificationRequestView(
         message_body_name = self.serialized_pyasn1_message['body'].getName()
         if message_body_name != 'cr':
             err_msg = f'Expected CMP CR body, but got CMP {message_body_name.upper()} body.'
-            raise ValueError(err_msg)
-
-        if self.serialized_pyasn1_message['body'].getName() != 'cr':
-            err_msg = 'not cr message'
             raise ValueError(err_msg)
 
         cr_body = self.serialized_pyasn1_message['body']['cr']
@@ -1158,7 +1151,7 @@ class CmpCertificationRequestView(
             err_msg = 'Failed to parse common name value'
             raise TypeError(err_msg)
 
-        if common_name_value != 'Trustpoint Domain Credential':
+        if common_name_value != LocalDomainCredentialIssuer.DOMAIN_CREDENTIAL_CN:
             err_msg = 'Not a domain credential.'
             raise ValueError(err_msg)
 
@@ -1232,7 +1225,7 @@ class CmpCertificationRequestView(
         )
 
         pki_message = self._sign_pki_message(
-            pki_message=pki_message, signature_suite=signature_suite, signer_credential=issuing_ca_credential)
+            pki_message=pki_message, signer_credential=issuing_ca_credential)
 
         encoded_message = encoder.encode(pki_message)
         decoded_message, _ = decoder.decode(encoded_message, asn1Spec=rfc4210.PKIMessage())

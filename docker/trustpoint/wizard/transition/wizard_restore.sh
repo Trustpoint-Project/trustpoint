@@ -35,40 +35,6 @@ if [ ! -f "$WIZARD_INITIAL" ]; then
   exit 1
 fi
 
-# 6) (Re-)create and clean TLS directory
-log INFO "Ensuring TLS directory exists: $APACHE_TLS_DIR"
-mkdir -p "$APACHE_TLS_DIR"
-
-log INFO "Removing may exisiting old TLS files from $APACHE_TLS_DIR"
-rm -f "$APACHE_TLS_DIR"/*
-
-# 7) Copy new TLS certs
-log INFO "Copying new TLS files"
-cp /var/www/html/trustpoint/docker/trustpoint/apache/tls/* "$APACHE_TLS_DIR"/
-
-# 8) Remove existing Apache sites
-log INFO "Removing standard enabled Apache sites"
-rm -f /etc/apache2/sites-enabled/*
-
-# 9) Install HTTP config
-log INFO "Installing HTTP config"
-cp /var/www/html/trustpoint/docker/trustpoint/apache/trustpoint-apache-http.conf \
-   /etc/apache2/sites-available/
-cp /var/www/html/trustpoint/docker/trustpoint/apache/trustpoint-apache-http.conf \
-   /etc/apache2/sites-enabled/
-
-# 10) Install HTTPS config
-log INFO "Installing HTTPS config"
-cp /var/www/html/trustpoint/docker/trustpoint/apache/trustpoint-apache-https.conf \
-   /etc/apache2/sites-available/
-cp /var/www/html/trustpoint/docker/trustpoint/apache/trustpoint-apache-https.conf \
-   /etc/apache2/sites-enabled/
-
-# 11) Enable Apache modules
-log INFO "Enabling Apache modules: ssl & rewrite"
-a2enmod ssl
-a2enmod rewrite
-
 # Removes the current WIZARD_INITIAL state file.
 if ! rm "$WIZARD_INITIAL"
 then
@@ -83,8 +49,9 @@ then
     exit 4
 fi
 
-# 12) gracefully restart Apache if already running
+# 12) if Apache is already running, update tls and gracefully restart
 if pgrep apache2 >/dev/null; then
+   /etc/trustpoint/wizard/transition/update_tls.sh
    log INFO "Restarting Apache (graceful)"
    apache2ctl graceful
 fi

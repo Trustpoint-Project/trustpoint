@@ -6,8 +6,6 @@ from collections import Counter
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from django.urls import reverse
-
 from devices.models import DeviceModel, IssuedCredentialModel
 from django.contrib import messages
 from django.core.management import call_command
@@ -22,6 +20,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import RedirectView, TemplateView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
+from notifications.models import NotificationModel, NotificationStatus
 from pki.models import CertificateModel, IssuingCaModel
 
 from trustpoint.logger import LoggerMixin
@@ -29,7 +28,6 @@ from trustpoint.settings import UIConfig
 from trustpoint.views.base import SortableTableMixin
 
 from .filters import NotificationFilter
-from notifications.models import NotificationModel, NotificationStatus
 
 if TYPE_CHECKING:
     from django.utils.safestring import SafeString
@@ -686,3 +684,5 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             err_msg = f'Error occurred in ca counts by type query: {exception}'
             self.logger.exception(err_msg)
         return issuing_ca_type_counts
+
+

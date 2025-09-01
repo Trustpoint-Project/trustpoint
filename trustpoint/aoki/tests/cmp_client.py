@@ -58,7 +58,7 @@ class AokiCmpClient:
     def _get_idevid_owner_san_uri(self, idevid_cert: x509.Certificate) -> str:
         """Get the Owner ID SAN URI corresponding to a IDevID certificate.
 
-        Formatted as "<idevid_subj_sn>.dev-owner.<idevid_x509_sn>.<idevid_sha256_fingerprint>.alt
+        Formatted as "dev-owner:<idevid_subj_sn>.<idevid_x509_sn>.<idevid_sha256_fingerprint>"
         """
         try:
             sn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
@@ -68,7 +68,7 @@ class AokiCmpClient:
         self.idevid_subj_sn = idevid_subj_sn
         idevid_x509_sn = hex(idevid_cert.serial_number)[2:].zfill(16)
         idevid_sha256_fingerprint = idevid_cert.fingerprint(hashes.SHA256()).hex()
-        return f'{idevid_subj_sn}.dev-owner.{idevid_x509_sn}.{idevid_sha256_fingerprint}.alt'
+        return f'dev-owner:{idevid_subj_sn}.{idevid_x509_sn}.{idevid_sha256_fingerprint}'
 
     def _verify_matches_idevid_cert(self, owner_id_cert: x509.Certificate, idevid_cert: x509.Certificate) -> None:
         """Verify the Owner ID certificate is valid for the device IDevID."""
@@ -129,7 +129,11 @@ class AokiCmpClient:
             '-trusted', f'{CERTS_DIR}/{self.owner_truststore_file}',
             #'-tls_used'
         )
-        print(subprocess.check_output(cmd).decode())  # noqa: S603
+        try:
+            print(subprocess.check_output(cmd).decode())  # noqa: S603
+        except subprocess.CalledProcessError as e:
+            print('Error occurred while requesting domain credential:', e.output.decode())
+            return
 
         # Step 3: Validate that the provided Owner ID certificate matches the IDevID certificate
         # Assuming first extraCert is the OwnerID / CMP signer cert, this is the case in the Trustpoint implementation
