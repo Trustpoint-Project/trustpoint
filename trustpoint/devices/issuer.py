@@ -533,8 +533,6 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
 
         if self.device.onboarding_config:
             self.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
-            self.device.onboarding_config.onboarding_est_password = ''
-            self.device.onboarding_config.onboarding_cmp_shared_secret = ''
             self.device.onboarding_config.save()
 
         self.device.save()
@@ -572,8 +570,6 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
 
         if self.device.onboarding_config:
             self.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
-            self.device.onboarding_config.onboarding_est_password = ''
-            self.device.onboarding_config.onboarding_cmp_shared_secret = ''
             self.device.onboarding_config.save()
 
         self.device.save()

@@ -177,7 +177,7 @@ class AbstractNoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[D
             err_msg = _('Failed to get certificate profile')
         self.host = (
             f'{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}/'
-            f'.well-known/cmp/certification/{ self.object.domain.unique_name }/')
+            f'.well-known/cmp/certification/{ self.object.domain.unique_name }')
 
 
         help_page = HelpPage(heading=_non_lazy('Help - CMP Shared-Secret (HMAC)'), sections=[
@@ -213,7 +213,7 @@ class AbstractNoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[D
 
     def _get_cmp_tls_client_profile_cmd_section(self, *, hidden: bool = False) -> HelpSection:
         cmp_command = CmpSharedSecretCommandBuilder.get_tls_client_profile_command(
-            host=self.host + 'tls-client/',
+            host=self.host + '/tls-client',
             pk=self.object.pk,
             shared_secret=self._get_shared_secret(),
             cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
@@ -232,7 +232,7 @@ class AbstractNoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[D
 
     def _get_cmp_tls_server_profile_cmd_section(self, *, hidden: bool = False) -> HelpSection:
         cmp_command = CmpSharedSecretCommandBuilder.get_tls_server_profile_command(
-            host=self.host + 'tls-server/',
+            host=self.host + '/tls-server',
             pk=self.object.pk,
             shared_secret=self._get_shared_secret(),
             cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
@@ -252,7 +252,7 @@ class AbstractNoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[D
 
     def _get_cmp_opc_ua_client_profile_cmd_section(self, *, hidden: bool = False) -> HelpSection:
         cmp_command = CmpSharedSecretCommandBuilder.get_opc_ua_client_profile_command(
-            host=self.host + 'opc-ua-client/',
+            host=self.host + '/opc-ua-client',
             pk=self.object.pk,
             shared_secret=self._get_shared_secret(),
             cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
@@ -272,7 +272,7 @@ class AbstractNoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[D
 
     def _get_cmp_opc_ua_server_profile_cmd_section(self, *, hidden: bool = False) -> HelpSection:
         cmp_command = CmpSharedSecretCommandBuilder.get_opc_ua_server_profile_command(
-            host=self.host + 'opc-ua-server/',
+            host=self.host + '/opc-ua-server',
             pk=self.object.pk,
             shared_secret=self._get_shared_secret(),
             cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
@@ -294,7 +294,7 @@ class AbstractNoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[D
         if self.object.domain is None:
             raise ValueError
         certificate_request_url = (
-            f'https://{self.host}<certificate_profile>/'
+            f'https://{self.host}<certificate_profile>'
         )
         url_row = HelpRow(
             key=format_html(_non_lazy('Certificate Request URL')),
@@ -440,7 +440,7 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
         if not self.certificate_profile:
             err_msg = _('Failed to get certificate profile')
         self.host = (
-            f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}/'
+            f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}'
         )
 
 
@@ -494,7 +494,7 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
     def _get_enroll_row(self, certificate_profile: str) -> HelpRow:
         enroll_cmd = EstUsernamePasswordCommandBuilder.get_curl_enroll_command(
             est_username=self.object.common_name,
-            est_password=self.no_onboarding_config.est_username_password,
+            est_password=self.no_onboarding_config.est_password,
             host=f'{ self.host }/.well-known/est/{ self.domain.unique_name }/{ certificate_profile }/simpleenroll/',
             domain_name=self.domain.unique_name,
             cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
@@ -612,7 +612,7 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
             raise ValueError(err_msg)
         est_password = HelpRow(
             key=('EST-PasswordU'),
-            value=self.object.no_onboarding_config.est_username_password,
+            value=self.object.no_onboarding_config.est_password,
             value_render_type=ValueRenderType.CODE,
         )
 
@@ -772,7 +772,7 @@ class AbstractOnboardingDomainCredentialCmpSharedSecretHelpView(PageContextMixin
         self.domain = self.object.domain
 
         self.host = (
-            f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}/'
+            f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}'
         )
 
         help_page = HelpPage(heading=_non_lazy('Help - CMP Shared-Secret (HMAC)'), sections=[
@@ -828,7 +828,7 @@ class AbstractOnboardingDomainCredentialCmpSharedSecretHelpView(PageContextMixin
         if self.object.domain is None:
             raise ValueError
         certificate_request_url = (
-            f'https://{self.host}domaincredential/'
+            f'https://{self.host}/domaincredential'
         )
         url_row = HelpRow(
             key=format_html(_non_lazy('Certificate Request URL')),
@@ -915,7 +915,7 @@ class AbstractOnboardingDomainCredentialCmpSharedSecretHelpView(PageContextMixin
         return root_ca_model.pk
 
     def _get_shared_secret(self) -> str:
-        return self.onboarding_config.onboarding_cmp_shared_secret
+        return self.onboarding_config.cmp_shared_secret
 
 
 class DeviceOnboardingDomainCredentialCmpSharedSecretHelpView(
@@ -976,7 +976,7 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
         if not self.certificate_profile:
             err_msg = _('Failed to get certificate profile')
         self.host = (
-            f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}/'
+            f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}'
         )
 
 
@@ -1026,7 +1026,7 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
     def _get_enroll_row(self, certificate_profile: str) -> HelpRow:
         enroll_cmd = EstUsernamePasswordCommandBuilder.get_curl_enroll_command(
             est_username=self.object.common_name,
-            est_password=self.onboarding_config.onboarding_est_password,
+            est_password=self.onboarding_config.est_password,
             host=f'{ self.host }/.well-known/est/{ self.domain.unique_name }/{ certificate_profile }/simpleenroll/',
             domain_name=self.domain.unique_name,
             cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
@@ -1085,7 +1085,7 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
             raise ValueError(err_msg)
         est_password = HelpRow(
             key=('EST-PasswordU'),
-            value=self.object.onboarding_config.onboarding_est_password,
+            value=self.object.onboarding_config.est_password,
             value_render_type=ValueRenderType.CODE,
         )
 
@@ -1230,7 +1230,7 @@ class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView
             raise Http404(err_msg)
         self.host = (
             f'{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}/'
-            f'.well-known/cmp/certification/{ self.object.domain.unique_name }/')
+            f'.well-known/cmp/certification/{ self.object.domain.unique_name }')
 
 
         help_page = HelpPage(heading=_non_lazy('Help - CMP Shared-Secret (HMAC)'), sections=[
@@ -1266,7 +1266,7 @@ class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView
 
     def _get_cmp_tls_client_profile_cmd_section(self, *, hidden: bool = False) -> HelpSection:
         cmp_command = CmpClientCertificateCommandBuilder.get_tls_client_profile_command(
-            host=self.host + 'tls-client/',
+            host=self.host + '/tls-client',
             cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
         )
         openssl_cmd_tls_client_profile_row = HelpRow(
@@ -1283,7 +1283,7 @@ class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView
 
     def _get_cmp_tls_server_profile_cmd_section(self, *, hidden: bool = False) -> HelpSection:
         cmp_command = CmpClientCertificateCommandBuilder.get_tls_server_profile_command(
-            host=self.host + 'tls-server/',
+            host=self.host + '/tls-server',
             cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
         )
         openssl_cmd_tls_server_profile_row = HelpRow(
@@ -1301,7 +1301,7 @@ class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView
 
     def _get_cmp_opc_ua_client_profile_cmd_section(self, *, hidden: bool = False) -> HelpSection:
         cmp_command = CmpClientCertificateCommandBuilder.get_opc_ua_client_profile_command(
-            host=self.host + 'opc-ua-client/',
+            host=self.host + '/opc-ua-client',
             cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
         )
         openssl_cmd_opc_ua_client_profile_row = HelpRow(
@@ -1319,7 +1319,7 @@ class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView
 
     def _get_cmp_opc_ua_server_profile_cmd_section(self, *, hidden: bool = False) -> HelpSection:
         cmp_command = CmpClientCertificateCommandBuilder.get_opc_ua_server_profile_command(
-            host=self.host + 'opc-ua-server/',
+            host=self.host + '/opc-ua-server',
             cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
         )
         openssl_cmd_opc_ua_server_profile_row = HelpRow(
@@ -1339,7 +1339,7 @@ class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView
         if self.object.domain is None:
             raise ValueError
         certificate_request_url = (
-            f'https://{self.host}<certificate_profile>/'
+            f'https://{self.host}/<certificate_profile>'
         )
         url_row = HelpRow(
             key=format_html(_non_lazy('Certificate Request URL')),

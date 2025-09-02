@@ -211,10 +211,10 @@ class Command(BaseCommand):
                     onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
 
                     if onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
-                        onboarding_config_model.onboarding_cmp_shared_secret = _get_secret()
+                        onboarding_config_model.cmp_shared_secret = _get_secret()
 
                     if onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD:
-                        onboarding_config_model.onboarding_est_password = _get_secret()
+                        onboarding_config_model.est_password = _get_secret()
 
                     onboarding_config_model.full_clean()
 
@@ -248,7 +248,7 @@ class Command(BaseCommand):
                         no_onboarding_config_model.cmp_shared_secret = _get_secret()
 
                     if NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD in no_onboarding_pki_protocols:
-                        no_onboarding_config_model.est_username_password = _get_secret()
+                        no_onboarding_config_model.est_password = _get_secret()
 
                     no_onboarding_config_model.full_clean()
 

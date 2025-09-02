@@ -361,7 +361,7 @@ class NoOnboardingCreateForm(forms.Form):
             no_onboarding_config_model.cmp_shared_secret = _get_secret()
 
         if NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD in no_onboarding_pki_protocols:
-            no_onboarding_config_model.est_username_password = _get_secret()
+            no_onboarding_config_model.est_password = _get_secret()
 
         no_onboarding_config_model.full_clean()
 
@@ -391,12 +391,8 @@ class OnboardingCreateForm(forms.Form):
         initial=OnboardingProtocol.CMP_SHARED_SECRET,
         label=_('Onboarding Protocol'),
         widget=DisableOptionsSelect(
-            disabled_options=[
-                OnboardingProtocol.MANUAL,
-                OnboardingProtocol.AOKI,
-                OnboardingProtocol.BRSKI
-            ]
-        )
+            disabled_options=[OnboardingProtocol.MANUAL, OnboardingProtocol.AOKI, OnboardingProtocol.BRSKI]
+        ),
     )
 
     onboarding_pki_protocols = forms.MultipleChoiceField(
@@ -470,10 +466,10 @@ class OnboardingCreateForm(forms.Form):
         onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
 
         if onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
-            onboarding_config_model.onboarding_cmp_shared_secret = _get_secret()
+            onboarding_config_model.cmp_shared_secret = _get_secret()
 
         if onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD:
-            onboarding_config_model.onboarding_est_password = _get_secret()
+            onboarding_config_model.est_password = _get_secret()
 
         onboarding_config_model.full_clean()
 
@@ -505,21 +501,12 @@ class ClmDeviceModelOnboardingForm(forms.Form):
         choices=ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS,
         label='Onboarding Protocol',
         coerce=int,
-        # widget=DisableOptionsSelect(
-        #     disabled_options=[
-        #         OnboardingProtocol.AOKI,
-        #         OnboardingProtocol.BRSKI
-        #     ]
-        # )
         widget=forms.Select(attrs={'disabled': 'disabled'}),
-        required=False
+        required=False,
     )
     onboarding_status = forms.CharField(
         label='Onboading Status',
-        widget=forms.TextInput(attrs={
-            'readonly': 'readonly',
-            'class': 'readonly-field form-control'
-        }),
+        widget=forms.TextInput(attrs={'readonly': 'readonly', 'class': 'readonly-field form-control'}),
     )
 
     pki_protocol_cmp = forms.BooleanField(label='CMP', required=False)
@@ -561,18 +548,18 @@ class ClmDeviceModelOnboardingForm(forms.Form):
 
             onboarding_protocol_selected = onboarding_protocol
             if onboarding_protocol_selected == OnboardingProtocol.MANUAL:
-                self.instance.onboarding_config.onboarding_cmp_shared_secret = ''
-                self.instance.onboarding_config.onboarding_est_password = ''
+                self.instance.onboarding_config.cmp_shared_secret = ''
+                self.instance.onboarding_config.est_password = ''
 
             if onboarding_protocol_selected == OnboardingProtocol.CMP_SHARED_SECRET:
-                self.instance.onboarding_config.onboarding_est_password = ''
-                if not self.instance.onboarding_config.onboarding_cmp_shared_secret:
-                    self.instance.onboarding_config.onboarding_cmp_shared_secret = _get_secret()
+                self.instance.onboarding_config.est_password = ''
+                if not self.instance.onboarding_config.cmp_shared_secret:
+                    self.instance.onboarding_config.cmp_shared_secret = _get_secret()
 
             if onboarding_protocol_selected == OnboardingProtocol.EST_USERNAME_PASSWORD:
-                self.instance.onboarding_config.onboarding_cmp_shared_secret = ''
-                if not self.instance.onboarding_config.onboarding_est_password:
-                    self.instance.onboarding_config.onboarding_est_password = _get_secret()
+                self.instance.onboarding_config.cmp_shared_secret = ''
+                if not self.instance.onboarding_config.est_password:
+                    self.instance.onboarding_config.est_password = _get_secret()
 
             self.instance.onboarding_config.onboarding_protocol = onboarding_protocol
             self.instance.onboarding_config.clear_pki_protocols()
@@ -641,10 +628,10 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
 
         if self.cleaned_data['pki_protocol_est'] is True:
             self.instance.no_onboarding_config.add_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD)
-            if self.instance.no_onboarding_config.est_username_password == '':
-                self.instance.no_onboarding_config.est_username_password = _get_secret()
+            if self.instance.no_onboarding_config.est_password == '':
+                self.instance.no_onboarding_config.est_password = _get_secret()
         else:
-            self.instance.no_onboarding_config.est_username_password = ''
+            self.instance.no_onboarding_config.est_password = ''
 
         if self.cleaned_data['pki_protocol_manual'] is True:
             self.instance.no_onboarding_config.add_pki_protocol(NoOnboardingPkiProtocol.MANUAL)
@@ -656,11 +643,12 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
 
 
 APP_CERT_PROFILES = [
-        ('tls-client', 'TLS-Client Certificate'),
-        ('tls-server', 'TLS-Server Certificate'),
-        ('opc-ua-client', 'OPC-UA Client Certificate'),
-        ('opc-ua-server', 'OPC-UA Server Certificates')
-    ]
+    ('tls-client', 'TLS-Client Certificate'),
+    ('tls-server', 'TLS-Server Certificate'),
+    ('opc-ua-client', 'OPC-UA Client Certificate'),
+    ('opc-ua-server', 'OPC-UA Server Certificates'),
+]
+
 
 class ApplicationCertProfileSelectForm(forms.Form):
     """Allows to select the certificate profile."""
@@ -669,5 +657,5 @@ class ApplicationCertProfileSelectForm(forms.Form):
         choices=APP_CERT_PROFILES,
         required=True,
         label='Application Certificate Profile',
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.Select(attrs={'class': 'form-control'}),
     )

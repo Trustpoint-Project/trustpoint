@@ -147,8 +147,8 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
     )
 
     # these will be dropped after successfull onboarding
-    onboarding_est_password = models.CharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
-    onboarding_cmp_shared_secret = models.CharField(
+    est_password = models.CharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
+    cmp_shared_secret = models.CharField(
         verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default=''
     )
 
@@ -166,8 +166,8 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
             'OnboardingConfigModel('
             f'onboarding_status:{OnboardingStatus(self.onboarding_status).label}, '
             f'onboarding_protocol:{OnboardingProtocol(self.onboarding_protocol).label}, '
-            f'cmp_shared_secret:{bool(self.onboarding_cmp_shared_secret)}, '
-            f'est_password:{bool(self.onboarding_est_password)})'
+            f'cmp_shared_secret:{bool(self.cmp_shared_secret)}, '
+            f'est_password:{bool(self.est_password)})'
         )
 
     def save(self, *args: Any, **kwargs: Any) -> None:
@@ -219,11 +219,11 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         """
         error_messages = {}
 
-        if self.onboarding_est_password != '':
-            error_messages['onboarding_est_password'] = 'EST password must not be set for manual onboarding.'  # noqa: S105
+        if self.est_password != '':
+            error_messages['est_password'] = 'EST password must not be set for manual onboarding.'  # noqa: S105
 
-        if self.onboarding_cmp_shared_secret != '':
-            error_messages['onboarding_cmp_shared_secret'] = 'CMP shared-secret must not be set for manual onboarding.'  # noqa: S105
+        if self.cmp_shared_secret != '':
+            error_messages['cmp_shared_secret'] = 'CMP shared-secret must not be set for manual onboarding.'  # noqa: S105
 
         if self.idevid_trust_store is not None:
             error_messages['idevid_trust_store'] = 'IDevID truststore must not be set for manual onboarding.'
@@ -241,11 +241,11 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         """
         error_messages = {}
 
-        if self.onboarding_est_password != '':
-            error_messages['onboarding_est_password'] = 'EST password must not be set for CMP IDevID onboarding.'  # noqa: S105
+        if self.est_password != '':
+            error_messages['est_password'] = 'EST password must not be set for CMP IDevID onboarding.'  # noqa: S105
 
-        if self.onboarding_cmp_shared_secret != '':
-            error_messages['onboarding_cmp_shared_secret'] = (
+        if self.cmp_shared_secret != '':
+            error_messages['cmp_shared_secret'] = (
                 'CMP shared-secret must not be set for CMP IDevID onboarding.'  # noqa: S105
             )
 
@@ -262,18 +262,18 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         """
         error_messages = {}
 
-        if self.onboarding_est_password != '':
-            error_messages['onboarding_est_password'] = 'EST password must not be set for CMP shared-secret onboarding.'  # noqa: S105
+        if self.est_password != '':
+            error_messages['est_password'] = 'EST password must not be set for CMP shared-secret onboarding.'  # noqa: S105
 
         if self.onboarding_status == OnboardingStatus.PENDING:
-            if self.onboarding_cmp_shared_secret == '':
-                error_messages['onboarding_cmp_shared_secret'] = (
+            if self.cmp_shared_secret == '':
+                error_messages['cmp_shared_secret'] = (
                     'CMP shared-secret must be set for CMP shared-secret onboarding '  # noqa: S105
                     'for net yet onboarded devices.'
                 )
 
-        elif self.onboarding_cmp_shared_secret != '':
-            error_messages['onboarding_cmp_shared_secret'] = (
+        elif self.cmp_shared_secret != '':
+            error_messages['cmp_shared_secret'] = (
                 'CMP shared-secret must not be set for CMP shared-secret onboarding '  # noqa: S105
                 'for already onboarded devices'
             )
@@ -294,11 +294,11 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         """
         error_messages = {}
 
-        if self.onboarding_est_password != '':
-            error_messages['onboarding_est_password'] = 'EST password must not be set for EST IDevID onboarding.'  # noqa: S105
+        if self.est_password != '':
+            error_messages['est_password'] = 'EST password must not be set for EST IDevID onboarding.'  # noqa: S105
 
-        if self.onboarding_cmp_shared_secret != '':
-            error_messages['onboarding_cmp_shared_secret'] = (
+        if self.cmp_shared_secret != '':
+            error_messages['cmp_shared_secret'] = (
                 'CMP shared-secret must not be set for EST IDevID onboarding.'  # noqa: S105
             )
 
@@ -318,19 +318,19 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         error_messages = {}
 
         if self.onboarding_status == OnboardingStatus.PENDING:
-            if self.onboarding_est_password == '':
-                error_messages['onboarding_est_password'] = (
+            if self.est_password == '':
+                error_messages['est_password'] = (
                     'EST password must be set for EST username / password onboarding '  # noqa: S105
                     'for net yet onboarded devices.'
                 )
-        elif self.onboarding_est_password != '':
-            error_messages['onboarding_est_password'] = (
+        elif self.est_password != '':
+            error_messages['est_password'] = (
                 'EST password must not be set for EST username / password onboarding '  # noqa: S105
                 'for already onboarded devices.'
             )
 
-        if self.onboarding_cmp_shared_secret != '':
-            error_messages['onboarding_cmp_shared_secret'] = (
+        if self.cmp_shared_secret != '':
+            error_messages['cmp_shared_secret'] = (
                 'CMP shared-secret must not be set for EST username / password onboarding.'  # noqa: S105
             )
 
@@ -350,7 +350,7 @@ class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol],
     pki_protocols = models.PositiveIntegerField(
         verbose_name=_('Pki Protocol Bitwise Flag'), null=False, blank=True, default=0
     )
-    est_username_password = models.CharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
+    est_password = models.CharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
     cmp_shared_secret = models.CharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
 
     def __str__(self) -> str:
@@ -358,7 +358,7 @@ class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol],
         return (
             'NoOnboardingConfigModel('
             f'cmp_shared_secret:{bool(self.cmp_shared_secret)}'
-            f'est_username_password:{bool(self.est_username_password)})'
+            f'est_password:{bool(self.est_password)})'
         )
 
     def save(self, *args: Any, **kwargs: Any) -> None:
@@ -383,12 +383,12 @@ class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol],
         if self.cmp_shared_secret == '' and self.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET):
             error_messages['cmp_shared_secret'] = 'CMP shared-secret must be set if EST_USERNAME_PASSWORD is enabled.'  # noqa: S105
 
-        if self.est_username_password != '' and not self.has_pki_protocol(
+        if self.est_password != '' and not self.has_pki_protocol(
             NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD
         ):
             error_messages['est_password'] = 'EST password must not be set if EST_USERNAME_PASSWORD is not enabled.'  # noqa: S105
 
-        if self.est_username_password == '' and self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):
+        if self.est_password == '' and self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):
             error_messages['est_password'] = 'EST password must be set if EST_USERNAME_PASSWORD is enabled.'  # noqa: S105
 
 

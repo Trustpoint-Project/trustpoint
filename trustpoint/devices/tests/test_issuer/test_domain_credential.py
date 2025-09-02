@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 
 from devices.issuer import LocalDomainCredentialIssuer
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingStatus
+from devices.models import IssuedCredentialModel, OnboardingStatus
 
 
 @pytest.mark.django_db
