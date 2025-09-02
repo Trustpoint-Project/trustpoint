@@ -7,6 +7,7 @@ They can also specify default values for fields and validate the request against
 """
 
 import logging
+import re
 from typing import Any, Literal
 
 from pydantic import (
@@ -16,25 +17,41 @@ from pydantic import (
     Field,
     field_validator,
 )
+from trustpoint_core.oid import NameOid
 
 logger = logging.getLogger(__name__)
 
 class ProfileValidationError(Exception):
     """Raised when the request is well-formed but does not match the profile constraints."""
 
-ALIASES = {
-    'common_name': AliasChoices('common_name', 'cn', 'CN', 'commonName', '2.5.4.3')
+ALIASES: dict[str, AliasChoices] = {
+    #'common_name': AliasChoices('common_name', 'cn', 'CN', 'commonName', '2.5.4.3')
 }
 
-def build_alias_map() -> dict[str, str]:
-    """Build a mapping of all known aliases to their canonical field names."""
+def build_alias_map_oids() -> dict[str, str]:
+    """Build a mapping of all known OID strings from trustpoint_core to their canonical field names."""
     alias_map = {}
-    for canonical, alias in ALIASES.items():
-        for choice in alias.choices:
-            alias_map[choice] = canonical
+    camel_case_pattern = re.compile(r'(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])')
+    for entry in NameOid:
+        dotted_string = entry.value.dotted_string # e.g. '2.5.4.3'
+        abbreviation = entry.value.abbreviation # e.g. 'CN'
+        camel_case = entry.value.full_name # e.g. 'commonName'
+        canonical = camel_case_pattern.sub('_', camel_case).lower() # e.g. 'common_name'
+        alias_map[dotted_string] = canonical
+        choices = [dotted_string]
+        if camel_case != canonical:
+            alias_map[camel_case] = canonical
+            choices.append(camel_case)
+        alias_map[canonical] = canonical
+        if abbreviation:
+            abbreviation_lower = abbreviation.lower() # e.g. 'cn'
+            alias_map[abbreviation] = canonical
+            alias_map[abbreviation_lower] = canonical
+            choices.extend([abbreviation, abbreviation_lower])
+        ALIASES[canonical] = AliasChoices(canonical, *choices)
     return alias_map
 
-alias_map = build_alias_map()
+alias_map = build_alias_map_oids()
 
 class ProfileValuePropertyModel(BaseModel):
     """Model for a profile value property."""
