@@ -58,3 +58,5 @@ Welcome to Trustpoint's documentation!
 
    development/development
    development/sbom
+   devices/workflow
+
