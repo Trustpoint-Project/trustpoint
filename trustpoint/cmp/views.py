@@ -22,7 +22,14 @@ from devices.issuer import (
     OpcUaClientCredentialIssuer,
     OpcUaServerCredentialIssuer,
 )
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingStatus, OnboardingProtocol, OnboardingPkiProtocol, NoOnboardingPkiProtocol
+from devices.models import (
+    DeviceModel,
+    IssuedCredentialModel,
+    NoOnboardingPkiProtocol,
+    OnboardingPkiProtocol,
+    OnboardingProtocol,
+    OnboardingStatus,
+)
 from django.http import HttpResponse
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -41,6 +48,7 @@ if TYPE_CHECKING:
     from typing import Any, TypeGuard
 
     from cryptography.hazmat.primitives.asymmetric.types import PublicKeyTypes
+    from devices.models import NoOnboardingConfigModel, OnboardingConfigModel
     from django.http import HttpRequest
     from pki.models.credential import CredentialModel
 
@@ -726,12 +734,12 @@ class CmpInitializationRequestView(
             err_msg = 'The device domain does not match the requested domain.'
             raise ValueError(err_msg)
 
-        config = None
+        config: OnboardingConfigModel | NoOnboardingConfigModel | None = None
         shared_secret = None
 
         if self.device.onboarding_config:
             config = self.device.onboarding_config
-            shared_secret = config.onboarding_cmp_shared_secret
+            shared_secret = config.cmp_shared_secret
         elif self.device.no_onboarding_config:
             config = self.device.no_onboarding_config
             shared_secret = config.cmp_shared_secret

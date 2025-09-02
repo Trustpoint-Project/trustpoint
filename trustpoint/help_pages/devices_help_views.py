@@ -807,7 +807,6 @@ class AbstractOnboardingDomainCredentialCmpSharedSecretHelpView(PageContextMixin
             host=self.host,
             pk=self.object.pk,
             shared_secret=self._get_shared_secret(),
-            device_name=self.object.common_name,
             domain_name=self.domain.unique_name
         )
 

@@ -239,17 +239,7 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         Returns:
             The error_messages gathered.
         """
-        error_messages = {}
-
-        if self.est_password != '':
-            error_messages['est_password'] = 'EST password must not be set for CMP IDevID onboarding.'  # noqa: S105
-
-        if self.cmp_shared_secret != '':
-            error_messages['cmp_shared_secret'] = (
-                'CMP shared-secret must not be set for CMP IDevID onboarding.'  # noqa: S105
-            )
-
-        return error_messages
+        return {}
 
     def _validate_case_cmp_shared_secret_onboarding(self) -> dict[str, str]:
         """Validates case OnboardingProtocol.CMP_SHARED_SECRET.
@@ -264,19 +254,6 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
 
         if self.est_password != '':
             error_messages['est_password'] = 'EST password must not be set for CMP shared-secret onboarding.'  # noqa: S105
-
-        if self.onboarding_status == OnboardingStatus.PENDING:
-            if self.cmp_shared_secret == '':
-                error_messages['cmp_shared_secret'] = (
-                    'CMP shared-secret must be set for CMP shared-secret onboarding '  # noqa: S105
-                    'for net yet onboarded devices.'
-                )
-
-        elif self.cmp_shared_secret != '':
-            error_messages['cmp_shared_secret'] = (
-                'CMP shared-secret must not be set for CMP shared-secret onboarding '  # noqa: S105
-                'for already onboarded devices'
-            )
 
         if self.idevid_trust_store is not None:
             error_messages['idevid_trust_store'] = 'IDevID truststore must not be set for CMP shared-secret onboarding.'
@@ -316,18 +293,6 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
             The error_messages gathered.
         """
         error_messages = {}
-
-        if self.onboarding_status == OnboardingStatus.PENDING:
-            if self.est_password == '':
-                error_messages['est_password'] = (
-                    'EST password must be set for EST username / password onboarding '  # noqa: S105
-                    'for net yet onboarded devices.'
-                )
-        elif self.est_password != '':
-            error_messages['est_password'] = (
-                'EST password must not be set for EST username / password onboarding '  # noqa: S105
-                'for already onboarded devices.'
-            )
 
         if self.cmp_shared_secret != '':
             error_messages['cmp_shared_secret'] = (
