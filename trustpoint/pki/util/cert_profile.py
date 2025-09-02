@@ -10,6 +10,7 @@ import logging
 import re
 from typing import Any, Literal
 
+from cryptography.x509 import CertificateSigningRequest, CertificateSigningRequestBuilder, NameAttribute
 from pydantic import (
     AliasChoices,
     BaseModel,
@@ -64,12 +65,24 @@ class ProfileValuePropertyModel(BaseModel):
 
 class SubjectModel(BaseModel):
     """Model for the subject DN of a certificate profile."""
-    common_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES['common_name'])
-    #organization: str | None = None
-    #organizational_unit: str | None = None
-    #country: str | None = None
-    #state: str | None = None
-    #locality: str | None = None
+    common_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('common_name'))
+    surname: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('surname'))
+    serial_number: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('serial_number'))
+    country_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('country_name'))
+    locality_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('locality_name'))
+    state_or_province_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('state_or_province_name'))
+    street_address: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('street_address'))
+    organization_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('organization_name'))
+    organizational_unit_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('organizational_unit_name'))
+    title: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('title'))
+    description: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('description'))
+    postal_code: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('postal_code'))
+    email_address: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('email_address'))
+    name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('name'))
+    given_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('given_name'))
+    initials: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('initials'))
+    pseudonym: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('pseudonym'))
+    domain_component: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('domain_component'))
 
     # Should allow unknown fields, but not required
     model_config = ConfigDict(extra='allow')
@@ -307,3 +320,18 @@ class JSONProfileVerifier:
         validated_request = self.validate_request(request=request)
         logger.debug('Validated Request before profile rules: %s', validated_request)
         return self._apply_profile_rules(validated_request, self.profile_dict)
+
+
+class JSONRequestAdapter:
+    """Adapter to convert from CertificateSigningRequest to JSON request dict."""
+
+    @staticmethod
+    def to_json(csr: CertificateSigningRequest | CertificateSigningRequestBuilder) -> dict[str, Any]:
+        """Convert a CSR to a JSON request dict."""
+        if isinstance(csr, CertificateSigningRequestBuilder):
+            csr = csr.build()
+        req = {'type': 'cert_request', 'subj': {}, 'ext': {}}
+        for attr in csr.subject_name:
+            req['subj'][attr.oid.dotted_string] = attr.value
+        for ext in csr.extensions:
+            req['ext'][ext.oid.dotted_string] = ext.value
