@@ -3,14 +3,14 @@ import base64
 import contextlib
 import re
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Never
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
-from cryptography.x509 import ExtensionOID
+from cryptography.x509.oid import ExtensionOID
 from pki.models import DomainModel
-from pyasn1.codec.ber import decoder
-from pyasn1.codec.der import encoder
+from pyasn1.codec.ber import decoder  # type: ignore[import-untyped]
+from pyasn1.codec.der import encoder  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
 
 from request.request_context import RequestContext
@@ -80,7 +80,8 @@ class EstPkiMessageParsing(ParsingComponent, LoggerMixin):
 
             subject_cn = 'unknown'
             with contextlib.suppress(IndexError, AttributeError):
-                subject_cn = csr.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
+                cn_value = csr.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
+                subject_cn = cn_value if isinstance(cn_value, str) else cn_value.decode('utf-8')
 
             self.logger.info('EST PKI message parsing successful: %(format)s format, subject CN: %(subject_cn)s',
                              extra={'format': est_encoding, 'subject_cn': subject_cn})
@@ -99,7 +100,13 @@ class EstCsrSignatureVerification(ParsingComponent, LoggerMixin):
         if csr is None:
             error_message = 'CSR not found in the parsing context. Ensure it was parsed before signature verification.'
             self.logger.warning('EST CSR signature verification failed: CSR not found in context')
-            raise ValueError(error_message)
+            self._raise_validation_error(error_message)
+
+        if not isinstance(csr, x509.CertificateSigningRequest):
+            error_message = 'CSR signature verification is only supported for EST requests with CertificateSigningRequest objects.'
+            self.logger.warning('EST CSR signature verification failed: Expected CertificateSigningRequest, got %s', 
+                              type(csr).__name__)
+            self._raise_validation_error(error_message)
 
         public_key = csr.public_key()
         signature_hash_algorithm = csr.signature_hash_algorithm
@@ -139,6 +146,10 @@ class EstCsrSignatureVerification(ParsingComponent, LoggerMixin):
             error_message = 'Failed to verify the CSR signature.'
             self.logger.exception('EST CSR signature verification failed', extra={'exception': str(e)})
             raise ValueError(error_message) from e
+
+    def _raise_validation_error(self, message: str) -> Never:
+        """Raise a ValueError with the given message."""
+        raise ValueError(message)
 
 class DomainParsing(ParsingComponent, LoggerMixin):
     """Parses and validates the domain from the request context object."""
@@ -220,6 +231,9 @@ class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
     def _extract_signer_certificate(self, context: RequestContext) -> None:
         """Extract the CMP signer certificate from extraCerts if available (optional)."""
         try:
+            if not context.parsed_message or not hasattr(context.parsed_message, '__getitem__'):
+                self.logger.debug('Parsed message is not indexable, skipping extraCerts extraction')
+                return
             extra_certs = context.parsed_message['extraCerts']
             if extra_certs is None or len(extra_certs) == 0:
                 self.logger.debug('No extra certificates found in CMP message')
@@ -340,15 +354,27 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         if context.parsed_message is None:
             error_message = 'Parsed message is missing from the context.'
             self.logger.warning('CMP body type validation failed: Parsed message is missing')
-            raise ValueError(error_message)
+            self._raise_value_error(error_message)
 
         try:
-            pki_body = context.parsed_message['body']
+            if not hasattr(context.parsed_message, '__getitem__'):
+                error_message = 'Parsed message is not a CMP message structure.'
+                self.logger.warning('CMP body type validation failed: Invalid message structure')
+                self._raise_value_error(error_message)
+
+            parsed_message = context.parsed_message
+            if not hasattr(parsed_message, '__getitem__'):
+                error_message = 'Parsed message is not indexable.'
+                self.logger.warning('CMP body type validation failed: Message not indexable')
+                self._raise_value_error(error_message)
+
+            pki_body = parsed_message['body']
+
             body_type = pki_body.getName()
 
             if body_type not in ('ir', 'cr'):
                 err_msg = f'Unsupported CMP body type: {body_type}'
-                self._raise_validation_error(err_msg)
+                self._raise_value_error(err_msg)
 
             # Validate body type matches operation
             self._validate_operation_body_match(context.operation, body_type)
@@ -378,7 +404,11 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             err_msg = f'Expected CMP CR body for certification operation, but got CMP {body_type.upper()} body.'
             raise ValueError(err_msg)
 
-    def _validate_cert_req_messages(self, cert_req_messages: list) -> None:
+    def _raise_value_error(self, message: str) -> Never:
+        """Helper function to raise a ValueError with the given message."""
+        raise ValueError(message)
+
+    def _validate_cert_req_messages(self, cert_req_messages: list[rfc2511.CertReqMsg]) -> None:
         """Validate the certificate request messages structure."""
         if len(cert_req_messages) > 1:
             self._raise_value_error('Multiple CertReqMessages found.')
@@ -401,6 +431,10 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             self._raise_validation_error('Version must be 2 if supplied in certificate request.')
 
         return self._cert_template_to_builder(cert_req_template)
+
+    def _raise_validation_error(self, message: str) -> Never:
+        """Helper function to raise a ValueError with the given message."""
+        raise ValueError(message)
 
     def _cert_template_to_builder(
             self,
@@ -471,7 +505,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         """Helper function to raise NotImplementedError with a given message."""
         raise NotImplementedError(message)
 
-    def _parse_cert_template_extensions(self, extensions_asn1: rfc2459.Extensions) -> list[x509.Extension]:
+    def _parse_cert_template_extensions(self, extensions_asn1: rfc2459.Extensions) -> list[x509.Extension[Any]]:
         """Parse ASN.1 extensions from certTemplate into cryptography extension objects using fallback approach."""
         extensions_list = []
 
@@ -482,9 +516,10 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
                 ext_value_bytes = bytes(extension['extnValue'])
 
                 try:
-                    if ext_oid == x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string:
+                    extension_obj: x509.Extension[Any]
+                    if ext_oid == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string:
                         extension_obj = self._parse_subject_alternative_name(ext_value_bytes, critical=is_critical)
-                    elif ext_oid == x509.ExtensionOID.CERTIFICATE_POLICIES.dotted_string:
+                    elif ext_oid == ExtensionOID.CERTIFICATE_POLICIES.dotted_string:
                         extension_obj = self._parse_certificate_policies(ext_value_bytes, critical=is_critical)
                     else:
                         self._raise_not_implemented_error(f'Extension with OID {ext_oid} is not supported')
@@ -502,7 +537,9 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
                          extra={'extensions_count': len(extensions_list)})
         return extensions_list
 
-    def _parse_subject_alternative_name(self, value: bytes, *, critical: bool) -> x509.Extension:
+    def _parse_subject_alternative_name(
+        self, value: bytes, *, critical: bool
+    ) -> x509.Extension[x509.SubjectAlternativeName]:
         """Parse Subject Alternative Name extension manually using the working approach."""
         from pyasn1.codec.der import decoder
         from pyasn1_modules import rfc2459
@@ -515,7 +552,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
 
             san_extension = x509.SubjectAlternativeName(general_names)
             return x509.Extension(
-                oid=x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME,
+                oid=ExtensionOID.SUBJECT_ALTERNATIVE_NAME,
                 critical=critical,
                 value=san_extension
             )
@@ -524,11 +561,11 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
                                    extra={'error': str(e)})
             raise
 
-    def _extract_general_names(self, san_asn1: rfc2459.SubjectAltName) -> list:
+    def _extract_general_names(self, san_asn1: rfc2459.SubjectAltName) -> list[x509.GeneralName]:
         """Extract general names from SAN ASN.1 structure."""
         ipv4_byte_length = 4
         ipv6_byte_length = 16
-        general_names = []
+        general_names: list[x509.GeneralName] = []
 
         for general_name in san_asn1:
             name_type = general_name.getName()
@@ -561,21 +598,17 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         try:
             ip_bytes = name_value.asOctets()
             if len(ip_bytes) == ipv4_byte_length:
-                ip_addr = ipaddress.IPv4Address(ip_bytes)
-                general_names.append(x509.IPAddress(ip_addr))
+                ipv4_addr = ipaddress.IPv4Address(ip_bytes)
+                general_names.append(x509.IPAddress(ipv4_addr))
             elif len(ip_bytes) == ipv6_byte_length:
-                ip_addr = ipaddress.IPv6Address(ip_bytes)
-                general_names.append(x509.IPAddress(ip_addr))
+                ipv6_addr = ipaddress.IPv6Address(ip_bytes)
+                general_names.append(x509.IPAddress(ipv6_addr))
             else:
                 self.logger.warning('Unknown IP address length: %(ip_length)s',
                                     extra={'ip_length': len(ip_bytes)})
         except (ValueError, TypeError) as ip_error:
             self.logger.warning('Failed to parse IP address: %(error)s',
                                 extra={'error': str(ip_error)})
-
-    def _raise_value_error(self, message: str) -> None:
-        """Raise a ValueError with the given message."""
-        raise ValueError(message)
 
     def _parse_certificate_policies(self, value: bytes, *, critical: bool) -> x509.Extension[x509.CertificatePolicies]:
         """Parse Certificate Policies extension manually."""
@@ -603,7 +636,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             certificate_policies = x509.CertificatePolicies(policy_information_list)
             oid = ExtensionOID.CERTIFICATE_POLICIES
 
-            if not isinstance(oid, ExtensionOID):
+            if not isinstance(oid, x509.ObjectIdentifier):
                 self.logger.warning('Invalid OID type: %(oid_type)s',
                                     extra={'oid_type': type(oid).__name__})
                 self._raise_value_error('Invalid OID type')
