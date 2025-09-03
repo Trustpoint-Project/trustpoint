@@ -45,6 +45,7 @@ if TYPE_CHECKING:
     from django.db.models import QuerySet
 
 
+
 class MailTemplateListView(View):
     """Return email templates grouped for the wizard."""
 
@@ -235,36 +236,28 @@ class WorkflowWizardView(View):
     template_name = 'workflows/definition_wizard.html'
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        """Render the wizard page."""
         return render(
             request,
             self.template_name,
-            {
-                'page_category': 'workflows',
-                'page_name': 'wizard',
-            },
+            {'page_category': 'workflows', 'page_name': 'wizard'},
         )
 
     def post(self, request: HttpRequest) -> JsonResponse:
-        """Create or update a workflow definition (JSON in, JSON out)."""
-        # Parse JSON
         try:
             data = json.loads(request.body)
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON payload.'}, status=400)
 
-        # Server-side validation (authoritative)
         errors = validate_wizard_payload(data)
         if errors:
             return JsonResponse({'error': 'Validation failed', 'errors': errors}, status=400)
 
-        # Build typed values for mypy and the transformer
         name, triggers_typed, steps_typed, scopes_list = self._parse_payload_for_save(data)
-
-        # Transform UI model -> internal schema
         definition = transform_to_definition_schema(triggers_typed, steps_typed)
 
-        # Create / Update
+        # Deduplicate scopes BEFORE writing (prevents unique_together conflicts)
+        scopes_list = self._dedupe_scopes(scopes_list)
+
         wf_id_raw = data.get('id')
         try:
             if wf_id_raw:
@@ -281,7 +274,7 @@ class WorkflowWizardView(View):
         except IntegrityError:
             return JsonResponse({'error': 'A workflow with that name already exists.'}, status=400)
 
-        # Reset scopes (idempotent on re-save)
+        # Reset scopes idempotently
         wf.scopes.all().delete()
         WorkflowScope.objects.bulk_create(
             [
@@ -295,19 +288,15 @@ class WorkflowWizardView(View):
             ]
         )
 
+        # Preserve 201 for both create and update to match current frontend expectation
         return JsonResponse({'id': str(wf.id)}, status=201)
-
-    # ------------- helpers -------------
 
     @staticmethod
     def _parse_payload_for_save(
         data: dict[str, Any],
     ) -> tuple[str, list[dict[str, str]], list[dict[str, Any]], list[dict[str, Any]]]:
-        """Return (name, triggers_typed, steps_typed, scopes_list) with precise types."""
-        # name
         name = str(data.get('name') or '').strip()
 
-        # triggers → list[dict[str, str]]
         triggers_raw = list(data.get('triggers') or [])
         triggers_typed: list[dict[str, str]] = [
             {
@@ -318,17 +307,12 @@ class WorkflowWizardView(View):
             for t in triggers_raw
         ]
 
-        # steps → list[dict[str, Any]]
         steps_raw = list(data.get('steps') or [])
         steps_typed: list[dict[str, Any]] = [
-            {
-                'type': str((s or {}).get('type', '')),
-                'params': dict((s or {}).get('params') or {}),
-            }
+            {'type': str((s or {}).get('type', '')), 'params': dict((s or {}).get('params') or {})}
             for s in steps_raw
         ]
 
-        # scopes → flat list[dict]
         scopes_in = data.get('scopes', {})
         scopes_list = WorkflowWizardView._flatten_scopes(scopes_in)
 
@@ -336,7 +320,6 @@ class WorkflowWizardView(View):
 
     @staticmethod
     def _flatten_scopes(scopes_in: Any) -> list[dict[str, Any]]:
-        """Normalize grouped scopes (ca_ids/domain_ids/device_ids) or flat rows to a flat list."""
         if isinstance(scopes_in, dict):
             out: list[dict[str, Any]] = []
             out.extend({'ca_id': ca, 'domain_id': None, 'device_id': None} for ca in scopes_in.get('ca_ids', []))
@@ -344,10 +327,26 @@ class WorkflowWizardView(View):
             out.extend({'ca_id': None, 'domain_id': None, 'device_id': dev} for dev in scopes_in.get('device_ids', []))
             return out
         if isinstance(scopes_in, list):
-            # trust caller; validator already ensured shape
             return [dict(x) for x in scopes_in]
-        # Fallback to empty (validator should have caught this)
         return []
+
+    @staticmethod
+    def _dedupe_scopes(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Remove duplicate rows (same CA/Domain/Device triple)."""
+        seen: set[tuple[int | None, int | None, int | None]] = set()
+        unique: list[dict[str, Any]] = []
+        for it in items:
+            ca = it.get('ca_id'); dom = it.get('domain_id'); dev = it.get('device_id')
+            key = (
+                int(ca) if isinstance(ca, (int,)) or (isinstance(ca, str) and ca.isdigit()) else None,
+                int(dom) if isinstance(dom, (int,)) or (isinstance(dom, str) and dom.isdigit()) else None,
+                int(dev) if isinstance(dev, (int,)) or (isinstance(dev, str) and dev.isdigit()) else None,
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append({'ca_id': key[0], 'domain_id': key[1], 'device_id': key[2]})
+        return unique
 
 
 class WorkflowDefinitionDeleteView(View):

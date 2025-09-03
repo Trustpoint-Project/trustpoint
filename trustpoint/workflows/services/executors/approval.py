@@ -30,12 +30,9 @@ class ApprovalExecutor(AbstractNodeExecutor):
         if signal is None and instance.state in {
             WorkflowInstance.STATE_STARTING,
             WorkflowInstance.STATE_RUNNING,
+            WorkflowInstance.STATE_AWAITING,
         }:
-            return NodeResult(
-                status=ExecStatus.WAITING,
-                wait_state=WorkflowInstance.STATE_AWAITING,
-                context={'awaiting': True},
-            )
+            return NodeResult(status=ExecStatus.WAITING, context={'awaiting': True})
 
         if signal == 'Rejected':
             return NodeResult(status=ExecStatus.REJECTED)
@@ -46,4 +43,4 @@ class ApprovalExecutor(AbstractNodeExecutor):
             return NodeResult(status=ExecStatus.PASSED, context={'approved': True})
 
         # Default: still waiting
-        return NodeResult(status=ExecStatus.WAITING, wait_state=WorkflowInstance.STATE_AWAITING)
+        return NodeResult(status=ExecStatus.WAITING)

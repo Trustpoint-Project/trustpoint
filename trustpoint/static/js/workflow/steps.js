@@ -1,6 +1,8 @@
+// static/js/steps.js
 import {
   state, addStep, removeStep, updateStepType, updateStepParam, moveStep,
 } from './state.js';
+import { fetchContextCatalog, attachVarPicker } from './ui-context.js';
 
 // Minimal styles for drag affordance (inserted once)
 let _stylesInjected = false;
@@ -34,8 +36,8 @@ export function renderStepsUI({containerEl, addBtnEl, onChange}) {
     onChange();
   };
 
-  // Enable drag/drop
-  enableDnD(containerEl, onChange);
+  // Enable drag/drop (handle-only drag)
+  enableDnD(containerEl, addBtnEl, onChange);
 }
 
 function stepCard(step, displayIndex, ctx) {
@@ -43,7 +45,7 @@ function stepCard(step, displayIndex, ctx) {
 
   const card = document.createElement('div');
   card.className = 'card ww-step-card mb-2 p-2';
-  card.setAttribute('draggable', 'true');
+  // NOTE: NO draggable on the card itself.
   card.dataset.stepId = String(step.id);
 
   // Header with label + controls
@@ -57,6 +59,9 @@ function stepCard(step, displayIndex, ctx) {
   grip.className = 'ww-drag-handle';
   grip.title = 'Drag to reorder';
   grip.textContent = '⋮⋮';
+  // Only the handle is draggable:
+  grip.setAttribute('draggable', 'true');
+
   const title = document.createElement('strong');
   title.textContent = `Step ${displayIndex + 1} • ${step.type}`;
   left.appendChild(grip);
@@ -96,20 +101,36 @@ function stepCard(step, displayIndex, ctx) {
   return card;
 }
 
-function enableDnD(containerEl, onChange) {
+function enableDnD(containerEl, addBtnEl, onChange) {
   let dragId = null;
+  let dragCard = null;
 
-  containerEl.querySelectorAll('[draggable="true"]').forEach(card => {
-    card.ondragstart = (e) => {
+  // Delegate dragstart/dragend to handles only
+  containerEl.querySelectorAll('.ww-drag-handle[draggable="true"]').forEach(handle => {
+    handle.ondragstart = (e) => {
+      const card = handle.closest('.ww-step-card');
+      if (!card) return;
       dragId = Number(card.dataset.stepId);
+      dragCard = card;
       card.classList.add('ww-dragging');
       e.dataTransfer.effectAllowed = 'move';
       try { e.dataTransfer.setData('text/plain', String(dragId)); } catch {}
+      // Optional nicer drag image (use the card)
+      try { e.dataTransfer.setDragImage(card, 10, 10); } catch {}
     };
-    card.ondragend = () => {
-      card.classList.remove('ww-dragging', 'ww-drop-indicator-top', 'ww-drop-indicator-bottom');
+    handle.ondragend = () => {
+      if (dragCard) dragCard.classList.remove('ww-dragging');
       dragId = null;
+      dragCard = null;
+      // Clear any stray indicators
+      containerEl.querySelectorAll('.ww-step-card').forEach(c => {
+        c.classList.remove('ww-drop-indicator-top', 'ww-drop-indicator-bottom');
+      });
     };
+  });
+
+  // Cards act as drop targets
+  containerEl.querySelectorAll('.ww-step-card').forEach(card => {
     card.ondragover = (e) => {
       if (!dragId) return;
       e.preventDefault(); // allow drop
@@ -133,16 +154,14 @@ function enableDnD(containerEl, onChange) {
       const fromIndex = steps.findIndex(s => s.id === dragId);
       const toIndexBase = steps.findIndex(s => s.id === targetId);
 
-      // Insert before/after depending on drop position
       const rect = card.getBoundingClientRect();
       const before = (e.clientY - rect.top) < rect.height / 2;
       let toIndex = toIndexBase + (before ? 0 : 1);
 
-      // If moving forward and dropping after, account for removal shift
       moveStep(dragId, toIndex > fromIndex ? toIndex - 1 : toIndex);
 
       // Re-render and notify
-      renderStepsUI({containerEl, addBtnEl: document.getElementById('add-step-btn'), onChange});
+      renderStepsUI({containerEl, addBtnEl, onChange});
       onChange();
     };
   });
@@ -163,8 +182,10 @@ function renderParams(step, container, ctx) {
       { name:'timeoutSecs',  label:'Timeout (sec)',  type:'number' },
     ],
     Webhook: [
-      { name:'url',    label:'Webhook URL', type:'text' },
-      { name:'method', label:'HTTP Method', type:'select', options:['GET','POST','PUT','DELETE'] },
+      { name:'url',          label:'Webhook URL',               type:'text' },
+      { name:'method',       label:'HTTP Method',               type:'select', options:['GET','POST','PUT','DELETE'] },
+      { name:'result_to',    label:'Save response to (vars.*)', type:'text' },
+      { name:'result_source',label:'What to save',              type:'select', options:['auto','json','text','status','headers'] },
     ],
     Timer: [{ name:'delaySecs', label:'Delay (sec)', type:'number' }],
     Condition: [{ name:'expression', label:'Condition (JS expr)', type:'text' }],
@@ -205,9 +226,10 @@ function renderEmailParams(step, container, ctx) {
   container.textContent = '';
 
   // Recipients (csv)
-  container.appendChild(labeledTextArea('Recipients (comma-separated)', step.params.recipients || '', v => {
+  const recips = labeledTextArea('Recipients (comma-separated)', step.params.recipients || '', v => {
     updateStepParam(step.id, 'recipients', v); onChange();
-  }));
+  });
+  container.appendChild(recips);
 
   // From / CC / BCC
   const row = document.createElement('div'); row.className = 'row g-2';
@@ -226,7 +248,6 @@ function renderEmailParams(step, container, ctx) {
   const useTpl = !!(step.params.template && String(step.params.template).trim());
   const modeWrap = document.createElement('div'); modeWrap.className = 'my-2';
   const tpl = radio('email-mode-'+step.id, 'Use template', useTpl, () => {
-    // Switch to template → clear subject/body, ensure a template key
     updateStepParam(step.id, 'subject', '');
     updateStepParam(step.id, 'body', '');
     if (!step.params.template) {
@@ -237,7 +258,6 @@ function renderEmailParams(step, container, ctx) {
     onChange();
   });
   const custom = radio('email-mode-'+step.id, 'Write custom', !useTpl, () => {
-    // Switch to custom → clear template
     updateStepParam(step.id, 'template', '');
     renderEmailParams(step, container, ctx);
     onChange();
@@ -273,11 +293,20 @@ function renderEmailParams(step, container, ctx) {
   tplBlock.appendChild(tplRow);
   container.appendChild(tplBlock);
 
-  // Custom subject/body
+  // Custom subject/body + variable pickers
   const customBlock = document.createElement('div'); customBlock.className = useTpl ? 'd-none mt-2' : 'mt-2';
-  customBlock.appendChild(labeledInput('Subject', step.params.subject || '', v => { updateStepParam(step.id, 'subject', v); onChange(); }));
-  customBlock.appendChild(labeledTextArea('Body (plain text)', step.params.body || '', v => { updateStepParam(step.id, 'body', v); onChange(); }));
+  const subjLbl = labeledInput('Subject', step.params.subject || '', v => { updateStepParam(step.id, 'subject', v); onChange(); });
+  const bodyLbl = labeledTextArea('Body (plain text)', step.params.body || '', v => { updateStepParam(step.id, 'body', v); onChange(); });
+  customBlock.appendChild(subjLbl);
+  customBlock.appendChild(bodyLbl);
   container.appendChild(customBlock);
+
+  if (!useTpl) {
+    fetchContextCatalog().then(cat => {
+      attachVarPicker({ container: subjLbl, targetInput: subjLbl.querySelector('input'), catalog: cat });
+      attachVarPicker({ container: bodyLbl, targetInput: bodyLbl.querySelector('textarea'), catalog: cat });
+    }).catch(() => {});
+  }
 
   // helpers
   function firstTemplateKey() {
