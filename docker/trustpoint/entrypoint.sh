@@ -14,20 +14,34 @@ echo "PostgreSQL database is available!"
 
 run_as_www_data "uv run trustpoint/manage.py managestartup"
 
-# 12) Configure apache
-/etc/trustpoint/wizard/transition/configure_apache.sh
+#  Configure nginx
+/etc/trustpoint/wizard/transition/configure_nginx.sh
 
-# Configure TLS
-/etc/trustpoint/wizard/transition/update_tls.sh
-
+/etc/trustpoint/wizard/transition/update_tls_nginx.sh
 
 echo "Starting cron service..."
 cron
 
 version=$(awk -F\" '/^version =/ { print $2 }' pyproject.toml)
-echo "Finished with initalisation"
+echo "Finished with initialisation"
 echo "Trustpoint version: $version"
 
-# Start Apache server
-echo "Starting Apache server..."
-exec apache2ctl -D FOREGROUND
+# ✅ Start Gunicorn in background
+echo "Starting Gunicorn server..."
+su -s /bin/bash www-data -c "cd /var/www/html/trustpoint/trustpoint && \
+    /var/www/html/trustpoint/.venv/bin/gunicorn \
+    --bind 127.0.0.1:8000 \
+    --workers 4 \
+    --timeout 300 \
+    --access-logfile /var/log/nginx/gunicorn-access.log \
+    --error-logfile /var/log/nginx/gunicorn-error.log \
+    --user www-data \
+    --group www-data \
+    trustpoint.wsgi:application" &
+
+# Wait for Gunicorn to start
+sleep 5
+
+# ✅ Start Nginx in foreground (NOT apache)
+echo "Starting Nginx server..."
+exec nginx -g 'daemon off;'

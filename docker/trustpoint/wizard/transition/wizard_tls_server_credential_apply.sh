@@ -35,7 +35,7 @@ then
 fi
 
 # configure apache and tsl
-/etc/trustpoint/wizard/transition/update_tls.sh
+/etc/trustpoint/wizard/transition/update_tls_nginx.sh
 
 echo "Transition from WIZARD_TLS_SERVER_CREDENTIAL_APPLY to WIZARD_DEMO_DATA completed successfully."
 exit 0

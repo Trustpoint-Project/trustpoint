@@ -17,11 +17,9 @@ RUN apt-get update && \
         apt-get install -y --no-install-recommends \ 
         sudo \
         apt-utils \
-        apache2 \
-        apache2-utils \
+        nginx \
         gettext \
         cron \
-        apache2-dev \
         locales \
         postgresql-client && \
     rm -rf /var/lib/apt/lists/*
@@ -54,12 +52,9 @@ RUN if [ "${BRANCH}" != "" ]; then \
 
 USER www-data
 RUN uv sync --python-preference only-system
-RUN uv pip install mod_wsgi
+RUN uv pip install gunicorn[gevent]
 USER root
 
-RUN uv run mod_wsgi-express install-module \
-    > /etc/apache2/mods-available/wsgi.load && \
-    a2enmod wsgi
 
 # Sets DEBUG = False and DOCKER_CONTAINER = True in the Django settings
 RUN sed -i '/DEBUG = True/s/True/False/' trustpoint/trustpoint/settings.py && \
@@ -76,28 +71,32 @@ RUN chmod +x /etc/trustpoint/notifications/execute_notifications.sh && \
     cp /etc/trustpoint/notifications/crontab.txt /etc/cron.d/execute_notifications && \
     chmod 0644 /etc/cron.d/execute_notifications && \
     crontab /etc/cron.d/execute_notifications && \
-    touch /var/log/cron.log
+    touch /var/log/cron.log \
+
+
 
 # Add sudoers file and configure user and restart sudo service
 RUN cp ./docker/trustpoint/wizard/sudoers /etc/sudoers && \
     chown root:root /etc/sudoers && \
     chmod 440 /etc/sudoers && \
     service sudo restart
-
+# Create log directories
+RUN mkdir -p /var/log/nginx && \
+    chown www-data:www-data /var/log/nginx
 # TODO(AlexHx8472): We may want to use proper docker secrets handling in the future
 RUN mkdir -p /etc/trustpoint/secrets && \
     uv run python -c "from pathlib import Path; from django.core.management.utils import get_random_secret_key; Path('/etc/trustpoint/secrets/django_secret_key.env').write_text(get_random_secret_key())" && \
     chown -R www-data:www-data /etc/trustpoint/secrets && \
     chmod -R 700 /etc/trustpoint/secrets
 
-# Remove any enabled Apache sites and add new Apache configuration
-RUN rm -f /etc/apache2/sites-enabled/* && \
-    cp ./docker/trustpoint/apache/trustpoint-http-init.conf /etc/apache2/sites-available/trustpoint-http-init.conf && \
-    a2ensite trustpoint-http-init.conf && \
-    echo 'ServerName trustpoint' >> /etc/apache2/apache2.conf
+#  COPY NGINX CONFIGURATION (now nginx is installed)
+COPY ./docker/trustpoint/nginx/trustpoint-nginx.conf /etc/nginx/sites-available/trustpoint
+RUN rm -f /etc/nginx/sites-enabled/default
 
-# Make entrypoint script executable
+
+RUN chmod +x /etc/trustpoint/wizard/transition/*.sh
+
+#  USE NGINX ENTRYPOINT
 RUN chmod +x ./docker/trustpoint/entrypoint.sh
 
-# Set entrypoint
 ENTRYPOINT ["docker/trustpoint/entrypoint.sh"]
