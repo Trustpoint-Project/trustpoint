@@ -6,9 +6,7 @@ from collections import Counter
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from django.urls import reverse
-
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingStatus, OnboardingProtocol
+from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, OnboardingStatus
 from django.contrib import messages
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -22,6 +20,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import RedirectView, TemplateView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
+from notifications.models import NotificationModel, NotificationStatus
 from pki.models import CertificateModel, IssuingCaModel
 
 from trustpoint.logger import LoggerMixin
@@ -29,7 +28,6 @@ from trustpoint.settings import UIConfig
 from trustpoint.views.base import SortableTableMixin
 
 from .filters import NotificationFilter
-from notifications.models import NotificationModel, NotificationStatus
 
 if TYPE_CHECKING:
     from django.utils.safestring import SafeString
@@ -45,11 +43,11 @@ class IndexView(RedirectView):
     pattern_name = 'home:dashboard'
 
 
-class DashboardView(SortableTableMixin, ListView[NotificationModel]):
+class DashboardView(SortableTableMixin[NotificationModel], ListView[NotificationModel]):
     """Renders the dashboard page for authenticated users. Uses the 'home/dashboard.html' template."""
 
     template_name = 'home/dashboard.html'
-    model = NotificationModel
+    model = type[NotificationModel]
     context_object_name = 'notifications'
     default_sort_param = '-created_at'
     paginate_by = UIConfig.notifications_paginate_by
@@ -370,7 +368,10 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             )
 
             protocol_mapping = {key: str(value) for key, value in OnboardingStatus.choices}
-            device_os_counts = {protocol_mapping[item['onboarding_config__onboarding_status']]: item['count'] for item in device_os_qr}
+            device_os_counts = {
+                protocol_mapping[item['onboarding_config__onboarding_status']]:
+                item['count'] for item in device_os_qr
+            }
 
             for protocol in protocol_mapping.values():
                 device_os_counts.setdefault(protocol, 0)
@@ -526,7 +527,10 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             )
 
             protocol_mapping = {key: str(value) for key, value in OnboardingProtocol.choices}
-            device_op_counts = {protocol_mapping[item['onboarding_config__onboarding_protocol']]: item['count'] for item in device_op_qr}
+            device_op_counts = {
+                protocol_mapping[item['onboarding_config__onboarding_protocol']]:
+                item['count'] for item in device_op_qr
+            }
 
         except Exception as exception:
             err_msg = f'Error occurred in device count by onboarding protocol query: {exception}'
@@ -686,3 +690,5 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             err_msg = f'Error occurred in ca counts by type query: {exception}'
             self.logger.exception(err_msg)
         return issuing_ca_type_counts
+
+
