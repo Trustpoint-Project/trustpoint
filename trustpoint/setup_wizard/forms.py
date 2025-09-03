@@ -130,7 +130,7 @@ class HsmSetupForm(forms.Form):
         label=_('PKCS#11 Module Path'),
         help_text=_('Path to the PKCS#11 module library.'),
         widget=forms.TextInput(attrs={'class': 'form-control'}),
-        required=False
+        required=True
     )
 
     slot = forms.IntegerField(
@@ -140,7 +140,7 @@ class HsmSetupForm(forms.Form):
         label=_('Slot Number'),
         help_text=_('HSM slot number to use.'),
         widget=forms.NumberInput(attrs={'class': 'form-control'}),
-        required=False
+        required=True
     )
 
     label = forms.CharField(
@@ -149,7 +149,7 @@ class HsmSetupForm(forms.Form):
         label=_('Token Label'),
         help_text=_('Label for the HSM token.'),
         widget=forms.TextInput(attrs={'class': 'form-control'}),
-        required=False
+        required=True
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:

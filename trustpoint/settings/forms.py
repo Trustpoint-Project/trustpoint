@@ -287,23 +287,22 @@ class PKCS11ConfigForm(forms.Form):
 
     def save_token_config(self) -> PKCS11Token:
         """Save or update token configuration."""
+        data = self.cleaned_data
         token, created = PKCS11Token.objects.get_or_create(
+            label=data["label"],
             defaults={
-                'hsm_type': self.cleaned_data['hsm_type'],
-                'label': self.cleaned_data['label'],
-                'slot': self.cleaned_data['slot'],
-                'module_path': self.cleaned_data['module_path'],
+                "hsm_type": data["hsm_type"],
+                "slot": data["slot"],
+                "module_path": data["module_path"],
             }
         )
 
         if not created:
-            # Update existing token
-            token.hsm_type = self.cleaned_data['hsm_type']
-            token.label = self.cleaned_data['label']
-            token.slot = self.cleaned_data['slot']
-            token.module_path = self.cleaned_data['module_path']
+            # Update fields for the existing token
+            for field, value in data.items():
+                if field != "label":  # Don't update the lookup field
+                    setattr(token, field, value)
             token.save()
-
         return token
 
 
