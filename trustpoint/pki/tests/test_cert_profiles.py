@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
+from pki.util.cert_req_converter import JSONCertRequestConverter
 
 
 def test_valid_profile_instance() -> None:
@@ -210,4 +211,62 @@ def test_request_normalization() -> None:
     }
     validated_request = JSONProfileVerifier.validate_request(request)
     # 'subj' should be expanded to 'subject' and 'cn' to 'common_name'
+    assert validated_request['subject']['common_name'] == 'example.com'
+
+def test_csr_to_json_adapter() -> None:
+    """Test that the CSR to JSON adapter works correctly."""
+    import ipaddress
+
+    from cryptography import x509
+
+    # Generate a test Certificate Builder
+    csr = (
+        x509.CertificateBuilder()
+        .subject_name(
+            x509.Name([
+                x509.NameAttribute(x509.NameOID.COMMON_NAME, 'example.com'),
+                x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, 'Example Org'),
+            ])
+        )
+        .add_extension(
+            x509.SubjectAlternativeName([
+                x509.DNSName('www.example.com'),
+                x509.IPAddress(ipaddress.IPv4Address('127.0.0.1')),
+                x509.RFC822Name('user@example.com'),
+                x509.UniformResourceIdentifier('http://www.example.com'),
+                x509.OtherName(x509.ObjectIdentifier('2.5.4.45'), b'John')
+            ]),
+            critical=False,
+        )
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=True,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=False,
+                decipher_only=False
+            ),
+            critical=True,
+        )
+        .add_extension(
+            x509.ExtendedKeyUsage([
+                x509.ExtendedKeyUsageOID.SERVER_AUTH,
+                x509.ExtendedKeyUsageOID.CLIENT_AUTH,
+            ]),
+            critical=False,
+        )
+        .add_extension(
+            x509.BasicConstraints(ca=False, path_length=None),
+            critical=True,
+        )
+    )
+
+    csr_json = JSONCertRequestConverter.to_json(csr)
+    print('JSON Cert Request:', csr_json)
+    validated_request = JSONProfileVerifier.validate_request(csr_json)
+    print('Validated Request:', validated_request)
     assert validated_request['subject']['common_name'] == 'example.com'

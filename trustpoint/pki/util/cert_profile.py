@@ -6,11 +6,11 @@ Profiles define allowed fields, prohibited fields, and other constraints for cer
 They can also specify default values for fields and validate the request against these rules.
 """
 
+import enum
 import logging
-import re
 from typing import Any, Literal
 
-from cryptography.x509 import CertificateSigningRequest, CertificateSigningRequestBuilder, NameAttribute
+from pki.util.ext_oids import CertificateExtensionOid  # temp
 from pydantic import (
     AliasChoices,
     BaseModel,
@@ -29,15 +29,13 @@ ALIASES: dict[str, AliasChoices] = {
     #'common_name': AliasChoices('common_name', 'cn', 'CN', 'commonName', '2.5.4.3')
 }
 
-def build_alias_map_oids() -> dict[str, str]:
+def build_alias_map_name_oids(alias_map: dict[str, str], enum_cls: enum.Enum) -> dict[str, str]:
     """Build a mapping of all known OID strings from trustpoint_core to their canonical field names."""
-    alias_map = {}
-    camel_case_pattern = re.compile(r'(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])')
-    for entry in NameOid:
+    for entry in enum_cls:
+        canonical = entry.name.lower() # e.g. 'common_name'
         dotted_string = entry.value.dotted_string # e.g. '2.5.4.3'
         abbreviation = entry.value.abbreviation # e.g. 'CN'
         camel_case = entry.value.full_name # e.g. 'commonName'
-        canonical = camel_case_pattern.sub('_', camel_case).lower() # e.g. 'common_name'
         alias_map[dotted_string] = canonical
         choices = [dotted_string]
         if camel_case != canonical:
@@ -52,7 +50,8 @@ def build_alias_map_oids() -> dict[str, str]:
         ALIASES[canonical] = AliasChoices(canonical, *choices)
     return alias_map
 
-alias_map = build_alias_map_oids()
+alias_map = build_alias_map_name_oids({}, NameOid)
+alias_map = build_alias_map_name_oids(alias_map, CertificateExtensionOid)
 
 class ProfileValuePropertyModel(BaseModel):
     """Model for a profile value property."""
@@ -82,6 +81,7 @@ class SubjectModel(BaseModel):
     given_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('given_name'))
     initials: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('initials'))
     pseudonym: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('pseudonym'))
+    uid: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('uid'))
     domain_component: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('domain_component'))
 
     # Should allow unknown fields, but not required
@@ -102,7 +102,7 @@ class ExtensionsModel(BaseModel):
     basic_constraints: str | None = None
     key_usage: str | None = None
     extended_key_usage: str | None = None
-    subject_alternative_name: SanExtensionModel | None = None
+    subject_alternative_name: SanExtensionModel | None = Field(default=None, alias=ALIASES.get('subject_alternative_name'))
 
 class ValidityModel(BaseModel):
     """Model for the validity period of a certificate profile."""
@@ -320,18 +320,3 @@ class JSONProfileVerifier:
         validated_request = self.validate_request(request=request)
         logger.debug('Validated Request before profile rules: %s', validated_request)
         return self._apply_profile_rules(validated_request, self.profile_dict)
-
-
-class JSONRequestAdapter:
-    """Adapter to convert from CertificateSigningRequest to JSON request dict."""
-
-    @staticmethod
-    def to_json(csr: CertificateSigningRequest | CertificateSigningRequestBuilder) -> dict[str, Any]:
-        """Convert a CSR to a JSON request dict."""
-        if isinstance(csr, CertificateSigningRequestBuilder):
-            csr = csr.build()
-        req = {'type': 'cert_request', 'subj': {}, 'ext': {}}
-        for attr in csr.subject_name:
-            req['subj'][attr.oid.dotted_string] = attr.value
-        for ext in csr.extensions:
-            req['ext'][ext.oid.dotted_string] = ext.value
