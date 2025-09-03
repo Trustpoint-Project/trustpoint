@@ -10,20 +10,22 @@ from setup_wizard.views import (
     SetupWizardGenerateTlsServerCredentialView,
     SetupWizardHsmSetupView,
     SetupWizardImportTlsServerCredentialView,
-    SetupWizardInitialView,
-    SetupWizardOptionsView,
+    SetupWizardRestoreOptionsView,
+    SetupWizardSelectTlsServerCredentialView,
+    SetupWizardSetupModeView,
     SetupWizardTlsServerCredentialApplyCancelView,
     SetupWizardTlsServerCredentialApplyView,
 )
 
 app_name = 'setup_wizard'
 urlpatterns = [
-    path('', SetupWizardInitialView.as_view(), name='initial'),
     path(
         'hsm-setup/',
         SetupWizardHsmSetupView.as_view(),
         name='hsm_setup',
     ),
+    path('setup_mode/', SetupWizardSetupModeView.as_view(), name='setup_mode'),
+    path('select_tls_server_credential/', SetupWizardSelectTlsServerCredentialView.as_view(), name='select_tls_server_credential'),
     path(
         'backup-password/',
         SetupWizardBackupPasswordView.as_view(),
@@ -40,9 +42,9 @@ urlpatterns = [
         name='import_tls_server_credential',
     ),
     path(
-        'options/',
-        SetupWizardOptionsView.as_view(),
-        name='options',
+        'restore_options/',
+        SetupWizardRestoreOptionsView.as_view(),
+        name='restore_options',
     ),
     path(
         'tls-server-credential-apply/',

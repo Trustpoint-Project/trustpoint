@@ -5,7 +5,7 @@
 
 STATE_FILE_DIR="/etc/trustpoint/wizard/state/"
 WIZARD_SETUP_HSM="/etc/trustpoint/wizard/state/WIZARD_SETUP_HSM"
-WIZARD_BACKUP_PASSWORD="/etc/trustpoint/wizard/state/WIZARD_BACKUP_PASSWORD"
+WIZARD_SETUP_MODE="/etc/trustpoint/wizard/state/WIZARD_SETUP_MODE"
 
 # HSM pin files from Docker Compose secrets
 HSM_SO_PIN_FILE="${HSM_SO_PIN_FILE:-/run/secrets/hsm_so_pin}"
@@ -143,13 +143,13 @@ then
     exit 12
 fi
 
-if ! touch "$WIZARD_BACKUP_PASSWORD"
+if ! touch "$WIZARD_SETUP_MODE"
 then
-    echo "ERROR: Failed to create the WIZARD_BACKUP_PASSWORD state file."
+    echo "ERROR: Failed to create the WIZARD_SETUP_MODE state file."
     exit 13
 fi
 
-echo "SUCCESS: Transitioned to WIZARD_BACKUP_PASSWORD state."
+echo "SUCCESS: Transitioned to WIZARD_SETUP_MODE state."
 
 log "HSM setup completed successfully."
 exit 0

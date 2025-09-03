@@ -70,12 +70,19 @@ class Command(BaseCommand, LoggerMixin):
                 try:
                     token = PKCS11Token.objects.get(label=token_label)
                 except ObjectDoesNotExist:
-                    self.log_and_stdout(f'Token with label "{token_label}" not found', level='error')
+                    self.log_and_stdout(
+                        f'Token with label "{token_label}" not found. '
+                        f'This may be expected behavior if the token is not yet created.',
+                        level='error'
+                    )
                     return
             else:
                 token = PKCS11Token.objects.first()
                 if not token:
-                    self.log_and_stdout('No PKCS11 tokens found', level='error')
+                    self.log_and_stdout(
+                        'No PKCS11 tokens found. This may be expected behavior if no tokens are created yet.',
+                        level='error'
+                    )
                     return
 
             self.log_and_stdout(f'Testing KEK and DEK for token: {token.label}')

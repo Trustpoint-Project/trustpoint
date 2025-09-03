@@ -1,27 +1,26 @@
 #!/usr/bin/env python3
-"""
-Full example: create a master EC key in HSM, wrap/unwrap a DEK,
+"""Full example: create a master EC key in HSM, wrap/unwrap a DEK,
 and encrypt/decrypt data with AES-GCM.
 """
 
+import base64
 import os
 import sys
+
 import django
-import base64
-from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 # --- Setup Django ---
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "your_project.settings")  # CHANGE THIS
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'your_project.settings')  # CHANGE THIS
 django.setup()
 
-from your_app.models import PKCS11Token     # CHANGE THIS to your app
 from pkcs11_util import Pkcs11ECPrivateKey  # your PKCS#11 utility
+from your_app.models import PKCS11Token  # CHANGE THIS to your app
 
-
-MASTER_KEY_LABEL = "MasterECKey"
+MASTER_KEY_LABEL = 'MasterECKey'
 
 
 def create_or_load_master_ec_key(token_config) -> Pkcs11ECPrivateKey:
@@ -41,8 +40,7 @@ def create_or_load_master_ec_key(token_config) -> Pkcs11ECPrivateKey:
 
 
 def wrap_dek(master_key: Pkcs11ECPrivateKey, dek: bytes):
-    """
-    Wrap (encrypt) a DEK using ECIES-like approach:
+    """Wrap (encrypt) a DEK using ECIES-like approach:
     - Generate ephemeral EC key
     - Derive shared secret with master public key
     - Use HKDF -> AES-GCM to wrap DEK
@@ -58,7 +56,7 @@ def wrap_dek(master_key: Pkcs11ECPrivateKey, dek: bytes):
         algorithm=hashes.SHA256(),
         length=32,
         salt=None,
-        info=b"hsm-ecies-wrap",
+        info=b'hsm-ecies-wrap',
     ).derive(shared_secret)
 
     # Encrypt DEK with KEK using AES-GCM
@@ -73,16 +71,16 @@ def wrap_dek(master_key: Pkcs11ECPrivateKey, dek: bytes):
     )
 
     return {
-        "ephemeral_pub": base64.b64encode(ephemeral_pub_bytes).decode(),
-        "nonce": base64.b64encode(nonce).decode(),
-        "wrapped_dek": base64.b64encode(wrapped_dek).decode(),
+        'ephemeral_pub': base64.b64encode(ephemeral_pub_bytes).decode(),
+        'nonce': base64.b64encode(nonce).decode(),
+        'wrapped_dek': base64.b64encode(wrapped_dek).decode(),
     }
 
 
 def unwrap_dek(master_key: Pkcs11ECPrivateKey, wrapped_info: dict) -> bytes:
     """Unwrap a DEK with master EC private key."""
     # Load ephemeral public key
-    ephemeral_pub_bytes = base64.b64decode(wrapped_info["ephemeral_pub"])
+    ephemeral_pub_bytes = base64.b64decode(wrapped_info['ephemeral_pub'])
     ephemeral_pub = serialization.load_der_public_key(ephemeral_pub_bytes)
 
     # Derive shared secret with master private key
@@ -93,12 +91,12 @@ def unwrap_dek(master_key: Pkcs11ECPrivateKey, wrapped_info: dict) -> bytes:
         algorithm=hashes.SHA256(),
         length=32,
         salt=None,
-        info=b"hsm-ecies-wrap",
+        info=b'hsm-ecies-wrap',
     ).derive(shared_secret)
 
     aesgcm = AESGCM(kek)
-    nonce = base64.b64decode(wrapped_info["nonce"])
-    wrapped_dek = base64.b64decode(wrapped_info["wrapped_dek"])
+    nonce = base64.b64decode(wrapped_info['nonce'])
+    wrapped_dek = base64.b64decode(wrapped_info['wrapped_dek'])
 
     dek = aesgcm.decrypt(nonce, wrapped_dek, None)
     return dek
@@ -108,7 +106,7 @@ def main():
     # 1. Load first configured token
     token_config = PKCS11Token.objects.first()
     if not token_config:
-        print("❌ No PKCS#11 tokens configured in DB.")
+        print('❌ No PKCS#11 tokens configured in DB.')
         sys.exit(1)
 
     # 2. Create/load master EC key
@@ -116,11 +114,11 @@ def main():
 
     # 3. Generate DEK (AES-256)
     dek = os.urandom(32)
-    print("Generated DEK:", base64.b64encode(dek).decode())
+    print('Generated DEK:', base64.b64encode(dek).decode())
 
     # 4. Wrap DEK
     wrapped = wrap_dek(master_key, dek)
-    print("Wrapped DEK blob:", wrapped)
+    print('Wrapped DEK blob:', wrapped)
 
     # 5. Unwrap DEK
     # (in practice this happens later, when you need the DEK again)
@@ -135,14 +133,14 @@ def main():
     # 6. Encrypt/decrypt data using DEK
     aesgcm = AESGCM(dek)
     nonce = os.urandom(12)
-    plaintext = b"secret message"
+    plaintext = b'secret message'
     ciphertext = aesgcm.encrypt(nonce, plaintext, None)
     recovered = aesgcm.decrypt(nonce, ciphertext, None)
 
-    print("Plaintext:", plaintext)
-    print("Ciphertext (b64):", base64.b64encode(ciphertext).decode())
-    print("Recovered:", recovered)
+    print('Plaintext:', plaintext)
+    print('Ciphertext (b64):', base64.b64encode(ciphertext).decode())
+    print('Recovered:', recovered)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

@@ -4,7 +4,7 @@
 
 STATE_FILE_DIR="/etc/trustpoint/wizard/state/"
 WIZARD_BACKUP_PASSWORD="/etc/trustpoint/wizard/state/WIZARD_BACKUP_PASSWORD"
-WIZARD_TLS_SERVER_CREDENTIAL_APPLY="/etc/trustpoint/wizard/state/WIZARD_TLS_SERVER_CREDENTIAL_APPLY"
+WIZARD_DEMO_DATA="/etc/trustpoint/wizard/state/WIZARD_DEMO_DATA"
 
 # Logging function
 log() {
@@ -38,12 +38,12 @@ if ! rm "$WIZARD_BACKUP_PASSWORD"; then
 fi
 
 # Create the next state file
-if ! touch "$WIZARD_TLS_SERVER_CREDENTIAL_APPLY"; then
-    echo "ERROR: Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file."
+if ! touch "$WIZARD_DEMO_DATA"; then
+    echo "ERROR: Failed to create the WIZARD_DEMO_DATA state file."
     exit 5
 fi
 
-echo "SUCCESS: Transitioned to WIZARD_TLS_SERVER_CREDENTIAL_APPLY state."
+echo "SUCCESS: Transitioned to WIZARD_DEMO_DATA state."
 
 log "Backup password state transition completed successfully."
 exit 0

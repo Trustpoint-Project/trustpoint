@@ -197,6 +197,7 @@ class EncryptedCharField(models.CharField[str, str]):
         except Exception as e:
             raise ValidationError(_('Failed to retrieve DEK from PKCS#11 token: %s') % e) from e
 
+    def encrypt_value(self, value: str) -> str:
         """Encrypt a string value using AES-256-GCM with the PKCS#11 DEK."""
         if not value:
             return value

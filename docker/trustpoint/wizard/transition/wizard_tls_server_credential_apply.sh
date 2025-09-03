@@ -4,7 +4,7 @@
 STATE_FILE_DIR="/etc/trustpoint/wizard/state/"
 APACHE_TLS_DIRECTORY="/etc/trustpoint/tls/"
 WIZARD_TLS_SERVER_CREDENTIAL_APPLY="/etc/trustpoint/wizard/state/WIZARD_TLS_SERVER_CREDENTIAL_APPLY"
-WIZARD_DEMO_DATA="/etc/trustpoint/wizard/state/WIZARD_DEMO_DATA"
+WIZARD_BACKUP_PASSWORD="/etc/trustpoint/wizard/state/WIZARD_BACKUP_PASSWORD"
 
 # Checks if the state file is present.
 if [ ! -f "$WIZARD_TLS_SERVER_CREDENTIAL_APPLY" ]; then
@@ -27,15 +27,15 @@ then
     exit 14
 fi
 
-# Creates the WIZARD_DEMO_DATA state file.
-if ! touch "$WIZARD_DEMO_DATA"
+# Creates the WIZARD_BACKUP_PASSWORD state file.
+if ! touch "$WIZARD_BACKUP_PASSWORD"
 then
-    echo "ERROR: Failed to create the WIZARD_DEMO_DATA state file."
+    echo "ERROR: Failed to create the WIZARD_BACKUP_PASSWORD state file."
     exit 15
 fi
 
 # configure apache and tsl
 /etc/trustpoint/wizard/transition/update_tls.sh
 
-echo "Transition from WIZARD_TLS_SERVER_CREDENTIAL_APPLY to WIZARD_DEMO_DATA completed successfully."
+echo "Transition from WIZARD_TLS_SERVER_CREDENTIAL_APPLY to WIZARD_BACKUP_PASSWORD completed successfully."
 exit 0

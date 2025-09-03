@@ -31,20 +31,11 @@
             <h1>{% trans "Trustpoint - Setup Wizard" %}</h1>
         </div>
         <div class="card-body pt-3 pb-4">
-            <h2>{% trans 'Generate Self-Signed TLS-Server Credential' %}</h2>
-            <hr>
-            <h3 class="mb-3">Subject Alternative Name (SAN) Information.</h3>
-            <form method="POST" class="text-start">
-                {% csrf_token %}
-                <fieldset class="form-group tp-form-group">
-                    {{ form|crispy }}
-                </fieldset>
-                <hr>
-                <div class="tp-form-btn-group tp-form-btn-group">
-                    <a href="{% url 'setup_wizard:setup_mode' %}" class="btn btn-secondary w-100 mt-1">{% trans "Cancel" %}</a>
-                    <button class="btn btn-primary w-100 mt-1" type="submit">{% trans "Generate Self-Signed TLS-Server Credential" %}</button>
-                </div>
-            </form>
+            <h2>{% trans 'Select Setup Mode' %}</h2>
+            <hr class="mb-4">
+            <a href="{% url 'setup_wizard:select_tls_server_credential' %}" class="btn btn-primary d-flex justify-content-center">{% trans 'Setup Trustpoint from Scratch' %}</a>
+            <br>
+            <a href="{% url 'setup_wizard:restore_options' %}" class="btn btn-primary d-flex justify-content-center">{% trans 'Restore from backup' %}</a>
         </div>
     </div>
 

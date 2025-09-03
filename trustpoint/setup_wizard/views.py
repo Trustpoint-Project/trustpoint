@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
+from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.core.management import call_command
+from django.db import connection
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.shortcuts import redirect
@@ -37,11 +41,12 @@ APACHE_CERT_PATH = APACHE_PATH / Path('apache-tls-server-cert.pem')
 APACHE_CERT_CHAIN_PATH = APACHE_PATH / Path('apache-tls-server-cert-chain.pem')
 
 STATE_FILE_DIR = Path('/etc/trustpoint/wizard/transition/')
-SCRIPT_WIZARD_INITIAL = STATE_FILE_DIR / Path('wizard_initial.sh')
 SCRIPT_WIZARD_SETUP_HSM = STATE_FILE_DIR / Path('wizard_setup_hsm.sh')
-SCRIPT_WIZARD_BACKUP_PASSWORD = STATE_FILE_DIR / Path('wizard_backup_password.sh')
+SCRIPT_WIZARD_SETUP_MODE = STATE_FILE_DIR / Path('wizard_setup_mode.sh')
+SCRIPT_WIZARD_SELECT_TLS_SERVER_CREDENTIAL = STATE_FILE_DIR / Path('wizard_select_tls_server_credential.sh')
 SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY = STATE_FILE_DIR / Path('wizard_tls_server_credential_apply.sh')
 SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY_CANCEL = STATE_FILE_DIR / Path('wizard_tls_server_credential_apply_cancel.sh')
+SCRIPT_WIZARD_BACKUP_PASSWORD = STATE_FILE_DIR / Path('wizard_backup_password.sh')
 SCRIPT_WIZARD_DEMO_DATA = STATE_FILE_DIR / Path('wizard_demo_data.sh')
 SCRIPT_WIZARD_CREATE_SUPER_USER = STATE_FILE_DIR / Path('wizard_create_super_user.sh')
 SCRIPT_WIZARD_RESTORE = STATE_FILE_DIR / Path('wizard_restore.sh')
@@ -122,14 +127,14 @@ class StartupWizardRedirect:
         Raises:
             ValueError: If the wizard state is unrecognized or invalid.
         """
-        if wizard_state == SetupWizardState.WIZARD_INITIAL:
-            return redirect('setup_wizard:initial', permanent=False)
         if wizard_state == SetupWizardState.WIZARD_SETUP_HSM:
             return redirect('setup_wizard:hsm_setup', permanent=False)
-        if wizard_state == SetupWizardState.WIZARD_BACKUP_PASSWORD:
-            return redirect('setup_wizard:backup_password', permanent=False)
+        if wizard_state == SetupWizardState.WIZARD_SETUP_MODE:
+            return redirect('setup_wizard:setup_mode', permanent=False)
         if wizard_state == SetupWizardState.WIZARD_TLS_SERVER_CREDENTIAL_APPLY:
             return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
+        if wizard_state == SetupWizardState.WIZARD_BACKUP_PASSWORD:
+            return redirect('setup_wizard:backup_password', permanent=False)
         if wizard_state == SetupWizardState.WIZARD_DEMO_DATA:
             return redirect('setup_wizard:demo_data', permanent=False)
         if wizard_state == SetupWizardState.WIZARD_CREATE_SUPER_USER:
@@ -138,86 +143,6 @@ class StartupWizardRedirect:
             return redirect('users:login', permanent=False)
         err_msg = 'Unknown wizard state found. Failed to redirect by state.'
         raise ValueError(err_msg)
-
-
-class SetupWizardInitialView(TemplateView):
-    """View for the initial step of the setup wizard.
-
-    This view is responsible for displaying the initial setup wizard page. It
-    ensures that the application is running in a Docker container and that the
-    setup wizard is in the initial state. If either condition is not met, the
-    user is redirected to the appropriate page, such as the login page or the
-    next setup step.
-
-    Attributes:
-        http_method_names (ClassVar[list[str]]): List of HTTP methods allowed for this view.
-        template_name (str): Path to the template used for rendering the initial page.
-    """
-
-    http_method_names = ('get',)
-    template_name = 'setup_wizard/initial.html'
-
-    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle GET requests for the initial setup wizard page.
-
-        This method validates the current state of the setup wizard and redirects
-        the user to the appropriate page. If the application is not running in a
-        Docker container, the user is redirected to the login page.
-
-        Args:
-            *args (Any): Additional positional arguments.
-            **kwargs (Any): Additional keyword arguments.
-
-        Returns:
-            HttpResponse: A redirect response to the appropriate setup wizard page
-                          or the login page if the setup is not in a Docker container.
-        """
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_INITIAL:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
-
-        return super().get(*args, **kwargs)
-
-
-
-class SetupWizardOptionsView(TemplateView):
-    """View for the restore option during initialization.
-
-    Attributes:
-        http_method_names (ClassVar[list[str]]): List of HTTP methods allowed for this view.
-        template_name (str): Path to the template used for rendering the initial page.
-    """
-
-    http_method_names = ('get',)
-    template_name = 'setup_wizard/options.html'
-
-    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle GET requests for the initial setup wizard page.
-
-        This method validates the current state of the setup wizard and redirects
-        the user to the appropriate page. If the application is not running in a
-        Docker container, the user is redirected to the login page.
-
-        Args:
-            *args (Any): Additional positional arguments.
-            **kwargs (Any): Additional keyword arguments.
-
-        Returns:
-            HttpResponse: A redirect response to the appropriate setup wizard page
-                          or the login page if the setup is not in a Docker container.
-        """
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_INITIAL:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
-
-        return super().get(*args, **kwargs)
-
 
 class SetupWizardHsmSetupView(LoggerMixin, FormView):
     """View for handling HSM setup during the setup wizard.
@@ -229,7 +154,7 @@ class SetupWizardHsmSetupView(LoggerMixin, FormView):
 
     http_method_names = ('get', 'post')
     template_name = 'setup_wizard/hsm_setup.html'
-    success_url = reverse_lazy('setup_wizard:backup_password')
+    success_url = reverse_lazy('setup_wizard:setup_mode')
     form_class = HsmSetupForm
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
@@ -375,6 +300,141 @@ class SetupWizardHsmSetupView(LoggerMixin, FormView):
         return error_messages.get(return_code, 'An unknown error occurred during HSM setup.')
 
 
+class SetupWizardSetupModeView(TemplateView):
+    """View for the initial step of the setup wizard.
+
+    This view is responsible for displaying the initial setup wizard page. It
+    ensures that the application is running in a Docker container and that the
+    setup wizard is in the initial state. If either condition is not met, the
+    user is redirected to the appropriate page, such as the login page or the
+    next setup step.
+
+    Attributes:
+        http_method_names (ClassVar[list[str]]): List of HTTP methods allowed for this view.
+        template_name (str): Path to the template used for rendering the initial page.
+    """
+
+    http_method_names = ('get',)
+    template_name = 'setup_wizard/setup_mode.html'
+
+    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests for the setup mode wizard page.
+
+        This method validates the current state of the setup wizard and redirects
+        the user to the appropriate page. If the application is not running in a
+        Docker container, the user is redirected to the login page.
+
+        Args:
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
+
+        Returns:
+            HttpResponse: A redirect response to the appropriate setup wizard page
+                          or the login page if the setup is not in a Docker container.
+        """
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().get(*args, **kwargs)
+
+class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView):
+    """View for selecting the TLS server credential during setup."""
+
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/select_tls_server_credential.html'
+    form_class = EmptyForm
+    
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle request dispatch and wizard state validation."""
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
+            self.logger.warning(
+                "Unexpected wizard state '%s' expected '%s'",
+                wizard_state,
+                SetupWizardState.WIZARD_SETUP_MODE,
+            )
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests for the TLS server credential selection page."""
+        return super().get(*args, **kwargs)
+    
+    def form_valid(self, form: EmptyForm) -> HttpResponse:
+        """Handle form submission for TLS server credential selection."""
+        try:
+            if 'generate_credential' in self.request.POST:
+                return redirect('setup_wizard:generate_tls_server_credential', permanent=False)
+            elif 'import_credential' in self.request.POST:
+                return redirect('setup_wizard:import_tls_server_credential', permanent=False)
+            else:
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    'Invalid option selected.'
+                )
+                return redirect('setup_wizard:select_tls_server_credential', permanent=False)
+
+        except subprocess.CalledProcessError as exception:
+            err_msg = f'Setup mode script failed: {self._map_exit_code_to_message(exception.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:select_tls_server_credential', permanent=False)
+        except FileNotFoundError:
+            err_msg = f'Setup mode script not found: {SCRIPT_WIZARD_SETUP_MODE}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:select_tls_server_credential', permanent=False)
+        except Exception:
+            err_msg = 'An unexpected error occurred during setup mode execution.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:select_tls_server_credential', permanent=False)
+
+
+class SetupWizardRestoreOptionsView(TemplateView):
+    """View for the restore option during initialization.
+
+    Attributes:
+        http_method_names (ClassVar[list[str]]): List of HTTP methods allowed for this view.
+        template_name (str): Path to the template used for rendering the initial page.
+    """
+
+    http_method_names = ('get',)
+    template_name = 'setup_wizard/restore_options.html'
+
+    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests for the initial setup wizard page.
+
+        This method validates the current state of the setup wizard and redirects
+        the user to the appropriate page. If the application is not running in a
+        Docker container, the user is redirected to the login page.
+
+        Args:
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
+
+        Returns:
+            HttpResponse: A redirect response to the appropriate setup wizard page
+                          or the login page if the setup is not in a Docker container.
+        """
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().get(*args, **kwargs)
+
 class SetupWizardBackupPasswordView(LoggerMixin, FormView):
     """View for setting up backup password for PKCS#11 token during the setup wizard.
 
@@ -492,7 +552,7 @@ class BackupRestoreView(LoggerMixin, View):
             for field, errors in form.errors.items():
                 for error in errors:
                     messages.add_message(request, messages.ERROR, f'{field}: {error}')
-            return redirect('setup_wizard:options')
+            return redirect('setup_wizard:restore_options')
 
         backup_file = form.cleaned_data['backup_file']
         backup_password = form.cleaned_data.get('backup_password')
@@ -509,32 +569,31 @@ class BackupRestoreView(LoggerMixin, View):
             # Restore database
             call_command('dbrestore', '-z', '--noinput', '-I', str(temp_path))
 
+            # Execute trustpoint restore command
+            call_command('trustpointrestore')
+
             # Handle backup password for DEK recovery if provided
             if backup_password:
                 success = self._handle_backup_password_recovery(backup_password)
                 if not success:
                     messages.add_message(
-                        request, 
-                        messages.WARNING, 
-                        'Database restored successfully, but backup password recovery failed. '
-                        'You may need to reconfigure HSM settings.'
+                        request,
+                        messages.ERROR,
+                        'Database restored successfully, but backup password recovery failed.'
+                    )
+                else:
+                    messages.add_message(
+                        request,
+                        messages.SUCCESS,
+                        f'Trustpoint restored successfully from {backup_file.name}'
                     )
 
-            # Execute trustpoint restore command
-            call_command('trustpointrestore')
-
-            messages.add_message(
-                request,
-                messages.SUCCESS,
-                f'Trustpoint restored successfully from {backup_file.name}'
-            )
-
-            self.logger.info('Backup restore completed successfully from file: %s', backup_file.name)
+                    self.logger.info('Backup restore completed successfully from file: %s', backup_file.name)
 
         except Exception as e:
             messages.add_message(request, messages.ERROR, 'Error occurred during restore operation.')
             self.logger.exception('Exception restoring database from %s: %s', backup_file.name, e)
-            return redirect('setup_wizard:options')
+            return redirect('setup_wizard:restore_options')
         finally:
             # Clean up temporary file
             try:
@@ -565,18 +624,24 @@ class BackupRestoreView(LoggerMixin, View):
                 return False
 
             if not token.has_backup_encryption():
-                self.logger.info('No backup encryption found for token %s, skipping password recovery', token.label)
-                return True  # Not an error, just no backup encryption was used
+                self.logger.warning('No backup encryption found for token %s, skipping password recovery', token.label)
+                return False
 
             # Verify the backup password and recover the DEK
             try:
                 dek_bytes = token.get_dek_with_backup_password(backup_password)
             except (RuntimeError, ValueError) as e:
                 self.logger.exception('Invalid backup password provided for token %s', token.label)
+                self.logger.exception('The restore process needs to be redone with the correct backup password.')
                 messages.add_message(
                     self.request,
                     messages.ERROR,
-                    'Invalid backup password provided. DEK recovery failed.'
+                    'Invalid backup password provided. DEK recovery failed. '
+                )
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    'The restore process needs to be redone with the correct backup password.'
                 )
                 return False
 
@@ -667,7 +732,7 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_INITIAL:
+        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
             return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().dispatch(request, *args, **kwargs)
@@ -707,7 +772,7 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
             active_tls.credential = trustpoint_tls_server_credential
             active_tls.save()
 
-            execute_shell_script(SCRIPT_WIZARD_INITIAL)
+            execute_shell_script(SCRIPT_WIZARD_SETUP_MODE)
 
             messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential generated successfully.')
 
@@ -716,27 +781,28 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
             err_msg = f'Script error: {self._get_error_message_from_return_code(exception.returncode)}'
             messages.add_message(self.request, messages.ERROR, err_msg)
             self.logger.exception(err_msg)
-            return redirect('setup_wizard:initial', permanent=False)
+            return redirect('setup_wizard:setup_mode', permanent=False)
         except FileNotFoundError:
-            err_msg = f'Transition script not found: {SCRIPT_WIZARD_INITIAL}.'
+            err_msg = f'Transition script not found: {SCRIPT_WIZARD_SETUP_MODE}.'
             messages.add_message(self.request, messages.ERROR, err_msg)
             self.logger.exception(err_msg)
-            return redirect('setup_wizard:initial', permanent=False)
+            return redirect('setup_wizard:setup_mode', permanent=False)
         except Exception:
             err_msg = 'Error generating TLS Server Credential.'
             messages.add_message(self.request, messages.ERROR, err_msg)
             self.logger.exception(err_msg)
-            return redirect('setup_wizard:initial', permanent=False)
+            return redirect('setup_wizard:setup_mode', permanent=False)
 
-    def _get_error_message_from_return_code(self, return_code: int) -> str:
-        """Maps return codes to error messages."""
+    @staticmethod
+    def _map_exit_code_to_message(return_code: int) -> str:
+        """Map script exit codes to meaningful error messages."""
         error_messages = {
-            1: 'Trustpoint is not in the WIZARD_INITIAL state. State file missing.',
-            2: 'Multiple state files detected. Wizard state is corrupted.',
-            3: 'Failed to remove the WIZARD_INITIAL state file.',
+            1: 'Trustpoint is not in the WIZARD_SETUP_MODE state. State file not found.',
+            2: 'Found multiple wizard state files. The wizard state appears corrupted.',
+            3: 'Failed to remove the WIZARD_SETUP_MODE state file.',
             4: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
         }
-        return error_messages.get(return_code, 'An unknown error occurred.')
+        return error_messages.get(return_code, 'An unknown error occurred during setup mode transition.')
 
 
 class SetupWizardImportTlsServerCredentialView(View):
@@ -756,13 +822,13 @@ class SetupWizardImportTlsServerCredentialView(View):
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_INITIAL:
+        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
             return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         messages.add_message(
             self.request, messages.ERROR, 'Import of the TLS-Server credential is not yet implemented.'
         )
-        return redirect('setup_wizard:initial', permanent=False)
+        return redirect('setup_wizard:setup_mode', permanent=False)
 
 
 class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
@@ -1026,7 +1092,7 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
             execute_shell_script(SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY_CANCEL)
 
             messages.add_message(request, messages.INFO, 'Generation of the TLS-Server credential canceled.')
-            return redirect('setup_wizard:initial', permanent=False)
+            return redirect('setup_wizard:setup_mode', permanent=False)
 
         except subprocess.CalledProcessError as exception:
             err_msg = (
