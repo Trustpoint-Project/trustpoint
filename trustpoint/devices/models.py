@@ -148,9 +148,7 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
 
     # these will be dropped after successfull onboarding
     est_password = models.CharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
-    cmp_shared_secret = models.CharField(
-        verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default=''
-    )
+    cmp_shared_secret = models.CharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
 
     idevid_trust_store = models.ForeignKey(
         TruststoreModel,
@@ -275,9 +273,7 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
             error_messages['est_password'] = 'EST password must not be set for EST IDevID onboarding.'  # noqa: S105
 
         if self.cmp_shared_secret != '':
-            error_messages['cmp_shared_secret'] = (
-                'CMP shared-secret must not be set for EST IDevID onboarding.'  # noqa: S105
-            )
+            error_messages['cmp_shared_secret'] = 'CMP shared-secret must not be set for EST IDevID onboarding.'  # noqa: S105
 
         # idevid_trust_store can be left blank while this would ofcourse mean no onboarding is possible.
 
@@ -348,9 +344,7 @@ class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol],
         if self.cmp_shared_secret == '' and self.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET):
             error_messages['cmp_shared_secret'] = 'CMP shared-secret must be set if EST_USERNAME_PASSWORD is enabled.'  # noqa: S105
 
-        if self.est_password != '' and not self.has_pki_protocol(
-            NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD
-        ):
+        if self.est_password != '' and not self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):
             error_messages['est_password'] = 'EST password must not be set if EST_USERNAME_PASSWORD is not enabled.'  # noqa: S105
 
         if self.est_password == '' and self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):

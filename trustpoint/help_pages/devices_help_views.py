@@ -12,7 +12,6 @@ from devices.models import (
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
     OnboardingConfigModel,
-    OnboardingPkiProtocol,
     OnboardingProtocol,
 )
 from devices.views import (
@@ -29,7 +28,13 @@ from django.views.generic.detail import DetailView
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from settings.models import TlsSettings
 
-from help_pages.commands import CmpSharedSecretCommandBuilder, EstUsernamePasswordCommandBuilder, KeyGenCommandBuilder, CmpClientCertificateCommandBuilder
+from help_pages.commands import (
+    CmpClientCertificateCommandBuilder,
+    CmpSharedSecretCommandBuilder,
+    EstClientCertificateCommandBuilder,
+    EstUsernamePasswordCommandBuilder,
+    KeyGenCommandBuilder,
+)
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
@@ -365,20 +370,6 @@ class AbstractNoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[D
         except Exception as exception:
             raise Http404(exception) from exception
 
-    def _get_cmp_issuer_root_ca_pk(self) -> None | int:
-        domain = self.object.domain
-        if not domain:
-            err_msg = 'domain not configured'
-            raise ValueError(err_msg)
-        issuing_ca = domain.issuing_ca
-        if not issuing_ca:
-            err_msg = 'issuing ca not configured'
-            raise ValueError(err_msg)
-        root_ca_model = issuing_ca.credential.get_last_in_chain()
-        if not root_ca_model:
-            return None
-        return root_ca_model.pk
-
     def _get_shared_secret(self) -> str:
         return self.no_onboarding_config.cmp_shared_secret
 
@@ -444,7 +435,7 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
         )
 
 
-        help_page = HelpPage(heading=_non_lazy('Help - CMP Shared-Secret (HMAC)'), sections=[
+        help_page = HelpPage(heading=_non_lazy('Help - EST Username & Password'), sections=[
             self._get_summary_section(),
             self._get_download_tls_trust_store_section(),
             self._get_key_generation_section(),
@@ -496,7 +487,6 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
             est_username=self.object.common_name,
             est_password=self.no_onboarding_config.est_password,
             host=f'{ self.host }/.well-known/est/{ self.domain.unique_name }/{ certificate_profile }/simpleenroll/',
-            domain_name=self.domain.unique_name,
             cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
         )
         return HelpRow(
@@ -611,7 +601,7 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
             err_msg = 'Device configured for onboarding.'
             raise ValueError(err_msg)
         est_password = HelpRow(
-            key=('EST-PasswordU'),
+            key=('EST-Password'),
             value=self.object.no_onboarding_config.est_password,
             value_render_type=ValueRenderType.CODE,
         )
@@ -665,20 +655,6 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
         except Exception as exception:
             raise Http404(exception) from exception
 
-    def _get_cmp_issuer_root_ca_pk(self) -> None | int:
-        domain = self.object.domain
-        if not domain:
-            err_msg = 'domain not configured'
-            raise ValueError(err_msg)
-        issuing_ca = domain.issuing_ca
-        if not issuing_ca:
-            err_msg = 'issuing ca not configured'
-            raise ValueError(err_msg)
-        root_ca_model = issuing_ca.credential.get_last_in_chain()
-        if not root_ca_model:
-            return None
-        return root_ca_model.pk
-
     def _get_shared_secret(self) -> str:
         return self.no_onboarding_config.cmp_shared_secret
 
@@ -689,7 +665,7 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
             raise ValueError(err_msg)
 
         download_tls_truststore_row = HelpRow(
-            key=_non_lazy('Download TLS Truststore'),
+            key=_non_lazy('Download TLS Trust-Store'),
             value=format_html(
                 '<a href="{}" class="btn btn-primary w-100">{}</a>',
                 reverse(
@@ -697,16 +673,16 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
                     kwargs={
                         'file_format': 'pem',
                         'pk': tls_cert_pk,
-                        'file_name': f'trust-store-{ self.domain.unique_name }.pem'
+                        'file_name': 'trustpoint-tls-trust-store.pem'
                     }
                 ),
-                _non_lazy('Download Device Trust-Store')
+                _non_lazy('Download TLS Trust-Store')
             ),
             value_render_type=ValueRenderType.PLAIN
         )
 
         return HelpSection(
-            heading=_non_lazy('Download TLS Truststore'),
+            heading=_non_lazy('Download TLS Trust-Store'),
             rows=[download_tls_truststore_row]
         )
 
@@ -803,7 +779,7 @@ class AbstractOnboardingDomainCredentialCmpSharedSecretHelpView(PageContextMixin
         )
 
     def _get_cmp_domain_credential_cmd_section(self, *, hidden: bool = False) -> HelpSection:
-        cmp_command = CmpSharedSecretCommandBuilder.get_domaincredential_profile_command(
+        cmp_command = CmpSharedSecretCommandBuilder.get_domain_credential_profile_command(
             host=self.host,
             pk=self.object.pk,
             shared_secret=self._get_shared_secret(),
@@ -894,24 +870,10 @@ class AbstractOnboardingDomainCredentialCmpSharedSecretHelpView(PageContextMixin
             return KeyGenCommandBuilder.get_key_gen_command(
                 public_key_info=device.public_key_info,
                 cred_number=len(IssuedCredentialModel.objects.filter(device=self.object)),
-                key_name='domain_credential_key.pem'
+                key_name='domain-credential-key.pem'
             )
         except Exception as exception:
             raise Http404(exception) from exception
-
-    def _get_cmp_issuer_root_ca_pk(self) -> None | int:
-        domain = self.object.domain
-        if not domain:
-            err_msg = 'domain not configured'
-            raise ValueError(err_msg)
-        issuing_ca = domain.issuing_ca
-        if not issuing_ca:
-            err_msg = 'issuing ca not configured'
-            raise ValueError(err_msg)
-        root_ca_model = issuing_ca.credential.get_last_in_chain()
-        if not root_ca_model:
-            return None
-        return root_ca_model.pk
 
     def _get_shared_secret(self) -> str:
         return self.onboarding_config.cmp_shared_secret
@@ -979,7 +941,7 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
         )
 
 
-        help_page = HelpPage(heading=_non_lazy('Help - CMP Shared-Secret (HMAC)'), sections=[
+        help_page = HelpPage(heading=_non_lazy('Help - EST Username & Password'), sections=[
             self._get_summary_section(),
             self._get_download_tls_trust_store_section(),
             self._get_key_generation_section(),
@@ -997,9 +959,7 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
         return context
 
     def _get_conversion_der_to_pem_section(self) -> HelpSection:
-        conversion_cmd = EstUsernamePasswordCommandBuilder.get_conversion_der_pem_command(
-            cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
-        )
+        conversion_cmd = EstUsernamePasswordCommandBuilder.get_domain_credential_conversion_der_pem_command()
         conversion_row = HelpRow(
             key=_non_lazy('OpenSSL Command'),
             value=conversion_cmd,
@@ -1010,25 +970,11 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
             rows=[conversion_row]
         )
 
-    def _get_certificate_profile_select_section(self) -> HelpSection:
-        cert_profile_select_row = HelpRow(
-            key=_non_lazy('Certificate Profile'),
-            value=self._get_cert_profile_select_input(),
-            value_render_type=ValueRenderType.PLAIN
-        )
-
-        return HelpSection(
-            heading=_non_lazy('Certificate Profile Selection'),
-            rows=[cert_profile_select_row]
-        )
-
     def _get_enroll_row(self, certificate_profile: str) -> HelpRow:
-        enroll_cmd = EstUsernamePasswordCommandBuilder.get_curl_enroll_command(
+        enroll_cmd = EstUsernamePasswordCommandBuilder.get_curl_enroll_domain_credential_command(
             est_username=self.object.common_name,
             est_password=self.onboarding_config.est_password,
             host=f'{ self.host }/.well-known/est/{ self.domain.unique_name }/{ certificate_profile }/simpleenroll/',
-            domain_name=self.domain.unique_name,
-            cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
         )
         return HelpRow(
             key=_non_lazy('Enroll certificate with curl'),
@@ -1037,9 +983,7 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
         )
 
     def _get_est_domain_cred_profile_cmd_section(self, *, hidden: bool = False) -> HelpSection:
-        openssl_req_cmd = EstUsernamePasswordCommandBuilder.get_tls_client_profile_command(
-            cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
-        )
+        openssl_req_cmd = EstUsernamePasswordCommandBuilder.get_domain_credential_profile_command()
         openssl_req_cmd_tls_client_profile_row = HelpRow(
             key=_non_lazy('OpenSSL Command'),
             value=openssl_req_cmd,
@@ -1098,18 +1042,6 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
             ]
         )
 
-    def _get_cert_profile_select_input(self) -> SafeString:
-        select_field = '<select id="cert-profile-select" class="form-select" aria-label="Certificate Profile Select">'
-        for index, profile in enumerate(ApplicationCertificateProfile):
-            if index == 0:
-                select_field += format_html('<option value="{}" selected>{}</option>', profile.name, profile.label)
-            else:
-                select_field += format_html('<option value="{}">{}</option>', profile.name, profile.label)
-        select_field += '</select>'
-
-        return format_html(select_field)
-
-
     def _get_key_generation_section(self) -> HelpSection:
         key_generation_row = HelpRow(
             key=_non_lazy('Generate Key-Pair'),
@@ -1132,7 +1064,8 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
         try:
             return KeyGenCommandBuilder.get_key_gen_command(
                 public_key_info=device.public_key_info,
-                cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
+                cred_number=len(IssuedCredentialModel.objects.filter(device=self.object)),
+                key_name='domain-credential-key.pem'
             )
         except Exception as exception:
             raise Http404(exception) from exception
@@ -1144,7 +1077,7 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
             raise ValueError(err_msg)
 
         download_tls_truststore_row = HelpRow(
-            key=_non_lazy('Download TLS Truststore'),
+            key=_non_lazy('Download TLS Trust-Store'),
             value=format_html(
                 '<a href="{}" class="btn btn-primary w-100">{}</a>',
                 reverse(
@@ -1152,16 +1085,16 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
                     kwargs={
                         'file_format': 'pem',
                         'pk': tls_cert_pk,
-                        'file_name': f'trust-store-{ self.domain.unique_name }.pem'
+                        'file_name': 'trustpoint-tls-trust-store.pem'
                     }
                 ),
-                _non_lazy('Download Device Trust-Store')
+                _non_lazy('Download TLS Trust-Store')
             ),
             value_render_type=ValueRenderType.PLAIN
         )
 
         return HelpSection(
-            heading=_non_lazy('Download TLS Truststore'),
+            heading=_non_lazy('Download TLS Trust-Store'),
             rows=[download_tls_truststore_row]
         )
 
@@ -1190,7 +1123,7 @@ class OpcUaGdsOnboardingDomainCredentialEstUsernamePasswordHelpView(
 
 
 class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView[DeviceModel]):
-    """Abstract help view for the case of no onboarding using CMP shared-secret."""
+    """Abstract help view for the case of onboarding using CMP shared-secret."""
 
     template_name = 'help/help_page.html'
 
@@ -1234,6 +1167,7 @@ class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView
 
         help_page = HelpPage(heading=_non_lazy('Help - CMP Shared-Secret (HMAC)'), sections=[
             self._get_summary_section(),
+            self._get_download_cmp_signer_trust_store_section(),
             self._get_key_generation_section(),
             self._get_certificate_profile_select_section(),
             self._get_cmp_tls_client_profile_cmd_section(),
@@ -1411,6 +1345,34 @@ class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView
             return None
         return root_ca_model.pk
 
+    def _get_download_cmp_signer_trust_store_section(self) -> HelpSection:
+        cmp_signer_pk = self._get_cmp_issuer_root_ca_pk()
+        if cmp_signer_pk is None:
+            err_msg = _non_lazy('Failed to get the CMP-Signer Root Certificate.')
+            raise ValueError(err_msg)
+
+        download_tls_truststore_row = HelpRow(
+            key=_non_lazy('Download CMP-Signer Trust-Store'),
+            value=format_html(
+                '<a href="{}" class="btn btn-primary w-100">{}</a>',
+                reverse(
+                    'pki:certificate-file-download-file-name',
+                    kwargs={
+                        'file_format': 'pem',
+                        'pk': cmp_signer_pk,
+                        'file_name': 'domain-credential-full-chain.pem'
+                    }
+                ),
+                _non_lazy('Download CMP-Signer Trust-Store')
+            ),
+            value_render_type=ValueRenderType.PLAIN
+        )
+
+        return HelpSection(
+            heading=_non_lazy('Download CMP-Signer Trust-Store'),
+            rows=[download_tls_truststore_row]
+        )
+
 
 class DeviceOnboardingCmpDomainCredentialHelpView(AbstractOnboardingCmpDomainCredentialHelpView):
     """Help view for the case of no onboarding using CMP shared-secret for generic devices."""
@@ -1420,5 +1382,306 @@ class DeviceOnboardingCmpDomainCredentialHelpView(AbstractOnboardingCmpDomainCre
 
 class OpcUaGdsOnboardingCmpDomainCredentialHelpView(AbstractOnboardingCmpDomainCredentialHelpView):
     """Help view for the case of no onboarding using CMP shared-secret for generic devices."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class AbstractDeviceOnboardingEstDomainCredentialHelpView(PageContextMixin, DetailView[DeviceModel]):
+    """Abstract help view for the case of no onboarding using CMP shared-secret."""
+
+    template_name = 'help/help_page.html'
+
+    pki_protocol = NoOnboardingPkiProtocol.CMP_SHARED_SECRET
+
+    http_method_names = ('get',)
+
+    model = DeviceModel
+    context_object_name = 'device'
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name: str
+
+    onboarding_config: OnboardingConfigModel
+    domain: DomainModel
+
+    certificate_profile: str
+    host: str
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds information about the required OpenSSL commands to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to render the page.
+        """
+        context = super().get_context_data(**kwargs)
+        if not self.object.onboarding_config:
+            err_msg = _('Onboarding is not configured for this device.')
+            raise Http404(err_msg)
+        self.onboarding_config = self.object.onboarding_config
+
+        if not self.object.domain:
+            err_msg = _('No domain is configured for this device.')
+            raise Http404(err_msg)
+        self.domain = self.object.domain
+        self.certificate_profile = self.kwargs.get('certificate_template')
+        if not self.certificate_profile:
+            err_msg = _('Failed to get certificate profile')
+        self.host = (
+            f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}'
+        )
+
+
+        help_page = HelpPage(heading=_non_lazy('Help - EST with Domain Credential'), sections=[
+            self._get_summary_section(),
+            self._get_download_tls_trust_store_section(),
+            self._get_key_generation_section(),
+            self._get_certificate_profile_select_section(),
+            self._get_cmp_tls_client_profile_cmd_section(),
+            self._get_cmp_tls_server_profile_cmd_section(hidden=True),
+            self._get_cmp_opc_ua_client_profile_cmd_section(hidden=True),
+            self._get_cmp_opc_ua_server_profile_cmd_section(hidden=True),
+            self._get_conversion_der_to_pem_section()
+        ])
+
+        context['help_page'] = help_page
+
+        context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
+        context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
+
+        context['clm_url'] = f'{self.page_category}:{self.page_name}_certificate_lifecycle_management'
+
+        return context
+
+    def _get_conversion_der_to_pem_section(self) -> HelpSection:
+        conversion_cmd = EstUsernamePasswordCommandBuilder.get_conversion_der_pem_command(
+            cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
+        )
+        conversion_row = HelpRow(
+            key=_non_lazy('OpenSSL Command'),
+            value=conversion_cmd,
+            value_render_type=ValueRenderType.CODE
+        )
+        return HelpSection(
+            heading='Convert the certificate from DER format to PEM format (Optional)',
+            rows=[conversion_row]
+        )
+
+    def _get_certificate_profile_select_section(self) -> HelpSection:
+        cert_profile_select_row = HelpRow(
+            key=_non_lazy('Certificate Profile'),
+            value=self._get_cert_profile_select_input(),
+            value_render_type=ValueRenderType.PLAIN
+        )
+
+        return HelpSection(
+            heading=_non_lazy('Certificate Profile Selection'),
+            rows=[cert_profile_select_row]
+        )
+
+    def _get_enroll_row(self, certificate_profile: str) -> HelpRow:
+        enroll_cmd = EstClientCertificateCommandBuilder.get_curl_enroll_application_credential(
+            host=f'{ self.host }/.well-known/est/{ self.domain.unique_name }/{ certificate_profile }/simpleenroll/',
+            cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
+        )
+        return HelpRow(
+            key=_non_lazy('Enroll certificate with curl'),
+            value=enroll_cmd,
+            value_render_type=ValueRenderType.CODE
+        )
+
+    def _get_cmp_tls_client_profile_cmd_section(self, *, hidden: bool = False) -> HelpSection:
+        openssl_req_cmd = EstUsernamePasswordCommandBuilder.get_tls_client_profile_command(
+            cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
+        )
+        openssl_req_cmd_tls_client_profile_row = HelpRow(
+            key=_non_lazy('OpenSSL Command'),
+            value=openssl_req_cmd,
+            value_render_type=ValueRenderType.CODE,
+        )
+
+        return HelpSection(
+            heading=_non_lazy('Generate PKCS#10 CSR for TLS Client Certificates'),
+            rows=[
+                openssl_req_cmd_tls_client_profile_row,
+                self._get_enroll_row(certificate_profile='tls-client')
+            ],
+            hidden=hidden,
+            css_id=ApplicationCertificateProfile.TLS_CLIENT.name
+        )
+
+    def _get_cmp_tls_server_profile_cmd_section(self, *, hidden: bool = False) -> HelpSection:
+        openssl_req_cmd = EstUsernamePasswordCommandBuilder.get_tls_server_profile_command(
+            cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
+        )
+        openssl_req_cmd_tls_server_profile_row = HelpRow(
+            key=_non_lazy('OpenSSL Command'),
+            value=openssl_req_cmd,
+            value_render_type=ValueRenderType.CODE,
+            hidden=False
+        )
+        return HelpSection(
+            heading=_non_lazy('Generate PKCS#10 CSR for TLS Server Certificates'),
+            rows=[
+                openssl_req_cmd_tls_server_profile_row,
+                self._get_enroll_row(certificate_profile='tls-server')
+            ],
+            hidden=hidden,
+            css_id=ApplicationCertificateProfile.TLS_SERVER.name
+        )
+
+    def _get_cmp_opc_ua_client_profile_cmd_section(self, *, hidden: bool = False) -> HelpSection:
+        openssl_req_cmd = EstUsernamePasswordCommandBuilder.get_opc_ua_client_profile_command(
+            cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
+        )
+        openssl_req_cmd_opc_ua_client_profile_row = HelpRow(
+            key=_non_lazy('OpenSSL Command'),
+            value=openssl_req_cmd,
+            value_render_type=ValueRenderType.CODE,
+            hidden=False
+        )
+        return HelpSection(
+            heading=_non_lazy('Generate PKCS#10 CSR for OPC-UA Client Certificates'),
+            rows=[
+                openssl_req_cmd_opc_ua_client_profile_row,
+                self._get_enroll_row(certificate_profile='opc-ua-client')
+            ],
+            hidden=hidden,
+            css_id=ApplicationCertificateProfile.OPC_UA_CLIENT.name
+        )
+
+    def _get_cmp_opc_ua_server_profile_cmd_section(self, *, hidden: bool = False) -> HelpSection:
+        openssl_req_cmd = EstUsernamePasswordCommandBuilder.get_opc_ua_server_profile_command(
+            cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
+        )
+        openssl_req_cmd_opc_ua_server_profile_row = HelpRow(
+            key=_non_lazy('OpenSSL Command'),
+            value=openssl_req_cmd,
+            value_render_type=ValueRenderType.CODE,
+            hidden=False
+        )
+        return HelpSection(
+            heading=_non_lazy('Generate PKCS#10 CSR for OPC-UA Server Certificates'),
+            rows=[
+                openssl_req_cmd_opc_ua_server_profile_row,
+                self._get_enroll_row(certificate_profile='opc-ua-server')
+            ],
+            hidden=hidden,
+            css_id=ApplicationCertificateProfile.OPC_UA_SERVER.name
+        )
+
+    def _get_summary_section(self) -> HelpSection:
+        if self.object.domain is None:
+            raise ValueError
+        certificate_request_url = (
+            f'https://{ self.host }/.well-known/est/'
+            f'{ self.object.domain.unique_name }/<certificate_profile>/simpleenroll/'
+        )
+        url_row = HelpRow(
+            key=format_html(_non_lazy('Certificate Request URL')),
+            value=certificate_request_url,
+            value_render_type=ValueRenderType.CODE
+        )
+        public_key_type_row = HelpRow(
+            key=_non_lazy('Required Public Key Type'),
+            value=str(self.object.public_key_info),
+            value_render_type=ValueRenderType.CODE
+        )
+
+        return HelpSection(
+            heading=_non_lazy('Summary'),
+            rows=[
+                url_row,
+                public_key_type_row
+            ]
+        )
+
+    def _get_cert_profile_select_input(self) -> SafeString:
+        select_field = '<select id="cert-profile-select" class="form-select" aria-label="Certificate Profile Select">'
+        for index, profile in enumerate(ApplicationCertificateProfile):
+            if index == 0:
+                select_field += format_html('<option value="{}" selected>{}</option>', profile.name, profile.label)
+            else:
+                select_field += format_html('<option value="{}">{}</option>', profile.name, profile.label)
+        select_field += '</select>'
+
+        return format_html(select_field)
+
+
+    def _get_key_generation_section(self) -> HelpSection:
+        key_generation_row = HelpRow(
+            key=_non_lazy('Generate Key-Pair'),
+            value=self._get_key_gen_command(),
+            value_render_type=ValueRenderType.CODE
+        )
+
+        return HelpSection(
+            heading=format_html(_non_lazy('Key Generation')),
+            rows=[key_generation_row]
+        )
+
+    def _get_key_gen_command(self) -> str:
+        device: DeviceModel = self.object
+        if device.domain is None:
+            raise Http404(DeviceWithoutDomainErrorMsg)
+
+        if not device.public_key_info:
+            raise Http404(PublicKeyInfoMissingErrorMsg)
+        try:
+            return KeyGenCommandBuilder.get_key_gen_command(
+                public_key_info=device.public_key_info,
+                cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
+            )
+        except Exception as exception:
+            raise Http404(exception) from exception
+
+    def _get_download_tls_trust_store_section(self) -> HelpSection:
+        tls_cert_pk = self._get_tls_server_root_ca_pk()
+        if tls_cert_pk is None:
+            err_msg = _non_lazy('Failed to get the Trustpoint TLS Root Certificate.')
+            raise ValueError(err_msg)
+
+        download_tls_truststore_row = HelpRow(
+            key=_non_lazy('Download TLS Trust-Store'),
+            value=format_html(
+                '<a href="{}" class="btn btn-primary w-100">{}</a>',
+                reverse(
+                    'pki:certificate-file-download-file-name',
+                    kwargs={
+                        'file_format': 'pem',
+                        'pk': tls_cert_pk,
+                        'file_name': 'trustpoint-tls-trust-store.pem'
+                    }
+                ),
+                _non_lazy('Download TLS Trust-Store')
+            ),
+            value_render_type=ValueRenderType.PLAIN
+        )
+
+        return HelpSection(
+            heading=_non_lazy('Download TLS Trust-Store'),
+            rows=[download_tls_truststore_row]
+        )
+
+    def _get_tls_server_root_ca_pk(self) -> None | int:
+        tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
+        if not tls_cert or not tls_cert.credential:
+            raise Http404(ActiveTrustpointTlsServerCredentialModelMissingErrorMsg)
+        root_ca_model = tls_cert.credential.get_last_in_chain()
+        if not root_ca_model:
+            return None
+        return root_ca_model.pk
+
+
+class DeviceOnboardingEstDomainCredentialHelpView(AbstractDeviceOnboardingEstDomainCredentialHelpView):
+    """abc."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+class OpcUaGdsOnboardingEstDomainCredentialHelpView(AbstractDeviceOnboardingEstDomainCredentialHelpView):
+    """abc."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY

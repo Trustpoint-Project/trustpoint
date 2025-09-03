@@ -13,9 +13,9 @@
             </div>
             <div class="card-body">
                 <div class="tp-card-centered-content">
-                    <a href="{% url 'devices:help-onboarding_est-idevid-registration' pk=devid_registration.id %}" class="btn btn-primary min-width-20 mb-3">{% trans 'Enroll with EST' %}</a>
+                    <a href="{% url 'pki:help_onboarding_cmp_idevid_registration' pk=devid_registration.id %}" class="btn btn-primary min-width-20 mb-5">{% trans 'Enroll with CMP' %}</a>
                     <br>
-                    <a href="{% url 'devices:help-onboarding_cmp-idevid-registration' pk=devid_registration.id %}" class="btn btn-primary min-width-20 mb-5">{% trans 'Enroll with CMP' %}</a>
+                    <a href="{% url 'pki:help_onboarding_est_idevid_registration' pk=devid_registration.id %}" class="btn btn-primary min-width-20 mb-3">{% trans 'Enroll with EST' %}</a>
                 </div>
             </div>
             <div class="card-footer d-flex">

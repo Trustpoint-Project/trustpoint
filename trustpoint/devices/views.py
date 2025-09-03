@@ -929,7 +929,7 @@ class AbstractOnboardingIssueNewApplicationCredentialView(PageContextMixin, Deta
                 'protocol': 'cmp',
                 'enabled': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP),
                 'url': (
-                    f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_domain_credential'
+                    f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_cmp_domain_credential'
                 ),
             }
         )
@@ -944,7 +944,7 @@ class AbstractOnboardingIssueNewApplicationCredentialView(PageContextMixin, Deta
                 'protocol': 'est',
                 'enabled': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST),
                 'url': (
-                    f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_domain_credential'
+                    f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_est_domain_credential'
                 ),
             }
         )

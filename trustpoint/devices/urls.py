@@ -197,7 +197,7 @@ urlpatterns = [
         ),
     ),
     path(
-        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/cmp-shared-secret/',
+        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/est-username-password/',
         devices_help_views.OpcUaGdsOnboardingDomainCredentialEstUsernamePasswordHelpView.as_view(),
         name=(
             f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}'
@@ -217,7 +217,7 @@ urlpatterns = [
     path(
         'certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/cmp-domain-credential/',
         devices_help_views.DeviceOnboardingCmpDomainCredentialHelpView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_onboarding_clm_issue_application_credential_domain_credential',
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_onboarding_clm_issue_application_credential_cmp_domain_credential',
     ),
     path(
         (
@@ -225,7 +225,20 @@ urlpatterns = [
             'onboarding/issue-application-credential/cmp-domain-credential/'
         ),
         devices_help_views.OpcUaGdsOnboardingCmpDomainCredentialHelpView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_onboarding_clm_issue_application_credential_domain_credential',
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_onboarding_clm_issue_application_credential_cmp_domain_credential',
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/est-domain-credential/',
+        devices_help_views.DeviceOnboardingEstDomainCredentialHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_onboarding_clm_issue_application_credential_est_domain_credential',
+    ),
+    path(
+        (
+            'opc-ua-gds/certificate-lifecycle-management/<int:pk>/'
+            'onboarding/issue-application-credential/est-domain-credential/'
+        ),
+        devices_help_views.OpcUaGdsOnboardingEstDomainCredentialHelpView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_onboarding_clm_issue_application_credential_est_domain_credential',
     ),
     # Certificate Lifecycle Management - Downloads
     path(

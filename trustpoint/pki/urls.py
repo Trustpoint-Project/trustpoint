@@ -116,6 +116,21 @@ urlpatterns = [
     path('domains/', domains.DomainTableView.as_view(), name='domains'),
     path('domains/add/', domains.DomainCreateView.as_view(), name='domains-add'),
     path('domains/config/<int:pk>/', domains.DomainConfigView.as_view(), name='domains-config'),
+    path(
+        'domains/config/<int:pk>/help/onboarding-method-select-idevid/',
+        domains.OnboardingMethodSelectIdevidHelpView.as_view(),
+        name='help_onboarding_method_select_idevid'
+    ),
+    path(
+        'domains/config/<int:pk>/help/cmp-idevid-registration/',
+        domains.OnboardingCmpIdevidRegistrationHelpView.as_view(),
+        name='help_onboarding_cmp_idevid_registration',
+    ),
+    path(
+        'domains/config/<int:pk>/help/est-idevid-registration/',
+        domains.OnboardingEstIdevidRegistrationHelpView.as_view(),
+        name='help_onboarding_est_idevid_registration',
+    ),
     path('domains/detail/<int:pk>/', domains.DomainDetailView.as_view(), name='domains-detail'),
     re_path(
         r'^domains/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
