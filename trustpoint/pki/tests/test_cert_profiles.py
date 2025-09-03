@@ -270,3 +270,23 @@ def test_csr_to_json_adapter() -> None:
     validated_request = JSONProfileVerifier.validate_request(csr_json)
     print('Validated Request:', validated_request)
     assert validated_request['subject']['common_name'] == 'example.com'
+
+def test_json_to_cb_adapter() -> None:
+    """Test that the JSON to Certificate Builder adapter works correctly."""
+    from cryptography import x509
+
+    request = {
+        'subj': {
+            'cn': 'example.com',
+            'o': 'Example Org'
+        },
+        'ext': {
+            'san': {
+                'dns_names': ['www.example.com'],
+            }
+        }
+    }
+    validated_request = JSONProfileVerifier.validate_request(request)
+    cb = JSONCertRequestConverter.from_json(validated_request)
+    print('Cert from JSON Request:', cb)
+    assert cb._subject_name.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value == 'example.com'  # noqa: SLF001

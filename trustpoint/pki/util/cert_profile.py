@@ -87,7 +87,13 @@ class SubjectModel(BaseModel):
     # Should allow unknown fields, but not required
     model_config = ConfigDict(extra='allow')
 
-class SanExtensionModel(BaseModel):
+class BaseExtensionModel(BaseModel):
+    """Base model for certificate extensions."""
+    critical: bool | None = None
+
+    model_config = ConfigDict(extra='forbid')
+
+class SanExtensionModel(BaseExtensionModel):
     """Model for the SAN extension of a certificate profile."""
     dns_names: list[str] | None = None
     ip_addresses: list[str] | None = None
@@ -95,7 +101,7 @@ class SanExtensionModel(BaseModel):
     uris: list[str] | None = None
     other_names: list[str] | None = None
 
-    model_config = ConfigDict(extra='forbid')  # allow, ignore (default)
+    model_config = ConfigDict(extra='forbid')
 
 class ExtensionsModel(BaseModel):
     """Model for the extensions of a certificate profile."""
