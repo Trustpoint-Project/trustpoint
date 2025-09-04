@@ -98,3 +98,19 @@ class CertificateExtensionOid(enum.Enum):
             The verbose name.
         """
         return self.value.verbose_name
+
+
+class ExtendedKeyUsageOid(enum.Enum):
+    """OIDs for Extended Key Usage values."""
+    SERVER_AUTH = '1.3.6.1.5.5.7.3.1'
+    CLIENT_AUTH = '1.3.6.1.5.5.7.3.2'
+    CODE_SIGNING = '1.3.6.1.5.5.7.3.3'
+    EMAIL_PROTECTION = '1.3.6.1.5.5.7.3.4'
+    TIME_STAMPING = '1.3.6.1.5.5.7.3.8'
+    OCSP_SIGNING = '1.3.6.1.5.5.7.3.9'
+    ANY_EXTENDED_KEY_USAGE = '2.5.29.37.0'
+    SMARTCARD_LOGON = '1.3.6.1.4.1.311.20.2.2'
+    KERBEROS_PKINIT_KDC = '1.3.6.1.5.2.3.5'
+    IPSEC_IKE = '1.3.6.1.5.5.7.3.17'
+    BUNDLE_SECURITY = '1.3.6.1.5.5.7.3.35'
+    CERTIFICATE_TRANSPARENCY = '1.3.6.1.4.1.11129.2.4.4'

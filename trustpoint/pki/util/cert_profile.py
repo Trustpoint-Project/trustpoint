@@ -29,7 +29,7 @@ ALIASES: dict[str, AliasChoices] = {
     #'common_name': AliasChoices('common_name', 'cn', 'CN', 'commonName', '2.5.4.3')
 }
 
-def build_alias_map_name_oids(alias_map: dict[str, str], enum_cls: enum.Enum) -> dict[str, str]:
+def build_alias_map_name_oids(alias_map: dict[str, str], enum_cls: type[enum.Enum]) -> dict[str, str]:
     """Build a mapping of all known OID strings from trustpoint_core to their canonical field names."""
     for entry in enum_cls:
         canonical = entry.name.lower() # e.g. 'common_name'
@@ -93,22 +93,50 @@ class BaseExtensionModel(BaseModel):
 
     model_config = ConfigDict(extra='forbid')
 
+class BasicConstraintsExtensionModel(BaseExtensionModel):
+    """Model for the Basic Constraints extension of a certificate profile."""
+    ca: bool | None = None
+    path_length: int | None = None
+
+    model_config = ConfigDict(extra='forbid')
+
 class SanExtensionModel(BaseExtensionModel):
     """Model for the SAN extension of a certificate profile."""
-    dns_names: list[str] | None = None
-    ip_addresses: list[str] | None = None
-    rfc822_names: list[str] | None = None
-    uris: list[str] | None = None
-    other_names: list[str] | None = None
+    dns_names: list[str] | ProfileValuePropertyModel | None = None
+    ip_addresses: list[str] | ProfileValuePropertyModel | None = None
+    rfc822_names: list[str] | ProfileValuePropertyModel | None = None
+    uris: list[str] | ProfileValuePropertyModel | None = None
+    other_names: list[str] | ProfileValuePropertyModel | None = None
+
+    model_config = ConfigDict(extra='forbid')
+
+class KeyUsageExtensionModel(BaseExtensionModel):
+    """Model for the Key Usage extension of a certificate profile."""
+    digital_signature: bool | None = None
+    content_commitment: bool | None = None
+    key_encipherment: bool | None = None
+    data_encipherment: bool | None = None
+    key_agreement: bool | None = None
+    key_cert_sign: bool | None = None
+    crl_sign: bool | None = None
+    encipher_only: bool | None = None
+    decipher_only: bool | None = None
+
+    model_config = ConfigDict(extra='forbid')
+
+class ExtendedKeyUsageExtensionModel(BaseExtensionModel):
+    """Model for the Extended Key Usage extension of a certificate profile."""
+    usages: list[str] | ProfileValuePropertyModel | None = None
 
     model_config = ConfigDict(extra='forbid')
 
 class ExtensionsModel(BaseModel):
     """Model for the extensions of a certificate profile."""
-    basic_constraints: str | None = None
-    key_usage: str | None = None
-    extended_key_usage: str | None = None
-    subject_alternative_name: SanExtensionModel | None = Field(default=None, alias=ALIASES.get('subject_alternative_name'))
+    basic_constraints: BasicConstraintsExtensionModel | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('basic_constraints'))
+    key_usage: KeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('key_usage'))
+    extended_key_usage: ExtendedKeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('extended_key_usage'))
+    subject_alternative_name: SanExtensionModel | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('subject_alternative_name'))
+
 
 class ValidityModel(BaseModel):
     """Model for the validity period of a certificate profile."""
