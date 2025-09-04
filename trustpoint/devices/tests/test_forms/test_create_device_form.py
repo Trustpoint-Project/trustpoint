@@ -4,8 +4,8 @@ from typing import Any
 
 import pytest
 
-from devices.forms import CreateDeviceForm
-from devices.models import DeviceModel
+from devices.forms import NoOnboardingCreateForm
+from devices.models import DeviceModel, OnboardingStatus
 
 
 @pytest.mark.django_db
@@ -22,7 +22,7 @@ def test_create_device_form_valid_data(domain_instance: dict[str, Any]) -> None:
         'pki_configuration': 'cmp_shared_secret',
     }
 
-    form = CreateDeviceForm(data=form_data)
+    form = NoOnboardingCreateForm(data=form_data)
 
     assert form.is_valid(), f'Form should be valid, but errors were found: {form.errors}'
 
@@ -30,5 +30,5 @@ def test_create_device_form_valid_data(domain_instance: dict[str, Any]) -> None:
     assert device.common_name == 'TestDevice', 'Device common name should match input'
     assert device.serial_number == '12345', 'Serial number should match input'
     assert device.domain == domain, 'Device domain should match the domain instance'
-    assert device.onboarding_status == DeviceModel.OnboardingStatus.PENDING, 'Onboarding status should be PENDING'
-    assert device.cmp_shared_secret, 'CMP shared secret should be auto-generated'
+    assert device.no_onboarding_config.onboarding_status == OnboardingStatus.PENDING, 'Onboarding status should be PENDING'
+    assert device.no_onboarding_config.cmp_shared_secret, 'CMP shared secret should be auto-generated'

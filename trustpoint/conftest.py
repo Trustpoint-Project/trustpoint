@@ -7,7 +7,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from devices.issuer import LocalTlsClientCredentialIssuer
-from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
+from devices.models import DeviceModel, IssuedCredentialModel, NoOnboardingConfigModel, NoOnboardingPkiProtocol, RemoteDeviceCredentialDownloadModel
 from pki.models import CertificateModel, CredentialModel
 from pki.models.domain import DomainModel
 from pki.models.issuing_ca import IssuingCaModel
@@ -87,13 +87,21 @@ def domain_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
 def device_instance(domain_instance: dict[str, Any]) -> dict[str, Any]:
     """Fixture to create a test device linked with a domain."""
     domain: DomainModel = domain_instance['domain']
+
+    no_onboarding_pki_protocols = [
+        NoOnboardingPkiProtocol.MANUAL
+    ]
+    no_onboarding_config_model = NoOnboardingConfigModel()
+    no_onboarding_config_model.set_pki_protocols(no_onboarding_pki_protocols)
+
+    no_onboarding_config_model.full_clean()
+    no_onboarding_config_model.save()
+
     device = DeviceModel.objects.create(
         common_name='test-device-1',
         serial_number='TEST123456',
         domain=domain,
-        onboarding_status=DeviceModel.OnboardingStatus.NO_ONBOARDING,
-        onboarding_protocol=DeviceModel.OnboardingProtocol.EST_PASSWORD,
-        pki_protocol=DeviceModel.PkiProtocol.EST_PASSWORD,
+        no_onboarding_config=no_onboarding_config_model,
     )
     domain_instance.update({'device': device})
     return domain_instance
