@@ -137,6 +137,7 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         verbose_name=_('Onboarding Status'),
         null=False,
         blank=False,
+        default=OnboardingStatus.PENDING,
     )
 
     onboarding_protocol = models.PositiveIntegerField(
@@ -200,7 +201,7 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
                 err_msg = 'BRSKI is not yet supported as onboarding protocol.'
                 raise ValidationError(err_msg)
             case _:
-                err_msg = f'Unknwon onboarding protocol found: {self.onboarding_protocol}.'
+                err_msg = f'Unknown onboarding protocol found: {self.onboarding_protocol}.'
                 raise ValidationError(err_msg)
 
         if error_messages:

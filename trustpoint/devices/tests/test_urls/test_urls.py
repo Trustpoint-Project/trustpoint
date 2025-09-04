@@ -12,9 +12,9 @@ from devices import views
     [
         # Main Pages
         ('devices:devices', {}, views.DeviceTableView),
-        ('devices:add', {}, views.DeviceCreateOnboardingView),
+        ('devices:devices_create_onboarding', {}, views.DeviceCreateOnboardingView),
         # Certificate Lifecycle Management
-        ('devices:certificate_lifecycle_management', {'pk': 1}, views.DeviceCertificateLifecycleManagementSummaryView),
+        ('devices:devices_certificate_lifecycle_management', {'pk': 1}, views.DeviceCertificateLifecycleManagementSummaryView),
         # OPC UA GDS
         ('devices:opc_ua_gds', {}, views.OpcUaGdsTableView),
         # ('devices:opc_ua_gds-add', {}, views.CreateOpcUaGdsView),
@@ -85,15 +85,15 @@ from devices import views
         # Downloads
         #('devices:download', {'pk': 1}, views.DownloadPageDispatcherView),
         #('devices:certificate-download', {'pk': 1}, views.CertificateDownloadView),
-        ('devices:credential-download', {'pk': 1}, views.DeviceManualCredentialDownloadView),
-        ('devices:browser_otp_view', {'pk': 1}, views.DeviceBrowserOnboardingOTPView),
+        ('devices:devices_credential-download', {'pk': 1}, views.DeviceManualCredentialDownloadView),
+        ('devices:devices_browser_otp_view', {'pk': 1}, views.DeviceBrowserOnboardingOTPView),
         ('devices:browser_login', {}, views.DeviceOnboardingBrowserLoginView),
         ('devices:browser_domain_credential_download', {'pk': 1}, views.DeviceBrowserCredentialDownloadView),
-        ('devices:browser_cancel', {'pk': 1}, views.DeviceBrowserOnboardingCancelView),
+        ('devices:devices_browser_cancel', {'pk': 1}, views.DeviceBrowserOnboardingCancelView),
         # Revoke Views
         #('devices:credential_revocation', {'pk': 1, 'credential_pk': 1}, views.DeviceCredentialRevocationView),
         #('devices:device_revocation', {'pk': 1}, views.DeviceRevocationView),
-        ('devices:device_delete', {'pks': '1/2/3'}, views.DeviceBulkDeleteView),
+        ('devices:devices_device_delete', {'pks': '1/2/3'}, views.DeviceBulkDeleteView),
     ],
 )
 def test_url_resolves(url_name: str, kwargs: dict[str, str], view_class: type) -> None:
