@@ -22,6 +22,7 @@ from django.views.generic.list import ListView
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
 from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH
+from trustpoint.views.base import SortableTableFromListMixin
 
 if TYPE_CHECKING:
     from typing import Any
@@ -48,7 +49,7 @@ def language(request: HttpRequest) -> HttpResponse:
 # ------------------------------------------------------- Logging ------------------------------------------------------
 
 
-class LoggingFilesTableView(PageContextMixin, LoggerMixin, ListView[models.Model]):
+class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromListMixin, ListView[models.Model]):
     """View to display all log files in the log directory in a table."""
 
     http_method_names = ('get',)

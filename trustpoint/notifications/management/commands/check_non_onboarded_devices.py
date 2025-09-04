@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from devices.models import DeviceModel
+from devices.models import DeviceModel, OnboardingStatus
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from notifications.models import NotificationModel, NotificationStatus
-from pki.models import DomainModel
 
 new_status, created = NotificationStatus.objects.get_or_create(status='NEW')
 
@@ -35,7 +34,7 @@ class Command(BaseCommand):
 
     def _check_non_onboarded_devices(self) -> None:
         """Task to create an info notification if a device is not onboarded."""
-        non_onboarded_devices = DeviceModel.objects.filter(onboarding_status=DeviceModel.OnboardingStatus.PENDING)
+        non_onboarded_devices = DeviceModel.objects.filter(onboarding_config__onboarding_status=OnboardingStatus.PENDING)
 
         for device in non_onboarded_devices:
             if not NotificationModel.objects.filter(event='DEVICE_NOT_ONBOARDED', device=device).exists():

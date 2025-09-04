@@ -89,7 +89,6 @@ class SortableTableMixin[T: models.Model]:
             queryset = self.model.objects.all()
 
         sort_param = self.request.GET.get('sort', self.default_sort_param)
-        # if issubclass(queryset_type, models.QuerySet):
         if hasattr(self.model, 'is_active'):
             return queryset.order_by('-is_active', sort_param)
         return queryset.order_by(sort_param)
@@ -104,7 +103,47 @@ class SortableTableMixin[T: models.Model]:
         # Pass sorting details to the template
         context['current_sort'] = sort_param
         return context
+    
 
+class SortableTableFromListMixin:
+    """Adds utility for sorting a ListView query by URL parameters.
+
+    default_sort_param must be set in the view to specify default sorting order.
+    Use instead of SortableTableMixin when you have a list of dicts instead of a Django queryset.
+    """
+    @staticmethod
+    def _sort_list_of_dicts(list_of_dicts: list[dict], sort_param: str) -> list[dict]:
+        """Sorts a list of dictionaries by the given sort parameter.
+
+        Args:
+            list_of_dicts: List of dictionaries to sort.
+            sort_param: The parameter to sort by. Prefix with '-' for descending order.
+
+        Returns:
+            The sorted list of dictionaries.
+        """
+        return sorted(list_of_dicts, key=lambda x: x[sort_param.lstrip('-')], reverse=sort_param.startswith('-'))
+
+    def get_queryset(self) -> list[dict[str, str]]:
+        if hasattr(self, 'queryset') and self.queryset is not None:
+            queryset = self.queryset
+        else:
+            queryset = self.model.objects.all()
+
+        # Get sort parameter (e.g., "name" or "-name")
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+        queryset_type = type(queryset)
+        return self._sort_list_of_dicts(queryset, sort_param)
+
+    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(*args, **kwargs)
+
+        # Get current sorting column
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+
+        # Pass sorting details to the template
+        context['current_sort'] = sort_param
+        return context
 
 class ContextDataMixin:
     def get_context_data(self, **kwargs: Any) -> dict:

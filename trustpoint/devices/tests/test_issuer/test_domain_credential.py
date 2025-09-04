@@ -9,9 +9,9 @@ from devices.models import IssuedCredentialModel, OnboardingStatus
 
 
 @pytest.mark.django_db
-def test_issue_domain_credential(device_instance: dict[str, Any]) -> None:
+def test_issue_domain_credential(device_instance_onboarding: dict[str, Any]) -> None:
     """Test that issuing a domain credential works without mocks."""
-    device = device_instance['device']
+    device = device_instance_onboarding['device']
 
     issuer = LocalDomainCredentialIssuer(device=device, domain=device.domain)
 
@@ -31,7 +31,7 @@ def test_issue_domain_credential(device_instance: dict[str, Any]) -> None:
     ), 'The issued_credential_purpose should match DOMAIN_CREDENTIAL'
 
     device.refresh_from_db()
-    assert device.onboarding_status == OnboardingStatus.ONBOARDED, (
+    assert device.onboarding_config.onboarding_status == OnboardingStatus.ONBOARDED, (
         'The device onboarding status should be updated to ONBOARDED'
     )
 
