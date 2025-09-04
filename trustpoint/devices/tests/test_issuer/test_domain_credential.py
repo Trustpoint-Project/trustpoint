@@ -1,10 +1,11 @@
 """Test suite for validating the Domain Credential functionality."""
+
 from typing import Any
 
 import pytest
 
 from devices.issuer import LocalDomainCredentialIssuer
-from devices.models import DeviceModel, IssuedCredentialModel
+from devices.models import IssuedCredentialModel, OnboardingStatus
 
 
 @pytest.mark.django_db
@@ -16,20 +17,23 @@ def test_issue_domain_credential(device_instance: dict[str, Any]) -> None:
 
     issued_credential = issuer.issue_domain_credential()
 
-    assert isinstance(issued_credential, IssuedCredentialModel), \
+    assert isinstance(issued_credential, IssuedCredentialModel), (
         'The returned object should be an IssuedCredentialModel'
+    )
     assert issued_credential.common_name == 'Trustpoint Domain Credential', 'The common name should match the pseudonym'
     assert issued_credential.device == device, 'The issued credential should belong to the correct device'
     assert issued_credential.domain == device.domain, 'The issued credential should belong to the correct domain'
-    assert issued_credential.issued_credential_type == IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL, \
+    assert issued_credential.issued_credential_type == IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL, (
         'The issued_credential_type should match DOMAIN_CREDENTIAL'
-    assert issued_credential.issued_credential_purpose == \
-           IssuedCredentialModel.IssuedCredentialPurpose.DOMAIN_CREDENTIAL, \
-        'The issued_credential_purpose should match DOMAIN_CREDENTIAL'
+    )
+    assert (
+        issued_credential.issued_credential_purpose == IssuedCredentialModel.IssuedCredentialPurpose.DOMAIN_CREDENTIAL
+    ), 'The issued_credential_purpose should match DOMAIN_CREDENTIAL'
 
     device.refresh_from_db()
-    assert device.onboarding_status == DeviceModel.OnboardingStatus.ONBOARDED, \
+    assert device.onboarding_status == OnboardingStatus.ONBOARDED, (
         'The device onboarding status should be updated to ONBOARDED'
+    )
 
     db_credential = IssuedCredentialModel.objects.get(pk=issued_credential.pk)
     assert db_credential == issued_credential, 'The credential should be saved correctly in the database'

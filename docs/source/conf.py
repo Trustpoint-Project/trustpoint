@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-import django  # Required for Django-based projects
+import django
 
 BUILD_AUTODOCS = True
 
