@@ -17,10 +17,10 @@ from trustpoint_core.serializer import (
 )
 from util.field import UniqueNameValidator
 
-from pki.models import DevIdRegistration, IssuingCaModel
+from pki.models import DevIdRegistration, IssuingCaModel, OwnerCredentialModel
 from pki.models.certificate import CertificateModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
-from trustpoint.views.base import LoggerMixin
+from trustpoint.logger import LoggerMixin
 
 
 class DevIdAddMethodSelectForm(forms.Form):
@@ -94,7 +94,6 @@ class TruststoreAddForm(forms.Form):
 
     trust_store_file = forms.FileField(label=_('PEM or PKCS#7 File'), required=True)
 
-    @LoggerMixin.log_exceptions
     def clean_unique_name(self) -> str:
         """Validates the uniqueness of the truststore name.
 
@@ -107,7 +106,6 @@ class TruststoreAddForm(forms.Form):
             raise ValidationError(error_message)
         return cast(str, unique_name)
 
-    @LoggerMixin.log_exceptions
     def clean(self) -> None:
         """Cleans and validates the form data.
 
@@ -124,16 +122,15 @@ class TruststoreAddForm(forms.Form):
         intended_usage = cleaned_data.get('intended_usage')
 
         try:
-            trust_store_file = cleaned_data.get('trust_store_file').read()
+            trust_store_file = cast(bytes, cleaned_data.get('trust_store_file').read())
         except (OSError, AttributeError) as original_exception:
             error_message = _(
                 'Unexpected error occurred while trying to get file contents. Please see logs for further details.'
             )
             raise ValidationError(error_message, code='unexpected-error') from original_exception
 
-        # TODO(FHatCSW): Also support PKCS#7 PEM and PKCS#7 DER files.
         try:
-            certificates = x509.load_pem_x509_certificates(trust_store_file)
+            certificate_collection_serializer = CertificateCollectionSerializer.from_bytes(trust_store_file)
         except Exception as exception:
             error_message = 'Unable to process the Truststore. May be malformed / corrupted.'
             raise ValidationError(error_message) from exception
@@ -142,7 +139,7 @@ class TruststoreAddForm(forms.Form):
             trust_store_model = self._save_trust_store(
                 unique_name=unique_name,
                 intended_usage=TruststoreModel.IntendedUsage(int(intended_usage)),
-                certificates=certificates,
+                certificates=certificate_collection_serializer.as_crypto(),
             )
         except Exception as exception:
             raise ValidationError(str(exception)) from exception
@@ -362,7 +359,6 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         required=False,
     )
 
-    @LoggerMixin.log_exceptions
     def clean_unique_name(self) -> str:
         """Validates the unique name to ensure it is not already in use.
 
@@ -375,7 +371,6 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             raise ValidationError(error_message)
         return cast(str, unique_name)
 
-    @LoggerMixin.log_exceptions
     def clean(self) -> None:
         """Cleans and validates the entire form.
 
@@ -415,7 +410,7 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             pkcs12_password = None
 
         try:
-            credential_serializer = CredentialSerializer(pkcs12_raw, pkcs12_password)
+            credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
         except Exception as exception:
             err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
             raise ValidationError(err_msg) from exception
@@ -458,6 +453,8 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
         validators=[UniqueNameValidator()],
     )
+    ca_certificate = forms.FileField(label=_('Issuing CA Certificate (.cer, .der, .pem, .p7b, .p7c)'), required=True)
+    ca_certificate_chain = forms.FileField(label=_('[Optional] Certificate Chain (.pem, .p7b, .p7c).'), required=False)
     private_key_file = forms.FileField(label=_('Private Key File (.key, .pem)'), required=True)
     private_key_file_password = forms.CharField(
         # hack, force autocomplete off in chrome with: one-time-code
@@ -465,10 +462,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         label=_('[Optional] Private Key File Password'),
         required=False,
     )
-    ca_certificate = forms.FileField(label=_('Issuing CA Certificate (.cer, .der, .pem, .p7b, .p7c)'), required=True)
-    ca_certificate_chain = forms.FileField(label=_('[Optional] Certificate Chain (.pem, .p7b, .p7c).'), required=False)
 
-    @LoggerMixin.log_exceptions
     def clean_unique_name(self) -> str:
         """Validates the unique name to ensure it does not already exist in the database.
 
@@ -481,7 +475,6 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             raise ValidationError(error_message)
         return unique_name
 
-    @LoggerMixin.log_exceptions
     def clean_private_key_file(self) -> PrivateKeySerializer:
         """Validates and parses the uploaded private key file.
 
@@ -513,12 +506,12 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             raise ValidationError(err_msg)
 
         try:
-            return PrivateKeySerializer(private_key_file.read(), private_key_file_password)
+            return PrivateKeySerializer.from_bytes(private_key_file.read(), private_key_file_password)
         except Exception as exception:
             err_msg = _('Failed to parse the private key file. Either wrong password or file corrupted.')
             raise ValidationError(err_msg) from exception
 
-    @LoggerMixin.log_exceptions
+
     def clean_ca_certificate(self) -> CertificateSerializer:
         """Validates and parses the uploaded Issuing CA certificate file.
 
@@ -546,7 +539,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             raise ValidationError(err_msg)
 
         try:
-            certificate_serializer = CertificateSerializer(ca_certificate.read())
+            certificate_serializer = CertificateSerializer.from_bytes(ca_certificate.read())
         except Exception as exception:
             err_msg = _('Failed to parse the Issuing CA certificate. Seems to be corrupted.')
             raise ValidationError(err_msg) from exception
@@ -555,8 +548,9 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             certificate_serializer.as_crypto().fingerprint(algorithm=hashes.SHA256()).hex()
         )
         if certificate_in_db:
-            issuing_ca_in_db = IssuingCaModel.objects.get(credential__certificate=certificate_in_db)
-            if issuing_ca_in_db:
+            issuing_ca_qs = IssuingCaModel.objects.filter(credential__certificate=certificate_in_db)
+            if issuing_ca_qs.exists():
+                issuing_ca_in_db = issuing_ca_qs.first()
                 err_msg = (
                     f'Issuing CA {issuing_ca_in_db.unique_name} is already configured '
                     'with the same Issuing CA certificate.'
@@ -565,7 +559,6 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
 
         return certificate_serializer
 
-    @LoggerMixin.log_exceptions
     def clean_ca_certificate_chain(self) -> None | CertificateCollectionSerializer:
         """Validates and parses the uploaded Issuing CA certificate chain file.
 
@@ -583,17 +576,15 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         """
         ca_certificate_chain = self.cleaned_data['ca_certificate_chain']
 
-        # TODO(AlexHx8472): Validate if full chain is available
         if ca_certificate_chain:
             try:
-                return CertificateCollectionSerializer(ca_certificate_chain.read())
-            except Exception as original_exception:
-                err_msg = 'Failed to parse the Issuing CA certificate chain. Seems to be corrupted.'
-                raise ValidationError(err_msg) from original_exception
+                return CertificateCollectionSerializer.from_bytes(ca_certificate_chain.read())
+            except Exception as exception:
+                err_msg = _('Failed to parse the Issuing CA certificate chain. Seems to be corrupted.')
+                raise ValidationError(err_msg) from exception
 
         return None
 
-    @LoggerMixin.log_exceptions
     def clean(self) -> None:
         """Cleans and validates the form data.
 
@@ -610,16 +601,20 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             if not cleaned_data:
                 return
             unique_name = cleaned_data.get('unique_name')
-            private_key_file = cleaned_data.get('private_key_file')
-            ca_certificate = cleaned_data.get('ca_certificate')
-            ca_certificate_chain = (
+            private_key_serializer = cleaned_data.get('private_key_file')
+            ca_certificate_serializer = cleaned_data.get('ca_certificate')
+            ca_certificate_chain_serializer = (
                 cleaned_data.get('ca_certificate_chain') if cleaned_data.get('ca_certificate_chain') else None
             )
 
-            if not unique_name or not private_key_file or not ca_certificate:
+            if not unique_name or not private_key_serializer or not ca_certificate_serializer:
                 return
 
-            credential_serializer = CredentialSerializer((private_key_file, ca_certificate, ca_certificate_chain))
+            credential_serializer = CredentialSerializer.from_serializers(
+                private_key_serializer= private_key_serializer,
+                certificate_serializer=ca_certificate_serializer,
+                certificate_collection_serializer=ca_certificate_chain_serializer
+            )
 
             IssuingCaModel.create_new_issuing_ca(
                 unique_name=unique_name,
@@ -629,6 +624,202 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         # TODO(AlexHx8472): Filter credentials and check if any issuing ca corresponds to it.
         # TODO(AlexHx8472): If it does get and display the name of the issuing ca in the message.
         # TODO(AlexHx8472): If not, give information about the credential usage that is already in the db.
+        except ValidationError:
+            raise
+        except Exception as exception:
+            err_msg = str(exception)
+            raise ValidationError(err_msg) from exception
+
+
+class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
+    """Form for importing an DevOwnerID using separate files.
+
+    This form allows the user to upload a private key file, its password (optional),
+    an DevOwnerID certificate file, and an optional certificate chain. The form
+    validates the uploaded files, ensuring they are correctly formatted and within
+    size limits.
+
+    Attributes:
+        unique_name (CharField): A unique name for the Owner Credential.
+        private_key_file (FileField): The private key file (.key, .pem).
+        private_key_file_password (CharField): An optional password for the private key.
+        owner_certificate (FileField): The DevOwnerID certificate file (.cer, .der, .pem, .p7b, .p7c).
+        owner_certificate_chain (FileField): An optional certificate chain file.
+    """
+
+    unique_name = forms.CharField(
+        max_length=256,
+        label=_('Unique Name') + ' ' + UniqueNameValidator.form_label,
+        widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
+        validators=[UniqueNameValidator()],
+    )
+    certificate = forms.FileField(label=_('DevOwnerID Certificate (.cer, .der, .pem, .p7b, .p7c)'), required=True)
+    certificate_chain = forms.FileField(label=_('[Optional] Certificate Chain (.pem, .p7b, .p7c).'), required=False)
+    private_key_file = forms.FileField(label=_('Private Key File (.key, .pem)'), required=True)
+    private_key_file_password = forms.CharField(
+        # hack, force autocomplete off in chrome with: one-time-code
+        widget=forms.PasswordInput(attrs={'autocomplete': 'one-time-code'}),
+        label=_('[Optional] Private Key File Password'),
+        required=False,
+    )
+
+    def clean_unique_name(self) -> str:
+        """Validates the unique name to ensure it does not already exist in the database.
+
+        Raises:
+            ValidationError: If an Issuing CA with the provided name already exists.
+        """
+        unique_name = self.cleaned_data['unique_name']
+        if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
+            error_message = 'Owner Credential with the provided name already exists.'
+            raise ValidationError(error_message)
+        return unique_name
+
+    def clean_private_key_file(self) -> PrivateKeySerializer:
+        """Validates and parses the uploaded private key file.
+
+        This method checks if the private key file is provided, ensures it meets
+        size constraints, and validates its contents. If a password is provided,
+        it is used to decrypt the private key. Raises validation errors for missing,
+        oversized, or corrupted private key files.
+
+        Returns:
+            PrivateKeySerializer: A serializer containing the parsed private key.
+
+        Raises:
+            ValidationError: If the private key file is missing, too large, or
+            corrupted, or if the password is invalid or incompatible.
+        """
+        private_key_file = self.cleaned_data.get('private_key_file')
+        private_key_file_password = (
+            self.data.get('private_key_file_password') if self.data.get('private_key_file_password') else None
+        )
+
+        if not private_key_file:
+            err_msg = 'No private key file was uploaded.'
+            raise forms.ValidationError(err_msg)
+
+        # max size: 64 kiB
+        max_size = 1024 * 64
+        if private_key_file.size > max_size:
+            err_msg = 'Private key file is too large, max. 64 kiB.'
+            raise ValidationError(err_msg)
+
+        try:
+            return PrivateKeySerializer.from_bytes(private_key_file.read(), private_key_file_password)
+        except Exception as exception:
+            err_msg = _('Failed to parse the private key file. Either wrong password or file corrupted.')
+            raise ValidationError(err_msg) from exception
+
+
+    def clean_certificate(self) -> CertificateSerializer:
+        """Validates and parses the uploaded certificate file.
+
+        This method ensures the provided certificate file is valid and
+        not already associated with an existing DevOwnerID in the database. If the
+        file is too large, corrupted, or already in use, a validation error is raised.
+
+        Returns:
+            CertificateSerializer: A serializer containing the parsed certificate.
+
+        Raises:
+            ValidationError: If the file is missing, too large, corrupted, or already
+            associated with an existing Issuing CA.
+        """
+        certificate = self.cleaned_data['certificate']
+
+        if not certificate:
+            err_msg = 'No certificate file was uploaded.'
+            raise forms.ValidationError(err_msg)
+
+        # max size: 64 kiB
+        max_size = 1024 * 64
+        if certificate.size > max_size:
+            err_msg = 'Certificate file is too large, max. 64 kiB.'
+            raise ValidationError(err_msg)
+
+        try:
+            certificate_serializer = CertificateSerializer.from_bytes(certificate.read())
+        except Exception as exception:
+            err_msg = _('Failed to parse the certificate. Seems to be corrupted.')
+            raise ValidationError(err_msg) from exception
+
+        certificate_in_db = CertificateModel.get_cert_by_sha256_fingerprint(
+            certificate_serializer.as_crypto().fingerprint(algorithm=hashes.SHA256()).hex()
+        )
+        if certificate_in_db:
+            credential_qs = OwnerCredentialModel.objects.filter(credential__certificate=certificate_in_db)
+            if credential_qs.exists():
+                credential_in_db = credential_qs.first()
+                err_msg = (
+                    f'Owner Credential {credential_in_db.unique_name} is already configured '
+                    'with the same DevOwnerID.'
+                )
+                raise ValidationError(err_msg)
+
+        return certificate_serializer
+
+    def clean_certificate_chain(self) -> None | CertificateCollectionSerializer:
+        """Validates and parses the uploaded certificate chain file.
+
+        This method checks if the optional certificate chain file is provided.
+        If present, it validates and attempts to parse the file into a collection
+        of certificates. Raises a validation error if parsing fails or the file
+        appears corrupted.
+
+        Returns:
+            CertificateCollectionSerializer: A serializer containing the parsed
+            certificate chain if provided.
+
+        Raises:
+            ValidationError: If the certificate chain cannot be parsed.
+        """
+        ca_certificate_chain = self.cleaned_data['certificate_chain']
+
+        if ca_certificate_chain:
+            try:
+                return CertificateCollectionSerializer.from_bytes(ca_certificate_chain.read())
+            except Exception as exception:
+                err_msg = _('Failed to parse the certificate chain. Seems to be corrupted.')
+                raise ValidationError(err_msg) from exception
+
+        return None
+
+    def clean(self) -> None:
+        """Cleans and validates the form data.
+
+        This method performs additional validation on the provided data,
+        such as ensuring the unique name, private key file, and certificates
+        are valid. It also initializes and saves the OwnerCredential configuration
+        if all checks pass.
+
+        Raises:
+            ValidationError: If the form data is invalid or there is an error during processing.
+        """
+        try:
+            cleaned_data = super().clean()
+            if not cleaned_data:
+                return
+            unique_name = cleaned_data.get('unique_name')
+            private_key_serializer = cleaned_data.get('private_key_file')
+            certificate_serializer = cleaned_data.get('certificate')
+            certificate_chain_serializer = (
+                cleaned_data.get('certificate_chain') if cleaned_data.get('certificate_chain') else None
+            )
+
+            if not unique_name or not private_key_serializer or not certificate_serializer:
+                return
+
+            credential_serializer = CredentialSerializer.from_serializers(
+                private_key_serializer= private_key_serializer,
+                certificate_serializer=certificate_serializer,
+                certificate_collection_serializer=certificate_chain_serializer
+            )
+
+            OwnerCredentialModel.create_new_owner_credential(
+                unique_name=unique_name,
+                credential_serializer=credential_serializer,
+            )
         except ValidationError:
             raise
         except Exception as exception:

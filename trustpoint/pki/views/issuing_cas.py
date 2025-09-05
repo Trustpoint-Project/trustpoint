@@ -25,9 +25,9 @@ from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
     ContextDataMixin,
-    LoggerMixin,
     SortableTableMixin,
 )
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -77,6 +77,14 @@ class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, FormView[IssuingCa
     form_class = IssuingCaAddFileImportPkcs12Form
     success_url = reverse_lazy('pki:issuing_cas')
 
+    def form_valid(self, form: IssuingCaAddFileImportPkcs12Form) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        messages.success(
+            self.request,
+            _('Successfully added Issuing CA {name}.').format(name=form.cleaned_data['unique_name']),
+        )
+        return super().form_valid(form)
+
 
 class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, FormView[IssuingCaAddFileImportSeparateFilesForm]):
     """View to import an Issuing CA from separate PEM files."""
@@ -84,6 +92,14 @@ class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, FormView[Is
     template_name = 'pki/issuing_cas/add/file_import.html'
     form_class = IssuingCaAddFileImportSeparateFilesForm
     success_url = reverse_lazy('pki:issuing_cas')
+
+    def form_valid(self, form: IssuingCaAddFileImportSeparateFilesForm) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        messages.success(
+            self.request,
+            _('Successfully added Issuing CA {name}.').format(name=form.cleaned_data['unique_name']),
+        )
+        return super().form_valid(form)
 
 
 class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[IssuingCaModel]):

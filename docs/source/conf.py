@@ -1,6 +1,5 @@
-# Configuration file for the Sphinx documentation builder.
-#
-# For the full list of built-in configuration values, see the documentation:
+# Sphinx configuration file for the Trustpoint documentation.  # noqa: D100, INP001
+# For full details, see:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 import os
@@ -9,40 +8,54 @@ from pathlib import Path
 
 import django
 
-sys.path.insert(0, os.path.abspath('../../trustpoint'))
-os.environ['DJANGO_SETTINGS_MODULE'] = 'trustpoint.settings'
-django.setup()
+BUILD_AUTODOCS = True
 
-PLANTUML_PATH = Path(__file__).parent.absolute() / Path('plantuml-mit-1.2024.6.jar')
+# -- Path setup -------------------------------------------------------------
+# Ensures Sphinx can find the project's modules for autodoc and autoapi.
+# Get absolute path to project root
+project_root = Path(__file__).parents[2].resolve()
 
-# -- Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
+# Add the `trustpoint/features` directory to the Sphinx path
+feature_path = project_root / 'trustpoint' / 'features'
 
+sys.path.insert(0, str(feature_path))
+
+# -- Django setup (only required if using Django models in documentation) --
+os.environ['DJANGO_SETTINGS_MODULE'] = 'trustpoint.settings'  # Set Django settings
+django.setup()  # Initialize Django
+
+# -- PlantUML Configuration -------------------------------------------------
+# Define the path to the PlantUML JAR file for diagram generation.
+PLANTUML_PATH = Path(__file__).parent / 'plantuml-mit-1.2025.2.jar'
+plantuml = f'java -jar {PLANTUML_PATH}'
+
+# -- Project information ----------------------------------------------------
 project = 'Trustpoint'
 copyright = '2025, Trustpoint Project'
 author = 'Trustpoint Project'
-release = '0.2.0'
+release = '0.3.0.dev1'  # Project version
 
-# -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
-
+# -- General configuration --------------------------------------------------
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.inheritance_diagram',
-    'sphinx.ext.napoleon',
-    'sphinxcontrib.plantuml',
-    'sphinx.ext.autosummary',
+    'sphinx.ext.inheritance_diagram',  # Generates class inheritance diagrams
+    'sphinx.ext.viewcode',  # Adds links to highlighted source code
+    'sphinxcontrib.plantuml',  # Enables PlantUML diagrams
 ]
 
-templates_path = ['_templates']
-exclude_patterns = []
+if BUILD_AUTODOCS:
+    autodoc_extensions = [
+        'sphinx.ext.autodoc',  # Auto-generate documentation from docstrings
+        'sphinx.ext.napoleon',  # Supports Google & NumPy docstring formats
+        'autoapi.extension',  # Automatically documents the API
+    ]
+    extensions.extend(autodoc_extensions)
+    autoapi_dirs = ['../../trustpoint']  # Directories for autoapi to scan
+    autodoc_typehints = 'description'  # Display type hints in descriptions
 
-# -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
+# -- Templates and exclusions -----------------------------------------------
+templates_path = ['_templates']  # Custom templates directory
+exclude_patterns = ['_build', '_templates']  # Ignore these directories
 
-html_theme = 'furo'
-html_static_path = ['_static']
-
-plantuml = f'java -jar {PLANTUML_PATH}'
-
-autodoc_member_order = 'bysource'
+# -- HTML output options ----------------------------------------------------
+html_theme = 'furo'  # Modern, responsive theme
+html_static_path = ['_static']  # Directory for static assets

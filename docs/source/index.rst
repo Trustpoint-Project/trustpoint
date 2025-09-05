@@ -6,6 +6,7 @@
 .. image:: /_static/trustpoint_banner.png
    :align: center
 
+======================================
 Welcome to Trustpoint's documentation!
 ======================================
 
@@ -16,35 +17,45 @@ Welcome to Trustpoint's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: 🚀 Getting Started :
+   :caption: 🚀 Getting Started
 
-   introduction
-   quickstart_setup
-   quickstart_operate
-   usage_guide
-   community_support
-   faq
-
-
-.. toctree::
-   :maxdepth: 2
-   :caption: 📟 Devices :
-
-   onboarding
+   getting_started/introduction
+   getting_started/quickstart_setup
+   getting_started/quickstart_operate
+   getting_started/usage_guide
+   getting_started/community_support
+   getting_started/faq
 
 
 .. toctree::
    :maxdepth: 2
-   :caption: 📍 Indices and tables :
+   :caption: 📟 Devices
 
-   glossary
-   issued_certificates
+   devices/onboarding
+   devices/aoki
+
 
 .. toctree::
    :maxdepth: 2
-   :caption: 🧑‍💻 Development :
+   :caption: 📍 Indices and Tables
 
-   development
-   ci_cd
-   test_plan/test_plan
-   test_report/test_report
+   indices_and_tables/glossary
+   indices_and_tables/issued_certificates
+
+
+.. toctree::
+   :maxdepth: 2
+   :caption: 🔎 Testing
+
+   testing/test_plan
+   testing/ci_cd
+   testing/test_report
+
+
+.. toctree::
+   :maxdepth: 2
+   :caption: 🧑‍💻 Development
+
+   development/development
+   development/architecture/credentials
+   development/sbom

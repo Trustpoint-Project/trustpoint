@@ -5,26 +5,31 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, final
 
 from django.db import models, transaction
-from django.db.models import ProtectedError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-    from typing import ClassVar, Self
 
-    from django.db.models.manager import Manager
+    from django.db.models import Manager
 
     _ModelBase = models.Model
 else:
     _ModelBase = object
 
 
-class CustomDeleteActionManager(models.Manager['CustomDeleteActionModel']):
+__all__ = [
+    'CustomDeleteActionManager',
+    'CustomDeleteActionModel',
+    'CustomDeleteActionQuerySet',
+]
+
+
+class CustomDeleteActionManager[T: 'CustomDeleteActionModel'](models.Manager[T]):
     """Default manager for CustomDeleteActionModel.
 
     It ensures the CustomDeleteActionQuerySet is the default queryset.
     """
 
-    def get_queryset(self) -> CustomDeleteActionQuerySet:
+    def get_queryset(self) -> CustomDeleteActionQuerySet[T, T]:
         """Return the queryset with individual delete."""
         return CustomDeleteActionQuerySet(self.model, using=self._db)
 
@@ -33,6 +38,7 @@ class CustomDeleteActionModel(models.Model):
     """Model that provides the pre_delete() and post_delete() methods to implement custom deletion logic.
 
     It uses a custom manager to ensure the methods are called both on individual and bulk (queryset) deletes.
+
     """
 
     objects = CustomDeleteActionManager()
@@ -65,7 +71,9 @@ class CustomDeleteActionModel(models.Model):
         return count
 
 
-class CustomDeleteActionQuerySet(models.QuerySet[CustomDeleteActionModel]):
+class CustomDeleteActionQuerySet[_Model: CustomDeleteActionModel, _Row: CustomDeleteActionModel](
+    models.QuerySet[_Model, _Row]
+):
     """Overrides a model's queryset to invoke pre- and post-delete hooks.
 
     This ensures the pre_delete() and post_delete() methods are called on each object in the queryset.
@@ -89,7 +97,7 @@ class CustomDeleteActionQuerySet(models.QuerySet[CustomDeleteActionModel]):
         del args
         del kwargs
 
-        obj_set = set()
+        obj_set: set[_Row] = set()
         for obj in self:
             obj_set.add(obj)
             obj.pre_delete()
@@ -113,8 +121,8 @@ class OrphanDeletionMixin(_ModelBase):
         (by adding it to the "check_references_on_delete" class attribute tuple in the model class).
     """
 
-    objects: ClassVar[Manager[Self]]
     check_references_on_delete: tuple[str, ...] | None = None
+    objects: Manager[OrphanDeletionMixin]
 
     @classmethod
     def delete_if_orphaned(cls, instance: OrphanDeletionMixin | None) -> None:
@@ -138,7 +146,7 @@ class OrphanDeletionMixin(_ModelBase):
                     return
         try:
             instance.delete()
-        except ProtectedError:
+        except models.ProtectedError:
             return
 
     @classmethod

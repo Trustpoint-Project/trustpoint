@@ -6,22 +6,23 @@ which can be used within the apps.
 
 from __future__ import annotations
 
-import functools
-import logging
-import traceback
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast, Protocol, Self
 
 from django import forms as dj_forms
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models import Model, QuerySet
-from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
+from django.db import models
+from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.views.generic.base import RedirectView
 from django.views.generic.edit import FormMixin
 from django.views.generic.list import BaseListView, ListView, MultipleObjectTemplateResponseMixin
 
+from trustpoint.logger import LoggerMixin
+
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from django.http import HttpRequest
 
 
 class IndexView(RedirectView):
@@ -40,7 +41,6 @@ class ListInDetailView(ListView):
     """
 
     detail_context_object_name = 'object'
-    object: Model
 
     def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
         self.object = self.get_object()
@@ -49,7 +49,7 @@ class ListInDetailView(ListView):
     def get_queryset_for_object(self):
         return self.detail_model.objects.all()
 
-    def get_object(self) -> Model:
+    def get_object(self) -> models.odel:
         queryset = self.get_queryset_for_object()
         pk = self.kwargs.get('pk')
         if pk is None:
@@ -62,13 +62,55 @@ class ListInDetailView(ListView):
         context[self.detail_context_object_name] = self.object
         return context
 
+class SupportsGetContextData(Protocol):
+    """For typing to provide super().get_context_data()."""
 
-class SortableTableMixin:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        ...
+
+class ParentSupportsGetContextData(SupportsGetContextData, Protocol):
+    """For typing to provide super().get_context_data()."""
+
+
+class SortableTableMixin[T: models.Model]:
     """Adds utility for sorting a ListView query by URL parameters.
 
     default_sort_param must be set in the view to specify default sorting order.
     """
 
+    default_sort_param: str
+    request: HttpRequest
+    model: T
+
+    def get_queryset(self) -> models.QuerySet[Any]:
+        if hasattr(self, 'queryset') and self.queryset is not None:
+            queryset = self.queryset
+        else:
+            queryset = self.model.objects.all()
+
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+        if hasattr(self.model, 'is_active'):
+            return queryset.order_by('-is_active', sort_param)
+        return queryset.order_by(sort_param)
+
+
+    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(*args, **kwargs)
+
+        # Get current sorting column
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+
+        # Pass sorting details to the template
+        context['current_sort'] = sort_param
+        return context
+    
+
+class SortableTableFromListMixin:
+    """Adds utility for sorting a ListView query by URL parameters.
+
+    default_sort_param must be set in the view to specify default sorting order.
+    Use instead of SortableTableMixin when you have a list of dicts instead of a Django queryset.
+    """
     @staticmethod
     def _sort_list_of_dicts(list_of_dicts: list[dict], sort_param: str) -> list[dict]:
         """Sorts a list of dictionaries by the given sort parameter.
@@ -82,7 +124,7 @@ class SortableTableMixin:
         """
         return sorted(list_of_dicts, key=lambda x: x[sort_param.lstrip('-')], reverse=sort_param.startswith('-'))
 
-    def get_queryset(self) -> QuerySet[Any]:
+    def get_queryset(self) -> list[dict[str, str]]:
         if hasattr(self, 'queryset') and self.queryset is not None:
             queryset = self.queryset
         else:
@@ -91,15 +133,7 @@ class SortableTableMixin:
         # Get sort parameter (e.g., "name" or "-name")
         sort_param = self.request.GET.get('sort', self.default_sort_param)
         queryset_type = type(queryset)
-        if issubclass(queryset_type, QuerySet):
-            if hasattr(self.model, 'is_active'):
-                return queryset.order_by('-is_active', sort_param)
-            return queryset.order_by(sort_param)
-        if queryset_type is list:
-            return self._sort_list_of_dicts(queryset, sort_param)
-
-        exc_msg = f'Unknown queryset type: {type}'
-        raise TypeError(exc_msg)
+        return self._sort_list_of_dicts(queryset, sort_param)
 
     def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(*args, **kwargs)
@@ -110,7 +144,6 @@ class SortableTableMixin:
         # Pass sorting details to the template
         context['current_sort'] = sort_param
         return context
-
 
 class ContextDataMixin:
     def get_context_data(self, **kwargs: Any) -> dict:
@@ -200,7 +233,7 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
     def get_pks_path(self) -> str:
         return self.kwargs.get('pks')
 
-    def get_queryset(self) -> None | QuerySet:
+    def get_queryset(self) -> None | models.QuerySet:
         if self.queryset:
             return self.queryset
 
@@ -220,43 +253,25 @@ class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFrom
     pass
 
 
-class LoggerMixin:
-    """Mixin that adds log features to the subclass."""
+THRESHOLD_LOGGER_HTTP_STATUS: int = 400
 
-    logger: logging.Logger
+class LoggedHttpResponse(HttpResponse, LoggerMixin):
+    """Custom HttpResponse that logs and prints error messages automatically."""
 
-    @classmethod
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        """Adds an appropriate logger to the subclass and makes it available through cls.logger."""
-        super().__init_subclass__(**kwargs)
-
-        cls.logger = logging.getLogger('trustpoint').getChild(cls.__module__).getChild(cls.__name__)
-
-    @staticmethod
-    def log_exceptions(function: Callable) -> Callable:
-        """Decorator that gets an appropriate logger and logs any unhandled exception.
-
-        Logs the type and message to both levels error and debug.
-        Also adds the traceback to the debug level log.
+    def __init__(self, content: str | bytes = b'', status: int | None = None, *args: Any, **kwargs: Any) -> None:
+        """Initialize the LoggedHttpResponse instance.
 
         Args:
-            function: The decorated method or function.
+            content (Any): The content of the response.
+            status (Optional[int], optional): The HTTP status code of the response. Defaults to None.
+            *args (Any): Additional positional arguments passed to HttpResponse.
+            **kwargs (Any): Additional keyword arguments passed to HttpResponse.
         """
+        if status and status >= THRESHOLD_LOGGER_HTTP_STATUS:
+            if isinstance(content, bytes):
+                content = content.decode('utf-8')
+            self.logger.error('ERROR (%s): %s', status, content)
+        else:
+            self.logger.info('SUCCESS (%s)', status)
 
-        @functools.wraps(function)
-        def _wrapper(*args: Any, **kwargs: Any) -> Callable:
-            try:
-                return function(*args, **kwargs)
-            except Exception as exception:
-                logger = logging.getLogger('trustpoint').getChild(function.__module__).getChild(function.__qualname__)
-                logger.error(f'Exception in {function.__name__}. Type: {type(exception)}, Message: {exception}')
-
-                logger.debug(
-                    f'Exception in {function.__name__}. '
-                    f'Type: {type(exception)}, '
-                    f'Message: {exception}, '
-                    f'Traceback: {traceback.format_exc()}'
-                )
-                raise
-
-        return _wrapper
+        super().__init__(content, *args, status=status, **kwargs)

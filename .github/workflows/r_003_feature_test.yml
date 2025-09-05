@@ -1,9 +1,13 @@
-name: R_003
+# name: R_003
 
-on: [pull_request]
+# on:
+#   pull_request:
+#   push:
+#     branches:
+#       - main
 
-jobs:
-  test:
-    uses: ./.github/workflows/behave-test-template.yml
-    with:
-      feature_file: R_003_certificate_lifecycle
+# jobs:
+#   test:
+#     uses: ./.github/workflows/behave-test-template.yml
+#     with:
+#       feature_file: R_003_certificate_lifecycle

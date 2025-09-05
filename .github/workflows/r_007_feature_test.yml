@@ -1,9 +1,13 @@
-name: R_007
+# name: R_007
 
-on: [pull_request]
+# on:
+#   pull_request:
+#   push:
+#     branches:
+#       - main
 
-jobs:
-  test:
-    uses: ./.github/workflows/behave-test-template.yml
-    with:
-      feature_file: R_007_logging
+# jobs:
+#   test:
+#     uses: ./.github/workflows/behave-test-template.yml
+#     with:
+#       feature_file: R_007_logging

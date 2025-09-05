@@ -1,4 +1,4 @@
-"""Steps file for the corresponding feature file (R_013)"""  # noqa: INP001
+"""Python steps file for R_013."""
 
 import logging
 
@@ -39,7 +39,10 @@ def step_when_admin_visits_the_given_view(context: runner.Context) -> None:
         context (runner.Context): Behave context.
     """
     response = context.authenticated_client.get(context.download_view_url)
-    assert response.status_code == HTTP_OK, 'Non-OK response code'
+
+    if response.status_code != HTTP_OK:
+        msg = 'Non-OK response code'
+        raise AssertionError(msg)
 
     context.otp_view_response = response.content
 
@@ -57,10 +60,16 @@ def step_then_an_otp_is_displayed(context: runner.Context) -> None:
     """
     soup = BeautifulSoup(context.otp_view_response, 'html.parser')
     element = soup.find(id='otp-display')
-    assert element is not None, 'otp-display not in response'
+    if element is None:
+        msg = 'otp-display not in response'
+        raise AssertionError(msg)
     otp = element.text.strip()
-    assert len(otp) >= MIN_OTP_LENGTH, 'OTP string shorter than 9 characters'
-    assert len(otp) <= MAX_OTP_LENGTH, 'OTP string longer than 32 characters'
+    if len(otp) < MIN_OTP_LENGTH:
+        msg = 'OTP string shorter than 9 characters'
+        raise AssertionError(msg)
+    if len(otp) > MAX_OTP_LENGTH:
+        msg = 'OTP string longer than 32 characters'
+        raise AssertionError(msg)
 
     context.otp = otp
 
@@ -83,7 +92,9 @@ def step_given_an_otp(context: runner.Context) -> None:
     except Exception as e:
         msg = f'Error in Scenario prerequisites: {e}'
         raise AssertionError(msg) from e
-    assert context.otp is not None, 'Correct OTP not in context'
+    if context.otp is None:
+        msg = 'Correct OTP not in context'
+        raise AssertionError(msg)
 
 
 @when('the user visits the "/devices/browser" endpoint and enters the OTP')
@@ -95,8 +106,12 @@ def step_when_user_visits_endpoint(context: runner.Context) -> None:
     """
     context.unauthenticated_user_client = Client()
     response = context.unauthenticated_user_client.get('/devices/browser/')
-    assert response.status_code == HTTP_OK, 'Non-OK response code, GET login page'
-    assert 'id="id_otp"' in response.content.decode(), 'Page does not contain OTP input field'
+    if response.status_code != HTTP_OK:
+        msg = 'Non-OK response code, GET login page'
+        raise AssertionError(msg)
+    if 'id="id_otp"' not in response.content.decode():
+        msg = 'Page does not contain OTP input field'
+        raise AssertionError(msg)
     response = context.unauthenticated_user_client.post('/devices/browser/', {'otp': context.otp})
     if response.status_code == HTTP_FOUND:
         redirect_url = response.url
@@ -110,7 +125,10 @@ def step_when_user_visits_endpoint(context: runner.Context) -> None:
         else:
             context.download_id = None
         response = context.unauthenticated_user_client.get(response.url)
-    assert response.status_code == HTTP_OK, f'Non-OK response code {response.status_code}, POST otp'
+
+    if response.status_code != HTTP_OK:
+        msg = f'Non-OK response code {response.status_code}, POST otp'
+        raise AssertionError(msg)
 
     context.otp_post_view_response = response.content
 
@@ -122,9 +140,9 @@ def step_then_they_will_receive_page_to_select_the_format(context: runner.Contex
     Args:
         context (runner.Context): Behave context.
     """
-    assert 'value="PEM_ZIP"' in context.otp_post_view_response.decode(), (
-        'Page does not contain "Download as ZIP (PEM)" button'
-    )
+    if 'value="pem_zip"' not in context.otp_post_view_response.decode():
+        msg = 'Page does not contain "Download as ZIP (PEM)" button'
+        raise AssertionError(msg)
 
 
 @given('an incorrect one-time password')
@@ -144,9 +162,9 @@ def step_then_they_will_receive_a_warning(context: runner.Context) -> None:
     Args:
         context (runner.Context): Behave context.
     """
-    assert 'The provided password is not valid.' in context.otp_post_view_response.decode(), (
-        'Page does not contain OTP error message'
-    )
+    if 'The provided password is not valid.' not in context.otp_post_view_response.decode():
+        msg = 'Page does not contain OTP error message'
+        raise AssertionError(msg)
 
 
 @given('the user is on the credential download page')
@@ -176,14 +194,19 @@ def step_given_the_download_is_not_yet_expired(context: runner.Context) -> None:
     Args:
         context (runner.Context): Behave context.
     """
-    assert context.download_token is not None, 'Download token not in context'
-    assert not RemoteDeviceCredentialDownloadModel.objects.get(id=context.download_id).check_token('dummy_token'), (
-        'Dummy token should not be valid'
-    )
+    if context.download_token is None:
+        msg  ='Download token not in context'
+        raise AssertionError(msg)
 
-    assert RemoteDeviceCredentialDownloadModel.objects.get(id=context.download_id).check_token(
+    if RemoteDeviceCredentialDownloadModel.objects.get(id=context.download_id).check_token('dummy_token'):
+        msg = 'Dummy token should not be valid'
+        raise AssertionError(msg)
+
+    if not RemoteDeviceCredentialDownloadModel.objects.get(id=context.download_id).check_token(
         context.download_token
-    ), 'Actual token from URL should be valid'
+    ):
+        msg = 'Actual token from URL should be valid'
+        raise AssertionError(msg)
 
 
 @when('the user enters a password to encrypt the credential private key')
@@ -204,9 +227,13 @@ def step_when_user_selects_a_file(context: runner.Context) -> None:
         context (runner.Context): Behave context.
     """
     url = f'/devices/browser/credential-download/{context.download_id}/?token={context.download_token}'
-    post_data = {'password': context.test_password, 'confirm_password': context.test_password, 'file_format': 'PEM_ZIP'}
+    post_data = {'password': context.test_password, 'confirm_password': context.test_password, 'file_format': 'pem_zip'}
     download_response = context.unauthenticated_user_client.post(url, post_data)
-    assert download_response.status_code == HTTP_OK, 'Non-OK response code'
+
+    if download_response.status_code != HTTP_OK:
+        msg = 'Non-OK response code'
+        raise AssertionError(msg)
+
     context.download_response = download_response
 
 
@@ -217,5 +244,10 @@ def step_then_the_cred_will_be_downloaded(context: runner.Context) -> None:
     Args:
         context (runner.Context): Behave context.
     """
-    assert 'application/zip' in context.download_response['Content-Type'], 'Downloaded file is not a ZIP file'
-    assert 'attachment; filename=' in context.download_response['Content-Disposition'], 'No filename in response'
+    if 'application/zip' not in context.download_response['Content-Type']:
+        msg = 'Downloaded file is not a ZIP file'
+        raise AssertionError(msg)
+
+    if 'attachment; filename=' not in context.download_response['Content-Disposition']:
+        msg = 'No filename in response'
+        raise AssertionError(msg)

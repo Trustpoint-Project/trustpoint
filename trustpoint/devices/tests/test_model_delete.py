@@ -8,7 +8,6 @@ from django.db.models import ProtectedError
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
-from unittest.mock import patch
 
 from devices.models import DeviceModel, IssuedCredentialModel
 
@@ -40,6 +39,7 @@ def test_device_delete_revocation(mock_models: dict[str, Any]) -> None:
         'Certificate should be revoked after delete.'
     )
 
+
 def test_multi_device_delete(mock_models: dict[str, Any]) -> None:
     """Tests that multiple devices can be deleted and pre_delete is called even on a QuerySet of DeviceModels."""
     mock_domain = mock_models['domain']
@@ -51,8 +51,7 @@ def test_multi_device_delete(mock_models: dict[str, Any]) -> None:
         common_name='test_device2',
         serial_number='1234567890_2',
         domain=mock_domain,
-        onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
-        onboarding_status=DeviceModel.OnboardingStatus.PENDING,
+        no_onboarding_config=mock_device1.no_onboarding_config,
     )
     mock_device2.save()
     DeviceModel.objects.filter(domain=mock_domain).delete()  # queryset delete

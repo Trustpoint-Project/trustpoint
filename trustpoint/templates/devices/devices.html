@@ -4,30 +4,29 @@
 
 {% block content %}
 
-
-
-
-
 <div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
-<div class="card-header">
-    <h1>{% trans 'Devices' %}</h1>
-</div>
-
-<div class="card-body pb-0">
-  <button
-    class="btn btn-sm btn-outline-secondary mb-3"
-    type="button"
-    data-bs-toggle="collapse"
-    data-bs-target="#filterCollapse"
-    aria-expanded="{% if request.GET %}true{% else %}false{% endif %}"
-    aria-controls="filterCollapse"
-  >{% trans 'Filters' %}
-  </button>
-
+  <div class="card-header">
+      <h1>{% trans 'Devices' %}</h1>
   </div>
+
+  {# --- Filter toggle + form --- #}
+  <div class="card-body pb-0">
+    <button
+      class="btn btn-sm btn-outline-secondary mb-1"
+      type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#filterCollapse"
+      aria-expanded="{% if request.GET %}true{% else %}false{% endif %}"
+      aria-controls="filterCollapse"
+    >
+      {% trans 'Filters' %}
+    </button>
+  </div>
+
   <div class="collapse{% if request.GET %} show{% endif %}" id="filterCollapse">
     <div class="card-body">
-      <form method="get" class="row gx-3 gy-2 align-items-end">
+      <form method="get" class="row gx-3 gy-1 align-items-end">
+
         <div class="col-md-4">
           <label for="{{ filter.form.common_name.id_for_label }}" class="form-label">
             {{ filter.form.common_name.label }}
@@ -57,27 +56,31 @@
             {% trans 'Reset' %}
           </a>
         </div>
-      </div>
+
+      </form>
+    </div>
   </div>
 
-<div class="card-body text-start pt-0" style="overflow: auto; flex-grow: 1; max-height: 90%;">
-  
-  {% include 'devices/devices_table.html' %}
-  {% include 'trustpoint/pagination.html' %}
-  
-</div>
-  <div class="card-footer d-flex justify-content-between tp-sticky-footer">
-      <div class="tp-card-btn-footer m-1">
-          <button type="button" class="btn btn-danger tp-table-select-btn me-2"
-                  data-tp-url="delete">{% trans 'Delete selected' %}</button>
-      </div>
-      <div class="m-1">
-        <a class="btn btn-primary" href="{% url 'devices:add' %}">
-          {% trans "Add new Device" %}
-        </a>
-      </div>
-    </div>
-</div>
+  {# --- Main table + pagination --- #}
+  <div class="card-body text-start pt-0" style="overflow: auto; flex-grow: 1; max-height: 90%;">
+    {% include 'devices/devices_table.html' %}
+    {% include 'trustpoint/pagination.html' %}
+  </div>
 
+  {# --- Footer actions from main --- #}
+  <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+    <div class="tp-card-btn-footer m-1">
+      <button type="button" class="btn btn-danger tp-table-select-btn me-2"
+              data-tp-url="{{ device_revoke_url }}">{% trans 'Revoke selected' %}</button>
+      <button type="button" class="btn btn-danger tp-table-select-btn me-2"
+              data-tp-url="{{ device_delete_url }}">{% trans 'Delete selected' %}</button>
+    </div>
+    <div class="m-1">
+      <a class="btn btn-primary" href="{% url create_url %}">
+        {% trans "Create new Device" %}
+      </a>
+    </div>
+  </div>
+</div>
 
 {% endblock content %}

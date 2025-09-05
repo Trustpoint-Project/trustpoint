@@ -1956,14 +1956,14 @@ msgid "TLS-Server Certificate Request URL"
 msgstr "TLS-Client-Zertifikatsanfrage-URL"
 
 #: .\templates\devices\help\generic_details\cmp_application_credential_summary_block.html:42
-#: .\templates\devices\help\generic_details\est_application_credential_opcua_summary_block.html:42
+#: .\templates\devices\help\generic_details\est_application_credential_opc_ua_summary_block.html:42
 #: .\templates\devices\help\generic_details\est_application_credential_summary_block.html:42
 #: .\templates\devices\help\onboarding\domain_credential_details\cmp_domain_credential_summary_block.html:27
 msgid "Key Identifier (KID)"
 msgstr "Key Identifier (KID)"
 
 #: .\templates\devices\help\generic_details\cmp_application_credential_summary_block.html:46
-#: .\templates\devices\help\generic_details\est_application_credential_opcua_summary_block.html:46
+#: .\templates\devices\help\generic_details\est_application_credential_opc_ua_summary_block.html:46
 #: .\templates\devices\help\generic_details\est_application_credential_summary_block.html:46
 #: .\templates\devices\help\onboarding\cmp_idevid_registration.html:41
 #: .\templates\devices\help\onboarding\domain_credential_details\cmp_domain_credential_summary_block.html:31
@@ -1986,11 +1986,11 @@ msgstr ""
 "TLS-Serverzertifikat im PEM-Format. Es kann kopiert und in einer neuen Datei "
 "namens server_cert.pem eingefügt werden."
 
-#: .\templates\devices\help\generic_details\est_application_credential_opcua_summary_block.html:12
+#: .\templates\devices\help\generic_details\est_application_credential_opc_ua_summary_block.html:12
 msgid "OPC UA-Client Certificate Request URL"
 msgstr "URL zur Anforderung des OPC UA-Clientzertifikats"
 
-#: .\templates\devices\help\generic_details\est_application_credential_opcua_summary_block.html:27
+#: .\templates\devices\help\generic_details\est_application_credential_opc_ua_summary_block.html:27
 msgid "OPC UA-Server Certificate Request URL"
 msgstr "URL zur Anforderung des OPC UA-Serverzertifikats"
 
@@ -3262,7 +3262,7 @@ msgstr ""
 "oder Betriebssystems zu importieren."
 
 #: .\templates\setup_wizard\tls_server_credential_apply.html:47
-msgid "Apply TLS-Configurations"
+msgid "Apply TLS configuration"
 msgstr "TLS-Konfiguration anwenden"
 
 #: .\templates\trustpoint\base.html:40

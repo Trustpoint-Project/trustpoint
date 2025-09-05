@@ -94,7 +94,7 @@ def test_serial_number(self_signed_cert_basic: CertificateTuple) -> None:
 
 @pytest.mark.django_db
 def test_issuer_attributes(self_signed_cert_basic: CertificateTuple) -> None:
-    """Test if issuer attributes are correctly stored."""
+    """Test if test_issuer attributes are correctly stored."""
     cert_model: CertificateModel
     cert_model, cert = self_signed_cert_basic
     issuer = []
@@ -105,7 +105,7 @@ def test_issuer_attributes(self_signed_cert_basic: CertificateTuple) -> None:
 
 @pytest.mark.django_db
 def test_issuer_public_bytes(self_signed_cert_basic: CertificateTuple) -> None:
-    """Test if the issuer public bytes are correctly saved."""
+    """Test if the test_issuer public bytes are correctly saved."""
     cert_model, cert = self_signed_cert_basic
     assert cert.issuer.public_bytes().hex().upper() == cert_model.issuer_public_bytes
 

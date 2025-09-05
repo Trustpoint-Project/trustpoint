@@ -2,7 +2,7 @@
 
 from django.urls import path, re_path
 
-from pki.views import certificates, domains, issuing_cas, truststores
+from pki.views import certificates, domains, issuing_cas, owner_credentials, truststores
 from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
 from pki.views.issuing_cas import IssuedCertificatesListView
 
@@ -73,6 +73,11 @@ urlpatterns = [
         certificates.CertificateDownloadView.as_view(),
         name='certificate-file-download',
     ),
+    re_path(
+        r'^certificates/download/(?P<file_format>[a-zA-Z0-9_]+)/(?P<pk>[0-9]+)/(?P<file_name>[^/]+)/?$',
+        certificates.CertificateDownloadView.as_view(),
+        name='certificate-file-download-file-name',
+    ),
     path(
         'certificates/download/issuing-ca/<int:pk>/',
         certificates.CmpIssuingCaCertificateDownloadView.as_view(),
@@ -111,6 +116,21 @@ urlpatterns = [
     path('domains/', domains.DomainTableView.as_view(), name='domains'),
     path('domains/add/', domains.DomainCreateView.as_view(), name='domains-add'),
     path('domains/config/<int:pk>/', domains.DomainConfigView.as_view(), name='domains-config'),
+    path(
+        'domains/config/<int:pk>/help/onboarding-method-select-idevid/',
+        domains.OnboardingMethodSelectIdevidHelpView.as_view(),
+        name='help_onboarding_method_select_idevid'
+    ),
+    path(
+        'domains/config/<int:pk>/help/cmp-idevid-registration/',
+        domains.OnboardingCmpIdevidRegistrationHelpView.as_view(),
+        name='help_onboarding_cmp_idevid_registration',
+    ),
+    path(
+        'domains/config/<int:pk>/help/est-idevid-registration/',
+        domains.OnboardingEstIdevidRegistrationHelpView.as_view(),
+        name='help_onboarding_est_idevid_registration',
+    ),
     path('domains/detail/<int:pk>/', domains.DomainDetailView.as_view(), name='domains-detail'),
     re_path(
         r'^domains/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
@@ -139,6 +159,22 @@ urlpatterns = [
     ),
     path(
         'devid-registration/delete/<int:pk>/', DevIdRegistrationDeleteView.as_view(), name='devid_registration_delete'
+    ),
+    path('owner-credentials/', owner_credentials.OwnerCredentialTableView.as_view(), name='owner_credentials'),
+    path(
+        'owner-credentials/details/<int:pk>/',
+        owner_credentials.OwnerCredentialDetailView.as_view(),
+        name='owner_credentials-details',
+    ),
+    path(
+        'owner-credentials/add/',
+        owner_credentials.OwnerCredentialAddView.as_view(),
+        name='owner_credentials-add',
+    ),
+    re_path(
+        r'^owner-credentials/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        owner_credentials.OwnerCredentialBulkDeleteConfirmView.as_view(),
+        name='owner_credentials-delete_confirm',
     ),
     path(
         'trustpoint/download/tls-server/',

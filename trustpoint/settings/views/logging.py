@@ -9,8 +9,9 @@ import re
 import tarfile
 import zipfile
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
+from django.db import models
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
 from django.utils.translation import gettext as _
@@ -18,24 +19,26 @@ from django.views.generic import TemplateView, View
 from django.views.generic.base import RedirectView
 from django.views.generic.list import ListView
 
-from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH, UIConfig
-from trustpoint.views.base import LoggerMixin, SortableTableMixin
+from trustpoint.logger import LoggerMixin
+from trustpoint.page_context import PageContextMixin
+from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH
+from trustpoint.views.base import SortableTableFromListMixin
 
 if TYPE_CHECKING:
-    from typing import Any, ClassVar
+    from typing import Any
 
     from django.http import HttpRequest
 
 
 class IndexView(RedirectView):
-    """Index view"""
+    """Index view."""
 
     permanent = True
     pattern_name = 'settings:language'
 
 
 def language(request: HttpRequest) -> HttpResponse:
-    """Handle language Configuration
+    """Handle language Configuration.
 
     Returns: HTTPResponse
     """
@@ -46,13 +49,7 @@ def language(request: HttpRequest) -> HttpResponse:
 # ------------------------------------------------------- Logging ------------------------------------------------------
 
 
-class LoggingContextMixin:
-    """Mixin which adds extra menu context for the Logging Views."""
-
-    extra_context: ClassVar[dict] = {'page_category': 'settings', 'page_name': 'logging'}
-
-
-class LoggingFilesTableView(LoggerMixin, LoggingContextMixin, SortableTableMixin, ListView):
+class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromListMixin, ListView[models.Model]):
     """View to display all log files in the log directory in a table."""
 
     http_method_names = ('get',)
@@ -60,10 +57,12 @@ class LoggingFilesTableView(LoggerMixin, LoggingContextMixin, SortableTableMixin
     template_name = 'settings/logging/logging_files.html'
     context_object_name = 'log_files'
     default_sort_param = 'filename'
-    paginate_by = UIConfig.paginate_by
+    paginate_by = None
+
+    page_category = 'settings'
+    page_name = 'logging'
 
     @staticmethod
-    @LoggerMixin.log_exceptions
     def _get_first_and_last_entry_date(
         log_file_path: Path,
     ) -> tuple[None | datetime.datetime, None | datetime.datetime]:
@@ -81,7 +80,6 @@ class LoggingFilesTableView(LoggerMixin, LoggingContextMixin, SortableTableMixin
         return first_date, last_date
 
     @classmethod
-    @LoggerMixin.log_exceptions
     def _get_log_file_data(cls, log_filename: str) -> dict[str, str]:
         log_file_path = LOG_DIR_PATH / Path(log_filename)
         if not log_file_path.exists() or not log_file_path.is_file():
@@ -100,17 +98,18 @@ class LoggingFilesTableView(LoggerMixin, LoggingContextMixin, SortableTableMixin
 
         return {'filename': log_filename, 'created_at': created_at, 'updated_at': updated_at}
 
-    @LoggerMixin.log_exceptions
-    def get_queryset(self) -> list[dict[str, str]]:
+    def get_queryset(self) -> list[dict[str, str]]: # type: ignore[override]
         """Gets a queryset of all valid Trustpoint log files in the log directory."""
         all_files = os.listdir(LOG_DIR_PATH)
         valid_log_files = [f for f in all_files if re.compile(r'^trustpoint\.log(?:\.\d+)?$').match(f)]
 
-        self.queryset = [self._get_log_file_data(log_file_name) for log_file_name in valid_log_files]
-        return super().get_queryset()
+        self.queryset = [self._get_log_file_data(log_file_name) for log_file_name in valid_log_files]   # type: ignore[assignment]
+        return cast('list[dict[str, str]]', self.queryset)
 
 
-class LoggingFilesDetailsView(LoggerMixin, LoggingContextMixin, TemplateView):
+
+
+class LoggingFilesDetailsView(PageContextMixin, LoggerMixin, TemplateView):
     """Log file detail view, allows to view the content of a single log file without download."""
 
     http_method_names = ('get',)
@@ -118,7 +117,9 @@ class LoggingFilesDetailsView(LoggerMixin, LoggingContextMixin, TemplateView):
     template_name = 'settings/logging/logging_files_details.html'
     log_directory = LOG_DIR_PATH
 
-    @LoggerMixin.log_exceptions
+    page_category = 'settings'
+    page_name = 'logging'
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Get the context data for the view."""
         context = super().get_context_data(**kwargs)
@@ -134,12 +135,14 @@ class LoggingFilesDetailsView(LoggerMixin, LoggingContextMixin, TemplateView):
         return context
 
 
-class LoggingFilesDownloadView(LoggerMixin, LoggingContextMixin, TemplateView):
+class LoggingFilesDownloadView(PageContextMixin, LoggerMixin, TemplateView):
     """View to download a single log file"""
 
     http_method_names = ('get',)
 
-    @LoggerMixin.log_exceptions
+    page_category = 'settings'
+    page_name = 'logging'
+
     def get(self, *_args: Any, **kwargs: Any) -> HttpResponse:
         """The HTTP GET method for the view."""
         filename = kwargs.get('filename')
@@ -156,13 +159,15 @@ class LoggingFilesDownloadView(LoggerMixin, LoggingContextMixin, TemplateView):
         return response
 
 
-class LoggingFilesDownloadMultipleView(LoggerMixin, LoggingContextMixin, View):
+class LoggingFilesDownloadMultipleView(PageContextMixin, LoggerMixin, View):
     """View to download multiple log files as a single archive."""
 
     http_method_names = ('get',)
 
+    page_category = 'settings'
+    page_name = 'logging'
+
     @classmethod
-    @LoggerMixin.log_exceptions
     def get(cls, *_args: Any, **kwargs: Any) -> HttpResponse:
         """The HTTP GET method for the view."""
         archive_format = kwargs.get('archive_format')

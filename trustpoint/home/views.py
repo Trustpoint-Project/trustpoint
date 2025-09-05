@@ -6,7 +6,7 @@ from collections import Counter
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from devices.models import DeviceModel, IssuedCredentialModel
+from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, OnboardingStatus
 from django.contrib import messages
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -20,13 +20,14 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import RedirectView, TemplateView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
+from notifications.models import NotificationModel, NotificationStatus
 from pki.models import CertificateModel, IssuingCaModel
 
+from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import LoggerMixin, SortableTableMixin
+from trustpoint.views.base import SortableTableMixin
 
 from .filters import NotificationFilter
-from .models import NotificationModel, NotificationStatus
 
 if TYPE_CHECKING:
     from django.utils.safestring import SafeString
@@ -42,11 +43,11 @@ class IndexView(RedirectView):
     pattern_name = 'home:dashboard'
 
 
-class DashboardView(SortableTableMixin, ListView[NotificationModel]):
+class DashboardView(SortableTableMixin[NotificationModel], ListView[NotificationModel]):
     """Renders the dashboard page for authenticated users. Uses the 'home/dashboard.html' template."""
 
     template_name = 'home/dashboard.html'
-    model = NotificationModel
+    model = type[NotificationModel]
     context_object_name = 'notifications'
     default_sort_param = '-created_at'
     paginate_by = UIConfig.notifications_paginate_by
@@ -358,16 +359,19 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         Returns:
             It returns device counts grouped by device onboarding status.
         """
-        device_os_counts = {str(status): 0 for _, status in DeviceModel.OnboardingStatus.choices}
+        device_os_counts = {str(status): 0 for _, status in OnboardingStatus.choices}
         try:
             device_os_qr = (
-                DeviceModel.objects.filter(created_at__gt=start_date)
-                .values('onboarding_status')
-                .annotate(count=Count('onboarding_status'))
+                DeviceModel.objects.filter(created_at__gt=start_date, onboarding_config__isnull=False)
+                .values('onboarding_config__onboarding_status')
+                .annotate(count=Count('onboarding_config__onboarding_status'))
             )
 
-            protocol_mapping = {key: str(value) for key, value in DeviceModel.OnboardingStatus.choices}
-            device_os_counts = {protocol_mapping[item['onboarding_status']]: item['count'] for item in device_os_qr}
+            protocol_mapping = {key: str(value) for key, value in OnboardingStatus.choices}
+            device_os_counts = {
+                protocol_mapping[item['onboarding_config__onboarding_status']]:
+                item['count'] for item in device_os_qr
+            }
 
             for protocol in protocol_mapping.values():
                 device_os_counts.setdefault(protocol, 0)
@@ -445,7 +449,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         cert_status_counts = {str(status): 0 for _, status in CertificateModel.CertificateStatus.choices}
         try:
             cert_status_qr = CertificateModel.objects.filter(created_at__gt=start_date)
-            status_counts = Counter(str(cert.certificate_status.value) for cert in cert_status_qr)
+            status_counts = Counter(str(cert.certificate_status.label) for cert in cert_status_qr)
 
             status_mapping = {key: str(value) for key, value in CertificateModel.CertificateStatus.choices}
             cert_status_counts = {status_mapping[key]: value for key, value in status_counts.items()}
@@ -514,16 +518,19 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         Returns:
             It returns device count by onboarding protocol.
         """
-        device_op_counts = {str(status): 0 for _, status in DeviceModel.OnboardingProtocol.choices}
+        device_op_counts = {str(status): 0 for _, status in OnboardingProtocol.choices}
         try:
             device_op_qr = (
-                DeviceModel.objects.filter(created_at__gt=start_date)
-                .values('onboarding_protocol')
-                .annotate(count=Count('onboarding_protocol'))
+                DeviceModel.objects.filter(created_at__gt=start_date, onboarding_config__isnull=False)
+                .values('onboarding_config__onboarding_protocol')
+                .annotate(count=Count('onboarding_config__onboarding_protocol'))
             )
 
-            protocol_mapping = {key: str(value) for key, value in DeviceModel.OnboardingProtocol.choices}
-            device_op_counts = {protocol_mapping[item['onboarding_protocol']]: item['count'] for item in device_op_qr}
+            protocol_mapping = {key: str(value) for key, value in OnboardingProtocol.choices}
+            device_op_counts = {
+                protocol_mapping[item['onboarding_config__onboarding_protocol']]:
+                item['count'] for item in device_op_qr
+            }
 
         except Exception as exception:
             err_msg = f'Error occurred in device count by onboarding protocol query: {exception}'
@@ -543,7 +550,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         try:
             device_domain_qr = (
                 DeviceModel.objects.filter(
-                    Q(onboarding_status=DeviceModel.OnboardingStatus.ONBOARDED) & Q(created_at__gte=start_date)
+                    Q(onboarding_config__onboarding_status=OnboardingStatus.ONBOARDED) & Q(created_at__gte=start_date)
                 )
                 .values(domain_name=F('domain__unique_name'))
                 .annotate(onboarded_device_count=Count('id'))
@@ -683,3 +690,5 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             err_msg = f'Error occurred in ca counts by type query: {exception}'
             self.logger.exception(err_msg)
         return issuing_ca_type_counts
+
+

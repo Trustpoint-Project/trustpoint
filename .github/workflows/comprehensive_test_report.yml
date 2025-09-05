@@ -1,0 +1,114 @@
+name: Comprehensive Test Report
+
+on:
+  push:
+    branches:
+      - master
+      - comprehensive_test_report
+
+jobs:
+
+  generate-unit-test-results:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action
+        with:
+          run_migrations: true
+
+      - name: Run Pytest and create reports
+        run: |
+          uv run pytest \
+          --cov=trustpoint \
+          --cov-report=xml:reports/coverage/coverage.xml \
+          --alluredir=reports/allure-results/unit \
+          --junitxml=reports/junit/pytest.xml \
+          trustpoint/ 
+          
+      - name: Upload unit test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: reports/allure-results/unit
+
+  generate-bdd-test-results:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action
+        with:
+          run_migrations: true
+
+      - name: Run Behave tests and generate reports
+        continue-on-error: true
+        run: |
+          uv run trustpoint/manage.py behave \
+          --format allure_behave.formatter:AllureFormatter \
+          --outfile reports/allure-results/bdd \
+          trustpoint/features/
+
+      - name: Upload BDD results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bdd-test-results
+          path: reports/allure-results/bdd
+
+  generate-allure:
+    needs:
+      - generate-unit-test-results
+      - generate-bdd-test-results
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Get Allure history
+        uses: actions/checkout@v5
+        if: always()
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Download unit-test-results
+        uses: actions/download-artifact@v5
+        with:
+          name: unit-test-results
+          path: unit-test-results
+
+      - name: Download bdd-test-results
+        uses: actions/download-artifact@v5
+        with:
+          name: bdd-test-results
+          path: bdd-test-results
+
+      - name: Create new allure result folder
+        run: mkdir -p allure-results
+
+      - name: Copy unit-test results to the allure folder
+        run: cp -r unit-test-results/* allure-results/
+
+      - name: Copy bdd test results to the allure folder
+        run: cp -r bdd-test-results/*  allure-results/
+
+      - name: Generate Allure HTML report
+        uses:  simple-elf/allure-report-action@v1
+        with:
+          allure_results: allure-results # default
+          allure_report: allure-report # default
+          allure_history: allure-history # default
+
+      - name: Deploy report to Github Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages # default
+          publish_dir: allure-history
+          allow_empty_commit: true

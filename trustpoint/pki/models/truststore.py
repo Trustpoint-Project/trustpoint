@@ -11,50 +11,23 @@ from trustpoint_core.serializer import CertificateCollectionSerializer
 from util.field import UniqueNameValidator
 
 from .certificate import CertificateModel
+from .credential import CredentialModel
 
 __all__ = [
     'ActiveTrustpointTlsServerCredentialModel',
-    'TrustpointTlsServerCredentialModel',
     'TruststoreModel',
     'TruststoreOrderModel',
 ]
-
-
-class TrustpointTlsServerCredentialModel(models.Model):
-    """Represents a TLS server credential, including a private key in PEM format and an associated certificate.
-
-    This model is used to manage server credentials required for secure
-    communication, storing the private key and linking it to a specific
-    certificate.
-    """
-
-    objects: models.Manager[TrustpointTlsServerCredentialModel]
-
-    private_key_pem = models.CharField(verbose_name=_('Private Key (PEM)'), max_length=65536, editable=False)
-    certificate = models.ForeignKey(CertificateModel, on_delete=models.CASCADE)
-
-    class Meta(TypedModelMeta):
-        """Meta class configuration."""
-
-    def __str__(self) -> str:
-        """Returns a human-readable string representation of the server credential.
-
-        Returns:
-            str: A description of the server credential, including the certificate ID.
-        """
-        return f'TLS Server Credential for Certificate ID: {self.certificate.id}'
 
 
 class ActiveTrustpointTlsServerCredentialModel(models.Model):
     """Represents the currently active TLS server credential.
 
     This model tracks the active server credential, ensuring that it is always
-    up-to-date and linked to a specific `TrustpointTlsServerCredentialModel` instance.
+    up-to-date and linked to a specific `CredentialModel` instance.
     """
 
-    objects: models.Manager[ActiveTrustpointTlsServerCredentialModel]
-
-    credential = models.ForeignKey(TrustpointTlsServerCredentialModel, on_delete=models.CASCADE, blank=True, null=True)
+    credential = models.ForeignKey(CredentialModel, on_delete=models.CASCADE, blank=True, null=True)
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""
@@ -86,14 +59,14 @@ class TruststoreModel(models.Model):
     or serializing its content.
     """
 
-    objects: models.Manager[TruststoreModel]
-
     class IntendedUsage(models.IntegerChoices):
         """Intended Usage of the Truststore."""
 
         IDEVID = 0, _('IDevID')
         TLS = 1, _('TLS')
         GENERIC = 2, _('Generic')
+        DEVICE_OWNER_ID = 3, _('Device Owner ID')
+        
 
     unique_name = models.CharField(
         verbose_name=_('Unique Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
@@ -137,7 +110,10 @@ class TruststoreModel(models.Model):
             The serialized representation of the certificates.
         """
         return CertificateCollectionSerializer(
-            [cert.certificate.get_certificate_serializer() for cert in self.truststoreordermodel_set.order_by('order')]
+            [
+                cert.certificate.get_certificate_serializer().as_crypto()
+                for cert in self.truststoreordermodel_set.order_by('order')
+            ]
         )
 
 
@@ -149,8 +125,6 @@ class TruststoreOrderModel(models.Model):
         CertificateModel, on_delete=models.CASCADE, editable=False, related_name='trust_store_components'
     )
     trust_store = models.ForeignKey(TruststoreModel, on_delete=models.CASCADE, editable=False)
-
-    objects: models.Manager[TruststoreOrderModel]
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""

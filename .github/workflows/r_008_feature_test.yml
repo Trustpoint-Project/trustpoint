@@ -1,9 +1,13 @@
-name: R_008
+# name: R_008
 
-on: [pull_request]
+# on:
+#   pull_request:
+#   push:
+#     branches:
+#       - main
 
-jobs:
-  test:
-    uses: ./.github/workflows/behave-test-template.yml
-    with:
-      feature_file: R_008_auto_issuing_ca
+# jobs:
+#   test:
+#     uses: ./.github/workflows/behave-test-template.yml
+#     with:
+#       feature_file: R_008_auto_issuing_ca

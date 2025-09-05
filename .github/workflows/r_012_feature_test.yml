@@ -1,9 +1,13 @@
-name: R_012
+# name: R_012
 
-on: [pull_request]
+# on:
+#   pull_request:
+#   push:
+#     branches:
+#       - main
 
-jobs:
-  test:
-    uses: ./.github/workflows/behave-test-template.yml
-    with:
-      feature_file: R_012_multi_language_support
+# jobs:
+#   test:
+#     uses: ./.github/workflows/behave-test-template.yml
+#     with:
+#       feature_file: R_012_multi_language_support

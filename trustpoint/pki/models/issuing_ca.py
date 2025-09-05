@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
@@ -18,11 +18,12 @@ from util.field import UniqueNameValidator
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
 from cryptography.hazmat.primitives import hashes
-from trustpoint.views.base import LoggerMixin
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet
     from trustpoint_core.serializer import CredentialSerializer
+    from util.db import CustomDeleteActionManager
 
 
 class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
@@ -83,7 +84,6 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
         return self.credential.certificate.common_name
 
     @classmethod
-    @LoggerMixin.log_exceptions
     def create_new_issuing_ca(
         cls,
         unique_name: str,
@@ -102,6 +102,16 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
         Returns:
             IssuingCaModel: The newly created Issuing CA model.
         """
+        ca_cert = credential_serializer.certificate
+        if not ca_cert:
+            raise ValidationError(_('The provided credential is not a valid CA; it does not contain a certificate.'))
+        try:
+            bc_extension = ca_cert.extensions.get_extension_for_class(x509.BasicConstraints)
+        except x509.ExtensionNotFound:
+            raise ValidationError(_('The provided certificate is not a valid CA certificate; it does not contain a Basic Constraints extension.'))
+        if not bc_extension.value.ca:
+            raise ValidationError(_('The provided certificate is not a valid CA certificate; it is an End Entity certificate.'))
+
         issuing_ca_types = (
             cls.IssuingCaTypeChoice.AUTOGEN_ROOT,
             cls.IssuingCaTypeChoice.AUTOGEN,

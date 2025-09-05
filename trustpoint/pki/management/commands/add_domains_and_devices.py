@@ -6,10 +6,60 @@ import random
 import secrets
 import string
 
-from devices.models import DeviceModel
+from devices.models import DeviceModel, OnboardingConfigModel, NoOnboardingConfigModel
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from pki.models import DevIdRegistration, DomainModel, IssuingCaModel, TruststoreModel
+from devices.models import OnboardingPkiProtocol, NoOnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
+
+
+ALLOWED_CHARS = allowed_chars = string.ascii_letters + string.digits
+
+
+def _get_secret(number_of_symbols: int = 16) -> str:
+    """Generates a secret with the number of symbols provided.
+
+    Args:
+        number_of_symbols: Number of symbols of the generated secret. Defaults to 16.
+
+    Returns:
+        The generated secret.
+    """
+    return ''.join(secrets.choice(allowed_chars) for _ in range(number_of_symbols))
+
+
+def get_random_no_onboarding_pki_protocols() -> list[NoOnboardingPkiProtocol]:
+    """Gets random allowed PkiProtocols.
+
+    Args:
+        include_protocol: This protocol will be included in the allowed list.
+
+    Returns:
+        A list of PkiProtocols.
+    """
+    protocols = list(NoOnboardingPkiProtocol)
+    num_choices = secrets.randbelow(len(protocols)) + 1
+    return random.sample(protocols, k=num_choices)
+
+
+def get_random_onboarding_pki_protocols(
+        include_protocol: OnboardingPkiProtocol | None = None) -> list[OnboardingPkiProtocol]:
+    """Gets random allowed PkiProtocols.
+
+    Args:
+        include_protocol: This protocol will be included in the allowed list.
+
+    Returns:
+        A list of PkiProtocols.
+    """
+    protocols = list(OnboardingPkiProtocol)
+    if include_protocol:
+        protocols.remove(include_protocol)
+    num_choices = secrets.randbelow(len(protocols)) + 1
+    random_protocols = random.sample(protocols, k=num_choices)
+    if include_protocol:
+        random_protocols.append(include_protocol)
+    return random_protocols
 
 
 class Command(BaseCommand):
@@ -81,11 +131,12 @@ class Command(BaseCommand):
             'schmalz': ('issuing-ca-f', 'idevid-truststore-EC-570'),
         }
 
-        onboarding_protocols = [
-            DeviceModel.OnboardingProtocol.NO_ONBOARDING.value,
-            DeviceModel.OnboardingProtocol.CMP_IDEVID.value,
-            DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET.value,
-        ]
+        onboarding_protocols = list(OnboardingProtocol)
+        onboarding_protocols.remove(OnboardingProtocol.AOKI)
+        onboarding_protocols.remove(OnboardingProtocol.BRSKI)
+        onboarding_protocols.remove(OnboardingProtocol.MANUAL)
+        onboarding_protocols.remove(OnboardingProtocol.CMP_IDEVID)
+        onboarding_protocols.remove(OnboardingProtocol.EST_IDEVID)
 
         print('Starting the process of adding domains and devices...\n')
 
@@ -118,72 +169,104 @@ class Command(BaseCommand):
 
             print(f'Domain({domain_name}, Issuing CA: {domain.issuing_ca})')
 
-            for device_name in devices:
-                onboarding_protocol = random.choice(onboarding_protocols)  # noqa: S311
+            device_uses_onboarding = random.choice([True, False])  # noqa: S311
 
+            for device_name in devices:
+
+                random_device_type = random.choice( # noqa: S311
+                        [DeviceModel.DeviceType.GENERIC_DEVICE, DeviceModel.DeviceType.OPC_UA_GDS])
                 serial_number = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))  # noqa: S311
 
-                print(f"Creating device '{device_name}' in domain '{domain_name}' with:")
-                print(f'  - Serial Number: {serial_number}')
-                print(f'  - Onboarding Protocol: {onboarding_protocol}')
+                if device_uses_onboarding:
 
-                onboarding_status = (
-                    DeviceModel.OnboardingStatus.NO_ONBOARDING
-                    if onboarding_protocol == DeviceModel.OnboardingProtocol.NO_ONBOARDING
-                    else DeviceModel.OnboardingStatus.PENDING
-                )
+                    onboarding_protocol = random.choice(onboarding_protocols)  # noqa: S311
+                    print(f"Creating device '{device_name}' in domain '{domain_name}' with:")
+                    print(f'  - Serial Number: {serial_number}')
+                    print(f'  - Onboarding Protocol: {onboarding_protocol}')
 
-                domain_credential_onboarding = onboarding_protocol != DeviceModel.OnboardingProtocol.NO_ONBOARDING
-
-                pki_protocol = (
-                    DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE.value
-                    if (
-                        onboarding_protocol
-                        in (DeviceModel.OnboardingProtocol.CMP_IDEVID, DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET)
-                    )
-                    else random.choice(  # noqa: S311
-                        [
-                            DeviceModel.PkiProtocol.MANUAL.value,
-                            DeviceModel.PkiProtocol.CMP_SHARED_SECRET.value,
-                        ]
-                    )
-                )
-
-                cmp_shared_secret = (
-                    secrets.token_urlsafe(16)
-                    if (
-                        onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET.value
-                        or pki_protocol == DeviceModel.PkiProtocol.CMP_SHARED_SECRET.value
-                    )
-                    else ''
-                )
-
-                idevid_trust_store = (
-                    truststore if onboarding_protocol == DeviceModel.OnboardingProtocol.CMP_IDEVID.value else None
-                )
-
-                dev = DeviceModel(
-                    common_name=device_name,
-                    serial_number=serial_number,
-                    domain=domain,
-                    onboarding_protocol=onboarding_protocol,
-                    onboarding_status=onboarding_status,
-                    domain_credential_onboarding=domain_credential_onboarding,
-                    pki_protocol=pki_protocol,
-                    cmp_shared_secret=cmp_shared_secret,
-                    idevid_trust_store=idevid_trust_store,
-                )
-
-                try:
-                    dev.save()
-                    if dev.pk:
-                        print(f"Creating device '{dev.common_name}' (ID {dev.pk}) in domain '{dev.domain}' with:")
-                        print(f'  - Serial Number: {dev.serial_number}')
-                        print(f'  - Onboarding Protocol: {dev.onboarding_protocol}')
-                        print(f'  - PKI Protocol: {dev.pki_protocol}')
+                    if onboarding_protocol == OnboardingProtocol.MANUAL:
+                        onboarding_pki_protocols = get_random_onboarding_pki_protocols()
+                    elif onboarding_protocol in [
+                            OnboardingProtocol.EST_IDEVID,
+                            OnboardingProtocol.EST_USERNAME_PASSWORD]:
+                        onboarding_pki_protocols = get_random_onboarding_pki_protocols(OnboardingPkiProtocol.EST)
+                    elif onboarding_protocol in [
+                            OnboardingProtocol.CMP_IDEVID,
+                            OnboardingProtocol.CMP_SHARED_SECRET]:
+                        onboarding_pki_protocols = get_random_onboarding_pki_protocols(OnboardingPkiProtocol.CMP)
                     else:
-                        print(f"Device '{device_name}' was not saved correctly.")
-                except Exception as e:  # noqa: BLE001
-                    print(f"Failed to create device '{device_name}': {e}")
+                        err_msg = 'Unknown onboarding protocol found.'
+                        raise ValueError(err_msg)
+
+                    idevid_trust_store = (
+                        truststore
+                        if onboarding_protocol in [OnboardingProtocol.CMP_IDEVID, OnboardingProtocol.EST_IDEVID]
+                        else None
+                    )
+                    onboarding_config_model = OnboardingConfigModel(
+                        onboarding_status=OnboardingStatus.PENDING,
+                        onboarding_protocol=onboarding_protocol,
+                        idevid_trust_store=idevid_trust_store
+                    )
+                    onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
+
+                    if onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
+                        onboarding_config_model.cmp_shared_secret = _get_secret()
+
+                    if onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD:
+                        onboarding_config_model.est_password = _get_secret()
+
+                    onboarding_config_model.full_clean()
+
+                    device_model = DeviceModel(
+                        common_name=device_name,
+                        serial_number=serial_number,
+                        domain=domain,
+                        device_type=random_device_type,
+                        onboarding_config=onboarding_config_model
+                    )
+
+                    device_model.full_clean()
+
+                    onboarding_config_model.save()
+                    device_model.save()
+
+
+                else:
+
+                    serial_number = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))  # noqa: S311
+                    print(f"Creating device '{device_name}' in domain '{domain_name}' with:")
+                    print(f'  - Serial Number: {serial_number}')
+                    print('  - No Onboarding')
+
+                    no_onboarding_pki_protocols = get_random_no_onboarding_pki_protocols()
+
+                    no_onboarding_config_model = NoOnboardingConfigModel()
+                    no_onboarding_config_model.set_pki_protocols(no_onboarding_pki_protocols)
+
+                    if NoOnboardingPkiProtocol.CMP_SHARED_SECRET in no_onboarding_pki_protocols:
+                        no_onboarding_config_model.cmp_shared_secret = _get_secret()
+
+                    if NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD in no_onboarding_pki_protocols:
+                        no_onboarding_config_model.est_password = _get_secret()
+
+                    no_onboarding_config_model.full_clean()
+
+                    device_model = DeviceModel(
+                        common_name=device_name,
+                        serial_number=serial_number,
+                        domain=domain,
+                        device_type=random_device_type
+                    )
+
+                    device_model.no_onboarding_config = no_onboarding_config_model
+                    device_model.full_clean()
+
+                    no_onboarding_config_model.save()
+                    device_model.save()
+
+            print(f'Device {device_name} created and saved.')
+
+
 
         print('\nProcess completed. All domains and devices have been added.')

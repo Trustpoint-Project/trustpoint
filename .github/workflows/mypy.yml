@@ -1,14 +1,18 @@
 name: MyPy
 
 # Trigger this workflow on pull requests, ensuring type checks are performed before merging.
-on: [pull_request]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
   mypy:
     runs-on: ubuntu-latest # Use the latest Ubuntu runner for compatibility and performance.
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4  # Ensures the repository code is available.
+        uses: actions/checkout@v5  # Ensures the repository code is available.
 
       - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.

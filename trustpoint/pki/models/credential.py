@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from cryptography import x509
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.db.models import QuerySet
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core import oid
 from trustpoint_core.serializer import (
@@ -15,21 +15,22 @@ from trustpoint_core.serializer import (
     CredentialSerializer,
     PrivateKeySerializer,
 )
+import logging
 from util.db import CustomDeleteActionModel
+from util.field import UniqueNameValidator
 
 from pki.models import CertificateModel
-from trustpoint.views.base import LoggerMixin
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
 
-    from cryptography import x509
     from cryptography.hazmat.primitives import hashes
     from django.db.models import QuerySet
-    from trustpoint_core.types import PrivateKey
+    from trustpoint_core.crypto_types import PrivateKey
 
 
-__all__ = ['CertificateChainOrderModel', 'CredentialAlreadyExistsError', 'CredentialModel']
+__all__ = ['CertificateChainOrderModel', 'CredentialAlreadyExistsError', 'CredentialModel', 'IDevIDReferenceModel', 'OwnerCredentialModel',]
 
 
 class CredentialAlreadyExistsError(ValidationError):
@@ -61,6 +62,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         ROOT_CA = 1, _('Root CA')
         ISSUING_CA = 2, _('Issuing CA')
         ISSUED_CREDENTIAL = 3, _('Issued Credential')
+        DEV_OWNER_ID = 4, _('DevOwnerID')
 
     credential_type = models.IntegerField(verbose_name=_('Credential Type'), choices=CredentialTypeChoice)
     private_key = models.CharField(verbose_name='Private key (PEM)', max_length=65536, default='', blank=True)
@@ -73,7 +75,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         CertificateModel, through='PrimaryCredentialCertificate', blank=False, related_name='credential'
     )
     certificate_chain = models.ManyToManyField(
-        CertificateModel, blank=True, through='CertificateChainOrderModel', related_name='credential_certificate_chains'
+        CertificateModel, blank=True,
+        through='CertificateChainOrderModel',
+        through_fields=('credential', 'certificate'),
+        related_name='credential_certificate_chains'
     )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
@@ -83,10 +88,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return f'CredentialModel(credential_type={self.credential_type}, certificate=)'
 
     def __str__(self) -> str:
-        """Returns a human-readable string that represents this CertificateChainOrderModel entry.
+        """Returns a human-readable string that represents this CredentialModel entry.
 
         Returns:
-            str: Human-readable string that represents this CertificateChainOrderModel entry.
+            str: Human-readable string that represents this CredentialModel entry.
         """
         return self.__repr__()
 
@@ -141,23 +146,26 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         Returns:
             CredentialModel: The stored credential model.
         """
-        certificate = CertificateModel.save_certificate(normalized_credential_serializer.credential_certificate)
+        certificate = CertificateModel.save_certificate(normalized_credential_serializer.certificate)
         # TODO(AlexHx8472): Verify that the credential is valid in respect to the credential_type!!!
 
         credential_model = cls.objects.create(
             certificate=certificate,
             credential_type=credential_type,
-            private_key=normalized_credential_serializer.credential_private_key.as_pkcs8_pem().decode(),
+            private_key=normalized_credential_serializer.get_private_key_serializer().as_pkcs8_pem().decode(),
         )
 
         PrimaryCredentialCertificate.objects.create(
             certificate=certificate, credential=credential_model, is_primary=True
         )
 
-        for order, certificate in enumerate(normalized_credential_serializer.additional_certificates.as_crypto()):
+        for order, certificate in enumerate(normalized_credential_serializer.additional_certificates):
             certificate_model = CertificateModel.save_certificate(certificate)
             CertificateChainOrderModel.objects.create(
-                certificate=certificate_model, credential=credential_model, order=order
+                certificate=certificate_model,
+                credential=credential_model,
+                order=order,
+                primary_certificate=credential_model.certificate
             )
 
         return credential_model
@@ -184,10 +192,41 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         for order, certificate_in_chain in enumerate(certificate_chain):
             certificate_model = CertificateModel.save_certificate(certificate_in_chain)
             CertificateChainOrderModel.objects.create(
-                certificate=certificate_model, credential=credential_model, order=order
+                certificate=certificate_model,
+                credential=credential_model,
+                order=order,
+                primary_certificate=credential_model.certificate
             )
 
         return credential_model
+
+    @transaction.atomic
+    def update_keyless_credential(
+        self,
+        certificate: x509.Certificate,
+        certificate_chain: list[x509.Certificate],
+    ) -> None:
+        """Updates the primary certificate and certificate chain of the credential.
+
+        Previous certificates are kept as part of the credential.
+        """
+        certificate_model = CertificateModel.save_certificate(certificate)
+        self.certificate = certificate_model
+
+        # Consider adding private key update logic here if needed
+
+        _, _ = PrimaryCredentialCertificate.objects.get_or_create(
+            certificate=certificate_model, credential=self, is_primary=True
+        )
+
+        # Store the complete chain for each new primary certificate
+        for order, certificate_in_chain in enumerate(certificate_chain):
+            certificate_model = CertificateModel.save_certificate(certificate_in_chain)
+            _, _ = CertificateChainOrderModel.objects.get_or_create(
+                certificate=certificate_model, credential=self, order=order, primary_certificate=self.certificate
+            )
+
+        self.save()
 
     def pre_delete(self) -> None:
         """Deletes related models, only allow deletion if there are no more active certificates."""
@@ -218,7 +257,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             PrivateKey: The credential private key abstraction.
         """
         if self.private_key:
-            return PrivateKeySerializer(self.private_key).as_crypto()
+            return PrivateKeySerializer.from_pem(self.private_key.encode()).as_crypto()
 
         err_msg = 'Failed to get private key information.'
         raise RuntimeError(err_msg)
@@ -230,7 +269,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             PrivateKey: The credential private key abstraction.
         """
         if self.private_key:
-            return PrivateKeySerializer(self.private_key)
+            return PrivateKeySerializer.from_pem(self.private_key.encode())
 
         err_msg = 'Failed to get private key information.'
         raise RuntimeError(err_msg)
@@ -244,7 +283,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return self.get_certificate_serializer().as_crypto()
 
     def get_certificate_chain(self) -> list[x509.Certificate]:
-        """Gets the credential certificate chain as list of x509.Certificate instances.
+        """Gets the credential certificate chain as a list of x509.Certificate instances.
 
         Returns:
             list[x509.Certificate]: The credential certificate chain as list of x509.Certificate instances.
@@ -252,7 +291,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return self.get_certificate_chain_serializer().as_crypto()
 
     def get_certificate_serializer(self) -> CertificateSerializer:
-        """Gets the credential certificate as CertificateSerializer instance.
+        """Gets the credential certificate as a CertificateSerializer instance.
 
         Returns:
             CertificateSerializer: The credential certificate.
@@ -260,7 +299,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return self.certificate.get_certificate_serializer()
 
     def get_certificate_chain_serializer(self) -> CertificateCollectionSerializer:
-        """Gets the credential certificate chain as CertificateCollectionSerializer instance.
+        """Gets the credential certificate chain as a CertificateCollectionSerializer instance.
 
         Returns:
             CertificateCollectionSerializer: The credential certificate chain.
@@ -268,10 +307,21 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         certificate_chain_order_models = self.certificatechainordermodel_set.order_by('order')
         return CertificateCollectionSerializer(
             [
-                certificate_chain_order_model.certificate.get_certificate_serializer()
+                certificate_chain_order_model.certificate.get_certificate_serializer().as_crypto()
                 for certificate_chain_order_model in certificate_chain_order_models
-            ],
+            ]
         )
+
+    def get_last_in_chain(self) -> None | CertificateModel:
+        """Gets the root ca certificate model, if any."""
+        last_certificate_in_chain = self.certificatechainordermodel_set.order_by('order').last()
+        logger = logging.getLogger()
+        logger.error('abc')
+        logger.error(last_certificate_in_chain)
+        logger.error(self.certificate)
+        if last_certificate_in_chain is None:
+            return self.certificate
+        return last_certificate_in_chain.certificate
 
     def get_root_ca_certificate(self) -> None | x509.Certificate:
         """Gets the root CA certificate of the credential certificate chain."""
@@ -283,6 +333,8 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     def get_root_ca_certificate_serializer(self) -> None | CertificateSerializer:
         """Gets the root CA certificate serializer."""
         last_certificate_in_chain = self.certificatechainordermodel_set.order_by('order').last()
+        if last_certificate_in_chain is None:
+            return self.certificate.get_certificate_serializer()
         if last_certificate_in_chain.certificate.is_root_ca:
             return last_certificate_in_chain.certificate.get_certificate_serializer()
         return None
@@ -290,11 +342,9 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     def get_credential_serializer(self) -> CredentialSerializer:
         """Gets the serializer for this credential."""
         return CredentialSerializer(
-            (
-                self.get_private_key_serializer(),
-                self.get_certificate_serializer(),
-                self.get_certificate_chain_serializer(),
-            )
+            private_key=self.get_private_key_serializer().as_crypto(),
+            certificate=self.get_certificate_serializer().as_crypto(),
+            additional_certificates=self.get_certificate_chain_serializer().as_crypto()
         )
 
     @property
@@ -312,8 +362,8 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         """Returns the hash algorithm used by the current credential."""
         return self.get_certificate().signature_hash_algorithm
 
-    def is_valid_domain_credential(self) -> tuple[bool, str]:
-        """Determines if this credential is valid for domain usage.
+    def is_valid_issued_credential(self) -> tuple[bool, str]:
+        """Determines if this issued credential is valid.
 
         This method performs the following checks:
           1. The credential must be of type ISSUED_CREDENTIAL.
@@ -335,7 +385,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         if primary_cert.certificate_status != primary_cert.CertificateStatus.OK:
             return False, f'Invalid certificate status: {primary_cert.certificate_status} (Must be OK).'
 
-        return True, 'Valid domain credential.'
+        return True, 'Valid issued credential.'
 
 
 class PrimaryCredentialCertificate(models.Model):
@@ -347,8 +397,6 @@ class PrimaryCredentialCertificate(models.Model):
     credential = models.ForeignKey(CredentialModel, on_delete=models.CASCADE)
     certificate = models.OneToOneField(CertificateModel, on_delete=models.CASCADE)
     is_primary = models.BooleanField(default=False)
-
-    objects: models.Manager[PrimaryCredentialCertificate]
 
     def __repr__(self) -> str:
         """Returns a string representation of this PrimaryCredentialCertificate entry."""
@@ -377,8 +425,10 @@ class CertificateChainOrderModel(models.Model):
     certificate = models.ForeignKey(CertificateModel, on_delete=models.PROTECT, null=False, blank=False, editable=False)
     credential = models.ForeignKey(CredentialModel, on_delete=models.CASCADE, null=False, blank=False, editable=False)
     order = models.PositiveIntegerField(null=False, blank=False, editable=False)
-
-    objects: models.Manager[CertificateChainOrderModel]
+    primary_certificate = models.ForeignKey(
+        CertificateModel, on_delete=models.PROTECT, null=False, blank=False, editable=False,
+        related_name = 'primary_certificate_set'
+    )
 
     class Meta:
         """This Meta class add some configuration to the CertificateChainOrderModel.
@@ -388,13 +438,16 @@ class CertificateChainOrderModel(models.Model):
         """
 
         ordering: ClassVar = ['order']
-        constraints: ClassVar = [models.UniqueConstraint(fields=['credential', 'order'], name='unique_group_order')]
+        constraints: ClassVar = [models.UniqueConstraint(
+            fields=['credential', 'primary_certificate', 'order'], name='unique_group_order'
+        )]
 
     def __repr__(self) -> str:
         """Returns a string representation of this CertificateChainOrderModel entry."""
         return (
             f'CertificateChainOrderModel(credential={self.credential}, '
             f'certificate={self.certificate}, '
+            f'primary_certificate={self.primary_certificate}, '
             f'order={self.order})'
         )
 
@@ -467,7 +520,140 @@ class CertificateChainOrderModel(models.Model):
         Returns:
             int: The highest order of a certificate of a credential certificate chain.
         """
-        existing_orders = CertificateChainOrderModel.objects.filter(credential=self.credential).values_list(
+        existing_orders = CertificateChainOrderModel.objects.filter(
+            credential=self.credential, primary_certificate=self.primary_certificate
+        ).values_list(
             'order', flat=True
         )
         return max(existing_orders, default=-1)
+
+
+class IDevIDReferenceModel(models.Model):
+    """Model to store the string referencing an IDevID certificate.
+
+    Obtained from the SAN of the DevOwnerID certificate.
+    """
+    dev_owner_id = models.ForeignKey(
+        'OwnerCredentialModel', related_name='idevid_ref_set', on_delete=models.CASCADE
+    )
+    idevid_ref = models.CharField(max_length=255, verbose_name=_('IDevID Identifier'))
+
+    def __str__(self) -> str:
+        """Returns a human-readable string that represents this IDevIDRefSanModel entry."""
+        return f'{self.dev_owner_id.unique_name} - {self.idevid_ref}'
+
+    @property
+    def idevid_subject_serial_number(self) -> str:
+        """Returns the IDevID Subject Serial Number from the SAN of the DevOwnerID certificate."""
+        try:
+            return self.idevid_ref.split('.')[0]
+        except IndexError:
+            return ''
+
+    @property
+    def idevid_x509_serial_number(self) -> str:
+        """Returns the IDevID X.509 Serial Number from the SAN of the DevOwnerID certificate."""
+        try:
+            return self.idevid_ref.split('.')[2]
+        except IndexError:
+            return ''
+
+    @property
+    def idevid_sha256_fingerprint(self) -> str:
+        """Returns the IDevID SHA256 Fingerprint from the SAN of the DevOwnerID certificate."""
+        try:
+            return self.idevid_ref.split('.')[3]
+        except IndexError:
+            return ''
+
+
+
+class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
+    """Device owner credential model.
+
+    This model is a wrapper to store a DevOwnerID Credential for use by devices to trust the Trustpoint.
+    """
+
+    unique_name = models.CharField(
+        verbose_name=_('Unique Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
+    )
+    credential: CredentialModel = models.OneToOneField(
+        CredentialModel, related_name='dev_owner_ids', on_delete=models.PROTECT)
+
+    created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
+
+
+    def __str__(self) -> str:
+        """Returns a human-readable string that represents this OwnerCredentialModel entry.
+
+        Returns:
+            str: Human-readable string that represents this OwnerCredentialModel entry.
+        """
+        return self.unique_name
+
+    def __repr__(self) -> str:
+        """Returns a string representation of the OwnerCredentialModel instance."""
+        return f'OwnerCredentialModel(unique_name={self.unique_name})'
+
+    @classmethod
+    def create_new_owner_credential(
+        cls,
+        unique_name: str,
+        credential_serializer: CredentialSerializer,
+    ) -> OwnerCredentialModel:
+        """Creates a new owner credential model and returns it.
+
+        Args:
+            unique_name: The unique name that will be used to identify the Owner Credential.
+            credential_serializer:
+                The credential as CredentialSerializer instance.
+
+        Returns:
+            OwnerCredentialModel: The newly created owner credential model.
+        """
+        # Extract the IDevID references from the SAN of the DevOwnerID certificate
+        # Reference URI format: 'dev-owner:<IDevID_Subj_SN>.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>'
+        idevid_refs: set[str] = set()
+        owner_cert = credential_serializer.certificate
+        if not owner_cert:
+            err_msg = _('The provided credential is not a valid DevOwnerID; it does not contain a certificate.')
+            raise ValidationError(err_msg)
+        try:
+            san_extension = owner_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        except x509.ExtensionNotFound as e:
+            err_msg = _('The provided certificate is not a valid DevOwnerID; it does not contain a SAN extension.')
+            raise ValidationError(err_msg) from e
+
+        for san in san_extension.value:
+            if isinstance(san, x509.UniformResourceIdentifier):
+                san_uri_str = san.value
+                san_parts = san_uri_str.split('.')
+                if len(san_parts) == 5 and san_parts[1] == 'dev-owner' and san_parts[-1] == 'alt':
+                    idevid_refs.add(san_uri_str)
+        if not idevid_refs:
+            raise ValidationError(_('The provided certificate is not a valid DevOwnerID; it does not contain a valid IDevID reference in the SAN.'))
+
+        credential_type = CredentialModel.CredentialTypeChoice.DEV_OWNER_ID
+
+        credential_model = CredentialModel.save_credential_serializer(
+            credential_serializer=credential_serializer, credential_type=credential_type
+        )
+
+        owner_credential = cls(
+            unique_name=unique_name,
+            credential=credential_model,
+        )
+        owner_credential.save()
+        for idevid_ref in idevid_refs:
+            IDevIDReferenceModel.objects.create(
+                dev_owner_id=owner_credential,
+                idevid_ref=idevid_ref
+            )
+
+        return owner_credential
+
+    def post_delete(self) -> None:
+        """Deletes the credential of this owner credential after deleting it."""
+        self.logger.debug('Deleting credential of owner credential %s', self)
+        self.credential.delete()
+

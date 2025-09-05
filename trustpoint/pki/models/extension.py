@@ -48,8 +48,6 @@ class AttributeTypeAndValue(models.Model):
     oid = models.CharField(max_length=256, editable=False, verbose_name='OID')
     value = models.CharField(max_length=16384, editable=False, verbose_name='Value')
 
-    objects: models.Manager[AttributeTypeAndValue]
-
     class Meta:  # noqa: D106
         unique_together = ('oid', 'value')
 
@@ -82,8 +80,6 @@ class GeneralNameRFC822Name(OrphanDeletionMixin, models.Model):
 
     value = models.CharField(max_length=1024, editable=False, verbose_name='Value', unique=True)
 
-    objects: models.Manager[GeneralNameRFC822Name]
-
     check_references_on_delete = ('general_names_set',)
 
     def __str__(self) -> str:
@@ -98,8 +94,6 @@ class GeneralNameDNSName(OrphanDeletionMixin, models.Model):
     """
 
     value = models.CharField(max_length=1024, editable=False, verbose_name='Value', unique=True)
-
-    objects: models.Manager[GeneralNameDNSName]
 
     check_references_on_delete = ('general_names_set',)
 
@@ -117,8 +111,6 @@ class GeneralNameDirectoryName(OrphanDeletionMixin, models.Model):
     """
 
     names = models.ManyToManyField(AttributeTypeAndValue, verbose_name=_('Name'), editable=False)
-
-    objects: models.Manager[GeneralNameDirectoryName]
 
     check_references_on_delete = ('general_names_set',)
 
@@ -141,8 +133,6 @@ class GeneralNameUniformResourceIdentifier(OrphanDeletionMixin, models.Model):
     """
 
     value = models.CharField(max_length=16384, editable=False, verbose_name='Value', unique=True)
-
-    objects: models.Manager[GeneralNameUniformResourceIdentifier]
 
     check_references_on_delete = ('general_names_set',)
 
@@ -168,8 +158,6 @@ class GeneralNameIpAddress(OrphanDeletionMixin, models.Model):
     ip_type = models.CharField(max_length=2, choices=IpType, editable=False, verbose_name='IP Type')
     value = models.CharField(max_length=16384, editable=False, verbose_name='Value')
 
-    objects: models.Manager[GeneralNameIpAddress]
-
     check_references_on_delete = ('general_names_set',)
 
     class Meta:  # noqa: D106
@@ -190,8 +178,6 @@ class GeneralNameRegisteredId(OrphanDeletionMixin, models.Model):
 
     value = models.CharField(max_length=256, editable=False, verbose_name='Value')
 
-    objects: models.Manager[GeneralNameRegisteredId]
-
     check_references_on_delete = ('general_names_set',)
 
     def __str__(self) -> str:
@@ -209,8 +195,6 @@ class GeneralNameOtherName(OrphanDeletionMixin, models.Model):
 
     type_id = models.CharField(max_length=256, editable=False, verbose_name='OID')
     value = models.CharField(max_length=16384, editable=False, verbose_name='Value')
-
-    objects: models.Manager[GeneralNameOtherName]
 
     check_references_on_delete = ('general_names_set',)
 
@@ -276,8 +260,6 @@ class BasicConstraintsExtension(CertificateExtension, models.Model):
     This extension indicates whether a certificate is a CA and its path length.
     """
 
-    objects: models.Manager[BasicConstraintsExtension]
-
     critical = models.BooleanField(verbose_name=_('Critical'), editable=False)
     ca = models.BooleanField(verbose_name=_('CA'), editable=False)
     path_length_constraint = models.PositiveSmallIntegerField(
@@ -333,8 +315,6 @@ class KeyUsageExtension(CertificateExtension, models.Model):
 
     Specifies the permitted usage of the certificate's public key.
     """
-
-    objects: models.Manager[KeyUsageExtension]
 
     critical = models.BooleanField(verbose_name=_('Critical'), editable=False)
     digital_signature = models.BooleanField(verbose_name=_('Digital Signature'), default=False, editable=False)
@@ -782,8 +762,6 @@ class SubjectKeyIdentifierExtension(CertificateExtension, models.Model):
     """
 
     # TODO(Anyone): Add critical and storage mechanism
-
-    objects: models.Manager[SubjectKeyIdentifierExtension]
 
     # The key_identifier is a hex-encoded, uppercase string representing the SKI
     key_identifier = models.CharField(max_length=256, editable=False, verbose_name='Key Identifier', unique=True)

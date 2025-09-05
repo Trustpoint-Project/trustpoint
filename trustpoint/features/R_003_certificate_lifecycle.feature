@@ -1,3 +1,6 @@
+@allure.label.epic:Features
+@allure.label.suite:R_003_Certificate_lifecycle_management_via_TPC_Web
+@allure.label.package:R_003_Certificate_lifecycle_management_via_TPC_Web
 Feature: Certificate lifecycle management via TPC_Web
   As an admin user
   I want to manage certificates across their lifecycle

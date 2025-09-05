@@ -70,6 +70,7 @@
                     <a href="{% url 'pki:issuing_cas' %}" class="tp-menu-item {% if page_name == 'issuing_cas' %}tp-menu-active{% endif %}">{% trans 'Issuing CAs' %}</a>
                     <a href="{% url 'pki:certificates' %}" class="tp-menu-item {% if page_name == 'certificates' %}tp-menu-active{% endif %}">{% trans 'Certificates' %}</a>
                     <a href="{% url 'pki:truststores' %}" class="tp-menu-item {% if page_name == 'truststores' %}tp-menu-active{% endif %}">{% trans 'Truststores' %}</a>
+                    <a href="{% url 'pki:owner_credentials' %}" class="tp-menu-item {% if page_name == 'owner_credentials' %}tp-menu-active{% endif %}">{% trans 'DevOwnerIDs' %}</a>
                 </div>
             </div>
 
@@ -85,9 +86,10 @@
                 <div class="tp-menu-collapse {% if page_category == 'settings' %}show{% endif %}">
                     <a href="{% url 'settings:language' %}" class="tp-menu-item {% if page_name == 'language' %}tp-menu-active{% endif %}">{% trans "Language" %}</a>
                     <a href="{% url 'settings:logging-files' %}" class="tp-menu-item {% if page_name == 'logging' %}tp-menu-active{% endif %}">{% trans "Logging" %}</a>
-{#                    <a href="{% url 'settings:network' %}" class="tp-menu-item {% if page_name == 'network' %}tp-menu-active{% endif %}">{% trans "Network" %}</a>#}
+                    <a href="{% url 'settings:tls' %}" class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}">{% trans "TLS" %}</a>
 {#                    <a href="{% url 'settings:ntp' %}" class="tp-menu-item {% if page_name == 'ntp' %}tp-menu-active{% endif %}">{% trans "NTP" %}</a>#}
                     <a href="{% url 'settings:security' %}" class="tp-menu-item {% if page_name == 'security' %}tp-menu-active{% endif %}">{% trans "Security" %}</a>
+                    <a href="{% url 'settings:backups' %}" class="tp-menu-item {% if page_name == 'backup' %}tp-menu-active{% endif %}">{% trans "Backup" %}</a>
                 </div>
             </div>
             <div class="tp-menu-footer">
@@ -100,6 +102,12 @@
                             <use href="{% static 'img/icons.svg' %}#icon-moon-stars"></use></svg>
                             <span class="light-only">{% trans "Dark theme" %}</span>
                     </button>
+                    <a href="{% url 'settings:help' %}" class="tp-menu-head">
+                        <svg class="bi" fill="currentColor" width="16" height="16" role="img">
+                            <use href="{% static 'img/icons.svg' %}#icon-question-circle"></use>
+                        </svg>
+                        {% trans "Help & Support" %}
+                    </a>
                     <form method="POST" action="{% url 'users:logout' %}">
                         {% csrf_token %}
                         <button class="tp-menu-head" type="submit">
@@ -110,9 +118,7 @@
                     </form>
 
                 </div>
-                <div id="tp-version">
-                    v0.2.0
-                </div>
+                <div id="tp-version">v{{ APP_VERSION }}</div>
             </div>
         </nav>
 

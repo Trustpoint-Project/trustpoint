@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest  # Use the latest Ubuntu runner for compatibility and performance.
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4  # Ensures the repository code is available.
+        uses: actions/checkout@v5  # Ensures the repository code is available.
 
       - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.
@@ -24,6 +24,8 @@ jobs:
       - name: Run Behave Tests and Generate HTML Report for ${{ inputs.feature_file }}.feature
         run: |
           uv run trustpoint/manage.py behave \
+          --format behave_html_pretty_formatter:PrettyHTMLFormatter \
+          --outfile behave-report.html \
           trustpoint/features/${{ inputs.feature_file }}.feature
 
       - name: Upload Test Report
