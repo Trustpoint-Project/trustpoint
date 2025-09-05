@@ -28,8 +28,23 @@ try:
 except PackageNotFoundError:
     APP_VERSION = 'Version not found'
 
-def app_version(request):
-    return {'APP_VERSION': APP_VERSION}
+try:
+    with Path('/etc/hostname').open('r') as f:
+        CONTAINER_ID = f.read().strip()
+except FileNotFoundError:
+    CONTAINER_ID = 'unknown'
+
+def app_version(request) -> dict:
+    """Provide application version and container ID for use in templates.
+
+    Args:
+        request: The HTTP request object.
+
+    Returns:
+        dict: A dictionary containing the application version and container ID.
+    """
+    return {'APP_VERSION': APP_VERSION,
+            'CONTAINER_ID': CONTAINER_ID}
 
 # Monkeypatching Django, so stubs will work for all generics,
 # see: https://github.com/typeddjango/django-stubs

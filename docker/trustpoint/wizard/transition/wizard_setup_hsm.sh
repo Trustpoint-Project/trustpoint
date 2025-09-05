@@ -1,11 +1,11 @@
 #!/bin/bash
 # This script sets up an HSM slot using the pins provided via Docker Compose secrets.
-# Usage: wizard_setup_hsm.sh <pkcs11_module_path> <slot_number> <token_label>
-
+# Usage: wizard_setup_hsm.sh <pkcs11_module_path> <slot_number> <token_label> [init_setup|auto_restore_setup]
 
 STATE_FILE_DIR="/etc/trustpoint/wizard/state/"
 WIZARD_SETUP_HSM="/etc/trustpoint/wizard/state/WIZARD_SETUP_HSM"
 WIZARD_SETUP_MODE="/etc/trustpoint/wizard/state/WIZARD_SETUP_MODE"
+WIZARD_AUTO_RESTORE_PASSWORD="/etc/trustpoint/wizard/state/WIZARD_AUTO_RESTORE_PASSWORD"
 
 # HSM pin files from Docker Compose secrets
 HSM_SO_PIN_FILE="${HSM_SO_PIN_FILE:-/run/secrets/hsm_so_pin}"
@@ -15,6 +15,7 @@ HSM_PIN_FILE="${HSM_PIN_FILE:-/run/secrets/hsm_pin}"
 PKCS11_MODULE_PATH="$1"
 HSM_SLOT="$2"
 HSM_TOKEN_LABEL="$3"
+SETUP_TYPE="$4"  # New parameter: init_setup or auto_restore_setup
 
 # Logging function
 log() {
@@ -22,14 +23,25 @@ log() {
 }
 
 # Check arguments
-if [ $# -ne 3 ]; then
-    echo "ERROR: Invalid number of arguments. Usage: $0 <pkcs11_module_path> <slot_number> <token_label>"
+if [ $# -lt 3 ] || [ $# -gt 4 ]; then
+    echo "ERROR: Invalid number of arguments. Usage: $0 <pkcs11_module_path> <slot_number> <token_label> [init_setup|auto_restore_setup]"
     exit 1
 fi
 
 if [ -z "$PKCS11_MODULE_PATH" ] || [ -z "$HSM_SLOT" ] || [ -z "$HSM_TOKEN_LABEL" ]; then
-    echo "ERROR: All arguments must be non-empty. Usage: $0 <pkcs11_module_path> <slot_number> <token_label>"
+    echo "ERROR: All arguments must be non-empty. Usage: $0 <pkcs11_module_path> <slot_number> <token_label> [init_setup|auto_restore_setup]"
     exit 1
+fi
+
+# Validate setup type if provided
+if [ -n "$SETUP_TYPE" ] && [ "$SETUP_TYPE" != "init_setup" ] && [ "$SETUP_TYPE" != "auto_restore_setup" ]; then
+    echo "ERROR: Invalid setup type. Must be 'init_setup' or 'auto_restore_setup'."
+    exit 1
+fi
+
+# Default to init_setup if not specified
+if [ -z "$SETUP_TYPE" ]; then
+    SETUP_TYPE="init_setup"
 fi
 
 # Checks if the state file is present.
@@ -76,7 +88,7 @@ if [ ! -f "$PKCS11_MODULE_PATH" ]; then
     exit 8
 fi
 
-log "Initializing HSM slot $HSM_SLOT with token label '$HSM_TOKEN_LABEL' using module '$PKCS11_MODULE_PATH'..."
+log "Initializing HSM slot $HSM_SLOT with token label '$HSM_TOKEN_LABEL' using module '$PKCS11_MODULE_PATH' for setup type '$SETUP_TYPE'..."
 
 # Initialize the HSM slot
 if ! softhsm2-util --init-token --module "$PKCS11_MODULE_PATH" --slot "$HSM_SLOT" --label "$HSM_TOKEN_LABEL" --pin "$HSM_PIN" --so-pin "$HSM_SO_PIN"; then
@@ -143,13 +155,22 @@ then
     exit 12
 fi
 
-if ! touch "$WIZARD_SETUP_MODE"
-then
-    echo "ERROR: Failed to create the WIZARD_SETUP_MODE state file."
-    exit 13
+# Create the appropriate next state file based on setup type
+if [ "$SETUP_TYPE" = "init_setup" ]; then
+    if ! touch "$WIZARD_SETUP_MODE"
+    then
+        echo "ERROR: Failed to create the WIZARD_SETUP_MODE state file."
+        exit 13
+    fi
+    log "SUCCESS: Transitioned to WIZARD_SETUP_MODE state for initial setup."
+elif [ "$SETUP_TYPE" = "auto_restore_setup" ]; then
+    if ! touch "$WIZARD_AUTO_RESTORE_PASSWORD"
+    then
+        echo "ERROR: Failed to create the WIZARD_AUTO_RESTORE_PASSWORD state file."
+        exit 20
+    fi
+    log "SUCCESS: Transitioned to WIZARD_AUTO_RESTORE_PASSWORD state for auto restore setup."
 fi
-
-echo "SUCCESS: Transitioned to WIZARD_SETUP_MODE state."
 
 log "HSM setup completed successfully."
 exit 0

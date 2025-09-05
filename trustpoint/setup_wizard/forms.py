@@ -326,3 +326,33 @@ class BackupRestoreForm(forms.Form):
             raise forms.ValidationError(msg)
 
         return password or ''
+
+class PasswordAutoRestoreForm(forms.Form):
+    """Form for filling the password for auto-restore."""
+
+    password = forms.CharField(
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control',
+            'placeholder': _('Enter backup password'),
+            'autocomplete': 'new-password',
+        }),
+        label=_('Backup Password'),
+        help_text=_('Enter a strong password to secure your backup encryption key.'),
+        required=True
+    )
+
+    def clean_password(self) -> str:
+        """Clean and validate the password field using Django's password validators.
+
+        Returns:
+            The cleaned password.
+
+        Raises:
+            ValidationError: If password validation fails.
+        """
+        password = self.cleaned_data.get('password')
+
+        if not password:
+            raise forms.ValidationError(_('Password is required.'))
+
+        return password

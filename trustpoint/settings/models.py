@@ -170,6 +170,12 @@ class AppVersion(models.Model):
     objects: models.Manager['AppVersion']
 
     version = models.CharField(max_length=17)
+    container_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        help_text=_('Container build ID or hash')
+    )
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -178,7 +184,8 @@ class AppVersion(models.Model):
 
     def __str__(self) -> str:
         """Return a string representation for the AppVersion."""
-        return f'{self.version} @ {self.last_updated.isoformat()}'
+        build_info = f' (Build: {self.container_build_id})' if self.container_build_id else ''
+        return f'{self.version}{build_info} @ {self.last_updated.isoformat()}'
 
 
 class BackupOptions(models.Model):

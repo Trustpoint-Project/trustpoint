@@ -1,10 +1,14 @@
 """Management command to check and update the Trustpoint database version."""
 
+import subprocess
+from pathlib import Path
+
 from django.conf import settings as django_settings
 from django.core.management import CommandError, call_command
 from django.core.management.base import BaseCommand
 from django.db.utils import OperationalError, ProgrammingError
 from packaging.version import InvalidVersion, Version
+from setup_wizard import SetupWizardState
 
 from settings.models import AppVersion
 
@@ -54,6 +58,37 @@ class Command(BaseCommand):
             app_version.version = current
             app_version.save()
             self.stdout.write(f'Trustpoint version updated to {current}')
+
+    def _is_wizard_completed(self) -> bool:
+        """Check if the setup wizard has been completed."""
+        try:
+            current_state = SetupWizardState.get_current_state()
+        except RuntimeError:
+            self.stdout.write(self.style.WARNING('Could not determine wizard state'))
+            return False
+        else:
+            return current_state == SetupWizardState.WIZARD_COMPLETED
+
+    def _set_auto_restore_state(self) -> None:
+        """Execute the wizard_auto_restore_set.sh script to transition to auto restore state."""
+        script_path = Path('/docker/trustpoint/wizard/transition/wizard_auto_restore_set.sh')
+
+        try:
+            if script_path.is_file() and script_path.is_absolute() and script_path.match('/docker/trustpoint/wizard/transition/*.sh'):
+                result = subprocess.run([str(script_path)], check=True, capture_output=True, text=True)
+            else:
+                error_msg = f'Invalid or untrusted script path: {script_path}'
+                self.stdout.write(self.style.ERROR(error_msg))
+                raise CommandError(error_msg)
+            self.stdout.write(self.style.SUCCESS('Transitioned to WIZARD_AUTO_RESTORE state'))
+        except subprocess.CalledProcessError as e:
+            error_msg = f'Failed to set auto restore state: {e.stderr}'
+            self.stdout.write(self.style.ERROR(error_msg))
+            raise CommandError(error_msg) from e
+        except FileNotFoundError:
+            error_msg = f'Auto restore script not found: {script_path}'
+            self.stdout.write(self.style.ERROR(error_msg))
+            raise CommandError(error_msg)
 
     def _parse_versions(self, db_version_str: str, current_version_str: str) -> tuple[Version, Version]:
         """Parse the version strings into Version objects."""

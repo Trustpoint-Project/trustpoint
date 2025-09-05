@@ -27,7 +27,7 @@ from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from settings.models import PKCS11Token
 
 from setup_wizard import SetupWizardState
-from setup_wizard.forms import BackupPasswordForm, EmptyForm, HsmSetupForm, StartupWizardTlsCertificateForm
+from setup_wizard.forms import BackupPasswordForm, EmptyForm, HsmSetupForm, PasswordAutoRestoreForm, StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
@@ -50,6 +50,7 @@ SCRIPT_WIZARD_BACKUP_PASSWORD = STATE_FILE_DIR / Path('wizard_backup_password.sh
 SCRIPT_WIZARD_DEMO_DATA = STATE_FILE_DIR / Path('wizard_demo_data.sh')
 SCRIPT_WIZARD_CREATE_SUPER_USER = STATE_FILE_DIR / Path('wizard_create_super_user.sh')
 SCRIPT_WIZARD_RESTORE = STATE_FILE_DIR / Path('wizard_restore.sh')
+SCRIPT_WIZARD_AUTORESTORE_PASSWORD = STATE_FILE_DIR / Path('wizard_autorestorepassword.sh')
 
 
 logger = logging.getLogger(__name__)
@@ -141,32 +142,19 @@ class StartupWizardRedirect:
             return redirect('setup_wizard:create_super_user', permanent=False)
         if wizard_state == SetupWizardState.WIZARD_COMPLETED:
             return redirect('users:login', permanent=False)
+        if wizard_state == SetupWizardState.WIZARD_AUTO_RESTORE_HSM:
+            return redirect('setup_wizard:auto_restore_hsm', permanent=False)
+        if wizard_state == SetupWizardState.WIZARD_AUTO_RESTORE_PASSWORD:
+            return redirect('setup_wizard:auto_restore_password', permanent=False)
         err_msg = 'Unknown wizard state found. Failed to redirect by state.'
         raise ValueError(err_msg)
 
-class SetupWizardHsmSetupView(LoggerMixin, FormView):
-    """View for handling HSM setup during the setup wizard.
 
-    This view allows the user to configure HSM settings, currently supporting
-    SoftHSM with Physical HSM options disabled. It validates the current wizard
-    state and transitions to the next state upon successful completion.
-    """
-
-    http_method_names = ('get', 'post')
-    template_name = 'setup_wizard/hsm_setup.html'
-    success_url = reverse_lazy('setup_wizard:setup_mode')
+class HsmSetupMixin(LoggerMixin):
+    """Mixin that provides common HSM setup functionality for both initial setup and auto restore."""
     form_class = HsmSetupForm
-
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Handle request dispatch and wizard state validation."""
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_SETUP_HSM:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
-
-        return super().dispatch(request, *args, **kwargs)
+    template_name = 'setup_wizard/hsm_setup.html'
+    http_method_names = ('get', 'post')
 
     def form_valid(self, form: HsmSetupForm) -> HttpResponse:
         """Handle form submission for HSM setup."""
@@ -175,14 +163,14 @@ class SetupWizardHsmSetupView(LoggerMixin, FormView):
 
         if hsm_type != 'softhsm':
             messages.add_message(self.request, messages.ERROR, 'Physical HSM is not yet supported.')
-            return redirect('setup_wizard:hsm_setup', permanent=False)
+            return redirect(self.get_error_redirect_url(), permanent=False)
 
         module_path = cleaned_data['module_path']
         slot = str(cleaned_data['slot'])
         label = cleaned_data['label']
 
         if not self._validate_hsm_inputs(module_path, slot, label):
-            return redirect('setup_wizard:hsm_setup', permanent=False)
+            return redirect(self.get_error_redirect_url(), permanent=False)
 
         try:
             result = self._run_hsm_setup_script(module_path, slot, label)
@@ -215,7 +203,8 @@ class SetupWizardHsmSetupView(LoggerMixin, FormView):
 
     def _run_hsm_setup_script(self, module_path: str, slot: str, label: str) -> subprocess.CompletedProcess[str]:
         """Run the HSM setup shell script."""
-        command = ['sudo', str(SCRIPT_WIZARD_SETUP_HSM), module_path, slot, label]
+        setup_type = self.get_setup_type()
+        command = ['sudo', str(SCRIPT_WIZARD_SETUP_HSM), module_path, slot, label, setup_type]
         return subprocess.run(command, capture_output=True, text=True, check=True)  # noqa: S603
 
     def _get_or_update_token(self, hsm_type: str, module_path: str, slot: str, label: str) -> tuple[PKCS11Token, bool]:
@@ -259,10 +248,11 @@ class SetupWizardHsmSetupView(LoggerMixin, FormView):
     def _add_success_message(self, hsm_type: str, *, created: bool, token: PKCS11Token) -> None:
         """Add a success message for HSM setup."""
         action = 'created' if created else 'updated'
+        context = self.get_success_context()
         messages.add_message(self.request, messages.SUCCESS,
-                             f'HSM setup completed successfully for {hsm_type.upper()}. '
+                             f'HSM setup completed successfully {context} with {hsm_type.upper()}. '
                              f'PKCS#11 token configuration {action}.')
-        self.logger.info('PKCS11Token %s: %s', action, token)
+        self.logger.info('PKCS11Token %s %s: %s', action, context, token)
 
     def _handle_hsm_setup_exception(self, exc: Exception) -> HttpResponse:
         """Handle exceptions during HSM setup and add appropriate error messages."""
@@ -274,7 +264,7 @@ class SetupWizardHsmSetupView(LoggerMixin, FormView):
             err_msg = 'An unexpected error occurred during HSM setup.'
         messages.add_message(self.request, messages.ERROR, err_msg)
         self.logger.exception(err_msg)
-        return redirect('setup_wizard:hsm_setup', permanent=False)
+        return redirect(self.get_error_redirect_url(), permanent=False)
 
     @staticmethod
     def _map_exit_code_to_message(return_code: int) -> str:
@@ -291,14 +281,101 @@ class SetupWizardHsmSetupView(LoggerMixin, FormView):
             9: 'Failed to initialize HSM token.',
             10: 'Failed to initialize user PIN for HSM.',
             11: 'Failed to access HSM with configured PIN.',
-            12: 'Failed to remove the WIZARD_SETUP_HSM state file',
-            13: 'Failed to create the WIZARD_BACKUP_PASSWORD state file.',
-            14: 'Failed to set ownership of token files to www-data.',
-            15: 'Failed to set permissions on token files.',
-            16: 'Failed to access HSM as www-data user after permission fix.',
+            12: 'Failed to remove the WIZARD_SETUP_HSM state file.',
+            13: 'Failed to create the WIZARD_SETUP_MODE state file.',
+            14: 'Failed to set ownership of SoftHSM tokens to www-data.',
+            15: 'Failed to set permissions on SoftHSM tokens.',
+            16: 'Failed to set permissions on SoftHSM config file.',
+            17: 'Failed to set permissions on /var/lib/softhsm directory.',
+            18: 'www-data still cannot access token directory after permission changes.',
+            19: 'Failed to access HSM slot as www-data user.',
+            20: 'Failed to create the WIZARD_AUTO_RESTORE state file.',
         }
         return error_messages.get(return_code, 'An unknown error occurred during HSM setup.')
 
+    def get_setup_type(self) -> str:
+        """Return the setup type for the HSM script."""
+        msg = 'Subclasses must implement get_setup_type()'
+        raise NotImplementedError(msg)
+
+    def get_error_redirect_url(self) -> str:
+        """Return the URL to redirect to on error."""
+        msg = 'Subclasses must implement get_error_redirect_url()'
+        raise NotImplementedError(msg)
+
+    def get_success_context(self) -> str:
+        """Return context string for success messages."""
+        msg = 'Subclasses must implement get_success_context()'
+        raise NotImplementedError(msg)
+
+    def get_expected_wizard_state(self) -> SetupWizardState:
+        """Return the expected wizard state for this view."""
+        msg = 'Subclasses must implement get_expected_wizard_state()'
+        raise NotImplementedError(msg)
+
+class SetupWizardHsmSetupView(HsmSetupMixin, FormView):
+    """View for handling HSM setup during the setup wizard."""
+
+    success_url = reverse_lazy('setup_wizard:setup_mode')
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle request dispatch and wizard state validation."""
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != self.get_expected_wizard_state():
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_setup_type(self) -> str:
+        """Return the setup type for the HSM script."""
+        return 'init_setup'
+
+    def get_error_redirect_url(self) -> str:
+        """Return the URL to redirect to on error."""
+        return 'setup_wizard:hsm_setup'
+
+    def get_success_context(self) -> str:
+        """Return context string for success messages."""
+        return 'for initial setup'
+
+    def get_expected_wizard_state(self) -> SetupWizardState:
+        """Return the expected wizard state for this view."""
+        return SetupWizardState.WIZARD_SETUP_HSM
+
+class BackupAutoRestoreHsmView(HsmSetupMixin, FormView):
+    """View for handling HSM setup during auto restore process."""
+
+    success_url = reverse_lazy('setup_wizard:auto_restore_password')
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle request dispatch and wizard state validation."""
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != self.get_expected_wizard_state():
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_setup_type(self) -> str:
+        """Return the setup type for the HSM script."""
+        return 'auto_restore_setup'
+
+    def get_error_redirect_url(self) -> str:
+        """Return the URL to redirect to on error."""
+        return 'setup_wizard:auto_restore_hsm'
+
+    def get_success_context(self) -> str:
+        """Return context string for success messages."""
+        return 'for auto restore'
+
+    def get_expected_wizard_state(self) -> SetupWizardState:
+        """Return the expected wizard state for this view."""
+        return SetupWizardState.WIZARD_AUTO_RESTORE_HSM
 
 class SetupWizardSetupModeView(TemplateView):
     """View for the initial step of the setup wizard.
@@ -398,7 +475,6 @@ class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView):
             messages.add_message(self.request, messages.ERROR, err_msg)
             self.logger.exception(err_msg)
             return redirect('setup_wizard:select_tls_server_credential', permanent=False)
-
 
 class SetupWizardRestoreOptionsView(TemplateView):
     """View for the restore option during initialization.
@@ -532,79 +608,10 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView):
         }
         return error_messages.get(return_code, 'An unknown error occurred during backup password setup.')
 
-class BackupRestoreView(LoggerMixin, View):
-    """Upload a dump file and restore the database from it with optional backup password."""
+class BackupPasswordRecoveryMixin(LoggerMixin):
+    """Mixin that provides backup password recovery functionality."""
 
-    def post(self, request: HttpRequest) -> HttpResponse:
-        """Handle POST requests to upload a backup file and restore the database.
-
-        Args:
-            request (HttpRequest): The HTTP request containing the uploaded backup file.
-
-        Returns:
-            HttpResponse: A redirect to the appropriate page based on the outcome.
-        """
-        from setup_wizard.forms import BackupRestoreForm
-
-        form = BackupRestoreForm(request.POST, request.FILES)
-
-        if not form.is_valid():
-            for field, errors in form.errors.items():
-                for error in errors:
-                    messages.add_message(request, messages.ERROR, f'{field}: {error}')
-            return redirect('setup_wizard:restore_options')
-
-        backup_file = form.cleaned_data['backup_file']
-        backup_password = form.cleaned_data.get('backup_password')
-
-        temp_dir = settings.BACKUP_FILE_PATH
-        temp_path = temp_dir / backup_file.name
-
-        try:
-            # Save uploaded file
-            with temp_path.open('wb+') as f:
-                for chunk in backup_file.chunks():
-                    f.write(chunk)
-
-            # Restore database
-            call_command('dbrestore', '-z', '--noinput', '-I', str(temp_path))
-
-            # Execute trustpoint restore command
-            call_command('trustpointrestore')
-
-            # Handle backup password for DEK recovery if provided
-            if backup_password:
-                success = self._handle_backup_password_recovery(backup_password)
-                if not success:
-                    messages.add_message(
-                        request,
-                        messages.ERROR,
-                        'Database restored successfully, but backup password recovery failed.'
-                    )
-                else:
-                    messages.add_message(
-                        request,
-                        messages.SUCCESS,
-                        f'Trustpoint restored successfully from {backup_file.name}'
-                    )
-
-                    self.logger.info('Backup restore completed successfully from file: %s', backup_file.name)
-
-        except Exception as e:
-            messages.add_message(request, messages.ERROR, 'Error occurred during restore operation.')
-            self.logger.exception('Exception restoring database from %s: %s', backup_file.name, e)
-            return redirect('setup_wizard:restore_options')
-        finally:
-            # Clean up temporary file
-            try:
-                if temp_path.exists():
-                    temp_path.unlink()
-            except Exception as e:  # noqa: BLE001
-                self.logger.warning('Failed to clean up temporary file %s: %s', temp_path, e)
-
-        return redirect('users:login')
-
-    def _handle_backup_password_recovery(self, backup_password: str) -> bool:
+    def handle_backup_password_recovery(self, backup_password: str) -> bool:
         """Handle DEK recovery using backup password.
 
         Uses the existing KEK to wrap the recovered DEK and stores everything 
@@ -691,6 +698,170 @@ class BackupRestoreView(LoggerMixin, View):
             )
             return True
 
+class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
+    """Upload a dump file and restore the database from it with optional backup password."""
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """Handle POST requests to upload a backup file and restore the database.
+
+        Args:
+            request (HttpRequest): The HTTP request containing the uploaded backup file.
+
+        Returns:
+            HttpResponse: A redirect to the appropriate page based on the outcome.
+        """
+        from setup_wizard.forms import BackupRestoreForm
+
+        form = BackupRestoreForm(request.POST, request.FILES)
+
+        if not form.is_valid():
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.add_message(request, messages.ERROR, f'{field}: {error}')
+            return redirect('setup_wizard:restore_options')
+
+        backup_file = form.cleaned_data['backup_file']
+        backup_password = form.cleaned_data.get('backup_password')
+
+        temp_dir = settings.BACKUP_FILE_PATH
+        temp_path = temp_dir / backup_file.name
+
+        try:
+            # Save uploaded file
+            with temp_path.open('wb+') as f:
+                for chunk in backup_file.chunks():
+                    f.write(chunk)
+
+            # Restore database
+            call_command('dbrestore', '-z', '--noinput', '-I', str(temp_path))
+
+            # Execute trustpoint restore command
+            call_command('trustpointrestore')
+
+            # Handle backup password for DEK recovery if provided
+            if backup_password:
+                success = self._handle_backup_password_recovery(backup_password)
+                if not success:
+                    messages.add_message(
+                        request,
+                        messages.ERROR,
+                        'Database restored successfully, but backup password recovery failed.'
+                    )
+                else:
+                    messages.add_message(
+                        request,
+                        messages.SUCCESS,
+                        f'Trustpoint restored successfully from {backup_file.name}'
+                    )
+
+                    self.logger.info('Backup restore completed successfully from file: %s', backup_file.name)
+
+        except Exception as e:
+            messages.add_message(request, messages.ERROR, 'Error occurred during restore operation.')
+            self.logger.exception('Exception restoring database from %s: %s', backup_file.name, e)
+            return redirect('setup_wizard:restore_options')
+        finally:
+            # Clean up temporary file
+            try:
+                if temp_path.exists():
+                    temp_path.unlink()
+            except Exception as e:  # noqa: BLE001
+                self.logger.warning('Failed to clean up temporary file %s: %s', temp_path, e)
+
+        return redirect('users:login')
+
+class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, FormView):
+    """View for handling backup password entry during auto restore process.
+
+    This view allows users to enter the backup password needed to recover
+    the DEK (Data Encryption Key) during the auto restore process. It validates
+    the current wizard state and processes the password recovery.
+    """
+
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/auto_restore_password.html'
+    success_url = reverse_lazy('users:login')
+    form_class = PasswordAutoRestoreForm
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle request dispatch and wizard state validation."""
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_AUTO_RESTORE_PASSWORD:
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs: Any) -> dict:
+        """Add additional context data."""
+        context = super().get_context_data(**kwargs)
+        context['page_title'] = _('Auto Restore - Enter Backup Password')
+        context['page_description'] = _('Enter the backup password to complete the auto restore process.')
+        return context
+
+    def form_valid(self, form: PasswordAutoRestoreForm) -> HttpResponse:
+        """Handle valid form submission."""
+        backup_password = form.cleaned_data.get('password')
+
+        try:
+            # Attempt to recover DEK using backup password
+            success = self.handle_backup_password_recovery(backup_password)
+            
+            if not success:
+                # Error messages are already added by handle_backup_password_recovery
+                return self.form_invalid(form)
+
+            # Execute the transition script to complete auto restore
+            execute_shell_script(SCRIPT_WIZARD_AUTORESTORE_PASSWORD)
+
+            messages.add_message(
+                self.request,
+                messages.SUCCESS,
+                'Auto restore completed successfully. You can now log in.'
+            )
+            self.logger.info('Auto restore completed successfully with backup password recovery')
+            return super().form_valid(form)
+
+        except subprocess.CalledProcessError as exc:
+            err_msg = f'Auto restore script failed: {self._map_exit_code_to_message(exc.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return self.form_invalid(form)
+            
+        except FileNotFoundError:
+            err_msg = f'Auto restore script not found: {SCRIPT_WIZARD_AUTORESTORE_PASSWORD}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return self.form_invalid(form)
+            
+        except Exception as exc:
+            err_msg = 'An unexpected error occurred during auto restore password recovery.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception('Unexpected error during auto restore: %s', exc)
+            return self.form_invalid(form)
+
+    def form_invalid(self, form: PasswordAutoRestoreForm) -> HttpResponse:
+        """Handle invalid form submission."""
+        messages.add_message(
+            self.request,
+            messages.ERROR,
+            'Please correct the errors below and try again.'
+        )
+        return super().form_invalid(form)
+
+    @staticmethod
+    def _map_exit_code_to_message(return_code: int) -> str:
+        """Map script exit codes to meaningful error messages."""
+        error_messages = {
+            1: 'Trustpoint is not in the WIZARD_AUTO_RESTORE_PASSWORD state.',
+            2: 'Found multiple wizard state files. The wizard state seems to be corrupted.',
+            3: 'Failed to remove the WIZARD_AUTO_RESTORE_PASSWORD state file.',
+            4: 'Failed to create the WIZARD_COMPLETED state file.',
+            5: 'Failed to execute post-restore operations.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred during auto restore password processing.')
 
 class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWizardTlsCertificateForm]):
     """View for generating TLS Server Credentials in the setup wizard.
