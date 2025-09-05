@@ -12,9 +12,8 @@ until pg_isready -h "$DATABASE_HOST" -p "$DATABASE_PORT" &>/dev/null; do
 done
 echo "PostgreSQL database is available!"
 run_as_www_data "uv run trustpoint/manage.py managestartup"
-echo "*************************************************************************************************"
-run_as_www_data "uv run trustpoint/manage.py inittrustpoint --tls"
-echo "*************************************************************************************************"
+
+
 
 
 #  Configure nginx
