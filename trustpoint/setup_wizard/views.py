@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from trustpoint_core.serializer import CertificateSerializer
 
-APACHE_PATH = Path(__file__).parent.parent.parent / 'docker/trustpoint/apache/tls'
+APACHE_PATH = Path(__file__).parent.parent.parent / 'docker/trustpoint/nginx/tls'
 APACHE_KEY_PATH = APACHE_PATH / Path('apache-tls-server-key.key')
 APACHE_CERT_PATH = APACHE_PATH / Path('apache-tls-server-cert.pem')
 APACHE_CERT_CHAIN_PATH = APACHE_PATH / Path('apache-tls-server-cert-chain.pem')

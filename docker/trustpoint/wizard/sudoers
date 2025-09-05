@@ -4,7 +4,7 @@ Defaults        secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/
 
 # This fixes CVE-2005-4890 and possibly breaks some versions of kdesu
 # (#1011624, https://bugs.kde.org/show_bug.cgi?id=452532)
-Defaults        use_pty
+#Defaults        use_pty
 
 # User privilege specification
 root    ALL=(ALL:ALL) ALL

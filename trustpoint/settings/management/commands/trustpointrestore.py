@@ -69,6 +69,8 @@ class Command(BaseCommand):
 
             script = SCRIPT_WIZARD_RESTORE
 
+            self.stdout.write('1')
+
             script_path = Path(script).resolve()
 
             if not script_path.exists():
@@ -77,14 +79,17 @@ class Command(BaseCommand):
             if not script_path.is_file():
                 err_msg = f'The script path {script_path} is not a valid file.'
                 raise ValueError(err_msg)
-
+            self.stdout.write('2')
             command = ['sudo', str(script_path)]
-
-            result = subprocess.run(command, capture_output=True, text=True, check=True)  # noqa: S603
-
+            self.stdout.write('5')
+            result = subprocess.run(command, capture_output=True, text=True, check=False)  # noqa: S603
+            self.stdout.write(f'Script stdout: {result.stdout}')
+            self.stdout.write(f'Script stderr: {result.stderr}')
+            self.stdout.write(f'Script return code: {result.returncode}')
+            self.stdout.write('4')
             if result.returncode != 0:
                 raise subprocess.CalledProcessError(result.returncode, str(script_path))
-
+            self.stdout.write('3')
             self.stdout.write('Restoration successful.')
 
         except (ProgrammingError, OperationalError):

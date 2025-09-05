@@ -38,6 +38,11 @@ class Command(BaseCommand):
 
             For use in the non-Apache development environment.
             """
+            print('**************************************************************************')
+            print(APACHE_PATH)
+            print('**************************************************************************')
+            print('**************************************************************************')
+
             try:
                 # Generate the TLS Server Credential
                 generator = TlsServerCredentialGenerator(

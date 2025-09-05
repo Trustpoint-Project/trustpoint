@@ -21,7 +21,8 @@ RUN apt-get update && \
         gettext \
         cron \
         locales \
-        postgresql-client && \
+        postgresql-client \
+        procps && \
     rm -rf /var/lib/apt/lists/*
 
 # Set locale Settings
@@ -65,7 +66,7 @@ RUN mkdir -p /etc/trustpoint/ && \
     cp -r /var/www/html/trustpoint/docker/trustpoint/* /etc/trustpoint/ && \
     chown -R root:root /etc/trustpoint/ && \
     chmod -R 755 /etc/trustpoint/
-
+COPY ./docker/trustpoint/wizard/state/ /etc/trustpoint/wizard/state/
 # Add cron setup
 RUN chmod +x /etc/trustpoint/notifications/execute_notifications.sh && \
     cp /etc/trustpoint/notifications/crontab.txt /etc/cron.d/execute_notifications && \
@@ -89,13 +90,21 @@ RUN mkdir -p /etc/trustpoint/secrets && \
     chown -R www-data:www-data /etc/trustpoint/secrets && \
     chmod -R 700 /etc/trustpoint/secrets
 
-#  COPY NGINX CONFIGURATION (now nginx is installed)
+# NGINX CONFIGURATION
+RUN rm -f /etc/nginx/sites-enabled/*
 COPY ./docker/trustpoint/nginx/trustpoint-nginx.conf /etc/nginx/sites-available/trustpoint
-RUN rm -f /etc/nginx/sites-enabled/default
+
+
+# Debug: Verify the file exists
+RUN ls -la /etc/nginx/sites-available/ && \
+    echo "=== Contents of trustpoint config ===" && \
+    cat /etc/nginx/sites-available/trustpoint || echo "File not found!"
+
 
 
 RUN chmod +x /etc/trustpoint/wizard/transition/*.sh
-
+COPY ./docker/trustpoint/wizard/sudoers /etc/sudoers
+RUN chown root:root /etc/sudoers && chmod 440 /etc/sudoers && cat /etc/sudoers
 #  USE NGINX ENTRYPOINT
 RUN chmod +x ./docker/trustpoint/entrypoint.sh
 
