@@ -37,9 +37,6 @@ def test_device(test_domain: DomainModel) -> DeviceModel:
         common_name='test-device-1',
         serial_number='TEST123456',
         domain=test_domain,
-        onboarding_status=DeviceModel.OnboardingStatus.NO_ONBOARDING,
-        onboarding_protocol=DeviceModel.OnboardingProtocol.EST_PASSWORD,
-        pki_protocol=DeviceModel.PkiProtocol.EST_PASSWORD,
     )
     return typing.cast('DeviceModel', device)
 

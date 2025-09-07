@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = "==3.12.*"
 
 [[package]]
@@ -13,41 +13,41 @@ wheels = [
 
 [[package]]
 name = "allure-behave"
-version = "2.14.2"
+version = "2.14.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "allure-python-commons" },
     { name = "behave" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/98/40/70cd8c95edfbdff9acd243df59512805f4dfa21291ae3df259319e7169a8/allure_behave-2.14.2.tar.gz", hash = "sha256:b145a838150cd2cdf6288b1922a855e4c6fb11ad0c950cd0f17146d1ea83adf4", size = 11563, upload-time = "2025-05-06T17:03:58.924Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/03/54/c736cb615961221ac3e89de451c162705f2ca4f67c50ea05e4d97ec034d8/allure_behave-2.14.3.tar.gz", hash = "sha256:71f8e3e215b5e525407ed95478a33bb8a345c71dc40ad42136b887661c073921", size = 11561, upload-time = "2025-06-09T14:34:31.685Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3c/27/696764b87750dacc92fd8736805e735fbe086a583c3f8afc27cb707784a4/allure_behave-2.14.2-py3-none-any.whl", hash = "sha256:159a54eee88e6117017160a565af18fd1c2c46fa5d0da993aa75e97a47d3d352", size = 8040, upload-time = "2025-05-06T17:03:57.639Z" },
+    { url = "https://files.pythonhosted.org/packages/fa/aa/dd92b582518e06246bfd6a801ee93afa3bfd42c24cd4617b2ee4e66e57ef/allure_behave-2.14.3-py3-none-any.whl", hash = "sha256:dba231278ef8e05e040eaeb5b38fb3093cf1956d4a3bb88b8d793f56f22ad96b", size = 8042, upload-time = "2025-06-09T14:34:30.309Z" },
 ]
 
 [[package]]
 name = "allure-pytest"
-version = "2.14.2"
+version = "2.14.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "allure-python-commons" },
     { name = "pytest" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d6/f4/59d3d3ca7cbcdb5efae990072f6b4aafebff524237fa277c14daac8b84f8/allure_pytest-2.14.2.tar.gz", hash = "sha256:d387492178d27805863d95350bdc38b7feca3ed7165841997630fd4073cc9101", size = 17153, upload-time = "2025-05-06T17:04:07.395Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/17/e4/5dc0ead5e16d4ae95ec5312bbdc68bf1e4498585afd3299850592c94ba2a/allure_pytest-2.14.3.tar.gz", hash = "sha256:6d02a129867c7ef8b6943721d2be3141e3d1c3551741aff17b6afee64cd92b60", size = 17064, upload-time = "2025-06-09T14:34:37.576Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f3/bb/d6b28ee5cced087a171715945e578bd6f2c0a32e6bbbd3578fe701f7ae4c/allure_pytest-2.14.2-py3-none-any.whl", hash = "sha256:18f3baa9ebd1b6148223cfa898bacfc2794bb9446221adac1be71deeb26ed79a", size = 11673, upload-time = "2025-05-06T17:04:06.406Z" },
+    { url = "https://files.pythonhosted.org/packages/77/85/25cec4a0ec38fa564b26cbc2e60e02b2801c4c6e3d35f5d7b253319864b8/allure_pytest-2.14.3-py3-none-any.whl", hash = "sha256:9704dea12f98991bc9e13be4ce9f90fe703beaff90e4741d67ae64c9815336c5", size = 11582, upload-time = "2025-06-09T14:34:36.756Z" },
 ]
 
 [[package]]
 name = "allure-python-commons"
-version = "2.14.2"
+version = "2.14.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "pluggy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d0/79/53fe62ff56fa1f972b9fcbc46d04687786907cecc40b412421c4554d3734/allure_python_commons-2.14.2.tar.gz", hash = "sha256:7acdc4fe3efbe709604895e2393f082b2659d8e5653e77ff6367682e6e4a41bc", size = 15186, upload-time = "2025-05-06T17:03:55.04Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/61/c5/8c1cc8d4216ad2266fa16d020fafa8c4cfe67ed8c23a3ce74ea0c1e8d392/allure_python_commons-2.14.3.tar.gz", hash = "sha256:2dcaa87dd6b0b41902f60fe17e2653d3762788f3998ca4cf721dabfa8342aa07", size = 15190, upload-time = "2025-06-09T14:34:27.937Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d5/b7/41b4323f65911b216a616087c37a8fd337d2cd92f7b8fa89bc35cb91cd1d/allure_python_commons-2.14.2-py3-none-any.whl", hash = "sha256:ad50385a4c601ec31c86eed773d8ccfdcc687fecbb6535c9768af3bf03b50a19", size = 16191, upload-time = "2025-05-06T17:03:53.564Z" },
+    { url = "https://files.pythonhosted.org/packages/4f/52/ed2029f1cd2c0b08040a85ef86f32af89ff70199ddecd5a4220c4043975d/allure_python_commons-2.14.3-py3-none-any.whl", hash = "sha256:7bcf6a2eff69e6f0eacd8681e923f0a9dfbdd86cb8e20d8f93288057f9fb7cb1", size = 16195, upload-time = "2025-06-09T14:34:27.006Z" },
 ]
 
 [[package]]
@@ -166,30 +166,30 @@ wheels = [
 
 [[package]]
 name = "behave-django"
-version = "1.5.0"
+version = "1.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "behave" },
     { name = "django" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/be/17/f6ac6e7a78ff7180b9e5821b4a31bbc74b0a5473716e7287b1880248b5fd/behave_django-1.5.0.tar.gz", hash = "sha256:e1c4d7e02ad6343a862246fb20ed9f850aa678d61497aad378b67d9b659f3f59", size = 16102, upload-time = "2024-10-03T18:43:47.637Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ca/2d/0991fc8a6415833f47e6e7a195de6d2475a69e23299107c114c89ab8dab2/behave_django-1.6.0.tar.gz", hash = "sha256:189542fd45784a90c182ec300b1d8241bbe142bfd99df70f17d4b013e5a65861", size = 15802, upload-time = "2025-06-14T21:57:15.348Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c2/2e/d16641b62aa7c4f5275ac5817179a538f5284553d9f4a6de6b0d8b64c74b/behave_django-1.5.0-py3-none-any.whl", hash = "sha256:d1cbbd922000109733979863fdc3a947c52754e529d7255c21b1760828bdd4e5", size = 12393, upload-time = "2024-10-03T18:43:45.866Z" },
+    { url = "https://files.pythonhosted.org/packages/94/95/74e5731e792ce6ab3d92db6af6fc6132b9d65a516d161e97f97b041e137d/behave_django-1.6.0-py3-none-any.whl", hash = "sha256:df85a15ef97e80f30a1aa7c00903d66a057366a283f834fca8cc94dca23ff1cf", size = 12122, upload-time = "2025-06-14T21:57:14.083Z" },
 ]
 
 [[package]]
 name = "behave-html-pretty-formatter"
-version = "1.13"
+version = "1.14.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "behave" },
     { name = "dominate" },
     { name = "markdown" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4a/34/60375b5dcb7113cd87aa3369aaffb12581fb1c154b97875b6b49f9fd8bc5/behave_html_pretty_formatter-1.13.tar.gz", hash = "sha256:be6a7869f53b8c9c248de69d0c62986f303ea721eec0feca458ff8c6e2dfe886", size = 71945, upload-time = "2025-05-30T14:24:30.785Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5b/10/904cf2df801c9fce85ddfb2d1534e195a9f0b8020896a18d5a1e2bfa61ce/behave_html_pretty_formatter-1.14.1.tar.gz", hash = "sha256:fae5a96613f61046510c6418accd06dbcd212b698cc28042039dc3ee5d2c0a5f", size = 72963, upload-time = "2025-06-30T07:32:37.639Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e3/32/2da75c8c2c842887ee3175e515ad22e2ceede71b842247c4ab8f8099721e/behave_html_pretty_formatter-1.13-py3-none-any.whl", hash = "sha256:83d414cdc5ec9cceba81ce247ae82f1bd55f79e87d90d01a042fdcb92de071eb", size = 57690, upload-time = "2025-05-30T14:24:29.258Z" },
+    { url = "https://files.pythonhosted.org/packages/75/b7/6db8095325906f2fbe88d5181517cede1b2f925fc456dd9b3b22537df01d/behave_html_pretty_formatter-1.14.1-py3-none-any.whl", hash = "sha256:f9e8e3fde9b3ffdde3d8e506ac69e18ed94ff2812d77203764b73fd5e089a832", size = 58394, upload-time = "2025-06-30T07:32:36.659Z" },
 ]
 
 [[package]]
@@ -378,16 +378,16 @@ wheels = [
 
 [[package]]
 name = "django"
-version = "5.1.9"
+version = "5.2.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "asgiref" },
     { name = "sqlparse" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/10/08/2e6f05494b3fc0a3c53736846034f882b82ee6351791a7815bbb45715d79/django-5.1.9.tar.gz", hash = "sha256:565881bdd0eb67da36442e9ac788bda90275386b549070d70aee86327781a4fc", size = 10710887, upload-time = "2025-05-07T14:06:45.257Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9c/7e/034f0f9fb10c029a02daaf44d364d6bf2eced8c73f0d38c69da359d26b01/django-5.2.4.tar.gz", hash = "sha256:a1228c384f8fa13eebc015196db7b3e08722c5058d4758d20cb287503a540d8f", size = 10831909, upload-time = "2025-07-02T18:47:39.19Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e1/d1/d8b6b8250b84380d5a123e099ad3298a49407d81598faa13b43a2c6d96d7/django-5.1.9-py3-none-any.whl", hash = "sha256:2fd1d4a0a66a5ba702699eb692e75b0d828b73cc2f4e1fc4b6a854a918967411", size = 8277363, upload-time = "2025-05-07T14:06:37.426Z" },
+    { url = "https://files.pythonhosted.org/packages/14/ae/706965237a672434c8b520e89a818e8b047af94e9beb342d0bee405c26c7/django-5.2.4-py3-none-any.whl", hash = "sha256:60c35bd96201b10c6e7a78121bd0da51084733efa303cc19ead021ab179cef5e", size = 8302187, upload-time = "2025-07-02T18:47:35.373Z" },
 ]
 
 [[package]]
@@ -441,18 +441,17 @@ wheels = [
 
 [[package]]
 name = "django-stubs"
-version = "5.1.3"
+version = "5.2.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "asgiref" },
     { name = "django" },
     { name = "django-stubs-ext" },
     { name = "types-pyyaml" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/dd/48/e733ceff94ed3c4ccba4c2f0708739974bbcdbcfb69efefb87b10780937f/django_stubs-5.1.3.tar.gz", hash = "sha256:8c230bc5bebee6da282ba8a27ad1503c84a0c4cd2f46e63d149e76d2a63e639a", size = 267390, upload-time = "2025-02-07T09:56:59.773Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/bc/27/ab9813da817a29ae69ec92af31ad8fc58ce3c904f23ea604bd3bdd9adc37/django_stubs-5.2.2.tar.gz", hash = "sha256:2a04b510c7a812f88223fd7e6d87fb4ea98717f19c8e5c8b59691d83ad40a8a6", size = 243049, upload-time = "2025-07-17T08:35:02.747Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/74/94/3551a181faf44a63a4ef1ab8e0eb7f27f6af168c2f719ea482e54b39d237/django_stubs-5.1.3-py3-none-any.whl", hash = "sha256:716758ced158b439213062e52de6df3cff7c586f9f9ad7ab59210efbea5dfe78", size = 472753, upload-time = "2025-02-07T09:56:57.291Z" },
+    { url = "https://files.pythonhosted.org/packages/55/cb/bb387a1d40691ad54fec2be9e5093becebd63cca0ccb9348cbb27602e1d1/django_stubs-5.2.2-py3-none-any.whl", hash = "sha256:79bd0fdbc78958a8f63e0b062bd9d03f1de539664476c0be62ade5f063c9e41e", size = 485188, upload-time = "2025-07-17T08:35:00.356Z" },
 ]
 
 [package.optional-dependencies]
@@ -462,15 +461,15 @@ compatible-mypy = [
 
 [[package]]
 name = "django-stubs-ext"
-version = "5.2.0"
+version = "5.2.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7c/7a/84338605817960942c1ea9d852685923ccccd0d91ba0d49532605973491f/django_stubs_ext-5.2.0.tar.gz", hash = "sha256:00c4ae307b538f5643af761a914c3f8e4e3f25f4e7c6d7098f1906c0d8f2aac9", size = 9618, upload-time = "2025-04-26T10:48:38.05Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fc/06/5e94715d103e6cc72380cb0d0b6682a7d5ad2c366cee478c94d77aad777d/django_stubs_ext-5.2.2.tar.gz", hash = "sha256:d9d151b919fe2438760f5bd938f03e1cb08c84d0651f9e5917f1313907e42683", size = 6244, upload-time = "2025-07-17T08:34:35.054Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e2/65/9f5ca467d84a67c0c547f10b0ece9fd9c26c5efc818a01bf6a3d306c2a0c/django_stubs_ext-5.2.0-py3-none-any.whl", hash = "sha256:b27ae0aab970af4894ba4e9b3fcd3e03421dc8731516669659ee56122d148b23", size = 9066, upload-time = "2025-04-26T10:48:36.032Z" },
+    { url = "https://files.pythonhosted.org/packages/4e/38/2903676f97f7902ee31984a06756b0e8836e897f4b617e1a03be4a43eb4f/django_stubs_ext-5.2.2-py3-none-any.whl", hash = "sha256:8833bbe32405a2a0ce168d3f75a87168f61bd16939caf0e8bf173bccbd8a44c5", size = 8816, upload-time = "2025-07-17T08:34:33.715Z" },
 ]
 
 [[package]]
@@ -604,11 +603,11 @@ wheels = [
 
 [[package]]
 name = "markdown"
-version = "3.8"
+version = "3.8.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/2f/15/222b423b0b88689c266d9eac4e61396fe2cc53464459d6a37618ac863b24/markdown-3.8.tar.gz", hash = "sha256:7df81e63f0df5c4b24b7d156eb81e4690595239b7d70937d0409f1b0de319c6f", size = 360906, upload-time = "2025-04-11T14:42:50.928Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d7/c2/4ab49206c17f75cb08d6311171f2d65798988db4360c4d1485bd0eedd67c/markdown-3.8.2.tar.gz", hash = "sha256:247b9a70dd12e27f67431ce62523e675b866d254f900c4fe75ce3dda62237c45", size = 362071, upload-time = "2025-06-19T17:12:44.483Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/51/3f/afe76f8e2246ffbc867440cbcf90525264df0e658f8a5ca1f872b3f6192a/markdown-3.8-py3-none-any.whl", hash = "sha256:794a929b79c5af141ef5ab0f2f642d0f7b1872981250230e72682346f7cc90dc", size = 106210, upload-time = "2025-04-11T14:42:49.178Z" },
+    { url = "https://files.pythonhosted.org/packages/96/2b/34cc11786bc00d0f04d0f5fdc3a2b1ae0b6239eef72d3d345805f9ad92a1/markdown-3.8.2-py3-none-any.whl", hash = "sha256:5c83764dbd4e00bdd94d85a19b8d55ccca20fe35b2e678a1422b380324dd5f24", size = 106827, upload-time = "2025-06-19T17:12:42.994Z" },
 ]
 
 [[package]]
@@ -643,21 +642,22 @@ wheels = [
 
 [[package]]
 name = "mypy"
-version = "1.15.0"
+version = "1.17.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "mypy-extensions" },
+    { name = "pathspec" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ce/43/d5e49a86afa64bd3839ea0d5b9c7103487007d728e1293f52525d6d5486a/mypy-1.15.0.tar.gz", hash = "sha256:404534629d51d3efea5c800ee7c42b72a6554d6c400e6a79eafe15d11341fd43", size = 3239717, upload-time = "2025-02-05T03:50:34.655Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1e/e3/034322d5a779685218ed69286c32faa505247f1f096251ef66c8fd203b08/mypy-1.17.0.tar.gz", hash = "sha256:e5d7ccc08ba089c06e2f5629c660388ef1fee708444f1dee0b9203fa031dee03", size = 3352114, upload-time = "2025-07-14T20:34:30.181Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/98/3a/03c74331c5eb8bd025734e04c9840532226775c47a2c39b56a0c8d4f128d/mypy-1.15.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:aea39e0583d05124836ea645f412e88a5c7d0fd77a6d694b60d9b6b2d9f184fd", size = 10793981, upload-time = "2025-02-05T03:50:28.25Z" },
-    { url = "https://files.pythonhosted.org/packages/f0/1a/41759b18f2cfd568848a37c89030aeb03534411eef981df621d8fad08a1d/mypy-1.15.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:2f2147ab812b75e5b5499b01ade1f4a81489a147c01585cda36019102538615f", size = 9749175, upload-time = "2025-02-05T03:50:13.411Z" },
-    { url = "https://files.pythonhosted.org/packages/12/7e/873481abf1ef112c582db832740f4c11b2bfa510e829d6da29b0ab8c3f9c/mypy-1.15.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:ce436f4c6d218a070048ed6a44c0bbb10cd2cc5e272b29e7845f6a2f57ee4464", size = 11455675, upload-time = "2025-02-05T03:50:31.421Z" },
-    { url = "https://files.pythonhosted.org/packages/b3/d0/92ae4cde706923a2d3f2d6c39629134063ff64b9dedca9c1388363da072d/mypy-1.15.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:8023ff13985661b50a5928fc7a5ca15f3d1affb41e5f0a9952cb68ef090b31ee", size = 12410020, upload-time = "2025-02-05T03:48:48.705Z" },
-    { url = "https://files.pythonhosted.org/packages/46/8b/df49974b337cce35f828ba6fda228152d6db45fed4c86ba56ffe442434fd/mypy-1.15.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:1124a18bc11a6a62887e3e137f37f53fbae476dc36c185d549d4f837a2a6a14e", size = 12498582, upload-time = "2025-02-05T03:49:03.628Z" },
-    { url = "https://files.pythonhosted.org/packages/13/50/da5203fcf6c53044a0b699939f31075c45ae8a4cadf538a9069b165c1050/mypy-1.15.0-cp312-cp312-win_amd64.whl", hash = "sha256:171a9ca9a40cd1843abeca0e405bc1940cd9b305eaeea2dda769ba096932bb22", size = 9366614, upload-time = "2025-02-05T03:50:00.313Z" },
-    { url = "https://files.pythonhosted.org/packages/09/4e/a7d65c7322c510de2c409ff3828b03354a7c43f5a8ed458a7a131b41c7b9/mypy-1.15.0-py3-none-any.whl", hash = "sha256:5469affef548bd1895d86d3bf10ce2b44e33d86923c29e4d675b3e323437ea3e", size = 2221777, upload-time = "2025-02-05T03:50:08.348Z" },
+    { url = "https://files.pythonhosted.org/packages/12/e9/e6824ed620bbf51d3bf4d6cbbe4953e83eaf31a448d1b3cfb3620ccb641c/mypy-1.17.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:f986f1cab8dbec39ba6e0eaa42d4d3ac6686516a5d3dccd64be095db05ebc6bb", size = 11086395, upload-time = "2025-07-14T20:34:11.452Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/51/a4afd1ae279707953be175d303f04a5a7bd7e28dc62463ad29c1c857927e/mypy-1.17.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:51e455a54d199dd6e931cd7ea987d061c2afbaf0960f7f66deef47c90d1b304d", size = 10120052, upload-time = "2025-07-14T20:33:09.897Z" },
+    { url = "https://files.pythonhosted.org/packages/8a/71/19adfeac926ba8205f1d1466d0d360d07b46486bf64360c54cb5a2bd86a8/mypy-1.17.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:3204d773bab5ff4ebbd1f8efa11b498027cd57017c003ae970f310e5b96be8d8", size = 11861806, upload-time = "2025-07-14T20:32:16.028Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/64/d6120eca3835baf7179e6797a0b61d6c47e0bc2324b1f6819d8428d5b9ba/mypy-1.17.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:1051df7ec0886fa246a530ae917c473491e9a0ba6938cfd0ec2abc1076495c3e", size = 12744371, upload-time = "2025-07-14T20:33:33.503Z" },
+    { url = "https://files.pythonhosted.org/packages/1f/dc/56f53b5255a166f5bd0f137eed960e5065f2744509dfe69474ff0ba772a5/mypy-1.17.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:f773c6d14dcc108a5b141b4456b0871df638eb411a89cd1c0c001fc4a9d08fc8", size = 12914558, upload-time = "2025-07-14T20:33:56.961Z" },
+    { url = "https://files.pythonhosted.org/packages/69/ac/070bad311171badc9add2910e7f89271695a25c136de24bbafc7eded56d5/mypy-1.17.0-cp312-cp312-win_amd64.whl", hash = "sha256:1619a485fd0e9c959b943c7b519ed26b712de3002d7de43154a489a2d0fd817d", size = 9585447, upload-time = "2025-07-14T20:32:20.594Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/fc/ee058cc4316f219078464555873e99d170bde1d9569abd833300dbeb484a/mypy-1.17.0-py3-none-any.whl", hash = "sha256:15d9d0018237ab058e5de3d8fce61b6fa72cc59cc78fd91f1b474bce12abf496", size = 2283195, upload-time = "2025-07-14T20:31:54.753Z" },
 ]
 
 [[package]]
@@ -1270,7 +1270,7 @@ wheels = [
 
 [[package]]
 name = "trustpoint"
-version = "0.3.0.dev2"
+version = "0.3.0.dev1"
 source = { editable = "." }
 dependencies = [
     { name = "crispy-bootstrap5" },
@@ -1327,11 +1327,11 @@ docs = [
 requires-dist = [
     { name = "crispy-bootstrap5", specifier = "~=2025.4" },
     { name = "cryptography", specifier = ">=45.0.2" },
-    { name = "django", specifier = "~=5.1.8" },
+    { name = "django", specifier = ">=5.2.4" },
     { name = "django-crispy-forms", specifier = "~=2.3" },
     { name = "django-dbbackup", specifier = ">=4.2.1" },
     { name = "django-filter", specifier = "~=25.1" },
-    { name = "django-stubs", extras = ["compatible-mypy"], specifier = "==5.1.3" },
+    { name = "django-stubs", extras = ["compatible-mypy"], specifier = ">=5.2.2" },
     { name = "django-taggit", specifier = ">=6.1.0,<7" },
     { name = "packaging", specifier = ">=25.0" },
     { name = "paramiko", specifier = ">=3.5.1" },
@@ -1346,12 +1346,12 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "allure-behave", specifier = ">=2.14.2" },
-    { name = "allure-pytest", specifier = ">=2.14.2" },
+    { name = "allure-behave", specifier = ">=2.14.3" },
+    { name = "allure-pytest", specifier = ">=2.14.3" },
     { name = "beautifulsoup4", specifier = ">=4.13.4" },
     { name = "behave", specifier = ">=1.2.7.dev6" },
-    { name = "behave-django", specifier = ">=1.5.0" },
-    { name = "behave-html-pretty-formatter", specifier = ">=1.12.7" },
+    { name = "behave-django", specifier = ">=1.6.0" },
+    { name = "behave-html-pretty-formatter", specifier = ">=1.14.1" },
     { name = "devtools", specifier = ">=0.12.2,<0.13" },
     { name = "django-extensions", specifier = ">=4.1" },
     { name = "docutils-stubs", specifier = ">=0.0.22,<0.0.23" },

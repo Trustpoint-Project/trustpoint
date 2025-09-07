@@ -2,7 +2,7 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, backup, logging, settings, tls
+from .views import IndexView, backup, help_support, logging, settings, tls
 
 app_name = 'management'
 urlpatterns = [
@@ -56,4 +56,5 @@ urlpatterns = [
         name='backup-download-multiple'
     ),
     path('backups/delete-multiple/', backup.BackupFilesDeleteMultipleView.as_view(), name='backup-delete-multiple'),
+    path('help/', help_support.HelpView.as_view(), name='help'),
 ]

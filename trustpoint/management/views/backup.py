@@ -19,7 +19,7 @@ from util.sftp import SftpClient, SftpError
 
 from management.forms import BackupOptionsForm
 from management.models import BackupOptions
-from trustpoint.views.base import SortableTableMixin
+from trustpoint.views.base import SortableTableFromListMixin
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ def create_db_backup(path: Path) -> str:
     return filename
 
 
-class BackupManageView(SortableTableMixin, ListView[Any]):
+class BackupManageView(SortableTableFromListMixin, ListView[Any]):
     """Display existing backups and handle backup-related actions.
 
     GET:

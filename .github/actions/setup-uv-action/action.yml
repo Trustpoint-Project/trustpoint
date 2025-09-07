@@ -15,7 +15,7 @@ runs:
         cache-dependency-glob: "uv.lock" # Invalidate cache when the lockfile changes.
 
     - name: Set up Python
-      uses: actions/setup-python@v5  # Sets up Python environment.
+      uses: actions/setup-python@v6  # Sets up Python environment.
       with:
         python-version-file: "pyproject.toml"  # Ensures the correct Python version is used.
 
