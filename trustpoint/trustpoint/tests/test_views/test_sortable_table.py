@@ -6,10 +6,10 @@ from django.db.models import Model, QuerySet
 from django.http import HttpRequest
 from django.test import RequestFactory, TestCase
 
-from trustpoint.views.base import SortableTableMixin
+from trustpoint.views.base import SortableTableMixin, SortableTableFromListMixin
 
 
-class SortableTableView(SortableTableMixin):
+class AbstractSortableTableView:
     """Simple view class inheriting from SortableTableMixin."""
 
     def __init__(self,
@@ -26,6 +26,14 @@ class SortableTableView(SortableTableMixin):
     def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
         """Call get_context_data from SortableTableMixin."""
         return super().get_context_data(**kwargs)
+    
+
+class SortableTableView(AbstractSortableTableView, SortableTableMixin):
+    """Concrete view class for testing SortableTableMixin."""
+
+
+class SortableTableFromListView(AbstractSortableTableView, SortableTableFromListMixin):
+    """Concrete view class for testing SortableTableFromListMixin."""
 
 
 class TestSortableTableMixin(TestCase):
@@ -76,7 +84,7 @@ class TestSortableTableMixin(TestCase):
 
     def test_sort_list_of_dicts(self) -> None:
         """Test sorting of a list of dictionaries."""
-        view = SortableTableView(queryset=self.device_list, default_sort_param='common_name')
+        view = SortableTableFromListView(queryset=self.device_list, default_sort_param='common_name')
         view.request = self.factory.get('/?sort=common_name')
 
         sorted_list = view.get_queryset()
@@ -85,7 +93,7 @@ class TestSortableTableMixin(TestCase):
 
     def test_sort_list_of_dicts_descending(self) -> None:
         """Test sorting of a list of dictionaries in descending order."""
-        view = SortableTableView(queryset=self.device_list, default_sort_param='common_name')
+        view = SortableTableFromListView(queryset=self.device_list, default_sort_param='common_name')
         view.request = self.factory.get('/?sort=-common_name')
 
         sorted_list = view.get_queryset()
@@ -95,7 +103,7 @@ class TestSortableTableMixin(TestCase):
 
     def test_default_sort_param(self) -> None:
         """Test sorting using the default sort parameter."""
-        view = SortableTableView(queryset=self.device_list, default_sort_param='serial_number')
+        view = SortableTableFromListView(queryset=self.device_list, default_sort_param='serial_number')
         view.request = self.factory.get('/')  # No sort parameter in the URL
 
         sorted_list = view.get_queryset()

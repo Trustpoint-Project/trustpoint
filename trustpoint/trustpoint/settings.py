@@ -189,6 +189,8 @@ TIME_ZONE = 'UTC'
 
 # Application definition
 INSTALLED_APPS = [
+    'help_pages.apps.HelpPagesConfig',
+    'shared.apps.SharedConfig',
     'setup_wizard.apps.SetupWizardConfig',
     'users.apps.UsersConfig',
     'home.apps.HomeConfig',

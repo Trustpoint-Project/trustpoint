@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+  pull_request:
+    types:
+      - reopened
+      - ready_for_review
+      - synchronize
 
 jobs:
   sbom:
@@ -12,46 +17,37 @@ jobs:
 
     steps:
     - name: Checkout Trustpoint repo
-      uses: actions/checkout@v3
+      uses: actions/checkout@v5
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-
-    - name: Install CycloneDX CLI
+    - name: Install Syft
       run: |
-        pip install cyclonedx-bom
+        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+    
+    - name: Build Trustpoint Docker image
+      run: docker build -t trustpoint:latest -f docker/trustpoint/Dockerfile .
+    
+    - name: Generate CycloneDX SBOM
+      run: syft trustpoint:latest -o cyclonedx-json=sbom_cyclonedx.json
 
-    - name: Generate SBOM (from environment)
+    - name: Generate SPDX SBOM
+      run: syft trustpoint:latest -o spdx-json=sbom_spdx.json
+
+    - name: Check if CycloneDX SBOM file exists
       run: |
-        cyclonedx-py env -o sbom_cyclonedx.json
+        ls -lh sbom_cyclonedx.json
 
-    - name: Create and push branch with SBOM
+    - name: Check if SPDX SBOM file exists
       run: |
-        git config user.name "github-actions"
-        git config user.email "github-actions@github.com"
+        ls -lh sbom_spdx.json
 
-        BRANCH_NAME=update-sbom-${{ github.run_id }}
-        git checkout -b $BRANCH_NAME
-        git add sbom_cyclonedx.json
-        git commit -m "Update SBOM (sbom_cyclonedx.json) [CI]" || echo "No changes to commit"
-        git push origin $BRANCH_NAME
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Create Pull Request
-      uses: peter-evans/create-pull-request@v5
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        branch: update-sbom-${{ github.run_id }}
-        title: "Update SBOM (sbom_cyclonedx.json) [CI]"
-        body: |
-          This PR updates the CycloneDX SBOM file automatically.
-        commit-message: "Update SBOM (sbom_cyclonedx.json) [CI]"
-
-    - name: Upload SBOM artifact
+    - name: Upload CycloneDX SBOM
       uses: actions/upload-artifact@v4
       with:
-        name: trustpoint-sbom
+        name: sbom-cyclonedx
         path: sbom_cyclonedx.json
+
+    - name: Upload SPDX SBOM
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom-spdx
+        path: sbom_spdx.json

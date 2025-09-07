@@ -7,7 +7,7 @@ from pki.models import DomainModel, IssuingCaModel
 from pki.util.x509 import CertificateGenerator
 
 from devices.issuer import LocalDomainCredentialIssuer
-from devices.models import DeviceModel, RemoteDeviceCredentialDownloadModel
+from devices.models import DeviceModel, NoOnboardingConfigModel, NoOnboardingPkiProtocol, RemoteDeviceCredentialDownloadModel
 
 
 @pytest.fixture(autouse=True)
@@ -35,12 +35,20 @@ def create_mock_models() -> dict[str, Any]:
     mock_domain = DomainModel(unique_name='test_domain', issuing_ca=mock_ca)
     mock_domain.save()
 
+    no_onboarding_pki_protocols = [
+        NoOnboardingPkiProtocol.MANUAL
+    ]
+    no_onboarding_config_model = NoOnboardingConfigModel()
+    no_onboarding_config_model.set_pki_protocols(no_onboarding_pki_protocols)
+
+    no_onboarding_config_model.full_clean()
+    no_onboarding_config_model.save()
+
     mock_device = DeviceModel(
         common_name='test_device',
         serial_number='1234567890',
         domain=mock_domain,
-        onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
-        onboarding_status=DeviceModel.OnboardingStatus.PENDING,
+        no_onboarding_config=no_onboarding_config_model,
     )
     mock_device.save()
 
