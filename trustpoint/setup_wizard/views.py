@@ -281,6 +281,7 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
             HttpResponse: A redirect response to the appropriate page or
                           the next handler in the dispatch chain.
         """
+
         if not DOCKER_CONTAINER:
             return redirect('users:login', permanent=False)
 
@@ -325,7 +326,9 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
             active_tls.credential = trustpoint_tls_server_credential
             active_tls.save()
 
-            execute_shell_script(SCRIPT_WIZARD_INITIAL)
+            # true during setup wizard phase
+            if not self.request.user.is_authenticated:
+                execute_shell_script(SCRIPT_WIZARD_INITIAL)
 
             messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential generated successfully.')
 

@@ -1,0 +1,1 @@
+"""Managment App Init."""

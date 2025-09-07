@@ -26,7 +26,7 @@ from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.detail import DetailView
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from settings.models import TlsSettings
+from management.models import TlsSettings
 
 from help_pages.commands import (
     CmpClientCertificateCommandBuilder,
