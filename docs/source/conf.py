@@ -13,10 +13,10 @@ BUILD_AUTODOCS = True
 # -- Path setup -------------------------------------------------------------
 # Ensures Sphinx can find the project's modules for autodoc and autoapi.
 # Get absolute path to project root
-project_root = Path(__file__).parents[1].resolve()
+project_root = Path(__file__).parents[2].resolve()
 
 # Add the `trustpoint/features` directory to the Sphinx path
-feature_path = project_root / 'features'
+feature_path = project_root / 'trustpoint' / 'features'
 
 sys.path.insert(0, str(feature_path))
 
