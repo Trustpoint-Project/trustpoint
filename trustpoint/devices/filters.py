@@ -1,4 +1,7 @@
-# devices/filters.py
+"""Devices filters.
+
+Defines the `DeviceFilter` used to filter the devices list view.
+"""
 import django_filters
 from django import forms
 from django.utils.translation import gettext_lazy as _
@@ -8,6 +11,13 @@ from devices.models import DeviceModel
 
 
 class DeviceFilter(django_filters.FilterSet):
+    """FilterSet for the devices list page.
+
+    Exposes three fields:
+      * common_name: case-insensitive substring match
+      * serial_number: case-insensitive substring match
+      * domain: exact match via dropdown
+    """
     common_name = django_filters.CharFilter(
         label='Device',
         lookup_expr='icontains',
@@ -32,9 +42,7 @@ class DeviceFilter(django_filters.FilterSet):
 
 
     class Meta:
+        """Meta class configuration."""
+
         model = DeviceModel
-        fields = [
-            'common_name',
-            'domain',
-            'serial_number',
-        ]
+        fields = ('common_name', 'domain', 'serial_number')
