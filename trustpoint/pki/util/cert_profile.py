@@ -10,7 +10,6 @@ import enum
 import logging
 from typing import Any, Literal
 
-from pki.util.ext_oids import CertificateExtensionOid  # temp
 from pydantic import (
     AliasChoices,
     BaseModel,
@@ -19,6 +18,8 @@ from pydantic import (
     field_validator,
 )
 from trustpoint_core.oid import NameOid
+
+from pki.util.ext_oids import CertificateExtensionOid  # temp
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ class BasicConstraintsExtensionModel(BaseExtensionModel):
 
     model_config = ConfigDict(extra='forbid')
 
-class SanExtensionModel(BaseExtensionModel):
+class SanExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
     """Model for the SAN extension of a certificate profile."""
     dns_names: list[str] | ProfileValuePropertyModel | None = None
     ip_addresses: list[str] | ProfileValuePropertyModel | None = None
@@ -179,11 +180,14 @@ class CertProfileBaseModel(BaseModel):
 class ProfileSubjectModel(SubjectModel, CertProfileBaseModel):
     """Model for the subject DN of a certificate profile, with profile constraints."""
 
+class ProfileExtensionsModel(ExtensionsModel, CertProfileBaseModel):
+    """Model for the extensions of a certificate profile, with profile constraints."""
+
 class CertProfileModel(CertProfileBaseModel):
     """Model for a certificate profile."""
     type: Literal['cert_profile']
     subject: ProfileSubjectModel | None = Field(alias='subj', default=None)
-    extensions: ExtensionsModel | None = Field(alias='ext', default=None)
+    extensions: ProfileExtensionsModel | None = Field(alias='ext', default=None)
 
 
 class CertRequestModel(BaseModel):
@@ -230,11 +234,13 @@ class JSONProfileVerifier:
 
     @staticmethod
     def _is_simple_type(value: Any) -> bool:
-        """Check if the value is a simple type (not a dict, list, class).
+        """Check if the value is a simple type (not a dict, class).
 
         Excludes None, since we check it separately.
+
+        List is considered a simple type here (e.g. for SAN dns_names).
         """
-        return isinstance(value, (str, int, float, bool))
+        return isinstance(value, (str, int, float, bool, list))
 
     def _handle_request_only_fields(
             self, request: dict[str, Any], profile: dict[str, Any],

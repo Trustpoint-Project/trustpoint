@@ -28,6 +28,8 @@ def test_invalid_profile_instance() -> None:
         JSONProfileVerifier(template)
 
 
+# --- Subject field tests ---
+
 def test_prohibited_cn_present() -> None:
     """Test that a request with a prohibited CN fails verification."""
     profile = {
@@ -203,6 +205,176 @@ def test_incompatible_request_cn_no_reject_mods() -> None:
     }
     validated_request = verifier.apply_profile_to_request(request)
     assert validated_request['subject']['common_name'] == 'onlyallowed.com'
+
+
+# --- Extension tests ---
+
+def test_required_ext_absent() -> None:
+    """Test that a request missing a required extension fails verification."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': {'required': True}},
+        'reject_mods': True
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {}
+    }
+    with pytest.raises(ProfileValidationError, match="Field 'subject_alternative_name' is required but not present in the request."):
+        verifier.apply_profile_to_request(request)
+
+def test_default_ext_present_in_req() -> None:
+    """Test that the request extension takes precedence over the profile's default extension."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        #'ext': {'san': {'default': {'dns_names': ['default.example.com']}}},
+        # This variant also works:
+        'ext': {'san': {'dns_names': {"default": ['default.example.com']}}},
+        'reject_mods': False
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': {'dns_names': ['example.com']}}
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    print('Validated Request: ', validated_request)
+    assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['example.com']
+
+def test_default_ext_absent_in_req() -> None:
+    """Test that the profile's default extension is applied when the request extension is absent."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': {'default': {'dns_names': ['example.com']}}},
+        'reject_mods': False
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {}
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['example.com']
+
+def test_incompatible_ext() -> None:
+    """Test that a request with an extension incompatible with the profile and reject_mods fails verification."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': {'dns_names': ['default.example.com']}},
+        'reject_mods': True
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': {'dns_names': ['incompatible.example.com']}}
+    }
+    with pytest.raises(ProfileValidationError, match="Field 'dns_names' is not mutable in the profile."):
+        verifier.apply_profile_to_request(request)
+
+def test_incompatible_ext_extra_field() -> None:
+    """Test that a request with an extension incompatible with the profile (extra field in req) and reject_mods fails verification."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': {'dns_names': ['ok.example.com']}},
+        'reject_mods': True
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': {'dns_names': ['ok.example.com'], 'uris': ['https://not-ok.example.com']}}
+    }
+    with pytest.raises(ProfileValidationError, match="Field 'uris' is not explicitly allowed in the profile."):
+        verifier.apply_profile_to_request(request)
+
+def test_incompatible_ext_no_reject() -> None:
+    """Test that a request with an incompatible extension and no reject_mods uses the extension from the profile."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': {'dns_names': ['value.example.com']}}
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': {'dns_names': ['incompatible.example.com']}}
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['value.example.com']
+
+def test_ext_value_mutable() -> None:
+    """Test that a request with a mutable extension value passes verification."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        #'ext': {'san': {'value': {'dns_names': ['val.example.com']}, 'mutable': True}}
+        # This variant works
+        'ext': {'san': {'dns_names': ['val.example.com'], 'mutable': True}}
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': {'dns_names': ['mutable.example.com']}}
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['mutable.example.com']
+
+def test_prohibited_ext_present() -> None:
+    """Test that a request with a prohibited extension fails verification."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': None},
+        'reject_mods': True
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': {'dns_names': ['prohibited.example.com']}}
+    }
+    with pytest.raises(ProfileValidationError, match="Field 'subject_alternative_name' is prohibited in the profile."):
+        verifier.apply_profile_to_request(request)
+
+def test_not_allowed_ext_present() -> None:
+    """Test that a request with an extension not explicitely allowed by the profile fails verification."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {'allow': ['key_usage']},
+        'reject_mods': True
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': {'dns_names': ['not.allowed.example.com']}}
+    }
+    with pytest.raises(ProfileValidationError, match="Field 'subject_alternative_name' is not explicitly allowed in the profile."):
+        verifier.apply_profile_to_request(request)
+
+def test_allowed_ext_present() -> None:
+    """Test that a request with an allowed extension passes verification."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {'allow': ['san', 'key_usage']},
+        'reject_mods': True
+    }
+    verifier = JSONProfileVerifier(profile)
+    print(verifier.profile.model_dump())
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': {'dns_names': ['allowed.example.com']}}
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['allowed.example.com']
+
+
+# --- General parsing and conversion tests ---
 
 def test_request_normalization() -> None:
     """Test that a request is normalized correctly."""
