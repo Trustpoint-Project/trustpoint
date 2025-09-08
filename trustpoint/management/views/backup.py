@@ -302,18 +302,18 @@ class BackupFilesDownloadMultipleView(View):
             An HttpResponse containing the archive.
 
         Raises:
-            Redirect to settings:backups with an error if no valid files are selected.
+            Redirect to management:backups with an error if no valid files are selected.
         """
         filenames: list[str] = request.POST.getlist('selected')
         if not filenames:
             messages.error(request, 'No files selected for download.')
-            return redirect('settings:backups')
+            return redirect('management:backups')
 
         backup_dir: Path = settings.BACKUP_FILE_PATH
         valid: list[str] = [f for f in filenames if (backup_dir / f).is_file()]
         if not valid:
             messages.error(request, 'No valid files to download.')
-            return redirect('settings:backups')
+            return redirect('management:backups')
 
         buffer = io.BytesIO()
         ext = archive_format.lower()
@@ -354,7 +354,7 @@ class BackupFilesDeleteMultipleView(View):
         filenames: list[str] = request.POST.getlist('selected')
         if not filenames:
             messages.error(request, 'No files selected for deletion.')
-            return redirect('settings:backups')
+            return redirect('management:backups')
 
         backup_dir: Path = settings.BACKUP_FILE_PATH
         deleted: list[str] = []
@@ -376,4 +376,4 @@ class BackupFilesDeleteMultipleView(View):
         if errors:
             messages.error(request, f"Errors deleting: {', '.join(errors)}")
 
-        return redirect('settings:backups')
+        return redirect('management:backups')

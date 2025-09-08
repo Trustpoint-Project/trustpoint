@@ -134,8 +134,8 @@
 
         <form id="batch-form" method="post" action="">
             {% csrf_token %}
-            <div class="card-body p-0">
-                <table class="table table-striped mb-0">
+            <div class="card-body">
+                <table class="table">
                     <thead>
                     <tr>
                         <th><input type="checkbox" id="select-all"/></th>
@@ -189,10 +189,11 @@
                     {% endfor %}
                     </tbody>
                 </table>
+                {% include "trustpoint/pagination.html" %}
             </div>
 
             <div class="card-footer d-flex justify-content-between">
-                <div>
+                <div class="tp-card-btn-footer m-1">
                     <button formaction="{% url 'management:backup-download-multiple' archive_format='tar.gz' %}"
                             formmethod="post"
                             class="btn btn-secondary">
@@ -204,14 +205,13 @@
                         {% trans "Download (zip)" %}
                     </button>
                 </div>
-                <div>
+                <div class="m-1">
                     <button formaction="{% url 'management:backup-delete-multiple' %}"
                             formmethod="post"
                             class="btn btn-danger">
                         {% trans "Delete" %}
                     </button>
                 </div>
-                {% include "trustpoint/pagination.html" %}
             </div>
         </form>
     </div>
