@@ -22,7 +22,6 @@ sys.path.insert(0, str(feature_path))
 
 # -- Django setup (only required if using Django models in documentation) --
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'trustpoint.settings')  # Set Django settings
-from django.conf import settings
 django.setup()  # Initialize Django
 
 # -- PlantUML Configuration -------------------------------------------------
