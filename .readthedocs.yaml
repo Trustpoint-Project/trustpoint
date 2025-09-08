@@ -25,5 +25,7 @@ build:
     install:
       - "true"
     build:
-      - cd docs
-      - uv run -m sphinx.cmd.build -M html source $READTHEDOCS_OUTPUT/html
+      html:
+        - cd docs
+        - mkdir -p $READTHEDOCS_OUTPUT/html/
+        - uv run -m sphinx.cmd.build -M html source $READTHEDOCS_OUTPUT/html
