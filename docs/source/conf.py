@@ -20,6 +20,8 @@ feature_path = project_root / 'trustpoint' / 'features'
 
 sys.path.insert(0, str(feature_path))
 
+sys.path.insert(0, project_root / 'trustpoint')
+
 # -- Django setup (only required if using Django models in documentation) --
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'trustpoint.settings')  # Set Django settings
 django.setup()  # Initialize Django
