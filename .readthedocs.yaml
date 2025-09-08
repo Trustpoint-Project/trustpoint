@@ -15,6 +15,7 @@ build:
     python: "3.12"
   apt_packages:
     - graphviz
+    - plantuml
   jobs:
     create_environment:
       - asdf plugin add uv
@@ -23,10 +24,6 @@ build:
       - UV_PROJECT_ENVIRONMENT=$READTHEDOCS_VIRTUALENV_PATH uv sync --all-extras --group docs
     install:
       - "true"
-
-  apt_packages:
-    - plantuml
-
-# Build documentation in the "docs/" directory with Sphinx
-sphinx:
-  configuration: docs/source/conf.py
+    build:
+      - cd docs
+      - uv run -m sphinx.cmd.build -M html source $READTHEDOCS_OUTPUT/html
