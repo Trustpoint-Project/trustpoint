@@ -1,5 +1,6 @@
 """Tests for the JSON template verification module."""
 
+from re import match
 import pytest
 from pydantic import ValidationError
 
@@ -314,7 +315,10 @@ def test_ext_value_mutable() -> None:
         'subj': {'cn': 'example.com'},
         #'ext': {'san': {'value': {'dns_names': ['val.example.com']}, 'mutable': True}}
         # This variant works
-        'ext': {'san': {'dns_names': ['val.example.com'], 'mutable': True}}
+        'ext': {
+            'san': {'dns_names': ['val.example.com'], 'mutable': True},
+            'crl': {'uris': ['http://crl.example.com/crl.pem']}
+        }
     }
     verifier = JSONProfileVerifier(profile)
     request = {
@@ -323,6 +327,7 @@ def test_ext_value_mutable() -> None:
     }
     validated_request = verifier.apply_profile_to_request(request)
     assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['mutable.example.com']
+    assert validated_request['extensions']['crl_distribution_points']['uris'] == ['http://crl.example.com/crl.pem']
 
 def test_prohibited_ext_present() -> None:
     """Test that a request with a prohibited extension fails verification."""
@@ -435,6 +440,18 @@ def test_csr_to_json_adapter() -> None:
             x509.BasicConstraints(ca=False, path_length=None),
             critical=True,
         )
+        # Normally not included in CSR
+        .add_extension(
+            x509.CRLDistributionPoints([
+                x509.DistributionPoint(
+                    full_name=[x509.UniformResourceIdentifier('http://crl.example.com/crl.pem')],
+                    relative_name=None,
+                    reasons=None,
+                    crl_issuer=None
+                )
+            ]),
+            critical=False,
+        )
     )
 
     csr_json = JSONCertRequestConverter.to_json(csr)
@@ -455,6 +472,9 @@ def test_json_to_cb_adapter() -> None:
         'ext': {
             'san': {
                 'dns_names': ['www.example.com'],
+            },
+            'crl': {
+                'uris': ['http://crl.example.com/crl.pem']
             }
         }
     }
@@ -462,3 +482,9 @@ def test_json_to_cb_adapter() -> None:
     cb = JSONCertRequestConverter.from_json(validated_request)
     print('Cert from JSON Request:', cb)
     assert cb._subject_name.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value == 'example.com'  # noqa: SLF001
+    extensions = cb._extensions  # noqa: SLF001
+    assert extensions is not None
+    crl_dp = next((ext.value for ext in extensions if isinstance(ext.value, x509.CRLDistributionPoints)), None)
+    assert crl_dp is not None
+    if crl_dp:
+        assert crl_dp[0].full_name[0].value == 'http://crl.example.com/crl.pem'

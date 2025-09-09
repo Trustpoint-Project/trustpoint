@@ -146,6 +146,13 @@ class JSONCertRequestConverter:
                     ),
                     critical=critical,
                 )
+            elif ext_name == 'crl_distribution_points':
+                crl_uris = ext_value.get('uris', [])
+                if crl_uris:
+                    dp_list = [x509.DistributionPoint(full_name=[x509.UniformResourceIdentifier(uri)],
+                                                       relative_name=None, reasons=None, crl_issuer=None)
+                               for uri in crl_uris]
+                    builder = builder.add_extension(x509.CRLDistributionPoints(dp_list), critical=critical)
             else:
                 logger.debug('JSON Cert Request Adapter: Skipping unsupported extension: %s', ext_name)
 

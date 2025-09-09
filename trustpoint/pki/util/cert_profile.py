@@ -111,6 +111,12 @@ class SanExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
 
     model_config = ConfigDict(extra='forbid')
 
+class CRLDistributionPointsExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
+    """Model for the CRL Distribution Points extension of a certificate profile."""
+    uris: list[str] | ProfileValuePropertyModel | None = None
+
+    model_config = ConfigDict(extra='forbid')
+
 class KeyUsageExtensionModel(BaseExtensionModel):
     """Model for the Key Usage extension of a certificate profile."""
     digital_signature: bool | None = None
@@ -137,6 +143,7 @@ class ExtensionsModel(BaseModel):
     key_usage: KeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('key_usage'))
     extended_key_usage: ExtendedKeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('extended_key_usage'))
     subject_alternative_name: SanExtensionModel | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('subject_alternative_name'))
+    crl_distribution_points: CRLDistributionPointsExtensionModel | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('crl_distribution_points'))
 
 
 class ValidityModel(BaseModel):
