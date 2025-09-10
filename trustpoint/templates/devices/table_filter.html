@@ -1,0 +1,57 @@
+{% block table_filter %}
+{% load i18n %}
+
+  {# --- Filter toggle + form --- #}
+
+  <div class="card-body pb-0">
+    <button
+      class="btn btn-sm btn-outline-secondary mb-1"
+      type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#filterCollapse"
+      aria-expanded="{% if request.GET %}true{% else %}false{% endif %}"
+      aria-controls="filterCollapse"
+    >
+      {% trans 'Filters' %}
+    </button>
+  </div>
+
+  <div class="collapse{% if request.GET %} show{% endif %}" id="filterCollapse">
+    <div class="card-body">
+      <form method="get" class="row gx-3 gy-1 align-items-end">
+
+        <div class="col-md-4">
+          <label for="{{ filter.form.common_name.id_for_label }}" class="form-label">
+            {{ filter.form.common_name.label }}
+          </label>
+          {{ filter.form.common_name }}
+        </div>
+
+        <div class="col-md-4">
+          <label for="{{ filter.form.serial_number.id_for_label }}" class="form-label">
+            {{ filter.form.serial_number.label }}
+          </label>
+          {{ filter.form.serial_number }}
+        </div>
+
+        <div class="col-md-4">
+          <label for="{{ filter.form.domain.id_for_label }}" class="form-label">
+            {{ filter.form.domain.label }}
+          </label>
+          {{ filter.form.domain }}
+        </div>
+
+        <div class="col-auto">
+          <button type="submit" class="btn btn-primary btn-sm">
+            {% trans 'Apply' %}
+          </button>
+          <a href="{% url table_url %}" class="btn btn-link btn-sm">
+            {% trans 'Reset' %}
+          </a>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+{% endblock table_filter %}

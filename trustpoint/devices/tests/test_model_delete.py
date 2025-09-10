@@ -51,8 +51,7 @@ def test_multi_device_delete(mock_models: dict[str, Any]) -> None:
         common_name='test_device2',
         serial_number='1234567890_2',
         domain=mock_domain,
-        onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
-        onboarding_status=DeviceModel.OnboardingStatus.PENDING,
+        no_onboarding_config=mock_device1.no_onboarding_config,
     )
     mock_device2.save()
     DeviceModel.objects.filter(domain=mock_domain).delete()  # queryset delete

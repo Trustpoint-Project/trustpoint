@@ -1,7 +1,7 @@
 """pytest configuration for the tests in the PKI app."""
 import base64
 import secrets
-from typing import Any, Tuple
+from typing import Any
 
 import pytest
 from cryptography import x509
@@ -14,6 +14,12 @@ from django.test.client import RequestFactory
 
 from devices.issuer import LocalTlsClientCredentialIssuer, LocalDomainCredentialIssuer
 from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
+from devices.issuer import LocalTlsClientCredentialIssuer
+from devices.models import (
+    DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel,
+    NoOnboardingConfigModel, NoOnboardingPkiProtocol,
+    OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
+)
 from pki.models import CertificateModel, CredentialModel
 from pki.models.domain import DomainModel
 from pki.models.issuing_ca import IssuingCaModel
@@ -94,14 +100,44 @@ def domain_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
 def device_instance(domain_instance: dict[str, Any]) -> dict[str, Any]:
     """Fixture to create a test device linked with a domain."""
     domain: DomainModel = domain_instance['domain']
+
+    no_onboarding_pki_protocols = [
+        NoOnboardingPkiProtocol.MANUAL
+    ]
+    no_onboarding_config_model = NoOnboardingConfigModel()
+    no_onboarding_config_model.set_pki_protocols(no_onboarding_pki_protocols)
+
+    no_onboarding_config_model.full_clean()
+    no_onboarding_config_model.save()
+
     device = DeviceModel.objects.create(
         common_name='test-device-1',
         serial_number='TEST123456',
         domain=domain,
-        onboarding_status=DeviceModel.OnboardingStatus.NO_ONBOARDING,
-        onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
-        pki_protocol=DeviceModel.PkiProtocol.EST_PASSWORD,
-        est_password=secrets.token_urlsafe(16)
+        no_onboarding_config=no_onboarding_config_model,
+    )
+    domain_instance.update({'device': device})
+    return domain_instance
+
+@pytest.fixture
+def device_instance_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any]:
+    """Fixture to create a test device linked with a domain."""
+    domain: DomainModel = domain_instance['domain']
+
+    onboarding_pki_protocols = [
+        OnboardingPkiProtocol.EST
+    ]
+    onboarding_config_model = OnboardingConfigModel(onboarding_protocol=OnboardingProtocol.MANUAL)
+    onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
+
+    onboarding_config_model.full_clean()
+    onboarding_config_model.save()
+
+    device = DeviceModel.objects.create(
+        common_name='test-device-1',
+        serial_number='TEST123456',
+        domain=domain,
+        onboarding_config=onboarding_config_model,
     )
     domain_instance.update({'device': device})
     return domain_instance
@@ -111,14 +147,17 @@ def device_instance(domain_instance: dict[str, Any]) -> dict[str, Any]:
 def est_device_without_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any]:
     """Fixture to create a device using the EST protocol without onboarding."""
     domain: DomainModel = domain_instance['domain']
+
+    no_onboarding_config = NoOnboardingConfigModel(est_password='test_est_password')  # noqa: S106
+    no_onboarding_config.add_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD)
+    no_onboarding_config.full_clean()
+    no_onboarding_config.save()
+
     device = DeviceModel.objects.create(
-        common_name="est-device-no-onboarding",
-        serial_number="EST123456",
+        common_name='NoOnboarding_EST',
+        serial_number='SN_NO_EST',
         domain=domain,
-        onboarding_status=DeviceModel.OnboardingStatus.NO_ONBOARDING,
-        onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
-        pki_protocol=DeviceModel.PkiProtocol.EST_PASSWORD,
-        est_password=secrets.token_urlsafe(16)
+        no_onboarding_config=no_onboarding_config,
     )
     domain_instance.update({'device': device})
     return domain_instance
@@ -128,14 +167,21 @@ def est_device_without_onboarding(domain_instance: dict[str, Any]) -> dict[str, 
 def est_device_with_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any]:
     """Fixture to create a device using the EST protocol with onboarding."""
     domain: DomainModel = domain_instance['domain']
+    onboarding_pki_protocols = [
+        OnboardingPkiProtocol.EST
+    ]
+    onboarding_config_model = OnboardingConfigModel(
+        onboarding_protocol=OnboardingProtocol.EST_USERNAME_PASSWORD, est_password='test_est_password')  # noqa: S106
+    onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
+
+    onboarding_config_model.full_clean()
+    onboarding_config_model.save()
+
     device = DeviceModel.objects.create(
-        common_name="est-device-with-onboarding",
-        serial_number="EST654321",
+        common_name='EST_Onboarding',
+        serial_number='SN_EST_ONBOARD',
         domain=domain,
-        onboarding_status=DeviceModel.OnboardingStatus.ONBOARDED,
-        onboarding_protocol=DeviceModel.OnboardingProtocol.EST_PASSWORD,
-        pki_protocol=DeviceModel.PkiProtocol.EST_CLIENT_CERTIFICATE,
-        est_password=secrets.token_urlsafe(16)
+        onboarding_config=onboarding_config_model
     )
     domain_instance.update({'device': device})
     return domain_instance
@@ -145,14 +191,16 @@ def est_device_with_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any
 def cmp_device_without_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any]:
     """Fixture to create a device using the CMP protocol without onboarding."""
     domain: DomainModel = domain_instance['domain']
+    no_onboarding_config = NoOnboardingConfigModel(cmp_shared_secret='test_cmp_secret')  # noqa: S106
+    no_onboarding_config.add_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET)
+    no_onboarding_config.full_clean()
+    no_onboarding_config.save()
+
     device = DeviceModel.objects.create(
-        common_name="cmp-device-no-onboarding",
-        serial_number="CMP123456",
+        common_name='NoOnboarding_CMP',
+        serial_number='SN_NO_CMP',
         domain=domain,
-        onboarding_status=DeviceModel.OnboardingStatus.NO_ONBOARDING,
-        onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
-        pki_protocol=DeviceModel.PkiProtocol.CMP_SHARED_SECRET,
-        cmp_shared_secret=secrets.token_urlsafe(16)
+        no_onboarding_config=no_onboarding_config,
     )
     domain_instance.update({'device': device})
     return domain_instance
@@ -162,14 +210,21 @@ def cmp_device_without_onboarding(domain_instance: dict[str, Any]) -> dict[str, 
 def cmp_device_with_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any]:
     """Fixture to create a device using the CMP protocol with onboarding."""
     domain: DomainModel = domain_instance['domain']
+    onboarding_pki_protocols = [
+        OnboardingPkiProtocol.CMP
+    ]
+    onboarding_config_model = OnboardingConfigModel(
+        onboarding_protocol=OnboardingProtocol.CMP_SHARED_SECRET, cmp_shared_secret='test_cmp_secret')  # noqa: S106
+    onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
+
+    onboarding_config_model.full_clean()
+    onboarding_config_model.save()
+
     device = DeviceModel.objects.create(
-        common_name="cmp-device-with-onboarding",
-        serial_number="CMP654321",
+        common_name='CMP_Onboarding',
+        serial_number='SN_CMP_ONBOARD',
         domain=domain,
-        onboarding_status=DeviceModel.OnboardingStatus.ONBOARDED,
-        onboarding_protocol=DeviceModel.OnboardingProtocol.CMP_SHARED_SECRET,
-        pki_protocol=DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE,
-        cmp_shared_secret=secrets.token_urlsafe(16)
+        onboarding_config=onboarding_config_model
     )
     domain_instance.update({'device': device})
     return domain_instance
@@ -363,7 +418,7 @@ def domain_credential_instance_for_cmp(
 def tls_client_request_with_client_cert_header(
     domain_credential_instance: CertificateModel,
     rsa_private_key: rsa.RSAPrivateKey
-) -> Tuple[HttpRequest, str, str, str]:
+) -> tuple[HttpRequest, str, str, str]:
     """
     Fixture to create an HttpRequest for a tls-client certificate request.
     Includes the client certificate in the 'SSL_CLIENT_CERT' header for authentication.

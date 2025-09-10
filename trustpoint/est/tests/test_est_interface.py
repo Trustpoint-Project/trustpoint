@@ -89,11 +89,9 @@ def test_authenticate_username_password_missing_header(request_factory, est_simp
 
 @patch('est.views.EstSimpleEnrollmentView.extract_requested_domain')
 @patch('est.views.EstSimpleEnrollmentView.authenticate_request')
-@patch('est.views.EstSimpleEnrollmentView.deserialize_pki_message')
-@patch('est.views.EstSimpleEnrollmentView.get_or_create_device_from_csr')
 @pytest.mark.django_db
 def test_post_authentication_failure(
-    mock_get_device, mock_deserialize, mock_auth, mock_extract_domain, request_factory, est_simple_enrollment_view
+    mock_auth, mock_extract_domain, request_factory, est_simple_enrollment_view
 ):
     request = request_factory.post('/')
     mock_auth.return_value = (None, LoggedHttpResponse('Authentication failed', status=400))
