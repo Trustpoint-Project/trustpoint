@@ -140,11 +140,15 @@ class CertificateDownloadView(CertificatesContextMixin, DetailView[CertificateMo
         except Exception as exception:
             raise Http404 from exception
 
+        file_name = self.kwargs.get('file_name', None)
+        if not file_name:
+            file_name = f'certificate{file_format_enum.file_extension}'
+
         certificate_serializer = CertificateModel.objects.get(pk=pk).get_certificate_serializer()
         file_bytes = certificate_serializer.as_format(file_format_enum)
 
         response = HttpResponse(file_bytes, content_type=file_format_enum.mime_type)
-        response['Content-Disposition'] = f'attachment; filename="certificate{file_format_enum.file_extension}"'
+        response['Content-Disposition'] = f'attachment; filename="{file_name}"'
 
         return response
 

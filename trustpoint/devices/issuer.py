@@ -14,7 +14,7 @@ from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
 
-from devices.models import DeviceModel, IssuedCredentialModel
+from devices.models import DeviceModel, IssuedCredentialModel, OnboardingStatus
 
 if TYPE_CHECKING:
     import ipaddress
@@ -531,7 +531,10 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             issued_credential_purpose=IssuedCredentialModel.IssuedCredentialPurpose.DOMAIN_CREDENTIAL,
         )
 
-        self.device.onboarding_status = self.device.OnboardingStatus.ONBOARDED
+        if self.device.onboarding_config:
+            self.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+            self.device.onboarding_config.save()
+
         self.device.save()
 
         return issued_domain_credential
@@ -565,7 +568,10 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             issued_credential_purpose=IssuedCredentialModel.IssuedCredentialPurpose.DOMAIN_CREDENTIAL,
         )
 
-        self.device.onboarding_status = self.device.OnboardingStatus.ONBOARDED
+        if self.device.onboarding_config:
+            self.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+            self.device.onboarding_config.save()
+
         self.device.save()
 
         return issued_domain_credential
@@ -632,7 +638,7 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
             errror_message = 'Application URI cannot be longer than 1 item'
             raise ValueError(errror_message)
 
-    def issue_opcua_server_credential(  # noqa: PLR0913
+    def issue_opc_ua_server_credential(  # noqa: PLR0913
         self,
         common_name: str,
         application_uri: str,
@@ -682,7 +688,7 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
             IssuedCredentialModel.IssuedCredentialPurpose.OPCUA_SERVER,
         )
 
-    def issue_opcua_server_certificate(  # noqa: PLR0913
+    def issue_opc_ua_server_certificate(  # noqa: PLR0913
         self,
         common_name: str,
         application_uri: str | list[str],
@@ -777,7 +783,7 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
             error_message = 'Application URI cannot be longer than 1 item'
             raise ValueError(error_message)
 
-    def issue_opcua_client_credential(
+    def issue_opc_ua_client_credential(
         self, common_name: str, application_uri: str | list[str], validity_days: int = 365
     ) -> IssuedCredentialModel:
         """Issues an OPC UA client credential (certificate + private key) following OPC UA security standards."""
@@ -818,7 +824,7 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
             IssuedCredentialModel.IssuedCredentialPurpose.OPCUA_CLIENT,
         )
 
-    def issue_opcua_client_certificate(
+    def issue_opc_ua_client_certificate(
         self, common_name: str, application_uri: str | list[str], validity_days: int, public_key: PublicKey
     ) -> IssuedCredentialModel:
         """Issues an OPC UA client certificate (no private key) following OPC UA security standards."""
