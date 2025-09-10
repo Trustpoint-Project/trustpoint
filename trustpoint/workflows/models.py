@@ -68,6 +68,7 @@ class WorkflowInstance(models.Model):
     STATE_COMPLETED = 'Completed'
     STATE_REJECTED = 'Rejected'
     STATE_FAILED = 'Failed'
+    STATE_NO_MATCH = 'No match'
     STATE_CHOICES = (
         (STATE_STARTING, 'Starting'),
         (STATE_RUNNING, 'Running'),
@@ -76,6 +77,7 @@ class WorkflowInstance(models.Model):
         (STATE_COMPLETED, 'Completed'),
         (STATE_FAILED, 'Failed'),
         (STATE_REJECTED, 'Rejected'),
+        (STATE_NO_MATCH, 'No match')
     )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

@@ -1,3 +1,5 @@
+"""Types and results for workflow executors."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -22,7 +24,8 @@ class NodeResult:
     Attributes:
         status: Execution status guiding engine behavior.
         context: Optional structured data to persist for this step (will be compacted).
-        vars: Optional nested dict to merge into the instance-global ctx.vars (stored at step_contexts["$vars"]).
+        vars: Optional nested dict to merge into the instance-global ctx.vars
+              (stored under step_contexts["$vars"]).
     """
     status: ExecStatus
     context: dict[str, Any] | None = None

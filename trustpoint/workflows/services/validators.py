@@ -1,4 +1,4 @@
-"""Validation helpers for the workflow wizard payload."""
+"""Validation helpers for the workflow wizard payload (server-side)."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ _SEGMENT_CHARS = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012345
 
 
 def _is_dotpath(s: str) -> bool:
-    """Return True if `s` is a valid dot-path like 'vars.foo_bar.baz1'."""
+    """Return True if `s` is a valid dot-path like 'serial_number' or 'http.status' (bare path; no prefix)."""
     if not isinstance(s, str) or not s:
         return False
     if any(ch not in _SEGMENT_CHARS for ch in s):
@@ -31,9 +31,9 @@ def _is_dotpath(s: str) -> bool:
     return all(p and (p[0].isalpha() or p[0] == '_') and p.replace('_', '').isalnum() for p in parts)
 
 
-def _is_var_path(s: str) -> bool:
-    """`vars.*` dot path with at least one segment after vars."""
-    return isinstance(s, str) and s.startswith('vars.') and _is_dotpath(s)
+def _is_bare_var_path(s: str) -> bool:
+    """Bare variable path (no 'vars.'), at least one segment, dot-separated."""
+    return _is_dotpath(s)
 
 
 def _is_http_url(s: str) -> bool:
@@ -93,7 +93,7 @@ def _validate_webhook_auth(val: Any) -> tuple[bool, str | None]:
 
 
 def _is_valid_from_path(s: str) -> bool:
-    """Allow: status | text | json[.a.b.0] | headers[.x_y] (no dashes)."""
+    """Allow: status | text | json[.a.b.0] | headers[.x_y] (no dashes in dot lookups)."""
     if not isinstance(s, str) or not s:
         return False
     if s in {'status', 'text', 'json', 'headers'}:
@@ -188,8 +188,12 @@ def _validate_webhook_step(idx: int, params: dict[str, Any], errors: list[str]) 
 
     # result_to/result_source (optional but must be valid if present)
     result_to = (params.get('result_to') or '').strip()
-    if result_to and not _is_var_path(result_to):
-        _error(errors, _('Step #%s (Webhook): result_to must start with "vars." and be a valid dot path.') % idx)
+    if result_to and not _is_bare_var_path(result_to):
+        _error(
+            errors,
+            _('Step #%s (Webhook): result_to must be a variable path like "serial_number" or "http.status".')
+            % idx,
+        )
 
     result_source = (params.get('result_source') or 'auto').strip().lower()
     if result_source and result_source not in {'auto', 'json', 'text', 'status', 'headers'}:
@@ -200,7 +204,7 @@ def _validate_webhook_step(idx: int, params: dict[str, Any], errors: list[str]) 
         _error(
             errors,
             _(
-                'Step #%s (Webhook): use "exports": [ {"from_path":"json.foo","to_path":"vars.my.foo"} ] '
+                'Step #%s (Webhook): use "exports": [ {"from_path":"json.foo","to_path":"my.foo"} ] '
                 'instead of legacy "export" mapping.'
             )
             % idx,
@@ -230,10 +234,14 @@ def _validate_webhook_step(idx: int, params: dict[str, Any], errors: list[str]) 
                 % (idx, j),
             )
 
-        if not _is_var_path(tp):
+        if not _is_bare_var_path(tp):
             _error(
                 errors,
-                _('Step #%s (Webhook): export #%s to_path must start with "vars." and be a valid dot path.') % (idx, j),
+                _(
+                    'Step #%s (Webhook): export #%s to_path must be a variable path like '
+                    '"serial_number" or "http.status" (no "vars." prefix).'
+                )
+                % (idx, j),
             )
         elif tp in seen_to:
             _error(errors, _('Step #%s (Webhook): duplicate to_path "%s" in exports.') % (idx, tp))

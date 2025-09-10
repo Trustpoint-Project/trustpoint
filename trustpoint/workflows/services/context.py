@@ -1,28 +1,135 @@
-"""Context assembly, export application, and design-time catalog/schema."""
+"""Context assembly utilities for workflow templates and executors.
+
+This module builds the per-instance template context (`ctx`) used by UI and
+template rendering (Email/Webhook/etc.). It also exposes helpers for working
+with nested dot paths and for compacting large step-context blobs.
+
+Schema (top-level keys produced by :func:`build_context`):
+
+- meta.schema:     integer schema version
+- workflow:        {"id": str, "name": str}
+- instance:        {"id": str, "state": str, "current_step": str}
+- payload:         dict (original trigger payload)
+- csr:             dict | None  (best-effort CSR parse: subject/common_name/sans/public_key_type)
+- steps_by_id:     dict[str, Any]   raw step ids (e.g. "step-2")
+- steps_safe:      dict[str, Any]   safe keys usable with dot lookup (e.g. "step_2")
+- steps:           dict[str, Any]   alias -> steps_safe (recommended for templates)
+- step_names:      dict[str, str]   raw id -> safe key mapping
+- vars:            dict[str, Any]   merged global variables bucket
+
+Notes:
+-----
+* Use ``{{ ctx.steps.step_1 }}`` in templates (recommended).
+* To reference raw ids with dashes, use bracket notation:
+  ``{{ ctx.steps_by_id."step-1".outputs.subject }}``.
+"""
+
 from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
 from typing import Any
 
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
+from cryptography.x509.oid import NameOID
 from django.conf import settings
-from django.db import transaction
 
 from workflows.models import WorkflowInstance
 
-CTX_SCHEMA_VERSION = 1
+__all__ = [
+    'CTX_SCHEMA_VERSION',
+    'STEP_CTX_MAX_BYTES',
+    'STEP_TEXT_EXCERPT',
+    'VARS_MAX_BYTES',
+    'build_context',
+    'compact_context_blob',
+    'get_in',
+    'set_in',
+]
 
-# Path rules and size caps
+# ---------------------------- constants ----------------------------
+
+CTX_SCHEMA_VERSION: int = 1
+
+# Size caps (engine enforces for $vars; compacting is for per-step blobs)
+VARS_MAX_BYTES: int = int(getattr(settings, 'WF_CTX_VARS_MAX_BYTES', 256 * 1024))
+STEP_CTX_MAX_BYTES: int = int(getattr(settings, 'WF_CTX_STEP_MAX_BYTES', 128 * 1024))
+STEP_TEXT_EXCERPT: int = int(getattr(settings, 'WF_CTX_STEP_TEXT_EXCERPT', 2048))
+
+# Reserved prefix for engine-managed blobs inside step_contexts
+_RESERVED_PREFIX: str = '$'
+
+# Path rules for get_in/set_in
 _SEGMENT_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
-VARS_MAX_BYTES = getattr(settings, 'WF_CTX_VARS_MAX_BYTES', 256 * 1024)
-STEP_CTX_MAX_BYTES = getattr(settings, 'WF_CTX_STEP_MAX_BYTES', 128 * 1024)
-STEP_TEXT_EXCERPT = getattr(settings, 'WF_CTX_STEP_TEXT_EXCERPT', 2048)
+
+
+# ---------------------------- small utils ----------------------------
+
+
+def _json_size(obj: Any) -> int:
+    """Return JSON-encoded length (UTF-8, ensure_ascii=False)."""
+    return len(json.dumps(obj, ensure_ascii=False))
+
+
+def _safe_step_key(raw_id: str) -> str:
+    """Return a 'safe' key usable with template dot-lookup.
+
+    - Replace any char not [A-Za-z0-9_] with '_'
+    - Ensure first char is alpha or '_'
+    """
+    if not raw_id:
+        return 'step'
+    out_chars: list[str] = []
+    for ch in raw_id:
+        if ch.isalnum() or ch == '_':
+            out_chars.append(ch)
+        else:
+            out_chars.append('_')
+    safe = ''.join(out_chars)
+    if not (safe[0].isalpha() or safe[0] == '_'):
+        safe = f's_{safe}'
+    return safe
+
+
+def _parse_csr_info(csr_pem: Any) -> dict[str, Any] | None:
+    """Best-effort parse of CSR details used in templates. Returns None on failure."""
+    if not isinstance(csr_pem, str) or not csr_pem.strip():
+        return None
+    try:
+        csr_obj = x509.load_pem_x509_csr(csr_pem.encode('utf-8'))
+    except Exception:
+        return None
+
+    # Common Name
+    try:
+        cn_attrs = csr_obj.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        common_name = cn_attrs[0].value if cn_attrs else None
+    except Exception:
+        common_name = None
+
+    # SANs (DNS and IP)
+    try:
+        san_ext = csr_obj.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        dns_sans = san_ext.value.get_values_for_type(x509.DNSName)
+        ip_sans = [str(ip) for ip in san_ext.value.get_values_for_type(x509.IPAddress)]
+        sans = [*dns_sans, *ip_sans]
+    except ExtensionNotFound:
+        sans = []
+
+    return {
+        'subject': csr_obj.subject.rfc4514_string(),
+        'common_name': common_name,
+        'sans': sans,
+        'public_key_type': csr_obj.public_key().__class__.__name__,
+    }
+
+
+# ---------------------------- dot-path helpers ----------------------------
 
 
 def _split_path(path: str) -> list[str]:
+    """Split and validate a dot path like 'a.b.c'. Raise ValueError on invalid."""
     segs = [s for s in (path or '').split('.') if s]
     if not segs:
         raise ValueError('empty path')
@@ -33,6 +140,7 @@ def _split_path(path: str) -> list[str]:
 
 
 def get_in(root: dict[str, Any], path: str) -> Any:
+    """Return value at dot path from a nested dict or raise KeyError."""
     cur: Any = root
     for seg in _split_path(path):
         if not isinstance(cur, dict) or seg not in cur:
@@ -42,135 +150,107 @@ def get_in(root: dict[str, Any], path: str) -> Any:
 
 
 def set_in(root: dict[str, Any], path: str, value: Any, *, forbid_overwrite: bool = True) -> None:
+    """Set value at dot path. If forbid_overwrite=True, raise on value change collisions."""
     segs = _split_path(path)
-    cur = root
+    cur: dict[str, Any] = root
     for s in segs[:-1]:
-        if s not in cur or not isinstance(cur[s], dict):
-            cur[s] = {}
-        cur = cur[s]
+        nxt = cur.get(s)
+        if not isinstance(nxt, dict):
+            nxt = {}
+            cur[s] = nxt
+        cur = nxt
     leaf = segs[-1]
     if forbid_overwrite and leaf in cur and cur[leaf] != value:
         raise ValueError(f'context collision at {path!r}')
     cur[leaf] = value
 
 
-def _json_size(obj: Any) -> int:
-    return len(json.dumps(obj, ensure_ascii=False))
+# ---------------------------- main API ----------------------------
 
 
-def _safe_key(name_or_id: str) -> str:
-    base = re.sub(r'[^A-Za-z0-9_]+', '_', (name_or_id or '').strip())
-    if not base or not base[0].isalpha():
-        base = f's_{base}'
-    return base
+def build_context(instance: WorkflowInstance) -> dict[str, Any]:
+    """Compose the template context `ctx` for a workflow instance.
 
+    Returns:
+        dict[str, Any]: A plain dict suitable for Django templates.
+    """
+    payload: dict[str, Any] = dict(instance.payload or {})
+    step_contexts: dict[str, Any] = dict(instance.step_contexts or {})
 
-def _build_id_map(instance: WorkflowInstance) -> dict[str, str]:
-    definition = instance.definition.definition or {}
-    nodes = list(definition.get('nodes') or [])
-    used: set[str] = set()
-    id_map: dict[str, str] = {}
-    for idx, n in enumerate(nodes, start=1):
-        node_id = str(n.get('id'))
-        params = n.get('params') or {}
-        human = str(params.get('name') or '') or node_id
-        sk = _safe_key(human)
-        base = sk
-        c = 2
-        while sk in used:
-            sk = f'{base}_{c}'
-            c += 1
-        used.add(sk)
-        id_map[node_id] = sk
-    return id_map
+    # Optional CSR enrichment
+    csr_info = _parse_csr_info(payload.get('csr_pem'))
 
-
-@dataclass(slots=True)
-class Context:
-    data: dict[str, Any]
-
-
-def build_context(instance: WorkflowInstance) -> Context:
-    """Compose `ctx` dict (stateless, rebuildable)."""
-    payload = instance.payload or {}
-    sc = instance.step_contexts or {}
-
-    # derive CSR (best-effort)
-    csr_extra: dict[str, Any] | None = None
-    csr_pem = payload.get('csr_pem')
-    if isinstance(csr_pem, str):
-        try:
-            csr_obj = x509.load_pem_x509_csr(csr_pem.encode('utf-8'))
-            try:
-                cn_attrs = csr_obj.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
-                cn = cn_attrs[0].value if cn_attrs else None
-            except Exception:
-                cn = None
-            try:
-                san_ext = csr_obj.extensions.get_extension_for_class(x509.SubjectAlternativeName)
-                dns_sans = san_ext.value.get_values_for_type(x509.DNSName)
-                ip_sans = [str(ip) for ip in san_ext.value.get_values_for_type(x509.IPAddress)]
-                sans = [*dns_sans, *ip_sans]
-            except ExtensionNotFound:
-                sans = []
-            csr_extra = {
-                'subject': csr_obj.subject.rfc4514_string(),
-                'common_name': cn,
-                'sans': sans,
-                'public_key_type': csr_obj.public_key().__class__.__name__,
-            }
-        except Exception:
-            csr_extra = None
-
-    # per-step blobs (exclude reserved)
+    # Per-step outputs (exclude reserved keys like "$vars")
     steps_by_id: dict[str, Any] = {}
-    for key, val in sc.items():
-        if key.startswith('$'):
+    for key, value in step_contexts.items():
+        if not isinstance(key, str):
             continue
-        steps_by_id[str(key)] = val
+        if key.startswith(_RESERVED_PREFIX):
+            continue
+        steps_by_id[key] = value
 
-    # vars aggregator from global $vars
-    vars_map = dict(sc.get('$vars') or {})
+    # Safe names for convenient template access
+    step_names: dict[str, str] = {raw: _safe_step_key(raw) for raw in steps_by_id}
+    steps_safe: dict[str, Any] = {step_names[raw]: value for raw, value in steps_by_id.items()}
 
-    # id_map (computed from definition each time; stable if node ids/names stable)
-    id_map = _build_id_map(instance)
-    steps_by_key: dict[str, Any] = {}
-    for node_id, blob in steps_by_id.items():
-        sk = id_map.get(node_id, _safe_key(node_id))
-        steps_by_key[sk] = blob
+    # Global variables bucket ($vars in engine)
+    vars_map: dict[str, Any] = dict(step_contexts.get('$vars') or {})
 
-    ctx = {
+    ctx: dict[str, Any] = {
         'meta': {'schema': CTX_SCHEMA_VERSION},
         'workflow': {'id': str(instance.definition_id), 'name': instance.definition.name},
         'instance': {'id': str(instance.id), 'state': instance.state, 'current_step': instance.current_step},
         'payload': payload,
-        'csr': csr_extra,  # may be None
-        'steps': steps_by_key,     # preferred by templates/UI
-        'steps_by_id': steps_by_id,  # raw ids, for debugging
+        'csr': csr_info,  # may be None
+        'steps_by_id': steps_by_id,  # raw ids (use bracket syntax if accessing in templates)
+        'steps_safe': steps_safe,  # safe names like "step_2"
+        'steps': steps_safe,  # alias → recommended for templates: {{ ctx.steps.step_2 }}
+        'step_names': step_names,  # {"step-2": "step_2"}
         'vars': vars_map,
     }
-    return Context(ctx)
+    return ctx
 
 
 def compact_context_blob(blob: dict[str, Any]) -> dict[str, Any]:
+    """Compact a step-context blob to fit STEP_CTX_MAX_BYTES.
+
+    The compaction is lossy: long strings are truncated, large nested dicts
+    are summarized. A '_meta' key indicates truncation and original size.
+    """
     size = _json_size(blob)
     if size <= STEP_CTX_MAX_BYTES:
         return blob
+
     summary: dict[str, Any] = {}
-    for k, v in blob.items():
+    for key, value in blob.items():
+        # skip values that cannot be serialized
         try:
-            _ = _json_size(v)
+            _ = _json_size(value)
         except Exception:
             continue
-        if isinstance(v, str):
-            summary[k] = v[:STEP_TEXT_EXCERPT]
-        elif isinstance(v, dict):
-            summary[k] = {kk: ('<omitted>' if _json_size(vv) > 2048 else vv) for kk, vv in list(v.items())[:20]}
+
+        if isinstance(value, str):
+            summary[key] = value[:STEP_TEXT_EXCERPT]
+        elif isinstance(value, dict):
+            # Keep first ~20 keys, redact very large leaf values
+            small: dict[str, Any] = {}
+            for i, (k, v) in enumerate(value.items()):
+                if i >= 20:
+                    break
+                try:
+                    small[k] = '<omitted>' if _json_size(v) > 2048 else v
+                except Exception:
+                    # Non-serializable leaves are omitted
+                    continue
+            summary[key] = small
         else:
-            summary[k] = v
+            summary[key] = value
+
     meta = {'_truncated': True, '_orig_size': size}
     summary['_meta'] = meta
+
     if _json_size(summary) <= STEP_CTX_MAX_BYTES:
         return summary
-    return {'_meta': meta}
 
+    # If still too large, only return the meta
+    return {'_meta': meta}

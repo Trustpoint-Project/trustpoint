@@ -2,7 +2,7 @@
 import {
   state, addStep, removeStep, updateStepType, updateStepParam, moveStep,
 } from './state.js';
-import { fetchContextCatalog, attachVarPicker } from './ui-context.js';
+import { buildDesignTimeCatalog, attachVarPicker } from './ui-context.js';
 
 // Minimal styles for drag affordance (inserted once)
 let _stylesInjected = false;
@@ -182,10 +182,10 @@ function renderParams(step, container, ctx) {
       { name:'timeoutSecs',  label:'Timeout (sec)',  type:'number' },
     ],
     Webhook: [
-      { name:'url',          label:'Webhook URL',               type:'text' },
-      { name:'method',       label:'HTTP Method',               type:'select', options:['GET','POST','PUT','DELETE'] },
-      { name:'result_to',    label:'Save response to (vars.*)', type:'text' },
-      { name:'result_source',label:'What to save',              type:'select', options:['auto','json','text','status','headers'] },
+      { name:'url',            label:'Webhook URL',                       type:'text' },
+      { name:'method',         label:'HTTP Method',                       type:'select', options:['GET','POST','PUT','PATCH','DELETE'] },
+      { name:'result_to',      label:'Save response to (variable path)',  type:'text' },
+      { name:'result_source',  label:'What to save',                      type:'select', options:['auto','json','text','status','headers'] },
     ],
     Timer: [{ name:'delaySecs', label:'Delay (sec)', type:'number' }],
     Condition: [{ name:'expression', label:'Condition (JS expr)', type:'text' }],
@@ -301,11 +301,15 @@ function renderEmailParams(step, container, ctx) {
   customBlock.appendChild(bodyLbl);
   container.appendChild(customBlock);
 
+  // >>> THIS is where you hook in the dynamic catalog <<<
   if (!useTpl) {
-    fetchContextCatalog().then(cat => {
-      attachVarPicker({ container: subjLbl, targetInput: subjLbl.querySelector('input'), catalog: cat });
-      attachVarPicker({ container: bodyLbl, targetInput: bodyLbl.querySelector('textarea'), catalog: cat });
-    }).catch(() => {});
+    try {
+      const catalog = buildDesignTimeCatalog({ state });
+      attachVarPicker({ container: subjLbl, targetInput: subjLbl.querySelector('input'),   catalog });
+      attachVarPicker({ container: bodyLbl, targetInput:  bodyLbl.querySelector('textarea'), catalog });
+    } catch {
+      // ignore picker failures (non-blocking)
+    }
   }
 
   // helpers

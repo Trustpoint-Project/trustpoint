@@ -160,4 +160,4 @@ class CertificateRequestHandler:
 
         # -- nothing matched --
         logger.info('certificate_request: no matching workflow for protocol=%s op=%s', protocol, operation)
-        return {'status': 'no_match'}
+        return {'status': WorkflowInstance.STATE_NO_MATCH}

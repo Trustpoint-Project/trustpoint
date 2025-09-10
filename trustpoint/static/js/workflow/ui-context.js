@@ -1,19 +1,45 @@
 // static/js/ui-context.js
-// Exports: fetchContextCatalog, attachVarPicker
-// Safe, static catalog for inserting {{ ctx.<path> }} variables.
-// Matches contexts produced by workflows.services.context.build_context().
+// Exports: buildDesignTimeCatalog, fetchContextCatalog, attachVarPicker
+// Purpose: Provide a design-time variable catalog for the wizard's insert picker.
+// Includes dynamic step entries under ctx.steps_safe and a helper group for ctx.step_names.
 
+let _lastCacheKey = null;
 let _catalogCache = null;
 
-export async function fetchContextCatalog() {
-  if (_catalogCache) return _catalogCache;
+/**
+ * Return a design-time catalog object that mirrors what will be available at runtime
+ * on `ctx.*`, including dynamic step safe names.
+ *
+ * @param {object} opts
+ * @param {object} opts.state - the wizard state (we use state.steps to synthesize step entries)
+ */
+export function buildDesignTimeCatalog({ state }) {
+  const stepCount = Array.isArray(state?.steps) ? state.steps.length : 0;
+
+  // Simple cache keyed by count; extend if you later include step titles, etc.
+  const cacheKey = `v2::steps:${stepCount}`;
+  if (_catalogCache && _lastCacheKey === cacheKey) return _catalogCache;
+
+  // Build dynamic step entries
+  const stepVars = [];
+  for (let i = 0; i < stepCount; i += 1) {
+    const safe = `step_${i + 1}`;
+    // Anchors authors can expand from:
+    stepVars.push({ key: `steps_safe.${safe}`,            label: `${safe} (all)` });
+    stepVars.push({ key: `steps_safe.${safe}.outputs`,    label: `${safe}.outputs` });
+    stepVars.push({ key: `steps_safe.${safe}.status`,     label: `${safe}.status` });
+    stepVars.push({ key: `steps_safe.${safe}.ok`,         label: `${safe}.ok` });
+    stepVars.push({ key: `steps_safe.${safe}.error`,      label: `${safe}.error` });
+  }
+
   _catalogCache = {
-    usage: 'Insert variables using {{ ctx.<path> }}, e.g. {{ ctx.workflow.id }}',
+    usage: 'Insert variables using {{ ctx.<path> }}, e.g. {{ ctx.workflow.id }} or {{ ctx.steps_safe.step_2.outputs.status }}',
     groups: [
       {
         key: 'workflow', label: 'Workflow', vars: [
-          { key: 'workflow.id',   label: 'Workflow ID' },
-          { key: 'workflow.name', label: 'Workflow Name' },
+          { key: 'workflow.id',      label: 'Workflow ID' },
+          { key: 'workflow.name',    label: 'Workflow Name' },
+          { key: 'workflow.version', label: 'Workflow Version (if present)' },
         ],
       },
       {
@@ -35,21 +61,49 @@ export async function fetchContextCatalog() {
       },
       {
         key: 'csr', label: 'CSR (parsed)', vars: [
-          { key: 'csr.subject',             label: 'CSR Subject' },
-          { key: 'csr.common_name',         label: 'Common Name' },
-          { key: 'csr.sans',                label: 'SubjectAltNames' },
-          { key: 'csr.public_key_type',     label: 'Public Key Type' },
+          { key: 'csr.subject',         label: 'CSR Subject' },
+          { key: 'csr.common_name',     label: 'Common Name' },
+          { key: 'csr.sans',            label: 'SubjectAltNames' },
+          { key: 'csr.public_key_type', label: 'Public Key Type' },
         ],
       },
+      // NEW: Steps (safe)
       {
-        key: 'vars', label: 'Saved Vars (from steps)', vars: [
-          // This is a placeholder group; concrete keys are user-defined.
-          // Users can still type {{ ctx.vars.<their_key> }} manually.
+        key: 'steps_safe',
+        label: 'Steps (safe)',
+        vars: stepVars,
+      },
+      // NEW: helper mapping raw -> safe (authors can see how to reference a given step id)
+      {
+        key: 'step_names',
+        label: 'Step name mapping',
+        vars: (function () {
+          const out = [];
+          for (let i = 0; i < stepCount; i += 1) {
+            const raw = `step-${i + 1}`;
+            const safe = `step_${i + 1}`;
+            out.push({ key: `step_names.${raw}`, label: `${raw} → ${safe}` });
+          }
+          return out;
+        }()),
+      },
+      {
+        key: 'vars', label: 'Saved Vars', vars: [
+          // Anchors only; authors will know their specific keys.
+          { key: 'vars',         label: 'vars (whole map)' },
+          { key: 'vars.answer',  label: 'example: vars.answer' },
         ],
       },
     ],
   };
+
+  _lastCacheKey = cacheKey;
   return _catalogCache;
+}
+
+// Backwards-compatible wrapper. Call with the wizard `state`.
+export async function fetchContextCatalog(state) {
+  return buildDesignTimeCatalog({ state });
 }
 
 // Adds a compact picker next to a label; inserts token at the caret into an
@@ -76,7 +130,7 @@ export function attachVarPicker({ container, targetInput, catalog }) {
   }
 
   select.onchange = () => {
-    const path = select.value; // e.g. 'workflow.id'
+    const path = select.value; // e.g. 'steps_safe.step_2.outputs.status'
     if (!path) return;
     insertAtCaret(targetInput, `{{ ctx.${path} }}`);
     // reset and notify state
@@ -87,7 +141,9 @@ export function attachVarPicker({ container, targetInput, catalog }) {
 
   const help = document.createElement('div');
   help.className = 'form-text';
-  help.textContent = catalog?.usage || 'Use {{ ctx.<path> }} to render variables.';
+  help.textContent =
+    catalog?.usage ||
+    'Use {{ ctx.<path> }} to render variables.';
 
   wrap.appendChild(select);
   wrap.appendChild(help);
@@ -96,7 +152,9 @@ export function attachVarPicker({ container, targetInput, catalog }) {
 
 function insertAtCaret(el, text) {
   if (!el) return;
-  const isText = el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'email'));
+  const isText =
+    el.tagName === 'TEXTAREA' ||
+    (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'email'));
   if (!isText) return;
 
   const start = el.selectionStart ?? el.value.length;

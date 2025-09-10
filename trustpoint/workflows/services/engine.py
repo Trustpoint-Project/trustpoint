@@ -6,9 +6,9 @@ from typing import Any
 from django.db import transaction
 
 from workflows.models import WorkflowInstance
+from workflows.services.context import VARS_MAX_BYTES, compact_context_blob
 from workflows.services.executors.factory import NodeExecutorFactory
 from workflows.services.types import ExecStatus, NodeResult
-from workflows.services.context import compact_context_blob, VARS_MAX_BYTES
 
 
 def _current_node(inst: WorkflowInstance) -> dict[str, Any]:
@@ -30,13 +30,23 @@ def _advance_pointer(inst: WorkflowInstance) -> bool:
 
 
 def _max_pass_hops(inst: WorkflowInstance) -> int:
+    """Upper bound of PASS transitions from current step."""
     steps = inst.get_steps()
     cur = inst.get_current_step_index()
     return max(0, len(steps) - (cur + 1))
 
 
+def _size_bytes(obj: Any) -> int:
+    return len(json.dumps(obj, ensure_ascii=False))
+
+
 def _deep_merge_no_overwrite(dst: dict[str, Any], src: dict[str, Any]) -> None:
-    """Deep-merge src into dst. If a leaf exists with a different non-dict value, raise ValueError."""
+    """Deep-merge src into dst; if a leaf exists with a different value, raise ValueError.
+
+    - Dicts merge recursively.
+    - If a key exists and either side is not a dict, and values differ → collision error.
+    - If values are equal → allowed (idempotent writes).
+    """
     for k, v in src.items():
         if k not in dst:
             dst[k] = v
@@ -49,14 +59,18 @@ def _deep_merge_no_overwrite(dst: dict[str, Any], src: dict[str, Any]) -> None:
             raise ValueError(f'ctx.vars collision at key "{k}": {dv!r} vs {v!r}')
 
 
-def _size_bytes(obj: Any) -> int:
-    return len(json.dumps(obj, ensure_ascii=False))
-
-
 def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
-    """Advance an instance until WAITING or a terminal outcome is reached."""
+    """Advance an instance until WAITING or a terminal outcome is reached.
+
+    Rules:
+      - Executors return NodeResult(status, context?, vars?).
+      - Engine stores compacted per-step context.
+      - Engine merges NodeResult.vars into global $vars (no overwrite of different values).
+      - Size guard on $vars (VARS_MAX_BYTES).
+      - Engine maps WAITING → Approval→AwaitingApproval, else Running.
+    """
     with transaction.atomic():
-        # Lock row to avoid concurrent advances
+        # Lock row to avoid concurrent advances from another worker
         inst = WorkflowInstance.objects.select_for_update().get(pk=inst.pk)
 
         if inst.finalized:
@@ -66,28 +80,36 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
             inst.state = WorkflowInstance.STATE_RUNNING
             inst.save(update_fields=['state'])
 
+        # allow last node to return COMPLETED
         budget = _max_pass_hops(inst) + 1
         for _ in range(budget):
             node_meta = _current_node(inst)
-            node_type = str(node_meta.get('type', ''))
+            node_type = str(node_meta.get('type') or '')
 
             executor = NodeExecutorFactory.create(node_type)
             result: NodeResult = executor.execute(inst, signal)
 
-            # Persist per-step context (compacted)
+            # Persist step context (compacted)
             if result.context is not None:
                 sc = dict(inst.step_contexts or {})
                 sc[str(inst.current_step)] = compact_context_blob(dict(result.context))
                 inst.step_contexts = sc
                 inst.save(update_fields=['step_contexts'])
 
-            # Merge vars into global $vars (with collision/size guard)
-            if result.vars:
+            # Merge vars into global $vars (flat map rooted at '$vars')
+            if isinstance(result.vars, dict) and result.vars:
                 sc = dict(inst.step_contexts or {})
                 vars_map = dict(sc.get('$vars') or {})
-                _deep_merge_no_overwrite(vars_map, dict(result.vars))
+                try:
+                    _deep_merge_no_overwrite(vars_map, dict(result.vars))
+                except ValueError:
+                    # collision → fail the instance
+                    inst.state = WorkflowInstance.STATE_FAILED
+                    inst.finalize()
+                    inst.save(update_fields=['state', 'finalized'])
+                    break
                 if _size_bytes(vars_map) > VARS_MAX_BYTES:
-                    # Hard fail on overflow
+                    # oversize → fail the instance
                     inst.state = WorkflowInstance.STATE_FAILED
                     inst.finalize()
                     inst.save(update_fields=['state', 'finalized'])
@@ -108,7 +130,6 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
                 break
 
             if status == ExecStatus.WAITING:
-                # Central policy: Approval waits in AwaitingApproval; other nodes keep Running.
                 inst.state = (
                     WorkflowInstance.STATE_AWAITING if node_type == 'Approval'
                     else WorkflowInstance.STATE_RUNNING

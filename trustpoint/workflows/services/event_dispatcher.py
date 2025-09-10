@@ -33,8 +33,7 @@ class EventDispatcher:
             **kwargs: Extra keyword arguments passed through to the handler.
 
         Returns:
-            A dictionary result returned by the handler. If no trigger or handler
-            matches, returns ``{"status": "no_match"}``.
+            A dictionary result returned by the handler.
         """
         # Resolve Trigger instance.
         trig: Trigger | None
@@ -48,11 +47,11 @@ class EventDispatcher:
                     break
 
         if trig is None:
-            return {'status': 'no_match'}
+            raise NotImplementedError
 
         handler_cls = get_handler_by_key(trig.handler)
         if handler_cls is None:
-            return {'status': 'no_match'}
+            raise NotImplementedError
 
         # Create instance and assert it matches our callable protocol.
         handler = cast('Handler', handler_cls())
