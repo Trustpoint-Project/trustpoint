@@ -155,7 +155,7 @@ def est_device_without_onboarding(domain_instance: dict[str, Any]) -> dict[str, 
 
     device = DeviceModel.objects.create(
         common_name='NoOnboarding_EST',
-        serial_number='SN_NO_EST',
+        serial_number='SN-NO-EST',
         domain=domain,
         no_onboarding_config=no_onboarding_config,
     )
@@ -179,7 +179,7 @@ def est_device_with_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any
 
     device = DeviceModel.objects.create(
         common_name='EST_Onboarding',
-        serial_number='SN_EST_ONBOARD',
+        serial_number='SN-EST-ONBOARD',
         domain=domain,
         onboarding_config=onboarding_config_model
     )
@@ -214,7 +214,7 @@ def cmp_device_with_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any
         OnboardingPkiProtocol.CMP
     ]
     onboarding_config_model = OnboardingConfigModel(
-        onboarding_protocol=OnboardingProtocol.CMP_SHARED_SECRET, cmp_shared_secret='test_cmp_secret')  # noqa: S106
+        onboarding_protocol=OnboardingProtocol.CMP_IDEVID)
     onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
 
     onboarding_config_model.full_clean()
@@ -222,7 +222,7 @@ def cmp_device_with_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any
 
     device = DeviceModel.objects.create(
         common_name='CMP_Onboarding',
-        serial_number='SN_CMP_ONBOARD',
+        serial_number='SN-CMP-ONBOARD',
         domain=domain,
         onboarding_config=onboarding_config_model
     )

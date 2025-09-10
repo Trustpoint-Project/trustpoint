@@ -7,7 +7,7 @@ from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
-from devices.models import DeviceModel, IssuedCredentialModel
+from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, OnboardingPkiProtocol
 from pki.models import CredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
@@ -39,7 +39,7 @@ class UsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
 
         try:
             device = DeviceModel.objects.select_related().filter(
-                common_name=username
+                common_name=username, no_onboarding_config__isnull=False
             ).first()
 
             if not device:
@@ -50,12 +50,12 @@ class UsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
                 self.logger.warning('Authentication failed: Invalid device model for %s', username)
                 self._raise_authentication_error()
 
-            if not device.est_password:
-                self.logger.warning('Authentication failed: No password set for %s', username)
+            if not device.no_onboarding_config.est_password:
+                self.logger.warning('Authentication failed: No EST password set for %s', username)
                 self._raise_authentication_error()
 
             # Use proper password hashing instead of plaintext comparison
-            if password != device.est_password:
+            if password != device.no_onboarding_config.est_password:
                 self.logger.warning('Authentication failed: Invalid password for %s', username)
                 self._raise_authentication_error()
 
@@ -295,7 +295,7 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
             sender_kid = self._extract_sender_kid(context)
             device = self._get_device(sender_kid)
             self._validate_device_configuration(device, sender_kid)
-            self._verify_hmac_protection(context, device.cmp_shared_secret)
+            self._verify_hmac_protection(context, device.no_onboarding_config.cmp_shared_secret)
             self._finalize_authentication(context, device, sender_kid)
 
         except (DeviceModel.DoesNotExist, ValueError, TypeError) as e:
@@ -364,7 +364,7 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
 
     def _validate_device_configuration(self, device: DeviceModel, sender_kid: int) -> None:
         """Validate device has required shared secret configuration."""
-        if not device.cmp_shared_secret:
+        if not device.no_onboarding_config or not device.no_onboarding_config.cmp_shared_secret:
             error_message = 'CMP shared secret authentication failed: Device has no shared secret configured.'
             self.logger.warning(
                 'Device %s (ID: %s) has no CMP shared secret configured', device.common_name, sender_kid)
@@ -567,13 +567,13 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
 
     def _verify_device_configuration(self, device: DeviceModel) -> None:
         """Verify the device's configuration and protocols."""
-        if not device.domain_credential_onboarding:
+        if not device.onboarding_config:
             self._raise_value_error('The corresponding device is not configured to use the onboarding mechanism.')
 
-        if device.onboarding_protocol != DeviceModel.OnboardingProtocol.CMP_IDEVID:
+        if device.onboarding_config.onboarding_protocol != OnboardingProtocol.CMP_IDEVID:
             self._raise_value_error('Wrong onboarding protocol.')
 
-        if device.pki_protocol != DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE:
+        if device.onboarding_config.onboarding_pki_protocol != OnboardingPkiProtocol.CMP_CLIENT_CERTIFICATE:
             self._raise_value_error('PKI protocol CMP client certificate expected, but got something else.')
 
     def _raise_value_error(self, message: str) -> Never:
@@ -787,15 +787,15 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
         cmp_signer_cert.verify_directly_issued_by(issuing_ca_cert)
 
         # Device configuration validation
-        if not device.domain_credential_onboarding:
+        if not device.onboarding_config:
             error_message = 'The corresponding device is not configured to use the onboarding mechanism.'
             self._raise_value_error(error_message)
 
-        if device.pki_protocol != DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE:
+        if not device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP):
             error_message = 'PKI protocol CMP client certificate expected, but got something else.'
             self.logger.warning(
                 'Device has wrong PKI protocol',
-                extra={'device_common_name': device.common_name, 'device_pki_protocol': device.pki_protocol}
+                extra={'device_common_name': device.common_name, 'device_pki_protocol': device.onboarding_config.get_pki_protocols()}
             )
             self._raise_value_error(error_message)
 

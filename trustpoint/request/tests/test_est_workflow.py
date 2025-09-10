@@ -12,7 +12,7 @@ from request.request_context import RequestContext
 from trustpoint.logger import LoggerMixin
 
 
-class TestCMPHelper(LoggerMixin):
+class TestESTHelper(LoggerMixin):
 
     def test_est_no_onboarding_username_password_auth(
             self,
@@ -28,7 +28,7 @@ class TestCMPHelper(LoggerMixin):
             raise ValueError('Domain for the device cannot be None')
 
         est_username = device.est_username
-        est_password = device.est_password
+        est_password = device.no_onboarding_config.est_password
         certtemplate_str = 'tls-client'
         operation_str = 'simpleenroll'
         common_name = device.common_name
@@ -76,7 +76,7 @@ class TestCMPHelper(LoggerMixin):
         assert mock_context.client_certificate is None
         assert mock_context.client_intermediate_certificate is None
         assert mock_context.est_username == device.est_username
-        assert mock_context.est_password == device.est_password
+        assert mock_context.est_password == device.no_onboarding_config.est_password
 
         parser.parse(mock_context)
 

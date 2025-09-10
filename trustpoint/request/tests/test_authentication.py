@@ -21,11 +21,11 @@ class TestUsernamePasswordAuthentication:
         self.auth = UsernamePasswordAuthentication()
         self.context = Mock(spec=RequestContext)
 
-    def test_authenticate_success(self, device_instance):
+    def test_authenticate_success(self, est_device_without_onboarding):
         """Test successful username/password authentication."""
-        device = device_instance['device']
+        device = est_device_without_onboarding['device']
         self.context.est_username = device.common_name
-        self.context.est_password = device.est_password
+        self.context.est_password = device.no_onboarding_config.est_password
 
         self.auth.authenticate(self.context)
 
@@ -43,11 +43,11 @@ class TestUsernamePasswordAuthentication:
         except ValueError as e:
             assert 'Authentication failed: Invalid username or password.' in str(e)
 
-    def test_authenticate_invalid_username(self, device_instance):
+    def test_authenticate_invalid_username(self, est_device_without_onboarding):
         """Test authentication with invalid username."""
-        device = device_instance['device']
+        device = est_device_without_onboarding['device']
         self.context.est_username = 'wronguser'
-        self.context.est_password = device.est_password
+        self.context.est_password = device.no_onboarding_config.est_password
 
         try:
             self.auth.authenticate(self.context)
@@ -64,11 +64,11 @@ class TestUsernamePasswordAuthentication:
 
         assert result is None
 
-    def test_authenticate_missing_username(self, device_instance):
+    def test_authenticate_missing_username(self, est_device_without_onboarding):
         """Test authentication with missing username."""
-        device = device_instance['device']
+        device = est_device_without_onboarding['device']
         self.context.est_username = None
-        self.context.est_password = device.est_password
+        self.context.est_password = device.no_onboarding_config.est_password
 
         result = self.auth.authenticate(self.context)
 

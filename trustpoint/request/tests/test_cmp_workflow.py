@@ -37,7 +37,7 @@ class TestCMPHelper(LoggerMixin):
         .add_component(BasicCMPArgs(cmd=operation_str_short))
         .add_component(ServerConfig(
             f'http://localhost:8443/.well-known/{protocol_str}/{operation_str_long}/{domain_str}/{certtemplate_str}/'))
-        .add_component(SharedSecretAuth(f'{device.id}', f'pass:{device.cmp_shared_secret}'))
+        .add_component(SharedSecretAuth(f'{device.id}', f'pass:{device.no_onboarding_config.cmp_shared_secret}'))
         .add_component(
             CertificateRequest('/CN=Trustpoint-TlsServer-Credential/O=TestOrg/OU=TestOrgUnit',
                                10,
@@ -84,7 +84,7 @@ class TestCMPHelper(LoggerMixin):
         assert mock_context.device is not None, 'Authentication failed: Device not found in context.'
         assert mock_context.device.common_name == device.common_name, \
             f'Authenticated device common_name {mock_context.device.common_name} does not match expected {device.common_name}.'
-        assert mock_context.cmp_shared_secret == device.cmp_shared_secret
+        assert mock_context.cmp_shared_secret == device.no_onboarding_config.cmp_shared_secret
 
         authorizer.authorize(mock_context)
 
