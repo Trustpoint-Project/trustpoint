@@ -59,3 +59,5 @@ Welcome to Trustpoint's documentation!
    development/development
    development/architecture/credentials
    development/sbom
+   devices/workflow
+

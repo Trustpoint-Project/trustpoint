@@ -9,6 +9,8 @@
         <h1>{% trans 'OPC UA GDS' %}</h1>
     </div>
 
+    {% include 'devices/table_filter.html' with table_url='devices:opc_ua_gds' %}
+
     <div class="card-body text-start" style="overflow: auto; flex-grow: 1; max-height: 90%;">
       {% include 'devices/devices_table.html' %}
       {% include 'trustpoint/pagination.html' %}

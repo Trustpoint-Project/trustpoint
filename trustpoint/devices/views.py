@@ -1,11 +1,10 @@
 """This module contains all views concerning the devices application."""
-
 from __future__ import annotations
 
 import abc
 import datetime
 import io
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
@@ -27,6 +26,7 @@ from trustpoint_core.archiver import Archiver
 from trustpoint_core.serializer import CredentialFileFormat
 from util.mult_obj_views import get_primary_keys_from_str_as_list_of_ints
 
+from devices.filters import DeviceFilter
 from devices.forms import (
     BrowserLoginForm,
     ClmDeviceModelNoOnboardingForm,
@@ -72,7 +72,6 @@ from trustpoint.settings import UIConfig
 if TYPE_CHECKING:
     import ipaddress
     from collections.abc import Sequence
-    from typing import Any
 
     from django.http.request import HttpRequest
     from django.utils.safestring import SafeString
@@ -112,9 +111,24 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
     context_object_name = 'devices'
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'common_name'
+    filterset_class = DeviceFilter
 
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
+
+
+    def apply_filters(self, qs: QuerySet[DeviceModel]) -> QuerySet[DeviceModel]:
+        """Applies the `DeviceFilter` to the given queryset.
+
+        Args:
+            qs: The base queryset to filter.
+
+        Returns:
+            The filtered queryset according to GET parameters.
+        """
+        self.filterset = DeviceFilter(self.request.GET, queryset=qs)
+        return cast('QuerySet[DeviceModel]', self.filterset.qs)
+
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Adds the object model to the instance and forwards to super().get().
@@ -161,6 +175,13 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
             The context to use for rendering the devices page.
         """
         context = super().get_context_data(**kwargs)
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+        context['current_sort'] = sort_param
+        context['filter'] = getattr(self, 'filterset', None)
+
+        params = self.request.GET.copy()
+        params.pop('sort', None)
+        context['preserve_qs'] = params.urlencode()
 
         for device in context['devices']:
             device.clm_button = self._get_clm_button_html(device)
@@ -214,12 +235,15 @@ class DeviceTableView(AbstractDeviceTableView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
     def get_queryset(self) -> QuerySet[DeviceModel]:
-        """Filter queryset to only include devices which are of generic type.
+        """Filter queryset to only include devices which are of generic type and filtered by filtered by UI filters.
 
         Returns:
-            Returns a queryset of all DeviceModels which are of generic type.
+            Returns a queryset of all DeviceModels, filtered by UI filters.
         """
-        return super(ListView, self).get_queryset().filter(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)
+        base_qs = super(ListView, self).get_queryset().filter(
+            device_type=DeviceModel.DeviceType.GENERIC_DEVICE
+        )
+        return self.apply_filters(base_qs)
 
 
 class OpcUaGdsTableView(DeviceTableView):
@@ -230,12 +254,15 @@ class OpcUaGdsTableView(DeviceTableView):
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
     def get_queryset(self) -> QuerySet[DeviceModel]:
-        """Filter queryset to only include devices which are of OPC-UA GDS type.
+        """Filter queryset to only include devices which are of OPC-UA GDS type and filtered by UI filters.
 
         Returns:
-            Returns a queryset of all DeviceModels which are of OPC-UA GDS type.
+            Returns a queryset of all DeviceModels which are of OPC-UA GDS type, filtered by UI filters.
         """
-        return super(ListView, self).get_queryset().filter(device_type=DeviceModel.DeviceType.OPC_UA_GDS)
+        base_qs = super(ListView, self).get_queryset().filter(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS
+        )
+        return self.apply_filters(base_qs)
 
 
 # ------------------------------------------------- Device Create View -------------------------------------------------
