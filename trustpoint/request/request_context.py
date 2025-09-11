@@ -4,7 +4,7 @@ from typing import Any
 
 from cryptography import x509
 from cryptography.x509 import CertificateSigningRequest
-from cryptography.x509.base import CertificateSigningRequestBuilder
+from cryptography.x509.base import CertificateBuilder, CertificateSigningRequestBuilder
 from devices.models import DeviceModel
 from django.http import HttpRequest
 from pki.models import DomainModel
@@ -27,6 +27,8 @@ class RequestContext:
     device: DeviceModel | None = None
 
     cert_requested: CertificateSigningRequest | CertificateSigningRequestBuilder | None = None
+    cert_requested_profile_validated: CertificateBuilder | None = None
+    issued_certificate: x509.Certificate | None = None
 
     est_username: str | None = None
     est_password: str | None = None

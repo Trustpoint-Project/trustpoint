@@ -3,7 +3,6 @@
 import base64
 import ipaddress
 import re
-import enum
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, cast
 

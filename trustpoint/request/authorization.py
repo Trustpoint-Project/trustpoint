@@ -118,7 +118,7 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
 
         self.logger.debug('Operation authorization successful for operation: %(operation)s',
                           extra={'operation': operation})
-    
+
     def _raise_value_error(self, message: str) -> Never:
         """Raise a ValueError with the given message."""
         raise ValueError(message)

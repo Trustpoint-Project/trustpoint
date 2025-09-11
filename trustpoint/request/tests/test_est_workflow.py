@@ -3,10 +3,13 @@ import base64
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from django.test.client import RequestFactory
+from pki.util.cert_profile import JSONProfileVerifier
+from pki.util.cert_req_converter import JSONCertRequestConverter
 
 from request.authentication import EstAuthentication
 from request.authorization import CertificateTemplateAuthorization, EstAuthorization, EstOperationAuthorization
 from request.http_request_validator import EstHttpRequestValidator
+from request.operation_processor import CertificateIssueProcessor
 from request.pki_message_parser import EstMessageParser
 from request.request_context import RequestContext
 from trustpoint.logger import LoggerMixin
@@ -179,3 +182,24 @@ class TestESTHelper(LoggerMixin):
         authorizer.authorize(mock_context)
 
         assert True, 'Authorization passed as expected'
+
+        # Certificate profile validation
+        cert_request_json = JSONCertRequestConverter.to_json(mock_context.cert_requested)
+        self.logger.info('Cert Request JSON: %s', cert_request_json)
+
+        validated_req = JSONProfileVerifier.validate_request(cert_request_json)
+
+        assert validated_req['subject']['common_name'] == 'Test TLS Client Certificate'
+
+        mock_profile = {
+            'type': 'cert_profile',
+            'ext': {
+                'crl': {'uris': ['http://localhost/crl/2']},
+            }
+        }
+
+        validated_request = JSONProfileVerifier(mock_profile).apply_profile_to_request(validated_req)
+        self.logger.info('Validated Cert Request JSON: %s', validated_request)
+
+        mock_context.cert_requested_profile_validated = JSONCertRequestConverter.from_json(validated_request)
+        CertificateIssueProcessor().process_operation(mock_context)

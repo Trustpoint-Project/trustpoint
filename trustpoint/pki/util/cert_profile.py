@@ -112,7 +112,10 @@ class SanExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
     model_config = ConfigDict(extra='forbid')
 
 class CRLDistributionPointsExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
-    """Model for the CRL Distribution Points extension of a certificate profile."""
+    """Model for the CRL Distribution Points extension of a certificate profile.
+
+    Note: Only URIs in full_name are supported.
+    """
     uris: list[str] | ProfileValuePropertyModel | None = None
 
     model_config = ConfigDict(extra='forbid')
@@ -193,8 +196,8 @@ class ProfileExtensionsModel(ExtensionsModel, CertProfileBaseModel):
 class CertProfileModel(CertProfileBaseModel):
     """Model for a certificate profile."""
     type: Literal['cert_profile']
-    subject: ProfileSubjectModel | None = Field(alias='subj', default=None)
-    extensions: ProfileExtensionsModel | None = Field(alias='ext', default=None)
+    subject: ProfileSubjectModel = Field(alias='subj', default=ProfileSubjectModel())
+    extensions: ProfileExtensionsModel = Field(alias='ext', default=ProfileExtensionsModel())
 
 
 class CertRequestModel(BaseModel):

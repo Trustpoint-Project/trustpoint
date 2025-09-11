@@ -7,7 +7,7 @@ from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, OnboardingPkiProtocol
+from devices.models import DeviceModel, IssuedCredentialModel, OnboardingPkiProtocol, OnboardingProtocol
 from pki.models import CredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
@@ -150,7 +150,7 @@ class ReenrollmentAuthentication(AuthenticationComponent, LoggerMixin):
         """Authenticate the client for reenrollment."""
         if not self._validate_context(context):
             return
-        
+
         if not context.client_certificate:
             error_message = 'Client certificate is required for reenrollment.'
             self.logger.warning(error_message)
@@ -174,7 +174,7 @@ class ReenrollmentAuthentication(AuthenticationComponent, LoggerMixin):
         """Validate the context for reenrollment."""
         if not context.client_certificate:
             return False
-        
+
         if not isinstance(context.client_certificate, x509.Certificate):
             error_message = 'Invalid client certificate type for reenrollment.'
             self.logger.warning(error_message)
@@ -703,7 +703,8 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
         """Extract device information from certificate subject."""
         try:
             device_id = int(cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.USER_ID)[0].value)
-            device_serial_number_raw = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
+            device_serial_number_raw = cmp_signer_cert.subject.get_attributes_for_oid(
+                x509.NameOID.SERIAL_NUMBER)[0].value
             domain_name_raw = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.DOMAIN_COMPONENT)[0].value
             common_name = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0]
 
@@ -762,7 +763,8 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             )
             self._raise_value_error(error_message)
 
-    def _validate_device(self, device: DeviceModel, device_info: dict[str, str | int], cmp_signer_cert: x509.Certificate) -> None:
+    def _validate_device(
+            self, device: DeviceModel, device_info: dict[str, str | int], cmp_signer_cert: x509.Certificate) -> None:
         """Validate device properties and certificate."""
         # Validate device serial number
         if device_info['serial_number'] != device.serial_number:
@@ -795,7 +797,10 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             error_message = 'PKI protocol CMP client certificate expected, but got something else.'
             self.logger.warning(
                 'Device has wrong PKI protocol',
-                extra={'device_common_name': device.common_name, 'device_pki_protocol': device.onboarding_config.get_pki_protocols()}
+                extra={
+                    'device_common_name': device.common_name,
+                    'device_pki_protocol': device.onboarding_config.get_pki_protocols()
+                }
             )
             self._raise_value_error(error_message)
 
@@ -812,7 +817,7 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
         if not device.domain:
             self._raise_value_error('Device is not part of any domain.')
 
-        device.domain.get_issuing_ca_or_value_error().credential
+        device.domain.get_issuing_ca_or_value_error() #.credential # ???
 
         self.logger.info(
             'Successfully authenticated device via CMP signature-based certification',
