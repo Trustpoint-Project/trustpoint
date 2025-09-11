@@ -1,12 +1,25 @@
+// static/js/ui-triggers.js
+// Renders the trigger selector (handler → protocol → operation) from state.triggersMap.
+// Keeps state mutations via setHandler/setProtocol/setOperation and re-renders on changes.
+
 import { state, setHandler, setProtocol, setOperation } from './state.js';
 
-export function renderTriggersUI({els, onChange}) {
-  // Build handlers
-  const handlers = [...new Set(Object.values(state.triggersMap).map(t => t.handler))].filter(Boolean);
+export function renderTriggersUI({ els, onChange }) {
+  if (!els || !els.handlerEl || !els.protoEl || !els.opEl || !els.protoContainer || !els.opContainer) {
+    // fail-soft if markup isn't wired yet
+    return;
+  }
+
+  const mapValues = Object.values(state.triggersMap || {});
+  const uniq = arr => [...new Set(arr)];
+  const byHandler = h => (t) => (t.handler || '') === (h || '');
+  const byHandlerProto = (h, p) => (t) => (t.handler || '') === (h || '') && (t.protocol || '') === (p || '');
+
+  // ---- Handlers ----
+  const handlers = uniq(mapValues.map(t => t.handler).filter(Boolean)).sort();
   els.handlerEl.innerHTML = '';
   handlers.forEach(h => {
-    const label = h.replace(/_/g, ' ');
-    const opt = new Option(label, h);
+    const opt = new Option(h.replace(/_/g, ' '), h);
     if (h === state.handler) opt.selected = true;
     els.handlerEl.add(opt);
   });
@@ -15,9 +28,10 @@ export function renderTriggersUI({els, onChange}) {
     els.handlerEl.value = state.handler;
   }
 
-  // Build protocols for current handler
-  const relevant = Object.values(state.triggersMap).filter(t => t.handler === state.handler);
-  const protos = [...new Set(relevant.map(t => t.protocol).filter(Boolean))];
+  // ---- Protocols (for selected handler) ----
+  const relevant = mapValues.filter(byHandler(state.handler));
+  const protos = uniq(relevant.map(t => t.protocol).filter(Boolean)).sort();
+
   if (protos.length) {
     els.protoContainer.style.display = '';
     els.protoEl.innerHTML = '';
@@ -36,15 +50,18 @@ export function renderTriggersUI({els, onChange}) {
     setProtocol('');
   }
 
-  // Build operations for (handler, protocol)
-  const ops = Object.values(state.triggersMap)
-    .filter(t => t.handler === state.handler && t.protocol === state.protocol)
-    .map(t => t.operation)
-    .filter(Boolean);
+  // ---- Operations (for selected handler+protocol) ----
+  const ops = uniq(
+    mapValues
+      .filter(byHandlerProto(state.handler, state.protocol))
+      .map(t => t.operation)
+      .filter(Boolean)
+  ).sort();
+
   if (ops.length) {
     els.opContainer.style.display = '';
     els.opEl.innerHTML = '';
-    [...new Set(ops)].forEach(o => {
+    ops.forEach(o => {
       const opt = new Option(o, o);
       if (o === state.operation) opt.selected = true;
       els.opEl.add(opt);
@@ -59,8 +76,21 @@ export function renderTriggersUI({els, onChange}) {
     setOperation('');
   }
 
-  // Wire events (assign, not addEventListener → avoids stacking)
-  els.handlerEl.onchange = () => { setHandler(els.handlerEl.value); renderTriggersUI({els, onChange}); onChange(); };
-  els.protoEl.onchange   = () => { setProtocol(els.protoEl.value);   renderTriggersUI({els, onChange}); onChange(); };
-  els.opEl.onchange      = () => { setOperation(els.opEl.value);     onChange(); };
+  // ---- Wire events (assign, not addEventListener → avoids stacking) ----
+  els.handlerEl.onchange = () => {
+    setHandler(els.handlerEl.value);
+    // changing handler resets protocol/operation internally; re-render
+    renderTriggersUI({ els, onChange });
+    onChange();
+  };
+  els.protoEl.onchange = () => {
+    setProtocol(els.protoEl.value);
+    // changing protocol resets operation; re-render
+    renderTriggersUI({ els, onChange });
+    onChange();
+  };
+  els.opEl.onchange = () => {
+    setOperation(els.opEl.value);
+    onChange();
+  };
 }

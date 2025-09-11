@@ -15,7 +15,12 @@ function isDotPath(s) {
   if (typeof s !== 'string' || !s) return false;
   for (const ch of s) if (!SEGMENT_CHARS.has(ch)) return false;
   const parts = s.split('.');
-  return parts.every(p => p && (/[A-Za-z_]/.test(p[0])) && (/^[A-Za-z0-9_]+$/.test(p.replaceAll('_','_'))));
+  // Strip underscores for the alnum check (fix: previously a no-op)
+  return parts.every(p =>
+    p &&
+    (/[A-Za-z_]/.test(p[0])) &&
+    (/^[A-Za-z0-9]+$/.test(p.replaceAll('_','')))
+  );
 }
 
 function knownTriples(triggersMap) {
@@ -136,11 +141,11 @@ export function validateWizardState(state, triggersMap) {
     });
   }
 
-  // scopes
-  const scopeCount =
-    (state.scopes.CA?.size || 0) +
-    (state.scopes.Domain?.size || 0) +
-    (state.scopes.Device?.size || 0);
+  // scopes (support Set or Array gracefully)
+  const caCount = Array.isArray(state.scopes?.CA) ? state.scopes.CA.length : (state.scopes?.CA?.size || 0);
+  const domCount = Array.isArray(state.scopes?.Domain) ? state.scopes.Domain.length : (state.scopes?.Domain?.size || 0);
+  const devCount = Array.isArray(state.scopes?.Device) ? state.scopes.Device.length : (state.scopes?.Device?.size || 0);
+  const scopeCount = (caCount || 0) + (domCount || 0) + (devCount || 0);
   if (scopeCount === 0) {
     errors.push('At least one scope (CA/Domain/Device) is required.');
   }

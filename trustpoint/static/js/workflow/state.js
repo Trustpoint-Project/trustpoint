@@ -1,4 +1,6 @@
-// Single source of truth for the wizard
+// static/js/state.js
+// Single source of truth for the wizard.
+// NOTE: Sets are used for scopes to keep add/remove cheap and avoid dupes.
 
 export const state = {
   editId: new URLSearchParams(window.location.search).get('edit') || null,
@@ -8,25 +10,38 @@ export const state = {
   protocol: '',
   operation: '',
 
-  steps: [],      // [{id, type, params}]
+  steps: [],      // [{ id:number, type:string, params:object }]
   nextStepId: 1,
 
   scopes: { CA: new Set(), Domain: new Set(), Device: new Set() },
 
-  triggersMap: {},                 // /workflows/api/triggers/
-  mailTemplates: { groups: [] },   // /workflows/api/mail-templates/
+  triggersMap: {},                 // GET /workflows/api/triggers/
+  mailTemplates: { groups: [] },   // GET /workflows/api/mail-templates/
   scopesChoices: {
     CA: new Map(), Domain: new Map(), Device: new Map(), // id->name
   },
 };
 
 // ---- mutations ----
-export function setName(v) { state.name = v || ''; }
-export function setHandler(h) { state.handler = h || ''; state.protocol=''; state.operation=''; }
-export function setProtocol(p) { state.protocol = p || ''; state.operation = ''; }
-export function setOperation(o) { state.operation = o || ''; }
+export function setName(v) {
+  state.name = v || '';
+}
+export function setHandler(h) {
+  state.handler = h || '';
+  // Selecting a handler invalidates protocol & operation
+  state.protocol = '';
+  state.operation = '';
+}
+export function setProtocol(p) {
+  state.protocol = p || '';
+  // Selecting a protocol invalidates operation
+  state.operation = '';
+}
+export function setOperation(o) {
+  state.operation = o || '';
+}
 
-export function addStep(type='Approval', params={}) {
+export function addStep(type = 'Approval', params = {}) {
   state.steps.push({ id: state.nextStepId++, type, params: { ...params } });
 }
 export function removeStep(id) {
@@ -36,7 +51,7 @@ export function updateStepType(id, newType) {
   const s = state.steps.find(x => x.id === id);
   if (!s) return;
   s.type = newType;
-  s.params = {};
+  s.params = {}; // reset params when type changes
 }
 export function updateStepParam(id, key, value) {
   const s = state.steps.find(x => x.id === id);
@@ -55,18 +70,22 @@ export function moveStep(id, toIndex) {
 }
 
 export function addScopes(kind, ids) {
-  ids.forEach(id => state.scopes[kind].add(String(id)));
+  const bucket = state.scopes[kind];
+  if (!bucket) return;
+  ids.forEach(id => bucket.add(String(id)));
 }
 export function removeScope(kind, id) {
-  state.scopes[kind].delete(String(id));
+  const bucket = state.scopes[kind];
+  if (!bucket) return;
+  bucket.delete(String(id));
 }
 
 // ---- payload builder ----
 export function buildPayload() {
   const scopesFlat = [
-    ...[...state.scopes.CA].map(id => ({ ca_id:id, domain_id:null, device_id:null })),
-    ...[...state.scopes.Domain].map(id => ({ ca_id:null, domain_id:id, device_id:null })),
-    ...[...state.scopes.Device].map(id => ({ ca_id:null, domain_id:null, device_id:id })),
+    ...[...state.scopes.CA].map(id => ({ ca_id: id,   domain_id: null, device_id: null })),
+    ...[...state.scopes.Domain].map(id => ({ ca_id: null, domain_id: id,  device_id: null })),
+    ...[...state.scopes.Device].map(id => ({ ca_id: null, domain_id: null, device_id: id })),
   ];
 
   return {
@@ -77,11 +96,16 @@ export function buildPayload() {
       protocol: state.protocol || '',
       operation: state.operation || '',
     }],
-    steps: state.steps.map(({type, params}) => {
+    steps: state.steps.map(({ type, params }) => {
       if (type === 'Email') {
+        // Normalize mutually exclusive params for Email step
         const p = { ...params };
-        if (p.template) { delete p.subject; delete p.body; }
-        else { delete p.template; }
+        if (p.template && String(p.template).trim()) {
+          delete p.subject;
+          delete p.body;
+        } else {
+          delete p.template;
+        }
         return { type, params: p };
       }
       return { type, params: { ...params } };

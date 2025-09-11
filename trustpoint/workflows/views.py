@@ -36,6 +36,8 @@ from workflows.models import (
     WorkflowInstance,
     WorkflowScope,
 )
+from workflows.services.context import build_context
+from workflows.services.context_catalog import build_catalog
 from workflows.services.engine import advance_instance
 from workflows.services.validators import validate_wizard_payload
 from workflows.services.wizard import transform_to_definition_schema
@@ -44,6 +46,24 @@ from workflows.triggers import Triggers
 if TYPE_CHECKING:
     from django.db.models import QuerySet
 
+
+class ContextCatalogView(View):
+    """Return a flattened, searchable catalog of {{ ctx.* }} variables for a running instance."""
+
+    def get(self, _request: HttpRequest, instance_id: UUID, *_args: Any, **_kwargs: Any) -> JsonResponse:
+        """Return JSON catalog of available template paths for {{ ctx.* }}.
+
+        Args:
+            _request: The HTTP request.
+            instance_id: Workflow instance UUID.
+
+        Returns:
+            JsonResponse with 'usage' and 'vars' (each var has key, label, sample).
+        """
+        inst = get_object_or_404(WorkflowInstance, pk=instance_id)
+        ctx = build_context(inst)  # returns a dict
+        catalog = build_catalog(ctx)
+        return JsonResponse(catalog, safe=True)
 
 
 class MailTemplateListView(View):

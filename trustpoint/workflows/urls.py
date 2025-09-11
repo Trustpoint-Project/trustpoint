@@ -8,6 +8,7 @@ from django.urls import path
 
 from workflows.views import (
     CAListView,
+    ContextCatalogView,
     DefinitionDetailView,
     DeviceListView,
     DomainListView,
@@ -33,6 +34,7 @@ urlpatterns = [
 
     # load one definition for “edit” in the wizard
     path('api/definitions/<uuid:pk>/', DefinitionDetailView.as_view(), name='definition_detail'),
+    path('context-catalog/<uuid:instance_id>/', ContextCatalogView.as_view(), name='context_catalog'),
 
     # main UI
     path('', WorkflowDefinitionListView.as_view(), name='definition_list'),

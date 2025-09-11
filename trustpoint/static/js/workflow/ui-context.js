@@ -1,45 +1,63 @@
-// static/js/ui-context.js
-// Exports: buildDesignTimeCatalog, fetchContextCatalog, attachVarPicker
-// Purpose: Provide a design-time variable catalog for the wizard's insert picker.
-// Includes dynamic step entries under ctx.steps_safe and a helper group for ctx.step_names.
+// static/js/workflow/ui-context.js
+// Design-time ctx catalog for the variable panel (step-type aware).
+// Exposes ctx.steps.step_1, step_2, ... and only shows per-type outputs where applicable.
 
-let _lastCacheKey = null;
-let _catalogCache = null;
+let _lastSig = null;
+let _cache = null;
 
-/**
- * Return a design-time catalog object that mirrors what will be available at runtime
- * on `ctx.*`, including dynamic step safe names.
- *
- * @param {object} opts
- * @param {object} opts.state - the wizard state (we use state.steps to synthesize step entries)
- */
+/** Build a stable signature of steps for caching. */
+function stepsSignature(steps) {
+  // type + presence of params keys (cheap but stable enough)
+  return (steps || [])
+    .map(s => `${s.type}|${Object.keys(s.params || {}).sort().join(',')}`)
+    .join('||');
+}
+
 export function buildDesignTimeCatalog({ state }) {
-  const stepCount = Array.isArray(state?.steps) ? state.steps.length : 0;
+  const steps = Array.isArray(state?.steps) ? state.steps : [];
+  const sig = `v4::${stepsSignature(steps)}`;
+  if (_cache && _lastSig === sig) return _cache;
 
-  // Simple cache keyed by count; extend if you later include step titles, etc.
-  const cacheKey = `v2::steps:${stepCount}`;
-  if (_catalogCache && _lastCacheKey === cacheKey) return _catalogCache;
-
-  // Build dynamic step entries
   const stepVars = [];
-  for (let i = 0; i < stepCount; i += 1) {
+  for (let i = 0; i < steps.length; i += 1) {
     const safe = `step_${i + 1}`;
-    // Anchors authors can expand from:
-    stepVars.push({ key: `steps_safe.${safe}`,            label: `${safe} (all)` });
-    stepVars.push({ key: `steps_safe.${safe}.outputs`,    label: `${safe}.outputs` });
-    stepVars.push({ key: `steps_safe.${safe}.status`,     label: `${safe}.status` });
-    stepVars.push({ key: `steps_safe.${safe}.ok`,         label: `${safe}.ok` });
-    stepVars.push({ key: `steps_safe.${safe}.error`,      label: `${safe}.error` });
+    const st = steps[i] || {};
+    const type = String(st.type || '');
+
+    // Always useful:
+    stepVars.push({ key: `steps.${safe}`,         label: `${safe} (all)` });
+    stepVars.push({ key: `steps.${safe}.outputs`, label: `${safe}.outputs` });
+    stepVars.push({ key: `steps.${safe}.status`,  label: `${safe}.status` });
+    stepVars.push({ key: `steps.${safe}.ok`,      label: `${safe}.ok` });
+    stepVars.push({ key: `steps.${safe}.error`,   label: `${safe}.error` });
+
+    // Type-specific hints
+    if (type === 'Webhook') {
+      stepVars.push({ key: `steps.${safe}.outputs.webhook.status`, label: `${safe}.outputs.webhook.status` });
+      stepVars.push({ key: `steps.${safe}.outputs.webhook.text`,   label: `${safe}.outputs.webhook.text` });
+      stepVars.push({ key: `steps.${safe}.outputs.webhook.json`,   label: `${safe}.outputs.webhook.json` });
+      stepVars.push({ key: `steps.${safe}.outputs.webhook.headers`,label: `${safe}.outputs.webhook.headers` });
+    }
+    if (type === 'Email') {
+      stepVars.push({ key: `steps.${safe}.outputs.mode`,    label: `${safe}.outputs.mode` });
+      stepVars.push({ key: `steps.${safe}.outputs.subject`, label: `${safe}.outputs.subject` });
+      stepVars.push({ key: `steps.${safe}.outputs.email`,   label: `${safe}.outputs.email` });
+    }
+    if (type === 'Approval') {
+      // keep generic for now; can add more if your approval step writes outputs
+    }
+    if (type === 'Condition') {
+      // if your condition step writes outputs, surface them here similarly
+    }
   }
 
-  _catalogCache = {
-    usage: 'Insert variables using {{ ctx.<path> }}, e.g. {{ ctx.workflow.id }} or {{ ctx.steps_safe.step_2.outputs.status }}',
+  _cache = {
+    usage: 'Insert variables using {{ ctx.<path> }}, e.g. {{ ctx.workflow.id }} or {{ ctx.steps.step_2.outputs.webhook.status }}',
     groups: [
       {
         key: 'workflow', label: 'Workflow', vars: [
-          { key: 'workflow.id',      label: 'Workflow ID' },
-          { key: 'workflow.name',    label: 'Workflow Name' },
-          { key: 'workflow.version', label: 'Workflow Version (if present)' },
+          { key: 'workflow.id',   label: 'Workflow ID' },
+          { key: 'workflow.name', label: 'Workflow Name' },
         ],
       },
       {
@@ -67,102 +85,20 @@ export function buildDesignTimeCatalog({ state }) {
           { key: 'csr.public_key_type', label: 'Public Key Type' },
         ],
       },
-      // NEW: Steps (safe)
-      {
-        key: 'steps_safe',
-        label: 'Steps (safe)',
-        vars: stepVars,
-      },
-      // NEW: helper mapping raw -> safe (authors can see how to reference a given step id)
-      {
-        key: 'step_names',
-        label: 'Step name mapping',
-        vars: (function () {
-          const out = [];
-          for (let i = 0; i < stepCount; i += 1) {
-            const raw = `step-${i + 1}`;
-            const safe = `step_${i + 1}`;
-            out.push({ key: `step_names.${raw}`, label: `${raw} → ${safe}` });
-          }
-          return out;
-        }()),
-      },
+      { key: 'steps', label: 'Steps', vars: stepVars },
       {
         key: 'vars', label: 'Saved Vars', vars: [
-          // Anchors only; authors will know their specific keys.
-          { key: 'vars',         label: 'vars (whole map)' },
-          { key: 'vars.answer',  label: 'example: vars.answer' },
+          { key: 'vars', label: 'vars (whole map)' },
         ],
       },
     ],
   };
 
-  _lastCacheKey = cacheKey;
-  return _catalogCache;
+  _lastSig = sig;
+  return _cache;
 }
 
-// Backwards-compatible wrapper. Call with the wizard `state`.
+// Backward compat (used by VarPanel)
 export async function fetchContextCatalog(state) {
   return buildDesignTimeCatalog({ state });
-}
-
-// Adds a compact picker next to a label; inserts token at the caret into an
-// <input> or <textarea> and keeps the field editable/copyable.
-export function attachVarPicker({ container, targetInput, catalog }) {
-  if (!container || !targetInput) return;
-
-  const wrap = document.createElement('div');
-  wrap.className = 'mt-1';
-
-  const select = document.createElement('select');
-  select.className = 'form-select form-select-sm';
-  const ph = new Option('Insert variable…', '', true, true);
-  ph.disabled = true;
-  select.add(ph);
-
-  for (const g of (catalog?.groups || [])) {
-    const og = document.createElement('optgroup');
-    og.label = g.label || g.key;
-    for (const v of (g.vars || [])) {
-      og.appendChild(new Option(v.label || v.key, v.key));
-    }
-    select.appendChild(og);
-  }
-
-  select.onchange = () => {
-    const path = select.value; // e.g. 'steps_safe.step_2.outputs.status'
-    if (!path) return;
-    insertAtCaret(targetInput, `{{ ctx.${path} }}`);
-    // reset and notify state
-    select.selectedIndex = 0;
-    targetInput.dispatchEvent(new Event('input', { bubbles: true }));
-    targetInput.focus();
-  };
-
-  const help = document.createElement('div');
-  help.className = 'form-text';
-  help.textContent =
-    catalog?.usage ||
-    'Use {{ ctx.<path> }} to render variables.';
-
-  wrap.appendChild(select);
-  wrap.appendChild(help);
-  container.appendChild(wrap);
-}
-
-function insertAtCaret(el, text) {
-  if (!el) return;
-  const isText =
-    el.tagName === 'TEXTAREA' ||
-    (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'email'));
-  if (!isText) return;
-
-  const start = el.selectionStart ?? el.value.length;
-  const end   = el.selectionEnd ?? el.value.length;
-  const before = el.value.slice(0, start);
-  const after  = el.value.slice(end);
-  el.value = before + text + after;
-
-  const pos = before.length + text.length;
-  try { el.setSelectionRange(pos, pos); } catch {}
 }
