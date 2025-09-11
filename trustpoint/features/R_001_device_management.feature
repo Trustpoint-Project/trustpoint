@@ -12,7 +12,7 @@ Feature: Manage devices via TPC_Web
     And a domain trustpoint_test with issuing ca "test_CA" exist
 
   Scenario Outline: Add a new device without domain credential onboarding
-    When the admin navigates to the "Add Device" page
+    When the admin navigates to the "create onboarding device" page
     And the admin fills in the device details with <name>, <serial_number> and domain "trustpoint_test"
     And the admin clicks on "Create Device"
     Then the system should display a confirmation page

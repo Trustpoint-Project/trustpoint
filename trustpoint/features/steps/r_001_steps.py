@@ -42,9 +42,8 @@ def step_fill_device_details(context: runner.Context, name: str, serial_number: 
         'common_name': name,
         'serial_number': serial_number,
         'domain': domain.id,
-        'domain_credential_onboarding': 'off',
-        'onboarding_and_pki_configuration': 'cmp_shared_secret' ,
-        'pki_configuration': 'cmp_shared_secret',
+        'onboarding_protocol': '2',
+        "onboarding_pki_protocols": ["1"] ,
         '_save': 'Save',
     }
 
@@ -92,14 +91,16 @@ def step_delete_device(context: runner.Context, name: str) -> None:  # noqa: ARG
     """
 
     context.response = context.authenticated_client.get(
-        '/devices/delete/'+ str(context.device.id),
+        '/devices/delete-device/'+ str(context.device.id),
         follow=True,
         HTTP_X_REQUESTED_WITH="XMLHttpRequest"
     )
 
     assert context.response.status_code == 200, "Device delete form submission failed"
     assert b"Confirm Device Deletion" in context.response.content
-    context.response = context.authenticated_client.post(f"/devices/delete/{context.device.id}/", data={}, follow=True)
+    context.response = context.authenticated_client.post(
+        "/devices/delete-device",
+        data={"pks": str(context.device.id)}, follow=True)
     assert context.response.status_code == 200, "Device deletion response"
     assert not DeviceModel.objects.filter(id=context.device.id).exists(), "Device deletion failed"
 
