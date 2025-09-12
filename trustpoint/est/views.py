@@ -1,6 +1,7 @@
 """Views for EST (Enrollment over Secure Transport) handling authentication and certificate issuance."""
 
 import base64
+import contextlib
 import ipaddress
 import re
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ from devices.issuer import (
     OpcUaServerCredentialIssuer,
 )
 from devices.models import DeviceModel, IssuedCredentialModel
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -26,11 +28,11 @@ from pki.models.domain import DomainModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
 from pyasn1.type.univ import ObjectIdentifier
-
-from trustpoint.logger import LoggerMixin
-from workflows.models import WorkflowInstance
+from workflows.models import EnrollmentRequest
 from workflows.services.event_dispatcher import EventDispatcher
 from workflows.triggers import Triggers
+
+from trustpoint.logger import LoggerMixin
 
 
 class UsernamePasswordAuthenticationError(Exception):
@@ -842,38 +844,47 @@ class EstSimpleEnrollmentView(
                 },
             )
 
-            status = info.get('status')
-            if status in (
-                WorkflowInstance.STATE_APPROVED,
-                WorkflowInstance.STATE_COMPLETED,
-                WorkflowInstance.STATE_NO_MATCH,
-            ):
-                # already approved → issue directly
+            agg = info.get('status')
+            req_id = info.get('request_id')
+
+            if agg == EnrollmentRequest.STATE_REJECTED:
+                print('REJECTED AGG')
+                try:
+                    print('TRY')
+                    with transaction.atomic():
+                        req = EnrollmentRequest.objects.select_for_update().get(pk=req_id)
+                        req.finalize_to(EnrollmentRequest.STATE_REJECTED)
+                except EnrollmentRequest.DoesNotExist:
+                    print('Failed')
+                http_response = LoggedHttpResponse('Enrollment request Rejected', status=403, content_type='text/plain')
+
+            if agg == EnrollmentRequest.STATE_FAILED:
+                http_response = LoggedHttpResponse('Enrollment request Failed', status=500, content_type='text/plain')
+
+            if agg == 'NoMatch':
+                # your choice: keep 202 to mimic "still pending / no policy"
+                http_response = LoggedHttpResponse('No matching workflow', status=202, content_type='text/plain')
+
+            if agg == EnrollmentRequest.STATE_PENDING:
+                http_response = LoggedHttpResponse('Enrollment request pending approval', status=202, content_type='text/plain')
+
+            if agg == EnrollmentRequest.STATE_APPROVED:
+                # Issue certificate now
                 http_response = self._issue_simpleenroll(
                     device=device,
                     domain=requested_domain,
                     credential_request=credential_request,
                     requested_cert_template_str=requested_cert_template_str,
                 )
-                if status is not WorkflowInstance.STATE_NO_MATCH:
-                    WorkflowInstance.objects.get(id=info.get('instance_id', '')).finalize()
-            elif status == WorkflowInstance.STATE_AWAITING:
-                # newly queued or re-queued
-                http_response = LoggedHttpResponse(
-                    'Enrollment request pending approval',
-                    status=202,
-                    content_type='text/plain',
-                )
-            elif status == WorkflowInstance.STATE_REJECTED:
-                # newly queued or re-queued
-                http_response = LoggedHttpResponse(
-                    'Enrollment request Rejected',
-                    status=403,
-                    content_type='text/plain',
-                )
-                WorkflowInstance.objects.get(id=info.get('instance_id', '')).finalize()
+                # Finalize the request (and all children)
+                try:
+                    with transaction.atomic():
+                        req = EnrollmentRequest.objects.select_for_update().get(pk=req_id)
+                        req.finalize_to(EnrollmentRequest.STATE_COMPLETED)
+                except EnrollmentRequest.DoesNotExist:
+                    pass
 
-        # Fallback error
+        # Fallback
         if http_response is None:
             http_response = LoggedHttpResponse(
                 f'Something went wrong during EST simpleenroll. Have fun debugging <3 status:  {info}',

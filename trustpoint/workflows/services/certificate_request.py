@@ -1,5 +1,3 @@
-"""Certificate request event handler and workflow trigger."""
-
 from __future__ import annotations
 
 import hashlib
@@ -10,9 +8,10 @@ from cryptography import x509
 from django.db import transaction
 from django.db.models import Q
 
-from workflows.models import WorkflowDefinition, WorkflowInstance
+from workflows.models import EnrollmentRequest, WorkflowDefinition, WorkflowInstance
 from workflows.services.engine import advance_instance
 from workflows.services.handler_lookup import register_handler
+from workflows.services.request_aggregator import recompute_request_state  # NEW
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -22,14 +21,6 @@ logger = logging.getLogger(__name__)
 
 @register_handler('certificate_request')
 class CertificateRequestHandler:
-    """Handle certificate-request events (e.g., EST simpleenroll).
-
-    Contract: for a matching, published workflow this will ALWAYS advance a
-    brand-new or still-starting/running instance synchronously until the FIRST
-    stopping state, then return that state (AwaitingApproval/Approved/Rejected/
-    Completed/Failed). Callers will never see "Starting" from this handler.
-    """
-
     def __call__(  # noqa: PLR0913
         self,
         *,
@@ -41,12 +32,9 @@ class CertificateRequestHandler:
         payload: dict[str, Any],
         **_: Any,
     ) -> dict[str, Any]:
-        # -- normalize incoming IDs to ints or None --
-        def _norm(val: int | UUID | None) -> int | None:
-            if val is None:
-                return None
+        def _norm(v):  # normalize IDs
             try:
-                return int(val)
+                return int(v) if v is not None else None
             except (TypeError, ValueError):
                 return None
 
@@ -54,22 +42,50 @@ class CertificateRequestHandler:
         dom = _norm(domain_id)
         dev = _norm(device_id)
 
-        # -- load & fingerprint CSR PEM --
         csr_pem = payload.get('csr_pem')
         if not isinstance(csr_pem, str):
-            logger.error('certificate_request: missing csr_pem')
             return {'status': 'error', 'msg': 'Missing or invalid csr_pem'}
-
         try:
             csr = x509.load_pem_x509_csr(csr_pem.encode('utf-8'))
         except Exception as exc:  # noqa: BLE001
-            logger.exception('certificate_request: failed to parse CSR PEM')
             return {'status': 'error', 'msg': f'Invalid CSR: {exc!s}'}
 
         fingerprint = hashlib.sha256(csr.tbs_certrequest_bytes).hexdigest()
-        logger.debug('certificate_request: CSR fingerprint=%s', fingerprint)
+        template = str(payload.get('template') or '') or None
 
-        # -- scope filter (NULL means "any") --
+        # Find or create an open EnrollmentRequest
+        req = (
+            EnrollmentRequest.objects.filter(
+                protocol=protocol,
+                operation=operation,
+                ca_id=ca,
+                domain_id=dom,
+                device_id=dev,
+                fingerprint=fingerprint,
+                template=template,
+                finalized=False,
+            )
+            .exclude(aggregate_state__in=EnrollmentRequest.TERMINAL_STATES)
+            .order_by('-created_at')
+            .first()
+        )
+
+        print('REQ')
+        print(req)
+        if req is None:
+            req = EnrollmentRequest.objects.create(
+                protocol=protocol,
+                operation=operation,
+                ca_id=ca,
+                domain_id=dom,
+                device_id=dev,
+                fingerprint=fingerprint,
+                template=template,
+                aggregate_state=EnrollmentRequest.STATE_PENDING,
+                finalized=False,
+            )
+
+        # Scope candidates
         definitions = (
             WorkflowDefinition.objects.filter(published=True)
             .filter(
@@ -79,45 +95,31 @@ class CertificateRequestHandler:
             )
             .distinct()
         )
-        logger.info(
-            'certificate_request: matching definitions by scope -> %d candidates',
-            definitions.count(),
-        )
 
-        # -- try each candidate until one matches the trigger --
+        per_instance: list[dict[str, Any]] = []
+
         for wf in definitions:
             meta = wf.definition or {}
             nodes = meta.get('nodes', [])
             if not nodes:
-                logger.warning('certificate_request: skip %r (no nodes)', wf.name)
                 continue
 
             triggers = meta.get('triggers', [])
-            matches = any(
-                (t.get('protocol') == protocol and t.get('operation') == operation)
-                for t in triggers
-            )
-            if not matches:
+            if not any(t.get('protocol') == protocol and t.get('operation') == operation for t in triggers):
                 continue
 
-            logger.info(
-                'certificate_request: workflow match name=%r protocol=%s operation=%s',
-                wf.name, protocol, operation,
-            )
-
-            # Reuse existing instance (any non-finalized state), or create
+            # Reuse regardless of finalized flag (to avoid duplicates forever)
             inst = (
                 WorkflowInstance.objects.filter(
                     definition=wf,
-                    payload__fingerprint=fingerprint,
-                    finalized=False,
+                    enrollment_request=req,
                 )
                 .order_by('-created_at')
                 .first()
             )
 
+            created = False
             if inst is None:
-                # Create new instance at first node
                 first_step = nodes[0]['id']
                 full_payload = {
                     'protocol': protocol,
@@ -131,33 +133,42 @@ class CertificateRequestHandler:
                 with transaction.atomic():
                     inst = WorkflowInstance.objects.create(
                         definition=wf,
+                        enrollment_request=req,
                         current_step=first_step,
                         state=WorkflowInstance.STATE_STARTING,
                         payload=full_payload,
                     )
-                logger.info(
-                    'certificate_request: created instance id=%s workflow=%r step=%s',
-                    inst.id, wf.name, first_step,
-                )
-            else:
-                logger.info(
-                    'certificate_request: reusing instance id=%s state=%s',
-                    inst.id, inst.state,
-                )
+                created = True
 
-            # Advance fresh/active instances to first stopping state
+            # Advance fresh/active instances
             if inst.state in {WorkflowInstance.STATE_STARTING, WorkflowInstance.STATE_RUNNING}:
-                logger.debug('certificate_request: advancing instance id=%s', inst.id)
                 advance_instance(inst)
                 inst.refresh_from_db()
-                logger.info(
-                    'certificate_request: advanced instance id=%s -> state=%s step=%s',
-                    inst.id, inst.state, inst.current_step,
-                )
 
-            # Return the (now stable) state for caller branching
-            return {'status': inst.state, 'instance_id': str(inst.id)}
+            per_instance.append(
+                {
+                    'workflow_id': str(wf.id),
+                    'workflow_name': wf.name,
+                    'instance_id': str(inst.id),
+                    'created': created,
+                    'state': inst.state,
+                }
+            )
 
-        # -- nothing matched --
-        logger.info('certificate_request: no matching workflow for protocol=%s op=%s', protocol, operation)
-        return {'status': WorkflowInstance.STATE_NO_MATCH}
+        # Recompute aggregate after all children were ensured/advanced
+        recompute_request_state(req)
+        req.refresh_from_db()
+
+        # If truly no matching definitions, reflect NoMatch
+        if not per_instance:
+            return {
+                'status': EnrollmentRequest.STATE_NOMATCH,
+                'request_id': str(req.id),
+                'instances': [],
+            }
+
+        return {
+            'status': req.aggregate_state,   # EST will branch on this
+            'request_id': str(req.id),
+            'instances': per_instance,
+        }

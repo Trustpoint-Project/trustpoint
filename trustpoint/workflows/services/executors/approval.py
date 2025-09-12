@@ -6,12 +6,11 @@ from workflows.services.types import ExecStatus, NodeResult
 
 
 class ApprovalExecutor(AbstractNodeExecutor):
-    """Implements approval semantics for workflow execution, with enveloped context.
+    """First encounter (no signal) → WAITING (engine maps to AwaitingApproval).
 
-    - First encounter → WAITING (engine sets state=AwaitingApproval).
     - On "Rejected" → REJECTED (terminal).
     - On "Approved":
-        • If this is the last Approval node → APPROVED (terminal).
+        • If this is the last Approval node → APPROVED (engine will continue if more steps exist).
         • Otherwise → PASSED (engine continues).
     """
 

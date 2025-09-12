@@ -10,6 +10,5 @@ Step:     {{ step }}
 Context:
 - Protocol: {{ payload.protocol|default:"-" }}
 - Operation: {{ payload.operation|default:"-" }}
-- Requestor: {{ payload.requestor|default:"unknown" }}
 
 Please approve or reject in the approvals console.

@@ -39,6 +39,7 @@ from workflows.models import (
 from workflows.services.context import build_context
 from workflows.services.context_catalog import build_catalog
 from workflows.services.engine import advance_instance
+from workflows.services.request_aggregator import recompute_request_state
 from workflows.services.validators import validate_wizard_payload
 from workflows.services.wizard import transform_to_definition_schema
 from workflows.triggers import Triggers
@@ -483,13 +484,22 @@ class SignalInstanceView(View):
     """Endpoint to signal (approve/reject) a workflow instance via POST."""
 
     def post(self, request: HttpRequest, instance_id: UUID, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
-        """Approve or reject a workflow instance."""
         inst = get_object_or_404(WorkflowInstance, pk=instance_id)
         action = request.POST.get('action')
         if action not in {'Approved', 'Rejected'}:
             messages.error(request, f'Invalid action: {action!r}')
             return redirect('workflows:pending_list')
+
         advance_instance(inst, signal=action)
+        inst.refresh_from_db()
+
+        # IMPORTANT: keep the parent request aggregate in sync
+        if inst.enrollment_request_id:
+            try:
+                recompute_request_state(inst.enrollment_request)
+            except Exception:
+                pass
+
         if action == 'Approved':
             messages.success(request, f'Workflow {inst.id} approved and advanced.')
         else:

@@ -35,7 +35,7 @@ const els = {
   errorsEl:       $('wizard-errors'),
 };
 
-// Ensure an error container exists (non-breaking if template omitted it).
+// Ensure an error container exists
 (function ensureErrorContainer() {
   if (!els.errorsEl && els.previewEl?.parentNode) {
     const host = document.createElement('div');
@@ -51,7 +51,6 @@ const els = {
 function onAnyChange() {
   clearErrors(els.errorsEl);
   renderPreview(els.previewEl);
-  // notify var panel & any listeners
   document.dispatchEvent(new CustomEvent('wf:changed'));
 }
 
@@ -120,12 +119,11 @@ async function preloadEditIfAny() {
     onChange: onAnyChange,
   });
 
-  // one shot notify post-preload
   document.dispatchEvent(new CustomEvent('wf:changed'));
 }
 
 async function init() {
-  // Mount Variables panel (Ctrl/Cmd+K) first so it can track focus immediately.
+  // Variables panel (Ctrl/Cmd+K)
   const varPanel = new VarPanel({ getState: () => state });
   varPanel.mount();
 
@@ -174,6 +172,52 @@ async function init() {
 
   // Initial preview
   renderPreview(els.previewEl);
+
+  // --- SAVE: robust handler with double-submit guard ---
+  if (!els.saveBtnEl) {
+    console.error('Save button not found');
+    return;
+  }
+  els.saveBtnEl.type = 'button';
+  let isSaving = false;
+
+  els.saveBtnEl.addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    if (isSaving) return; // prevent double submits
+    isSaving = true;
+
+    const origText = els.saveBtnEl.textContent;
+    els.saveBtnEl.disabled = true;
+    els.saveBtnEl.textContent = 'Saving…';
+
+    clearErrors(els.errorsEl);
+
+    try {
+      const clientErrors = validateWizardState(state, state.triggersMap);
+      if (clientErrors.length) {
+        renderErrors(els.errorsEl, clientErrors);
+        return;
+      }
+
+      const payload = buildPayload();
+      const { ok, data } = await api.save(payload, getCookie('csrftoken'));
+      if (ok) {
+        window.location.href = `/workflows/?saved=${encodeURIComponent(data.id)}`;
+        return;
+      }
+      const serverErrors = Array.isArray(data.errors)
+        ? data.errors
+        : [data.error || data.message || 'Unknown error'];
+      renderErrors(els.errorsEl, serverErrors);
+    } catch (e) {
+      renderErrors(els.errorsEl, 'Network error while saving. Please try again.');
+    } finally {
+      // Re-enable so user can try again after fixing errors
+      isSaving = false;
+      els.saveBtnEl.disabled = false;
+      els.saveBtnEl.textContent = origText;
+    }
+  });
 }
 
 init().catch(err => console.error('Wizard init failed:', err));

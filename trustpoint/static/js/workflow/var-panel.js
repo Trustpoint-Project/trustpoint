@@ -9,7 +9,7 @@ export class VarPanel {
     this.searchEl = null;
     this.listEl = null;
     this.isOpen = false;
-    this._boundOnWFChange = () => this._renderList();
+    this._toastTimer = null;
   }
 
   mount() {
@@ -47,21 +47,27 @@ export class VarPanel {
       }
     });
 
-    // Listen for global workflow changes (emitted from main.js)
-    document.addEventListener('wf:changed', this._boundOnWFChange);
+    // Auto-refresh when the wizard state changes
+    document.addEventListener('wf:changed', () => this._renderList());
 
     this._renderList();
   }
 
-  destroy() {
-    document.removeEventListener('wf:changed', this._boundOnWFChange);
-    this.root?.remove();
-    this.root = null;
+  open()  {
+    this.isOpen = true;
+    this.root.classList.remove('vp-hidden');
+    document.body.classList.add('vp-open');
+    this._renderList();
   }
-
-  open()  { this.isOpen = true;  this.root.classList.remove('vp-hidden'); this._renderList(); }
-  close() { this.isOpen = false; this.root.classList.add('vp-hidden'); }
+  close() {
+    this.isOpen = false;
+    this.root.classList.add('vp-hidden');
+    document.body.classList.remove('vp-open');
+  }
   toggle(){ this.isOpen ? this.close() : this.open(); }
+
+  // public helper (safe no-op)
+  refresh() { this._renderList(); }
 
   _renderList() {
     if (!this.listEl) return;
@@ -160,6 +166,10 @@ export class VarPanel {
         background: rgba(0,0,0,.8); color:#fff; padding:.35rem .6rem; border-radius:.4rem;
         font-size:.8rem; opacity:0; transition:opacity .15s ease; pointer-events:none; }
       .vp-toast.show{ opacity:1; }
+
+      /* Push main content so Save button isn't covered when panel is open */
+      .vp-open .tp-main { margin-right: 380px; }
+      @media (max-width: 920px) { .vp-open .tp-main { margin-right: min(380px, 30vw); } }
     `;
     document.head.appendChild(css);
   }
