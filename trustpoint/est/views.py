@@ -38,6 +38,9 @@ from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthent
 from pyasn1.type.univ import ObjectIdentifier  # type: ignore[import-untyped]
 
 from trustpoint.logger import LoggerMixin
+from workflows.models import EnrollmentRequest
+from workflows.services.event_dispatcher import EventDispatcher
+from workflows.triggers import Triggers
 
 if TYPE_CHECKING:
     from pki.models.credential import CredentialModel
@@ -826,7 +829,6 @@ class EstSimpleEnrollmentView(
                 payload={
                     'csr_pem': csr_pem,
                     'template': requested_cert_template_str,
-                    'requestor': getattr(request.user, 'username', None),
                 },
             )
 
@@ -847,9 +849,13 @@ class EstSimpleEnrollmentView(
             if agg == EnrollmentRequest.STATE_FAILED:
                 http_response = LoggedHttpResponse('Enrollment request Failed', status=500, content_type='text/plain')
 
-            if agg == 'NoMatch':
-                # your choice: keep 202 to mimic "still pending / no policy"
-                http_response = LoggedHttpResponse('No matching workflow', status=202, content_type='text/plain')
+            if agg == EnrollmentRequest.STATE_NOMATCH:
+                http_response = self._issue_simpleenroll(
+                    device=device,
+                    domain=requested_domain,
+                    credential_request=credential_request,
+                    requested_cert_template_str=requested_cert_template_str,
+                )
 
             if agg == EnrollmentRequest.STATE_PENDING:
                 http_response = LoggedHttpResponse('Enrollment request pending approval', status=202, content_type='text/plain')
