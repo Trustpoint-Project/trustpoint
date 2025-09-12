@@ -196,7 +196,8 @@ class TestRequestContext:
             'certificate_template', 'response_format', 'est_encoding',
             'domain_str', 'domain', 'device', 'cert_requested',
             'est_username', 'est_password', 'cmp_shared_secret',
-            'client_certificate', 'client_intermediate_certificate'
+            'client_certificate', 'client_intermediate_certificate',
+            'cert_requested_profile_validated', 'issued_certificate'
         ]
 
         assert len(field_names) == len(expected_fields)

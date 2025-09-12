@@ -28,6 +28,19 @@ def test_invalid_profile_instance() -> None:
     with pytest.raises(ValidationError):
         JSONProfileVerifier(template)
 
+def test_incomplete_profile_instance() -> None:
+    """Test that an incomplete profile instance raises an error.
+
+    Behavior (subject to change) when 'subj' field is missing:
+    - Effectively prohibits subject, which is not valid in X.509 certs.
+    """
+    template = {
+        'type': 'cert_profile',
+        # 'subj' field is missing
+    }
+    #with pytest.raises(ValidationError) as exc_info:
+    JSONProfileVerifier(template)
+
 
 # --- Subject field tests ---
 

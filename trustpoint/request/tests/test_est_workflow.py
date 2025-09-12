@@ -193,6 +193,7 @@ class TestESTHelper(LoggerMixin):
 
         mock_profile = {
             'type': 'cert_profile',
+            'subj': {'allow':'*'},
             'ext': {
                 'crl': {'uris': ['http://localhost/crl/2']},
             }

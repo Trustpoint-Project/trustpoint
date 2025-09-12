@@ -198,13 +198,14 @@ class CertProfileModel(CertProfileBaseModel):
     type: Literal['cert_profile']
     subject: ProfileSubjectModel = Field(alias='subj', default=ProfileSubjectModel())
     extensions: ProfileExtensionsModel = Field(alias='ext', default=ProfileExtensionsModel())
+    validity: ValidityModel = Field(default=ValidityModel(days=10))
 
 
 class CertRequestModel(BaseModel):
     """Model for a certificate request."""
     type: Literal['cert_request'] | None = 'cert_request'
-    subject: SubjectModel | None = Field(alias='subj', default=None)
-    extensions: ExtensionsModel | None = Field(alias='ext', default=None)
+    subject: SubjectModel = Field(alias='subj', default=SubjectModel())
+    extensions: ExtensionsModel = Field(alias='ext', default=ExtensionsModel())
 
     model_config = ConfigDict(extra='allow') # extra fields are validated by _apply_profile_rules
 
@@ -230,7 +231,7 @@ class JSONProfileVerifier:
         self.profile = validated_profile
         logger.debug('Profile: %s', self.profile)
 
-        self.profile_dict = validated_profile.model_dump(exclude_unset=True)
+        self.profile_dict = validated_profile.model_dump(exclude_unset=True, exclude_defaults=False)
         logger.debug('Profile Dict: %s', self.profile_dict)
 
     @staticmethod
