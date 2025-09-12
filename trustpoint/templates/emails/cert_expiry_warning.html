@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <p>Hi {{ owner_name }},</p>
+    <p>
+      Your certificate <strong>{{ cert_name }}</strong>
+      (serial {{ serial }}) will expire on
+      <strong>{{ expiry_date }}</strong>.
+    </p>
+    <p>
+      <a href="{{ renewal_link }}">Click here to renew</a> before expiry
+      to avoid service disruption.
+    </p>
+    <hr>
+    <p>Best,<br/>Trustpoint PKI</p>
+  </body>
+</html>

@@ -67,6 +67,7 @@ PUBLIC_PATHS = [
     '/crl',
 ]
 
+
 # ------------- Functions --------------
 
 def is_postgre_available() -> bool:
@@ -140,6 +141,20 @@ ADMIN_ENABLED = bool(DEBUG)
 DEVELOPMENT_ENV = True
 
 
+
+# —––––––– Basic SMTP backend –––––––—
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    # EMAIL_HOST = os.environ.get('EMAIL_HOST')
+    # EMAIL_PORT = os.environ.get('EMAIL_PORT')
+    # EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+    # EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+    # EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', True)
+    DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', default='no‑reply@trustpoint.ai')
+
+
 # Settings for postgreql database
 POSTGRESQL = True
 DATABASE_ENGINE = 'django.db.backends.postgresql'
@@ -148,6 +163,30 @@ DATABASE_PORT = '5432'
 POSTGRES_DB = 'trustpoint_db'
 DATABASE_USER = 'admin'
 DATABASE_PASSWORD = 'testing321'  # noqa: S105
+
+
+# Settomg for email backend
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@trustpoint.de')
+
+# Default: console (safe for dev/showcases)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# If EMAIL_HOST is present, switch to SMTP
+_email_host = os.getenv('EMAIL_HOST')  # e.g. "smtp.customer.tld" or "mailpit"
+if _email_host:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = _email_host
+    EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+
+    # Sensible defaults based on port; env can override
+    _use_tls_env = os.getenv('EMAIL_USE_TLS')
+    _use_ssl_env = os.getenv('EMAIL_USE_SSL')
+    EMAIL_USE_TLS = (_use_tls_env.lower() in ('1', 'true', 'yes')) if _use_tls_env else (EMAIL_PORT == 587)
+    EMAIL_USE_SSL = (_use_ssl_env.lower() in ('1', 'true', 'yes')) if _use_ssl_env else (EMAIL_PORT == 465)
+
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')       # auth only if both non-empty
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+    EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
 
 
 DBBACKUP_STORAGE = 'django.core.files.storage.FileSystemStorage'
@@ -211,6 +250,7 @@ INSTALLED_APPS = [
     'crispy_bootstrap5',
     'django_filters',
     'dbbackup',
+    'workflows.apps.WorkflowsConfig',
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
