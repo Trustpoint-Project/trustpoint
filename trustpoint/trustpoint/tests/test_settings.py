@@ -93,7 +93,7 @@ def test_installed_apps():
         'pki',
         'cmp',
         'est',
-        'settings',
+        'management',
         'notifications',
     ]
 

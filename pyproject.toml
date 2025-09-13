@@ -1,6 +1,6 @@
 [project]
 name = "trustpoint"
-version = "0.3.0.dev1"
+version = "0.3.0.dev2"
 description = "Trustpoint Server Software"
 authors = [{ name = "Trustpoint-Project" }]
 requires-python = "==3.12.*"
@@ -67,7 +67,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv]
-required-version = ">=0.7.19"
+required-version = ">=0.8.3"
 
 [tool.ruff]
 line-length = 120

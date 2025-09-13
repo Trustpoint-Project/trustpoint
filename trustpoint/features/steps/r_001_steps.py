@@ -1,162 +1,136 @@
 """Python steps file for R_001."""
 
 from behave import given, runner, then, when
+from django.middleware.csrf import get_token
+from pki.models.domain import DomainModel
+from devices.models import DeviceModel
+from bs4 import BeautifulSoup
 
 
-@given('the identity {name} with {identifier} exists')
-def step_identity_exists(context: runner.Context, name: str, identifier: str) -> None:  # noqa: ARG001
-    """Ensures that an identity with the specified name and identifier exists in the system.
-
-    Args:
-        context (runner.Context): Behave context.
-        name (str): The name of the identity.
-        identifier (str): The ID of the identity.
-    """
-    msg = 'Step not implemented: Identity creation or precondition setup.'
-    raise AssertionError(msg)
-
-
-@when('the admin navigates to the identity details page for {name}')
-def step_navigate_identity_details(context: runner.Context, name: str) -> None:  # noqa: ARG001
-    """The admin user navigates to the identity details page.
+@given('the device {name} with {serial_number} exists')
+def step_device_exists(context: runner.Context, name: str, serial_number: str) -> None:  # noqa: ARG001
+    """Ensures that an device with the specified name and serial_number exists in the system.
 
     Args:
         context (runner.Context): Behave context.
-        name (str): The name of the identity.
+        name (str): The name of the device.
+        serial_number (str): The Serial number of the device.
     """
-    msg = f'STEP: When the admin navigates to the identity details page for {name}'
-    raise AssertionError(msg)
+    
+    context.device, created = DeviceModel.objects.get_or_create(common_name=name, serial_number=serial_number, domain=context.domain)
+    assert created, f" Device creation failed"
+    assert context.device.common_name == name, f"Device {name} with serial number {serial_number} doesn't exist"
 
-
-@then('the system should display the correct details for {name} and {identifier}')
-def step_display_identity_details(context: runner.Context, name: str, identifier: str) -> None:  # noqa: ARG001
-    """Verifies that the correct identity details are displayed.
+@when('the admin fills in the device details with {name}, {serial_number} and domain "{domain_name}"')
+def step_fill_device_details(context: runner.Context, name: str, serial_number: str, domain_name: str) -> None:  # noqa: ARG001
+    """Fills in the device creation form.
 
     Args:
         context (runner.Context): Behave context.
-        name (str): The name of the identity.
-        identifier (str): The ID of the identity.
+        name (str): The name of the device.
+        serial_number (str): The Serial number of the device.
     """
-    msg = f'STEP: Then the system should display the correct details for {name} and {identifier}'
-    raise AssertionError(msg)
+    # Retrieve CSRF token
+    csrf_token = get_token(context.response.wsgi_request)
+
+    domain = DomainModel.objects.get(unique_name=domain_name)
+
+    assert domain.unique_name == domain_name, f"Domain {domain_name} doesn't exist"
+    # Prepare POST data
+    context.device_add_form_data = {
+        'csrfmiddlewaretoken': csrf_token,
+        'common_name': name,
+        'serial_number': serial_number,
+        'domain': domain.id,
+        'onboarding_protocol': '2',
+        "onboarding_pki_protocols": ["1"] ,
+        '_save': 'Save',
+    }
+
+@then('the system should display a confirmation page')
+def step_device_list(context: runner.Context) -> None:  # noqa: ARG001
+    """Verifies that the new device appears in the device list.
+
+    Args:
+        context (runner.Context): Behave context.
+        name (str): The name of the device.
+        serial_number (str): The Serial number of the device.
+    """
+    assert context.response.status_code == 200, "Device add form submission failed"
 
 
-@when('the admin navigates to the "Create Identity" page')
-def step_navigate_create_identity(context: runner.Context) -> None:  # noqa: ARG001
-    """Navigates to the "Create Identity" page.
+@then('the new device with {name}, {serial_number} and domain name "{domain_name}" should appear in the device list')
+def step_device_list(context: runner.Context, name: str, serial_number: str, domain_name: str) -> None:  # noqa: ARG001
+    """Verifies that the new device appears in the device list.
+
+    Args:
+        context (runner.Context): Behave context.
+        name (str): The name of the device.
+        serial_number (str): The Serial number of the device.
+    """
+    context.response = context.authenticated_client.get("/devices/")
+    soup = BeautifulSoup(context.response.content, "html.parser")
+    # Find all <td> elements
+    tds = soup.find_all("td")
+
+    # Get their text content (unescaped and stripped)
+    values = [td.get_text(strip=True) for td in tds]
+
+    assert name in values, f"Device {name} doesn't exist"
+    assert serial_number in values, f"Device with serial number {serial_number} doesn't exist"
+    assert domain_name in values, f"Domain {domain_name} doesn't exist"
+
+
+@when('the admin deletes the device with the name {name}')
+def step_delete_device(context: runner.Context, name: str) -> None:  # noqa: ARG001
+    """Deletes an device by name.
+
+    Args:
+        context (runner.Context): Behave context.
+        name (str): The name of the device to be deleted.
+    """
+
+    context.response = context.authenticated_client.get(
+        '/devices/delete-device/'+ str(context.device.id),
+        follow=True,
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest"
+    )
+
+    assert context.response.status_code == 200, "Device delete form submission failed"
+    assert b"Confirm Device Deletion" in context.response.content
+    context.response = context.authenticated_client.post(
+        "/devices/delete-device",
+        data={"pks": str(context.device.id)}, follow=True)
+    assert context.response.status_code == 200, "Device deletion response"
+    assert not DeviceModel.objects.filter(id=context.device.id).exists(), "Device deletion failed"
+
+@then('the device {name} should no longer appear in the device list')
+def step_verify_device_deletion(context: runner.Context, name: str) -> None:  # noqa: ARG001
+    """Verifies that the device no longer appears in the list.
+
+    Args:
+        context (runner.Context): Behave context.
+        name (str): The name of the device.
+    """
+    assert name not in context.response, "Device still exist in the list"
+
+
+@when('the admin attempts to view the details of a non-existent device {non_existent_device_id}')
+def step_attempt_view_nonexistent(context: runner.Context, non_existent_device_id: str) -> None:  # noqa: ARG001
+    """Attempts to view details of a non-existent device.
+
+    Args:
+        context (runner.Context): Behave context.
+        non_existent_device_id (str): The id a non-existent device.
+    """
+    #Navigate (GET request) to the device detailed page
+    context.response = context.authenticated_client.get(f"/devices/details/{non_existent_device_id}")
+    
+@then('the system should display an error message')
+def step_device_list(context: runner.Context) -> None:  # noqa: ARG001
+    """Verifies that the new device appears in the device list.
 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'Step not implemented: Navigate to Create Identity page.'
-    raise AssertionError(msg)
-
-
-@when('the admin fills in the identity details with {name} and {identifier}')
-def step_fill_identity_details(context: runner.Context, name: str, identifier: str) -> None:  # noqa: ARG001
-    """Fills in the identity creation form.
-
-    Args:
-        context (runner.Context): Behave context.
-        name (str): The name of the identity.
-        identifier (str): The ID of the identity.
-    """
-    msg = 'Step not implemented: Fill identity details.'
-    raise AssertionError(msg)
-
-
-@when('the admin submits the form')
-def step_submit_form(context: runner.Context) -> None:  # noqa: ARG001
-    """Submits the identity creation form.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    msg = 'Step not implemented: Submit the Create Identity form.'
-    raise AssertionError(msg)
-
-
-@then('the new identity {name} with {identifier} should appear in the identity list')
-def step_identity_in_list(context: runner.Context, name: str, identifier: str) -> None:  # noqa: ARG001
-    """Verifies that the new identity appears in the identity list.
-
-    Args:
-        context (runner.Context): Behave context.
-        name (str): The name of the identity.
-        identifier (str): The ID of the identity.
-    """
-    msg = 'Step not implemented: Check for identity in the list.'
-    raise AssertionError(msg)
-
-
-@when('the admin updates the name to {name} and identifier to {identifier}')
-def step_update_identity(context: runner.Context, name: str, identifier: str) -> None:  # noqa: ARG001
-    """Updates the identity details.
-
-    Args:
-        context (runner.Context): Behave context.
-        name (str): The new name of the identity.
-        identifier (str): The new ID of the identity.
-    """
-    msg = f'STEP: When the admin updates the name to {name} and identifier to {identifier}'
-    raise AssertionError(msg)
-
-
-@when('the admin saves the changes')
-def step_save_changes(context: runner.Context) -> None:  # noqa: ARG001
-    """Saves the updated identity details.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    msg = 'STEP: When the admin saves the changes'
-    raise AssertionError(msg)
-
-
-@then('the updated identity {name} with {identifier} should appear in the identity list')
-def step_verify_updated_identity(context: runner.Context, name: str, identifier: str) -> None:  # noqa: ARG001
-    """Verifies that the updated identity appears in the identity list.
-
-    Args:
-        context (runner.Context): Behave context.
-        name (str): The updated name of the identity.
-        identifier (str): The updated ID of the identity.
-    """
-    msg = f'STEP: Then the updated identity {name} with {identifier} should appear in the identity list'
-    raise AssertionError(msg)
-
-
-@when('the admin deletes the identity with the name {name}')
-def step_delete_identity(context: runner.Context, name: str) -> None:  # noqa: ARG001
-    """Deletes an identity by name.
-
-    Args:
-        context (runner.Context): Behave context.
-        name (str): The name of the identity to be deleted.
-    """
-    msg = f'STEP: When the admin deletes the identity with the name {name}'
-    raise AssertionError(msg)
-
-
-@then('the identity {name} should no longer appear in the identity list')
-def step_verify_identity_deletion(context: runner.Context, name: str) -> None:  # noqa: ARG001
-    """Verifies that the identity no longer appears in the list.
-
-    Args:
-        context (runner.Context): Behave context.
-        name (str): The name of the identity.
-    """
-    msg = f'STEP: Then the identity {name} should no longer appear in the identity list'
-    raise AssertionError(msg)
-
-
-@when('the admin attempts to view the details of a non-existent identity {non_existent_ID}')
-def step_attempt_view_nonexistent(context: runner.Context, non_existent_id: str) -> None:  # noqa: ARG001
-    """Attempts to view details of a non-existent identity.
-
-    Args:
-        context (runner.Context): Behave context.
-        non_existent_id (str): The ID of the non-existent identity.
-    """
-    msg = f'STEP: When the admin attempts to view the details of a non-existent identity {non_existent_id}'
-    raise AssertionError(msg)
+    assert context.response.status_code == 404,  f"Expected 404 Not Found, but got {context.response.status_code}"
