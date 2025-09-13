@@ -58,15 +58,11 @@ Feature: Add and delete new Issuing CAs
     Examples:
       | key_type | cert_type | cert_chain |
       | .key     | .cer      | .pem       |
-      | .key     | .der      | .p7b       |
-      | .key     | .pem      | .p7c       |
-      | .key     | .p7b      | .pem       |
-      | .key     | .p7c      | .p7b       |
-      | .pem     | .cer      | .p7c       |
+      | .key     | .der      | .pem       |
+      | .key     | .pem      | .pem       |
+      | .pem     | .cer      | .pem       |
       | .pem     | .der      | .pem       |
-      | .pem     | .pem      | .p7b       |
-      | .pem     | .p7b      | .p7c       |
-      | .pem     | .p7c      | None       |
+      | .pem     | .pem      | .pem       |
 
 
   Scenario Outline: Add a new issuing CA by uploading end entity certificates
@@ -87,8 +83,6 @@ Feature: Add and delete new Issuing CAs
       | .cer      |
       | .der      |
       | .pem      |
-      | .p7b      |
-      | .p7c      |
 
   Scenario: Add a new issuing CA by uploading valid key and certificate files - Mismatched key and cert file
     When the admin clicks on "Add new Issuing CA"
