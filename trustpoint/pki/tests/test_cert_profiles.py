@@ -489,6 +489,9 @@ def test_json_to_cb_adapter() -> None:
             'crl': {
                 'uris': ['http://crl.example.com/crl.pem']
             }
+        },
+        'validity': {
+            'days': 30
         }
     }
     validated_request = JSONProfileVerifier.validate_request(request)
@@ -501,3 +504,25 @@ def test_json_to_cb_adapter() -> None:
     assert crl_dp is not None
     if crl_dp:
         assert crl_dp[0].full_name[0].value == 'http://crl.example.com/crl.pem'
+
+
+def test_json_to_cb_adapter_no_validity() -> None:
+    """Test that the JSON to Certificate Builder adapter raises an error when validity is missing."""
+    request = {
+        'subj': {
+            'cn': 'example.com',
+            'o': 'Example Org'
+        },
+        'ext': {
+            'san': {
+                'dns_names': ['www.example.com'],
+            },
+            'crl': {
+                'uris': ['http://crl.example.com/crl.pem']
+            }
+        }
+        # No validity field
+    }
+    validated_request = JSONProfileVerifier.validate_request(request)
+    with pytest.raises(ValueError, match='Validity period must be specified in the profile.'):
+        JSONCertRequestConverter.from_json(validated_request)

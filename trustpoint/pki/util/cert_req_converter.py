@@ -1,5 +1,6 @@
 """Adapter to convert from CertificateSigningRequest to JSON certificate request dict."""
 
+import datetime
 import logging
 from typing import Any
 
@@ -82,11 +83,7 @@ class JSONCertRequestConverter:
         return req
 
     @staticmethod
-    def from_json(json: dict[str, Any]) -> x509.CertificateBuilder:
-        """Convert a JSON request dict to a CertificateBuilder."""
-        json = JSONProfileVerifier.validate_request(json) # normalize aliases and validate
-
-        builder = x509.CertificateBuilder()
+    def _subject_from_json(json: dict[str, Any], builder: x509.CertificateBuilder) -> x509.CertificateBuilder:
         subj = json.get('subject', {})
         name_attributes = []
         for key, value in subj.items():
@@ -94,7 +91,10 @@ class JSONCertRequestConverter:
             name_attributes.append(x509.NameAttribute(x509.ObjectIdentifier(oid.dotted_string), value))
         if name_attributes:
             builder = builder.subject_name(x509.Name(name_attributes))
+        return builder
 
+    @staticmethod
+    def _ext_from_json(json: dict[str, Any], builder: x509.CertificateBuilder) -> x509.CertificateBuilder:
         ext = json.get('extensions', {})
         for ext_name, ext_value in ext.items():
             critical = ext_value.get('critical', False)
@@ -155,5 +155,49 @@ class JSONCertRequestConverter:
                     builder = builder.add_extension(x509.CRLDistributionPoints(dp_list), critical=critical)
             else:
                 logger.debug('JSON Cert Request Adapter: Skipping unsupported extension: %s', ext_name)
-
         return builder
+
+    @staticmethod
+    def _validity_from_json(json: dict[str, Any], builder: x509.CertificateBuilder) -> x509.CertificateBuilder:
+        """Parses validity from JSON and applies it to the builder.
+
+        For relative periods, this sets not_before to now - 1 hour and not_after to now + period.
+        Therefore, it should be called just before signing the certificate.
+        """
+        validity = json.get('validity', {})
+        if validity.get('not_before') and validity.get('not_after'):
+            builder = builder.not_valid_before(validity['not_before'])
+            builder = builder.not_valid_after(validity['not_after'])
+        else:
+            validity_period = 0
+            if validity.get('duration'):
+                validity_period = validity['duration']
+            else:
+                days = validity.get('days', 0)
+                hours = validity.get('hours', 0)
+                minutes = validity.get('minutes', 0)
+                seconds = validity.get('seconds', 0)
+                validity_seconds = days * 86400 + hours * 3600 + minutes * 60 + seconds
+                validity_period = datetime.timedelta(seconds=validity_seconds)
+            if validity_period == 0 or validity_period == datetime.timedelta(seconds=0):
+                exc_msg = 'Validity period must be specified in the profile.'
+                raise ValueError(exc_msg)
+
+            default_backdate = datetime.timedelta(hours=1)
+
+            builder = builder.not_valid_before(datetime.datetime.now(datetime.UTC) - default_backdate)
+            builder = builder.not_valid_after(
+                datetime.datetime.now(datetime.UTC) + validity_period
+            )
+        return builder
+
+    @staticmethod
+    def from_json(json: dict[str, Any]) -> x509.CertificateBuilder:
+        """Convert a JSON request dict to a CertificateBuilder."""
+        json = JSONProfileVerifier.validate_request(json) # normalize aliases and validate
+
+        builder = JSONCertRequestConverter._subject_from_json(json, x509.CertificateBuilder())
+
+        builder = JSONCertRequestConverter._ext_from_json(json, builder)
+
+        return JSONCertRequestConverter._validity_from_json(json, builder)

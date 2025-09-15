@@ -9,6 +9,8 @@ They can also specify default values for fields and validate the request against
 import enum
 import logging
 from typing import Any, Literal
+from datetime import timedelta
+from pydantic import AwareDatetime
 
 from pydantic import (
     AliasChoices,
@@ -151,17 +153,17 @@ class ExtensionsModel(BaseModel):
 
 class ValidityModel(BaseModel):
     """Model for the validity period of a certificate profile."""
-    not_before: str | None = None  # ISO 8601 format
-    not_after: str | None = None  # ISO 8601 format
+    not_before: AwareDatetime | None = None  # ISO 8601 format
+    not_after: AwareDatetime | None = None  # ISO 8601 format
     days: float | None = None  # Number of days for validity
     hours: float | None = None  # Number of hours for validity
     minutes: float | None = None  # Number of minutes for validity
     seconds: int | None = None  # Number of seconds for validity
-    duration: str | None = None  # Duration string in ISO 8601 format
+    duration: timedelta | None = None  # Duration string in ISO 8601 format
 
     offset_s: int | None = None  # Offset in seconds
-    validity_max: str | None = None  # Maximum validity period in ISO 8601 format
-    validity_min: str | None = None  # Minimum validity period in ISO 8601 format
+    validity_max: timedelta | None = None  # Maximum validity period in ISO 8601 format
+    validity_min: timedelta | None = None  # Minimum validity period in ISO 8601 format
 
     model_config = ConfigDict(extra='ignore')  # allow, ignore (default)
 
@@ -206,6 +208,7 @@ class CertRequestModel(BaseModel):
     type: Literal['cert_request'] | None = 'cert_request'
     subject: SubjectModel = Field(alias='subj', default=SubjectModel())
     extensions: ExtensionsModel = Field(alias='ext', default=ExtensionsModel())
+    validity: ValidityModel = Field(default=ValidityModel(days=10))
 
     model_config = ConfigDict(extra='allow') # extra fields are validated by _apply_profile_rules
 

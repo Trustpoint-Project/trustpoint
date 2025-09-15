@@ -196,6 +196,9 @@ class TestESTHelper(LoggerMixin):
             'subj': {'allow':'*'},
             'ext': {
                 'crl': {'uris': ['http://localhost/crl/2']},
+            },
+            'validity': {
+                'days': 30
             }
         }
 
