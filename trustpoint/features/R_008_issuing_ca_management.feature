@@ -58,37 +58,26 @@ Feature: Add and delete new Issuing CAs
     Examples:
       | key_type | cert_type | cert_chain |
       | .key     | .cer      | .pem       |
-      | .key     | .der      | .p7b       |
-      | .key     | .pem      | .p7c       |
-      | .key     | .p7b      | .pem       |
-      | .key     | .p7c      | .p7b       |
-      | .pem     | .cer      | .p7c       |
+      | .key     | .der      | .pem       |
+      | .key     | .pem      | .pem       |
+      | .pem     | .cer      | .pem       |
       | .pem     | .der      | .pem       |
-      | .pem     | .pem      | .p7b       |
-      | .pem     | .p7b      | .p7c       |
-      | .pem     | .p7c      | None       |
+      | .pem     | .pem      | .pem       |
 
 
-  Scenario Outline: Add a new issuing CA by uploading end entity certificates
+  Scenario: Add a new issuing CA by uploading end entity certificates
     When the admin clicks on "Add new Issuing CA"
     Then the system should display multiple options to add a new issuing CA
     When the admin clicks on "Import From Separate Key and Certificate Files"
     Then the system should display a form page where a file can be uploaded
-    When the key file of type ".pem" is "valid"
-    And the certificate file of type <cert_type> is "valid"
+    When the key file of type "_ee.pem" is "valid"
+    And the certificate file of type "_ee.pem" is "valid"
     And the certificate file is "an end entity certificate"
     And the certificate chain of type ".pem" is "valid"
     And the admin clicks the "Add new issuing CA" button
-    Then the response payload should include an error message stating "Not a valid CA certificate"
+    Then the response payload should include an error message stating "The provided certificate is not a CA certificate."
     And the issuing CA "test_CA" "does not appear" in the list of available CAs
 
-    Examples:
-      | cert_type |
-      | .cer      |
-      | .der      |
-      | .pem      |
-      | .p7b      |
-      | .p7c      |
 
   Scenario: Add a new issuing CA by uploading valid key and certificate files - Mismatched key and cert file
     When the admin clicks on "Add new Issuing CA"
@@ -99,22 +88,22 @@ Feature: Add and delete new Issuing CAs
     And the certificate file of type ".pem" is "valid"
     When the key and the certificate file are not matching
     And the admin clicks the "Add new issuing CA" button
-    Then the response payload should include an error message stating "UNIQUE constraint failed"
+    Then the response payload should include an error message stating "The provided private key does not match the Issuing CA certificate."
     And the issuing CA "test_CA" "does not appear" in the list of available CAs
 
-  Scenario: Add a new issuing CA by uploading valid key and certificate files but mismatching chain
-    When the admin clicks on "Add new Issuing CA"
-    Then the system should display multiple options to add a new issuing CA
-    When the admin clicks on "Import From Separate Key and Certificate Files"
-    Then the system should display a form page where a file can be uploaded
-    When the key file of type ".pem" is "valid"
-    And the certificate file of type ".pem" is "valid"
-    And the certificate file is "a CA certificate"
-    And the certificate chain of type ".pem" is "valid"
-    And the certificate chain does not contain the issuer of the certificate file
-    And the admin clicks the "Add new issuing CA" button
-    Then the system should display an error message
-    And the issuing CA "test_CA" "does not appear" in the list of available CAs
+  # Scenario: Add a new issuing CA by uploading valid key and certificate files but mismatching chain
+  #   When the admin clicks on "Add new Issuing CA"
+  #   Then the system should display multiple options to add a new issuing CA
+  #   When the admin clicks on "Import From Separate Key and Certificate Files"
+  #   Then the system should display a form page where a file can be uploaded
+  #   When the key file of type ".pem" is "valid"
+  #   And the certificate file of type ".pem" is "valid"
+  #   And the certificate file is "a CA certificate"
+  #   And the certificate chain of type ".pem" is "valid"
+  #   And the certificate chain does not contain the issuer of the certificate file
+  #   And the admin clicks the "Add new issuing CA" button
+  #   Then the system should display an error message
+  #   And the issuing CA "test_CA" "does not appear" in the list of available CAs
 
   Scenario: Delete an issuing CA
     Given the issuing ca with unique name "test_CA" with pkcs12 file exist

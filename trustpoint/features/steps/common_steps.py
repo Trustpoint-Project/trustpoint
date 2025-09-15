@@ -175,7 +175,7 @@ def step_when_admin_click_button(context: runner.Context, button_name: str) -> N
           context.response = context.authenticated_client.post('/pki/truststores/add/', context.truststore_add_form_data, follow=True)
           assert context.response.status_code == 200, f"Failed to add new truststore."
     elif button_name == "Create Device":
-        context.response = context.authenticated_client.post('/devices/add/', context.device_add_form_data, follow=True)
+        context.response = context.authenticated_client.post('/devices/create/onboarding/', context.device_add_form_data, follow=True)
         assert context.response.status_code == 200, f"Failed to add new device."
     else:
         msg = 'Step not implemented: Verify API response status code.'
@@ -191,7 +191,9 @@ def step_navigate_add_device(context: runner.Context, page_name: str) -> None:  
         page_name (str): Page name.
     """
     if page_name == "Add Device":
-        context.response = context.authenticated_client.get("/devices/add/")
+        context.response = context.authenticated_client.get("/devices/create/")
+    elif page_name == "create onboarding device":
+        context.response = context.authenticated_client.get("/devices/create/onboarding/")
     elif page_name == "device list":
         context.response = context.authenticated_client.get("/devices/")
     elif page_name == "truststore list":
