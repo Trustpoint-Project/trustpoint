@@ -415,7 +415,7 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
             raise ValidationError(err_msg) from exception
 
-        cert_crypto = credential_serializer.certificate.as_crypto()
+        cert_crypto = credential_serializer.certificate
         if cert_crypto.extensions.get_extension_for_class(x509.BasicConstraints).value.ca is False:
             err_msg = 'The provided certificate is not a CA certificate.'
             raise ValidationError(err_msg)
