@@ -21,10 +21,12 @@ from django.db import IntegrityError
 from django.http import (
     HttpRequest,
     HttpResponse,
+    HttpResponseBadRequest,
     HttpResponseRedirect,
     JsonResponse,
 )
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.timezone import now as tz_now
 from django.views import View
 from django.views.generic import ListView
 from pki.models import DomainModel, IssuingCaModel
@@ -251,6 +253,203 @@ class WorkflowDefinitionListView(ListView[WorkflowDefinition]):
         return context
 
 
+class WorkflowDefinitionImportView(View):
+    """Accepts a JSON file exported from this system and stages a one-time wizard prefill.
+
+    UX:
+      - On success → message.success + redirect to wizard (the wizard loads and clears prefill).
+      - On error   → message.error   + redirect back to the definition list (keeps user in UI).
+    """
+
+    MAX_ERRORS_TO_SHOW = 6  # avoid spamming too many details
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        f = request.FILES.get('file')
+        if not f:
+            messages.error(request, 'Please choose a JSON file to import.')
+            return redirect('workflows:definition_list')
+
+        try:
+            raw = f.read().decode('utf-8', errors='strict')
+        except Exception:
+            messages.error(request, 'The uploaded file is not valid UTF-8 text.')
+            return redirect('workflows:definition_list')
+
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as e:
+            messages.error(request, f'Invalid JSON: line {e.lineno}, col {e.colno}.')
+            return redirect('workflows:definition_list')
+
+        # Validate export bundle and convert to wizard prefill
+        errors, prefill = self._validate_and_transform_export(data)
+
+        if errors:
+            # Trim and show a concise list
+            shown = errors[: self.MAX_ERRORS_TO_SHOW]
+            for err in shown:
+                messages.error(request, err)
+            if len(errors) > self.MAX_ERRORS_TO_SHOW:
+                messages.error(request, f'(+{len(errors)-self.MAX_ERRORS_TO_SHOW} more issues)')
+            return redirect('workflows:definition_list')
+
+        # Stage prefill and go to wizard
+        request.session['wizard_prefill'] = prefill
+        request.session.modified = True
+        messages.success(
+            request,
+            'Workflow imported. The wizard has been prefilled—please review, set scopes, and save or publish.'
+        )
+        return redirect('workflows:definition_wizard')
+
+    # ---- helpers ----
+
+    def _validate_and_transform_export(self, data: dict[str, Any]) -> tuple[list[str], dict[str, Any] | None]:
+        """
+        Returns (errors, prefill) where prefill is:
+          { name, triggers: [{handler, protocol, operation}], steps: [{type, params}], scopes:{} }
+        """
+        errs: list[str] = []
+
+        # 1) schema
+        schema = data.get('schema')
+        if schema != 'trustpoint.workflow/1':
+            errs.append('Unsupported or missing "schema". Expected "trustpoint.workflow/1".')
+
+        # 2) name
+        name = str(data.get('name') or '').strip()
+        if not name:
+            name = 'Imported Workflow'  # fallback; not fatal
+
+        # 3) definition
+        definition = data.get('definition')
+        if not isinstance(definition, dict):
+            errs.append('"definition" must be an object with "triggers" and "nodes".')
+            return errs, None
+
+        triggers_in = definition.get('triggers')
+        nodes_in = definition.get('nodes')
+
+        if not isinstance(triggers_in, list):
+            errs.append('"definition.triggers" must be a list.')
+            triggers_in = []
+
+        if not isinstance(nodes_in, list):
+            errs.append('"definition.nodes" must be a list.')
+            nodes_in = []
+
+        # 4) validate triggers (soft, but informative)
+        triggers_out: list[dict[str, str]] = []
+        for i, t in enumerate(triggers_in):
+            if not isinstance(t, dict):
+                errs.append(f'triggers[{i}] must be an object.')
+                continue
+            handler  = str(t.get('handler')  or '')
+            protocol = str(t.get('protocol') or '')
+            operation= str(t.get('operation')or '')
+            if not handler or not protocol or not operation:
+                errs.append(f'triggers[{i}] is missing "handler", "protocol", or "operation".')
+            triggers_out.append({'handler': handler, 'protocol': protocol, 'operation': operation})
+
+        # 5) validate nodes/steps
+        steps_out: list[dict[str, Any]] = []
+        for i, n in enumerate(nodes_in):
+            if not isinstance(n, dict):
+                errs.append(f'nodes[{i}] must be an object with "type" and "params".')
+                continue
+            typ = str(n.get('type') or '')
+            par = n.get('params') or {}
+            if not typ:
+                errs.append(f'nodes[{i}] is missing non-empty "type".')
+            if not isinstance(par, dict):
+                errs.append(f'nodes[{i}].params must be an object.')
+                par = {}
+            steps_out.append({'type': typ, 'params': par})
+
+        # 6) At least something meaningful?
+        if not steps_out:
+            errs.append('No steps found in "definition.nodes".')
+
+        if errs:
+            return errs, None
+
+        prefill = {
+            'name': name,
+            'triggers': triggers_out,
+            'steps': steps_out,
+            'scopes': {},  # never import scopes; user will choose for this environment
+        }
+        return [], prefill
+
+
+class WizardPrefillView(View):
+    """Returns and CLEARS a one-time wizard prefill from the session."""
+
+    def get(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
+        payload = request.session.pop('wizard_prefill', None)
+        request.session.modified = True
+        return JsonResponse(payload or {}, safe=True)
+
+class WorkflowDefinitionExportView(View):
+    """Download a single workflow definition as a JSON file.
+
+    {
+      "schema": "trustpoint.workflow/1",
+      "name": "...",
+      "version": 1,
+      "published": true/false,
+      "definition": {...},
+      "scopes": [{"ca_id":..., "domain_id":..., "device_id":...}, ...],
+      "exported_at": "ISO-8601"
+    }
+    """
+
+    def get(self, _request: HttpRequest, pk: UUID, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        wf = get_object_or_404(WorkflowDefinition, pk=pk)
+
+        # Serialize scopes (raw IDs only—names are environment-specific)
+        scopes = [
+            {"ca_id": s.ca_id, "domain_id": s.domain_id, "device_id": s.device_id}
+            for s in wf.scopes.all().order_by('ca_id', 'domain_id', 'device_id')
+        ]
+
+        bundle = {
+            "schema": "trustpoint.workflow/1",
+            "name": wf.name,
+            "version": wf.version,
+            "published": wf.published,
+            "definition": wf.definition,
+            "scopes": scopes,
+            "exported_at": tz_now().isoformat(),
+        }
+
+        body = json.dumps(bundle, ensure_ascii=False, indent=2)
+        filename = f'workflow-{wf.name.replace(" ", "_")}-{wf.id}.json'
+
+        resp = HttpResponse(body, content_type='application/json; charset=utf-8')
+        resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return resp
+
+
+class WorkflowDefinitionPublishView(View):
+    """Toggle published flag via POST (publish/unpublish)."""
+
+    def post(self, request: HttpRequest, pk: UUID, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        wf = get_object_or_404(WorkflowDefinition, pk=pk)
+        action = (request.POST.get('action') or '').lower()
+        if action == 'publish':
+            wf.published = True
+            wf.save(update_fields=['published', 'updated_at'])
+            messages.success(request, f'Workflow "{wf.name}" published.')
+        elif action == 'pause':
+            wf.published = False
+            wf.save(update_fields=['published', 'updated_at'])
+            messages.info(request, f'Workflow "{wf.name}" paused (saved as draft).')
+        else:
+            messages.error(request, 'Invalid publish action.')
+        return redirect('workflows:definition_list')
+
+
 class WorkflowWizardView(View):
     """UI wizard to create or edit a linear workflow."""
 
@@ -275,9 +474,10 @@ class WorkflowWizardView(View):
 
         name, triggers_typed, steps_typed, scopes_list = self._parse_payload_for_save(data)
         definition = transform_to_definition_schema(triggers_typed, steps_typed)
-
-        # Deduplicate scopes BEFORE writing (prevents unique_together conflicts)
         scopes_list = self._dedupe_scopes(scopes_list)
+
+        # NEW: published flag from payload (default to False = draft)
+        published_flag = bool(data.get('published', False))
 
         wf_id_raw = data.get('id')
         try:
@@ -285,12 +485,13 @@ class WorkflowWizardView(View):
                 wf = WorkflowDefinition.objects.get(pk=UUID(str(wf_id_raw)))
                 wf.name = name
                 wf.definition = definition
-                wf.save(update_fields=['name', 'definition', 'updated_at'])
+                wf.published = published_flag
+                wf.save(update_fields=['name', 'definition', 'published', 'updated_at'])
             else:
                 wf = WorkflowDefinition.objects.create(
                     name=name,
                     definition=definition,
-                    published=True,
+                    published=published_flag,
                 )
         except IntegrityError:
             return JsonResponse({'error': 'A workflow with that name already exists.'}, status=400)
@@ -309,7 +510,6 @@ class WorkflowWizardView(View):
             ]
         )
 
-        # Preserve 201 for both create and update to match current frontend expectation
         return JsonResponse({'id': str(wf.id)}, status=201)
 
     @staticmethod

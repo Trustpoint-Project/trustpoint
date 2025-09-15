@@ -16,8 +16,12 @@ from workflows.views import (
     PendingApprovalsView,
     SignalInstanceView,
     TriggerListView,
+    WizardPrefillView,
     WorkflowDefinitionDeleteView,
+    WorkflowDefinitionExportView,
+    WorkflowDefinitionImportView,
     WorkflowDefinitionListView,
+    WorkflowDefinitionPublishView,
     WorkflowInstanceDetailView,
     WorkflowWizardView,
 )
@@ -39,6 +43,10 @@ urlpatterns = [
     # main UI
     path('', WorkflowDefinitionListView.as_view(), name='definition_list'),
     path('wizard/', WorkflowWizardView.as_view(), name='definition_wizard'),
+    path('definitions/<uuid:pk>/publish/', WorkflowDefinitionPublishView.as_view(), name='definition_publish'),
+    path('definitions/<uuid:pk>/export/', WorkflowDefinitionExportView.as_view(), name='definition_export'),
+    path('definitions/import/', WorkflowDefinitionImportView.as_view(), name='definition_import'),
+    path('api/wizard-prefill/', WizardPrefillView.as_view(), name='api_wizard_prefill'),
 
     # delete workflow definition
     path(

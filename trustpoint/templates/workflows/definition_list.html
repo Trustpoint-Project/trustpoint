@@ -5,19 +5,12 @@
 {% block content %}
   <h1 class="mb-4">Workflows</h1>
   <div class="mb-3">
-    <a
-      class="btn btn-primary me-2"
-      href="{% url 'workflows:definition_wizard' %}"
-    >
-      + Create New Workflow
-    </a>
-    <a
-      class="btn btn-secondary"
-      href="{% url 'workflows:pending_list' %}"
-    >
-      Pending Approvals
-    </a>
-  </div>
+  <a class="btn btn-primary me-2" href="{% url 'workflows:definition_wizard' %}">+ Create New Workflow</a>
+  <a class="btn btn-secondary me-2" href="{% url 'workflows:pending_list' %}">Pending Approvals</a>
+  <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#importModal">
+    Import…
+  </button>
+</div>
 
   <table class="table table-hover align-middle">
     <thead class="table-light">
@@ -47,6 +40,21 @@
             >
               Edit
             </a>
+
+            {% if wf.published %}
+              <form method="post" action="{% url 'workflows:definition_publish' wf.id %}" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="pause">
+                <button type="submit" class="btn btn-sm btn-outline-warning me-1">Pause</button>
+              </form>
+            {% else %}
+              <form method="post" action="{% url 'workflows:definition_publish' wf.id %}" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="publish">
+                <button type="submit" class="btn btn-sm btn-outline-success me-1">Publish</button>
+              </form>
+            {% endif %}
+
             <button
               type="button"
               class="btn btn-sm btn-outline-danger delete-btn"
@@ -55,6 +63,7 @@
             >
               Delete
             </button>
+            <a href="{% url 'workflows:definition_export' wf.id %}" class="btn btn-sm btn-outline-secondary me-1">Export</a>
           </td>
         </tr>
       {% empty %}
@@ -115,6 +124,38 @@
     </div>
   </div>
 
+  <!-- Import Modal (clean, no publish toggle) -->
+  <div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <form
+        class="modal-content"
+        method="post"
+        action="{% url 'workflows:definition_import' %}"
+        enctype="multipart/form-data"
+      >
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title">Import Workflow</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-muted">
+            Choose a JSON file previously exported from this system.
+            The wizard will open prefilled so you can review, set scopes, and publish.
+          </p>
+          <div class="mb-3">
+            <label class="form-label">JSON File</label>
+            <input type="file" name="file" class="form-control" accept="application/json" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Import</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   {# Load Bootstrap JS and wire up the modal #}
   <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
   <script>
@@ -126,7 +167,6 @@
 
       document.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-          // Pull in values from the clicked button
           form.action      = btn.getAttribute('data-delete-url');
           nameField.textContent = btn.getAttribute('data-wf-name');
           modal.show();
