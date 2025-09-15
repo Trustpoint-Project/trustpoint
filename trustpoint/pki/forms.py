@@ -628,7 +628,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
 
             pk = credential_serializer.private_key
             cert = credential_serializer.certificate
-            if pk.public_key().public_bytes() != cert.public_key().public_bytes():
+            if pk.public_key() != cert.public_key():
                 err_msg = 'The provided private key does not match the Issuing CA certificate.'
                 raise ValidationError(err_msg)
 
