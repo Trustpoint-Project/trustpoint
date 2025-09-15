@@ -18,7 +18,7 @@ from django.views.generic import DeleteView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import CreateView, FormView, UpdateView
 from django.views.generic.list import ListView
-from settings.models import TlsSettings
+from management.models import TlsSettings
 from trustpoint_core import oid
 
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
