@@ -235,7 +235,7 @@ class PKCS11ConfigForm(forms.Form):
         max_length=255,
         widget=forms.TextInput(attrs={'class': 'form-control'}),
         help_text=_('Path to the PKCS#11 module library file'),
-        initial='/usr/lib/softhsm/libsofthsm2.so',
+        initial='/usr/lib/libpkcs11-proxy.so',
         required=False
     )
 
@@ -261,7 +261,7 @@ class PKCS11ConfigForm(forms.Form):
         if hsm_type == 'softhsm':
             cleaned_data['label'] = 'Trustpoint-SoftHSM'
             cleaned_data['slot'] = 0
-            cleaned_data['module_path'] = '/usr/lib/softhsm/libsofthsm2.so'
+            cleaned_data['module_path'] = '/usr/lib/libpkcs11-proxy.so'
         elif hsm_type == 'physical':
             raise forms.ValidationError(_('Physical HSM is not yet supported.'))
 

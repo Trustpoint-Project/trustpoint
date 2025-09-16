@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             if (modulePathField) {
-                modulePathField.value = '/usr/lib/softhsm/libsofthsm2.so';
+                modulePathField.value = '/usr/lib/libpkcs11-proxy.so';
                 modulePathField.disabled = true;
                 modulePathField.style.opacity = '0.6';
                 modulePathField.removeAttribute('required');

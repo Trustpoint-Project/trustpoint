@@ -12,6 +12,13 @@ until pg_isready -h "$DATABASE_HOST" -p "$DATABASE_PORT" &>/dev/null; do
 done
 echo "PostgreSQL database is available!"
 
+# Wait for SoftHSM to be ready
+echo "Waiting for SoftHSM..."
+until nc -z "$SOFTHSM_HOST" 5657; do
+  sleep 1
+done
+echo "SoftHSM is available!"
+
 run_as_www_data "uv run trustpoint/manage.py managestartup"
 
 echo "Unwrapping DEK..."
@@ -21,13 +28,11 @@ else
     echo "DEK unwrapping failed or no DEK found, continuing startup..."
 fi
 
-
-# 12) Configure apache
+# Configure apache
 /etc/trustpoint/wizard/transition/configure_apache.sh
 
 # Configure TLS
 /etc/trustpoint/wizard/transition/update_tls.sh
-
 
 echo "Starting cron service..."
 cron

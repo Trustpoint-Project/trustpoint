@@ -27,7 +27,13 @@ from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from settings.models import PKCS11Token
 
 from setup_wizard import SetupWizardState
-from setup_wizard.forms import BackupPasswordForm, EmptyForm, HsmSetupForm, PasswordAutoRestoreForm, StartupWizardTlsCertificateForm
+from setup_wizard.forms import (
+    BackupPasswordForm,
+    EmptyForm,
+    HsmSetupForm,
+    PasswordAutoRestoreForm,
+    StartupWizardTlsCertificateForm,
+)
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER

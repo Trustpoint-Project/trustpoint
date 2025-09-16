@@ -13,7 +13,7 @@ class PKCS11ConfigFormTestCase(TestCase):
             hsm_type='softhsm',
             label='TestToken',
             slot=1,
-            module_path='/usr/lib/softhsm/libsofthsm2.so',
+            module_path='/usr/lib/libpkcs11-proxy.so',
         )
 
     def test_form_initialization_with_existing_token(self):
@@ -31,7 +31,7 @@ class PKCS11ConfigFormTestCase(TestCase):
         self.assertEqual(form.fields['hsm_type'].initial, 'softhsm')
         self.assertIsNone(form.fields['label'].initial)
         self.assertIsNone(form.fields['slot'].initial)
-        self.assertEqual(form.fields['module_path'].initial, '/usr/lib/softhsm/libsofthsm2.so')
+        self.assertEqual(form.fields['module_path'].initial, '/usr/lib/libpkcs11-proxy.so')
 
     def test_clean_with_softhsm(self):
         """Test that the form sets default values for SoftHSM."""
@@ -40,7 +40,7 @@ class PKCS11ConfigFormTestCase(TestCase):
         cleaned_data = form.clean()
         self.assertEqual(cleaned_data['label'], 'Trustpoint-SoftHSM')
         self.assertEqual(cleaned_data['slot'], 0)
-        self.assertEqual(cleaned_data['module_path'], '/usr/lib/softhsm/libsofthsm2.so')
+        self.assertEqual(cleaned_data['module_path'], '/usr/lib/libpkcs11-proxy.so')
 
     def test_clean_with_physical_hsm(self):
         """Test that the form raises an error for unsupported physical HSM."""
@@ -55,7 +55,7 @@ class PKCS11ConfigFormTestCase(TestCase):
             hsm_type='softhsm',
             label='DuplicateToken',
             slot=2,
-            module_path='/usr/lib/softhsm/libsofthsm2.so',
+            module_path='/usr/lib/libpkcs11-proxy.so',
         )
 
         # Attempt to create a new token with the same label
@@ -74,7 +74,7 @@ class PKCS11ConfigFormTestCase(TestCase):
                 hsm_type='softhsm',
                 label='Trustpoint-SoftHSM',
                 slot=0,
-                module_path='/usr/lib/softhsm/libsofthsm2.so',
+                module_path='/usr/lib/libpkcs11-proxy.so',
             )
             mock_get_or_create.return_value = (new_token, True)
 
@@ -83,7 +83,7 @@ class PKCS11ConfigFormTestCase(TestCase):
                     'hsm_type': 'softhsm',
                     'label': 'NewToken',  # This will be ignored
                     'slot': 3,  # This will be overridden
-                    'module_path': '/usr/lib/softhsm/libsofthsm2.so',
+                    'module_path': '/usr/lib/libpkcs11-proxy.so',
                 }
             )
             self.assertTrue(form.is_valid())
@@ -95,7 +95,7 @@ class PKCS11ConfigFormTestCase(TestCase):
                 defaults={
                     'hsm_type': 'softhsm',
                     'slot': 0,
-                    'module_path': '/usr/lib/softhsm/libsofthsm2.so',
+                    'module_path': '/usr/lib/libpkcs11-proxy.so',
                 }
             )
             self.assertEqual(result, new_token)
@@ -108,7 +108,7 @@ class PKCS11ConfigFormTestCase(TestCase):
             hsm_type='softhsm',
             label='Trustpoint-SoftHSM',
             slot=0,
-            module_path='/usr/lib/softhsm/libsofthsm2.so',
+            module_path='/usr/lib/libpkcs11-proxy.so',
         )
         mock_get_or_create.return_value = (softhsm_token, False)
 
@@ -116,7 +116,7 @@ class PKCS11ConfigFormTestCase(TestCase):
             data={
                 'hsm_type': 'softhsm',
                 'slot': 2,  # This will be overridden to 0 for SoftHSM
-                'module_path': '/usr/lib/softhsm/libsofthsm2.so',
+                'module_path': '/usr/lib/libpkcs11-proxy.so',
             }
         )
         self.assertTrue(form.is_valid())
@@ -125,7 +125,7 @@ class PKCS11ConfigFormTestCase(TestCase):
         # For SoftHSM, the form enforces specific default values
         self.assertEqual(token.label, 'Trustpoint-SoftHSM')
         self.assertEqual(token.slot, 0)  # SoftHSM always uses slot 0
-        self.assertEqual(token.module_path, '/usr/lib/softhsm/libsofthsm2.so')
+        self.assertEqual(token.module_path, '/usr/lib/libpkcs11-proxy.so')
 
         # Verify the method was called with the correct parameters
         mock_get_or_create.assert_called_once_with(
@@ -133,6 +133,6 @@ class PKCS11ConfigFormTestCase(TestCase):
             defaults={
                 'hsm_type': 'softhsm',
                 'slot': 0,
-                'module_path': '/usr/lib/softhsm/libsofthsm2.so',
+                'module_path': '/usr/lib/libpkcs11-proxy.so',
             }
         )
