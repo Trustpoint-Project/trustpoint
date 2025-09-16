@@ -31,8 +31,6 @@ def test_auto_gen_pki(key_alg: AutoGenPkiKeyAlgorithm) -> None:
         common_name='test_device',
         serial_number='1234567890',
         domain=domain,
-        onboarding_protocol=DeviceModel.OnboardingProtocol.NO_ONBOARDING,
-        onboarding_status=DeviceModel.OnboardingStatus.PENDING,
     )
     test_device.save()
     credential_issuer = LocalDomainCredentialIssuer(device=test_device, domain=domain)

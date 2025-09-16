@@ -1636,14 +1636,14 @@ msgstr "Gerätekonfiguration"
 #: .\templates\pki\truststores\details.html:28
 #: .\templates\pki\truststores\download.html:43
 #: .\templates\pki\truststores\download_multiple.html:59
-#: .\templates\settings\logging\logging_files_details.html:13
+#: .\templates\management\logging\logging_files_details.html:13
 msgid "Back"
 msgstr "Zurück"
 
 #: .\templates\devices\configure.html:19
 #: .\templates\pki\domains\config.html:190
-#: .\templates\settings\language.html:30 .\templates\settings\network.html:19
-#: .\templates\settings\ntp.html:19 .\templates\settings\security.html:56
+#: .\templates\management\language.html:30 .\templates\management\network.html:19
+#: .\templates\management\ntp.html:19 .\templates\management\security.html:56
 msgid "Save"
 msgstr "Speichern"
 
@@ -1791,9 +1791,9 @@ msgstr "Läuft aus in"
 #: .\templates\pki\truststores\details.html:29
 #: .\templates\pki\truststores\truststores.html:31
 #: .\templates\pki\truststores\truststores.html:48
-#: .\templates\settings\logging\logging_files.html:32
-#: .\templates\settings\logging\logging_files.html:48
-#: .\templates\settings\logging\logging_files_details.html:14
+#: .\templates\management\logging\logging_files.html:32
+#: .\templates\management\logging\logging_files.html:48
+#: .\templates\management\logging\logging_files_details.html:14
 msgid "Download"
 msgstr "Herunterladen"
 
@@ -1956,14 +1956,14 @@ msgid "TLS-Server Certificate Request URL"
 msgstr "TLS-Client-Zertifikatsanfrage-URL"
 
 #: .\templates\devices\help\generic_details\cmp_application_credential_summary_block.html:42
-#: .\templates\devices\help\generic_details\est_application_credential_opcua_summary_block.html:42
+#: .\templates\devices\help\generic_details\est_application_credential_opc_ua_summary_block.html:42
 #: .\templates\devices\help\generic_details\est_application_credential_summary_block.html:42
 #: .\templates\devices\help\onboarding\domain_credential_details\cmp_domain_credential_summary_block.html:27
 msgid "Key Identifier (KID)"
 msgstr "Key Identifier (KID)"
 
 #: .\templates\devices\help\generic_details\cmp_application_credential_summary_block.html:46
-#: .\templates\devices\help\generic_details\est_application_credential_opcua_summary_block.html:46
+#: .\templates\devices\help\generic_details\est_application_credential_opc_ua_summary_block.html:46
 #: .\templates\devices\help\generic_details\est_application_credential_summary_block.html:46
 #: .\templates\devices\help\onboarding\cmp_idevid_registration.html:41
 #: .\templates\devices\help\onboarding\domain_credential_details\cmp_domain_credential_summary_block.html:31
@@ -1986,11 +1986,11 @@ msgstr ""
 "TLS-Serverzertifikat im PEM-Format. Es kann kopiert und in einer neuen Datei "
 "namens server_cert.pem eingefügt werden."
 
-#: .\templates\devices\help\generic_details\est_application_credential_opcua_summary_block.html:12
+#: .\templates\devices\help\generic_details\est_application_credential_opc_ua_summary_block.html:12
 msgid "OPC UA-Client Certificate Request URL"
 msgstr "URL zur Anforderung des OPC UA-Clientzertifikats"
 
-#: .\templates\devices\help\generic_details\est_application_credential_opcua_summary_block.html:27
+#: .\templates\devices\help\generic_details\est_application_credential_opc_ua_summary_block.html:27
 msgid "OPC UA-Server Certificate Request URL"
 msgstr "URL zur Anforderung des OPC UA-Serverzertifikats"
 
@@ -3128,57 +3128,57 @@ msgstr "Truststores"
 msgid "No Truststore has been added yet."
 msgstr "Es wurden noch keine Truststores hinzugefügt."
 
-#: .\templates\settings\language.html:7
+#: .\templates\management\language.html:7
 msgid "Language Configuration"
 msgstr "Spracheinstellungen (Language)"
 
-#: .\templates\settings\logging\logging_files.html:8
+#: .\templates\management\logging\logging_files.html:8
 #: .\templates\trustpoint\base.html:87
 msgid "Logging"
 msgstr "Logging"
 
-#: .\templates\settings\logging\logging_files.html:18
+#: .\templates\management\logging\logging_files.html:18
 msgid "Log file"
 msgstr "Log-Datei"
 
-#: .\templates\settings\logging\logging_files.html:23
+#: .\templates\management\logging\logging_files.html:23
 msgid "First log entry"
 msgstr "Erster Logeintrag"
 
-#: .\templates\settings\logging\logging_files.html:28
+#: .\templates\management\logging\logging_files.html:28
 msgid "Last log entry"
 msgstr "Letzter Logeintrag"
 
-#: .\templates\settings\logging\logging_files.html:31
-#: .\templates\settings\logging\logging_files.html:45
+#: .\templates\management\logging\logging_files.html:31
+#: .\templates\management\logging\logging_files.html:45
 msgid "View"
 msgstr "Ansehen"
 
-#: .\templates\settings\logging\logging_files.html:53
+#: .\templates\management\logging\logging_files.html:53
 msgid "No log files available."
 msgstr "Keine Log-Dateien vorhanden."
 
-#: .\templates\settings\logging\logging_files.html:65
+#: .\templates\management\logging\logging_files.html:65
 msgid "Download selected (tar.gz)"
 msgstr "Auswahl herunterladen (tar.gz)"
 
-#: .\templates\settings\logging\logging_files.html:68
+#: .\templates\management\logging\logging_files.html:68
 msgid "Download selected (zip)"
 msgstr "Auswahl herunterladen (zip)"
 
-#: .\templates\settings\network.html:7
+#: .\templates\management\network.html:7
 msgid "Network Configuration"
 msgstr "Netzwerkkonfiguration"
 
-#: .\templates\settings\ntp.html:7
+#: .\templates\management\ntp.html:7
 msgid "NTP Configuration"
 msgstr "NTP-Konfiguration"
 
-#: .\templates\settings\security.html:13
+#: .\templates\management\security.html:13
 msgid "Security Configuration"
 msgstr "Sicherheitseinstellungen"
 
-#: .\templates\settings\security.html:24
+#: .\templates\management\security.html:24
 msgid ""
 "Some settings are hidden as they are unavailable for the selected security "
 "level."
@@ -3186,11 +3186,11 @@ msgstr ""
 "Einige Einstellungen sind ausgeblendet, da sie für das ausgewählte "
 "Sicherheitslevel nicht verfügbar sind."
 
-#: .\templates\settings\security.html:34
+#: .\templates\management\security.html:34
 msgid "WARNING!"
 msgstr "ACHTUNG!"
 
-#: .\templates\settings\security.html:35
+#: .\templates\management\security.html:35
 msgid ""
 "By saving, you will disable the local auto-generated PKI. This revokes all "
 "certificates issued by the local auto-generated PKI."
@@ -3198,7 +3198,7 @@ msgstr ""
 "Beim Speichern wird die lokale automatisch generierte PKI deaktiviert. Dies "
 "widerruft alle durch die auto-generierte PKI ausgestellten Zertifikate."
 
-#: .\templates\settings\security.html:37
+#: .\templates\management\security.html:37
 msgid "This action is irreversible."
 msgstr "Diese Aktion ist unwiderruflich."
 
@@ -3276,6 +3276,10 @@ msgstr "PKI"
 #: .\templates\trustpoint\base.html:80
 msgid "Settings"
 msgstr "Einstellungen"
+
+#: .\templates\trustpoint\base.html:80
+msgid "Management"
+msgstr "Verwaltung"
 
 #: .\templates\trustpoint\base.html:86
 msgid "Language"

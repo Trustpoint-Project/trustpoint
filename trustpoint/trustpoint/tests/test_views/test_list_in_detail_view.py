@@ -18,7 +18,6 @@ class TestListInDetailView(TestCase):
         cls.device = DeviceModel.objects.create(
             common_name='Test Device',
             serial_number='12345',
-            domain_credential_onboarding=True
         )
         cls.notification1 = NotificationModel.objects.create(
             notification_type=NotificationModel.NotificationTypes.INFO,

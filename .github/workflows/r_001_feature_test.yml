@@ -1,13 +1,13 @@
-# name: R_001
+name: R_001
 
-# on:
-#   pull_request:
-#   push:
-#     branches:
-#       - main
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 
-# jobs:
-#   test:
-#     uses: ./.github/workflows/behave-test-template.yml
-#     with:
-#       feature_file: R_001_CRUD
+jobs:
+  test:
+    uses: ./.github/workflows/behave-test-template.yml
+    with:
+      feature_file: R_001_device_management
