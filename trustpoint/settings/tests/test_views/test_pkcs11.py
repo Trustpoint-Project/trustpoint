@@ -15,7 +15,7 @@ class PKCS11ConfigViewTestCase(TestCase):
             'hsm_type': 'softhsm',
             'label': 'TestToken',
             'slot': 1,
-            'module_path': '/usr/lib/libpkcs11-proxy.so',
+            'module_path': '/usr/local/lib/libpkcs11-proxy.so',
         }
         # Create and log in a test user
         self.user = User.objects.create_user(username='testuser', password='testpassword')

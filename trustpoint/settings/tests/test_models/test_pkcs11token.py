@@ -16,7 +16,7 @@ class PKCS11TokenTestCase(TestCase):
         self.token = PKCS11Token.objects.create(
             label='TestToken',
             slot=1,
-            module_path='/usr/lib/libpkcs11-proxy.so',
+            module_path='/usr/local/lib/libpkcs11-proxy.so',
         )
 
     def tearDown(self):
@@ -45,16 +45,18 @@ class PKCS11TokenTestCase(TestCase):
         """Test wrapping a DEK."""
         mock_session = mock.Mock()
         mock_wrap_key = mock.Mock()
-        mock_temp_key = mock.Mock()
         mock_pkcs11_lib.return_value.get_token.return_value.open.return_value = mock_session
         mock_session.get_key.return_value = mock_wrap_key
-        mock_session.create_object.return_value = mock_temp_key
-        mock_wrap_key.wrap_key.return_value = b'wrapped_data'
+
+        mock_wrap_key.encrypt.return_value = b'encrypted_data'
 
         dek_bytes = os.urandom(32)
         wrapped_data = self.token.wrap_dek(dek_bytes)
-        self.assertEqual(wrapped_data, b'wrapped_data')
-        mock_wrap_key.wrap_key.assert_called_once()
+
+        assert len(wrapped_data) == 16 + len(b'encrypted_data')
+        assert wrapped_data[16:] == b'encrypted_data'
+
+        mock_wrap_key.encrypt.assert_called_once()
 
     @mock.patch('settings.models.pkcs11.lib')
     def test_get_dek_cache_hit(self, mock_pkcs11_lib):
@@ -80,7 +82,16 @@ class PKCS11TokenTestCase(TestCase):
 
         mock_pkcs11_lib.return_value.get_token.return_value.open.return_value = mock_session
         mock_session.get_key.return_value = mock_wrap_key
-        mock_wrap_key.unwrap_key.return_value = mock_unwrapped_key
+
+        # Create a valid padded DEK for the mock decrypt method
+        def create_padded_dek(data: bytes, block_size: int) -> bytes:
+            padding_length = block_size - (len(data) % block_size)
+            padding = bytes([padding_length] * padding_length)
+            return data + padding
+
+        valid_dek = os.urandom(32)  # Simulate a valid DEK
+        padded_dek = create_padded_dek(valid_dek, 16)  # Add PKCS#7 padding
+        mock_wrap_key.decrypt.return_value = padded_dek  # Return the padded DEK
 
         # Simulate that the token has an encrypted DEK
         self.token.encrypted_dek = b'mock_encrypted_dek'
@@ -89,8 +100,8 @@ class PKCS11TokenTestCase(TestCase):
         dek = self.token.get_dek()
 
         # Assert that the unwrapped DEK is returned
-        self.assertEqual(len(dek), 32)  # Ensure the DEK length is valid
-        mock_wrap_key.unwrap_key.assert_called_once()
+        assert dek == valid_dek  # Ensure the DEK matches the original unpadded data
+        mock_wrap_key.decrypt.assert_called_once()
 
     def test_get_pin_from_env(self):
         """Test retrieving PIN from environment variable."""

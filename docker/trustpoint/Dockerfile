@@ -5,7 +5,8 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_NO_CACHE=1 \
-    UV_FROZEN=1
+    UV_FROZEN=1 \
+    PKCS11_PROXY_SOCKET=tcp://softhsm:5657
 
 # Make port 80 and 443 available to the world outside this container.
 # 80 will be redirected to 443 using TLS through the apache.
@@ -15,7 +16,6 @@ EXPOSE 80 443
 RUN apt-get update && \
     apt-get upgrade -y && \
         apt-get install -y --no-install-recommends \
-        pkcs11-proxy \
         opensc \
         sudo \
         apt-utils \
@@ -25,8 +25,22 @@ RUN apt-get update && \
         cron \
         apache2-dev \
         locales \
-        postgresql-client && \
-    rm -rf /var/lib/apt/lists/*
+        postgresql-client \
+        git \
+        build-essential \
+        cmake \
+        libssl-dev \
+        libseccomp-dev \
+        && rm -rf /var/lib/apt/lists/*
+
+# Clone and build pkcs11-proxy
+RUN git clone https://github.com/SUNET/pkcs11-proxy.git /tmp/pkcs11-proxy && \
+    cd /tmp/pkcs11-proxy && \
+    mkdir build && cd build && \
+    cmake .. && \
+    make && \
+    make install && \
+    rm -rf /tmp/pkcs11-proxy
 
 # Set locale Settings
 RUN sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen && \

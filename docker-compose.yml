@@ -21,7 +21,6 @@ services:
       DATABASE_PORT: "5432"
       HSM_PIN_FILE: /run/secrets/hsm_pin
       HSM_SO_PIN_FILE: /run/secrets/hsm_so_pin
-      PKCS11_PROXY_SOCKET: "softhsm:5657"
     secrets:
       - db_user
       - db_password

@@ -126,7 +126,7 @@ class HsmSetupForm(forms.Form):
 
     module_path = forms.CharField(
         max_length=255,
-        initial='/usr/lib/libpkcs11-proxy.so',
+        initial='/usr/local/lib/libpkcs11-proxy.so',
         label=_('PKCS#11 Module Path'),
         help_text=_('Path to the PKCS#11 module library.'),
         widget=forms.TextInput(attrs={'class': 'form-control'}),
@@ -173,7 +173,7 @@ class HsmSetupForm(forms.Form):
         if hsm_type == 'softhsm':
             cleaned_data['label'] = 'Trustpoint-SoftHSM'
             cleaned_data['slot'] = 0
-            cleaned_data['module_path'] = '/usr/lib/libpkcs11-proxy.so'
+            cleaned_data['module_path'] = '/usr/local/lib/libpkcs11-proxy.so'
         elif hsm_type == 'physical':
             raise forms.ValidationError(_('Physical HSM is not yet supported.'))
 
@@ -197,7 +197,7 @@ class HsmSetupForm(forms.Form):
         """Clean module path field."""
         hsm_type = self.data.get('hsm_type')
         if hsm_type == 'softhsm':
-            return '/usr/lib/libpkcs11-proxy.so'
+            return '/usr/local/lib/libpkcs11-proxy.so'
         return self.cleaned_data.get('module_path', '')
 
 class BackupPasswordForm(forms.Form):

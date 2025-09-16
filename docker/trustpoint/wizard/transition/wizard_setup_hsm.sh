@@ -2,6 +2,8 @@
 # This script sets up an HSM slot using the pins provided via Docker Compose secrets.
 # Usage: wizard_setup_hsm.sh <pkcs11_module_path> <slot_number> <token_label> [init_setup|auto_restore_setup]
 
+export PKCS11_PROXY_SOCKET="${PKCS11_PROXY_SOCKET:-tcp://softhsm:5657}"
+
 STATE_FILE_DIR="/etc/trustpoint/wizard/state/"
 WIZARD_SETUP_HSM="/etc/trustpoint/wizard/state/WIZARD_SETUP_HSM"
 WIZARD_SETUP_MODE="/etc/trustpoint/wizard/state/WIZARD_SETUP_MODE"
@@ -91,8 +93,17 @@ fi
 log "Initializing HSM slot $HSM_SLOT with token label '$HSM_TOKEN_LABEL' using module '$PKCS11_MODULE_PATH' for setup type '$SETUP_TYPE'..."
 
 # Initialize the HSM slot
-if ! softhsm2-util --init-token --module "$PKCS11_MODULE_PATH" --slot "$HSM_SLOT" --label "$HSM_TOKEN_LABEL" --pin "$HSM_PIN" --so-pin "$HSM_SO_PIN"; then
+log "Initializing HSM slot $HSM_SLOT with token label '$HSM_TOKEN_LABEL' using module '$PKCS11_MODULE_PATH' for setup type '$SETUP_TYPE'..."
+
+# Initialize the HSM slot using pkcs11-tool
+if ! PKCS11_PROXY_SOCKET="$PKCS11_PROXY_SOCKET" pkcs11-tool --module "$PKCS11_MODULE_PATH" --init-token --label "$HSM_TOKEN_LABEL" --so-pin "$HSM_SO_PIN"; then
     echo "ERROR: Failed to initialize HSM token in slot $HSM_SLOT."
+    exit 9
+fi
+
+# Set the user PIN with explicit environment variable
+if ! PKCS11_PROXY_SOCKET="$PKCS11_PROXY_SOCKET" pkcs11-tool --module "$PKCS11_MODULE_PATH" --init-pin --pin "$HSM_PIN" --so-pin "$HSM_SO_PIN"; then
+    echo "ERROR: Failed to set HSM token user PIN in slot $HSM_SLOT."
     exit 9
 fi
 

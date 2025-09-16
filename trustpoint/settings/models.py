@@ -309,7 +309,7 @@ class PKCS11Token(models.Model, LoggerMixin):
     )
     module_path = models.CharField(
         max_length=255,
-        default='/usr/lib/libpkcs11-proxy.so',
+        default='/usr/local/lib/libpkcs11-proxy.so',
         help_text=_('Path to PKCS#11 module library'),
         verbose_name=_('Module Path')
     )
@@ -478,7 +478,6 @@ class PKCS11Token(models.Model, LoggerMixin):
             RuntimeError: If wrapping fails
         """
         session = None
-        temp_key = None
 
         try:
             pkcs11_lib = pkcs11.lib(self.module_path)
@@ -490,21 +489,21 @@ class PKCS11Token(models.Model, LoggerMixin):
                 label=self.KEK_ENCRYPTION_KEY_LABEL
             )
 
-            temp_label = f'temp-wrap-{os.urandom(8).hex()}'
-            temp_key = session.create_object({
-                pkcs11.Attribute.CLASS: pkcs11.ObjectClass.SECRET_KEY,
-                pkcs11.Attribute.KEY_TYPE: pkcs11.KeyType.AES,
-                pkcs11.Attribute.TOKEN: False,  # Session key only
-                pkcs11.Attribute.EXTRACTABLE: True,
-                pkcs11.Attribute.VALUE: dek_bytes,
-                pkcs11.Attribute.LABEL: temp_label,
-            })
+            # Use AES encryption instead of key wrapping since AES-KEY-WRAP is not supported
+            # Generate a random IV for AES-ECB (though ECB doesn't use IV, we'll use it for compatibility)
+            iv = os.urandom(16)  # 16 bytes for AES block size
 
-            wrapped_data = wrap_key.wrap_key(
-                temp_key,
-                mechanism=pkcs11.Mechanism.AES_KEY_WRAP
+            # Pad the DEK to AES block size (16 bytes) - manual padding for ECB
+            padded_dek = self._pad_to_block_size(dek_bytes, 16)
+
+            # Encrypt using AES-ECB (no IV needed but we'll prepend random bytes for security)
+            encrypted_data = wrap_key.encrypt(
+                padded_dek,
+                mechanism=pkcs11.Mechanism.AES_ECB
             )
 
+            # Return IV + encrypted data for consistency with other encryption methods
+            wrapped_data = iv + encrypted_data
 
         except pkcs11.NoSuchKey as e:
             msg = (
@@ -519,18 +518,54 @@ class PKCS11Token(models.Model, LoggerMixin):
             return wrapped_data
 
         finally:
-            # Cleanup
-            if temp_key:
-                try:
-                    temp_key.destroy()
-                except pkcs11.PKCS11Exception as cleanup_error:
-                    self.logger.warning('Failed to cleanup temp key: %s', cleanup_error)
-
             if session:
                 try:
                     session.close()
                 except Exception as cleanup_error:  # noqa: BLE001
                     self.logger.warning('Failed to close session: %s', cleanup_error)
+
+    def _pad_to_block_size(self, data: bytes, block_size: int) -> bytes:
+        """Pad data to block size using PKCS#7 padding.
+
+        Args:
+            data: Data to pad
+            block_size: Block size for padding
+
+        Returns:
+            bytes: Padded data
+        """
+        padding_length = block_size - (len(data) % block_size)
+        padding = bytes([padding_length] * padding_length)
+        return data + padding
+
+    def _unpad_from_block_size(self, data: bytes) -> bytes:
+        """Remove PKCS#7 padding from data.
+
+        Args:
+            data: Padded data
+
+        Returns:
+            bytes: Unpadded data
+
+        Raises:
+            ValueError: If padding is invalid
+        """
+        if not data:
+            msg = 'Cannot unpad empty data'
+            raise ValueError(msg)
+
+        padding_length = data[-1]
+        if padding_length == 0 or padding_length > len(data):
+            msg = 'Invalid padding'
+            raise ValueError(msg)
+
+        # Verify padding
+        for i in range(1, padding_length + 1):
+            if data[-i] != padding_length:
+                msg = 'Invalid padding'
+                raise ValueError(msg)
+
+        return data[:-padding_length]
 
     def get_dek(self) -> bytes:
         """Get the Data Encryption Key (DEK), unwrapping it if necessary.
@@ -638,7 +673,7 @@ class PKCS11Token(models.Model, LoggerMixin):
 
         try:
             session, wrap_key = self._open_session_and_get_wrap_key()
-            dek_bytes, unwrapped_key = self._unwrap_with_key(wrap_key, wrapped_data)
+            dek_bytes = self._unwrap_with_key(wrap_key, wrapped_data)
             self._validate_dek_bytes(dek_bytes)
         except pkcs11.NoSuchKey as e:
             self._handle_no_such_key(e)
@@ -648,7 +683,6 @@ class PKCS11Token(models.Model, LoggerMixin):
             self.logger.info('DEK unwrapped successfully for token %s', self.label)
             return dek_bytes
         finally:
-            self._cleanup_unwrapped_key(unwrapped_key)
             self._cleanup_session(session)
         msg = 'Failed to unwrap DEK: Unknown error'
         raise RuntimeError(msg)
@@ -676,7 +710,7 @@ class PKCS11Token(models.Model, LoggerMixin):
         )
         return session, wrap_key
 
-    def _unwrap_with_key(self, wrap_key: pkcs11.Key, wrapped_data: bytes) -> tuple[bytes, pkcs11.Key]:
+    def _unwrap_with_key(self, wrap_key: pkcs11.Key, wrapped_data: bytes) -> bytes:
         """Unwrap the DEK using the provided wrapping key.
 
         Args:
@@ -684,25 +718,23 @@ class PKCS11Token(models.Model, LoggerMixin):
             wrapped_data (bytes): The wrapped DEK data.
 
         Returns:
-            tuple[bytes, pkcs11.Key]: The unwrapped DEK and the unwrapped key.
+            tuple[bytes, None]: The unwrapped DEK and None (no key object for encryption method).
         """
-        temp_label = f'temp-unwrap-{os.urandom(8).hex()}'
-        unwrapped_key = wrap_key.unwrap_key(
-            pkcs11.ObjectClass.SECRET_KEY,
-            pkcs11.KeyType.AES,
-            wrapped_data,
-            template={
-                pkcs11.Attribute.LABEL: temp_label,
-                pkcs11.Attribute.TOKEN: False,
-                pkcs11.Attribute.ENCRYPT: True,
-                pkcs11.Attribute.DECRYPT: True,
-                pkcs11.Attribute.EXTRACTABLE: True,
-                pkcs11.Attribute.SENSITIVE: False,
-            },
-            mechanism=pkcs11.Mechanism.AES_KEY_WRAP
-        )
-        dek_bytes = unwrapped_key[pkcs11.Attribute.VALUE]
-        return dek_bytes, unwrapped_key
+        try:
+            # Extract IV and encrypted data (IV not used for ECB but kept for consistency)
+            encrypted_data = wrapped_data[16:]
+
+            # Decrypt using AES-ECB
+            decrypted_data = wrap_key.decrypt(
+                encrypted_data,
+                mechanism=pkcs11.Mechanism.AES_ECB
+            )
+
+            return self._unpad_from_block_size(decrypted_data)
+
+        except Exception as e:
+            msg = f'Failed to unwrap DEK: {e}'
+            raise RuntimeError(msg) from e
 
     def _validate_dek_bytes(self, dek_bytes: bytes) -> None:
         """Validate the unwrapped DEK bytes."""
@@ -755,18 +787,6 @@ class PKCS11Token(models.Model, LoggerMixin):
         self.logger.exception('DEK unwrapping failed')
         msg = f'Failed to unwrap DEK: {e}'
         raise RuntimeError(msg) from e
-
-    def _cleanup_unwrapped_key(self, unwrapped_key: pkcs11.Key) -> None:
-        """Cleanup the unwrapped key from memory.
-
-        Args:
-            unwrapped_key (pkcs11.Key): The unwrapped key object.
-        """
-        if unwrapped_key:
-            try:
-                unwrapped_key.destroy()
-            except Exception as cleanup_error:  # noqa: BLE001
-                self.logger.warning('Failed to cleanup unwrapped key: %s', cleanup_error)
 
     def _cleanup_session(self, session: pkcs11.Session) -> None:
         """Cleanup the session from memory.

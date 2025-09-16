@@ -14,7 +14,7 @@ class SetupWizardHsmSetupViewTestCase(TestCase):
         self.url = reverse('setup_wizard:hsm_setup')
         self.valid_data = {
             'hsm_type': 'softhsm',
-            'module_path': '/usr/lib/libpkcs11-proxy.so',
+            'module_path': '/usr/local/lib/libpkcs11-proxy.so',
             'slot': 0,
             'label': 'Trustpoint-SoftHSM',
         }

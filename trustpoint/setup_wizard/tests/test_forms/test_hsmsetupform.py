@@ -8,7 +8,7 @@ class HsmSetupFormTestCase(TestCase):
         """Set up valid data for testing."""
         self.valid_data = {
             'hsm_type': 'softhsm',
-            'module_path': '/usr/lib/libpkcs11-proxy.so',
+            'module_path': '/usr/local/lib/libpkcs11-proxy.so',
             'slot': 0,
             'label': 'Trustpoint-SoftHSM',
         }
@@ -17,7 +17,7 @@ class HsmSetupFormTestCase(TestCase):
         """Test that the form initializes with default values."""
         form = HsmSetupForm()
         self.assertEqual(form.fields['hsm_type'].initial, 'softhsm')
-        self.assertEqual(form.fields['module_path'].initial, '/usr/lib/libpkcs11-proxy.so')
+        self.assertEqual(form.fields['module_path'].initial, '/usr/local/lib/libpkcs11-proxy.so')
         self.assertEqual(form.fields['slot'].initial, 0)
         self.assertEqual(form.fields['label'].initial, 'Trustpoint-SoftHSM')
 
@@ -27,7 +27,7 @@ class HsmSetupFormTestCase(TestCase):
         self.assertTrue(form.is_valid())
         cleaned_data = form.clean()
         self.assertEqual(cleaned_data['hsm_type'], 'softhsm')
-        self.assertEqual(cleaned_data['module_path'], '/usr/lib/libpkcs11-proxy.so')
+        self.assertEqual(cleaned_data['module_path'], '/usr/local/lib/libpkcs11-proxy.so')
         self.assertEqual(cleaned_data['slot'], 0)
         self.assertEqual(cleaned_data['label'], 'Trustpoint-SoftHSM')
 
@@ -69,7 +69,7 @@ class HsmSetupFormTestCase(TestCase):
         data['module_path'] = '/custom/path/libsofthsm2.so'  # This will be overridden for SoftHSM
         form = HsmSetupForm(data=data)
         self.assertTrue(form.is_valid())
-        self.assertEqual(form.cleaned_data['module_path'], '/usr/lib/libpkcs11-proxy.so')
+        self.assertEqual(form.cleaned_data['module_path'], '/usr/local/lib/libpkcs11-proxy.so')
 
     def test_missing_required_fields(self):
         """Test that the form is invalid if required fields are missing."""
