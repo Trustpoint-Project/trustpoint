@@ -1,4 +1,5 @@
 """Tests for the IssuedCredential model."""
+
 from typing import Any
 
 import pytest
@@ -23,14 +24,13 @@ def test_issued_credential_creation(credential_instance: dict[str, Any], device_
     )
 
     assert issued_credential.pk is not None, 'The issued credential should be saved to the database.'
-    assert issued_credential.credential == credential, \
-        'The issued credential should refer to the correct credential.'
+    assert issued_credential.credential == credential, 'The issued credential should refer to the correct credential.'
     assert issued_credential.device == device, 'The issued credential should be linked to the correct device.'
-    assert issued_credential.domain == device.domain, \
-        'The issued credential should be linked to the correct domain.'
+    assert issued_credential.domain == device.domain, 'The issued credential should be linked to the correct domain.'
     assert issued_credential.issued_credential_type == IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
     assert issued_credential.issued_credential_purpose == IssuedCredentialModel.IssuedCredentialPurpose.TLS_CLIENT
     assert issued_credential.common_name == 'Test Issued Credential', 'The common name should match the input.'
+
 
 @pytest.mark.django_db
 def test_is_valid_domain_credential(credential_instance: dict[str, Any], device_instance: dict[str, Any]) -> None:
@@ -49,6 +49,7 @@ def test_is_valid_domain_credential(credential_instance: dict[str, Any], device_
 
     is_valid, reason = issued_credential.is_valid_domain_credential()
     assert is_valid is True, f'The domain credential should be valid. Reason: {reason}'
+
 
 @pytest.mark.django_db
 def test_revoke_issued_credential(credential_instance: dict[str, Any], device_instance: dict[str, Any]) -> None:
@@ -80,6 +81,7 @@ def test_revoke_issued_credential(credential_instance: dict[str, Any], device_in
         "The revocation reason should be 'cessationOfOperation'."
     )
 
+
 @pytest.mark.django_db
 def test_get_credential_for_certificate(credential_instance: dict[str, Any], device_instance: dict[str, Any]) -> None:
     """Test retrieving the IssuedCredentialModel for a given certificate."""
@@ -98,6 +100,7 @@ def test_get_credential_for_certificate(credential_instance: dict[str, Any], dev
     cert = credential.certificate.get_certificate_serializer().as_crypto()
     retrieved_credential = IssuedCredentialModel.get_credential_for_certificate(cert)
     assert retrieved_credential == issued_credential, 'The retrieved credential should match the created credential.'
+
 
 @pytest.mark.django_db
 def test_pre_delete_issued_credential(credential_instance: dict[str, Any], device_instance: dict[str, Any]) -> None:
@@ -124,5 +127,3 @@ def test_pre_delete_issued_credential(credential_instance: dict[str, Any], devic
     assert not CredentialModel.objects.filter(pk=credential.pk).exists(), (
         'The credential instance should be deleted after `pre_delete` is called.'
     )
-
-

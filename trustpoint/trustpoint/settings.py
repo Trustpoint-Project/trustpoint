@@ -204,6 +204,8 @@ TIME_ZONE = 'UTC'
 
 # Application definition
 INSTALLED_APPS = [
+    'help_pages.apps.HelpPagesConfig',
+    'shared.apps.SharedConfig',
     'setup_wizard.apps.SetupWizardConfig',
     'users.apps.UsersConfig',
     'home.apps.HomeConfig',
@@ -212,7 +214,7 @@ INSTALLED_APPS = [
     'cmp.apps.CmpConfig',
     'est.apps.EstConfig',
     'aoki.apps.AokiConfig',
-    'settings.apps.SettingsConfig',
+    'management.apps.ManagementConfig',
     'notifications.apps.NotificationsConfig',
 
     'trustpoint_core',
@@ -225,6 +227,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'crispy_forms',
     'crispy_bootstrap5',
+    'django_filters',
     'dbbackup',
 ]
 

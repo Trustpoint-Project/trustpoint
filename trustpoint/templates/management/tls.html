@@ -1,0 +1,158 @@
+{% extends 'trustpoint/base.html' %}
+{% load crispy_forms_filters %}
+{% load i18n %}
+
+{% block content %}
+
+    <div class="card">
+        <div class="card-header">
+            <h1>{% trans "TLS Settings" %}</h1>
+        </div>
+        <div class="card-body">
+            <div class="tp-card-centered-content">
+                {% if certificate %}
+                    <h3>{% trans "Certificate Information" %}</h3>
+                                        <br>
+
+
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>{% trans "Common Name (CN)" %}</div>
+                            <div>{{ certificate.common_name }}</div>
+                        </div>
+                    </div>
+                    <hr>
+
+                    <h3>{% trans "Issuer Details" %}</h3>
+                                        <br>
+
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>{% trans "Country (C)" %}</div>
+                            <div>{{ issuer_details.country|default:_("N/A") }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans "Organization (O)" %}</div>
+                            <div>{{ issuer_details.organization|default:_("N/A") }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans "Common Name (CN)" %}</div>
+                            <div>{{ issuer_details.common_name|default:_("N/A") }}</div>
+                        </div>
+                    </div>
+                    <hr>
+
+                    <h3>{% trans "Validity" %}</h3>
+                                        <br>
+
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>{% trans "Not Before" %}</div>
+                            <div>{{ certificate.not_valid_before }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans "Not After" %}</div>
+                            <div>{{ certificate.not_valid_after }}</div>
+                        </div>
+                    </div>
+                    <hr>
+
+                    <h3>{% trans "Subject Alternative Names (SAN)" %}</h3>
+                                        <br>
+
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>
+                                {% trans "DNS Names" %}
+                            </div>
+                            <div>
+                                {% if san_dns_names %}
+                                    {{ san_dns_names|join:", " }}
+                                {% else %}
+                                    <em>{% trans "No DNS names listed in SAN." %}</em>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>
+                                {% trans "IP Addresses" %}
+                            </div>
+                            <div>
+                                {% if san_ips %}
+                                    {{ san_ips|join:", " }}
+                                {% else %}
+                                    <em>{% trans "No IP addresses listed in SAN." %}</em>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+
+                    <h3>{% trans "Miscellaneous" %}</h3>
+                                        <br>
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>{% trans "Serial Number" %}</div>
+                            <div>{{ certificate.serial_number }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans "Signature Algorithm" %}</div>
+                            <div>{{ certificate.signature_algorithm }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans "Download" %}</div>
+                            <div>
+                                <a href="{% url 'pki:trustpoint-tls-server-download' %}">
+                                    {% trans "PEM (cert)" %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+
+                    <h3>{% trans "Preferred IPv4 Address" %}</h3>
+                    <br>
+
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>{% trans "Preferred IPv4 Address" %}</div>
+                            <div>
+                                <form method="post" action="{% url 'management:tls' %}" id="preferred_ipv4_configuration">
+                                    {% csrf_token %}
+                                    <div>
+                                        <div class="btn-group" role="group" aria-label="IPv4 Address Selection">
+                                            {% for ip, label in form.ipv4_address.field.choices %}
+                                                <button class="btn {% if form.ipv4_address.value == ip %}btn-primary{% else %}btn-outline-primary{% endif %}"
+                                                        name="ipv4_address"
+                                                        value="{{ ip }}">
+                                                    {{ label }}
+                                                </button>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>{% trans "Usage" %}</div>
+                            <div>
+                                {% trans "The preferred IPv4 address is used for the code blocks and examples displayed in the help section." %}
+                            </div>
+                        </div>
+                    </div>
+
+
+                {% else %}
+                    <p>{% trans "No active certificate available to display." %}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+{% endblock %}

@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 import paramiko
-from settings.models import BackupOptions
+from management.models import BackupOptions
 
 
 class SftpError(Exception):

@@ -38,7 +38,7 @@ For more detailed output please visit the corresponding github action pages.
    :header: "Name (Identifier)", "Title", "Status of the behave tests"
    :widths: 10, 60, 30
 
-   _`R_001`, "Create, view, edit and delete an identity", "|R_001_badge|"
+   _`R_001`, "Create, view, edit and delete a device", "|R_001_badge|"
    _`R_002`, "Usage of any zero touch onboarding protocol", "No test present."
    _`R_003`, "Certificate Lifecycle Management", "|R_003_badge|"
    _`R_004`, "REST API", "|R_004_badge|"
@@ -53,6 +53,8 @@ For more detailed output please visit the corresponding github action pages.
    _`R_013`, "Remote Credential Download", "|R_013_badge|"
    _`R_101`, "Security Level Configuration", "|R_101_badge|"
    _`R_102`, "Certificate Template Security", "|R_102_badge|"
+   _`R_103`, "Create, view, and delete a domain", "|R_103_badge|"
+   _`R_104`, "Create, view, and delete a truststore", "|R_104_badge|"
    _`F_001`, "NTEU must be able to execute R_001 and R_002.", "|F_001_badge|"
 
 
@@ -107,6 +109,14 @@ For more detailed output please visit the corresponding github action pages.
 .. |R_102_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml/badge.svg
     :alt: R_102_badge
     :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml
+
+.. |R_103_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_103_feature_test.yml/badge.svg
+    :alt: R_103_badge
+    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_103_feature_test.yml
+
+.. |R_104_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_104_feature_test.yml/badge.svg
+    :alt: R_104_badge
+    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_104_feature_test.yml
 
 .. |F_001_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/f_001_feature_test.yml/badge.svg
     :alt: F_001_badge

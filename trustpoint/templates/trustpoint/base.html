@@ -75,22 +75,20 @@
             </div>
 
             <div class="tp-menu-group">
-                <a href="{% url 'settings:language' %}" class="tp-menu-head {% if page_category == 'settings' %}tp-menu-active{% endif %}">
+               <a href="{% url 'management:settings' %}" class="tp-menu-head {% if page_category == 'settings' %}tp-menu-active{% endif %}">
                     <svg class="bi" fill="currentColor" role="img">
                         <use href="{% static 'img/icons.svg' %}#icon-settings"></use></svg>
-                        {% translate "Settings" %}
+                        {% translate "Management" %}
                     <div class="btn-collapse" data-category="settings"
                         aria-expanded="{% if page_category == 'settings' %}true{% else %}false{% endif %}">
                     </div>
                 </a>
                 <div class="tp-menu-collapse {% if page_category == 'settings' %}show{% endif %}">
-                    <a href="{% url 'settings:language' %}" class="tp-menu-item {% if page_name == 'language' %}tp-menu-active{% endif %}">{% trans "Language" %}</a>
-                    <a href="{% url 'settings:logging-files' %}" class="tp-menu-item {% if page_name == 'logging' %}tp-menu-active{% endif %}">{% trans "Logging" %}</a>
-                    <a href="{% url 'settings:tls' %}" class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}">{% trans "TLS" %}</a>
-{#                    <a href="{% url 'settings:ntp' %}" class="tp-menu-item {% if page_name == 'ntp' %}tp-menu-active{% endif %}">{% trans "NTP" %}</a>#}
-                    <a href="{% url 'settings:security' %}" class="tp-menu-item {% if page_name == 'security' %}tp-menu-active{% endif %}">{% trans "Security" %}</a>
-                    <a href="{% url 'settings:backups' %}" class="tp-menu-item {% if page_name == 'backup' %}tp-menu-active{% endif %}">{% trans "Backup" %}</a>
-                    <a href="{% url 'settings:pkcs11' %}" class="tp-menu-item {% if page_name == 'pkcs11' %}tp-menu-active{% endif %}">{% trans "PKCS#11" %}</a>
+                    <a href="{% url 'management:settings' %}" class="tp-menu-item {% if page_name == 'settings' %}tp-menu-active{% endif %}">{% trans "Settings" %}</a>
+                    <a href="{% url 'management:logging-files' %}" class="tp-menu-item {% if page_name == 'logging' %}tp-menu-active{% endif %}">{% trans "Logging" %}</a>
+                    <a href="{% url 'management:tls' %}" class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}">{% trans "TLS" %}</a>
+                    <a href="{% url 'management:backups' %}" class="tp-menu-item {% if page_name == 'backup' %}tp-menu-active{% endif %}">{% trans "Backups" %}</a>
+                    <a href="{% url 'management:pkcs11' %}" class="tp-menu-item {% if page_name == 'pkcs11' %}tp-menu-active{% endif %}">{% trans "PKCS#11" %}</a>
                 </div>
             </div>
             <div class="tp-menu-footer">
@@ -103,6 +101,12 @@
                             <use href="{% static 'img/icons.svg' %}#icon-moon-stars"></use></svg>
                             <span class="light-only">{% trans "Dark theme" %}</span>
                     </button>
+                    <a href="{% url 'management:help' %}" class="tp-menu-head">
+                        <svg class="bi" fill="currentColor" width="16" height="16" role="img">
+                            <use href="{% static 'img/icons.svg' %}#icon-question-circle"></use>
+                        </svg>
+                        {% trans "Help & Support" %}
+                    </a>
                     <form method="POST" action="{% url 'users:logout' %}">
                         {% csrf_token %}
                         <button class="tp-menu-head" type="submit">

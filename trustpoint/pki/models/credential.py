@@ -20,6 +20,7 @@ from trustpoint_core.serializer import (
     PrivateKeyLocation,
     PrivateKeySerializer,
 )
+import logging
 from util.db import CustomDeleteActionModel
 from util.field import UniqueNameValidator
 
@@ -32,7 +33,6 @@ if TYPE_CHECKING:
     from cryptography.hazmat.primitives import hashes
     from django.db.models import QuerySet
     from trustpoint_core.crypto_types import PrivateKey
-    from util.db import CustomDeleteActionManager
 
 
 __all__ = ['CertificateChainOrderModel',
@@ -690,6 +690,17 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             ]
         )
 
+    def get_last_in_chain(self) -> None | CertificateModel:
+        """Gets the root ca certificate model, if any."""
+        last_certificate_in_chain = self.certificatechainordermodel_set.order_by('order').last()
+        logger = logging.getLogger()
+        logger.error('abc')
+        logger.error(last_certificate_in_chain)
+        logger.error(self.certificate)
+        if last_certificate_in_chain is None:
+            return self.certificate
+        return last_certificate_in_chain.certificate
+
     def get_root_ca_certificate(self) -> None | x509.Certificate:
         """Gets the root CA certificate of the credential certificate chain."""
         root_ca_certificate_serializer = self.get_root_ca_certificate_serializer()
@@ -700,6 +711,8 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     def get_root_ca_certificate_serializer(self) -> None | CertificateSerializer:
         """Gets the root CA certificate serializer."""
         last_certificate_in_chain = self.certificatechainordermodel_set.order_by('order').last()
+        if last_certificate_in_chain is None:
+            return self.certificate.get_certificate_serializer()
         if last_certificate_in_chain.certificate.is_root_ca:
             return last_certificate_in_chain.certificate.get_certificate_serializer()
         return None

@@ -13,7 +13,9 @@ from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
-    PrivateKeySerializer, PrivateKeyLocation, PrivateKeyReference,
+    PrivateKeySerializer,
+    PrivateKeyLocation,
+    PrivateKeyReference,
 )
 from util.field import UniqueNameValidator
 
@@ -148,7 +150,7 @@ class TruststoreAddForm(forms.Form):
 
     @staticmethod
     def _save_trust_store(
-            unique_name: str, intended_usage: TruststoreModel.IntendedUsage, certificates: list[x509.Certificate]
+        unique_name: str, intended_usage: TruststoreModel.IntendedUsage, certificates: list[x509.Certificate]
     ) -> TruststoreModel:
         saved_certs: list[CertificateModel] = []
 
@@ -419,6 +421,11 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
             raise ValidationError(err_msg) from exception
 
+        cert_crypto = credential_serializer.certificate
+        if cert_crypto.extensions.get_extension_for_class(x509.BasicConstraints).value.ca is False:
+            err_msg = 'The provided certificate is not a CA certificate.'
+            raise ValidationError(err_msg)
+
         try:
             IssuingCaModel.create_new_issuing_ca(
                 unique_name=unique_name,
@@ -547,6 +554,11 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             err_msg = _('Failed to parse the Issuing CA certificate. Seems to be corrupted.')
             raise ValidationError(err_msg) from exception
 
+        cert_crypto = certificate_serializer.as_crypto()
+        if cert_crypto.extensions.get_extension_for_class(x509.BasicConstraints).value.ca is False:
+            err_msg = 'The provided certificate is not a CA certificate.'
+            raise ValidationError(err_msg)
+
         certificate_in_db = CertificateModel.get_cert_by_sha256_fingerprint(
             certificate_serializer.as_crypto().fingerprint(algorithm=hashes.SHA256()).hex()
         )
@@ -618,6 +630,12 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
                 certificate_serializer=ca_certificate_serializer,
                 certificate_collection_serializer=ca_certificate_chain_serializer
             )
+
+            pk = credential_serializer.private_key
+            cert = credential_serializer.certificate
+            if pk.public_key() != cert.public_key():
+                err_msg = 'The provided private key does not match the Issuing CA certificate.'
+                raise ValidationError(err_msg)
 
             credential_serializer.private_key_reference = (
                 PrivateKeyReference.from_private_key(private_key=credential_serializer.private_key,
