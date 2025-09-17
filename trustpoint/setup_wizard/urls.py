@@ -3,20 +3,36 @@
 from django.urls import path
 
 from setup_wizard.views import (
+    BackupAutoRestoreHsmView,
+    BackupAutoRestorePasswordView,
     BackupRestoreView,
+    SetupWizardBackupPasswordView,
     SetupWizardCreateSuperUserView,
     SetupWizardDemoDataView,
     SetupWizardGenerateTlsServerCredentialView,
+    SetupWizardHsmSetupView,
     SetupWizardImportTlsServerCredentialView,
-    SetupWizardInitialView,
-    SetupWizardOptionsView,
+    SetupWizardRestoreOptionsView,
+    SetupWizardSelectTlsServerCredentialView,
+    SetupWizardSetupModeView,
     SetupWizardTlsServerCredentialApplyCancelView,
     SetupWizardTlsServerCredentialApplyView,
 )
 
 app_name = 'setup_wizard'
 urlpatterns = [
-    path('', SetupWizardInitialView.as_view(), name='initial'),
+    path(
+        'hsm-setup/',
+        SetupWizardHsmSetupView.as_view(),
+        name='hsm_setup',
+    ),
+    path('setup_mode/', SetupWizardSetupModeView.as_view(), name='setup_mode'),
+    path('select_tls_server_credential/', SetupWizardSelectTlsServerCredentialView.as_view(), name='select_tls_server_credential'),
+    path(
+        'backup-password/',
+        SetupWizardBackupPasswordView.as_view(),
+        name='backup_password',
+    ),
     path(
         'generate-tls-server-credential/',
         SetupWizardGenerateTlsServerCredentialView.as_view(),
@@ -28,9 +44,9 @@ urlpatterns = [
         name='import_tls_server_credential',
     ),
     path(
-        'options/',
-        SetupWizardOptionsView.as_view(),
-        name='options',
+        'restore_options/',
+        SetupWizardRestoreOptionsView.as_view(),
+        name='restore_options',
     ),
     path(
         'tls-server-credential-apply/',
@@ -50,4 +66,7 @@ urlpatterns = [
     path('demo-data/', SetupWizardDemoDataView.as_view(), name='demo_data'),
     path('create-super-user', SetupWizardCreateSuperUserView.as_view(), name='create_super_user'),
     path('restore/', BackupRestoreView.as_view(), name='restore'),
+    path('auto_restore_hsm/', BackupAutoRestoreHsmView.as_view(), name='auto_restore_hsm'),
+    path('auto_restore_password/', BackupAutoRestorePasswordView.as_view(), name='auto_restore_password'),
+
 ]

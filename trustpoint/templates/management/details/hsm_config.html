@@ -1,0 +1,61 @@
+{% load i18n %}
+{% block html_config %}
+    <form method="POST" class="text-start" novalidate id="hsm_configuration">
+        {% csrf_token %}
+        <fieldset class="form-group tp-form-group">
+            <!-- HSM Type Selection - Always visible -->
+            <div class="mb-3">
+                <label for="{{ form.hsm_type.id_for_label }}" class="form-label">{{ form.hsm_type.label }}</label>
+                {{ form.hsm_type }}
+                {% if form.hsm_type.help_text %}
+                    <div class="form-text">{{ form.hsm_type.help_text }}</div>
+                {% endif %}
+                {% if form.hsm_type.errors %}
+                    <div class="invalid-feedback d-block">{{ form.hsm_type.errors.0 }}</div>
+                {% endif %}
+            </div>
+
+            <!-- Configuration Fields - Show/Hide based on HSM type -->
+            <div id="hsm-config-fields">
+                <div class="mb-3">
+                    <label for="{{ form.label.id_for_label }}"
+                           class="form-label">{{ form.label.label }}</label>
+                    {{ form.label }}
+                    {% if form.label.help_text %}
+                        <div class="form-text">{{ form.label.help_text }}</div>
+                    {% endif %}
+                    {% if form.label.errors %}
+                        <div class="invalid-feedback d-block">{{ form.label.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <label for="{{ form.slot.id_for_label }}"
+                           class="form-label">{{ form.slot.label }}</label>
+                    {{ form.slot }}
+                    {% if form.slot.help_text %}
+                        <div class="form-text">{{ form.slot.help_text }}</div>
+                    {% endif %}
+                    {% if form.slot.errors %}
+                        <div class="invalid-feedback d-block">{{ form.slot.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <label for="{{ form.module_path.id_for_label }}"
+                           class="form-label">{{ form.module_path.label }}</label>
+                    {{ form.module_path }}
+                    {% if form.module_path.help_text %}
+                        <div class="form-text">{{ form.module_path.help_text }}</div>
+                    {% endif %}
+                    {% if form.module_path.errors %}
+                        <div class="invalid-feedback d-block">{{ form.module_path.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Message container -->
+            <div id="hsm-message-container"></div>
+        </fieldset>
+    </form>
+{% endblock html_config %}
