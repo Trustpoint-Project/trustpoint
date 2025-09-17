@@ -2,7 +2,6 @@
 # This script will transition the from the WIZARD_INITIAL state to the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state.
 
 STATE_FILE_DIR="/etc/trustpoint/wizard/state/"
-APACHE_TLS_DIRECTORY="/etc/trustpoint/tls/"
 WIZARD_TLS_SERVER_CREDENTIAL_APPLY="/etc/trustpoint/wizard/state/WIZARD_TLS_SERVER_CREDENTIAL_APPLY"
 WIZARD_DEMO_DATA="/etc/trustpoint/wizard/state/WIZARD_DEMO_DATA"
 
@@ -34,7 +33,7 @@ then
     exit 15
 fi
 
-# configure apache and tsl
+# configure Nginx and tsl
 /etc/trustpoint/wizard/transition/update_tls_nginx.sh
 
 echo "Transition from WIZARD_TLS_SERVER_CREDENTIAL_APPLY to WIZARD_DEMO_DATA completed successfully."

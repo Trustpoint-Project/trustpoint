@@ -31,10 +31,10 @@ if TYPE_CHECKING:
 
     from trustpoint_core.serializer import CertificateSerializer
 
-APACHE_PATH = Path(__file__).parent.parent.parent / 'docker/trustpoint/nginx/tls'
-APACHE_KEY_PATH = APACHE_PATH / Path('apache-tls-server-key.key')
-APACHE_CERT_PATH = APACHE_PATH / Path('apache-tls-server-cert.pem')
-APACHE_CERT_CHAIN_PATH = APACHE_PATH / Path('apache-tls-server-cert-chain.pem')
+NGINX_PATH = Path(__file__).parent.parent.parent / 'docker/trustpoint/nginx/tls'
+NGINX_KEY_PATH = NGINX_PATH / Path('nginx-tls-server-key.key')
+NGINX_CERT_PATH = NGINX_PATH / Path('nginx-tls-server-cert.pem')
+NGINX_CERT_CHAIN_PATH = NGINX_PATH / Path('nginx-tls-server-cert-chain.pem')
 
 STATE_FILE_DIR = Path('/etc/trustpoint/wizard/transition/')
 SCRIPT_WIZARD_INITIAL = STATE_FILE_DIR / Path('wizard_initial.sh')
@@ -500,17 +500,17 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
         error_messages = {
             1: 'State file not found. Ensure Trustpoint is in the correct state.',
             2: 'Multiple state files detected. The wizard state is corrupted.',
-            3: 'Failed to create the required TLS directory for Apache.',
-            4: 'Failed to clear existing files in the Apache TLS directory.',
-            5: 'Failed to copy Trustpoint TLS files to the Apache directory.',
-            6: 'Failed to remove existing Apache sites from sites-enabled.',
-            7: 'Failed to copy HTTP config to Apache sites-available.',
-            8: 'Failed to copy HTTP config to Apache sites-enabled.',
-            9: 'Failed to copy HTTPS config to Apache sites-available.',
-            10: 'Failed to copy HTTPS config to Apache sites-enabled.',
-            11: 'Failed to enable Apache mod_ssl.',
-            12: 'Failed to enable Apache mod_rewrite.',
-            13: 'Failed to restart Apache gracefully.',
+            3: 'Failed to create the required TLS directory for Nginx.',
+            4: 'Failed to clear existing files in the Nginx TLS directory.',
+            5: 'Failed to copy Trustpoint TLS files to the Nginx directory.',
+            6: 'Failed to remove existing Nginx sites from sites-enabled.',
+            7: 'Failed to copy HTTP config to Nginx sites-available.',
+            8: 'Failed to copy HTTP config to Nginx sites-enabled.',
+            9: 'Failed to copy HTTPS config to Nginx sites-available.',
+            10: 'Failed to copy HTTPS config to Nginx sites-enabled.',
+            11: 'Failed to enable Nginx mod_ssl.',
+            12: 'Failed to enable Nginx mod_rewrite.',
+            13: 'Failed to restart Nginx gracefully.',
             14: 'Failed to remove the current state file.',
             15: 'Failed to create the next state file.',
         }
@@ -600,9 +600,9 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
         certificate_pem = credential_model.get_certificate_serializer().as_pem().decode()
         trust_store_pem = credential_model.get_certificate_chain_serializer().as_pem().decode()
 
-        APACHE_KEY_PATH.write_text(private_key_pem)
-        APACHE_CERT_PATH.write_text(certificate_pem)
-        APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+        NGINX_KEY_PATH.write_text(private_key_pem)
+        NGINX_CERT_PATH.write_text(certificate_pem)
+        NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
 
 
 class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):

@@ -42,7 +42,7 @@ if ! touch "$WIZARD_COMPLETED"; then
     exit 4
 fi
 
-# If Nginx is running, update tls and reload (instead of Apache commands)
+# If Nginx is running, update tls and reload
 log INFO "DEBUG: Checking if nginx is running"
 if pgrep nginx >/dev/null; then
     log INFO "DEBUG: Nginx is running, updating TLS"

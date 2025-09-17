@@ -35,15 +35,13 @@ su -s /bin/bash www-data -c "cd /var/www/html/trustpoint/trustpoint && \
     --bind 0.0.0.0:8000 \
     --workers 4 \
     --timeout 300 \
-    --access-logfile /var/log/nginx/gunicorn-access.log \
-    --error-logfile /var/log/nginx/gunicorn-error.log \
     --user www-data \
     --group www-data \
     trustpoint.wsgi:application" &
 
 # Wait for Gunicorn to start
-sleep 5
+sleep 2
 
-# Start Nginx in foreground
+# Start Nginx
 echo "Starting Nginx server..."
 exec nginx -g 'daemon off;'

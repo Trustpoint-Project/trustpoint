@@ -13,37 +13,19 @@ log INFO "Starting TLS certificate setup for nginx"
 # Create nginx TLS directory
 mkdir -p /etc/trustpoint/nginx/tls/
 
-# Check if certificates exist in apache directory and copy them
-APACHE_TLS_DIR="/var/www/html/trustpoint/docker/trustpoint/nginx/tls"
+# Check if certificates exist in nginx directory and copy them
 NGINX_TLS_DIR="/etc/trustpoint/nginx/tls"
 
-if [ -f "$APACHE_TLS_DIR/apache-tls-server-cert.pem" ]; then
-    log INFO "Copying TLS certificates from apache to nginx directory"
-    cp "$APACHE_TLS_DIR/apache-tls-server-cert.pem" "$NGINX_TLS_DIR/"
-    cp "$APACHE_TLS_DIR/apache-tls-server-key.key" "$NGINX_TLS_DIR/apache-tls-server-key.pem"
+# 2) Move new TLS certs
+log INFO "Move TLS Server credentials into $NGINX_TLS_DIR"
 
-    # Set proper permissions
-    chown www-data:www-data "$NGINX_TLS_DIR"/*
-    chmod 600 "$NGINX_TLS_DIR"/apache-tls-server-key.pem
-    chmod 644 "$NGINX_TLS_DIR"/apache-tls-server-cert.pem
-
-    log INFO "TLS certificates successfully prepared for nginx"
-else
-    log ERROR "TLS certificates not found in apache directory: $APACHE_TLS_DIR"
-    log INFO "Available files in apache tls directory:"
-    ls -la "$APACHE_TLS_DIR" || log ERROR "Apache TLS directory does not exist"
-    exit 1
+# Copies the TLS-Server credentials into the nginx TLS directory.
+if ! mv /var/www/html/trustpoint/docker/trustpoint/nginx/tls/* "$NGINX_TLS_DIR"
+then
+    log "ERROR: Failed to copy Trustpoint TLS files to $NGINX_TLS_DIR."
+    exit 5
 fi
 
-# Verify certificates are now in place
-if [ -f "$NGINX_TLS_DIR/apache-tls-server-cert.pem" ] && [ -f "$NGINX_TLS_DIR/apache-tls-server-key.pem" ]; then
-    log INFO "TLS certificate verification successful"
-    log INFO "Certificate files:"
-    ls -la "$NGINX_TLS_DIR"
-else
-    log ERROR "TLS certificate verification failed"
-    exit 1
-fi
 
 # Test nginx configuration with new certificates
 log INFO "Testing nginx configuration with new TLS certificates"

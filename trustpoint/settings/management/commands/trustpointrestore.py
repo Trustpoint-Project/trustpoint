@@ -1,4 +1,4 @@
-"""Management command to restore the Trustpoint container (Apache TLS + wizard)."""
+"""Management command to restore the Trustpoint container (Nginx TLS + wizard)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from django.core.management.base import BaseCommand
 from django.db.utils import OperationalError, ProgrammingError
 from django.utils.translation import gettext as _
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from setup_wizard.views import APACHE_CERT_CHAIN_PATH, APACHE_CERT_PATH, APACHE_KEY_PATH, SCRIPT_WIZARD_RESTORE
+from setup_wizard.views import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH, SCRIPT_WIZARD_RESTORE
 
 from settings.models import AppVersion
 
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 class Command(BaseCommand):
     """A Django management command to restore the Trustpoint container.
 
-    This restores the Apache TLS certificate and the wizard state.
+    This restores the Nginx TLS certificate and the wizard state.
     It is unrelated to the restore of a database backup.
     """
 
@@ -35,7 +35,7 @@ class Command(BaseCommand):
         self.restore_trustpoint()
 
     def restore_trustpoint(self) -> None:
-        """Restore trustpoint (Apache TLS and wizard state) if DB is there."""
+        """Restore trustpoint (Nginx TLS and wizard state) if DB is there."""
         current = django_settings.APP_VERSION
         try:
             self.stdout.write('Starting with restoration')
@@ -52,7 +52,7 @@ class Command(BaseCommand):
                 return
 
             self.stdout.write('Matching version in database found.')
-            self.stdout.write('Extrating tls cert and preparing for restoration of apache config...')
+            self.stdout.write('Extrating tls cert and preparing for restoration of nginx config...')
 
             active_tls = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
             tls_server_credential_model = active_tls.credential
@@ -61,9 +61,9 @@ class Command(BaseCommand):
             certificate_pem = tls_server_credential_model.get_certificate_serializer().as_pem().decode()
             trust_store_pem = tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
 
-            APACHE_KEY_PATH.write_text(private_key_pem)
-            APACHE_CERT_PATH.write_text(certificate_pem)
-            APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+            NGINX_KEY_PATH.write_text(private_key_pem)
+            NGINX_CERT_PATH.write_text(certificate_pem)
+            NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
 
             self.stdout.write('Finished with preparation.')
 
