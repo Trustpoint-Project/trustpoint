@@ -18,7 +18,7 @@ PG_IMAGE="postgres:15.14"
 MAILPIT_IMAGE="axllent/mailpit:latest"
 SFTPGO_IMAGE="drakkan/sftpgo:latest"
 
-# Fixed app ports (Apache already on 80/443)
+# Fixed trustpoint ports (Apache already on 80/443)
 APP_HTTP_HOST=80
 APP_HTTPS_HOST=443
 
@@ -539,25 +539,25 @@ usage(){
   cat <<'EOF'
 Commands:
   (no command)       Run interactive wizard
-  up [all|app|db|mail|sftp] [--nowait]
-  down [all|app|db|mail|sftp]
-  logs [app|db|mail|sftp]
+  up [all|trustpoint|db|mail|sftp] [--nowait]
+  down [all|trustpoint|db|mail|sftp]
+  logs [trustpoint|db|mail|sftp]
   status
   nuke
   help
 
-Also supported (legacy): --only app|db|mail|sftp|all
+Also supported (legacy): --only trustpoint|db|mail|sftp|all
 EOF
 }
 
 map_only_to_flags(){
   case "$1" in
     all)  ONLY_APP=true; ONLY_DB=true; ONLY_MAIL=true; ONLY_SFTP=true ;;
-    app)  ONLY_APP=true ;;
+    trustpoint)  ONLY_APP=true ;;
     db)   ONLY_DB=true ;;
     mail) ONLY_MAIL=true ;;
     sftp) ONLY_SFTP=true ;;
-    *) die "Unknown target: $1 (use app|db|mail|sftp|all)";;
+    *) die "Unknown target: $1 (use trustpoint|db|mail|sftp|all)";;
   esac
 }
 
@@ -565,7 +565,7 @@ set_targets_from_args(){
   local any=false
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      all|app|db|mail|sftp) map_only_to_flags "$1"; any=true; shift ;;
+      all|trustpoint|db|mail|sftp) map_only_to_flags "$1"; any=true; shift ;;
       --only) map_only_to_flags "${2:-}"; any=true; shift 2 ;;
       --nowait) NOWAIT=true; shift ;;
       *) die "Unknown option/target: $1" ;;
