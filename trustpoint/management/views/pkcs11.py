@@ -12,9 +12,9 @@ from management.forms import PKCS11ConfigForm
 
 class PKCS11ConfigView(FormView[PKCS11ConfigForm]):
     """Class-based view for configuring PKCS#11 settings including HSM PIN and token configuration."""
-    template_name = 'settings/pkcs11.html'
+    template_name = 'management/pkcs11.html'
     form_class = PKCS11ConfigForm
-    success_url = reverse_lazy('settings:pkcs11')
+    success_url = reverse_lazy('management:pkcs11')
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context to the template."""
         context = super().get_context_data(**kwargs)

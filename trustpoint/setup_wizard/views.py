@@ -22,9 +22,9 @@ from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpRespons
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import FormView, TemplateView, View
+from management.models import PKCS11Token
 from pki.models import CertificateModel, CredentialModel, IssuingCaModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from settings.models import PKCS11Token
 
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import (

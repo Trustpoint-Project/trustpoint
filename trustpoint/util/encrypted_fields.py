@@ -35,7 +35,7 @@ class EncryptedTextField(models.TextField[str, str]):
         Raises:
             ValidationError: If no PKCS#11 token is configured or DEK unavailable.
         """
-        from settings.models import PKCS11Token
+        from management.models import PKCS11Token
 
         token = PKCS11Token.objects.first()
         if not token:
@@ -169,7 +169,6 @@ class EncryptedCharField(models.CharField[str, str]):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the encrypted field."""
-
         if 'max_length' in kwargs:
             original_length = kwargs['max_length']
             # Calculate encrypted length: original + padding + IV + base64 overhead
@@ -182,7 +181,7 @@ class EncryptedCharField(models.CharField[str, str]):
 
     def get_dek(self) -> bytes:
         """Get the DEK from PKCS#11 token, preferring cached value."""
-        from settings.models import PKCS11Token
+        from management.models import PKCS11Token
 
         token = PKCS11Token.objects.first()
         if not token:

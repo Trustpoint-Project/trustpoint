@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import TYPE_CHECKING, Optional
 
@@ -10,8 +11,8 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
-from settings.models import PKCS11Token
-from settings.pkcs11_util import Pkcs11AESKey, Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
+from management.models import PKCS11Token
+from management.pkcs11_util import Pkcs11AESKey, Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
 from trustpoint_core import oid
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
@@ -20,7 +21,6 @@ from trustpoint_core.serializer import (
     PrivateKeyLocation,
     PrivateKeySerializer,
 )
-import logging
 from util.db import CustomDeleteActionModel
 from util.field import UniqueNameValidator
 
