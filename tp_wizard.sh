@@ -258,7 +258,7 @@ show_plan(){
 }
 
 # -------------------------- Build/Pull & Start -------------------------------
-build_trustpoint_image(){ [[ -f "$TP_DOCKERFILE" ]] || die "Dockerfile not found: $TP_DOCKERFILE"; log "Building TrustPoint image..."; docker build -f "$TP_DOCKERFILE" -t "trustpoint:local" .; }
+build_trustpoint_image(){ [[ -f "$TP_DOCKERFILE" ]] || log "Dockerfile not found: $TP_DOCKERFILE"; log "Building TrustPoint image..."; docker build -f "$TP_DOCKERFILE" -t "trustpoint:local" .; }
 pull_trustpoint_image(){ log "Pulling ${APP_IMAGE} ..."; docker pull "${APP_IMAGE}" >/dev/null; }
 
 start_postgres(){
@@ -328,18 +328,6 @@ start_app(){
   # die early if 80/443 are busy
   if port_in_use "$APP_HTTP_HOST"; then die "Host port ${APP_HTTP_HOST} is in use (TrustPoint HTTP)."; fi
   if port_in_use "$APP_HTTPS_HOST"; then die "Host port ${APP_HTTPS_HOST} is in use (TrustPoint HTTPS)."; fi
-
-  # pick image according to mode or availability
-  if $BUILD_LOCAL; then
-    build_trustpoint_image
-  else
-    # if a local build exists, prefer it; otherwise pull
-    if docker image inspect trustpoint:local >/dev/null 2>&1; then
-      APP_IMAGE="trustpoint:local"
-    else
-      pull_trustpoint_image
-    fi
-  fi
 
   log "Starting TrustPoint..."
   local smtp_env=()
@@ -631,10 +619,25 @@ start_selected(){
     fi
     APP_DB_NAME="$DB_NAME"; APP_DB_USER="$DB_USER"; APP_DB_PASS="$DB_PASS"
     # Prefer local image if present; otherwise pull repo:latest
-    if docker image inspect trustpoint:local >/dev/null 2>&1; then
-      BUILD_LOCAL=true; APP_IMAGE="trustpoint:local"
+    if ask_yes_no "Do you want to buid locally (No = pull from Docker Hub)" "y"; then
+      if build_trustpoint_image; then
+        BUILD_LOCAL=true
+        APP_IMAGE="trustpoint:local"
+      else
+        warn "Local build failed"
+        if ask_yes_no "Do you want to pull from Docker Hub" "y"; then
+          BUILD_LOCAL=false
+          APP_IMAGE="${TP_REPO}:latest"
+          pull_trustpoint_image
+        else
+          nuke_cmd ;
+          exit 1;
+        fi
+      fi
     else
-      BUILD_LOCAL=false; APP_IMAGE="${TP_REPO}:latest"
+      BUILD_LOCAL=false
+      APP_IMAGE="${TP_REPO}:latest"
+      pull_trustpoint_image
     fi
   fi
   $ONLY_DB   && { EN_PG=true; ensure_volumes; start_postgres; }
