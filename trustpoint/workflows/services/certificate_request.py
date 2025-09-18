@@ -70,8 +70,6 @@ class CertificateRequestHandler:
             .first()
         )
 
-        print('REQ')
-        print(req)
         if req is None:
             req = EnrollmentRequest.objects.create(
                 protocol=protocol,
@@ -96,26 +94,17 @@ class CertificateRequestHandler:
             .distinct()
         )
 
-        print('DEFINITIONS')
-        print(definitions)
-
         per_instance: list[dict[str, Any]] = []
 
         for wf in definitions:
-            print('WF')
             meta = wf.definition or {}
             nodes = meta.get('nodes', [])
             if not nodes:
-                print(1)
                 continue
-            print(2)
 
             triggers = meta.get('triggers', [])
             if not any(t.get('protocol') == protocol and t.get('operation') == operation for t in triggers):
-                
-                print(3)
                 continue
-            print(4)
 
             # Reuse regardless of finalized flag (to avoid duplicates forever)
             inst = (
@@ -126,13 +115,9 @@ class CertificateRequestHandler:
                 .order_by('-created_at')
                 .first()
             )
-            
-            print('INSTTTTTTTTTTTT')
-            print(inst)
 
             created = False
             if inst is None:
-                print('NOOOOOOOOO INST')
                 first_step = nodes[0]['id']
                 full_payload = {
                     'protocol': protocol,
@@ -174,9 +159,6 @@ class CertificateRequestHandler:
 
         # If truly no matching definitions, reflect NoMatch
         if not per_instance:
-            print('I AM HERE')
-            print(req)
-            print(req.finalize_to(EnrollmentRequest.STATE_NOMATCH))
             return {
                 'status': EnrollmentRequest.STATE_NOMATCH,
                 'request_id': str(req.id),

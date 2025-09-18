@@ -836,14 +836,12 @@ class EstSimpleEnrollmentView(
             req_id = info.get('request_id')
 
             if agg == EnrollmentRequest.STATE_REJECTED:
-                print('REJECTED AGG')
                 try:
-                    print('TRY')
                     with transaction.atomic():
                         req = EnrollmentRequest.objects.select_for_update().get(pk=req_id)
                         req.finalize_to(EnrollmentRequest.STATE_REJECTED)
                 except EnrollmentRequest.DoesNotExist:
-                    print('Failed')
+                    pass
                 http_response = LoggedHttpResponse('Enrollment request Rejected', status=403, content_type='text/plain')
 
             if agg == EnrollmentRequest.STATE_FAILED:
