@@ -1,0 +1,178 @@
+{% extends "trustpoint/base.html" %}
+{% load static i18n %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="mb-1">Help & Support</h2>
+    <p class="text-muted mb-4">Need help using Trustpoint? Choose an option below.</p>
+
+    <div class="row g-4">
+
+        <!-- Feature Request -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5>
+                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
+                            <use href="{% static 'img/icons.svg' %}#icon-lightbulb"></use>
+                        </svg>
+                        Request a Feature
+                    </h5>
+                    <p class="text-muted">Have an idea to improve Trustpoint? Submit a feature request.</p>
+                    <a href="https://github.com/Trustpoint-Project/trustpoint/issues/new?template=feature_request.md" 
+                       target="_blank" class="btn btn-primary" aria-label="Submit a feature request on GitHub">
+                        Submit Feature Request
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bug Report -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5>
+                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
+                            <use href="{% static 'img/icons.svg' %}#icon-bug"></use>
+                        </svg>
+                        Report a Bug
+                    </h5>
+                    <p class="text-muted">Found something broken or not working? Help us fix it.</p>
+                    <a href="https://github.com/Trustpoint-Project/trustpoint/issues/new?template=bug_report.md" 
+                       target="_blank" class="btn btn-danger" aria-label="Report a bug on GitHub">
+                        Report Bug
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Documentation -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5>
+                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
+                            <use href="{% static 'img/icons.svg' %}#icon-book"></use>
+                        </svg>
+                        Documentation
+                    </h5>
+                    <p class="text-muted">Find setup instructions, tutorials, and advanced topics.</p>
+                    <a href="https://trustpoint.readthedocs.io/en/latest/" 
+                       target="_blank" class="btn btn-primary" aria-label="Visit the Trustpoint homepage">
+                        View Documentation
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Video Demos -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5>
+                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
+                            <use href="{% static 'img/icons.svg' %}#icon-youtube"></use>
+                        </svg>
+                        Video Demos
+                    </h5>
+                    <p class="text-muted">Watch quick demos and tutorials on our YouTube channel.</p>
+                    <a href="https://www.youtube.com/@Trustpoint-oss" 
+                       target="_blank" class="btn btn-primary" aria-label="Watch on YouTube">
+                        Watch on YouTube
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Homepage -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5>
+                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
+                            <use href="{% static 'img/icons.svg' %}#icon-homepage"></use>
+                        </svg>
+                        Trustpoint Homepage
+                    </h5>
+                    <p class="text-muted">Visit our homepage for updates, partnerships, and more.</p>
+                    <a href="https://trustpoint.campus-schwarzwald.de" 
+                       target="_blank" class="btn btn-primary" aria-label="Visit the Trustpoint homepage">
+                        Go to Trustpoint Homepage
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- License -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5>
+                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
+                            <use href="{% static 'img/icons.svg' %}#icon-license"></use>
+                        </svg>
+                        License
+                    </h5>
+                    <p class="text-muted">Read the Trustpoint project license on GitHub.</p>
+                    <a href="https://github.com/Trustpoint-Project/trustpoint/blob/main/LICENSE" 
+                       target="_blank" class="btn btn-primary" aria-label="View the Trustpoint license on GitHub">
+                    View License
+                    </a>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- View SBOM -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5>
+                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
+                            <use href="{% static 'img/icons.svg' %}#icon-file-code"></use>
+                        </svg>
+                        View Software Bill of Materials (SBOM)
+                    </h5>
+                    <p class="text-muted">See the list of packages used in this project.</p>
+                    <a href="https://github.com/Trustpoint-Project/trustpoint/actions/workflows/sbom.yml" 
+                       target="_blank" class="btn btn-primary" aria-label="View the CycloneDX SBOM on GitHub">
+                        Download SBOM
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Us -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5>
+                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
+                            <use href="{% static 'img/icons.svg' %}#icon-envelope"></use>
+                        </svg>
+                        Contact Us
+                    </h5>
+                    <p class="text-muted">Still have questions? Reach out by email.</p>
+                    <a href="mailto:trustpoint@campus-schwarzwald.de" 
+                       target="_blank" class="btn btn-primary" aria-label="Visit the Trustpoint homepage">
+                        Send Email
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <hr class="mt-5">
+    <div class="text-center text-muted small mt-3">
+        Funded by the Federal Ministry of Research, Technology and Space (BMFTR)
+        <br>
+        <a href="https://www.bmftr.bund.de/DE/Home/home_node.html" target="_blank" aria-label="Visit BMFTR website">
+            <img src="{% static 'img/BMFTR_Logo.svg.png' %}" class="mt-2" alt="BMFTR Logo" height="90" 
+                 style="background-color: white; border-radius: 6px; padding: 4px;">
+        </a>
+    </div>
+</div>
+
+{% endblock %}

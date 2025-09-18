@@ -238,7 +238,7 @@ INSTALLED_APPS = [
     'cmp.apps.CmpConfig',
     'est.apps.EstConfig',
     'aoki.apps.AokiConfig',
-    'settings.apps.SettingsConfig',
+    'management.apps.ManagementConfig',
     'notifications.apps.NotificationsConfig',
     'django.contrib.admin',
     'django.contrib.auth',
