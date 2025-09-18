@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # tp_wizard.sh — single-file wizard for TrustPoint stack (no docker-compose)
+# Requirements: bash 4+, docker. No apt/brew/snap deps.
 set -euo pipefail
 
 # -------------------------- Constants & defaults ------------------------------
@@ -10,7 +11,7 @@ VOL_DB="${PROJECT}_postgres_data"
 # TrustPoint image handling
 TP_DOCKERFILE="docker/trustpoint/Dockerfile"
 TP_REPO="trustpointproject/trustpoint"
-APP_IMAGE="${TP_REPO}:latest"
+APP_IMAGE="${TP_REPO}:latest"   # overridden to trustpoint:local when BUILD_LOCAL=true
 BUILD_LOCAL=false
 
 # Fixed images
@@ -27,7 +28,7 @@ DEF_DB_NAME="trustpoint_db"
 DEF_DB_USER="admin"
 DEF_DB_PASS="testing321"
 DEF_DB_PORT=5432
-DEF_DB_HOST_INTERNAL="postgres"
+DEF_DB_HOST_INTERNAL="postgres"   # container name/hostname
 
 # Mailpit defaults
 DEF_MAILPIT_SMTP_PORT=1025
@@ -44,6 +45,7 @@ SFTPGO_ROOT="${PWD}/sftpgo-data"
 READINESS_TIMEOUT=90
 TLS_FP_TIMEOUT=150
 
+# Optional backup user provisioning
 SFTPGO_BACKUP_USER="tpbackup"
 SFTPGO_BACKUP_PASS="testing321"
 SFTPGO_BACKUP_HOME=""
@@ -68,7 +70,10 @@ ensure_network(){ docker network inspect "$NET" >/dev/null 2>&1 || docker networ
 ensure_volumes(){ docker volume inspect "$VOL_DB" >/dev/null 2>&1 || docker volume create "$VOL_DB" >/dev/null; }
 health_state(){ docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' "$1" 2>/dev/null || echo "unknown"; }
 stop_one(){ local n="$1"; exists "$n" || return 0; running "$n" && docker stop "$n" >/dev/null || true; docker rm "$n" >/dev/null || true; }
+
+# quick TCP connect test (true if something accepts on host:port)
 tcp_check(){ local host="$1" port="$2" ts=$(( $(date +%s) + ${3:-5} )); while (( $(date +%s) < ts )); do (exec 3<>"/dev/tcp/$host/$port") >/dev/null 2>&1 && { exec 3>&- 3<&-; return 0; }; sleep 1; done; return 1; }
+port_in_use(){ tcp_check 127.0.0.1 "$1" 1; }
 
 # SFTPGo host web port resolver (avoid Apache :80)
 sftpgo_web_port(){
@@ -80,6 +85,7 @@ sftpgo_web_port(){
 ask(){ local prompt="$1" def="${2:-}"; if [[ -n "$def" ]]; then read -r -p "$(bold)${prompt}$(rst) [default: ${def}] > " REPLY || true; REPLY="${REPLY:-$def}"; else read -r -p "$(bold)${prompt}$(rst) > " REPLY || true; fi; }
 ask_yes_no(){ local prompt="$1" def="${2:-y}" a; case "${def,,}" in y|yes) a="[Y/n]";; n|no) a="[y/N]";; *) a="[y/n]";; esac; read -r -p "$(bold)${prompt} ${a}$(rst) > " resp || true; resp="${resp:-$def}"; [[ "${resp,,}" =~ ^y ]]; }
 ask_port(){ local prompt="$1" def="$2" p; while true; do ask "$prompt" "$def"; p="$REPLY"; [[ "$p" =~ ^[0-9]{1,5}$ ]] && (( p>0 && p<65536 )) && { echo "$p"; return; } ; warn "Invalid port. Enter 1..65535."; done; }
+ask_free_port(){ local prompt="$1" def="$2" p; while true; do p="$(ask_port "$prompt" "$def")"; if port_in_use "$p"; then warn "Port ${p} is already in use on this host. Pick another."; else echo "$p"; return; fi; done; }
 ask_user(){ local prompt="$1" def="$2" u; while true; do ask "$prompt" "$def"; u="$REPLY"; [[ "$u" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]] && { echo "$u"; return; } ; warn "Invalid username."; done; }
 ask_dbname(){ local prompt="$1" def="$2" d; while true; do ask "$prompt" "$def"; d="$REPLY"; [[ "$d" =~ ^[A-Za-z0-9_-]+$ ]] && { echo "$d"; return; } ; warn "Invalid DB name."; done; }
 ask_password(){ local prompt="$1" def="$2" pw; while true; do ask "$prompt" "$def"; pw="$REPLY"; (( ${#pw} >= 6 )) && { echo "$pw"; return; } ; warn "Password too short (min 6)."; done; }
@@ -89,8 +95,8 @@ mask(){ local s="$1" n=${#1}; (( n<=2 )) && { printf '%s' '**'; return; }; print
 EN_APP=false; EN_PG=false; EN_MAILPIT=false; EN_SFTPGO=false
 
 DB_INTERNAL=true
-DB_HOST="$DEF_DB_HOST_INTERNAL"
-DB_PORT="$DEF_DB_PORT"
+DB_HOST="$DEF_DB_HOST_INTERNAL"   # default host when internal
+DB_PORT="$DEF_DB_PORT"            # host-mapped port for convenience access
 DB_NAME="$DEF_DB_NAME"
 DB_USER="$DEF_DB_USER"
 DB_PASS="$DEF_DB_PASS"
@@ -109,12 +115,8 @@ SFTPGO_WEB_PORT="$DEF_SFTPGO_WEB_PORT"
 SFTPGO_ADMIN_USER="$DEF_SFTPGO_ADMIN_USER"
 SFTPGO_ADMIN_PASS="$DEF_SFTPGO_ADMIN_PASS"
 
-# Optional backup user provisioning
-SFTPGO_BACKUP_USER="tpbackup"
-SFTPGO_BACKUP_PASS="testing321"
-SFTPGO_BACKUP_HOME=""
-
 TLS_FP_FOUND=""
+TLS_FP_ELAPSED=0
 
 # CLI target flags
 ONLY_APP=false; ONLY_DB=false; ONLY_MAIL=false; ONLY_SFTP=false
@@ -148,7 +150,8 @@ step_postgres_config(){
     DB_NAME="$(ask_dbname 'PostgreSQL database name' "$DB_NAME")"
     DB_USER="$(ask_user 'PostgreSQL username' "$DB_USER")"
     DB_PASS="$(ask_password 'PostgreSQL password' "$DB_PASS")"
-    DB_PORT="$(ask_port 'PostgreSQL host port (mapped)' "$DB_PORT")"
+    # Immediate check: host port must be free to publish
+    DB_PORT="$(ask_free_port 'PostgreSQL host port (mapped)' "$DB_PORT")"
   else
     DB_HOST="$(ask 'External DB host/IP' '127.0.0.1'; echo "$REPLY")"
     DB_PORT="$(ask_port 'External DB port' "$DB_PORT")"
@@ -161,10 +164,27 @@ step_postgres_config(){
 step_app_db_binding(){
   $EN_APP || return 0
   if ask_yes_no "Should TrustPoint reuse the PostgreSQL settings configured above?" "y"; then
-    APP_DB_HOST="$DB_HOST"; APP_DB_PORT="$DB_PORT"; APP_DB_NAME="$DB_NAME"; APP_DB_USER="$DB_USER"; APP_DB_PASS="$DB_PASS"
+    APP_DB_NAME="$DB_NAME"
+    APP_DB_USER="$DB_USER"
+    APP_DB_PASS="$DB_PASS"
+    if $DB_INTERNAL; then
+      # Internal DB: always connect to the container directly
+      APP_DB_HOST="$DEF_DB_HOST_INTERNAL"
+      APP_DB_PORT=5432
+    else
+      # External DB: use exactly what you entered
+      APP_DB_HOST="$DB_HOST"
+      APP_DB_PORT="$DB_PORT"
+    fi
   else
-    APP_DB_HOST="$(ask 'TrustPoint DB host' "$DB_HOST"; echo "$REPLY")"
-    APP_DB_PORT="$(ask_port 'TrustPoint DB port' "$DB_PORT")"
+    local def_host def_port
+    if $DB_INTERNAL; then
+      def_host="$DEF_DB_HOST_INTERNAL"; def_port=5432
+    else
+      def_host="$DB_HOST"; def_port="$DB_PORT"
+    fi
+    APP_DB_HOST="$(ask 'TrustPoint DB host' "$def_host"; echo "$REPLY")"
+    APP_DB_PORT="$(ask_port 'TrustPoint DB port' "$def_port")"
     APP_DB_NAME="$(ask_dbname 'TrustPoint DB name' "$DB_NAME")"
     APP_DB_USER="$(ask_user 'TrustPoint DB user' "$DB_USER")"
     APP_DB_PASS="$(ask_password 'TrustPoint DB password' "$DB_PASS")"
@@ -174,14 +194,14 @@ step_app_db_binding(){
 step_helpers(){
   EN_MAILPIT=$(ask_yes_no "Enable Mailpit (demo SMTP inbox)?" "n" && echo true || echo false)
   if $EN_MAILPIT; then
-    MAILPIT_SMTP_PORT="$(ask_port 'Mailpit SMTP host port' "$MAILPIT_SMTP_PORT")"
-    MAILPIT_UI_PORT="$(ask_port 'Mailpit UI host port' "$MAILPIT_UI_PORT")"
+    MAILPIT_SMTP_PORT="$(ask_free_port 'Mailpit SMTP host port' "$MAILPIT_SMTP_PORT")"
+    MAILPIT_UI_PORT="$(ask_free_port 'Mailpit UI host port' "$MAILPIT_UI_PORT")"
   fi
 
   EN_SFTPGO=$(ask_yes_no "Enable SFTPGo (demo SFTP + Web UI)?" "n" && echo true || echo false)
   if $EN_SFTPGO; then
-    SFTPGO_SFTP_PORT="$(ask_port 'SFTPGo SFTP host port' "$SFTPGO_SFTP_PORT")"
-    SFTPGO_WEB_PORT="$(ask_port 'SFTPGo Web UI host port' "$SFTPGO_WEB_PORT")"
+    SFTPGO_SFTP_PORT="$(ask_free_port 'SFTPGo SFTP host port' "$SFTPGO_SFTP_PORT")"
+    SFTPGO_WEB_PORT="$(ask_free_port 'SFTPGo Web UI host port' "$SFTPGO_WEB_PORT")"
     SFTPGO_ADMIN_USER="$(ask_user 'SFTPGo admin user' "$SFTPGO_ADMIN_USER")"
     SFTPGO_ADMIN_PASS="$(ask_password 'SFTPGo admin password' "$SFTPGO_ADMIN_PASS")"
 
@@ -211,7 +231,7 @@ show_plan(){
   echo
   printf "%-22s %s\n" "Internal Postgres:" "$DB_INTERNAL"
   printf "%-22s %s\n" "DB host:" "$DB_HOST"
-  printf "%-22s %s\n" "DB port:" "$DB_PORT"
+  printf "%-22s %s\n" "DB host port:" "$DB_PORT"
   printf "%-22s %s\n" "DB name:" "$DB_NAME"
   printf "%-22s %s\n" "DB user:" "$DB_USER"
   printf "%-22s %s\n" "DB pass:" "$(mask "$DB_PASS")"
@@ -246,6 +266,8 @@ start_postgres(){
   ensure_volumes
   local name="postgres"
   stop_one "$name"
+  # safety: host port must still be free (non-interactive runs)
+  if port_in_use "$DB_PORT"; then die "Host port ${DB_PORT} is already in use. Choose another port or stop the process using it."; fi
   log "Starting PostgreSQL..."
   docker run -d --name "$name" --network "$NET" \
     -p "${DB_PORT}:5432" \
@@ -260,6 +282,8 @@ start_mailpit(){
   $EN_MAILPIT || return 0
   local name="mailpit"
   stop_one "$name"
+  if port_in_use "$MAILPIT_SMTP_PORT"; then die "Host port ${MAILPIT_SMTP_PORT} in use (Mailpit SMTP)."; fi
+  if port_in_use "$MAILPIT_UI_PORT"; then die "Host port ${MAILPIT_UI_PORT} in use (Mailpit UI)."; fi
   log "Starting Mailpit..."
   docker run -d --name "$name" --network "$NET" \
     -p "${MAILPIT_SMTP_PORT}:1025" \
@@ -272,8 +296,10 @@ start_sftpgo(){
   local name="sftpgo"
   stop_one "$name"
 
+  if port_in_use "$SFTPGO_SFTP_PORT"; then die "Host port ${SFTPGO_SFTP_PORT} in use (SFTPGo SFTP)."; fi
+  if port_in_use "$SFTPGO_WEB_PORT"; then die "Host port ${SFTPGO_WEB_PORT} in use (SFTPGo Web)."; fi
+
   mkdir -p "${SFTPGO_ROOT}/data"
-  # Always ensure the backup user's host dir exists and is owned by UID/GID 1000
   if [[ -n "$SFTPGO_BACKUP_USER" ]]; then
     mkdir -p "${SFTPGO_ROOT}/data/${SFTPGO_BACKUP_USER}"
   fi
@@ -299,7 +325,22 @@ start_app(){
   $EN_APP || return 0
   local name="trustpoint"
   stop_one "$name"
-  if $BUILD_LOCAL; then build_trustpoint_image; else pull_trustpoint_image; fi
+  # die early if 80/443 are busy
+  if port_in_use "$APP_HTTP_HOST"; then die "Host port ${APP_HTTP_HOST} is in use (TrustPoint HTTP)."; fi
+  if port_in_use "$APP_HTTPS_HOST"; then die "Host port ${APP_HTTPS_HOST} is in use (TrustPoint HTTPS)."; fi
+
+  # pick image according to mode or availability
+  if $BUILD_LOCAL; then
+    build_trustpoint_image
+  else
+    # if a local build exists, prefer it; otherwise pull
+    if docker image inspect trustpoint:local >/dev/null 2>&1; then
+      APP_IMAGE="trustpoint:local"
+    else
+      pull_trustpoint_image
+    fi
+  fi
+
   log "Starting TrustPoint..."
   local smtp_env=()
   if $EN_MAILPIT; then
@@ -324,8 +365,12 @@ await_sftpgo_ready(){
   echo "Waiting (<= ${READINESS_TIMEOUT}s) for SFTPGo API on localhost:${PORT} ..."
   local until=$(( $(date +%s) + READINESS_TIMEOUT ))
   while (( $(date +%s) < until )); do
-    if [[ "$(curl -fsS "http://127.0.0.1:${PORT}/healthz" || true)" == "ok" ]]; then
+    if have curl && [[ "$(curl -fsS "http://127.0.0.1:${PORT}/healthz" 2>/dev/null || true)" == "ok" ]]; then
       ok "SFTPGo API healthy on :${PORT}"
+      return 0
+    fi
+    if tcp_check 127.0.0.1 "$PORT" 1; then
+      ok "SFTPGo API port open on :${PORT}"
       return 0
     fi
     printf "."; sleep 1
@@ -355,29 +400,22 @@ await_readiness(){
   await_sftpgo_ready
 }
 
-
+# ---- SFTPGo provisioning via REST -------------------------------------------
 upsert_virtual_folder(){
-  local vf_name="$1"     # e.g. "trustpoint"
-  local mapped="$2"      # e.g. "/srv/sftpgo/data/tpbackup"
-
-  # Payload for YOUR SFTPGo: uses /api/v2/folders with top-level mapped_path
+  local vf_name="$1" mapped="$2"
   read -r -d '' VF_PAYLOAD <<JSON || true
 {
   "name": "${vf_name}",
   "mapped_path": "${mapped}"
 }
 JSON
-
-  # Try POST then PUT on /api/v2/folders
   local http
   http="$(curl -sS -o >(cat >/tmp/sftpgo_vf_upsert.json) -w '%{http_code}' \
     -X POST "${HDR[@]}" -d "$VF_PAYLOAD" "${API}/api/v2/folders")" || true
-
   if [[ "$http" != "200" && "$http" != "201" ]]; then
     http="$(curl -sS -o >(cat >/tmp/sftpgo_vf_upsert.json) -w '%{http_code}' \
       -X PUT "${HDR[@]}" -d "$VF_PAYLOAD" "${API}/api/v2/folders/${vf_name}")" || true
   fi
-
   if [[ "$http" != "200" && "$http" != "201" ]]; then
     warn "Virtual folder upsert failed (HTTP ${http}). Response follows:"
     cat /tmp/sftpgo_vf_upsert.json >&2
@@ -390,24 +428,20 @@ provision_sftpgo_backup_user(){
   $EN_SFTPGO || return 0
   have curl || { warn "curl not found on host; skipping SFTPGo user provisioning."; return 0; }
 
-  # Ensure backup home has a default if not set for any reason
   [[ -z "${SFTPGO_BACKUP_HOME:-}" ]] && SFTPGO_BACKUP_HOME="/srv/sftpgo/data/${SFTPGO_BACKUP_USER}"
 
-  # Ensure host path backing the container home exists and is owned by UID/GID 1000
   local host_home="${SFTPGO_ROOT}${SFTPGO_BACKUP_HOME#/srv/sftpgo}"
   mkdir -p "$host_home"
   chown -R 1000:1000 "$host_home" 2>/dev/null || true
 
   local PORT; PORT="$(sftpgo_web_port)"
-  local API="http://127.0.0.1:${PORT}"
+  API="http://127.0.0.1:${PORT}"
 
-  # Brief health wait
   for _ in {1..30}; do
-    [[ "$(curl -fsS "${API}/healthz" || true)" == "ok" ]] && break
+    [[ "$(curl -fsS "${API}/healthz" 2>/dev/null || true)" == "ok" ]] && break
     sleep 1
   done
 
-  # Obtain admin token
   local token=""
   for _ in 1 2 3; do
     token="$(curl -fsS -u "${SFTPGO_ADMIN_USER}:${SFTPGO_ADMIN_PASS}" "${API}/api/v2/token" \
@@ -417,12 +451,9 @@ provision_sftpgo_backup_user(){
   done
   [[ -n "$token" ]] || { warn "Could not obtain SFTPGo admin token; skipping user provisioning."; return 0; }
 
-  local HDR=(-H "Authorization: Bearer ${token}" -H "Content-Type: application/json")
-
-  # 1) Ensure global virtual folder "trustpoint" exists and maps to the backup home
+  HDR=(-H "Authorization: Bearer ${token}" -H "Content-Type: application/json")
   upsert_virtual_folder "trustpoint" "${SFTPGO_BACKUP_HOME}" || return 0
 
-  # 2) Create or update the user and attach the VF at /upload
   local code method url http
   code="$(curl -s -o /dev/null -w '%{http_code}' "${HDR[@]}" "${API}/api/v2/users/${SFTPGO_BACKUP_USER}")"
   if [[ "$code" == "200" ]]; then
@@ -455,6 +486,7 @@ JSON
   fi
 }
 
+# ---- TLS fingerprint wait ----------------------------------------------------
 extract_tls_fingerprint_once(){
   local logs="$1"
   if [[ "$logs" =~ ([0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2} ]]; then TLS_FP_FOUND="${BASH_REMATCH[0]}"; return 0; fi
@@ -464,18 +496,24 @@ extract_tls_fingerprint_once(){
 }
 
 wait_tls_fingerprint(){
-  $EN_APP || return 0
+  $EN_APP || { TLS_FP_ELAPSED=0; return 0; }
+  local start; start="$(date +%s)"
   local start_iso; start_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  local end=$(( $(date +%s) + TLS_FP_TIMEOUT ))
+  local end=$(( start + TLS_FP_TIMEOUT ))
   while (( $(date +%s) < end )); do
     local chunk
     chunk="$(docker logs --since "$start_iso" trustpoint 2>/dev/null || true)"
-    if extract_tls_fingerprint_once "$chunk"; then return 0; fi
+    if extract_tls_fingerprint_once "$chunk"; then
+      TLS_FP_ELAPSED=$(( $(date +%s) - start ))
+      return 0
+    fi
     sleep 3
   done
+  TLS_FP_ELAPSED=$(( $(date +%s) - start ))
   return 1
 }
 
+# -------------------------- Summary ------------------------------------------
 final_summary(){
   echo
   echo "========================= Runtime Summary (Actual) ======================="
@@ -487,7 +525,7 @@ final_summary(){
     printf "%-22s %s\n" "TrustPoint state:" "$(docker inspect --format '{{.State.Status}}' trustpoint 2>/dev/null || echo '-') / health=$(health_state trustpoint)"
   fi
   if $DB_INTERNAL; then
-    printf "%-22s %s\n" "PostgreSQL:" "tcp://localhost:${DB_PORT}"
+    printf "%-22s %s\n" "PostgreSQL:" "tcp://localhost:${DB_PORT}  (container port 5432)"
   fi
   if $EN_APP; then
     printf "%-22s %s\n" "DB connect:" "host=${APP_DB_HOST} port=${APP_DB_PORT} db=${APP_DB_NAME} user=${APP_DB_USER} pass=$(mask "$APP_DB_PASS")"
@@ -503,10 +541,16 @@ final_summary(){
     printf "%-22s %s\n" "Backup URL:" "sftp://${SFTPGO_BACKUP_USER}:***@127.0.0.1:${SFTPGO_SFTP_PORT}/"
     printf "%-22s %s\n" "Data dir:" "${SFTPGO_ROOT}"
   fi
-  if [[ -n "$TLS_FP_FOUND" ]]; then
-    printf "%-22s %s\n" "TLS fingerprint:" "$TLS_FP_FOUND"
-  else
-    printf "%-22s %s\n" "TLS fingerprint:" "not found in logs (waited ${TLS_FP_TIMEOUT}s)"
+  if $EN_APP; then
+    if [[ -n "$TLS_FP_FOUND" ]]; then
+      printf "%-22s %s\n" "TLS fingerprint:" "$TLS_FP_FOUND"
+    else
+      if $NOWAIT; then
+        printf "%-22s %s\n" "TLS fingerprint:" "skipped (NOWAIT)"
+      else
+        printf "%-22s %s\n" "TLS fingerprint:" "not found yet (polled ${TLS_FP_ELAPSED}s; timeout ${TLS_FP_TIMEOUT}s)"
+      fi
+    fi
   fi
   echo "========================================================================="
 }
@@ -553,7 +597,7 @@ EOF
 map_only_to_flags(){
   case "$1" in
     all)  ONLY_APP=true; ONLY_DB=true; ONLY_MAIL=true; ONLY_SFTP=true ;;
-    trustpoint)  ONLY_APP=true ;;
+    trustpoint|app)  ONLY_APP=true ;;   # accept both names
     db)   ONLY_DB=true ;;
     mail) ONLY_MAIL=true ;;
     sftp) ONLY_SFTP=true ;;
@@ -565,7 +609,7 @@ set_targets_from_args(){
   local any=false
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      all|trustpoint|db|mail|sftp) map_only_to_flags "$1"; any=true; shift ;;
+      all|trustpoint|app|db|mail|sftp) map_only_to_flags "$1"; any=true; shift ;;
       --only) map_only_to_flags "${2:-}"; any=true; shift 2 ;;
       --nowait) NOWAIT=true; shift ;;
       *) die "Unknown option/target: $1" ;;
@@ -579,9 +623,19 @@ start_selected(){
   if $ONLY_DB; then DB_INTERNAL=true; fi
   if $ONLY_APP; then
     EN_APP=true
-    APP_DB_HOST="$DB_HOST"; APP_DB_PORT="$DB_PORT"; APP_DB_NAME="$DB_NAME"; APP_DB_USER="$DB_USER"; APP_DB_PASS="$DB_PASS"
-    BUILD_LOCAL=true
-    APP_IMAGE="trustpoint:local"
+    # If internal DB is (or will be) used, set app connection to container:5432
+    if $DB_INTERNAL; then
+      APP_DB_HOST="$DEF_DB_HOST_INTERNAL"; APP_DB_PORT=5432
+    else
+      APP_DB_HOST="$DB_HOST"; APP_DB_PORT="$DB_PORT"
+    fi
+    APP_DB_NAME="$DB_NAME"; APP_DB_USER="$DB_USER"; APP_DB_PASS="$DB_PASS"
+    # Prefer local image if present; otherwise pull repo:latest
+    if docker image inspect trustpoint:local >/dev/null 2>&1; then
+      BUILD_LOCAL=true; APP_IMAGE="trustpoint:local"
+    else
+      BUILD_LOCAL=false; APP_IMAGE="${TP_REPO}:latest"
+    fi
   fi
   $ONLY_DB   && { EN_PG=true; ensure_volumes; start_postgres; }
   $ONLY_MAIL && { EN_MAILPIT=true; start_mailpit; }
