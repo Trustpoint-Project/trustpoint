@@ -40,7 +40,7 @@ jobs:
         run: ./tests/scripts/test_successfull_restoration.sh
 
       - name: Create backup (from inside container)
-        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointbackup --filename from_outside"
+        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointbackup --filename from_outside.dump.gz"
 
       - name: Download backup artifact
         run: docker cp trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/from_outside.dump.gz .

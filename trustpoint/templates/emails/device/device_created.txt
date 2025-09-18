@@ -1,0 +1,13 @@
+Subject: {{ workflow.name }}: Device created
+
+A device has been created.
+
+Workflow: {{ workflow.name }}
+Instance: {{ instance.id }}
+State:    {{ state }}
+Step:     {{ step }}
+
+Device: {% if payload.device_name %}{{ payload.device_name }} ({{ payload.device_id }}){% elif payload.device_id %}{{ payload.device_id }}{% else %}-{% endif %}
+Domain: {% if payload.domain_name %}{{ payload.domain_name }} ({{ payload.domain_id }}){% elif payload.domain_id %}{{ payload.domain_id }}{% else %}-{% endif %}
+
+Proceed with any onboarding steps as required.
