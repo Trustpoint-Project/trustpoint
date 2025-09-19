@@ -14,7 +14,8 @@ General Message Flow
    :Message parsing - RequestMessageParser -> parsed message;
    :Request Authentication - Authenticator -> DeviceModel object;
    :Request Authorization - Authorizer;
-   :Message normalization, if required - CsrAdapter; 
+   :Message normalization, if required - CsrAdapter;
+   :Certificate profile handling - JsonProfileValidator
    :Message processing - OperationProcessor;
 
 
