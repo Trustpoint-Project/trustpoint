@@ -16,8 +16,11 @@ class JSONCertRequestConverter:
     """Adapter to convert from CertificateSigningRequest to JSON certificate request dict."""
 
     @staticmethod
-    def to_json(csr: x509.CertificateSigningRequest | x509.CertificateBuilder) -> dict[str, Any]:
+    def to_json(csr: x509.CertificateSigningRequest | x509.CertificateBuilder | None) -> dict[str, Any]:
         """Convert a CSR to a JSON request dict."""
+        if csr is None:
+            exc_msg = 'CSR is None'
+            raise ValueError(exc_msg)
         if isinstance(csr, x509.CertificateBuilder):
             subject_dn = csr._subject_name  # noqa: SLF001
             extensions = csr._extensions  # noqa: SLF001

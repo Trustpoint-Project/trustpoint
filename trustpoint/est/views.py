@@ -32,6 +32,13 @@ from pki.models.domain import DomainModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
 from pyasn1.type.univ import ObjectIdentifier  # type: ignore[import-untyped]
+from request.authentication import EstAuthentication
+from request.authorization import CertificateTemplateAuthorization, EstAuthorization, EstOperationAuthorization
+from request.http_request_validator import EstHttpRequestValidator
+from request.operation_processor import CertificateIssueProcessor
+from request.pki_message_parser import EstMessageParser
+from request.profile_validator import ProfileValidator
+from request.request_context import RequestContext
 
 from trustpoint.logger import LoggerMixin
 
@@ -753,6 +760,63 @@ class EstSimpleEnrollmentView(
         """Handle POST requests for simple enrollment."""
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
         del args
+
+        # TODO: This should really be done by the message parser,
+        # it also needs to handle the case where one or both are omitted
+        domain_name = cast('str', kwargs.get('domain'))
+        cert_template = cast('str', kwargs.get('certtemplate'))
+
+        ctx = RequestContext(
+            raw_message=request,
+            protocol='est',
+            operation='simpleenroll',
+            domain_str=domain_name,
+            certificate_template=cert_template,
+        )
+
+        validator = EstHttpRequestValidator()
+        validator.validate(ctx)
+
+        parser = EstMessageParser()
+        parser.parse(ctx)
+
+        est_authenticator = EstAuthentication()
+        est_authenticator.authenticate(ctx)
+
+        est_authorizer = EstAuthorization(
+            # Allowed templates are TODO and might depend on authentication method
+            allowed_templates=['tls-client','tls-server','domaincredential'],
+            allowed_operations=['simpleenroll']
+        )
+        est_authorizer.authorize(ctx)
+
+        ProfileValidator.validate(ctx)
+
+        CertificateIssueProcessor().process_operation(ctx)
+
+        if ctx.issued_certificate is None:
+            return LoggedHttpResponse('Credential cannot be found', 400)
+
+        encoding = Encoding.DER if ctx.est_encoding in {'der', 'base64_der'} else Encoding.PEM
+        cert_bytes = ctx.issued_certificate.public_bytes(encoding=encoding)
+
+        if ctx.est_encoding == 'base64_der':
+            b64_cert = base64.b64encode(cert_bytes).decode('utf-8')
+            cert = '\n'.join([b64_cert[i:i + 64] for i in range(0, len(b64_cert), 64)])
+            content_type = 'application/pkix-cert'
+        elif ctx.est_encoding == 'der':
+            cert = cert_bytes
+            content_type = 'application/pkix-cert'
+        else:
+            try:
+                cert = cert_bytes.decode('utf-8')
+            except UnicodeDecodeError:
+                cert = cert_bytes
+            content_type = 'application/x-pem-file'
+
+        return LoggedHttpResponse(content=cert, status=200, content_type=content_type)
+
+        # ===
         credential_request = None
         device: DeviceModel | None = None
         requested_domain: DomainModel | None = None

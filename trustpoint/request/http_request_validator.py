@@ -340,7 +340,7 @@ class EstHttpRequestValidator(CompositeValidation):
         super().__init__()
         self.add(PayloadSizeValidation(max_payload_size=65536))
         self.add(ContentTypeValidation(expected_content_type='application/pkcs10'))
-        self.add(AcceptHeaderValidation(allowed_content_types=['application/pkcs7-mime']))
+        self.add(AcceptHeaderValidation(allowed_content_types=['application/pkcs7-mime','*/*']))
         self.add(AuthorizationHeaderValidation())
         self.add(ClientCertificateValidation())
         self.add(IntermediateCertificatesValidation())

@@ -39,23 +39,25 @@ class UsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
 
         try:
             device = DeviceModel.objects.select_related().filter(
-                common_name=username, no_onboarding_config__isnull=False
+                common_name=username
             ).first()
 
             if not device:
                 self.logger.warning('Authentication failed: Unknown username %s', username)
                 self._raise_authentication_error()
 
-            if not isinstance(device, DeviceModel):
+            device_config = device.onboarding_config or device.no_onboarding_config
+
+            if not isinstance(device, DeviceModel) or not device_config:
                 self.logger.warning('Authentication failed: Invalid device model for %s', username)
                 self._raise_authentication_error()
 
-            if not device.no_onboarding_config.est_password:
+            if not device_config.est_password:
                 self.logger.warning('Authentication failed: No EST password set for %s', username)
                 self._raise_authentication_error()
 
             # Use proper password hashing instead of plaintext comparison
-            if password != device.no_onboarding_config.est_password:
+            if password != device_config.est_password:
                 self.logger.warning('Authentication failed: Invalid password for %s', username)
                 self._raise_authentication_error()
 
