@@ -26,4 +26,4 @@ class Command(BaseCommand):
 
     def backup_trustpoint(self, filename: str) -> None:
         """Checks current state of trustpoint and acts accordingly."""
-        call_command('dbbackup', '-o', filename + '.dump.gz', '-z')
+        call_command('dbbackup', '-o', filename, '-z')
