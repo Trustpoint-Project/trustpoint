@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+from django.conf import settings
 from django.core.mail import EmailMultiAlternatives, get_connection
 from django.template.exceptions import TemplateDoesNotExist
 from django.template.loader import render_to_string
@@ -83,6 +84,14 @@ class MailTemplates:
         """Return all templates for all groups."""
         return [t for group in cls.GROUPS.values() for t in group]
 
+    @classmethod
+    def get_by_key(cls, key: str) -> MailTemplate | None:
+        """Find a template by its key."""
+        for t in cls.all():
+            if t.key == key:
+                return t
+        return None
+
 
 @dataclass(frozen=True)
 class EmailPayload:
@@ -91,7 +100,7 @@ class EmailPayload:
     Attributes:
         subject: Subject line.
         to: Recipients.
-        template_html: Django template path for the HTML body.
+        template_html: Django template base (we render .txt and .html).
         context: Template context (wrapped as read-only).
         from_email: Optional override; defaults to settings.DEFAULT_FROM_EMAIL.
         reply_to: Optional Reply-To addresses.
@@ -113,10 +122,7 @@ class EmailPayload:
     headers: Mapping[str, str] = MappingProxyType({})
 
     def __post_init__(self) -> None:
-        """Validate and normalize fields after dataclass initialization.
-
-        Ensures that mapping/sequence attributes are immutable wrappers or tuples.
-        """
+        """Validate and normalize fields after dataclass initialization."""
         if not isinstance(self.context, MappingProxyType):
             object.__setattr__(self, 'context', MappingProxyType(dict(self.context)))
         if not isinstance(self.headers, MappingProxyType):
@@ -146,17 +152,13 @@ def _render_bodies(tpl: MailTemplate, context: Mapping[str, object]) -> tuple[st
 
 
 def send_email(payload: EmailPayload, *, connection: Any = None) -> int:
-    """Send a single email with HTML + text alternative.
-
-    Returns:
-        Number of successfully delivered messages (0 or 1).
-    """
+    """Send a single email with HTML + text alternative (from templates)."""
     text, html = _render_bodies(payload.template_html, payload.context)
 
     msg = EmailMultiAlternatives(
         subject=payload.subject,
         body=text,
-        from_email=payload.from_email,
+        from_email=payload.from_email or getattr(settings, 'DEFAULT_FROM_EMAIL', None),
         to=list(payload.to),
         cc=list(payload.cc),
         bcc=list(payload.bcc),
@@ -172,8 +174,42 @@ def send_email(payload: EmailPayload, *, connection: Any = None) -> int:
     return msg.send()
 
 
+def send_simple(
+    *,
+    subject: str,
+    body: str,
+    to: Iterable[str],
+    cc: Iterable[str] = (),
+    bcc: Iterable[str] = (),
+    from_email: str | None = None,
+    connection: Any = None,
+    attachments: Iterable[Attachment] = (),
+) -> int:
+    """Send a plain-text email without using a HTML/txt template pair."""
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=body,
+        from_email=from_email or getattr(settings, 'DEFAULT_FROM_EMAIL', None),
+        to=list(to),
+        cc=list(cc),
+        bcc=list(bcc),
+        connection=connection,
+    )
+    for name, content, mimetype in attachments:
+        msg.attach(name, content, mimetype)
+    return msg.send()
+
+
+def normalize_addresses(value: Any) -> tuple[str, ...]:
+    """Accept CSV string or iterable; return tuple of non-empty, trimmed emails."""
+    if not value:
+        return ()
+    parts = [p.strip() for p in value.split(',')] if isinstance(value, str) else [str(p).strip() for p in value]
+    return tuple(p for p in parts if p)
+
+
 def send_bulk(payloads: Iterable[EmailPayload]) -> int:
-    """Send multiple emails reusing one SMTP connection."""
+    """Send multiple template-based emails reusing one SMTP connection."""
     sent = 0
     with get_connection() as conn:
         for p in payloads:
