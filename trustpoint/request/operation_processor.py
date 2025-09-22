@@ -3,6 +3,9 @@ from abc import ABC, abstractmethod
 from typing import get_args
 
 from cryptography import x509
+from devices.issuer import CredentialSaver
+from devices.models import DeviceModel, IssuedCredentialModel
+from pki.models import DomainModel
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 
@@ -36,6 +39,16 @@ class LocalCaCertificateIssueProcessor(AbstractOperationProcessor):
 
     def process_operation(self, context: RequestContext) -> None:
         """Process the certificate issuance operation."""
+        if not context.device:
+            exc_msg = 'Device must be set in the context to issue a certificate.'
+            raise ValueError(exc_msg)
+        if not context.domain:
+            exc_msg = 'Domain must be set in the context to issue a certificate.'
+            raise ValueError(exc_msg)
+        if not context.cert_requested:
+            exc_msg = 'Certificate request must be set in the context to issue a certificate.'
+            raise ValueError(exc_msg)
+
         ca = context.domain.get_issuing_ca_or_value_error()
         public_key = context.cert_requested.public_key()
 
@@ -94,5 +107,19 @@ class LocalCaCertificateIssueProcessor(AbstractOperationProcessor):
         signed_cert = certificate_builder.sign(
             private_key=issuing_credential.get_private_key_serializer().as_crypto(),
             algorithm=hash_algorithm,
+        )
+        common_names = signed_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+        cn = common_names[0].value if common_names else '(no CN set)'
+        common_name = cn.decode() if isinstance(cn, bytes) else cn
+        saver = CredentialSaver(device=context.device, domain=context.domain)
+        saver.save_keyless_credential(
+            signed_cert,
+            [
+                issuing_credential.get_certificate(),
+                *issuing_credential.get_certificate_chain(),
+            ],
+            common_name,
+            IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL, # TODO: depends on profile name/operation type
+            IssuedCredentialModel.IssuedCredentialPurpose.GENERIC,
         )
         context.issued_certificate = signed_cert
