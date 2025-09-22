@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from cryptography.hazmat.primitives import hashes
 from django.conf import settings as django_settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management.base import BaseCommand
@@ -86,6 +87,9 @@ class Command(BaseCommand):
                 raise subprocess.CalledProcessError(result.returncode, str(script_path))
 
             self.stdout.write('Restoration successful.')
+            sha256_fingerprint = active_tls.credential.get_certificate().fingerprint(hashes.SHA256())
+            formatted = ':'.join(f'{b:02X}' for b in sha256_fingerprint)
+            self.stdout.write(f'TLS SHA256 fingerprint: {(formatted)}')
 
         except (ProgrammingError, OperationalError):
             error_msg = _('Appversion table not found. DB probably not initialized')
