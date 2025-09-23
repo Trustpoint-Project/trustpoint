@@ -26,20 +26,17 @@ class PKCS11ConfigView(FormView[PKCS11ConfigForm]):
         success_messages = []
         error_messages = []
 
-        # Save token configuration
         try:
             form.save_token_config()
             success_messages.append(_('Token configuration saved successfully.'))
         except Exception as e:  # noqa: BLE001
             error_messages.append(_('Failed to save token configuration'))
 
-        # Display messages
         for msg in success_messages:
             messages.success(self.request, msg)
         for msg in error_messages:
             messages.error(self.request, msg)
 
-        # If there are errors, redisplay the form
         if error_messages:
             return self.form_invalid(form)
 

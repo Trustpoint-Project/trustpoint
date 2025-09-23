@@ -8,6 +8,7 @@ from setup_wizard.views import (
     BackupRestoreView,
     SetupWizardBackupPasswordView,
     SetupWizardCreateSuperUserView,
+    SetupWizardCryptoStorageView,
     SetupWizardDemoDataView,
     SetupWizardGenerateTlsServerCredentialView,
     SetupWizardHsmSetupView,
@@ -22,12 +23,21 @@ from setup_wizard.views import (
 app_name = 'setup_wizard'
 urlpatterns = [
     path(
-        'hsm-setup/',
+        'crypto-storage-setup/',
+        SetupWizardCryptoStorageView.as_view(),
+        name='crypto_storage_setup',
+    ),
+    path(
+        'hsm-setup/<str:hsm_type>/',
         SetupWizardHsmSetupView.as_view(),
         name='hsm_setup',
     ),
     path('setup_mode/', SetupWizardSetupModeView.as_view(), name='setup_mode'),
-    path('select_tls_server_credential/', SetupWizardSelectTlsServerCredentialView.as_view(), name='select_tls_server_credential'),
+    path(
+        'select_tls_server_credential/',
+        SetupWizardSelectTlsServerCredentialView.as_view(),
+        name='select_tls_server_credential',
+    ),
     path(
         'backup-password/',
         SetupWizardBackupPasswordView.as_view(),

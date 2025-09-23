@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 import os
-from typing import Any
+from typing import Any, Never
 
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -25,6 +25,45 @@ class EncryptedTextField(models.TextField[str, str]):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the encrypted field."""
         super().__init__(*args, **kwargs)
+
+    def raise_validation_error(self, msg: str) -> Never:
+        """Raise a ValidationError with the given message.
+
+        Args:
+            msg (str): The error message to include in the ValidationError.
+
+        Raises:
+            ValidationError: Always raised with the provided message.
+        """
+        raise ValidationError(msg)
+
+    def should_encrypt(self) -> bool:
+        """Check if encryption should be used based on crypto storage configuration.
+
+        Returns:
+            bool: True if storage type is SoftHSM or Physical HSM, False for software storage.
+
+        Raises:
+            ValidationError: If crypto storage config is not found or there's an error accessing it.
+        """
+        try:
+            from management.models import CryptoStorageConfig
+
+            crypto_config = CryptoStorageConfig.objects.first()
+            if not crypto_config:
+                msg = 'No crypto storage configuration found. Please configure storage type first.'
+                self.raise_validation_error(msg)
+
+        except Exception as e:
+            if isinstance(e, ValidationError):
+                raise
+            msg = f'Failed to check crypto storage configuration: {e}'
+            raise ValidationError(msg) from e
+        else:
+                return crypto_config.storage_type in [
+                    CryptoStorageConfig.StorageType.SOFTHSM,
+                    CryptoStorageConfig.StorageType.PHYSICAL_HSM
+                ]
 
     def get_dek(self) -> bytes:
         """Get the DEK from PKCS#11 token, preferring cached value.
@@ -60,6 +99,9 @@ class EncryptedTextField(models.TextField[str, str]):
             str: Base64-encoded encrypted data in format: nonce:tag:ciphertext
         """
         if not value:
+            return value
+
+        if not self.should_encrypt():
             return value
 
         try:
@@ -100,6 +142,9 @@ class EncryptedTextField(models.TextField[str, str]):
             str: The decrypted plaintext string.
         """
         if not encrypted_value:
+            return encrypted_value
+
+        if not self.should_encrypt():
             return encrypted_value
 
         try:
@@ -179,6 +224,45 @@ class EncryptedCharField(models.CharField[str, str]):
 
         super().__init__(*args, **kwargs)
 
+    def raise_validation_error(self, msg: str) -> Never:
+        """Raise a ValidationError with the given message.
+
+        Args:
+            msg (str): The error message to include in the ValidationError.
+
+        Raises:
+            ValidationError: Always raised with the provided message.
+        """
+        raise ValidationError(msg)
+
+    def should_encrypt(self) -> bool:
+        """Check if encryption should be used based on crypto storage configuration.
+
+        Returns:
+            bool: True if storage type is SoftHSM or Physical HSM, False for software storage.
+
+        Raises:
+            ValidationError: If crypto storage config is not found or there's an error accessing it.
+        """
+        try:
+            from management.models import CryptoStorageConfig
+
+            crypto_config = CryptoStorageConfig.objects.first()
+            if not crypto_config:
+                msg = 'No crypto storage configuration found. Please configure storage type first.'
+                self.raise_validation_error(msg)
+
+        except Exception as e:
+            if isinstance(e, ValidationError):
+                raise
+            msg = f'Failed to check crypto storage configuration: {e}'
+            raise ValidationError(msg) from e
+        else:
+                return crypto_config.storage_type in [
+                    CryptoStorageConfig.StorageType.SOFTHSM,
+                    CryptoStorageConfig.StorageType.PHYSICAL_HSM
+                ]
+
     def get_dek(self) -> bytes:
         """Get the DEK from PKCS#11 token, preferring cached value."""
         from management.models import PKCS11Token
@@ -199,6 +283,9 @@ class EncryptedCharField(models.CharField[str, str]):
     def encrypt_value(self, value: str) -> str:
         """Encrypt a string value using AES-256-GCM with the PKCS#11 DEK."""
         if not value:
+            return value
+
+        if not self.should_encrypt():
             return value
 
         try:
@@ -232,6 +319,9 @@ class EncryptedCharField(models.CharField[str, str]):
     def decrypt_value(self, encrypted_value: str) -> str:
         """Decrypt a base64-encoded encrypted value using the PKCS#11 DEK."""
         if not encrypted_value:
+            return encrypted_value
+
+        if not self.should_encrypt():
             return encrypted_value
 
         try:

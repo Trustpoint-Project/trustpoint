@@ -197,6 +197,35 @@ class IPv4AddressForm(forms.Form):
         ipv4_field = cast('forms.ChoiceField', self.fields['ipv4_address'])
         ipv4_field.choices = [(ip, ip) for ip in san_ips]
 
+class CryptoStorageConfigForm(forms.ModelForm):
+    """Form for configuring cryptographic material storage options."""
+
+    storage_type = forms.ChoiceField(
+        widget=forms.RadioSelect,
+        label=_('Storage Type'),
+        help_text=_('Select how cryptographic material should be stored'),
+        choices=[
+            ('software', _('Software Storage')),
+            ('softhsm', _('SoftHSM Container')),
+            ('physical_hsm', _('Physical HSM')),
+        ]
+    )
+
+    class Meta:
+        """ModelForm Meta configuration for CryptoStorageConfig."""
+        from management.models import CryptoStorageConfig
+        model = CryptoStorageConfig
+        fields: ClassVar[list[str]] = ['storage_type']
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the form."""
+        super().__init__(*args, **kwargs)
+
+    def clean(self) -> dict[str, Any]:
+        """Custom validation for the form."""
+        cleaned_data: dict[str, Any] = super().clean() or {}
+        return cleaned_data
+
 
 class PKCS11ConfigForm(forms.Form):
     """Form for configuring PKCS#11 settings including HSM PIN and token information."""
@@ -289,18 +318,17 @@ class PKCS11ConfigForm(forms.Form):
         """Save or update token configuration."""
         data = self.cleaned_data
         token, created = PKCS11Token.objects.get_or_create(
-            label=data["label"],
+            label=data['label'],
             defaults={
-                "hsm_type": data["hsm_type"],
-                "slot": data["slot"],
-                "module_path": data["module_path"],
+                'hsm_type': data['hsm_type'],
+                'slot': data['slot'],
+                'module_path': data['module_path'],
             }
         )
 
         if not created:
-            # Update fields for the existing token
             for field, value in data.items():
-                if field != "label":  # Don't update the lookup field
+                if field != 'label':
                     setattr(token, field, value)
             token.save()
         return token

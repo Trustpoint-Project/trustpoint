@@ -11,6 +11,7 @@ WIZARD_STATE_PATH = Path('/etc/trustpoint/wizard/state')
 class SetupWizardState(enum.Enum):
     """This enum represents the current setup wizard state of the trustpoint."""
 
+    WIZARD_SETUP_CRYPTO_STORAGE = WIZARD_STATE_PATH / Path('WIZARD_SETUP_CRYPTO_STORAGE')
     WIZARD_SETUP_HSM = WIZARD_STATE_PATH / Path('WIZARD_SETUP_HSM')
     WIZARD_SETUP_MODE = WIZARD_STATE_PATH / Path('WIZARD_SETUP_MODE')
     WIZARD_SELECT_TLS_SERVER_CREDENTIAL = WIZARD_STATE_PATH / Path('WIZARD_SELECT_TLS_SERVER_CREDENTIAL')

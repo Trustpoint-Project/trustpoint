@@ -9,6 +9,7 @@ Defaults        use_pty
 # User privilege specification
 root    ALL=(ALL:ALL) ALL
 
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_setup_crypto_storage.sh
 www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_setup_hsm.sh
 www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_setup_mode.sh
 www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_tls_server_credential_apply.sh

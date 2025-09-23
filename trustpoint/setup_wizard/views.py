@@ -22,6 +22,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpRespons
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import FormView, TemplateView, View
+from management.forms import CryptoStorageConfigForm
 from management.models import PKCS11Token
 from pki.models import CertificateModel, CredentialModel, IssuingCaModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -41,12 +42,14 @@ from trustpoint.settings import DOCKER_CONTAINER
 if TYPE_CHECKING:
     from trustpoint_core.serializer import CertificateSerializer
 
+
 APACHE_PATH = Path(__file__).parent.parent.parent / 'docker/trustpoint/apache/tls'
 APACHE_KEY_PATH = APACHE_PATH / Path('apache-tls-server-key.key')
 APACHE_CERT_PATH = APACHE_PATH / Path('apache-tls-server-cert.pem')
 APACHE_CERT_CHAIN_PATH = APACHE_PATH / Path('apache-tls-server-cert-chain.pem')
 
 STATE_FILE_DIR = Path('/etc/trustpoint/wizard/transition/')
+SCRIPT_WIZARD_SETUP_CRYPTO_STORAGE = STATE_FILE_DIR / Path('wizard_setup_crypto_storage.sh')
 SCRIPT_WIZARD_SETUP_HSM = STATE_FILE_DIR / Path('wizard_setup_hsm.sh')
 SCRIPT_WIZARD_SETUP_MODE = STATE_FILE_DIR / Path('wizard_setup_mode.sh')
 SCRIPT_WIZARD_SELECT_TLS_SERVER_CREDENTIAL = STATE_FILE_DIR / Path('wizard_select_tls_server_credential.sh')
@@ -84,11 +87,12 @@ class TrustpointTlsServerCredentialError(Exception):
         super().__init__(message)
 
 
-def execute_shell_script(script: Path) -> None:
-    """Execute a shell script.
+def execute_shell_script(script: Path, *args: str) -> None:
+    """Execute a shell script with optional arguments.
 
     Args:
         script (Path): The path to the shell script to execute.
+        *args (str): Additional arguments to pass to the script.
 
     Raises:
         FileNotFoundError: If the script does not exist.
@@ -104,7 +108,7 @@ def execute_shell_script(script: Path) -> None:
         err_msg = f'The script path {script_path} is not a valid file.'
         raise ValueError(err_msg)
 
-    command = ['sudo', str(script_path)]
+    command = ['sudo', str(script_path)] + list(args)
 
     # This method is executing all paths it gets.
     # The security is actually implemented using a sudoers file within the linux system -> noqa: S603.
@@ -134,26 +138,43 @@ class StartupWizardRedirect:
         Raises:
             ValueError: If the wizard state is unrecognized or invalid.
         """
-        if wizard_state == SetupWizardState.WIZARD_SETUP_HSM:
-            return redirect('setup_wizard:hsm_setup', permanent=False)
-        if wizard_state == SetupWizardState.WIZARD_SETUP_MODE:
-            return redirect('setup_wizard:setup_mode', permanent=False)
-        if wizard_state == SetupWizardState.WIZARD_TLS_SERVER_CREDENTIAL_APPLY:
-            return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
-        if wizard_state == SetupWizardState.WIZARD_BACKUP_PASSWORD:
-            return redirect('setup_wizard:backup_password', permanent=False)
-        if wizard_state == SetupWizardState.WIZARD_DEMO_DATA:
-            return redirect('setup_wizard:demo_data', permanent=False)
-        if wizard_state == SetupWizardState.WIZARD_CREATE_SUPER_USER:
-            return redirect('setup_wizard:create_super_user', permanent=False)
-        if wizard_state == SetupWizardState.WIZARD_COMPLETED:
-            return redirect('users:login', permanent=False)
-        if wizard_state == SetupWizardState.WIZARD_AUTO_RESTORE_HSM:
-            return redirect('setup_wizard:auto_restore_hsm', permanent=False)
-        if wizard_state == SetupWizardState.WIZARD_AUTO_RESTORE_PASSWORD:
-            return redirect('setup_wizard:auto_restore_password', permanent=False)
+        from management.models import CryptoStorageConfig
+
+        state_to_url = {
+            SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE: 'setup_wizard:crypto_storage_setup',
+            SetupWizardState.WIZARD_SETUP_HSM: 'setup_wizard:hsm_setup',
+            SetupWizardState.WIZARD_SETUP_MODE: 'setup_wizard:setup_mode',
+            SetupWizardState.WIZARD_TLS_SERVER_CREDENTIAL_APPLY: 'setup_wizard:tls_server_credential_apply',
+            SetupWizardState.WIZARD_BACKUP_PASSWORD: 'setup_wizard:backup_password',
+            SetupWizardState.WIZARD_DEMO_DATA: 'setup_wizard:demo_data',
+            SetupWizardState.WIZARD_CREATE_SUPER_USER: 'setup_wizard:create_super_user',
+            SetupWizardState.WIZARD_COMPLETED: 'users:login',
+            SetupWizardState.WIZARD_AUTO_RESTORE_HSM: 'setup_wizard:auto_restore_hsm',
+            SetupWizardState.WIZARD_AUTO_RESTORE_PASSWORD: 'setup_wizard:auto_restore_password',
+        }
+
+        if wizard_state == 'WIZARD_SETUP_HSM':
+            try:
+                config = CryptoStorageConfig.get_config()
+                if config.storage_type == CryptoStorageConfig.StorageType.SOFTHSM:
+                    hsm_type = 'softhsm'
+                elif config.storage_type == CryptoStorageConfig.StorageType.PHYSICAL_HSM:
+                    hsm_type = 'physical'
+                else:
+                    msg = 'Invalid storage type for HSM setup.'
+                    raise ValueError(msg) from None
+
+                return redirect(state_to_url[wizard_state], hsm_type=hsm_type, permanent=False)
+
+            except CryptoStorageConfig.DoesNotExist:
+                msg = 'CryptoStorageConfig is not configured.'
+                raise ValueError(msg) from None
+
+        if wizard_state in state_to_url:
+            return redirect(state_to_url[wizard_state], permanent=False)
+
         err_msg = 'Unknown wizard state found. Failed to redirect by state.'
-        raise ValueError(err_msg)
+        raise ValueError(err_msg) from None
 
 
 class HsmSetupMixin(LoggerMixin):
@@ -218,17 +239,44 @@ class HsmSetupMixin(LoggerMixin):
         token, created = PKCS11Token.objects.get_or_create(
             label=label,
             defaults={
-                'hsm_type': hsm_type,
                 'slot': int(slot),
                 'module_path': module_path,
             }
         )
         if not created:
-            token.hsm_type = hsm_type
             token.slot = int(slot)
             token.module_path = module_path
             token.save()
+
+        self._assign_token_to_crypto_storage(token, hsm_type)
+
         return token, created
+
+    def _assign_token_to_crypto_storage(self, token: PKCS11Token, hsm_type: str) -> None:
+        """Assign the created token to the appropriate crypto storage configuration."""
+        try:
+            from management.models import CryptoStorageConfig
+
+            config = CryptoStorageConfig.get_config()
+
+            if hsm_type == 'softhsm' and config.storage_type == CryptoStorageConfig.StorageType.SOFTHSM:
+                config.softhsm_config = token
+                config.save(update_fields=['softhsm_config'])
+                self.logger.info('Assigned SoftHSM token %s to crypto storage configuration', token.label)
+
+            elif hsm_type == 'physical' and config.storage_type == CryptoStorageConfig.StorageType.PHYSICAL_HSM:
+                config.physical_hsm_config = token
+                config.save(update_fields=['physical_hsm_config'])
+                self.logger.info('Assigned Physical HSM token %s to crypto storage configuration', token.label)
+
+            else:
+                self.logger.warning(
+                    'Token HSM type %s does not match crypto storage type %s, not assigning',
+                    hsm_type, config.storage_type
+                )
+
+        except (AttributeError, ValueError, RuntimeError) as e:
+            self.logger.warning('Failed to assign token to crypto storage configuration: %s', e)
 
     def _generate_kek_and_dek(self, token: PKCS11Token) -> None:
         """Generate KEK and DEK for the token, log and warn on failure."""
@@ -319,10 +367,97 @@ class HsmSetupMixin(LoggerMixin):
         msg = 'Subclasses must implement get_expected_wizard_state()'
         raise NotImplementedError(msg)
 
+class SetupWizardCryptoStorageView(LoggerMixin, FormView):
+    """View for handling crypto storage setup during the setup wizard."""
+
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/crypto_storage_setup.html'
+    form_class = CryptoStorageConfigForm
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle request dispatch and wizard state validation."""
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE:
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form: CryptoStorageConfigForm) -> HttpResponse:
+        """Handle valid form submission and determine next step based on storage type."""
+        try:
+            config = form.save()
+            storage_type = config.storage_type
+
+            execute_shell_script(SCRIPT_WIZARD_SETUP_CRYPTO_STORAGE, storage_type)
+
+            messages.add_message(
+                self.request,
+                messages.SUCCESS,
+                f'Crypto storage configuration saved: {config.get_storage_type_display()}'
+            )
+
+            self.logger.info('Crypto storage configured with type: %s', storage_type)
+
+            from management.models import CryptoStorageConfig
+
+            if storage_type == CryptoStorageConfig.StorageType.SOFTWARE:
+                return redirect('setup_wizard:setup_mode', permanent=False)
+            elif storage_type == CryptoStorageConfig.StorageType.SOFTHSM:
+                return redirect('setup_wizard:hsm_setup', hsm_type='softhsm', permanent=False)
+            elif storage_type == CryptoStorageConfig.StorageType.PHYSICAL_HSM:
+                return redirect('setup_wizard:hsm_setup', hsm_type='physical', permanent=False)
+            else:
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    'Unknown storage type selected.'
+                )
+                return redirect('setup_wizard:crypto_storage_setup', permanent=False)
+
+        except subprocess.CalledProcessError as exception:
+            err_msg = f'Crypto storage script failed: {self._map_exit_code_to_message(exception.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:crypto_storage_setup', permanent=False)
+
+        except FileNotFoundError:
+            err_msg = f'Crypto storage script not found: {SCRIPT_WIZARD_SETUP_CRYPTO_STORAGE}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:crypto_storage_setup', permanent=False)
+
+        except Exception:
+            err_msg = 'An unexpected error occurred during crypto storage setup.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception('Crypto storage setup error')
+            return redirect('setup_wizard:crypto_storage_setup', permanent=False)
+
+    def form_invalid(self, form: CryptoStorageConfigForm) -> HttpResponse:
+        """Handle invalid form submission."""
+        messages.add_message(
+            self.request,
+            messages.ERROR,
+            'Please correct the errors below and try again.'
+        )
+        return super().form_invalid(form)
+
+    @staticmethod
+    def _map_exit_code_to_message(return_code: int) -> str:
+        """Map script exit codes to meaningful error messages."""
+        error_messages = {
+            1: 'Trustpoint is not in the WIZARD_SETUP_CRYPTO_STORAGE state.',
+            2: 'Found multiple wizard state files. The wizard state seems to be corrupted.',
+            3: 'Failed to remove the WIZARD_SETUP_CRYPTO_STORAGE state file.',
+            4: 'Failed to create the next wizard state file.',
+            5: 'Invalid crypto storage type provided.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred during crypto storage setup.')
+
 class SetupWizardHsmSetupView(HsmSetupMixin, FormView):
     """View for handling HSM setup during the setup wizard."""
-
-    success_url = reverse_lazy('setup_wizard:setup_mode')
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Handle request dispatch and wizard state validation."""
@@ -333,11 +468,60 @@ class SetupWizardHsmSetupView(HsmSetupMixin, FormView):
         if wizard_state != self.get_expected_wizard_state():
             return StartupWizardRedirect.redirect_by_state(wizard_state)
 
+        hsm_type = kwargs.get('hsm_type')
+        if hsm_type not in ['softhsm', 'physical']:
+            messages.add_message(
+                self.request,
+                messages.ERROR,
+                'Invalid HSM type specified.'
+            )
+            return redirect('setup_wizard:crypto_storage_setup', permanent=False)
+
+        try:
+            from management.models import CryptoStorageConfig
+            config = CryptoStorageConfig.get_config()
+
+            expected_storage_type = (
+                CryptoStorageConfig.StorageType.SOFTHSM if hsm_type == 'softhsm'
+                else CryptoStorageConfig.StorageType.PHYSICAL_HSM
+            )
+
+            if config.storage_type != expected_storage_type:
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    f'{hsm_type.title()} HSM setup is only available when {hsm_type.title()} HSM storage is selected.'
+                )
+                return redirect('setup_wizard:crypto_storage_setup', permanent=False)
+        except Exception:
+            return redirect('setup_wizard:crypto_storage_setup', permanent=False)
+
         return super().dispatch(request, *args, **kwargs)
+
+    def get_form(self, form_class: type[HsmSetupForm] | None = None) -> HsmSetupForm:
+        """Return a form instance with appropriate defaults based on HSM type."""
+        if form_class is None:
+            form_class = self.get_form_class()
+
+        hsm_type = self.kwargs.get('hsm_type')
+        form_kwargs = self.get_form_kwargs()
+
+        return form_class(hsm_type, **form_kwargs)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add HSM type to template context."""
+        context = super().get_context_data(**kwargs)
+        context['hsm_type'] = self.kwargs.get('hsm_type')
+        context['hsm_type_display'] = self.kwargs.get('hsm_type').replace('_', ' ').title()
+        return context
 
     def get_setup_type(self) -> str:
         """Return the setup type for the HSM script."""
         return 'init_setup'
+
+    def get_success_url(self) -> str:
+        """Return the success URL after HSM setup."""
+        return reverse_lazy('setup_wizard:setup_mode')
 
     def get_error_redirect_url(self) -> str:
         """Return the URL to redirect to on error."""

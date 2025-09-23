@@ -111,22 +111,8 @@ class StartupWizardTlsCertificateForm(forms.Form):
 class HsmSetupForm(forms.Form):
     """Form for HSM setup configuration."""
 
-    HSM_TYPE_CHOICES: ClassVar[list[tuple[str, str]]] = [
-        ('softhsm', _('SoftHSM')),
-        ('physical', _('Physical HSM')),
-    ]
-
-    hsm_type = forms.ChoiceField(
-        choices=HSM_TYPE_CHOICES,
-        initial='softhsm',
-        widget=forms.RadioSelect,
-        label=_('HSM Type'),
-        help_text=_('Select the type of HSM to configure.')
-    )
-
     module_path = forms.CharField(
         max_length=255,
-        initial='/usr/local/lib/libpkcs11-proxy.so',
         label=_('PKCS#11 Module Path'),
         help_text=_('Path to the PKCS#11 module library.'),
         widget=forms.TextInput(attrs={'class': 'form-control'}),
@@ -145,25 +131,50 @@ class HsmSetupForm(forms.Form):
 
     label = forms.CharField(
         max_length=32,
-        initial='Trustpoint-SoftHSM',
         label=_('Token Label'),
         help_text=_('Label for the HSM token.'),
         widget=forms.TextInput(attrs={'class': 'form-control'}),
         required=True
     )
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the form and set field states."""
+    # Hidden field to store the HSM type (will be set by the view)
+    hsm_type = forms.CharField(widget=forms.HiddenInput())
+
+    def __init__(self, hsm_type: str = 'softhsm', *args: Any, **kwargs: Any) -> None:
+        """Initialize the form with HSM type-specific defaults."""
         super().__init__(*args, **kwargs)
-        hsm_type = None
-        if args and len(args) > 0:  # POST data available
-            hsm_type = args[0].get('hsm_type')
+
+        self.fields['hsm_type'].initial = hsm_type
 
         if hsm_type == 'softhsm':
-            self.fields['label'].required = False
-            self.fields['slot'].required = False
-            self.fields['module_path'].required = False
+            self.fields['module_path'].initial = '/usr/local/lib/libpkcs11-proxy.so'
+            self.fields['slot'].initial = 0
+            self.fields['label'].initial = 'Trustpoint-SoftHSM'
 
+            self.fields['module_path'].widget.attrs.update({
+                'readonly': True,
+                'class': 'form-control bg-light'
+            })
+            self.fields['slot'].widget.attrs.update({
+                'readonly': True,
+                'class': 'form-control bg-light'
+            })
+            self.fields['label'].widget.attrs.update({
+                'readonly': True,
+                'class': 'form-control bg-light'
+            })
+
+        elif hsm_type == 'physical':
+            self.fields['module_path'].initial = ''
+            self.fields['slot'].initial = 0
+            self.fields['label'].initial = 'Trustpoint-Physical-HSM'
+
+            self.fields['module_path'].widget.attrs.update({
+                'placeholder': '/usr/lib/vendor/libpkcs11.so'
+            })
+            self.fields['label'].widget.attrs.update({
+                'placeholder': 'Enter token label'
+            })
 
     def clean(self) -> dict[str, Any]:
         """Custom validation for the form."""
@@ -174,8 +185,6 @@ class HsmSetupForm(forms.Form):
             cleaned_data['label'] = 'Trustpoint-SoftHSM'
             cleaned_data['slot'] = 0
             cleaned_data['module_path'] = '/usr/local/lib/libpkcs11-proxy.so'
-        elif hsm_type == 'physical':
-            raise forms.ValidationError(_('Physical HSM is not yet supported.'))
 
         return cleaned_data
 

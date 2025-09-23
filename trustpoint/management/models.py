@@ -15,7 +15,6 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from notifications.models import WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
-
 from trustpoint.logger import LoggerMixin
 
 
@@ -266,6 +265,76 @@ class BackupOptions(models.Model):
 
         return super().clean()
 
+class CryptoStorageConfig(models.Model):
+    """Configuration model for cryptographic material storage."""
+
+    class StorageType(models.TextChoices):
+        """Types of cryptographic storage."""
+        SOFTWARE = 'software', _('Software (No Encryption)')
+        SOFTHSM = 'softhsm', _('SoftHSM Container')
+        PHYSICAL_HSM = 'physical_hsm', _('Physical HSM')
+
+    storage_type = models.CharField(
+        max_length=12,
+        choices=StorageType.choices,
+        default=StorageType.SOFTWARE,
+        verbose_name=_('Storage Type'),
+        help_text=_('Type of storage for cryptographic material')
+    )
+
+    hsm_config = models.OneToOneField(
+        'PKCS11Token',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='crypto_storage_config',
+        verbose_name=_('HSM Configuration'),
+        help_text=_('Associated HSM token configuration (SoftHSM or Physical HSM)')
+    )
+
+    last_updated = models.DateTimeField(
+        auto_now=True,
+        verbose_name=_('Last Updated')
+    )
+
+    class Meta:
+        """Meta options for the CryptoStorageConfig model."""
+        verbose_name = _('Crypto Storage Configuration')
+        verbose_name_plural = _('Crypto Storage Configurations')
+
+    def __str__(self) -> str:
+        """Return a string representation of the storage configuration."""
+        status = 'Active' if self.is_active else 'Inactive'
+        return f'{self.get_storage_type_display()} ({status})'
+
+
+    @classmethod
+    def get_config(cls) -> 'CryptoStorageConfig':
+        """Get the crypto storage configuration (singleton).
+
+        Returns:
+            CryptoStorageConfig: The configuration instance
+
+        Raises:
+            cls.DoesNotExist: If no configuration exists
+        """
+        return cls.objects.get(pk=1)
+
+    @classmethod
+    def get_or_create_default(cls) -> 'CryptoStorageConfig':
+        """Get the configuration or create a default one.
+
+        Returns:
+            CryptoStorageConfig: The configuration instance
+        """
+        try:
+            return cls.get_config()
+        except cls.DoesNotExist:
+            return cls.objects.create(
+                pk=1,
+                storage_type=cls.StorageType.SOFTWARE
+            )
+
 class PKCS11Token(models.Model, LoggerMixin):
     """Model representing a PKCS#11 token (e.g., a SoftHSM slot/token pair).
 
@@ -283,19 +352,6 @@ class PKCS11Token(models.Model, LoggerMixin):
     ARGON2_MEMORY_COST = 65536  # Memory usage in KB (64MB)
     ARGON2_PARALLELISM = 1      # Number of parallel threads
     ARGON2_HASH_LENGTH = 32     # Output length (32 bytes for AES-256)
-
-    class HSMType(models.TextChoices):
-        """Types of HSM."""
-        SOFTHSM = 'softhsm', _('SoftHSM')
-        PHYSICAL = 'physical', _('Physical HSM')
-
-    hsm_type = models.CharField(
-        max_length=10,
-        choices=HSMType.choices,
-        default=HSMType.SOFTHSM,
-        help_text=_('Type of HSM (SoftHSM or Physical)'),
-        verbose_name=_('HSM Type')
-    )
 
     label = models.CharField(
         max_length=100,
@@ -354,14 +410,6 @@ class PKCS11Token(models.Model, LoggerMixin):
         """
         return f'{self.label} (Slot {self.slot})'
 
-    def get_hsm_type(self) -> HSMType:
-        """Get the HSM type for this token.
-
-        Returns:
-            HSMType: The HSM type (SOFTHSM or PHYSICAL)
-        """
-        return self.hsm_type
-
     def generate_kek(self, key_length: int = 256) -> bool:
         """Generate the KEK (key encryption key) in the PKCS#11 token.
 
@@ -377,7 +425,7 @@ class PKCS11Token(models.Model, LoggerMixin):
         from pki.models import PKCS11Key
 
         try:
-            kek, created = PKCS11Key.objects.get_or_create(
+            kek, _ = PKCS11Key.objects.get_or_create(
                 token_label=self.label,
                 key_label=self.KEK_ENCRYPTION_KEY_LABEL,
                 defaults={
@@ -669,7 +717,6 @@ class PKCS11Token(models.Model, LoggerMixin):
         self._log_unexpected_wrapped_length(wrapped_data)
 
         session = None
-        unwrapped_key = None
 
         try:
             session, wrap_key = self._open_session_and_get_wrap_key()

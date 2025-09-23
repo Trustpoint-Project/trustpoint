@@ -443,8 +443,14 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
 
         is_ca_credential = credential_type in [cls.CredentialTypeChoice.ROOT_CA, cls.CredentialTypeChoice.ISSUING_CA]
         is_software_location = normalized_credential_serializer.private_key_reference.location == PrivateKeyLocation.SOFTWARE
-        token_config = PKCS11Token.objects.first()
-        is_softhsm = token_config and token_config.get_hsm_type() == PKCS11Token.HSMType.SOFTHSM if token_config else False
+        from management.models import CryptoStorageConfig
+        crypto_storage_config = CryptoStorageConfig.objects.first()
+        is_softhsm = (
+            crypto_storage_config
+            and crypto_storage_config.storage_type == CryptoStorageConfig.StorageType.SOFTHSM
+            if crypto_storage_config
+            else False
+        )
 
 
         if is_ca_credential and is_software_location and not is_softhsm:
