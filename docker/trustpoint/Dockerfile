@@ -1,5 +1,5 @@
 FROM python:3.12-slim-bookworm
-COPY --from=ghcr.io/astral-sh/uv:0.8.3 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.8.20 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
