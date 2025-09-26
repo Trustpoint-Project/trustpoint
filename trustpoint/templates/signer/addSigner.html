@@ -1,0 +1,88 @@
+{% load static %}
+{% load crispy_forms_tags %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+
+
+
+
+    <div class="card">
+        <div class="card-header d-flex">
+           <h1>{{ form_title }}</h1>
+
+        </div>
+        <form method="POST" id="add-device-form" action="{{ request.path }}">
+            <div class="card-body py-3">
+                {% crispy form %}
+            </div>
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'signer:signerList' %}" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary">
+                        Create Signer
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+<script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+<script>
+
+  const ECC_ALGOS = [
+    {% for value, label in form.fields.signing_algorithm.choices %}
+      {% if "ECDSA" in label %}
+        "{{ value }}",
+      {% endif %}
+    {% endfor %}
+  ];
+
+  const algoSelect = document.getElementById("id_signing_algorithm");
+  const curveField = document.getElementById("id_curve").closest(".form-group") || document.getElementById("id_curve").closest(".mb-3");
+  const keyLengthField = document.getElementById("id_key_length").closest(".form-group") || document.getElementById("id_key_length").closest(".mb-3");
+  const hashFunctionInput = document.getElementById("id_hash_function");
+
+
+  if (hashFunctionInput) {
+    hashFunctionInput.readOnly = true;
+  }
+
+  function updateFieldVisibilityAndHash() {
+    const selectedValue = algoSelect.value;
+    const selectedLabel = algoSelect.options[algoSelect.selectedIndex].text;
+    const isECC = ECC_ALGOS.includes(selectedValue);
+
+
+    if (isECC) {
+      curveField.style.display = "block";
+      keyLengthField.style.display = "none";
+      document.getElementById("id_key_length").value = "";
+    } else {
+      curveField.style.display = "none";
+      keyLengthField.style.display = "block";
+      document.getElementById("id_curve").value = "";
+    }
+
+
+    const match = selectedLabel.match(/\b(SHA3?-?\d{3}|MD5|SHA1|MAC)\b/i);;
+    if (match && hashFunctionInput) {
+      hashFunctionInput.value = match[0].toUpperCase();
+    } else if (hashFunctionInput) {
+      hashFunctionInput.value = "";
+    }
+  }
+
+  algoSelect.addEventListener("change", updateFieldVisibilityAndHash);
+  window.addEventListener("DOMContentLoaded", updateFieldVisibilityAndHash);
+</script>
+
+
+
+</body>
+</html>

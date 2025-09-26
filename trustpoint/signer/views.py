@@ -31,7 +31,7 @@ class SignerListView(LoginRequiredMixin, ListView[Signer]):
 
     model = Signer
     paginate_by = 10
-    template_name = 'signerlist.html'
+    template_name = 'signer/signers.html'
     context_object_name = 'signers'
 
     def get_ordering(self) -> str | Sequence[str] | None:
@@ -119,7 +119,7 @@ class SignerCreateView(CreateView[Signer, SignerForm]):
 
     model = Signer
     form_class = SignerForm
-    template_name = 'addSigner.html'
+    template_name = 'signer/addSigner.html'
     success_url = reverse_lazy('signerList')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:

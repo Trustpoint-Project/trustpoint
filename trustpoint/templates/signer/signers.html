@@ -1,0 +1,75 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block content %}
+<div class="card" style="max-height:100%;display: flex;flex-direction: column;">
+  <div class="card-header">
+    <span style="font-size:1.2rem;font-weight:500;">{% trans "Signers List" %}</span>
+  </div>
+  <div class="card-body text-start pt-0" style="overflow: auto; flex-grow: 1; max-height: 90%;">
+    <div class="table-responsive">
+      <table class="table table-borderless table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th class="fw-bold">{% trans "ID" %}</th>
+            <th class="fw-bold">{% trans "Unique Name" %}</th>
+            <th class="fw-bold">{% trans "Algorithm" %}</th>
+            <th class="fw-bold">{% trans "Key Length or Curve" %}</th>
+            <th class="fw-bold">{% trans "Hash Function" %}</th>
+            <th class="fw-bold">{% trans "Expires On" %}</th>
+            <th class="fw-bold">{% trans "Created On" %}</th>
+            <th class="fw-bold">{% trans "Actions" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for signer in page_obj %}
+          <tr>
+            <td><a href="{% url 'signer:signerDetail' signer.pk %}">{{ signer.pk }}</a></td>
+            <td>{{ signer.unique_name }}</td>
+            <td>{{ signer.get_signing_algorithm_display }}</td>
+            <td>
+              {% if signer.key_length %}
+                {{ signer.key_length }} bits
+              {% elif signer.curve %}
+                {{ signer.curve }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>
+              {% if signer.hash_function %}
+                {{ signer.hash_function.name }} {{ signer.hash_function }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>{{ signer.expires_by|date:"Y-m-d" }}</td>
+            <td>{{ signer.created_on|date:"Y-m-d" }}</td>
+            <td>
+              <a href="{% url 'signer:editSigner' signer.pk %}" class="btn btn-sm btn-warning">{% trans "Edit" %}</a>
+              <form method="post" action="{% url 'signer:deleteSigner' signer.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('{% trans "Are you sure you want to delete this signer?" %}');">{% trans "Delete" %}</button>
+              </form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="8" class="text-center">{% trans "No signers found" %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="d-flex justify-content-end mt-3">
+      <a href="{}" class="btn btn-primary me-2">{% trans "Add New Signer" %}</a>
+      <a href="{}" class="btn btn-warning me-2">{% trans "Tokens" %}</a>
+      <form method="post" action="{}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-danger">{% trans "Logout" %}</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock content %}

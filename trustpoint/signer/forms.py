@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 from django.forms import ModelForm
 from trustpoint_core.oid import AlgorithmIdentifier, NamedCurve
 
-from trustpoint.signer.models import Signer
+from .models import Signer
 
 
 class SignerForm(ModelForm[Signer]):

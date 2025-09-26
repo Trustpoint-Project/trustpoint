@@ -2,14 +2,15 @@
 
 from django.urls import path
 
-from trustpoint.signer.views import SignerCreateView, SignerListView, SignerDeleteView, SignerEditView, \
-    SignerDetailView, SignHashAPIView
+from . import views
+
+app_name = 'signer'
 
 urlpatterns = [
-    path('add-signer/', SignerCreateView.as_view(), name='addSigner'),
-    path('', SignerListView.as_view(), name='signerList'),
-    path('delete-signer/<int:pk>/', SignerDeleteView.as_view(), name='deleteSigner'),
-    path('edit-signer/<int:pk>/', SignerEditView.as_view(), name='editSigner'),
-    path('signer/<int:pk>/', SignerDetailView.as_view(), name='signerDetail'),
-    path('api/sign/', SignHashAPIView.as_view(), name='sign_hash_api'),
+    path('add-signer/', views.SignerCreateView.as_view(), name='addSigner'),
+    path('', views.SignerListView.as_view(), name='signerList'),
+    path('delete-signer/<int:pk>/', views.SignerDeleteView.as_view(), name='deleteSigner'),
+    path('edit-signer/<int:pk>/', views.SignerEditView.as_view(), name='editSigner'),
+    path('signer/<int:pk>/', views.SignerDetailView.as_view(), name='signerDetail'),
+    path('api/sign/', views.SignHashAPIView.as_view(), name='sign_hash_api'),
 ]
