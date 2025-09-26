@@ -627,8 +627,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         for san in san_extension.value:
             if isinstance(san, x509.UniformResourceIdentifier):
                 san_uri_str = san.value
-                san_parts = san_uri_str.split('.')
-                if len(san_parts) == 5 and san_parts[1] == 'dev-owner' and san_parts[-1] == 'alt':
+                if san_uri_str.startswith('dev-owner:'):
                     idevid_refs.add(san_uri_str)
         if not idevid_refs:
             raise ValidationError(_('The provided certificate is not a valid DevOwnerID; it does not contain a valid IDevID reference in the SAN.'))
