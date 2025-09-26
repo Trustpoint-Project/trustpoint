@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# tp_wizard.sh — single-file wizard for TrustPoint stack (no docker-compose)
-# Requirements: bash 4+, docker. No apt/brew/snap deps.
+# tp_wizard.sh — single-file wizard for trustpoint stack
 set -euo pipefail
 
 # -------------------------- Constants & defaults ------------------------------
@@ -8,7 +7,7 @@ PROJECT="trustpoint"
 NET="${PROJECT}-net"
 VOL_DB="${PROJECT}_postgres_data"
 
-# TrustPoint image handling
+# trustpoint image handling
 TP_DOCKERFILE="docker/trustpoint/Dockerfile"
 TP_REPO="trustpointproject/trustpoint"
 APP_IMAGE="${TP_REPO}:latest"   # overridden to trustpoint:local when BUILD_LOCAL=true
@@ -16,10 +15,10 @@ BUILD_LOCAL=false
 
 # Fixed images
 PG_IMAGE="postgres:15.14"
-MAILPIT_IMAGE="axllent/mailpit:latest"
-SFTPGO_IMAGE="drakkan/sftpgo:latest"
+MAILPIT_IMAGE="axllent/mailpit:v1.27"
+SFTPGO_IMAGE="drakkan/sftpgo:2.6.x-slim"
 
-# Fixed trustpoint ports (Apache already on 80/443)
+# Fixed trustpoint ports
 APP_HTTP_HOST=80
 APP_HTTPS_HOST=443
 
@@ -68,7 +67,6 @@ exists(){ docker ps -a --format '{{.Names}}' | grep -Fxq "$1"; }
 running(){ docker ps --format '{{.Names}}' | grep -Fxq "$1"; }
 ensure_network(){ docker network inspect "$NET" >/dev/null 2>&1 || docker network create "$NET" >/dev/null; }
 ensure_volumes(){ docker volume inspect "$VOL_DB" >/dev/null 2>&1 || docker volume create "$VOL_DB" >/dev/null; }
-health_state(){ docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' "$1" 2>/dev/null || echo "unknown"; }
 stop_one(){ local n="$1"; exists "$n" || return 0; running "$n" && docker stop "$n" >/dev/null || true; docker rm "$n" >/dev/null || true; }
 
 # quick TCP connect test (true if something accepts on host:port)
@@ -125,11 +123,11 @@ NOWAIT=false
 # -------------------------- Steps --------------------------------------------
 preflight(){ have docker || die "docker not found"; docker version >/dev/null || die "docker daemon not reachable"; }
 
-step_enable_trustpoint(){ EN_APP=$(ask_yes_no "Enable TrustPoint application container?" "y" && echo true || echo false); }
+step_enable_trustpoint(){ EN_APP=$(ask_yes_no "Enable trustpoint application container?" "y" && echo true || echo false); }
 
 step_trustpoint_source(){
   $EN_APP || return 0
-  if ask_yes_no "Build TrustPoint locally from ${TP_DOCKERFILE}? (No = pull from Docker Hub)" "y"; then
+  if ask_yes_no "Build trustpoint locally from ${TP_DOCKERFILE}? (No = pull from Docker Hub)" "y"; then
     BUILD_LOCAL=true
     APP_IMAGE="trustpoint:local"
   else
@@ -140,7 +138,7 @@ step_trustpoint_source(){
 }
 
 step_enable_postgres(){
-  EN_PG=$(ask_yes_no "Use internal PostgreSQL container?" "y" && echo true || echo false)
+  EN_PG=$(ask_yes_no "Start PostgreSQL container?" "y" && echo true || echo false)
   DB_INTERNAL=$EN_PG
   if $DB_INTERNAL; then DB_HOST="$DEF_DB_HOST_INTERNAL"; fi
 }
@@ -163,7 +161,7 @@ step_postgres_config(){
 
 step_app_db_binding(){
   $EN_APP || return 0
-  if ask_yes_no "Should TrustPoint reuse the PostgreSQL settings configured above?" "y"; then
+  if ask_yes_no "Should trustpoint reuse the PostgreSQL settings configured above?" "y"; then
     APP_DB_NAME="$DB_NAME"
     APP_DB_USER="$DB_USER"
     APP_DB_PASS="$DB_PASS"
@@ -183,11 +181,11 @@ step_app_db_binding(){
     else
       def_host="$DB_HOST"; def_port="$DB_PORT"
     fi
-    APP_DB_HOST="$(ask 'TrustPoint DB host' "$def_host"; echo "$REPLY")"
-    APP_DB_PORT="$(ask_port 'TrustPoint DB port' "$def_port")"
-    APP_DB_NAME="$(ask_dbname 'TrustPoint DB name' "$DB_NAME")"
-    APP_DB_USER="$(ask_user 'TrustPoint DB user' "$DB_USER")"
-    APP_DB_PASS="$(ask_password 'TrustPoint DB password' "$DB_PASS")"
+    APP_DB_HOST="$(ask 'trustpoint DB host' "$def_host"; echo "$REPLY")"
+    APP_DB_PORT="$(ask_port 'trustpoint DB port' "$def_port")"
+    APP_DB_NAME="$(ask_dbname 'trustpoint DB name' "$DB_NAME")"
+    APP_DB_USER="$(ask_user 'trustpoint DB user' "$DB_USER")"
+    APP_DB_PASS="$(ask_password 'trustpoint DB password' "$DB_PASS")"
   fi
 }
 
@@ -219,7 +217,7 @@ show_plan(){
   printf "%-22s %s\n" "Network:" "$NET"
   printf "%-22s %s\n" "DB Volume:" "$VOL_DB"
   echo
-  printf "%-22s %s\n" "TrustPoint enabled:" "$EN_APP"
+  printf "%-22s %s\n" "trustpoint enabled:" "$EN_APP"
   if $EN_APP; then
     if $BUILD_LOCAL; then
       printf "%-22s %s\n" "App image:" "Build local → trustpoint:local"
@@ -237,11 +235,11 @@ show_plan(){
   printf "%-22s %s\n" "DB pass:" "$(mask "$DB_PASS")"
   echo
   if $EN_APP; then
-    printf "%-22s %s\n" "TrustPoint DB host:" "$APP_DB_HOST"
-    printf "%-22s %s\n" "TrustPoint DB port:" "$APP_DB_PORT"
-    printf "%-22s %s\n" "TrustPoint DB name:" "$APP_DB_NAME"
-    printf "%-22s %s\n" "TrustPoint DB user:" "$APP_DB_USER"
-    printf "%-22s %s\n" "TrustPoint DB pass:" "$(mask "$APP_DB_PASS")"
+    printf "%-22s %s\n" "trustpoint DB host:" "$APP_DB_HOST"
+    printf "%-22s %s\n" "trustpoint DB port:" "$APP_DB_PORT"
+    printf "%-22s %s\n" "trustpoint DB name:" "$APP_DB_NAME"
+    printf "%-22s %s\n" "trustpoint DB user:" "$APP_DB_USER"
+    printf "%-22s %s\n" "trustpoint DB pass:" "$(mask "$APP_DB_PASS")"
   fi
   echo
   printf "%-22s %s\n" "Mailpit enabled:" "$EN_MAILPIT"
@@ -258,7 +256,7 @@ show_plan(){
 }
 
 # -------------------------- Build/Pull & Start -------------------------------
-build_trustpoint_image(){ [[ -f "$TP_DOCKERFILE" ]] || log "Dockerfile not found: $TP_DOCKERFILE"; log "Building TrustPoint image..."; docker build -f "$TP_DOCKERFILE" -t "trustpoint:local" .; }
+build_trustpoint_image(){ [[ -f "$TP_DOCKERFILE" ]] || log "Dockerfile not found: $TP_DOCKERFILE"; log "Building trustpoint image..."; docker build -f "$TP_DOCKERFILE" -t "trustpoint:local" .; }
 pull_trustpoint_image(){ log "Pulling ${APP_IMAGE} ..."; docker pull "${APP_IMAGE}" >/dev/null; }
 
 start_postgres(){
@@ -326,10 +324,10 @@ start_app(){
   local name="trustpoint"
   stop_one "$name"
   # die early if 80/443 are busy
-  if port_in_use "$APP_HTTP_HOST"; then die "Host port ${APP_HTTP_HOST} is in use (TrustPoint HTTP)."; fi
-  if port_in_use "$APP_HTTPS_HOST"; then die "Host port ${APP_HTTPS_HOST} is in use (TrustPoint HTTPS)."; fi
+  if port_in_use "$APP_HTTP_HOST"; then die "Host port ${APP_HTTP_HOST} is in use (trustpoint HTTP)."; fi
+  if port_in_use "$APP_HTTPS_HOST"; then die "Host port ${APP_HTTPS_HOST} is in use (trustpoint HTTPS)."; fi
 
-  log "Starting TrustPoint..."
+  log "Starting trustpoint..."
   local smtp_env=()
   if $EN_MAILPIT; then
     smtp_env+=( -e "EMAIL_HOST=mailpit" -e "EMAIL_PORT=1025" -e "EMAIL_USE_TLS=0" -e "EMAIL_USE_SSL=0" -e "DEFAULT_FROM_EMAIL=no-reply@trustpoint.local" )
@@ -378,9 +376,9 @@ await_readiness(){
     echo
   fi
   if $EN_APP; then
-    echo "Waiting (<= ${READINESS_TIMEOUT}s) for TrustPoint HTTP on localhost:${APP_HTTP_HOST} ..."
+    echo "Waiting (<= ${READINESS_TIMEOUT}s) for trustpoint HTTP on localhost:${APP_HTTP_HOST} ..."
     while (( $(date +%s) < deadline )); do
-      if tcp_check 127.0.0.1 "$APP_HTTP_HOST" 1; then ok "TrustPoint reachable on :$APP_HTTP_HOST"; break; fi
+      if tcp_check 127.0.0.1 "$APP_HTTP_HOST" 1; then ok "trustpoint reachable on :$APP_HTTP_HOST"; break; fi
       printf "."; sleep 1
     done
     echo
@@ -509,8 +507,7 @@ final_summary(){
   printf "%-22s %s\n" "Containers:" "$(docker ps --format '{{.Names}}' | grep -E '^(trustpoint|postgres|mailpit|sftpgo)$' || true)"
   echo
   if $EN_APP; then
-    printf "%-22s %s\n" "TrustPoint:" "http://localhost:80  |  https://localhost:443"
-    printf "%-22s %s\n" "TrustPoint state:" "$(docker inspect --format '{{.State.Status}}' trustpoint 2>/dev/null || echo '-') / health=$(health_state trustpoint)"
+    printf "%-22s %s\n" "trustpoint:" "http://localhost:80  |  https://localhost:443"
   fi
   if $DB_INTERNAL; then
     printf "%-22s %s\n" "PostgreSQL:" "tcp://localhost:${DB_PORT}  (container port 5432)"
@@ -545,7 +542,7 @@ final_summary(){
 
 # -------------------------- High-level orchestration -------------------------
 wizard(){
-  echo "$(bold)TrustPoint Setup Wizard$(rst)"
+  echo "$(bold)trustpoint Setup Wizard$(rst)"
   ensure_network
   step_enable_trustpoint
   step_trustpoint_source
@@ -571,25 +568,24 @@ usage(){
   cat <<'EOF'
 Commands:
   (no command)       Run interactive wizard
-  up [all|trustpoint|db|mail|sftp] [--nowait]
-  down [all|trustpoint|db|mail|sftp]
+  up [demo|trustpoint|db|mail|sftp] [--nowait]
+  down [demo|trustpoint|db|mail|sftp]
   logs [trustpoint|db|mail|sftp]
-  status
   nuke
   help
 
-Also supported (legacy): --only trustpoint|db|mail|sftp|all
+Also supported (legacy): --only trustpoint|db|mail|sftp|demo
 EOF
 }
 
 map_only_to_flags(){
   case "$1" in
-    all)  ONLY_APP=true; ONLY_DB=true; ONLY_MAIL=true; ONLY_SFTP=true ;;
+    demo)  ONLY_APP=true; ONLY_DB=true; ONLY_MAIL=true; ONLY_SFTP=true ;;
     trustpoint|app)  ONLY_APP=true ;;   # accept both names
     db)   ONLY_DB=true ;;
     mail) ONLY_MAIL=true ;;
     sftp) ONLY_SFTP=true ;;
-    *) die "Unknown target: $1 (use trustpoint|db|mail|sftp|all)";;
+    *) die "Unknown target: $1 (use trustpoint|db|mail|sftp|demo)";;
   esac
 }
 
@@ -597,7 +593,7 @@ set_targets_from_args(){
   local any=false
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      all|trustpoint|app|db|mail|sftp) map_only_to_flags "$1"; any=true; shift ;;
+      demo|trustpoint|app|db|mail|sftp) map_only_to_flags "$1"; any=true; shift ;;
       --only) map_only_to_flags "${2:-}"; any=true; shift 2 ;;
       --nowait) NOWAIT=true; shift ;;
       *) die "Unknown option/target: $1" ;;
@@ -670,14 +666,6 @@ logs_selected(){
   docker logs -f "$target"
 }
 
-status_cmd(){
-  for n in postgres trustpoint mailpit sftpgo; do
-    if exists "$n"; then
-      printf "%-10s status=%-10s health=%s\n" "$n" "$(docker inspect --format '{{.State.Status}}' "$n")" "$(health_state "$n")"
-    fi
-  done
-}
-
 nuke_cmd(){
   read -r -p "Remove ALL project containers, network, and DB volume (and ./sftpgo-data)? [y/N] " a; [[ "${a,,}" == "y" ]] || exit 0
   read -r -p "Are you sure? This is destructive. [y/N] " b; [[ "${b,,}" == "y" ]] || exit 0
@@ -711,7 +699,6 @@ case "$cmd" in
     set_targets_from_args "$@"
     logs_selected
     ;;
-  status) status_cmd ;;
   nuke) nuke_cmd ;;
   *) usage; die "Unknown command: $cmd" ;;
 esac
