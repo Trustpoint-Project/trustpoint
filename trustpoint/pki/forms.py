@@ -1,4 +1,4 @@
-"""Module for managing PKI-related forms in the TrustPoint application."""
+"""Module for managing PKI-related forms in the Trustpoint application."""
 
 from __future__ import annotations
 
