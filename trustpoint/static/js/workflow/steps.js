@@ -17,7 +17,7 @@ function injectStylesOnce() {
   const style = document.createElement('style');
   style.textContent = `
     .ww-step-card { border-radius:.6rem; border:1px solid var(--bs-border-color,#dee2e6); }
-    .ww-step-header { background: var(--bs-light,#f8f9fa); border-radius:.5rem; padding:.5rem .75rem; }
+    .ww-step-header { border-radius:.5rem; padding:.5rem .75rem; }
     .ww-drag-handle { cursor: grab; user-select:none; font-size:1.1rem; opacity:.7; }
     .ww-dragging { opacity:.6; }
     .ww-drop-indicator-top { box-shadow: 0 -2px 0 0 var(--bs-primary,#0d6efd) inset; }
