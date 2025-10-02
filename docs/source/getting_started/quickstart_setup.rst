@@ -5,15 +5,105 @@ Quickstart Setup Guide
 
 This guide provides an introduction to Trustpoint and instructions for setting up the Trustpoint using Docker and Docker Compose.
 
-Getting Started with Docker 🐳
-------------------------------
-
 Prerequisites ✅
-^^^^^^^^^^^^^^^^
+---------------
 Make sure you have the following installed:
 
 1. **Docker**: Version 20.10 or higher.
-2. **Git**: To clone the Trustpoint repository.
+2. **Docker Compose**: Version v2.32.4 or higher.
+3. **Git**: To clone the Trustpoint repository.
+
+Getting started with the Trustpoint Wizard script 🪄
+---------------------------------------------------
+
+The ``tp_wizard.sh`` offers a convenient guided CLI for setting up a Docker container environment.
+
+1. **Clone** the Trustpoint repository
+
+   First, clone the Trustpoint source code from the official repository:
+
+   .. code-block:: bash
+
+       git clone https://github.com/TrustPoint-Project/trustpoint.git
+       cd trustpoint
+
+2. **Interactively configure** the Trustpoint environment using the script
+
+   This requires a Linux host.
+
+   .. code-block:: bash
+   
+       ./tp_wizard.sh
+
+| For testing, you can use ``./tp_wizard.sh up`` to directly start the Trustpoint and integrated postgres DB container with default testing credentials.  
+| Strictly for testing use only, use ``./tp_wizard.sh up demo`` to additionally start SFTP and mailpit demo servers.  
+| Use ``./tp_wizard.sh down`` to stop and remove all containers.  
+| To completely remove the Trustpoint volume and delete all stored data, you can use ``./tp_wizard.sh nuke``.  
+
+Getting started with Docker Compose 🐙
+--------------------------------------
+
+Step-by-Step Setup (Load from Dockerhub) ⬇️
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1. **Download** `docker-compose.yml <https://raw.githubusercontent.com/Trustpoint-Project/trustpoint/refs/heads/main/docker-compose.yml>`_
+
+2. **Pull and run the Trustpoint and Postgres Containers** 🚀
+
+    You can pull the images and start Trustpoint and Postgres containers with following command:
+
+   .. code-block:: bash
+
+       docker compose up -d
+
+  - **-d**: Runs the container in detached mode.
+
+  .. note::
+
+   If the specified ports are already in use on your system, modify the port mapping in the `docker-compose.yml` file accordingly.
+
+Step-by-Step Setup (Build container) 🔧
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+1. **Clone the Trustpoint Repository**
+
+   First, clone the Trustpoint source code from the official repository:
+
+   .. code-block:: bash
+
+       git clone https://github.com/TrustPoint-Project/trustpoint.git
+       cd trustpoint
+
+   This command downloads the Trustpoint source code to your local machine and navigates into the project directory.
+
+   .. note::
+      The database connection between the containers uses default credentials for testing. THIS IS INSECURE.
+      It is highly encouraged to change the default credentials in the `docker-compose.yml` file before building the containers.
+
+2. **Build the Trustpoint and Postgres Docker Images**
+
+   Use docker compose to build the Trustpoint and Postgres images from the source:
+
+   .. code-block:: bash
+
+       docker compose build
+
+3. **Run the Trustpoint and Postgres Containers** 🚀
+
+   Start the Trustpoint and Postgres containers using the images you just built:
+
+   .. code-block:: bash
+
+       docker compose up -d
+
+   - **-d**: Runs the container in detached mode.
+
+   .. note::
+
+      If the specified ports are already in use on your system, modify the port mapping in the `docker-compose.yml` file accordingly.
+
+
+Getting Started with Docker 🐳
+------------------------------
 
 Step-by-Step Setup (Load from Dockerhub) ⬇️
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -100,82 +190,6 @@ Step-by-Step Setup (Build container) 🔧
    - **-p**: Maps the container's port to your local machine's port.
    - **-v**: Creates a volume to persist data.
    - **-e**: Sets environment variables.
-
-Getting Started with Docker Compose 🐙
---------------------------------------
-
-Prerequisites ✅
-^^^^^^^^^^^^^^^^
-Make sure you have the following installed:
-
-1. **Docker Compose**: Version v2.32.4 or higher.
-2. **Git**: To clone the Trustpoint repository.
-
-Step-by-Step Setup (Load from Dockerhub) ⬇️
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-1. **Download** `docker-compose.yml <https://raw.githubusercontent.com/Trustpoint-Project/trustpoint/refs/heads/main/docker-compose.yml>`_
-
-2. **Pull the Trustpoint and Postgres Docker Images**
-
-   You can pull the pre-built docker images from Docker Hub with the following command:
-
-   .. code-block:: bash
-
-       docker compose pull
-
-3. **Run the Trustpoint and Postgres Containers** 🚀
-
-   Once the images are pulled, you can start Trustpoint and Postgres containers with following command:
-
-   .. code-block:: bash
-
-       docker compose up -d
-
-  - **-d**: Runs the container in detached mode.
-
-  .. note::
-
-   If the specified ports are already in use on your system, modify the port mapping in the `docker-compose.yml` file accordingly.
-
-Step-by-Step Setup (Build container) 🔧
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-1. **Clone the Trustpoint Repository**
-
-   First, clone the Trustpoint source code from the official repository:
-
-   .. code-block:: bash
-
-       git clone https://github.com/TrustPoint-Project/trustpoint.git
-       cd trustpoint
-
-   This command downloads the Trustpoint source code to your local machine and navigates into the project directory.
-
-   .. note::
-      The database connection between the containers uses default credentials for testing. THIS IS INSECURE.
-      It is highly encouraged to change the default credentials in the `docker-compose.yml` file before building the containers.
-
-2. **Build the Trustpoint and Postgres Docker Images**
-
-   Use docker compose to build the Trustpoint and Postgres images from the source:
-
-   .. code-block:: bash
-
-       docker compose build
-
-3. **Run the Trustpoint and Postgres Containers** 🚀
-
-   Start the Trustpoint and Postgres containers using the images you just built:
-
-   .. code-block:: bash
-
-       docker compose up -d
-
-   - **-d**: Runs the container in detached mode.
-
-   .. note::
-
-      If the specified ports are already in use on your system, modify the port mapping in the `docker-compose.yml` file accordingly.
 
 
 Verify the Setup 🔍

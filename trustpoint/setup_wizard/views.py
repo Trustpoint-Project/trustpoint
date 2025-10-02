@@ -12,6 +12,7 @@ from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.shortcuts import redirect
@@ -19,11 +20,11 @@ from django.urls import reverse_lazy
 from django.views.generic import FormView, TemplateView, View
 from pki.models import CertificateModel, CredentialModel, IssuingCaModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from trustpoint.logger import LoggerMixin
 
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import EmptyForm, StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
-from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
@@ -213,7 +214,7 @@ class SetupWizardOptionsView(TemplateView):
         return super().get(*args, **kwargs)
 
 
-class BackupRestoreView(View):
+class BackupRestoreView(View, LoggerMixin):
     """Upload a dump file and restore the database from it."""
 
     def post(self, request: HttpRequest) -> HttpResponse:
@@ -228,22 +229,27 @@ class BackupRestoreView(View):
         temp_dir = settings.BACKUP_FILE_PATH
         temp_path = temp_dir / backup_file.name
         # save upload
-
         with open(temp_path, 'wb+') as f:
             for chunk in backup_file.chunks():
                 f.write(chunk)
 
         try:
-            call_command('dbrestore',  '-z', '--noinput', '-I', str(temp_path))
-            call_command('trustpointrestore')
+            self.logger.info(f'Restore process started {backup_file.name}')
+            call_command('trustpointrestore', '--filepath', str(temp_path))
             messages.success(request, f'Trustpoint restored from {backup_file.name}')
+        except CommandError as e:
+            messages.error(request, str(e))
+        except FileNotFoundError as e:
+            messages.error(request, f'Backup file not found: {e}')
+        except PermissionError:
+            messages.error(request, 'Permission denied while processing the backup.')
+        except subprocess.CalledProcessError:
+            messages.error(request, 'Backup processing failed (pg_restore/awk).')
         except Exception as e:
-            messages.error(request, 'Error restoring.')
-            msg = f'Exception restoring database: {e}'
-            logger.exception(msg)
-
-        return redirect('users:login')
-
+            messages.error(request, f'Error restoring. {e}')
+        else:
+            return redirect('users:login')
+        return redirect('setup_wizard:initial')
 
 class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWizardTlsCertificateForm]):
     """View for generating TLS Server Credentials in the setup wizard.
