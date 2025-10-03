@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class UniqueNameValidator(RegexValidator):
     """Validates unique names used in the trustpoint."""
 
-    form_label = _('(Must start with a letter. Can only contain letters, digits, underscores and hyphens)')
+    form_label = _('(Must start with a letter. Can only contain letters, digits, umlauts, underscores and hyphens)')
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes a UniqueNameValidator object.
@@ -28,7 +28,7 @@ class UniqueNameValidator(RegexValidator):
         msg = f'Enter a valid unique name. {self.form_label}.'
         trans_msg = _(msg)
         super().__init__(
-            regex=r'^[a-zA-Z]+[a-zA-Z0-9_-]+$',
+            regex=r'^[a-zA-ZäöüÄÖÜß]+[a-zA-Z0-9äöüÄÖÜß _-]*$',
             message=trans_msg,
             code='invalid_unique_name',
         )
