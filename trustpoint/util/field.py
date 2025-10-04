@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.x509.oid import NameOID
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
 
@@ -14,7 +17,9 @@ if TYPE_CHECKING:
 class UniqueNameValidator(RegexValidator):
     """Validates unique names used in the trustpoint."""
 
-    form_label = _('(Must start with a letter. Can only contain letters, digits, umlauts, underscores and hyphens)')
+    form_label = _(
+        '(Must start with a letter. Can only contain letters, digits, umlauts, spaces, underscores and hyphens)'
+    )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes a UniqueNameValidator object.
@@ -32,3 +37,32 @@ class UniqueNameValidator(RegexValidator):
             message=trans_msg,
             code='invalid_unique_name',
         )
+
+
+def get_certificate_name(cert: x509.Certificate) -> str :
+    """Extracts a certificate name from x509 certificate.
+
+    Args:
+        cert: x509 Certificate.
+    Priority:
+      1. CN (Common Name) from Subject DN
+      2. First SAN entry
+    """
+    # Try CN from Subject DN
+    try:
+        cn = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
+        if cn:
+            return cn
+    except IndexError:
+        pass
+
+    # Try SAN extension (first entry)
+    try:
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        san_names = san.value.get_values_for_type(x509.DNSName)
+        if san_names:
+            return san_names[0]
+    except x509.ExtensionNotFound:
+        pass  # SAN not present
+
+    raise ValueError('No valid CN or SAN found in the certificate. Unique name is required.')
