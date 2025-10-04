@@ -15,7 +15,7 @@ from trustpoint_core.serializer import (
     CredentialSerializer,
     PrivateKeySerializer,
 )
-from util.field import UniqueNameValidator
+from util.field import get_certificate_name, UniqueNameValidator
 
 from pki.models import DevIdRegistration, IssuingCaModel, OwnerCredentialModel
 from pki.models.certificate import CertificateModel
@@ -345,9 +345,9 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
 
     unique_name = forms.CharField(
         max_length=256,
-        label=_('Unique Name') + ' ' + UniqueNameValidator.form_label,
+        label=_('[Optional] Unique Name') + ' ' + UniqueNameValidator.form_label,
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
-        required=True,
+        required=False,
         validators=[UniqueNameValidator()],
     )
 
@@ -358,18 +358,6 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         label=_('[Optional] PKCS#12 password'),
         required=False,
     )
-
-    def clean_unique_name(self) -> str:
-        """Validates the unique name to ensure it is not already in use.
-
-        Raises:
-            ValidationError: If the unique name is already associated with an existing Issuing CA.
-        """
-        unique_name = self.cleaned_data['unique_name']
-        if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
-            error_message = 'Unique name is already taken. Choose another one.'
-            raise ValidationError(error_message)
-        return cast(str, unique_name)
 
     def clean(self) -> None:
         """Cleans and validates the entire form.
@@ -419,6 +407,13 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         if cert_crypto.extensions.get_extension_for_class(x509.BasicConstraints).value.ca is False:
             err_msg = 'The provided certificate is not a CA certificate.'
             raise ValidationError(err_msg)
+
+        if not unique_name:
+            unique_name = get_certificate_name(cert_crypto)
+
+        if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
+            error_message = 'Unique name is already taken. Choose another one.'
+            raise ValidationError(error_message)
 
         try:
             IssuingCaModel.create_new_issuing_ca(
