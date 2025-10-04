@@ -26,7 +26,7 @@ dependencies = [
     "pyasn1-modules>=0.4.1,<0.5",
     "trustpoint-core==0.2.5",
     "types-paramiko>=3.5.0.20250516",
-    "zeroconf>=0.147,<0.148",
+    "zeroconf>=1,<1.1",
 ]
 
 [dependency-groups]
