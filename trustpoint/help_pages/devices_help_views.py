@@ -370,6 +370,7 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
     certificate_profile: str
     host: str
 
+    @override
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds information about the required OpenSSL commands to the context.
 
@@ -652,6 +653,7 @@ class AbstractOnboardingDomainCredentialCmpSharedSecretHelpView(PageContextMixin
 
     host: str
 
+    @override
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds information about the required OpenSSL commands to the context.
 
@@ -825,6 +827,7 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
     certificate_profile: str
     host: str
 
+    @override
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds information about the required OpenSSL commands to the context.
 
@@ -1032,6 +1035,7 @@ class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView
     certificate_profile: str
     host: str
 
+    @override
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds information about the required OpenSSL commands to the context.
 
@@ -1266,6 +1270,7 @@ class AbstractDeviceOnboardingEstDomainCredentialHelpView(PageContextMixin, Deta
     certificate_profile: str
     host: str
 
+    @override
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds information about the required OpenSSL commands to the context.
 
