@@ -45,7 +45,7 @@ class UniqueNameValidator(RegexValidator):
 
 
 def get_certificate_name(cert: x509.Certificate) -> str :
-    """Extracts a certificate name from x509 certificate.
+    """Extracts a name from an x509 certificate to auto-populate model Unique Name fields.
 
     Args:
         cert: x509 Certificate.
@@ -67,7 +67,15 @@ def get_certificate_name(cert: x509.Certificate) -> str :
         san_names = san.value.get_values_for_type(x509.DNSName)
         if san_names:
             return san_names[0]
+        san_names = san.value.get_values_for_type(x509.UniformResourceIdentifier)
+        if san_names:
+            candidate = san_names[0]
+            if candidate.startswith('dev-owner:'): # AOKI DevOwnerID
+                candidate = 'Owner of SN: ' + candidate.removeprefix('dev-owner:').split('.')[0]
+            return candidate
+
     except x509.ExtensionNotFound:
         pass  # SAN not present
 
-    raise ValueError('No valid CN or SAN found in the certificate. Unique name is required.')
+    exc_msg = 'No valid CN or SAN found in the certificate. Unique name is required.'
+    raise ValueError(exc_msg)

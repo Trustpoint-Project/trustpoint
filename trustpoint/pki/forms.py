@@ -682,8 +682,9 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
 
     unique_name = forms.CharField(
         max_length=256,
-        label=_('Unique Name'),
+        label=_('[Optional] Unique Name'),
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
+        required=False,
         validators=[UniqueNameValidator()],
     )
     certificate = forms.FileField(label=_('DevOwnerID Certificate (.cer, .der, .pem, .p7b, .p7c)'), required=True)
@@ -695,18 +696,6 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
         label=_('[Optional] Private Key File Password'),
         required=False,
     )
-
-    def clean_unique_name(self) -> str:
-        """Validates the unique name to ensure it does not already exist in the database.
-
-        Raises:
-            ValidationError: If an Issuing CA with the provided name already exists.
-        """
-        unique_name = self.cleaned_data['unique_name']
-        if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
-            error_message = 'Owner Credential with the provided name already exists.'
-            raise ValidationError(error_message)
-        return unique_name
 
     def clean_private_key_file(self) -> PrivateKeySerializer:
         """Validates and parses the uploaded private key file.
@@ -840,8 +829,21 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
                 cleaned_data.get('certificate_chain') if cleaned_data.get('certificate_chain') else None
             )
 
-            if not unique_name or not private_key_serializer or not certificate_serializer:
+            if not private_key_serializer or not certificate_serializer:
                 return
+
+            if not unique_name:
+                name_from_cert = get_certificate_name(certificate_serializer.as_crypto())
+                if not name_from_cert:
+                    return
+                unique_name = name_from_cert
+
+            if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
+                error_message = 'Owner Credential with the provided name already exists.'
+                raise ValidationError(error_message)
+
+            cleaned_data['unique_name'] = unique_name
+            self.cleaned_data = cleaned_data
 
             credential_serializer = CredentialSerializer.from_serializers(
                 private_key_serializer= private_key_serializer,
