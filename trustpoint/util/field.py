@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from cryptography import x509
-from cryptography.hazmat.backends import default_backend
 from cryptography.x509.oid import NameOID
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
