@@ -63,6 +63,36 @@ class DevIdRegistrationForm(forms.ModelForm[DevIdRegistration]):
             'serial_number_pattern': 'Serial Number Pattern (Regex)',
         }
 
+    unique_name = forms.CharField(
+        max_length=256,
+        label=_('[Optional] Unique Name'),
+        widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
+        required=False,
+        validators=[UniqueNameValidator()],
+    )
+
+    def clean(self) -> None:
+        """Cleans and validates the form data.
+
+        Ensures the unique name is not already used if provided.
+
+        Raises:
+            ValidationError: If the unique name is not unique.
+        """
+        cleaned_data = super().clean()
+        unique_name = cleaned_data.get('unique_name')
+        truststore_name = cleaned_data.get('truststore')
+
+        if not unique_name and truststore_name:
+            unique_name = truststore_name.unique_name
+            cleaned_data['unique_name'] = unique_name
+
+        if unique_name and DevIdRegistration.objects.filter(unique_name=unique_name).exists():
+            error_message = 'DevID Registration with the provided name already exists.'
+            raise ValidationError(error_message)
+
+        self.cleaned_data = cleaned_data
+
 
 class TruststoreAddForm(forms.Form):
     """Form for adding a new truststore.
@@ -79,7 +109,7 @@ class TruststoreAddForm(forms.Form):
 
     unique_name = forms.CharField(
         max_length=256,
-        label=_('Unique Name') + ' ' + UniqueNameValidator.form_label,
+        label=_('[Optional] Unique Name'),
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
         required=False,
         validators=[UniqueNameValidator()],
@@ -341,7 +371,7 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
 
     unique_name = forms.CharField(
         max_length=256,
-        label=_('[Optional] Unique Name') + ' ' + UniqueNameValidator.form_label,
+        label=_('[Optional] Unique Name'),
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
         required=False,
         validators=[UniqueNameValidator()],
@@ -445,7 +475,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
 
     unique_name = forms.CharField(
         max_length=256,
-        label=_('Unique Name') + ' ' + UniqueNameValidator.form_label,
+        label=_('[Optional] Unique Name'),
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
         required=False,
         validators=[UniqueNameValidator()],
@@ -652,7 +682,7 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
 
     unique_name = forms.CharField(
         max_length=256,
-        label=_('Unique Name') + ' ' + UniqueNameValidator.form_label,
+        label=_('Unique Name'),
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
         validators=[UniqueNameValidator()],
     )

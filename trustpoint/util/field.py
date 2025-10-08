@@ -17,7 +17,7 @@ class UniqueNameValidator(RegexValidator):
     """Validates unique names used in the trustpoint."""
 
     form_label = _(
-        '(All UTF-8 characters are allowed except control characters (e.g., newline, tab).”)'
+        '(All UTF-8 characters are allowed except control characters (e.g., newline, tab).)'
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
