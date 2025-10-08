@@ -15,7 +15,7 @@ from trustpoint_core.serializer import (
     CredentialSerializer,
     PrivateKeySerializer,
 )
-from util.field import get_certificate_name, UniqueNameValidator
+from util.field import UniqueNameValidator, get_certificate_name
 
 from pki.models import DevIdRegistration, IssuingCaModel, OwnerCredentialModel
 from pki.models.certificate import CertificateModel
@@ -81,7 +81,7 @@ class TruststoreAddForm(forms.Form):
         max_length=256,
         label=_('Unique Name') + ' ' + UniqueNameValidator.form_label,
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
-        required=True,
+        required=False,
         validators=[UniqueNameValidator()],
     )
 
@@ -93,18 +93,6 @@ class TruststoreAddForm(forms.Form):
     )
 
     trust_store_file = forms.FileField(label=_('PEM or PKCS#7 File'), required=True)
-
-    def clean_unique_name(self) -> str:
-        """Validates the uniqueness of the truststore name.
-
-        Raises:
-            ValidationError: If the name is already used by an existing truststore.
-        """
-        unique_name = self.cleaned_data['unique_name']
-        if TruststoreModel.objects.filter(unique_name=unique_name).exists():
-            error_message = 'Truststore with the provided name already exists.'
-            raise ValidationError(error_message)
-        return cast(str, unique_name)
 
     def clean(self) -> None:
         """Cleans and validates the form data.
@@ -136,10 +124,18 @@ class TruststoreAddForm(forms.Form):
             raise ValidationError(error_message) from exception
 
         try:
+            certs = certificate_collection_serializer.as_crypto()
+            if not unique_name:
+                unique_name = get_certificate_name(certs[0])
+
+            if TruststoreModel.objects.filter(unique_name=unique_name).exists():
+                error_message = 'Truststore with the provided name already exists.'
+                raise ValidationError(error_message)
+
             trust_store_model = self._save_trust_store(
                 unique_name=unique_name,
                 intended_usage=TruststoreModel.IntendedUsage(int(intended_usage)),
-                certificates=certificate_collection_serializer.as_crypto(),
+                certificates=certs,
             )
         except Exception as exception:
             raise ValidationError(str(exception)) from exception
@@ -408,14 +404,14 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             err_msg = 'The provided certificate is not a CA certificate.'
             raise ValidationError(err_msg)
 
-        if not unique_name:
-            unique_name = get_certificate_name(cert_crypto)
-
-        if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
-            error_message = 'Unique name is already taken. Choose another one.'
-            raise ValidationError(error_message)
-
         try:
+            if not unique_name:
+                unique_name = get_certificate_name(cert_crypto)
+
+            if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
+                error_message = 'Unique name is already taken. Choose another one.'
+                raise ValidationError(error_message)
+
             IssuingCaModel.create_new_issuing_ca(
                 unique_name=unique_name,
                 credential_serializer=credential_serializer,
