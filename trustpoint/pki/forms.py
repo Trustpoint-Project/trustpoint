@@ -451,6 +451,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         max_length=256,
         label=_('Unique Name') + ' ' + UniqueNameValidator.form_label,
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
+        required=False,
         validators=[UniqueNameValidator()],
     )
     ca_certificate = forms.FileField(label=_('Issuing CA Certificate (.cer, .der, .pem, .p7b, .p7c)'), required=True)
@@ -462,18 +463,6 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         label=_('[Optional] Private Key File Password'),
         required=False,
     )
-
-    def clean_unique_name(self) -> str:
-        """Validates the unique name to ensure it does not already exist in the database.
-
-        Raises:
-            ValidationError: If an Issuing CA with the provided name already exists.
-        """
-        unique_name = self.cleaned_data['unique_name']
-        if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
-            error_message = 'Issuing CA with the provided name already exists.'
-            raise ValidationError(error_message)
-        return unique_name
 
     def clean_private_key_file(self) -> PrivateKeySerializer:
         """Validates and parses the uploaded private key file.
@@ -612,7 +601,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
                 cleaned_data.get('ca_certificate_chain') if cleaned_data.get('ca_certificate_chain') else None
             )
 
-            if not unique_name or not private_key_serializer or not ca_certificate_serializer:
+            if not private_key_serializer or not ca_certificate_serializer:
                 return
 
             credential_serializer = CredentialSerializer.from_serializers(
@@ -626,6 +615,13 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             if pk.public_key() != cert.public_key():
                 err_msg = 'The provided private key does not match the Issuing CA certificate.'
                 raise ValidationError(err_msg)
+
+            if not unique_name:
+              unique_name = get_certificate_name(cert)
+
+            if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
+                error_message = 'Unique name is already taken. Choose another one.'
+                raise ValidationError(error_message)
 
             IssuingCaModel.create_new_issuing_ca(
                 unique_name=unique_name,
