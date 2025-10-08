@@ -9,7 +9,7 @@ runs:
   using: "composite"
   steps:
     - name: Install and setup uv
-      uses: astral-sh/setup-uv@v6  # Sets up `uv` package manager.
+      uses: astral-sh/setup-uv@v7  # Sets up `uv` package manager.
       with:
         enable-cache: true  # Caches `uv` installation for faster runs.
         cache-dependency-glob: "uv.lock" # Invalidate cache when the lockfile changes.
