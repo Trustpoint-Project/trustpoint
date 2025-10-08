@@ -105,7 +105,7 @@ def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG0
     if hasattr(context, "pkcs12_file_path"):
         with open(context.pkcs12_file_path, "rb") as f:
             data = {
-                'unique_name': "test_CA",
+                'unique_name': "test_CA_duplicate",
                 'pkcs12_password': "testing321",
                 'pkcs12_file': f
             }
