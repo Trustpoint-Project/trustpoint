@@ -17,7 +17,7 @@ class UniqueNameValidator(RegexValidator):
     """Validates unique names used in the trustpoint."""
 
     form_label = _(
-        '(Must start with a letter. Can only contain letters, digits, umlauts, spaces, underscores and hyphens)'
+        '(All UTF-8 characters are allowed except control characters (e.g., newline, tab).”)'
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -32,10 +32,16 @@ class UniqueNameValidator(RegexValidator):
         msg = f'Enter a valid unique name. {self.form_label}.'
         trans_msg = _(msg)
         super().__init__(
-            regex=r'^[a-zA-ZäöüÄÖÜß]+[a-zA-Z0-9äöüÄÖÜß _-]*$',
+            regex=r'^[^\x00-\x1F\x7F-\x9F]+$',
             message=trans_msg,
             code='invalid_unique_name',
         )
+
+    def __call__(self, value: Any) -> None:
+        """Trim trailing spaces before validation."""
+        if isinstance(value, str):
+            value = value.rstrip()
+        super().__call__(value)
 
 
 def get_certificate_name(cert: x509.Certificate) -> str :
