@@ -1,85 +1,133 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Signer Details</title>
-    <style>
-        body { font-family: sans-serif; margin: 40px; }
-        h1 { border-bottom: 2px solid #ccc; padding-bottom: 10px; }
-        .field { margin-bottom: 15px; }
-        .field strong { display: inline-block; width: 200px; }
-        .cert-list { margin-top: 20px; }
-        .cert-item { margin-left: 20px; padding: 5px 0; }
-    </style>
-</head>
-<body>
-    <h1>Signer: {{ signer.unique_name }}</h1>
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load static %}
 
-    <div class="field"><strong>Signer ID:</strong> {{ signer.pk }}</div>
-    <div class="field"><strong>Signing Algorithm:</strong> {{signer.get_signing_algorithm_display}}</div>
-    <div class="field"><strong>Hash Function:</strong> {{ signer.hash_function }}</div>
+{% block content %}
+    <div class="card">
+        <div class="card-header">
+            <h1>{% trans "Signer Details" %}: {{ signer.unique_name }}</h1>
+        </div>
+        <div class="card-body">
+            <div class="tp-card-centered-content">
+                <h2>{% trans "General Information" %}</h2>
+                <hr class="hr-m">
+                <div class="tp-kvp-list">
+                    <div>
+                        <div>{% trans "Signer ID" %}</div>
+                        <div>{{ signer.pk }}</div>
+                    </div>
+                    <div>
+                        <div>{% trans "Unique Name" %}</div>
+                        <div>{{ signer.unique_name }}</div>
+                    </div>
+                    <div>
+                        <div>{% trans "Signing Algorithm" %}</div>
+                        <div>{{ signer.get_signing_algorithm_display }}</div>
+                    </div>
+                    {% if signer.key_length %}
+                    <div>
+                        <div>{% trans "Key Length" %}</div>
+                        <div>{{ signer.key_length }} bits</div>
+                    </div>
+                    {% endif %}
+                    {% if signer.curve %}
+                    <div>
+                        <div>{% trans "Curve" %}</div>
+                        <div>{{ signer.curve }}</div>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <div>{% trans "Hash Function" %}</div>
+                        <div>{% if signer.hash_function %}{{ signer.hash_function }}{% else %}—{% endif %}</div>
+                    </div>
+                    <div>
+                        <div>{% trans "Created On" %}</div>
+                        <div>{{ signer.created_on|date:"Y-m-d H:i" }}</div>
+                    </div>
+                    <div>
+                        <div>{% trans "Expires By" %}</div>
+                        <div>{{ signer.expires_by|date:"Y-m-d H:i" }}</div>
+                    </div>
+                </div>
 
-    {% if signer.key_length %}
-        <div class="field"><strong>Key Length:</strong> {{ signer.key_length }} bits</div>
-    {% endif %}
+                <h2 class="mt-5">{% trans "Certificate Details" %}</h2>
+                <hr class="hr-m">
+                {% if cert_details %}
+                    {% if cert_details.error %}
+                        <div class="alert alert-danger">{{ cert_details.error }}</div>
+                    {% else %}
+                        <div class="tp-kvp-list">
+                            <div>
+                                <div>{% trans "Subject" %}</div>
+                                <div>{{ cert_details.subject }}</div>
+                            </div>
+                            <div>
+                                <div>{% trans "Issuer" %}</div>
+                                <div>{{ cert_details.issuer }}</div>
+                            </div>
+                            <div>
+                                <div>{% trans "Serial Number" %}</div>
+                                <div>{{ cert_details.serial_number }}</div>
+                            </div>
+                            <div>
+                                <div>{% trans "Valid From" %}</div>
+                                <div>{{ cert_details.not_valid_before }}</div>
+                            </div>
+                            <div>
+                                <div>{% trans "Valid Until" %}</div>
+                                <div>{{ cert_details.not_valid_after }}</div>
+                            </div>
+                        </div>
 
-    {% if signer.curve %}
-        <div class="field"><strong>Curve:</strong> {{ signer.curve }}</div>
-    {% endif %}
+                        <h5 class="mb-2 ms-2 mt-4">{% trans "Certificate" %}</h5>
+                        <div class="mb-3">
+                            <textarea class="form-control" rows="8" readonly>{{ cert_details.certificate|truncatechars:10000 }}</textarea>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <p class="text-muted">{% trans "No certificate available." %}</p>
+                {% endif %}
 
-    <div class="field"><strong>Expires By:</strong> {{ signer.expires_by }}</div>
+                <h5 class="mb-2 ms-2 mt-4">{% trans "Private Key (truncated)" %}</h5>
+                <div class="mb-3">
+                    <textarea class="form-control" rows="8" readonly>{{ signer.private_key|truncatechars:10000 }}</textarea>
+                </div>
 
-    <div class="field"><strong>Private Key (truncated):</strong><br>
-        <pre>{{ signer.private_key|truncatechars:10000 }}</pre>
+                <h2 class="mt-5">{% trans "Signed Hashes" %}</h2>
+                <hr class="hr-m">
+                {% if signed_messages %}
+                    <div class="table-responsive">
+                        <table class="table table-borderless table-hover align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="fw-bold">{% trans "Hash" %}</th>
+                                    <th class="fw-bold">{% trans "Signature" %}</th>
+                                    <th class="fw-bold">{% trans "Time" %}</th>
+
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for msg in signed_messages %}
+                                <tr>
+                                    <td style="max-width: 200px; word-break: break-all; font-family: monospace;">{{ msg.hash_value }}</td>
+                                    <td style="max-width: 200px; word-break: break-all; font-family: monospace;">{{ msg.signature|truncatechars:100 }}</td>
+                                    <td>{{ msg.created_at|date:"F j, Y, g:i a" }}</td>
+
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">{% trans "No hashes signed yet." %}</p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <div class="tp-card-btn-footer m-1">
+                <a href="{% url 'signer:signerList' %}" class="btn btn-secondary">{% trans "← Back to Signer List" %}</a>
+                <a href="{% url 'signer:editSigner' signer.pk %}" class="btn btn-warning">{% trans "Edit Signer" %}</a>
+            </div>
+        </div>
     </div>
-
- <h3>Certificate Details</h3>
-{% if cert_details %}
-    {% if cert_details.error %}
-        <p style="color:red;">{{ cert_details.error }}</p>
-    {% else %}
-        <div class="field"><strong>Subject:</strong> {{ cert_details.subject }}</div>
-        <div class="field"><strong>Issuer:</strong> {{ cert_details.issuer }}</div>
-        <div class="field"><strong>Serial Number:</strong> {{ cert_details.serial_number }}</div>
-        <div class="field"><strong>Valid From:</strong> {{ cert_details.not_valid_before }}</div>
-        <div class="field"><strong>Valid Until:</strong> {{ cert_details.not_valid_after }}</div>
-        <div class="field"><strong>Cert:</strong> {{ cert_details.certificate|truncatechars:10000 }}</div>
-    {% endif %}
-{% else %}
-    <p>No certificate available.</p>
-{% endif %}
-
-
-
-    <h3>Signed Hashes</h3>
-{% if signed_messages %}
-    <table border="1" cellpadding="8" cellspacing="0">
-        <thead>
-            <tr>
-                <th>Hash</th>
-                <th>Signature</th>
-                <th>Time</th>
-                <th>Signed By</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for msg in signed_messages %}
-            <tr>
-                <td style="max-width: 300px; word-break: break-all;">{{ msg.hash_value }}</td>
-                <td style="max-width: 300px; word-break: break-all;">{{ msg.signature|truncatechars:1000 }}</td>
-                <td>{{ msg.created_at|date:"F j, Y, g:i a" }}</td>
-            <td>{{ msg.token.user.username }}</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-{% else %}
-    <p>No Hashes signed yet.</p>
-{% endif %}
-
-
-
-    <br>
-    <a href="{% url 'signerList' %}">← Back to Signer List</a>
-</body>
-</html>
+{% endblock content %}

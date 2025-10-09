@@ -1,8 +1,21 @@
+
+
+import secrets
+from typing import Any
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import HttpResponse
+from django.urls import reverse_lazy
+from django.views.generic import CreateView, FormView, ListView
+
+from .form import UserTokenForm
+from .models import UserToken
+
+
 class TokenListView(LoginRequiredMixin, ListView):
     """View to display the list of tokens owned by the current user."""
 
     model = UserToken
-    template_name = 'users/token_list.html'
+    template_name = 'auth/token_list.html'
     context_object_name = 'tokens'
 
     def get_queryset(self) -> Any:
@@ -22,8 +35,8 @@ class TokenCreateView(LoginRequiredMixin, CreateView):
 
     model = UserToken
     form_class = UserTokenForm
-    template_name = 'users/token_form.html'
-    success_url = reverse_lazy('token_list')
+    template_name = 'auth/token_form.html'
+    success_url = reverse_lazy('auth:token_list')
 
     def form_valid(self, form: UserTokenForm) -> HttpResponse:
         """Process a valid token creation form submission.

@@ -9,6 +9,7 @@ license = { file = "LICENSE" }
 keywords = ["django", "trustpoint", "server"]
 
 dependencies = [
+    "auth>=0.5.3",
     "crispy-bootstrap5~=2025.4",
     "cryptography>=45.0.2",
     "django>=5.2.4",

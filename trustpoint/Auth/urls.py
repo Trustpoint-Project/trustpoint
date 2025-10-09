@@ -1,10 +1,10 @@
 """Module containing urls for user app."""
-from django.contrib.auth.views import LoginView, LogoutView
+
 from django.urls import path
 
-from .views import TokenCreateView, TokenListView
-appname = 'Auth'
+from . import views
+app_name = 'auth'
 urlpatterns = [
-    path('tokens/', TokenListView.as_view(), name='token_list'),
-    path('generate-token/', TokenCreateView.as_view(), name='api_token'),
+    path('tokens/', views.TokenListView.as_view(), name='token_list'),
+    path('generate-token/', views.TokenCreateView.as_view(), name='gen_token'),
 ]

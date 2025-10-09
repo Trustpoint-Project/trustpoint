@@ -24,6 +24,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 from .forms import SignerForm
 from .models import SignedMessage, Signer
 from .util.keygen import load_private_key_object, generate_private_key
+from Auth.models import UserToken
 
 
 class SignerListView(LoginRequiredMixin, ListView[Signer]):
@@ -48,16 +49,16 @@ class SignerDeleteView(DeleteView[Signer, BaseModelForm[Signer]]):
 
     model = Signer
     paginate_by = 10
-    success_url = reverse_lazy('signerList')
+    success_url = reverse_lazy('signer:signerList')
 
 
 class SignerEditView(UpdateView[Signer, SignerForm]):
     """Class View for Updating/Editing the Signer."""
 
     model = Signer
-    success_url = reverse_lazy('signerList')
+    success_url = reverse_lazy('signer:signerList')
     form_class = SignerForm
-    template_name = 'addSigner.html'
+    template_name = 'signer/addSigner.html'
     context_object_name = 'signer'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -80,7 +81,7 @@ class SignerDetailView(DetailView[Signer]):
 
     model = Signer
     paginate_by = 10
-    template_name = 'signer_detail.html'
+    template_name = 'signer/signer_detail.html'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds signed messages object and certificate object to the context.
@@ -120,7 +121,7 @@ class SignerCreateView(CreateView[Signer, SignerForm]):
     model = Signer
     form_class = SignerForm
     template_name = 'signer/addSigner.html'
-    success_url = reverse_lazy('signerList')
+    success_url = reverse_lazy('signer:signerList')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the title to the context.
@@ -200,26 +201,22 @@ class SignHashAPIView(View):
             HTTPResponse containing the signature object.
 
         """
-        pem_raw = request.META.get('HTTP_X_SSL_CLIENT_CERT')
-        if not pem_raw or request.META.get('HTTP_X_SSL_CLIENT_VERIFY') != 'SUCCESS':
-            return JsonResponse({'error': 'mTLS client cert required'}, status=401)
-
-        # Decode PEM
-        try:
-            pem = urllib.parse.unquote(pem_raw)
-            cert = x509.load_pem_x509_certificate(pem.encode('utf-8'))
-            subject = cert.subject.rfc4514_string()  # human-readable DN
-
-        except (ValueError, UnsupportedAlgorithm):
-            return JsonResponse({'error': 'Invalid certificate format'}, status=400)
-
         try:
             data = json.loads(request.body)
             signer_id = data.get('signer_id')
             hash_hex = data.get('hash')
+            token_key = data.get('token')
 
             if not signer_id or not hash_hex:
                 return JsonResponse({'error': 'Missing signer_id, token key or hash'}, status=400)
+
+            try:
+                user_token = UserToken.objects.get(key=token_key)
+
+            except UserToken.DoesNotExist:
+                return JsonResponse({'error': 'Invalid token'}, status=401)
+            if user_token.expires_at < timezone.now():
+                return JsonResponse({'error': 'Token expired'}, status=403)
 
             signer = Signer.objects.get(pk=signer_id)
             private_key = load_private_key_object(signer.private_key)
@@ -233,7 +230,7 @@ class SignHashAPIView(View):
                 return JsonResponse({'error': 'Unsupported algorithm'}, status=400)
 
             SignedMessage.objects.create(
-                signer=signer, cert_subject=subject, hash_value=hash_hex, signature=signature.hex()
+                signer=signer,  cert_subject="API Token Auth",  hash_value=hash_hex, signature=signature.hex()
             )
 
             return JsonResponse({'signature': signature.hex()}, status=200)

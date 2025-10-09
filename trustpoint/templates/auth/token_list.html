@@ -1,0 +1,57 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header">
+        <h1>{% trans "API Tokens for" %} <strong>{{ request.user.username }}</strong></h1>
+    </div>
+
+    <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; max-height: 90%;">
+        <div class="table-responsive">
+            <table class="table table-borderless table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="fw-bold">{% trans "S. No." %}</th>
+                        <th class="fw-bold">{% trans "Token" %}</th>
+                        <th class="fw-bold">{% trans "Created At" %}</th>
+                        <th class="fw-bold">{% trans "Expires At" %}</th>
+
+                    </tr>
+                </thead>
+                <tbody>
+                {% for token in tokens %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td><code>{{ token.key }}</code></td>
+                        <td>{{ token.created_at|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            {% if token.expires_at < now %}
+                                <span class="text-danger">{{ token.expires_at|date:"Y-m-d H:i" }} ({% trans "Expired" %})</span>
+                            {% else %}
+                                {{ token.expires_at|date:"Y-m-d H:i" }}
+                            {% endif %}
+                        </td>
+
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center">{% trans "No tokens found. Click Generate New Token below." %}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <a href="{% url 'signer:signerList' %}" class="btn btn-secondary">{% trans "← Back to Signers" %}</a>
+        </div>
+        <div class="m-1">
+            <a href="{% url 'auth:gen_token' %}" class="btn btn-primary">{% trans "Generate New Token" %}</a>
+        </div>
+    </div>
+</div>
+{% endblock content %}
