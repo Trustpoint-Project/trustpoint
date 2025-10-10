@@ -438,7 +438,7 @@ class OnboardingCreateForm(forms.Form):
         return common_name
 
     def save(self, device_type: DeviceModel.DeviceType) -> DeviceModel:
-        """Stores the form as devie model object in the db.
+        """Stores the form as device model object in the db.
 
         Args:
             device_type: The device type to set. Defaults to None.
