@@ -36,6 +36,11 @@ class RequestContext:
     client_certificate: x509.Certificate | None = None
     client_intermediate_certificate: list[x509.Certificate] | None = None
 
+    http_response_status: int | None = None
+    # consider adding http_response_headers: dict[str, str] | None = None
+    http_response_content: bytes | str | None = None
+    http_response_content_type: str | None = None
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize the context to a dictionary."""
         return {field.name: getattr(self, field.name) for field in fields(self)}

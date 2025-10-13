@@ -39,6 +39,7 @@ from request.operation_processor import CertificateIssueProcessor
 from request.pki_message_parser import EstMessageParser
 from request.profile_validator import ProfileValidator
 from request.request_context import RequestContext
+from request.message_responder import EstMessageResponder, EstErrorMessageResponder
 
 from trustpoint.logger import LoggerMixin
 
@@ -763,114 +764,54 @@ class EstSimpleEnrollmentView(
 
         # TODO: This should really be done by the message parser,
         # it also needs to handle the case where one or both are omitted
-        domain_name = cast('str', kwargs.get('domain'))
-        cert_template = cast('str', kwargs.get('certtemplate'))
-
-        ctx = RequestContext(
-            raw_message=request,
-            protocol='est',
-            operation='simpleenroll',
-            domain_str=domain_name,
-            certificate_template=cert_template,
-        )
-
-        validator = EstHttpRequestValidator()
-        validator.validate(ctx)
-
-        parser = EstMessageParser()
-        parser.parse(ctx)
-
-        est_authenticator = EstAuthentication()
-        est_authenticator.authenticate(ctx)
-
-        est_authorizer = EstAuthorization(
-            # Allowed templates are TODO and might depend on authentication method
-            allowed_templates=['tls-client','tls-server','domaincredential'],
-            allowed_operations=['simpleenroll']
-        )
-        est_authorizer.authorize(ctx)
-
-        ProfileValidator.validate(ctx)
-
-        CertificateIssueProcessor().process_operation(ctx)
-
-        if ctx.issued_certificate is None:
-            return LoggedHttpResponse('Credential cannot be found', 400)
-
-        encoding = Encoding.DER if ctx.est_encoding in {'der', 'base64_der'} else Encoding.PEM
-        cert_bytes = ctx.issued_certificate.public_bytes(encoding=encoding)
-
-        if ctx.est_encoding == 'base64_der':
-            b64_cert = base64.b64encode(cert_bytes).decode('utf-8')
-            cert = '\n'.join([b64_cert[i:i + 64] for i in range(0, len(b64_cert), 64)])
-            content_type = 'application/pkix-cert'
-        elif ctx.est_encoding == 'der':
-            cert = cert_bytes
-            content_type = 'application/pkix-cert'
-        else:
-            try:
-                cert = cert_bytes.decode('utf-8')
-            except UnicodeDecodeError:
-                cert = cert_bytes
-            content_type = 'application/x-pem-file'
-
-        return LoggedHttpResponse(content=cert, status=200, content_type=content_type)
-
-        # ===
-        credential_request = None
-        device: DeviceModel | None = None
-        requested_domain: DomainModel | None = None
-        requested_cert_template_str: str | None = None
-
-        raw_message, http_response = self.process_http_request(request)
-
-        if not http_response and raw_message:
+        try:
             domain_name = cast('str', kwargs.get('domain'))
-            requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
-
-        if not http_response and raw_message and requested_domain:
             cert_template = cast('str', kwargs.get('certtemplate'))
-            requested_cert_template_str, http_response = self.extract_cert_template(cert_template=cert_template)
 
-        if (not http_response and
-                raw_message and
-                requested_domain and
-                requested_cert_template_str):
-            device, http_response = self.authenticate_request(
-                request=self.request,
-                domain=requested_domain,
-                cert_template_str=requested_cert_template_str,
+            ctx = RequestContext(
+                raw_message=request,
+                protocol='est',
+                operation='simpleenroll',
+                domain_str=domain_name,
+                certificate_template=cert_template,
             )
+        except Exception:
+            err_msg = 'Failed to set up request context.'
+            self.logger.exception(err_msg)
+            return LoggedHttpResponse(err_msg, status=500)
 
-        if not http_response:
-            credential_request, _csr, http_response = self.deserialize_pki_message(self.raw_message)
+        try:
+            validator = EstHttpRequestValidator()
+            validator.validate(ctx)
 
-        if not http_response and credential_request and requested_domain and requested_cert_template_str:
-            if not device:
-                device = self.create_device_idevid(
-                    credential_request=credential_request,
-                    domain=requested_domain,
-                    cert_template=cert_template
-                )
+            parser = EstMessageParser()
+            parser.parse(ctx)
 
-            if not device:
-                http_response = LoggedHttpResponse('Device not found and failed to create a new one.', status=500)
+            est_authenticator = EstAuthentication()
+            est_authenticator.authenticate(ctx)
 
-        if not http_response and credential_request and device and requested_cert_template_str:
-            http_response = self._validate_onboarding(device=device,
-                                                      credential_request=credential_request,
-                                                      requested_cert_template_str=requested_cert_template_str)
+            est_authorizer = EstAuthorization(
+                # Allowed templates are TODO and might depend on authentication method
+                allowed_templates=['tls-client','tls-server','domaincredential'],
+                allowed_operations=['simpleenroll']
+            )
+            est_authorizer.authorize(ctx)
 
-        if not http_response and credential_request and device and requested_domain and requested_cert_template_str:
-            http_response = self._issue_simpleenroll(device=device,
-                                                     domain=requested_domain,
-                                                     credential_request=credential_request,
-                                                     requested_cert_template_str=requested_cert_template_str)
+            ProfileValidator.validate(ctx)
 
-        if not http_response:
-            http_response = LoggedHttpResponse('Something went wrong during EST simpleenroll.', status=500)
+            CertificateIssueProcessor().process_operation(ctx)
 
-        return http_response
+            EstMessageResponder.build_response(ctx)
+
+        except Exception:
+            self.logger.exception('Error processing EST simpleenroll request')
+            EstErrorMessageResponder.build_response(ctx)
+
+        return LoggedHttpResponse(
+            content=ctx.http_response_content,
+            status=ctx.http_response_status,
+            content_type=ctx.http_response_content_type
+        )
 
 
 @method_decorator(csrf_exempt, name='dispatch')

@@ -902,6 +902,8 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
                 continue
         error_message = 'Authentication failed: All authentication methods were unsuccessful.'
         self.logger.warning('Authentication failed for all methods: %s', authentication_errors)
+        context.http_response_content = 'Authentication failed.'
+        context.http_response_status = 403
         raise ValueError(error_message)
 
 class EstAuthentication(CompositeAuthentication):
