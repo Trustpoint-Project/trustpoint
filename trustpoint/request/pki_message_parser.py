@@ -709,8 +709,8 @@ class CompositeParsing(ParsingComponent, LoggerMixin):
                            'component_name': component.__class__.__name__})
                 raise ValueError(error_message) from e
 
-        self.logger.info('Composite parsing successful. All %(component_count)s components completed',
-                         extra={'component_count': len(self.components)})
+        self.logger.info('Composite parsing successful. All %i components completed',
+                         len(self.components))
 
 
 class CmpMessageParser(CompositeParsing):

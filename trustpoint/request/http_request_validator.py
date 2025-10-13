@@ -174,15 +174,15 @@ class ClientCertificateValidation(ValidationComponent, LoggerMixin):
             self.logger.warning('Client certificate validation failed: Raw message is missing')
             raise ValueError(error_message)
 
-        if not hasattr(context.raw_message, 'headers') or not context.raw_message.headers:
-            error_message = 'Raw message is missing headers.'
-            self.logger.warning('Client certificate validation failed: Raw message headers are missing')
+        if not hasattr(context.raw_message, 'META') or not context.raw_message.META:
+            error_message = 'Raw message is missing META.'
+            self.logger.warning('Client certificate validation failed: Raw message META is missing')
             raise ValueError(error_message)
 
-        ssl_client_cert = context.raw_message.headers.get('SSL_CLIENT_CERT')
+        ssl_client_cert = context.raw_message.META.get('SSL_CLIENT_CERT')
 
         if ssl_client_cert is None:
-            self.logger.debug('Client certificate validation skipped: No SSL_CLIENT_CERT header present')
+            self.logger.debug('Client certificate validation skipped: No SSL_CLIENT_CERT present')
             return
 
         try:

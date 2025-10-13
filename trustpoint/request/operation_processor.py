@@ -33,8 +33,24 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
         exc_msg = 'No suitable operation processor found for certificate issuance.'
         raise ValueError(exc_msg)
 
+    @staticmethod
+    def _get_credential_type_for_template(context: RequestContext
+            ) -> tuple[IssuedCredentialModel.IssuedCredentialType, IssuedCredentialModel.IssuedCredentialPurpose]:
+        """Map certificate template to issued credential type."""
+        if context.certificate_template == 'domaincredential':
+            return (IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+                    IssuedCredentialModel.IssuedCredentialPurpose.DOMAIN_CREDENTIAL)
 
-class LocalCaCertificateIssueProcessor(AbstractOperationProcessor):
+        if context.certificate_template == 'tls-client':
+            purpose = IssuedCredentialModel.IssuedCredentialPurpose.TLS_CLIENT
+        elif context.certificate_template == 'tls-server':
+            purpose = IssuedCredentialModel.IssuedCredentialPurpose.TLS_SERVER
+        else:
+            purpose = IssuedCredentialModel.IssuedCredentialPurpose.GENERIC
+
+        return (IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL, purpose)
+
+class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
     """Operation processor for issuing certificates via a local CA."""
 
     def process_operation(self, context: RequestContext) -> None:
@@ -111,6 +127,7 @@ class LocalCaCertificateIssueProcessor(AbstractOperationProcessor):
         common_names = signed_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
         cn = common_names[0].value if common_names else '(no CN set)'
         common_name = cn.decode() if isinstance(cn, bytes) else cn
+        credential_type, credential_purpose = self._get_credential_type_for_template(context)
         saver = CredentialSaver(device=context.device, domain=context.domain)
         saver.save_keyless_credential(
             signed_cert,
@@ -119,7 +136,7 @@ class LocalCaCertificateIssueProcessor(AbstractOperationProcessor):
                 *issuing_credential.get_certificate_chain(),
             ],
             common_name,
-            IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL, # TODO: depends on profile name/operation type
-            IssuedCredentialModel.IssuedCredentialPurpose.GENERIC,
+            credential_type,
+            credential_purpose,
         )
         context.issued_certificate = signed_cert

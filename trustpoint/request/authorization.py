@@ -157,6 +157,8 @@ class CertificateTemplateAuthorization(AuthorizationComponent, LoggerMixin):
             raise ValueError(error_message)
 
         if requested_template not in self.allowed_templates:
+            context.http_response_content = f'Not authorized for requested certificate template "{requested_template}".'
+            context.http_response_status = 403
             error_message = (
                 f"Unauthorized certificate template: '{requested_template}'. "
                 f"Allowed templates: {', '.join(self.allowed_templates)}."
