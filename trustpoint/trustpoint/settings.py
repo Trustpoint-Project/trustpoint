@@ -175,8 +175,20 @@ if _email_host:
     EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
 
 
-DBBACKUP_STORAGE = 'django.core.files.storage.FileSystemStorage'
-DBBACKUP_STORAGE_OPTIONS = {'location': BACKUP_FILE_PATH}
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    },
+    'dbbackup': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'OPTIONS': {
+            'location': BACKUP_FILE_PATH,
+        },
+    },
+}
 
 
 # Default primary key field type

@@ -52,7 +52,7 @@ ________________________
 
 Testing:
 ________________________
-- :ref:`test_plan`: Details the TrustPoint Test Plan, covering functionality, security, integration, and usability.
+- :ref:`test_plan`: Details the Trustpoint Test Plan, covering functionality, security, integration, and usability.
 - :ref:`ci_cd`: Explains all pipelines used on GitHub.
 - :ref:`test_report`: Provides a report of all the tests executed and described inside the test plan.
 

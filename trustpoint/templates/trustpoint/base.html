@@ -87,15 +87,15 @@
             </div>
 
             <div class="tp-menu-group">
-               <a href="{% url 'management:settings' %}" class="tp-menu-head {% if page_category == 'settings' %}tp-menu-active{% endif %}">
+               <a href="{% url 'management:settings' %}" class="tp-menu-head {% if page_category == 'management' %}tp-menu-active{% endif %}">
                     <svg class="bi" fill="currentColor" role="img">
                         <use href="{% static 'img/icons.svg' %}#icon-settings"></use></svg>
                         {% translate "Management" %}
-                    <div class="btn-collapse" data-category="settings"
-                        aria-expanded="{% if page_category == 'settings' %}true{% else %}false{% endif %}">
+                    <div class="btn-collapse" data-category="management"
+                        aria-expanded="{% if page_category == 'management' %}true{% else %}false{% endif %}">
                     </div>
                 </a>
-                <div class="tp-menu-collapse {% if page_category == 'settings' %}show{% endif %}">
+                <div class="tp-menu-collapse {% if page_category == 'management' %}show{% endif %}">
                     <a href="{% url 'management:settings' %}" class="tp-menu-item {% if page_name == 'settings' %}tp-menu-active{% endif %}">{% trans "Settings" %}</a>
                     <a href="{% url 'management:logging-files' %}" class="tp-menu-item {% if page_name == 'logging' %}tp-menu-active{% endif %}">{% trans "Logging" %}</a>
                     <a href="{% url 'management:tls' %}" class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}">{% trans "TLS" %}</a>
