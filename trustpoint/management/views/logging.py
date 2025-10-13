@@ -59,7 +59,7 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
     default_sort_param = 'filename'
     paginate_by = None
 
-    page_category = 'settings'
+    page_category = 'management'
     page_name = 'logging'
 
     @staticmethod
