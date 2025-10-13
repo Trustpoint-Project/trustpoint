@@ -25,12 +25,14 @@ from pki.models.credential import CredentialModel
 from pki.models.devid_registration import DevIdRegistration
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
-from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
+from pki.util.x509 import  ClientCertificateAuthenticationError
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pyasn1.type.univ import ObjectIdentifier  # type: ignore[import-untyped]
 from trustpoint_core.serializer import CertificateCollectionSerializer  # type: ignore[import-untyped]
 
 from trustpoint.logger import LoggerMixin
+
+from pki.util.x509 import NginxTLSClientCertExtractor
 
 
 class UsernamePasswordAuthenticationError(Exception):
@@ -115,7 +117,7 @@ class EstAuthenticationMixin(LoggerMixin):
 
     def authenticate_domain_credential(self, request: HttpRequest) -> DeviceModel:
         """Authenticate client using a Domain Credential TLS cert (Mutual TLS), return the associated DeviceModel."""
-        client_cert, _intermediary_cas = ApacheTLSClientCertExtractor.get_client_cert_as_x509(request)
+        client_cert, _intermediary_cas = NginxTLSClientCertExtractor.get_client_cert_as_x509(request)
 
         try:
             issued_credential = IssuedCredentialModel.get_credential_for_certificate(client_cert)
@@ -135,7 +137,7 @@ class EstAuthenticationMixin(LoggerMixin):
 
         Only authenticates if subject and SAN in both client cert and CSR match the existing issued credential.
         """
-        client_cert, _intermediary_cas = ApacheTLSClientCertExtractor.get_client_cert_as_x509(request)
+        client_cert, _intermediary_cas = NginxTLSClientCertExtractor.get_client_cert_as_x509(request)
 
         try:
             issued_credential = IssuedCredentialModel.get_credential_for_certificate(client_cert)

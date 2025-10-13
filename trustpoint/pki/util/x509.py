@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 import datetime
 import itertools
 import logging
+import urllib
 from typing import TYPE_CHECKING, cast
 
 from cryptography import x509
@@ -231,45 +233,28 @@ class ClientCertificateAuthenticationError(Exception):
     """Exception raised for general client certificate authentication failures."""
 
 
-class ApacheTLSClientCertExtractor:
-    """Extracts the TLS client certificate from the request."""
+class NginxTLSClientCertExtractor:
+    """Extracts the TLS client certificate from nginx headers."""
 
     @staticmethod
     def get_client_cert_as_x509(request: HttpRequest) -> tuple[x509.Certificate, list[x509.Certificate]]:
-        """Retrieve the client certificate from the request and convert it to an x509.Certificate object.
+        """Retrieve the client certificate from nginx headers."""
+        cert_data = (
+                request.headers.get('X-SSL-Client-Cert') or
+                request.META.get('HTTP_X_SSL_CLIENT_CERT')
+        )
 
-        Args:
-            request: Django HttpRequest containing the headers.
-
-        Returns:
-            x509.Certificate object.
-
-        Raises:
-            ClientCertificateAuthenticationError: if no client certificate found or it is not a valid PEM-encoded cert.
-        """
-        cert_data = request.META.get('SSL_CLIENT_CERT')
         if not cert_data:
-            error_message = 'Missing SSL_CLIENT_CERT header'
+            error_message = 'Missing X-SSL-Client-Cert header'
             raise ClientCertificateAuthenticationError(error_message)
+
+        # URL-decode the certificate (like your working code)
+        cert_data = urllib.parse.unquote(cert_data)
 
         try:
             client_cert = x509.load_pem_x509_certificate(cert_data.encode('utf-8'))
         except Exception as e:
-            error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
+            error_message = f'Invalid X-SSL-Client-Cert header: {e}'
             raise ClientCertificateAuthenticationError(error_message) from e
 
-        # Extract intermediate CAs from Apache variables
-        intermediate_cas = []
-
-        for i in itertools.count():
-            ca = request.META.get(f'SSL_CLIENT_CERT_CHAIN_{i}')
-            if not ca:
-                break
-            try:
-                ca_cert = x509.load_pem_x509_certificate(ca.encode('utf-8'))
-            except Exception as e:
-                error_message = f'Invalid SSL_CLIENT_CERT_CHAIN_{i} PEM: {e}'
-                raise ClientCertificateAuthenticationError(error_message) from e
-            intermediate_cas.append(ca_cert)
-
-        return (client_cert, intermediate_cas)
+        return (client_cert, [])
