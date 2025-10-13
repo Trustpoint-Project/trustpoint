@@ -20,7 +20,8 @@
                         <th class="fw-bold">{% trans "Hash Function" %}</th>
                         <th class="fw-bold">{% trans "Expires On" %}</th>
                         <th class="fw-bold">{% trans "Created On" %}</th>
-                        <th class="fw-bold">{% trans "Actions" %}</th>
+                        <th class="fw-bold">{% trans "Edit" %}</th>
+                        <th class="fw-bold">{% trans "Delete" %}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -54,9 +55,11 @@
                         <td>
                             <div class="btn-group" role="group">
                                 <a href="{% url 'signer:editSigner' signer.pk %}"
-                                   class="btn btn-sm btn-warning">
+                                   class="btn btn-sm btn-primary">
                                    {% trans "Edit" %}
-                                </a>
+                                </a></div>
+                        </td>
+                        <td><div>
                                 <form method="post" action="{% url 'signer:deleteSigner' signer.pk %}"
                                       style="display:inline;">
                                     {% csrf_token %}
@@ -88,7 +91,7 @@
         </div>
         <div class="m-1">
             <a href="{% url 'signer:addSigner' %}" class="btn btn-primary me-2">{% trans "Add New Signer" %}</a>
-            <a href="{% url 'auth:token_list' %}" class="btn btn-warning">{% trans "Manage Tokens" %}</a>
+            <a href="{% url 'auth:token_list' %}" class="btn btn-primary">{% trans "Manage Tokens" %}</a>
         </div>
     </div>
 </div>

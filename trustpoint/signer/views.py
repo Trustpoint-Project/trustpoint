@@ -34,6 +34,8 @@ class SignerListView(LoginRequiredMixin, ListView[Signer]):
     paginate_by = 10
     template_name = 'signer/signers.html'
     context_object_name = 'signers'
+    page_name = 'signers'
+    page_category = 'signers'
 
     def get_ordering(self) -> str | Sequence[str] | None:
         """Returns the sort parameters as a list.
