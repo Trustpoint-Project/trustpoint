@@ -137,4 +137,39 @@
 
 </style>
 
+<style>.nav-tabs {
+    border-bottom: 1px solid #34373c;
+    background: none;
+}
+
+.nav-tabs .nav-link {
+    /* Remove borders/backgrounds! */
+    border: none !important;
+    border-bottom: 3px solid transparent !important;
+    background: none !important;
+    color: #b7b8be;
+    font-weight: 500;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin-bottom: -1px;
+    transition: color 0.16s, border-bottom 0.16s;
+}
+
+.nav-tabs .nav-link.active {
+    color: #5196ff;
+    border-bottom: 3px solid #5196ff !important;
+    background: none !important;
+    font-weight: 600;
+    box-shadow: none !important;
+}
+.nav-tabs .nav-link:hover:not(.active),
+.nav-tabs .nav-link:focus:not(.active) {
+    color: #dde8ff;
+    border-bottom: 3px solid #363b40;
+    background: none !important;
+    box-shadow: none !important;
+}
+
+</style>
+
 {% endblock content %}
