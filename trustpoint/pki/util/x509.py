@@ -239,10 +239,7 @@ class NginxTLSClientCertExtractor:
     @staticmethod
     def get_client_cert_as_x509(request: HttpRequest) -> tuple[x509.Certificate, list[x509.Certificate]]:
         """Retrieve the client certificate from nginx headers."""
-        cert_data = (
-                request.headers.get('X-SSL-Client-Cert') or
-                request.META.get('HTTP_X_SSL_CLIENT_CERT')
-        )
+        cert_data = request.META.get('HTTP_X_SSL_CLIENT_CERT')
 
         if not cert_data:
             error_message = 'Missing X-SSL-Client-Cert header'
@@ -257,4 +254,4 @@ class NginxTLSClientCertExtractor:
             error_message = f'Invalid X-SSL-Client-Cert header: {e}'
             raise ClientCertificateAuthenticationError(error_message) from e
 
-        return (client_cert, [])
+        return (client_cert, [])  # TODO(Air): Add back intermediate cert chain
