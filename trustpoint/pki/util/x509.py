@@ -248,7 +248,7 @@ class NginxTLSClientCertExtractor:
             error_message = 'Missing X-SSL-Client-Cert header'
             raise ClientCertificateAuthenticationError(error_message)
 
-        # URL-decode the certificate (like your working code)
+        # URL-decode the certificate
         cert_data = urllib.parse.unquote(cert_data)
 
         try:
