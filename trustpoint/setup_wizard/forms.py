@@ -107,7 +107,6 @@ class StartupWizardTlsCertificateForm(forms.Form):
             raise forms.ValidationError(err_msg)
         return cleaned_data
 
-
 class HsmSetupForm(forms.Form):
     """Form for HSM setup configuration."""
 

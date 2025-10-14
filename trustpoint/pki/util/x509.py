@@ -11,6 +11,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509.oid import NameOID
+from management.models import KeyStorageConfig
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
 from pki.models import IssuingCaModel
@@ -218,13 +219,47 @@ class CertificateGenerator:
             additional_certificates=chain
         )
 
+        if ca_type == IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED:
+            # For unprotected local CAs, always use software storage
+            private_key_location = PrivateKeyLocation.SOFTWARE
+        else:
+            # For protected CAs, HSM storage is required
+            try:
+                config = KeyStorageConfig.get_config()
+            except KeyStorageConfig.DoesNotExist as e:
+                error_msg = (
+                    f'Cannot create protected CA "{unique_name}": KeyStorageConfig not found. '
+                    'Protected CAs require HSM storage configuration.'
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg) from e
+
+            if config.storage_type in [
+                KeyStorageConfig.StorageType.SOFTHSM,
+                KeyStorageConfig.StorageType.PHYSICAL_HSM
+            ]:
+                private_key_location = PrivateKeyLocation.HSM_PROVIDED
+            else:
+                error_msg = (
+                    f'Cannot create protected CA "{unique_name}" with storage type "{config.storage_type}". '
+                    f'Protected CAs require HSM storage (SoftHSM or Physical HSM), but current storage type is: '
+                    f'{config.storage_type}'
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
         issuing_ca_credential_serializer.private_key_reference = (
-            PrivateKeyReference.from_private_key(private_key=issuing_ca_credential_serializer.private_key,
-                                                 key_label=unique_name,
-                                                 location=PrivateKeyLocation.HSM_PROVIDED))
+            PrivateKeyReference.from_private_key(
+                private_key=issuing_ca_credential_serializer.private_key,
+                key_label=unique_name,
+                location=private_key_location
+            )
+        )
 
         issuing_ca = IssuingCaModel.create_new_issuing_ca(
-            unique_name=unique_name, credential_serializer=issuing_ca_credential_serializer, issuing_ca_type=ca_type
+            unique_name=unique_name, 
+            credential_serializer=issuing_ca_credential_serializer, 
+            issuing_ca_type=ca_type
         )
 
         logger.info("Issuing CA '%s' saved successfully.", unique_name)

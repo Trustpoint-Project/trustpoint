@@ -28,14 +28,51 @@
 
     <div class="card tp-card-setup-wizard text-center">
         <div class="card-header">
-            <h1>{% trans "Trustpoint - Setup Wizard" %}</h1>
+            <h1>{% trans "Setup Mode" %}</h1>
         </div>
         <div class="card-body pt-3 pb-4">
-            <h2>{% trans 'Select Setup Mode' %}</h2>
-            <hr class="mb-4">
-            <a href="{% url 'setup_wizard:select_tls_server_credential' %}" class="btn btn-primary d-flex justify-content-center">{% trans 'Setup Trustpoint from Scratch' %}</a>
-            <br>
-            <a href="{% url 'setup_wizard:restore_options' %}" class="btn btn-primary d-flex justify-content-center">{% trans 'Restore from backup' %}</a>
+            
+            <div class="row g-4 mb-4 justify-content-center">
+                <!-- Setup from Scratch Option -->
+                <div class="col-md-5">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <svg class="bi mb-3" width="48" height="48" fill="currentColor">
+                                <use href="{% static 'img/icons.svg' %}#icon-plus-circle"></use>
+                            </svg>
+                            <h5 class="card-title">{% trans 'Setup Trustpoint from Scratch' %}</h5>
+                            <p class="card-text">
+                                {% trans 'Configure a new Trustpoint instance with fresh settings' %}
+                            </p>
+                        </div>
+                        <div class="card-footer">
+                            <a href="{% url 'setup_wizard:select_tls_server_credential' %}" class="btn btn-primary w-100">
+                                {% trans 'Start Fresh Setup' %}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Restore from Backup Option -->
+                <div class="col-md-5">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <svg class="bi mb-3" width="48" height="48" fill="currentColor">
+                                <use href="{% static 'img/icons.svg' %}#icon-arrow-clockwise"></use>
+                            </svg>
+                            <h5 class="card-title">{% trans 'Restore from Backup' %}</h5>
+                            <p class="card-text">
+                                {% trans 'Restore Trustpoint configuration from a previous backup' %}
+                            </p>
+                        </div>
+                        <div class="card-footer">
+                            <a href="{% url 'setup_wizard:restore_options' %}" class="btn btn-primary w-100">
+                                {% trans 'Restore Backup' %}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

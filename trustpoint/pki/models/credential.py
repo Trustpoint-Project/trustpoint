@@ -22,6 +22,7 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 from util.db import CustomDeleteActionModel
+from util.encrypted_fields import EncryptedCharField
 from util.field import UniqueNameValidator
 
 from pki.models import CertificateModel
@@ -146,7 +147,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         DEV_OWNER_ID = 4, _('DevOwnerID')
 
     credential_type = models.IntegerField(verbose_name=_('Credential Type'), choices=CredentialTypeChoice)
-    private_key = models.CharField(verbose_name=_('Private key (PEM)'), max_length=65536, default='', blank=True)
+    private_key = EncryptedCharField(verbose_name=_('Private key (PEM)'), max_length=65536, default='', blank=True)
     pkcs11_private_key = models.ForeignKey(
         PKCS11Key,
         on_delete=models.PROTECT,
@@ -442,34 +443,65 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         pkcs11_private_key = None
 
         is_ca_credential = credential_type in [cls.CredentialTypeChoice.ROOT_CA, cls.CredentialTypeChoice.ISSUING_CA]
-        is_software_location = normalized_credential_serializer.private_key_reference.location == PrivateKeyLocation.SOFTWARE
-        from management.models import CryptoStorageConfig
-        crypto_storage_config = CryptoStorageConfig.objects.first()
+        is_software_location = (
+            normalized_credential_serializer.private_key_reference.location
+            == PrivateKeyLocation.SOFTWARE
+        )
+        from management.models import KeyStorageConfig
+        crypto_storage_config = KeyStorageConfig.objects.first()
         is_softhsm = (
             crypto_storage_config
-            and crypto_storage_config.storage_type == CryptoStorageConfig.StorageType.SOFTHSM
+            and crypto_storage_config.storage_type == KeyStorageConfig.StorageType.SOFTHSM
+            if crypto_storage_config
+            else False
+        )
+        is_hardwarehsm = (
+            crypto_storage_config
+            and crypto_storage_config.storage_type == KeyStorageConfig.StorageType.PHYSICAL_HSM
+            if crypto_storage_config
+            else False
+        )
+        is_softwarestorage = (
+            crypto_storage_config
+            and crypto_storage_config.storage_type == KeyStorageConfig.StorageType.SOFTWARE
             if crypto_storage_config
             else False
         )
 
+        # Ensure exactly one storage type is active
+        active_storage_types = sum([is_softhsm, is_hardwarehsm, is_softwarestorage])
+        if active_storage_types != 1 and credential_type not in [cls.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER]:
+            msg = (
+                f'Exactly one storage type must be active, but {active_storage_types} are active. '
+                f'SoftHSM: {is_softhsm}, Hardware HSM: {is_hardwarehsm}, Software: {is_softwarestorage}'
+            )
+            raise ValueError(msg)
 
-        if is_ca_credential and is_software_location and not is_softhsm:
-            err_msg = 'Credentials of type Root CA and Issuing CA need to be stored in an HSM (except for SoftHSM)'
-            raise ValueError(err_msg)
 
         private_key_serializer = normalized_credential_serializer.get_private_key_serializer()
         if private_key_serializer is None:
             msg = 'Private key serializer cannot be None'
             raise ValueError(msg)
-        store_private_key_in_model = (
-            is_software_location or
-            (is_ca_credential and is_softhsm)
-        )
+        if credential_type == cls.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER:
+            store_private_key_in_model = True
+        else:
+            store_private_key_in_model = (
+                is_softwarestorage or
+                ((is_softhsm or is_hardwarehsm) and not is_ca_credential and is_software_location)
+            )
 
         private_key_pem = private_key_serializer.as_pkcs8_pem().decode() if store_private_key_in_model else ''
 
         if normalized_credential_serializer.private_key_reference.location in [PrivateKeyLocation.HSM_GENERATED,
                                                                                PrivateKeyLocation.HSM_PROVIDED]:
+
+            if not (is_softhsm or is_hardwarehsm):
+                msg = (
+                    'HSM operations are only allowed when storage type is SoftHSM or Hardware HSM. '
+                    f'Current storage type: {crypto_storage_config.storage_type if crypto_storage_config else "None"}'
+                )
+                raise ValueError(msg)
+
             token_config = PKCS11Token.objects.first()
 
             if not token_config:

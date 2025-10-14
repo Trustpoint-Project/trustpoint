@@ -59,5 +59,16 @@ class Command(BaseCommand):
 
         if options.get('tls'):
             self.stdout.write('Preparing TLS certificate...')
+            from management.models import KeyStorageConfig
+            crypto_config, created = KeyStorageConfig.objects.get_or_create(
+                pk=1,
+                defaults={
+                    'storage_type': KeyStorageConfig.StorageType.SOFTWARE,
+                }
+            )
+            if created:
+                self.stdout.write('Created software crypto storage configuration')
+            else:
+                self.stdout.write('Using existing crypto storage configuration')
             call_command('tls_cred', '--write_out')
             self.stdout.write('Done')

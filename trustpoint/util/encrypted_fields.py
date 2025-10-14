@@ -47,9 +47,9 @@ class EncryptedTextField(models.TextField[str, str]):
             ValidationError: If crypto storage config is not found or there's an error accessing it.
         """
         try:
-            from management.models import CryptoStorageConfig
+            from management.models import KeyStorageConfig
 
-            crypto_config = CryptoStorageConfig.objects.first()
+            crypto_config = KeyStorageConfig.objects.first()
             if not crypto_config:
                 msg = 'No crypto storage configuration found. Please configure storage type first.'
                 self.raise_validation_error(msg)
@@ -61,8 +61,8 @@ class EncryptedTextField(models.TextField[str, str]):
             raise ValidationError(msg) from e
         else:
                 return crypto_config.storage_type in [
-                    CryptoStorageConfig.StorageType.SOFTHSM,
-                    CryptoStorageConfig.StorageType.PHYSICAL_HSM
+                    KeyStorageConfig.StorageType.SOFTHSM,
+                    KeyStorageConfig.StorageType.PHYSICAL_HSM
                 ]
 
     def get_dek(self) -> bytes:
@@ -245,9 +245,9 @@ class EncryptedCharField(models.CharField[str, str]):
             ValidationError: If crypto storage config is not found or there's an error accessing it.
         """
         try:
-            from management.models import CryptoStorageConfig
+            from management.models import KeyStorageConfig
 
-            crypto_config = CryptoStorageConfig.objects.first()
+            crypto_config = KeyStorageConfig.objects.first()
             if not crypto_config:
                 msg = 'No crypto storage configuration found. Please configure storage type first.'
                 self.raise_validation_error(msg)
@@ -259,8 +259,8 @@ class EncryptedCharField(models.CharField[str, str]):
             raise ValidationError(msg) from e
         else:
                 return crypto_config.storage_type in [
-                    CryptoStorageConfig.StorageType.SOFTHSM,
-                    CryptoStorageConfig.StorageType.PHYSICAL_HSM
+                    KeyStorageConfig.StorageType.SOFTHSM,
+                    KeyStorageConfig.StorageType.PHYSICAL_HSM
                 ]
 
     def get_dek(self) -> bytes:

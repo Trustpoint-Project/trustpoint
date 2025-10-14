@@ -2,7 +2,7 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, backup, help_support, logging, settings, tls, pkcs11
+from .views import IndexView, backup, help_support, logging, settings, tls, key_storage
 
 app_name = 'management'
 urlpatterns = [
@@ -40,6 +40,6 @@ urlpatterns = [
     ),
     path('backups/delete-multiple/', backup.BackupFilesDeleteMultipleView.as_view(), name='backup-delete-multiple'),
     path('help/', help_support.HelpView.as_view(), name='help'),
-    path('pkcs11/', pkcs11.PKCS11ConfigView.as_view(), name='pkcs11'),
+    path('key_storage/', key_storage.KeyStorageConfigView.as_view(), name='key_storage'),
 
 ]

@@ -22,8 +22,8 @@ from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpRespons
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import FormView, TemplateView, View
-from management.forms import CryptoStorageConfigForm
-from management.models import PKCS11Token
+from management.forms import KeyStorageConfigForm
+from management.models import KeyStorageConfig, PKCS11Token
 from pki.models import CertificateModel, CredentialModel, IssuingCaModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 
@@ -138,7 +138,7 @@ class StartupWizardRedirect:
         Raises:
             ValueError: If the wizard state is unrecognized or invalid.
         """
-        from management.models import CryptoStorageConfig
+        from management.models import KeyStorageConfig
 
         state_to_url = {
             SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE: 'setup_wizard:crypto_storage_setup',
@@ -155,10 +155,10 @@ class StartupWizardRedirect:
 
         if wizard_state == 'WIZARD_SETUP_HSM':
             try:
-                config = CryptoStorageConfig.get_config()
-                if config.storage_type == CryptoStorageConfig.StorageType.SOFTHSM:
+                config = KeyStorageConfig.get_config()
+                if config.storage_type == KeyStorageConfig.StorageType.SOFTHSM:
                     hsm_type = 'softhsm'
-                elif config.storage_type == CryptoStorageConfig.StorageType.PHYSICAL_HSM:
+                elif config.storage_type == KeyStorageConfig.StorageType.PHYSICAL_HSM:
                     hsm_type = 'physical'
                 else:
                     msg = 'Invalid storage type for HSM setup.'
@@ -166,8 +166,8 @@ class StartupWizardRedirect:
 
                 return redirect(state_to_url[wizard_state], hsm_type=hsm_type, permanent=False)
 
-            except CryptoStorageConfig.DoesNotExist:
-                msg = 'CryptoStorageConfig is not configured.'
+            except KeyStorageConfig.DoesNotExist:
+                msg = 'KeyStorageConfig is not configured.'
                 raise ValueError(msg) from None
 
         if wizard_state in state_to_url:
@@ -255,16 +255,16 @@ class HsmSetupMixin(LoggerMixin):
     def _assign_token_to_crypto_storage(self, token: PKCS11Token, hsm_type: str) -> None:
         """Assign the created token to the appropriate crypto storage configuration."""
         try:
-            from management.models import CryptoStorageConfig
+            from management.models import KeyStorageConfig
 
-            config = CryptoStorageConfig.get_config()
+            config = KeyStorageConfig.get_config()
 
-            if hsm_type == 'softhsm' and config.storage_type == CryptoStorageConfig.StorageType.SOFTHSM:
+            if hsm_type == 'softhsm' and config.storage_type == KeyStorageConfig.StorageType.SOFTHSM:
                 config.softhsm_config = token
                 config.save(update_fields=['softhsm_config'])
                 self.logger.info('Assigned SoftHSM token %s to crypto storage configuration', token.label)
 
-            elif hsm_type == 'physical' and config.storage_type == CryptoStorageConfig.StorageType.PHYSICAL_HSM:
+            elif hsm_type == 'physical' and config.storage_type == KeyStorageConfig.StorageType.PHYSICAL_HSM:
                 config.physical_hsm_config = token
                 config.save(update_fields=['physical_hsm_config'])
                 self.logger.info('Assigned Physical HSM token %s to crypto storage configuration', token.label)
@@ -372,7 +372,7 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView):
 
     http_method_names = ('get', 'post')
     template_name = 'setup_wizard/crypto_storage_setup.html'
-    form_class = CryptoStorageConfigForm
+    form_class = KeyStorageConfigForm
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Handle request dispatch and wizard state validation."""
@@ -385,7 +385,7 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView):
 
         return super().dispatch(request, *args, **kwargs)
 
-    def form_valid(self, form: CryptoStorageConfigForm) -> HttpResponse:
+    def form_valid(self, form: KeyStorageConfigForm) -> HttpResponse:
         """Handle valid form submission and determine next step based on storage type."""
         try:
             config = form.save()
@@ -401,21 +401,20 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView):
 
             self.logger.info('Crypto storage configured with type: %s', storage_type)
 
-            from management.models import CryptoStorageConfig
+            from management.models import KeyStorageConfig
 
-            if storage_type == CryptoStorageConfig.StorageType.SOFTWARE:
+            if storage_type == KeyStorageConfig.StorageType.SOFTWARE:
                 return redirect('setup_wizard:setup_mode', permanent=False)
-            elif storage_type == CryptoStorageConfig.StorageType.SOFTHSM:
+            if storage_type == KeyStorageConfig.StorageType.SOFTHSM:
                 return redirect('setup_wizard:hsm_setup', hsm_type='softhsm', permanent=False)
-            elif storage_type == CryptoStorageConfig.StorageType.PHYSICAL_HSM:
+            if storage_type == KeyStorageConfig.StorageType.PHYSICAL_HSM:
                 return redirect('setup_wizard:hsm_setup', hsm_type='physical', permanent=False)
-            else:
-                messages.add_message(
-                    self.request,
-                    messages.ERROR,
-                    'Unknown storage type selected.'
-                )
-                return redirect('setup_wizard:crypto_storage_setup', permanent=False)
+            messages.add_message(
+                self.request,
+                messages.ERROR,
+                'Unknown storage type selected.'
+            )
+            return redirect('setup_wizard:crypto_storage_setup', permanent=False)
 
         except subprocess.CalledProcessError as exception:
             err_msg = f'Crypto storage script failed: {self._map_exit_code_to_message(exception.returncode)}'
@@ -435,7 +434,7 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView):
             self.logger.exception('Crypto storage setup error')
             return redirect('setup_wizard:crypto_storage_setup', permanent=False)
 
-    def form_invalid(self, form: CryptoStorageConfigForm) -> HttpResponse:
+    def form_invalid(self, form: KeyStorageConfigForm) -> HttpResponse:
         """Handle invalid form submission."""
         messages.add_message(
             self.request,
@@ -478,12 +477,12 @@ class SetupWizardHsmSetupView(HsmSetupMixin, FormView):
             return redirect('setup_wizard:crypto_storage_setup', permanent=False)
 
         try:
-            from management.models import CryptoStorageConfig
-            config = CryptoStorageConfig.get_config()
+            from management.models import KeyStorageConfig
+            config = KeyStorageConfig.get_config()
 
             expected_storage_type = (
-                CryptoStorageConfig.StorageType.SOFTHSM if hsm_type == 'softhsm'
-                else CryptoStorageConfig.StorageType.PHYSICAL_HSM
+                KeyStorageConfig.StorageType.SOFTHSM if hsm_type == 'softhsm'
+                else KeyStorageConfig.StorageType.PHYSICAL_HSM
             )
 
             if config.storage_type != expected_storage_type:
@@ -614,7 +613,7 @@ class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView):
     http_method_names = ('get', 'post')
     template_name = 'setup_wizard/select_tls_server_credential.html'
     form_class = EmptyForm
-    
+
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Handle request dispatch and wizard state validation."""
         if not DOCKER_CONTAINER:
@@ -634,7 +633,7 @@ class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView):
     def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests for the TLS server credential selection page."""
         return super().get(*args, **kwargs)
-    
+
     def form_valid(self, form: EmptyForm) -> HttpResponse:
         """Handle form submission for TLS server credential selection."""
         try:
@@ -711,7 +710,7 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView):
 
     http_method_names = ('get', 'post')
     template_name = 'setup_wizard/backup_password.html'
-    success_url = reverse_lazy('setup_wizard:tls_server_credential_apply')
+    success_url = reverse_lazy('setup_wizard:demo_data')
     form_class = BackupPasswordForm
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
@@ -721,6 +720,11 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView):
 
         wizard_state = SetupWizardState.get_current_state()
         if wizard_state != SetupWizardState.WIZARD_BACKUP_PASSWORD:
+            self.logger.warning(
+                "Unexpected wizard state '%s', expected '%s'. Redirecting to appropriate state.",
+                wizard_state,
+                SetupWizardState.WIZARD_BACKUP_PASSWORD,
+            )
             return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().dispatch(request, *args, **kwargs)
@@ -735,17 +739,16 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView):
         password = form.cleaned_data.get('password')
 
         try:
-            # Get the first (and should be only) PKCS11Token
             token = PKCS11Token.objects.first()
             if not token:
                 messages.add_message(
                     self.request,
                     messages.ERROR,
-                    'No PKCS#11 token found. Please complete HSM setup first.'
+                    'No PKCS#11 token found. This should not happen in the backup password step.'
                 )
-                return redirect('setup_wizard:hsm_setup', permanent=False)
+                self.logger.error('No PKCS11Token found in backup password step')
+                return redirect('setup_wizard:demo_data', permanent=False)
 
-            # Set the backup password
             token.set_backup_password(password)
             execute_shell_script(SCRIPT_WIZARD_BACKUP_PASSWORD)
 
@@ -1165,7 +1168,6 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
         }
         return error_messages.get(return_code, 'An unknown error occurred during setup mode transition.')
 
-
 class SetupWizardImportTlsServerCredentialView(View):
     """View for handling the import of TLS Server Credentials."""
 
@@ -1191,7 +1193,6 @@ class SetupWizardImportTlsServerCredentialView(View):
         )
         return redirect('setup_wizard:setup_mode', permanent=False)
 
-
 class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
     """View for handling the application of TLS Server Credentials in the setup wizard.
 
@@ -1205,7 +1206,21 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
     http_method_names = ('get', 'post')
     form_class = EmptyForm
     template_name = 'setup_wizard/tls_server_credential_apply.html'
-    success_url = reverse_lazy('setup_wizard:demo_data')
+
+    def get_success_url(self) -> str:
+        """Return the success URL based on storage type."""
+        from management.models import KeyStorageConfig
+
+        try:
+            config = KeyStorageConfig.get_config()
+            if config.storage_type in [
+                KeyStorageConfig.StorageType.SOFTHSM,
+                KeyStorageConfig.StorageType.PHYSICAL_HSM
+            ]:
+                return reverse_lazy('setup_wizard:backup_password')
+            return reverse_lazy('setup_wizard:demo_data')
+        except KeyStorageConfig.DoesNotExist:
+            return reverse_lazy('setup_wizard:demo_data')
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests for the TLS Server Credential application view.
@@ -1270,7 +1285,20 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
 
             self._write_pem_files(trustpoint_tls_server_credential_model)
 
-            execute_shell_script(SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY)
+            try:
+                config = KeyStorageConfig.get_config()
+                if config.storage_type in [
+                    KeyStorageConfig.StorageType.SOFTHSM,
+                    KeyStorageConfig.StorageType.PHYSICAL_HSM
+                ]:
+                    storage_param = 'hsm'
+                else:
+                    storage_param = 'no_hsm'
+            except KeyStorageConfig.DoesNotExist:
+                storage_param = 'no_hsm'
+                self.logger.warning('KeyStorageConfig not found, defaulting to no_hsm mode')
+
+            execute_shell_script(SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY, storage_param)
 
             messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential applied successfully.')
             return super().form_valid(form)
@@ -1413,7 +1441,6 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
         APACHE_CERT_PATH.write_text(certificate_pem)
         APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
 
-
 class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
     """View for handling the cancellation of TLS Server Credential application.
 
@@ -1501,7 +1528,6 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
             'permissions are set correctly.',
         }
         return error_messages.get(return_code, 'An unknown error occurred during the cancel operation.')
-
 
 class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
     """View for handling the demo data setup during the setup wizard.

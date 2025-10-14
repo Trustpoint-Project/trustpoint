@@ -4,7 +4,8 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import resolve, reverse
 
-from management.views import IndexView, backup, logging, pkcs11, security, tls
+from management.views import IndexView, backup, logging, security, tls
+from trustpoint.management.views import key_storage
 
 
 class SettingsUrlsTestCase(TestCase):
@@ -159,7 +160,7 @@ class SettingsUrlsTestCase(TestCase):
 
         resolver = resolve(url)
         self.assertEqual(resolver.view_name, 'settings:pkcs11')
-        self.assertEqual(resolver.func.view_class, pkcs11.PKCS11ConfigView)
+        self.assertEqual(resolver.func.view_class, key_storage.PKCS11ConfigView)
 
     def test_logging_regex_patterns(self):
         """Test that logging regex patterns work correctly."""

@@ -5,6 +5,8 @@ from __future__ import annotations
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.core.management.base import BaseCommand
+from management.models import KeyStorageConfig
+from pki.models import IssuingCaModel
 
 from trustpoint.logger import LoggerMixin
 
@@ -40,8 +42,33 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         else:
             self.stdout.write(message)
 
+    def get_ca_type_from_storage_config(self) -> IssuingCaModel.IssuingCaTypeChoice:
+        """Determine the CA type based on the crypto storage configuration.
+
+        Returns:
+            IssuingCaModel.IssuingCaTypeChoice: The appropriate CA type.
+        """
+        try:
+            config = KeyStorageConfig.get_config()
+            if config.storage_type in [
+                KeyStorageConfig.StorageType.SOFTHSM,
+                KeyStorageConfig.StorageType.PHYSICAL_HSM
+            ]:
+                return IssuingCaModel.IssuingCaTypeChoice.LOCAL_PKCS11
+            return IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED
+        except KeyStorageConfig.DoesNotExist:
+            self.log_and_stdout(
+                'KeyStorageConfig not found, defaulting to LOCAL_UNPROTECTED',
+                level='warning'
+            )
+            return IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED
+
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Adds a Root CA and three issuing CAs to the database."""
+        # Determine CA type based on storage configuration
+        ca_type = self.get_ca_type_from_storage_config()
+        self.log_and_stdout(f'Using CA type: {ca_type}')
+
         self.log_and_stdout('Creating RSA-2048 Root CA and Issuing CA A...')
         rsa2_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         rsa2_issuing_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -60,6 +87,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             private_key=rsa2_issuing_ca_key,
             chain=[rsa2_root],
             unique_name='issuing-ca-a',
+            ca_type=ca_type,
         )
 
         self.log_and_stdout('Creating RSA-3072 Root CA and Issuing CA B...')
@@ -80,6 +108,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             private_key=rsa3_issuing_ca_key,
             chain=[rsa3_root],
             unique_name='issuing-ca-b',
+            ca_type=ca_type,
         )
 
         self.log_and_stdout('Creating RSA-4096 Root CA and Issuing CA C...')
@@ -100,6 +129,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             private_key=rsa4_issuing_ca_key,
             chain=[rsa4_root],
             unique_name='issuing-ca-c',
+            ca_type=ca_type,
         )
 
         self.log_and_stdout('Creating SECP256R1 Root CA and Issuing CA D...')
@@ -120,6 +150,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             private_key=ecc1_issuing_ca_key,
             chain=[ecc1_root],
             unique_name='issuing-ca-d',
+            ca_type=ca_type,
         )
 
         self.log_and_stdout('Creating SECP384R1 Root CA and Issuing CA E...')
@@ -140,6 +171,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             private_key=ecc2_issuing_ca_key,
             chain=[ecc2_root],
             unique_name='issuing-ca-e',
+            ca_type=ca_type,
         )
 
         self.log_and_stdout('Creating SECP521R1 Root CA and Issuing CA F...')
@@ -160,6 +192,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             private_key=ecc3_issuing_ca_key,
             chain=[ecc3_root],
             unique_name='issuing-ca-f',
+            ca_type=ca_type,
         )
 
         self.log_and_stdout('All issuing CAs have been created successfully!')

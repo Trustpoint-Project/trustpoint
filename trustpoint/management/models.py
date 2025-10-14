@@ -15,6 +15,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from notifications.models import WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
+
 from trustpoint.logger import LoggerMixin
 
 
@@ -265,7 +266,7 @@ class BackupOptions(models.Model):
 
         return super().clean()
 
-class CryptoStorageConfig(models.Model):
+class KeyStorageConfig(models.Model):
     """Configuration model for cryptographic material storage."""
 
     class StorageType(models.TextChoices):
@@ -298,7 +299,7 @@ class CryptoStorageConfig(models.Model):
     )
 
     class Meta:
-        """Meta options for the CryptoStorageConfig model."""
+        """Meta options for the KeyStorageConfig model."""
         verbose_name = _('Crypto Storage Configuration')
         verbose_name_plural = _('Crypto Storage Configurations')
 
@@ -307,13 +308,12 @@ class CryptoStorageConfig(models.Model):
         status = 'Active' if self.is_active else 'Inactive'
         return f'{self.get_storage_type_display()} ({status})'
 
-
     @classmethod
-    def get_config(cls) -> 'CryptoStorageConfig':
+    def get_config(cls) -> 'KeyStorageConfig':
         """Get the crypto storage configuration (singleton).
 
         Returns:
-            CryptoStorageConfig: The configuration instance
+            KeyStorageConfig: The configuration instance
 
         Raises:
             cls.DoesNotExist: If no configuration exists
@@ -321,19 +321,20 @@ class CryptoStorageConfig(models.Model):
         return cls.objects.get(pk=1)
 
     @classmethod
-    def get_or_create_default(cls) -> 'CryptoStorageConfig':
+    def get_or_create_default(cls) -> 'KeyStorageConfig':
         """Get the configuration or create a default one.
 
         Returns:
-            CryptoStorageConfig: The configuration instance
+            KeyStorageConfig: The configuration instance
         """
-        try:
-            return cls.get_config()
-        except cls.DoesNotExist:
-            return cls.objects.create(
-                pk=1,
-                storage_type=cls.StorageType.SOFTWARE
-            )
+        config, created = cls.objects.get_or_create(
+            pk=1,
+            defaults={
+                'storage_type': cls.StorageType.SOFTWARE
+            }
+        )
+        return config
+
 
 class PKCS11Token(models.Model, LoggerMixin):
     """Model representing a PKCS#11 token (e.g., a SoftHSM slot/token pair).

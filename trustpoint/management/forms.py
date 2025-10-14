@@ -10,7 +10,7 @@ from django import forms
 from django.utils.translation import gettext_lazy as _
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
-from management.models import BackupOptions, PKCS11Token, SecurityConfig
+from management.models import BackupOptions, KeyStorageConfig, PKCS11Token, SecurityConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 
@@ -197,7 +197,7 @@ class IPv4AddressForm(forms.Form):
         ipv4_field = cast('forms.ChoiceField', self.fields['ipv4_address'])
         ipv4_field.choices = [(ip, ip) for ip in san_ips]
 
-class CryptoStorageConfigForm(forms.ModelForm):
+class KeyStorageConfigForm(forms.ModelForm):
     """Form for configuring cryptographic material storage options."""
 
     storage_type = forms.ChoiceField(
@@ -212,9 +212,9 @@ class CryptoStorageConfigForm(forms.ModelForm):
     )
 
     class Meta:
-        """ModelForm Meta configuration for CryptoStorageConfig."""
-        from management.models import CryptoStorageConfig
-        model = CryptoStorageConfig
+        """ModelForm Meta configuration for KeyStorageConfig."""
+        from management.models import KeyStorageConfig
+        model = KeyStorageConfig
         fields: ClassVar[list[str]] = ['storage_type']
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -226,6 +226,17 @@ class CryptoStorageConfigForm(forms.ModelForm):
         cleaned_data: dict[str, Any] = super().clean() or {}
         return cleaned_data
 
+    def save(self, *, commit: bool = True) -> KeyStorageConfigForm:
+        """Save the form, ensuring singleton behavior."""
+        from management.models import KeyStorageConfig
+
+        instance = KeyStorageConfig.get_or_create_default()
+        instance.storage_type = self.cleaned_data['storage_type']
+
+        if commit:
+            instance.save(update_fields=['storage_type', 'last_updated'])
+
+        return instance
 
 class PKCS11ConfigForm(forms.Form):
     """Form for configuring PKCS#11 settings including HSM PIN and token information."""

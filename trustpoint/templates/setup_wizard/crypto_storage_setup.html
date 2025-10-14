@@ -31,120 +31,97 @@
             <h1>{% trans "Cryptographic Storage Configuration" %}</h1>
         </div>
         <div class="card-body pt-3 pb-4">
-            <h2>{% trans 'Select Storage Method' %}</h2>
-            <hr>
-            <h3 class="mb-4">{% trans 'Choose how cryptographic material should be stored' %}</h3>
+            <h3 class="mb-4">{% trans 'Choose how cryptographic material is stored' %}</h3>
             
-            <form method="post" id="crypto-storage-form">
-                {% csrf_token %}
-                
-                <div class="row g-4 mb-4">
-                    <!-- Software Storage Option -->
-                    <div class="col-md-4">
-                        <div class="card h-100">
-                            <div class="card-body text-center">
-                                <svg class="bi mb-3" width="48" height="48" fill="currentColor">
-                                    <use href="{% static 'img/icons.svg' %}#icon-computer"></use>
-                                </svg>
-                                <h5 class="card-title">{% trans 'Software Storage' %}</h5>
-                                <p class="card-text">
-                                    {% trans 'Store cryptographic keys in software without encryption' %}
-                                </p>
-                                <span class="badge bg-warning mb-3">{% trans 'Low Security' %}</span>
-                                <div class="alert alert-warning mt-3">
-                                    <strong>{% trans 'Not recommended for production!' %}</strong>
-                                </div>
-                            </div>
-                            <div class="card-footer">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="storage_type" 
-                                           value="software" id="storage_software"
-                                           {% if form.storage_type.value == 'software' or not form.storage_type.value %}checked{% endif %}>
-                                    <label class="form-check-label" for="storage_software">
-                                        {% trans 'Select Software Storage' %}
-                                    </label>
-                                </div>
-                            </div>
+            <div class="row g-4 mb-4">
+                <!-- Software Storage Option -->
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <svg class="bi mb-3" width="48" height="48" fill="currentColor">
+                                <use href="{% static 'img/icons.svg' %}#icon-computer"></use>
+                            </svg>
+                            <h5 class="card-title">{% trans 'Software Storage' %}</h5>
+                            <p class="card-text">
+                                {% trans 'Store cryptographic keys in software without encryption' %}
+                            </p>
+                            <span class="badge bg-warning mb-3">{% trans 'Not recommended for production!' %}</span>
                         </div>
-                    </div>
-
-                    <!-- SoftHSM Option -->
-                    <div class="col-md-4">
-                        <div class="card h-100">
-                            <div class="card-body text-center">
-                                <svg class="bi mb-3" width="48" height="48" fill="currentColor">
-                                    <use href="{% static 'img/icons.svg' %}#icon-shield"></use>
-                                </svg>
-                                <h5 class="card-title">{% trans 'SoftHSM Container' %}</h5>
-                                <p class="card-text">
-                                    {% trans 'Software-based HSM with encryption and secure key storage' %}
-                                </p>
-                                <span class="badge bg-info mb-3">{% trans 'Medium Security' %}</span>
-                                <div class="alert alert-warning mt-3">
-                                    <strong>{% trans 'Not recommended for production!' %}</strong>
-                                </div>
-                            </div>
-                            <div class="card-footer">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="storage_type" 
-                                           value="softhsm" id="storage_softhsm"
-                                           {% if form.storage_type.value == 'softhsm' %}checked{% endif %}>
-                                    <label class="form-check-label" for="storage_softhsm">
-                                        {% trans 'Select SoftHSM' %}
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Physical HSM Option -->
-                    <div class="col-md-4">
-                        <div class="card h-100">
-                            <div class="card-body text-center">
-                                <svg class="bi mb-3" width="48" height="48" fill="currentColor">
-                                    <use href="{% static 'img/icons.svg' %}#icon-hardware"></use>
-                                </svg>
-                                <h5 class="card-title">{% trans 'Physical HSM' %}</h5>
-                                <p class="card-text">
-                                    {% trans 'Hardware-based secure cryptographic storage device' %}
-                                </p>
-                                <span class="badge bg-success mb-3">{% trans 'High Security' %}</span>
-                            </div>
-                            <div class="card-footer">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="storage_type" 
-                                           value="physical_hsm" id="storage_physical"
-                                           {% if form.storage_type.value == 'physical_hsm' %}checked{% endif %}>
-                                    <label class="form-check-label" for="storage_physical">
-                                        {% trans 'Select Physical HSM' %}
-                                    </label>
-                                </div>
-                            </div>
+                        <div class="card-footer">
+                            <form method="post" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="storage_type" value="software">
+                                <button type="submit" class="btn btn-outline-primary w-100">
+                                    {% trans 'Select Software Storage' %}
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>
 
-                <!-- Form errors -->
-                {% if form.non_field_errors %}
-                    <div class="alert alert-danger">
-                        {{ form.non_field_errors }}
+                <!-- SoftHSM Option -->
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <svg class="bi mb-3" width="48" height="48" fill="currentColor">
+                                <use href="{% static 'img/icons.svg' %}#icon-shield"></use>
+                            </svg>
+                            <h5 class="card-title">{% trans 'SoftHSM Container' %}</h5>
+                            <p class="card-text">
+                                {% trans 'Software-based HSM with encryption and key storage' %}
+                            </p>
+                             <span class="badge bg-warning mb-3">{% trans 'Not recommended for production!' %}</span>
+                        </div>
+                        <div class="card-footer">
+                            <form method="post" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="storage_type" value="softhsm">
+                                <button type="submit" class="btn btn-outline-primary w-100">
+                                    {% trans 'Select SoftHSM' %}
+                                </button>
+                            </form>
+                        </div>
                     </div>
-                {% endif %}
+                </div>
 
-                {% if form.storage_type.errors %}
-                    <div class="alert alert-danger">
-                        {{ form.storage_type.errors }}
+                <!-- Physical HSM Option -->
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <svg class="bi mb-3" width="48" height="48" fill="currentColor">
+                                <use href="{% static 'img/icons.svg' %}#icon-hardware"></use>
+                            </svg>
+                            <h5 class="card-title">{% trans 'Physical HSM' %}</h5>
+                            <p class="card-text">
+                                {% trans 'Hardware-based secure cryptographic storage device' %}
+                            </p>
+                            <span class="badge bg-success mb-3">{% trans 'High Security' %}</span>
+                        </div>
+                        <div class="card-footer">
+                            <form method="post" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="storage_type" value="physical_hsm">
+                                <button type="submit" class="btn btn-outline-primary w-100">
+                                    {% trans 'Select Physical HSM' %}
+                                </button>
+                            </form>
+                        </div>
                     </div>
-                {% endif %}
-            </form>
-        </div>
-        
-        <div class="card-footer d-flex justify-content-between tp-sticky-footer">
-            <div class="tp-card-btn-footer m-1">
-                <button class="btn btn-primary w-100 mt-1" type="submit" form="crypto-storage-form">
-                    {% trans 'Save Configuration' %}
-                </button>
+                </div>
             </div>
+
+            <!-- Form errors -->
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+
+            {% if form.storage_type.errors %}
+                <div class="alert alert-danger">
+                    {{ form.storage_type.errors }}
+                </div>
+            {% endif %}
         </div>
     </div>
 

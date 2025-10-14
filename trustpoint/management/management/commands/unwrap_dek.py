@@ -62,7 +62,7 @@ class Command(BaseCommand, LoggerMixin):
         """
         del args  # Unused
         token_label = options.get('token_label')
-        from settings.models import PKCS11Token
+        from management.models import PKCS11Token
 
         try:
             # Get the token
@@ -119,10 +119,10 @@ class Command(BaseCommand, LoggerMixin):
             self.stdout.write(self.style.ERROR(message))
         elif level == 'warning':
             self.stdout.write(self.style.WARNING(message))
-        elif level == 'info':
-            self.stdout.write(self.style.INFO(message))
-        else:
+        elif level == 'success':
             self.stdout.write(self.style.SUCCESS(message))
+        else:
+            self.stdout.write(message)
 
     def _test_kek_loading(self, token: 'PKCS11Token') -> None:
         """Test loading the KEK (Key Encryption Key)."""
