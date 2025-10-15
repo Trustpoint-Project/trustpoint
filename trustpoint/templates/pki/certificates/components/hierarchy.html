@@ -8,9 +8,14 @@
         <div>
             <div>{% trans 'Issuer' %}</div>
             <div>
+
                 {% for entry in cert.issuer.all %}
-                    {{ entry }}<br>
-                {% endfor %}
+    {% if cert.is_self_signed %}
+        <span class="btn-primary">{{ entry }}</span><br>
+    {% else %}
+        <a href="{% url 'pki:certificate-detail' pk=entry.id %}" class="btn-primary">{{ entry }}</a><br>
+    {% endif %}
+{% endfor %}
             </div>
         </div>
 
