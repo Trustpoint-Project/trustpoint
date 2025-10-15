@@ -25,7 +25,8 @@
             </li><li class="nav-item" role="presentation">
                 <button class="nav-link" id="tab4-tab" data-bs-toggle="tab" data-bs-target="#tab4-panel" type="button" role="tab">{% trans "Signature" %}</button>
             </li>
-            <li class="nav-item" role="presentation">
+
+             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="tab5-tab" data-bs-toggle="tab" data-bs-target="#tab5-panel" type="button" role="tab">{% trans "Hierarchy & Additional" %}</button>
             </li>
         </ul>
@@ -58,14 +59,19 @@
                     {% include 'pki/certificates/components/signature.html' %}
                 </div>
             </div>
+
+
             <div class="tab-pane fade" id="tab5-panel" role="tabpanel">
                 <div class="tp-card-centered-content">
                     {% include 'pki/certificates/components/hierarchy.html' %}
+                      {% include 'pki/certificates/components/extensions/subject_alternative_name_extension.html' %}
+                    {% include 'pki/certificates/components/extensions/subject_alternative_name_extension_content.html' %}
                     {% if cert.credential_set.first.issued_credential %}
                         {% include 'pki/certificates/components/additional.html' %}
                     {% endif %}
                 </div>
             </div>
+
         </div>
     </div>
     <div class="card-footer d-flex justify-content-between align-items-center">
