@@ -32,6 +32,14 @@
         </div>
 
 
+    <div>
+            <div>{% trans 'Signature Algorithm' %}</div>
+            <div>{{ cert.signature_algorithm }}</div>
+        </div>
+        <div>
+            <div>{% trans 'Not valid after' %}</div>
+            <div>{{ cert.not_valid_after }}</div>
+        </div>
     </div>
 
 {% endblock general %}
