@@ -72,7 +72,13 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
 
         issuing_credential = ca.credential
         issuer_certificate = issuing_credential.get_certificate()
-        hash_algorithm_enum = SignatureSuite.from_certificate(issuer_certificate).algorithm_identifier.hash_algorithm
+
+        signature_suite = SignatureSuite.from_certificate(issuer_certificate)
+        if not signature_suite.public_key_matches_signature_suite(public_key):
+            err_msg = 'Requested cert public key type does not match the CA signature suite.'
+            raise ValueError(err_msg)
+
+        hash_algorithm_enum = signature_suite.algorithm_identifier.hash_algorithm
         if hash_algorithm_enum is None:
             err_msg = 'Failed to get hash algorithm.'
             raise ValueError(err_msg)

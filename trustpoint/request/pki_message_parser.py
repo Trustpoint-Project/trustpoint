@@ -662,10 +662,22 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
                 value=certificate_policies
             )
 
-        except Exception as e:
-            self.logger.exception('Failed to parse Certificate Policies extension: %(error)s',
-                              extra={'error': str(e)})
+        except Exception:
+            self.logger.exception('Failed to parse Certificate Policies extension')
             raise
+
+
+class CmpProtectionValidation(ParsingComponent, LoggerMixin):
+    """Component for validating CMP message signatures."""
+
+    def parse(self, context: RequestContext) -> None:
+        """Validate the CMP message signature."""
+        if context.parsed_message is None:
+            error_message = 'Parsed message is missing from the context.'
+            self.logger.warning('CMP protection validation failed: Parsed message is missing')
+            raise ValueError(error_message)
+
+        self.logger.warning('CMP protection validation is not yet implemented!')
 
 
 class CompositeParsing(ParsingComponent, LoggerMixin):
@@ -730,6 +742,7 @@ class CmpMessageParser(CompositeParsing):
         self.add(CmpPkiMessageParsing())
         self.add(CmpHeaderValidation())
         self.add(CmpBodyValidation())
+        self.add(CmpProtectionValidation())  # TODO(Air): Add!
         self.add(DomainParsing())
         self.add(CertTemplateParsing())
 

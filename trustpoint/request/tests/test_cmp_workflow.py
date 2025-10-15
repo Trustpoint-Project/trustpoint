@@ -74,8 +74,8 @@ class TestCMPHelper(LoggerMixin):
         parser.parse(mock_context)
 
         assert mock_context.cert_requested is not None
-        assert isinstance(mock_context.cert_requested, x509.base.CertificateSigningRequestBuilder), \
-            f'cert_requested must be of type x509.base.CertificateSigningRequestBuilder, got {type(mock_context.cert_requested)}.'
+        assert isinstance(mock_context.cert_requested, x509.CertificateBuilder), \
+            f'cert_requested must be of type x509.CertificateBuilder, got {type(mock_context.cert_requested)}.'
         assert mock_context.domain == device.domain, \
             f'Domain in context {mock_context.domain} does not match expected domain {device.domain.unique_name}'
 
@@ -170,8 +170,8 @@ class TestCMPHelper(LoggerMixin):
         assert private_key.public_key().public_numbers() == mock_context.client_certificate.public_key().public_numbers(), \
             'Private key does not match the client certificate'
 
-        assert isinstance(mock_context.cert_requested, x509.base.CertificateSigningRequestBuilder), \
-            f'cert_requested must be of type x509.base.CertificateSigningRequestBuilder, got {type(mock_context.cert_requested)}.'
+        assert isinstance(mock_context.cert_requested, x509.CertificateBuilder), \
+            f'cert_requested must be of type x509.CertificateBuilder, got {type(mock_context.cert_requested)}.'
         assert mock_context.domain == device.domain, \
             f'Domain in context {mock_context.domain} does not match expected domain {device.domain.unique_name}'
 

@@ -43,6 +43,7 @@ from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-unty
 from request.authentication import CmpAuthentication
 from request.authorization import CmpAuthorization
 from request.http_request_validator import CmpHttpRequestValidator
+from request.message_responder import CmpMessageResponder
 from request.operation_processor import CertificateIssueProcessor
 from request.pki_message_parser import CmpMessageParser
 from request.profile_validator import ProfileValidator
@@ -944,7 +945,7 @@ class CmpInitializationRequestView(View):
 
         CertificateIssueProcessor().process_operation(ctx)
 
-        #CmpMessageResponder.build_response(ctx)
+        CmpMessageResponder.build_response(ctx)
 
         return LoggedHttpResponse(content=ctx.http_response_content,
                                   status=ctx.http_response_status,

@@ -467,7 +467,7 @@ class TestCmpMessageParser:
         """Test CmpMessageParser initialization."""
         parser = CmpMessageParser()
 
-        assert len(parser.components) == 5
+        assert len(parser.components) == 6
         assert isinstance(parser.components[0], CmpPkiMessageParsing)
 
     def test_parse_delegation(self):

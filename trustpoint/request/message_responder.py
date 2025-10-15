@@ -74,3 +74,47 @@ class EstErrorMessageResponder(EstMessageResponder):
         context.http_response_status = context.http_response_status or 500
         context.http_response_content = context.http_response_content or 'An error occurred processing the EST request.'
         context.http_response_content_type = context.http_response_content_type or 'text/plain'
+
+
+class CmpMessageResponder(AbstractMessageResponder):
+    """Builds response to CMP requests."""
+
+    @staticmethod
+    def build_response(context: RequestContext) -> None:
+        """Respond to a CMP message."""
+        if context.issued_certificate and context.operation == 'initialization':
+            responder = CmpInitializationResponder()
+            return responder.build_response(context)
+
+        exc_msg = 'No suitable responder found for this CMP message.'
+        context.http_response_status = 500
+        context.http_response_content = exc_msg
+        return CmpErrorMessageResponder().build_response(context)
+
+
+class CmpInitializationResponder(CmpMessageResponder):
+    """Respond to a CMP initialization request with the issued certificate."""
+
+    @staticmethod
+    def build_response(context: RequestContext) -> None:
+        """Respond to a CMP initialization message with the issued certificate."""
+        if context.issued_certificate is None:
+            exc_msg = 'Issued certificate is not set in the context.'
+            raise ValueError(exc_msg)
+
+        context.http_response_status = 200
+        context.http_response_content = 'TODO'
+        context.http_response_content_type = 'application/pkixcmp'
+
+
+class CmpErrorMessageResponder(CmpMessageResponder):
+    """Respond to a CMP message with an error."""
+
+    @staticmethod
+    def build_response(context: RequestContext) -> None:
+        """Respond to a CMP message with an error."""
+        # Set appropriate HTTP status code and error message in context
+        # TODO(Air): Use CMP error message format instead of plain text
+        context.http_response_status = context.http_response_status or 500
+        context.http_response_content = context.http_response_content or 'An error occurred processing the CMP request.'
+        context.http_response_content_type = context.http_response_content_type or 'text/plain'
