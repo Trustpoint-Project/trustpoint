@@ -29,14 +29,31 @@
             <div>
             <div>{% trans 'Self-Signed' %}</div>
             <div>{{ cert.is_self_signed }}</div>
+            <div>{% trans 'Public Key Algorithm' %}</div>
+            <div>{{ cert.spki_algorithm }}</div>
         </div>
 
 
     <div>
+        <div>
             <div>{% trans 'Signature Algorithm' %}</div>
             <div>{{ cert.signature_algorithm }}</div>
         </div>
-        <div>
+
+
+            <div>
+            <div>{% trans 'Self-Signed' %}</div>
+            <div>{{ cert.is_self_signed }}</div>
+        </div>
+    </div>
+<h2>{% trans 'Lifecycle' %}</h2>
+    <hr class="hr-m">
+    <div class="tp-kvp-list">
+         <div>
+            <div>{% trans 'Certificate Status' %}</div>
+            <div>{{ cert.certificate_status.label }}</div>
+        </div>
+         <div>
             <div>{% trans 'Not valid after' %}</div>
             <div>{{ cert.not_valid_after }}</div>
         </div>

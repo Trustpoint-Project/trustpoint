@@ -61,6 +61,8 @@
             <div class="tab-pane fade" id="tab5-panel" role="tabpanel">
                 <div class="tp-card-centered-content">
                     {% include 'pki/certificates/components/hierarchy.html' %}
+                      {% include 'pki/certificates/components/extensions/subject_alternative_name_extension.html' %}
+                    {% include 'pki/certificates/components/extensions/subject_alternative_name_extension_content.html' %}
                     {% if cert.credential_set.first.issued_credential %}
                         {% include 'pki/certificates/components/additional.html' %}
                     {% endif %}
