@@ -25,8 +25,7 @@
             <div>{{ cert.signature_algorithm }}</div>
         </div>
 
-
-            <div>
+        <div>
             <div>{% trans 'Self-Signed' %}</div>
             <div>{{ cert.is_self_signed }}</div>
             <div>{% trans 'Public Key Algorithm' %}</div>
@@ -58,7 +57,10 @@
             <div>{{ cert.not_valid_after }}</div>
         </div>
 
-
+        <div>
+            <div>{% trans 'Not valid after' %}</div>
+            <div>{{ cert.not_valid_after }}</div>
+        </div>
     </div>
 
 {% endblock general %}
