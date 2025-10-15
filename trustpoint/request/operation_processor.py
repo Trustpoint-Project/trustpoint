@@ -4,8 +4,7 @@ from typing import get_args
 
 from cryptography import x509
 from devices.issuer import CredentialSaver
-from devices.models import DeviceModel, IssuedCredentialModel
-from pki.models import DomainModel
+from devices.models import IssuedCredentialModel
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 
@@ -66,7 +65,10 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
             raise ValueError(exc_msg)
 
         ca = context.domain.get_issuing_ca_or_value_error()
-        public_key = context.cert_requested.public_key()
+        if isinstance(context.cert_requested, x509.CertificateBuilder):
+            public_key = context.cert_requested._public_key  # noqa: SLF001
+        else:
+            public_key = context.cert_requested.public_key()
 
         issuing_credential = ca.credential
         issuer_certificate = issuing_credential.get_certificate()

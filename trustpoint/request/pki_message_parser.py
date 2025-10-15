@@ -7,6 +7,7 @@ from typing import Any, Never
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+from cryptography.hazmat.primitives.serialization import load_der_public_key
 from cryptography.x509.oid import ExtensionOID
 from pki.models import DomainModel
 from pyasn1.codec.ber import decoder  # type: ignore[import-untyped]
@@ -158,9 +159,12 @@ class DomainParsing(ParsingComponent, LoggerMixin):
         """Extract and validate the domain, then add it to the context."""
         domain_str = context.domain_str
         if not domain_str:
-            error_message = 'Domain is missing in the request context.'
+            error_msg = 'Domain str missing in request context, deferring domain resolution to authentication step'
             self.logger.warning('Domain parsing failed: Domain string is missing')
-            raise ValueError(error_message)
+            return
+        if domain_str == '.aoki':
+            self.logger.info('Special domain ".aoki" detected, deferring domain resolution to authentication step')
+            return
 
         domain = self._extract_requested_domain(domain_str)
         context.domain = domain
@@ -177,8 +181,7 @@ class DomainParsing(ParsingComponent, LoggerMixin):
             raise ValueError(error_message) from e
         except DomainModel.MultipleObjectsReturned as e:
             error_message = f"Multiple domains found for '{domain_name}'."
-            self.logger.warning("Domain lookup failed: Multiple domains found for '%(domain_name)s'",
-                                extra={'domain_name': domain_name})
+            self.logger.warning("Domain lookup failed: Multiple domains found for '%s'", domain_name)
             raise ValueError(error_message) from e
         else:
             self.logger.debug("Domain lookup successful: Found domain '%s'", domain_name)
@@ -221,11 +224,10 @@ class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
 
             self._extract_signer_certificate(context)
 
-            self.logger.info('CMP PKI message parsing successful: Parsed %(body_size)s bytes',
-                             extra={'body_size': body_size})
+            self.logger.info('CMP PKI message parsing successful: Parsed %d bytes', body_size)
         except (ValueError, TypeError) as e:
             error_message = 'Failed to parse the CMP message. It seems to be corrupted.'
-            self.logger.exception('CMP PKI message parsing failed: %(error)s', extra={'error': e})
+            self.logger.exception('CMP PKI message parsing failed')
             raise ValueError(error_message) from e
 
     def _extract_signer_certificate(self, context: RequestContext) -> None:
@@ -416,7 +418,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         if len(cert_req_messages) < 1:
             self._raise_value_error('No CertReqMessages found.')
 
-    def _validate_cert_request(self, cert_req_msg: rfc2511.CertReqMsg) -> x509.base.CertificateSigningRequestBuilder:
+    def _validate_cert_request(self, cert_req_msg: rfc2511.CertReqMsg) -> x509.CertificateBuilder:
         """Validate the certificate request message details."""
         if cert_req_msg['certReqId'] != 0:
             self._raise_validation_error('certReqId must be 0.')
@@ -439,14 +441,14 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
     def _cert_template_to_builder(
             self,
             cert_template: rfc2511.CertTemplate
-    ) -> x509.base.CertificateSigningRequestBuilder:
+    ) -> x509.CertificateBuilder:
 
         if cert_template['subject'].hasValue():
             subject = self._parse_asn1_name_to_x509_name(cert_template['subject'])
         else:
             subject = x509.Name([])
 
-        builder = x509.CertificateSigningRequestBuilder()
+        builder = x509.CertificateBuilder()
         builder = builder.subject_name(subject)
 
         if cert_template['extensions'].hasValue():
@@ -454,7 +456,23 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             for extension in extensions:
                 builder = builder.add_extension(extension.value, extension.critical)
 
-        return builder
+        cert_template_pubkey = cert_template['publicKey']
+        if not cert_template_pubkey.hasValue():
+            err_msg = 'Public key missing in CMP certTemplate.'
+            raise ValueError(err_msg)
+
+        try:
+            spki = rfc2511.SubjectPublicKeyInfo()
+            spki.setComponentByName('algorithm', cert_template_pubkey['algorithm'])
+            spki.setComponentByName('subjectPublicKey', cert_template_pubkey['subjectPublicKey'])
+            spki_der = encoder.encode(spki)
+            public_key = load_der_public_key(spki_der)
+        except Exception as e:
+            error_message = f'Failed to parse public key from CMP certTemplate: {e}'
+            self.logger.exception(error_message)
+            raise ValueError(error_message) from e
+
+        return builder.public_key(public_key)
 
     def _parse_asn1_name_to_x509_name(self, asn1_name: rfc2459.Name) -> x509.Name:
         """Convert ASN.1 Name structure to cryptography x509.Name object."""
@@ -533,8 +551,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             self.logger.exception('Error parsing extensions', extra={'exception': str(e)})
             raise
 
-        self.logger.info('Successfully parsed %(extensions_count)s extensions',
-                         extra={'extensions_count': len(extensions_list)})
+        self.logger.info('Successfully parsed %i extensions', len(extensions_list))
         return extensions_list
 
     def _parse_subject_alternative_name(
@@ -556,9 +573,8 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
                 critical=critical,
                 value=san_extension
             )
-        except Exception as e:
-            self.logger.exception('Failed to parse SAN extension: %(error)s',
-                                   extra={'error': str(e)})
+        except Exception:
+            self.logger.exception('Failed to parse SAN extension.')
             raise
 
     def _extract_general_names(self, san_asn1: rfc2459.SubjectAltName) -> list[x509.GeneralName]:
@@ -580,8 +596,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             elif name_type == 'rfc822Name':
                 general_names.append(x509.RFC822Name(str(name_value)))
             else:
-                self.logger.warning('Unsupported SAN type: %(name_type)s',
-                                    extra={'name_type': name_type})
+                self.logger.warning('Unsupported SAN type: %s', name_type)
 
         return general_names
 
@@ -678,35 +693,28 @@ class CompositeParsing(ParsingComponent, LoggerMixin):
 
     def parse(self, context: RequestContext) -> None:
         """Execute all child parsers."""
-        self.logger.debug('Starting composite parsing with %(component_count)s components',
-                          extra={'component_count': len(self.components)})
+        self.logger.debug('Starting composite parsing with %i components', len(self.components))
 
         for i, component in enumerate(self.components):
             try:
                 component.parse(context)
-                self.logger.debug('Parsing component %(component_name)s completed successfully',
-                                  extra={'component_name': component.__class__.__name__})
+                self.logger.debug('Parsing component %s completed successfully',
+                                  component.__class__.__name__)
             except ValueError as e:
                 error_message = f'{component.__class__.__name__}: {e}'
-                self.logger.warning('Parsing component %(component_name)s failed: %(error)s',
-                                    extra={'component_name': component.__class__.__name__, 'error': str(e)})
+                self.logger.warning('Parsing component %s failed: %s',
+                                    component.__class__.__name__, str(e))
                 self.logger.exception(
-                    'Composite parsing failed at component %(current_component)s/'
-                    '%(total_components)s: %(component_name)s',
-                    extra={'current_component': i + 1,
-                           'total_components': len(self.components),
-                           'component_name': component.__class__.__name__})
+                    'Composite parsing failed at component %s/%s: %s',
+                    i + 1, len(self.components), component.__class__.__name__)
                 raise ValueError(error_message) from e
             except Exception as e:
                 error_message = f'Unexpected error in {component.__class__.__name__}: {e}'
-                self.logger.exception('Unexpected error in parsing component %(component_name)s: %(error)s',
-                                      extra={'component_name': component.__class__.__name__, 'error': str(e)})
+                self.logger.exception('Unexpected error in parsing component %s',
+                                      component.__class__.__name__)
                 self.logger.exception(
-                    'Composite parsing failed at component %(current_component)s/'
-                    '%(total_components)s: %(component_name)s',
-                    extra={'current_component': i + 1,
-                           'total_components': len(self.components),
-                           'component_name': component.__class__.__name__})
+                    'Composite parsing failed at component %s/%s: %s',
+                    i + 1, len(self.components), component.__class__.__name__)
                 raise ValueError(error_message) from e
 
         self.logger.info('Composite parsing successful. All %i components completed',

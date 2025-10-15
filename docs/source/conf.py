@@ -5,7 +5,6 @@
 import os
 import sys
 from pathlib import Path
-from trustpoint.settings import settings  # Import Django settings
 
 import django
 

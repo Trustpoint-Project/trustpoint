@@ -66,12 +66,12 @@ class EstOperationAuthorization(AuthorizationComponent, LoggerMixin):
                 f"Allowed operations: {', '.join(self.allowed_operations)}."
             )
             self.logger.warning(
-                'Operation authorization failed: %(operation)s not in allowed operations %(allowed_operations)s',
-                extra={'operation': operation, 'allowed_operations': self.allowed_operations})
+                'Operation authorization failed: %s not in allowed operations %s',
+                operation, self.allowed_operations
+            )
             raise ValueError(error_message)
 
-        self.logger.debug('Operation authorization successful for operation: %(operation)s',
-                          extra={'operation': operation})
+        self.logger.debug('Operation authorization successful for operation: %s', operation)
 
 class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
     """Ensures the request is authorized for the specified operation."""
@@ -199,18 +199,19 @@ class DomainScopeValidation(AuthorizationComponent, LoggerMixin):
 
         if not device_domain or device_domain != requested_domain:
             error_message = (
-                f"Unauthorized domain: '{requested_domain}'. "
+                f"Unauthorized requested domain: '{requested_domain}'. "
                 f"Device domain: '{device_domain}'."
             )
             self.logger.warning(
-                "Domain scope validation failed: Device domain %(device_domain)s "
-                "doesn't match requested domain %(requested_domain)s",
-                extra={'device_domain': device_domain, 'requested_domain': requested_domain})
+                "Domain scope validation failed: Device domain %s doesn't match requested domain %s",
+                device_domain, requested_domain
+            )
             raise ValueError(error_message)
 
         self.logger.debug(
-            'Domain scope validation successful: Device %(device_name)s authorized for domain %(domain_name)s',
-            extra={'device_name': authenticated_device.common_name, 'domain_name': requested_domain})
+            'Domain scope validation successful: Device %s authorized for domain %s',
+            authenticated_device.common_name, requested_domain
+        )
 
 
 class ManualAuthorization(AuthorizationComponent, LoggerMixin):
@@ -246,8 +247,7 @@ class CompositeAuthorization(AuthorizationComponent, LoggerMixin):
 
     def authorize(self, context: RequestContext) -> None:
         """Iterate through all child authorization components and execute their authorization logic."""
-        self.logger.debug('Starting composite authorization with %(component_count)d components',
-                          extra={'component_count': len(self.components)})
+        self.logger.debug('Starting composite authorization with %d components', len(self.components))
 
         for i, component in enumerate(self.components):
             try:
@@ -259,34 +259,21 @@ class CompositeAuthorization(AuthorizationComponent, LoggerMixin):
                 self.logger.warning('Authorization component failed',
                                     extra={'component_name': component.__class__.__name__, 'error_message': str(e)})
                 self.logger.exception(
-                    (
-                        'Composite authorization failed at component '
-                        '%(component_index)d/%(total_components)d: %(component_name)s'
-                    ),
-                    extra={'component_index': i + 1,
-                           'total_components': len(self.components),
-                           'component_name': component.__class__.__name__})
+                    'Composite authorization failed at component %d/%d: %s',
+                    i + 1, len(self.components), component.__class__.__name__)
                 raise ValueError(error_message) from e
             except Exception as e:
                 error_message = f'Unexpected error in {component.__class__.__name__}: {e}'
                 self.logger.exception(
-                    'Unexpected error in authorization component %(component_name)s: %(error_message)s',
-                    extra={'component_name': component.__class__.__name__, 'error_message': str(e)}
+                    'Unexpected error in authorization component %s',
+                    component.__class__.__name__
                 )
                 self.logger.exception(
-                    (
-                    'Composite authorization failed at component ',
-                    '%(component_index)d/%(total_components)d: %(component_name)s',
-                    ),
-                    extra={'component_index': i + 1,
-                           'total_components': len(self.components),
-                           'component_name': component.__class__.__name__})
+                    'Composite authorization failed at component %d/%d: %s',
+                    i + 1, len(self.components), component.__class__.__name__)
                 raise ValueError(error_message) from e
 
-        self.logger.info(
-            'Composite authorization successful. All %(component_count)d components passed',
-            extra={'component_count': len(self.components)}
-        )
+        self.logger.info('Composite authorization successful. All %d components passed', len(self.components))
 
 
 class EstAuthorization(CompositeAuthorization):

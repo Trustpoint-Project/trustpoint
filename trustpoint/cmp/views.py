@@ -34,11 +34,19 @@ from django.http import HttpResponse
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic.base import View
+from est.views import LoggedHttpResponse  # TEMP
 from pki.models.domain import DomainModel
 from pki.util.idevid import IDevIDAuthenticator
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
+from request.authentication import CmpAuthentication
+from request.authorization import CmpAuthorization
+from request.http_request_validator import CmpHttpRequestValidator
+from request.operation_processor import CertificateIssueProcessor
+from request.pki_message_parser import CmpMessageParser
+from request.profile_validator import ProfileValidator
+from request.request_context import RequestContext
 from trustpoint_core.crypto_types import PublicKey
 from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
 
@@ -616,14 +624,7 @@ def get_encoded_protected_part(cmp_message: rfc4210.PKIMessage) -> Any: # bytes?
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class CmpInitializationRequestView(
-    CmpHttpMixin,
-    CmpRequestedDomainExtractorMixin,
-    CmpPkiMessageSerializerMixin,
-    CmpRequestTemplateExtractorMixin,
-    CmpResponseBuilderMixin,
-    View
-):
+class CmpInitializationRequestView(View):
     """Handles CMP Initialization Request Messages."""
 
     http_method_names = ('post',)
@@ -917,6 +918,38 @@ class CmpInitializationRequestView(
         **kwargs: Any,
     ) -> HttpResponse:
         """Handles the POST requests to the CMP IR endpoint."""
+        domain_name = cast('str', kwargs.get('domain_name'))
+        # Default to 'domaincredential' if not provided
+        cert_profile = cast('str', kwargs.get('certificate_profile', 'domaincredential'))
+
+        ctx = RequestContext(raw_message=request,
+                                      domain_str=domain_name,
+                                      protocol='cmp',
+                                      operation='initialization',
+                                      certificate_template=cert_profile)
+
+        validator = CmpHttpRequestValidator()
+        validator.validate(ctx)
+
+        parser = CmpMessageParser()
+        parser.parse(ctx)
+
+        authenticator = CmpAuthentication()
+        authenticator.authenticate(ctx)
+
+        authorizer = CmpAuthorization(['tls-server', 'tls-client', 'domaincredential'], ['initialization'])
+        authorizer.authorize(ctx)
+
+        ProfileValidator.validate(ctx)
+
+        CertificateIssueProcessor().process_operation(ctx)
+
+        #CmpMessageResponder.build_response(ctx)
+
+        return LoggedHttpResponse(content=ctx.http_response_content,
+                                  status=ctx.http_response_status,
+                                  content_type=ctx.http_response_content_type)
+
         del args, kwargs, request  # request not accessed directly
         self._check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
 

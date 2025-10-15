@@ -234,20 +234,20 @@ class IDevIDAuthentication(AuthenticationComponent, LoggerMixin):
 
     def authenticate(self, context: RequestContext) -> None:
         """Authenticate the request using the IDevID mechanism."""
-        # Early return if domain is missing
-        if not context.domain:
-            return
-
         # Early return if raw_message is missing
         if not context.raw_message:
             return
 
         try:
+            # domain can be None, in that case IDevIDAuthenticator will infer it from registration pattern
             device_or_none = IDevIDAuthenticator.authenticate_idevid(context.raw_message, context.domain)
 
             if device_or_none:
                 self.logger.info('Successfully authenticated device via IDevID')
                 context.device = device_or_none
+                if not context.domain:
+                    context.domain = context.device.domain
+                    context.domain_str = context.domain.unique_name
             else:
                 error_message = 'IDevID authentication failed: No device associated.'
                 self.logger.warning('IDevID authentication failed: No device associated')
@@ -282,7 +282,7 @@ class CmpAuthenticationBase(AuthenticationComponent, LoggerMixin):
         if hasattr(context, 'raw_message') and context.raw_message:
             request_path = context.raw_message.path
 
-        return bool(domain_name == '.aoki' and request_path and '/initialization/.aoki' in request_path)
+        return bool(domain_name == '.aoki' and request_path and '/p/.aoki/initialization' in request_path)
 
 
 class CmpSharedSecretAuthentication(CmpAuthenticationBase):
@@ -536,11 +536,12 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
         cmp_signer_extra_cert = extra_certs[0]
         cmp_signer_cert = x509.load_der_x509_certificate(encoder.encode(cmp_signer_extra_cert))
 
-        intermediate_certs = [
-            x509.load_der_x509_certificate(encoder.encode(cert))
-            for cert in extra_certs[1:]
-            if cert.subject.public_bytes() != cert.issuer.public_bytes()
-        ]
+        intermediate_certs = []
+        loaded_cert = None
+        for cert in extra_certs[1:]:
+            loaded_cert = x509.load_der_x509_certificate(encoder.encode(cert))
+            if loaded_cert.subject.public_bytes() != loaded_cert.issuer.public_bytes():
+                intermediate_certs.append(loaded_cert)
 
         if not cmp_signer_cert:
             self._raise_value_error('CMP signer certificate missing in extra certs.')
@@ -555,8 +556,8 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
             idevid_cert=cmp_signer_cert,
             intermediate_cas=intermediate_certs,
             domain=None if is_aoki else context.domain,
-            onboarding_protocol=DeviceModel.OnboardingProtocol.CMP_IDEVID,
-            pki_protocol=DeviceModel.PkiProtocol.CMP_CLIENT_CERTIFICATE,
+            onboarding_protocol=OnboardingProtocol.CMP_IDEVID,
+            pki_protocol=OnboardingPkiProtocol.CMP,
         )
 
         if not device.domain:
@@ -575,8 +576,8 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
         if device.onboarding_config.onboarding_protocol != OnboardingProtocol.CMP_IDEVID:
             self._raise_value_error('Wrong onboarding protocol.')
 
-        if device.onboarding_config.onboarding_pki_protocol != OnboardingPkiProtocol.CMP_CLIENT_CERTIFICATE:
-            self._raise_value_error('PKI protocol CMP client certificate expected, but got something else.')
+        if not device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP):
+            self._raise_value_error('PKI protocol CMP expected, but got something else.')
 
     def _raise_value_error(self, message: str) -> Never:
         """Helper method to log and raise a ValueError."""
