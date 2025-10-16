@@ -1,8 +1,10 @@
 {% load i18n %}
 {% block key_usage_extension %}
-    {% if cert.key_usage_extension %}
+
         <h2>{% trans 'Key Usage Extension' %}</h2><hr class="hr-m">
-        <div class="tp-kvp-list">
+        {% if cert.key_usage_extension %}
+<div class="tp-kvp-list">
+
             <div>
                 <div>{% trans 'Extension OID' %}</div>
                 <div>{{ cert.key_usage_extension.extension_oid }}</div>
@@ -48,6 +50,13 @@
                 <div>{% trans 'Decipher Only' %}</div>
                 <div>{{ cert.key_usage_extension.decipher_only }}</div>
             </div>
+        </div>
+             {% else %}
+<div class="tp-kvp-list">
+            <div>
+                <div>{% trans 'No Key Usage Extension' %}</div>
+
+                </div>
         </div>
 
     {% endif %}

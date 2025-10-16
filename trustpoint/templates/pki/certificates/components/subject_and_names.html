@@ -8,7 +8,7 @@
             <div>{% trans 'Subject' %}</div>
             <div>
                 {% for entry in cert.subject.all %}
-                    {{ entry }}<br>
+                    {{ entry.value }}<br>
                 {% endfor %}
             </div>
         </div>
