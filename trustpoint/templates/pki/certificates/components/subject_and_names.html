@@ -7,9 +7,15 @@
         <div>
             <div>{% trans 'Subject' %}</div>
             <div>
-                {% for entry in cert.subject.all %}
-                    {{ entry.value }}<br>
-                {% endfor %}
+             {% for entry in cert.subject.all %}
+    {% if entry.value %}
+        {{ entry.oid|add:" ["|add:entry.value|add:"]" }}<br>
+    {% else %}
+        {{ entry.oid }}<br>
+    {% endif %}
+{% endfor %}
+
+
             </div>
         </div>
 

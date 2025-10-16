@@ -1,7 +1,8 @@
 {% load i18n %}
 {% block issuer_alternative_name_extension %}
+ <h2>{% trans 'Issuer Alternative Name (IAN) Extension' %}</h2><hr class="hr-m">
     {% if cert.issuer_alternative_name_extension %}
-        <h2>{% trans 'Issuer Alternative Name (IAN) Extension' %}</h2><hr class="hr-m">
+
         <div class="tp-kvp-list">
             <div>
                 <div>{% trans 'Extension OID' %}</div>
@@ -11,7 +12,6 @@
                 <div>{% trans 'Critical' %}</div>
                 <div>{{ cert.issuer_alternative_name_extension.critical }}</div>
             </div>
-            <hr>
         {% if cert.issuer_alternative_name_extension.rfc822_names and cert.issuer_alternative_name_extension.rfc822_names.all %}
             <div>
                 <div>{% trans 'RFC822 Names (IAN)' %}</div>
@@ -89,5 +89,10 @@
             </div>
         {% endif %}
         </div>
+
+ {% else %}
+<div class="tp-kvp-list">
+    <div>{% trans 'No IAN Extension' %}</div>
+            </div>
     {% endif %}
 {% endblock issuer_alternative_name_extension %}
