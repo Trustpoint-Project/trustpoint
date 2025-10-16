@@ -42,8 +42,8 @@ from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
 from request.authentication import CmpAuthentication
 from request.authorization import CmpAuthorization
+from request.cmp_responder import CmpMessageResponder
 from request.http_request_validator import CmpHttpRequestValidator
-from request.message_responder import CmpMessageResponder
 from request.operation_processor import CertificateIssueProcessor
 from request.pki_message_parser import CmpMessageParser
 from request.profile_validator import ProfileValidator

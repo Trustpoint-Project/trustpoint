@@ -1,7 +1,8 @@
 """Handles Request Conversion to JSON and Profile Validation."""
 
-from pki.util.cert_profile import JSONProfileVerifier
+from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from pki.util.cert_req_converter import JSONCertRequestConverter
+from pydantic_core import ValidationError
 
 from request.request_context import RequestContext
 from trustpoint.logger import LoggerMixin
@@ -20,8 +21,6 @@ class ProfileValidator(LoggerMixin):
         cert_request_json = JSONCertRequestConverter.to_json(context.cert_requested)
         cls.logger.info('Cert Request JSON: %s', cert_request_json)
 
-        validated_req = JSONProfileVerifier.validate_request(cert_request_json)
-
         # TODO: Get correct profile
         # How this will work eventually:
         # First, we check the requested profile ("template") from the URL.
@@ -39,7 +38,14 @@ class ProfileValidator(LoggerMixin):
             }
         }
 
-        validated_request = JSONProfileVerifier(cert_profile).apply_profile_to_request(validated_req)
+        try:
+            validated_request = JSONProfileVerifier(cert_profile).apply_profile_to_request(cert_request_json)
+        except (ValidationError, ProfileValidationError) as e:
+            exc_msg = f'Certificate request validation against profile failed: {e}'
+            context.http_response_content = 'Request does not match the certificate profile.'
+            context.http_response_status = 400
+            raise ValueError(exc_msg) from e
+
         cls.logger.info('Validated Cert Request JSON: %s', validated_request)
 
         context.cert_requested_profile_validated = JSONCertRequestConverter.from_json(validated_request)

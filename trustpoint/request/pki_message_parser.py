@@ -5,6 +5,7 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any, Never
 
+from cmp.util import NameParser
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.serialization import load_der_public_key
@@ -444,7 +445,11 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
     ) -> x509.CertificateBuilder:
 
         if cert_template['subject'].hasValue():
-            subject = self._parse_asn1_name_to_x509_name(cert_template['subject'])
+            try:
+                subject = NameParser.parse_name(cert_template['subject'])
+            except Exception:
+                self.logger.exception('Error parsing ASN.1 name')
+                raise
         else:
             subject = x509.Name([])
 
@@ -473,51 +478,6 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             raise ValueError(error_message) from e
 
         return builder.public_key(public_key)
-
-    def _parse_asn1_name_to_x509_name(self, asn1_name: rfc2459.Name) -> x509.Name:
-        """Convert ASN.1 Name structure to cryptography x509.Name object."""
-        name_attributes = []
-
-        if not asn1_name or not asn1_name.hasValue():
-            self.logger.warning('ASN.1 name is empty or has no value')
-            return x509.Name([])
-
-        try:
-            for i in range(len(asn1_name)):
-                rdn_sequence = asn1_name.getComponentByPosition(i)
-                for j in range(len(rdn_sequence)):
-                    rdn = rdn_sequence.getComponentByPosition(j)
-                    for k in range(len(rdn)):
-                        atv = rdn.getComponentByPosition(k)
-
-                        oid_component = atv.getComponentByName('type')
-                        value_component = atv.getComponentByName('value')
-
-                        oid_str = str(oid_component)
-                        value_str = str(value_component)
-
-                        if value_str.startswith('0x'):
-                            try:
-                                hex_str = value_str[2:]
-                                value_bytes = bytes.fromhex(hex_str)
-                                attribute_value = value_bytes.decode('utf-8')
-                            except Exception as decode_error:  # noqa: BLE001
-                                self.logger.warning('Failed to decode hex value: %(decode_error)s, using raw value',
-                                                    extra={'decode_error': decode_error})
-                                attribute_value = value_str
-                        else:
-                            attribute_value = value_str
-
-                        oid = x509.ObjectIdentifier(oid_str)
-
-                        name_attr = x509.NameAttribute(oid, attribute_value)
-                        name_attributes.append(name_attr)
-
-        except Exception as e:
-            self.logger.exception('Error parsing ASN.1 name', extra={'exception': str(e)})
-            raise
-
-        return x509.Name(name_attributes)
 
     def _raise_not_implemented_error(self, message: str) -> None:
         """Helper function to raise NotImplementedError with a given message."""
@@ -667,19 +627,6 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             raise
 
 
-class CmpProtectionValidation(ParsingComponent, LoggerMixin):
-    """Component for validating CMP message signatures."""
-
-    def parse(self, context: RequestContext) -> None:
-        """Validate the CMP message signature."""
-        if context.parsed_message is None:
-            error_message = 'Parsed message is missing from the context.'
-            self.logger.warning('CMP protection validation failed: Parsed message is missing')
-            raise ValueError(error_message)
-
-        self.logger.warning('CMP protection validation is not yet implemented!')
-
-
 class CompositeParsing(ParsingComponent, LoggerMixin):
     """Composite parser to group multiple parsing strategies."""
 
@@ -742,7 +689,6 @@ class CmpMessageParser(CompositeParsing):
         self.add(CmpPkiMessageParsing())
         self.add(CmpHeaderValidation())
         self.add(CmpBodyValidation())
-        self.add(CmpProtectionValidation())  # TODO(Air): Add!
         self.add(DomainParsing())
         self.add(CertTemplateParsing())
 

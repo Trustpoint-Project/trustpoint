@@ -4,6 +4,7 @@ from typing import Never
 
 from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 
+from aoki.views import AokiServiceMixin
 from request.request_context import RequestContext
 from trustpoint.logger import LoggerMixin
 
@@ -214,6 +215,35 @@ class DomainScopeValidation(AuthorizationComponent, LoggerMixin):
         )
 
 
+class DevOwnerIDAuthorization(AuthorizationComponent, LoggerMixin):
+    """Ensure that if this is an AOKI request, we have a matching DevOwnerID to the IDevID."""
+
+    def authorize(self, context: RequestContext) -> None:
+        """Authorize the request based on the DevOwnerID corresponding to the client certificate."""
+        if context.protocol != 'cmp':
+            return
+        if context.domain_str != '.aoki':
+            return
+
+        client_cert = context.client_certificate
+
+        if not client_cert:
+            error_message = 'Client certificate is missing in the context. Authorization denied.'
+            self.logger.warning('DevOwnerID authorization failed: Client certificate is missing')
+            raise ValueError(error_message)
+
+        owner_credential = AokiServiceMixin.get_owner_credential(client_cert)
+        if not owner_credential:
+            err_msg = 'No DevOwnerID credential present for this IDevID.'
+            context.http_response_content = err_msg
+            context.http_response_status = 403
+            self.logger.warning(err_msg)
+            raise ValueError(err_msg)
+
+        context.owner_credential = owner_credential
+
+
+
 class ManualAuthorization(AuthorizationComponent, LoggerMixin):
     """Perform manual authorization override."""
 
@@ -318,6 +348,7 @@ class CmpAuthorization(CompositeAuthorization):
 
         self.add(CertificateTemplateAuthorization(allowed_templates))
         self.add(DomainScopeValidation())
+        self.add(DevOwnerIDAuthorization())
         self.add(ManualAuthorization())
         self.add(ProtocolAuthorization(['cmp']))
         self.add(CmpOperationAuthorization(allowed_operations))

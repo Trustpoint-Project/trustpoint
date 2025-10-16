@@ -826,6 +826,7 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             'Successfully authenticated device via CMP signature-based certification',
             extra={'device_common_name': device.common_name})
         context.device = device
+        context.client_certificate = cmp_signer_cert
 
     def _raise_value_error(self, message: str) -> Never:
         """Helper method to log and raise a ValueError."""

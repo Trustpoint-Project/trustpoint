@@ -7,8 +7,8 @@ from cryptography.x509 import CertificateSigningRequest
 from cryptography.x509.base import CertificateBuilder
 from devices.models import DeviceModel
 from django.http import HttpRequest
-from pki.models import DomainModel
-from pyasn1_modules.rfc4210 import PKIMessage
+from pki.models import DomainModel, CredentialModel
+from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 
 
 @dataclass
@@ -35,6 +35,9 @@ class RequestContext:
     cmp_shared_secret: str | None = None
     client_certificate: x509.Certificate | None = None
     client_intermediate_certificate: list[x509.Certificate] | None = None
+
+    owner_credential: CredentialModel | None = None
+    issuer_credential: CredentialModel | None = None
 
     http_response_status: int | None = None
     # consider adding http_response_headers: dict[str, str] | None = None
