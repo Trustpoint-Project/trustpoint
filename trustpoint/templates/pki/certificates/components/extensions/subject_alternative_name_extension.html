@@ -1,7 +1,8 @@
 {% load i18n %}
 {% block subject_alternative_name_extension %}
+  <h2>{% trans 'Subject Alternative Name (SAN) Extension' %}</h2><hr class="hr-m">
     {% if cert.subject_alternative_name_extension %}
-        <h2>{% trans 'Subject Alternative Name (SAN) Extension' %}</h2><hr class="hr-m">
+
         <div class="tp-kvp-list">
             <div>
                 <div>{% trans 'Extension OID' %}</div>
@@ -14,5 +15,10 @@
         </div>
         <hr>
         {% include 'pki/certificates/components/extensions/subject_alternative_name_extension_content.html' %}
+    {% else %}
+<div class="tp-kvp-list">
+    <div>{% trans 'No SAN Extension' %}</div>
+            </div>
+
     {% endif %}
 {% endblock subject_alternative_name_extension %}

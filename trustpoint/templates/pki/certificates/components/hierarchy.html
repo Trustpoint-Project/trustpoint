@@ -8,14 +8,25 @@
         <div>
             <div>{% trans 'Issuer' %}</div>
             <div>
-
                 {% for entry in cert.issuer.all %}
-    {% if cert.is_self_signed %}
-        <span class="btn-primary">{{ entry.value }}</span><br>
-    {% else %}
-        <a href="{% url 'pki:certificate-detail' pk=entry.id %}" class="btn-primary">{{ entry.value }}</a><br>
-    {% endif %}
-{% endfor %}
+                    {% if cert.is_self_signed %}
+                        <span class="btn-primary">
+                            {% if entry.value %}
+                                {{ entry.oid|add:" ["|add:entry.value|add:"]" }}
+                            {% else %}
+                                {{ entry.oid }}
+                            {% endif %}
+                        </span><br>
+                    {% else %}
+                        <a href="{% url 'pki:certificate-detail' pk=entry.id %}" class="btn-primary">
+                            {% if entry.value %}
+                                {{ entry.oid|add:" ["|add:entry.value|add:"]" }}
+                            {% else %}
+                                {{ entry.oid }}
+                            {% endif %}
+                        </a><br>
+                    {% endif %}
+                {% endfor %}
             </div>
         </div>
 
@@ -38,36 +49,37 @@
             <div>{% trans 'Self-Signed' %}</div>
             <div>{{ cert.is_self_signed }}</div>
         </div>
-    
 
-    {% for certificate_chain in cert.get_certificate_chains %}
-        <div class="tp-row-br">
-            <div>{% trans 'Certificate Chain' %} {{ forloop.counter }}</div>
-            <div>
-                {% for certificate in certificate_chain %}
-                    <a href="{% url 'pki:certificate-detail' pk=certificate.id %}">
-                        {% if certificate.common_name %}
-                            commonName={{ certificate.common_name }}
-                        {% else %}
-                            serialNumber={{ certificate.serial_number }}
-                        {% endif %}
-                    </a><br>
-                {% endfor %}
-            <br>
+        {% for certificate_chain in cert.get_certificate_chains %}
+            <div class="tp-row-br">
+                <div>{% trans 'Certificate Chain' %} {{ forloop.counter }}</div>
+                <div>
+                    {% for certificate in certificate_chain %}
+                        <a href="{% url 'pki:certificate-detail' pk=certificate.id %}">
+                            {% if certificate.common_name %}
+                                commonName={{ certificate.common_name }}
+                            {% else %}
+                                serialNumber={{ certificate.serial_number }}
+                            {% endif %}
+                        </a><br>
+                    {% endfor %}
+                    <br>
+                </div>
             </div>
-        </div>
-    {% endfor %}
+        {% endfor %}
 
-    {% if cert.issued_certificate_references.all %}
-        <div>
-            <div>{% trans 'Number of Issued Certificates' %}</div>
+        {% if cert.issued_certificate_references.all %}
             <div>
-                {{ cert.issued_certificate_references.count }}
-                <br>
-                <a href="{% url 'pki:issued_certificates' pk=cert.id %}" class="btn btn-primary my-1">{% trans 'Show all issued certificates' %}</a>
+                <div>{% trans 'Number of Issued Certificates' %}</div>
+                <div>
+                    {{ cert.issued_certificate_references.count }}
+                    <br>
+                    <a href="{% url 'pki:issued_certificates' pk=cert.id %}" class="btn btn-primary my-1">
+                        {% trans 'Show all issued certificates' %}
+                    </a>
+                </div>
             </div>
-        </div>
-    {% endif %}
+        {% endif %}
     </div>
 
 {% endblock certificate_hierarchy %}
