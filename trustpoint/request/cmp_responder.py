@@ -11,6 +11,7 @@ from typing import Any, cast
 from cryptography import x509
 from cryptography.hazmat.primitives import hmac
 from cryptography.hazmat.primitives.serialization import Encoding
+from devices.models import OnboardingStatus
 from pki.models import CredentialModel
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
@@ -235,6 +236,9 @@ class CmpInitializationResponder(CmpMessageResponder):
 
         encoded_message = encoder.encode(pki_message)
 
+        if context.device and context.device.onboarding_config:
+            context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+            context.device.onboarding_config.save()
         context.http_response_status = 200
         context.http_response_content = encoded_message
         context.http_response_content_type = 'application/pkixcmp'

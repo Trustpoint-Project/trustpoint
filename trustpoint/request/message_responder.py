@@ -3,6 +3,7 @@ import base64
 from abc import ABC, abstractmethod
 
 from cryptography.hazmat.primitives._serialization import Encoding
+from devices.models import OnboardingStatus
 
 from request.request_context import RequestContext
 
@@ -44,6 +45,7 @@ class EstCertificateMessageResponder(EstMessageResponder):
 
         encoding = Encoding.DER if context.est_encoding in {'der', 'base64_der'} else Encoding.PEM
         cert_bytes = context.issued_certificate.public_bytes(encoding=encoding)
+        cert: str | bytes
 
         if context.est_encoding == 'base64_der':
             b64_cert = base64.b64encode(cert_bytes).decode('utf-8')
@@ -59,6 +61,9 @@ class EstCertificateMessageResponder(EstMessageResponder):
                 cert = cert_bytes
             content_type = 'application/x-pem-file'
 
+        if context.device and context.device.onboarding_config:
+            context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+            context.device.onboarding_config.save()
         context.http_response_status = 200
         context.http_response_content = cert
         context.http_response_content_type = content_type
