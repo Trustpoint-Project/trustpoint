@@ -15,11 +15,9 @@
     <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; padding-top: 0;">
         <ul class="nav nav-tabs mt-3" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="tab1-tab" data-bs-toggle="tab" data-bs-target="#tab1-panel" type="button" role="tab">{% trans "General" %}</button>
+                <button class="nav-link active" id="tab1-tab" data-bs-toggle="tab" data-bs-target="#tab1-panel" type="button" role="tab">{% trans "Profile" %}</button>
             </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="tab2-tab" data-bs-toggle="tab" data-bs-target="#tab2-panel" type="button" role="tab">{% trans "Profile" %}</button>
-            </li>
+
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="tab3-tab" data-bs-toggle="tab" data-bs-target="#tab3-panel" type="button" role="tab">{% trans "Key & Signature" %}</button>
             </li>
@@ -40,40 +38,29 @@
                      {% include 'pki/certificates/components/validity.html' %}
                 </div>
             </div>
-            <div class="tab-pane fade" id="tab2-panel" role="tabpanel">
-                <div class="tp-card-centered-content">
-                    {% include 'pki/certificates/components/profile.html' %}
-                    {% include 'pki/certificates/components/extensions/basic_constraints_extension.html' %}
-                    {% include 'pki/certificates/components/extensions/key_usage_extension.html' %}
-                               {% include 'pki/certificates/components/extensions/issuer_alternative_name_extension.html' %}
-                        {% include 'pki/certificates/components/extensions/subject_alternative_name_extension_content.html' %}
 
-                </div>
-            </div>
-            <div class="tab-pane fade" id="tab4-panel" role="tabpanel">
-                <div class="tp-card-centered-content">
 
-                    {% include 'pki/certificates/components/extensions/basic_constraints_extension.html' %}
-                    {% include 'pki/certificates/components/extensions/key_usage_extension.html' %}
-                               {% include 'pki/certificates/components/extensions/issuer_alternative_name_extension.html' %}
-                        {% include 'pki/certificates/components/extensions/subject_alternative_name_extension_content.html' %}
-
-                </div>
-            </div>
             <div class="tab-pane fade" id="tab3-panel" role="tabpanel">
                 <div class="tp-card-centered-content">
                     {% include 'pki/certificates/components/subject_public_key_info.html' %}
                       {% include 'pki/certificates/components/signature.html' %}
                 </div>
             </div>
+  <div class="tab-pane fade" id="tab4-panel" role="tabpanel">
+                <div class="tp-card-centered-content">
 
+                    {% include 'pki/certificates/components/extensions/basic_constraints_extension.html' %}
+                    {% include 'pki/certificates/components/extensions/key_usage_extension.html' %}
+                               {% include 'pki/certificates/components/extensions/issuer_alternative_name_extension.html' %}
+                        {% include 'pki/certificates/components/extensions/subject_alternative_name_extension.html' %}
+
+                </div>
+            </div>
 
 
             <div class="tab-pane fade" id="tab5-panel" role="tabpanel">
                 <div class="tp-card-centered-content">
                     {% include 'pki/certificates/components/hierarchy.html' %}
-                      {% include 'pki/certificates/components/extensions/subject_alternative_name_extension.html' %}
-                    {% include 'pki/certificates/components/extensions/subject_alternative_name_extension_content.html' %}
                     {% if cert.credential_set.first.issued_credential %}
                         {% include 'pki/certificates/components/additional.html' %}
                     {% endif %}
