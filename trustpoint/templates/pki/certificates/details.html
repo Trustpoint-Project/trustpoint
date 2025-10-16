@@ -22,7 +22,10 @@
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="tab3-tab" data-bs-toggle="tab" data-bs-target="#tab3-panel" type="button" role="tab">{% trans "Key & Signature" %}</button>
-
+            </li>
+               <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab4-tab" data-bs-toggle="tab" data-bs-target="#tab4-panel" type="button" role="tab">{% trans "Extensions" %}</button>
+            </li>
 
              <li class="nav-item" role="presentation">
                 <button class="nav-link" id="tab5-tab" data-bs-toggle="tab" data-bs-target="#tab5-panel" type="button" role="tab">{% trans "Hierarchy & Additional" %}</button>
@@ -32,7 +35,7 @@
             <div class="tab-pane fade show active" id="tab1-panel" role="tabpanel">
                 <div class="tp-card-centered-content">
                     {% include 'pki/certificates/components/subject_and_names.html' %}
-                    {% include 'pki/certificates/components/extensions/subject_alternative_name_extension_content.html' %}
+
                     {% include 'pki/certificates/components/general.html' %}
                      {% include 'pki/certificates/components/validity.html' %}
                 </div>
@@ -40,11 +43,21 @@
             <div class="tab-pane fade" id="tab2-panel" role="tabpanel">
                 <div class="tp-card-centered-content">
                     {% include 'pki/certificates/components/profile.html' %}
-
-                    {% include 'pki/certificates/components/extensions/subject_alternative_name_extension.html' %}
-                    {% include 'pki/certificates/components/extensions/issuer_alternative_name_extension.html' %}
                     {% include 'pki/certificates/components/extensions/basic_constraints_extension.html' %}
                     {% include 'pki/certificates/components/extensions/key_usage_extension.html' %}
+                               {% include 'pki/certificates/components/extensions/issuer_alternative_name_extension.html' %}
+                        {% include 'pki/certificates/components/extensions/subject_alternative_name_extension_content.html' %}
+
+                </div>
+            </div>
+            <div class="tab-pane fade" id="tab4-panel" role="tabpanel">
+                <div class="tp-card-centered-content">
+
+                    {% include 'pki/certificates/components/extensions/basic_constraints_extension.html' %}
+                    {% include 'pki/certificates/components/extensions/key_usage_extension.html' %}
+                               {% include 'pki/certificates/components/extensions/issuer_alternative_name_extension.html' %}
+                        {% include 'pki/certificates/components/extensions/subject_alternative_name_extension_content.html' %}
+
                 </div>
             </div>
             <div class="tab-pane fade" id="tab3-panel" role="tabpanel">
@@ -77,6 +90,7 @@
         </div>
     </div>
 </div>
+
 
 <style>.nav-tabs {
     border-bottom: 1px solid #34373c;
