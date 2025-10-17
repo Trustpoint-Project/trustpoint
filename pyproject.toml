@@ -19,6 +19,7 @@ dependencies = [
     "django-stubs[compatible-mypy]>=5.2.2",
     "django-taggit>=6.1.0,<7",
     "djangorestframework>=3.16.1",
+    "djangorestframework-simplejwt>=5.5.1",
     "packaging>=25.0",
     "paramiko>=3.5.1",
     "psycopg>=3.2.10",
