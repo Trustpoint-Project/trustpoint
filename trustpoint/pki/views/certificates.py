@@ -46,8 +46,6 @@ class CertificateTableView(CertificatesContextMixin, SortableTableMixin, ListVie
 
 OID_MAP = {oid.dotted_string: oid.verbose_name for oid in NameOid}
 
-
-
 class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateModel]):
     """The certificate detail view."""
 
