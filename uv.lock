@@ -506,6 +506,18 @@ wheels = [
 ]
 
 [[package]]
+name = "djangorestframework"
+version = "3.16.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8a/95/5376fe618646fde6899b3cdc85fd959716bb67542e273a76a80d9f326f27/djangorestframework-3.16.1.tar.gz", hash = "sha256:166809528b1aced0a17dc66c24492af18049f2c9420dbd0be29422029cfc3ff7", size = 1089735, upload-time = "2025-08-06T17:50:53.251Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b0/ce/bf8b9d3f415be4ac5588545b5fcdbbb841977db1c1d923f7568eeabe1689/djangorestframework-3.16.1-py3-none-any.whl", hash = "sha256:33a59f47fb9c85ede792cbf88bde71893bcda0667bc573f784649521f1102cec", size = 1080442, upload-time = "2025-08-06T17:50:50.667Z" },
+]
+
+[[package]]
 name = "djangorestframework-stubs"
 version = "3.16.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1318,6 +1330,7 @@ dependencies = [
     { name = "django-filter-stubs" },
     { name = "django-stubs", extra = ["compatible-mypy"] },
     { name = "django-taggit" },
+    { name = "djangorestframework" },
     { name = "packaging" },
     { name = "paramiko" },
     { name = "psycopg" },
@@ -1371,6 +1384,7 @@ requires-dist = [
     { name = "django-filter-stubs", specifier = ">=0.1.3" },
     { name = "django-stubs", extras = ["compatible-mypy"], specifier = ">=5.2.2" },
     { name = "django-taggit", specifier = ">=6.1.0,<7" },
+    { name = "djangorestframework", specifier = ">=3.16.1" },
     { name = "packaging", specifier = ">=25.0" },
     { name = "paramiko", specifier = ">=3.5.1" },
     { name = "psycopg", specifier = ">=3.2.10" },
