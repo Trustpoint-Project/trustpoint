@@ -1,4 +1,5 @@
 """This module contains all views concerning the devices application."""
+
 from __future__ import annotations
 
 import abc
@@ -22,6 +23,7 @@ from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
+from rest_framework import viewsets
 from trustpoint_core.archiver import Archiver
 from trustpoint_core.serializer import CredentialFileFormat
 from util.mult_obj_views import get_primary_keys_from_str_as_list_of_ints
@@ -60,6 +62,7 @@ from devices.models import (
     RemoteDeviceCredentialDownloadModel,
 )
 from devices.revocation import DeviceCredentialRevocation
+from devices.serializers import DeviceSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
@@ -116,7 +119,6 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
 
-
     def apply_filters(self, qs: QuerySet[DeviceModel]) -> QuerySet[DeviceModel]:
         """Applies the `DeviceFilter` to the given queryset.
 
@@ -128,7 +130,6 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
         """
         self.filterset = DeviceFilter(self.request.GET, queryset=qs)
         return cast('QuerySet[DeviceModel]', self.filterset.qs)
-
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Adds the object model to the instance and forwards to super().get().
@@ -2152,3 +2153,14 @@ class OpcUaGdsBulkDeleteView(AbstractBulkDeleteView):
     """abc."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class DeviceViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing Device instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+
+    queryset = DeviceModel.objects.all()
+    serializer_class = DeviceSerializer
