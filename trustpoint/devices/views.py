@@ -5,7 +5,7 @@ from __future__ import annotations
 import abc
 import datetime
 import io
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
@@ -2164,3 +2164,17 @@ class DeviceViewSet(viewsets.ModelViewSet):
 
     queryset = DeviceModel.objects.all()
     serializer_class = DeviceSerializer
+    action_descriptions: ClassVar[dict[str, str]] = {
+        'list': 'Retrieve a list of all devices.',
+        'retrieve': 'Retrieve a single device by id.',
+        'create': 'Create a new device with name, serial number, and status.',
+        'update': 'Update an existing device.',
+        'partial_update': 'Partially update an existing device.',
+        'destroy': 'Delete a device.',
+    }
+
+    def get_view_description(self, *, html: bool = False) -> str:
+        """Return a description for the given action."""
+        if hasattr(self, 'action') and self.action in self.action_descriptions:
+            return self.action_descriptions[self.action]
+        return super().get_view_description(html)
