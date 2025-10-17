@@ -57,4 +57,7 @@ urlpatterns += [
         name='javascript-catalog',
     ),
     path('', base.IndexView.as_view()),
+
+    # API URLs
+    path('api/', include('devices.api_urls')),
 ]
