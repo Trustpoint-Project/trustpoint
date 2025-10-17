@@ -247,7 +247,8 @@ INSTALLED_APPS = [
     'crispy_bootstrap5',
     'django_filters',
     'dbbackup',
-    'rest_framework'
+    'rest_framework',
+    'drf_yasg',
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
