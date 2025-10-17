@@ -26,6 +26,10 @@ from django.views.decorators.http import last_modified
 from django.views.decorators.vary import vary_on_cookie
 from django.views.i18n import JavaScriptCatalog
 from pki.views.issuing_cas import CrlDownloadView
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 
 from .views import base
 
@@ -60,4 +64,8 @@ urlpatterns += [
 
     # API URLs
     path('api/', include('devices.api_urls')),
+
+    # JWT endpoints
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh')
 ]
