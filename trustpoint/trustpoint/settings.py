@@ -247,6 +247,7 @@ INSTALLED_APPS = [
     'crispy_bootstrap5',
     'django_filters',
     'dbbackup',
+    'rest_framework'
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
@@ -381,3 +382,13 @@ class UIConfig:
 
     paginate_by: ClassVar[int] = 50
     notifications_paginate_by: ClassVar[int] = 5
+
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
+}
