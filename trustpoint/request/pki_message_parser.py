@@ -11,12 +11,13 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.serialization import load_der_public_key
 from cryptography.x509.oid import ExtensionOID
 from pki.models import DomainModel
-from pyasn1.codec.ber import decoder  # type: ignore[import-untyped]
-from pyasn1.codec.der import encoder  # type: ignore[import-untyped]
+from pyasn1.codec.ber import decoder as ber_decoder  # type: ignore[import-untyped]
+from pyasn1.codec.der import decoder as der_decoder  # type: ignore[import-untyped]
+from pyasn1.codec.der import encoder as der_encoder  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
+from trustpoint.logger import LoggerMixin
 
 from request.request_context import RequestContext
-from trustpoint.logger import LoggerMixin
 
 
 class ParsingComponent(ABC):
@@ -105,7 +106,7 @@ class EstCsrSignatureVerification(ParsingComponent, LoggerMixin):
             self._raise_validation_error(error_message)
 
         if not isinstance(csr, x509.CertificateSigningRequest):
-            error_message = 'CSR signature verification is only supported for EST requests with CertificateSigningRequest objects.'
+            error_message = 'CSR signature verification only supported for EST requests with CertificateSigningRequest objects.'
             self.logger.warning('EST CSR signature verification failed: Expected CertificateSigningRequest, got %s', 
                               type(csr).__name__)
             self._raise_validation_error(error_message)
@@ -220,7 +221,7 @@ class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
 
         try:
             body_size = len(context.raw_message.body)
-            serialized_message, _ = decoder.decode(context.raw_message.body, asn1Spec=rfc4210.PKIMessage())
+            serialized_message, _ = ber_decoder.decode(context.raw_message.body, asn1Spec=rfc4210.PKIMessage())
             context.parsed_message = serialized_message
 
             self._extract_signer_certificate(context)
@@ -243,7 +244,7 @@ class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
                 return
 
             cmp_signer_extra_cert = extra_certs[0]
-            der_cmp_signer_cert = encoder.encode(cmp_signer_extra_cert)
+            der_cmp_signer_cert = der_encoder.encode(cmp_signer_extra_cert)
             cmp_signer_cert = x509.load_der_x509_certificate(der_cmp_signer_cert)
             context.client_certificate = cmp_signer_cert
 
@@ -251,7 +252,7 @@ class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
                 intermediate_certs = []
                 for i, cert_asn1 in enumerate(extra_certs[1:], start=1):
                     try:
-                        der_cert = encoder.encode(cert_asn1)
+                        der_cert = der_encoder.encode(cert_asn1)
                         intermediate_cert = x509.load_der_x509_certificate(der_cert)
                         intermediate_certs.append(intermediate_cert)
                         self.logger.debug('Loaded intermediate certificate %d from extraCerts', i)
@@ -470,7 +471,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             spki = rfc2511.SubjectPublicKeyInfo()
             spki.setComponentByName('algorithm', cert_template_pubkey['algorithm'])
             spki.setComponentByName('subjectPublicKey', cert_template_pubkey['subjectPublicKey'])
-            spki_der = encoder.encode(spki)
+            spki_der = der_encoder.encode(spki)
             public_key = load_der_public_key(spki_der)
         except Exception as e:
             error_message = f'Failed to parse public key from CMP certTemplate: {e}'
@@ -518,11 +519,8 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         self, value: bytes, *, critical: bool
     ) -> x509.Extension[x509.SubjectAlternativeName]:
         """Parse Subject Alternative Name extension manually using the working approach."""
-        from pyasn1.codec.der import decoder
-        from pyasn1_modules import rfc2459
-
         try:
-            san_asn1, _ = decoder.decode(value, asn1Spec=rfc2459.SubjectAltName())
+            san_asn1, _ = der_decoder.decode(value, asn1Spec=rfc2459.SubjectAltName())
             general_names = self._extract_general_names(san_asn1)
             if not general_names:
                 self.logger.warning('No valid SAN entries found')
@@ -588,7 +586,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
     def _parse_certificate_policies(self, value: bytes, *, critical: bool) -> x509.Extension[x509.CertificatePolicies]:
         """Parse Certificate Policies extension manually."""
         try:
-            cert_policies, _ = decoder.decode(value, asn1Spec=rfc2459.CertificatePolicies())
+            cert_policies, _ = ber_decoder.decode(value, asn1Spec=rfc2459.CertificatePolicies())
 
             policy_information_list = []
 

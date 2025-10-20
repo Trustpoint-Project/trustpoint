@@ -12,10 +12,10 @@ from pki.models import CredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
+from trustpoint.logger import LoggerMixin
 from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
 
 from request.request_context import RequestContext
-from trustpoint.logger import LoggerMixin
 
 
 class AuthenticationComponent(ABC):
@@ -297,7 +297,8 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
             sender_kid = self._extract_sender_kid(context)
             device = self._get_device(sender_kid)
             self._validate_device_configuration(device, sender_kid)
-            self._verify_hmac_protection(context, device.no_onboarding_config.cmp_shared_secret)
+            device_config = device.onboarding_config or device.no_onboarding_config
+            self._verify_hmac_protection(context, device_config.cmp_shared_secret)
             self._finalize_authentication(context, device, sender_kid)
 
         except (DeviceModel.DoesNotExist, ValueError, TypeError) as e:
@@ -366,7 +367,8 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
 
     def _validate_device_configuration(self, device: DeviceModel, sender_kid: int) -> None:
         """Validate device has required shared secret configuration."""
-        if not device.no_onboarding_config or not device.no_onboarding_config.cmp_shared_secret:
+        device_config = device.onboarding_config or device.no_onboarding_config
+        if not device_config.cmp_shared_secret:
             error_message = 'CMP shared secret authentication failed: Device has no shared secret configured.'
             self.logger.warning(
                 'Device %s (ID: %s) has no CMP shared secret configured', device.common_name, sender_kid)
@@ -406,12 +408,12 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
 
     @staticmethod
     def _verify_protection_shared_secret(
-            serialized_pyasn1_message: rfc4210.PKIMessage, shared_secret: str) -> hmac.HMAC:
+            parsed_message: rfc4210.PKIMessage, shared_secret: str) -> hmac.HMAC:
         """Verifies the HMAC-based protection of a CMP message using a shared secret.
 
         Returns a new HMAC object that can be used to sign the response message.
         """
-        pbm_parameters_bitstring = serialized_pyasn1_message['header']['protectionAlg']['parameters']
+        pbm_parameters_bitstring = parsed_message['header']['protectionAlg']['parameters']
         decoded_pbm, _ = decoder.decode(pbm_parameters_bitstring, asn1Spec=rfc4210.PBMParameter())
 
         salt = decoded_pbm['salt'].asOctets()
@@ -439,11 +441,11 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
             raise ValueError(err_msg) from exception
 
         protected_part = rfc4210.ProtectedPart()
-        protected_part['header'] = serialized_pyasn1_message['header']
-        protected_part['infoValue'] = serialized_pyasn1_message['body']
+        protected_part['header'] = parsed_message['header']
+        protected_part['infoValue'] = parsed_message['body']
         encoded_protected_part = encoder.encode(protected_part)
 
-        protection_value = serialized_pyasn1_message['protection'].asOctets()
+        protection_value = parsed_message['protection'].asOctets()
 
         hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
         hmac_gen.update(encoded_protected_part)
@@ -584,15 +586,15 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
         self.logger.warning(message)
         raise ValueError(message)
 
-    def _verify_protection_signature(self, serialized_pyasn1_message: rfc4210.PKIMessage,
+    def _verify_protection_signature(self, parsed_message: rfc4210.PKIMessage,
                                      cmp_signer_cert: x509.Certificate) -> None:
         """Verifies the message signature of a CMP message using signature-based protection."""
         protected_part = rfc4210.ProtectedPart()
-        protected_part['header'] = serialized_pyasn1_message['header']
-        protected_part['infoValue'] = serialized_pyasn1_message['body']
+        protected_part['header'] = parsed_message['header']
+        protected_part['infoValue'] = parsed_message['body']
         encoded_protected_part = encoder.encode(protected_part)
 
-        protection_value = serialized_pyasn1_message['protection'].asOctets()
+        protection_value = parsed_message['protection'].asOctets()
         signature_suite = SignatureSuite.from_certificate(cmp_signer_cert)
 
         hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
@@ -813,7 +815,7 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
         """Verify protection signature and finalize authentication."""
         # Verify protection signature
         self._verify_protection_signature(
-            serialized_pyasn1_message=context.parsed_message,
+            parsed_message=context.parsed_message,
             cmp_signer_cert=cmp_signer_cert
         )
 
@@ -836,15 +838,15 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
         """Helper method to log and raise a TypeError."""
         raise TypeError(message)
 
-    def _verify_protection_signature(self, serialized_pyasn1_message: rfc4210.PKIMessage,
+    def _verify_protection_signature(self, parsed_message: rfc4210.PKIMessage,
                                      cmp_signer_cert: x509.Certificate) -> None:
         """Verifies the message signature of a CMP message using signature-based protection."""
         protected_part = rfc4210.ProtectedPart()
-        protected_part['header'] = serialized_pyasn1_message['header']
-        protected_part['infoValue'] = serialized_pyasn1_message['body']
+        protected_part['header'] = parsed_message['header']
+        protected_part['infoValue'] = parsed_message['body']
         encoded_protected_part = encoder.encode(protected_part)
 
-        protection_value = serialized_pyasn1_message['protection'].asOctets()
+        protection_value = parsed_message['protection'].asOctets()
         signature_suite = SignatureSuite.from_certificate(cmp_signer_cert)
 
         hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm

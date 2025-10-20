@@ -9,13 +9,14 @@ import secrets
 from typing import Any, cast
 
 from cryptography import x509
-from cryptography.hazmat.primitives import hmac
+from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.serialization import Encoding
 from devices.models import OnboardingStatus
 from pki.models import CredentialModel
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
+from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm
 
 from request.message_responder import AbstractMessageResponder
 from request.operation_processor import LocalCaCmpSignatureProcessor
@@ -91,11 +92,49 @@ class CmpMessageResponder(AbstractMessageResponder):
 
     @staticmethod
     def _add_protection_shared_secret(
-            pki_message: rfc4210.PKIMessage, hmac_gen: hmac.HMAC,
+            pki_message: rfc4210.PKIMessage, context: RequestContext
     ) -> rfc4210.PKIMessage:
         """Adds HMAC-based shared-secret protection to the base PKI message."""
-        # TODO(AlexHx8472): Use fresh salt! # noqa: FIX002
+        shared_secret = context.cmp_shared_secret
+        parsed_request_message: rfc4210.PKIMessage = context.parsed_message
+
+        pbm_parameters_bitstring = parsed_request_message['header']['protectionAlg']['parameters']
+        decoded_pbm, _ = decoder.decode(pbm_parameters_bitstring, asn1Spec=rfc4210.PBMParameter())
+
+        # Generate fresh salt
+        salt = secrets.token_bytes(len(decoded_pbm['salt']))
+
+        response_pbm_parameters = decoded_pbm
+        response_pbm_parameters['salt'] = decoded_pbm['salt'].clone(salt)
+
+        pki_message['header']['protectionAlg']['parameters'] = encoder.encode(response_pbm_parameters)
+
+        try:
+            owf = HashAlgorithm.from_dotted_string(decoded_pbm['owf']['algorithm'].prettyPrint())
+        except Exception as exception:
+            err_msg = 'owf algorithm not supported.'
+            raise ValueError(err_msg) from exception
+
+        iteration_count = int(decoded_pbm['iterationCount'])
+
+        shared_secret_bytes = shared_secret.encode()
+        salted_secret = shared_secret_bytes + salt
+        hmac_key = salted_secret
+        for _ in range(iteration_count):
+            hasher = hashes.Hash(owf.hash_algorithm())
+            hasher.update(hmac_key)
+            hmac_key = hasher.finalize()
+
+        hmac_algorithm_oid = decoded_pbm['mac']['algorithm'].prettyPrint()
+        try:
+            hmac_algorithm = HmacAlgorithm.from_dotted_string(hmac_algorithm_oid)
+        except Exception as exception:
+            err_msg = 'hmac algorithm not supported.'
+            raise ValueError(err_msg) from exception
+
         encoded_protected_part = CmpMessageResponder._get_encoded_protected_part(pki_message)
+
+        hmac_gen = hmac.HMAC(hmac_key, hmac_algorithm.hash_algorithm.hash_algorithm())
 
         hmac_gen.update(encoded_protected_part)
         hmac_digest = hmac_gen.finalize()
@@ -215,8 +254,8 @@ class CmpInitializationResponder(CmpMessageResponder):
             raise ValueError(exc_msg)
         issuing_ca_credential = context.issuer_credential
 
-        if context.owner_credential:
-            signer_credential = context.owner_credential if context.owner_credential else issuing_ca_credential
+        # AOKI: Sign with owner credential
+        signer_credential = context.owner_credential if context.owner_credential else issuing_ca_credential
 
         sender_ski = x509.SubjectKeyIdentifier.from_public_key(signer_credential.get_certificate().public_key())
         sender_kid = rfc2459.KeyIdentifier(sender_ski.digest).subtype(
@@ -230,9 +269,14 @@ class CmpInitializationResponder(CmpMessageResponder):
             issuer_credential=issuing_ca_credential,
             signer_credential=signer_credential
         )
-        pki_message = CmpInitializationResponder._sign_pki_message(
-            pki_message=pki_message, context=context
-        )
+        if context.cmp_shared_secret:
+            pki_message = CmpInitializationResponder._add_protection_shared_secret(
+                pki_message=pki_message, context=context
+            )
+        else:
+            pki_message = CmpInitializationResponder._sign_pki_message(
+                pki_message=pki_message, context=context
+            )
 
         encoded_message = encoder.encode(pki_message)
 

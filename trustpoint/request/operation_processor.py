@@ -7,11 +7,11 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from devices.issuer import CredentialSaver
 from devices.models import IssuedCredentialModel
 from pki.models import CredentialModel
+from trustpoint.logger import LoggerMixin
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 
 from request.request_context import RequestContext
-from trustpoint.logger import LoggerMixin
 
 
 class AbstractOperationProcessor(ABC):

@@ -3,9 +3,9 @@
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from pki.util.cert_req_converter import JSONCertRequestConverter
 from pydantic_core import ValidationError
+from trustpoint.logger import LoggerMixin
 
 from request.request_context import RequestContext
-from trustpoint.logger import LoggerMixin
 
 
 class ProfileValidator(LoggerMixin):
