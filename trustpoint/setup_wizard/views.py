@@ -532,10 +532,12 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
             HttpResponse: A response with the trust store content or an error message.
         """
         try:
-            trustpoint_tls_server_credential_model = CredentialModel.objects.get(
-                credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
-            )
-        except CredentialModel.DoesNotExist:
+            active_tls_credential_model = ActiveTrustpointTlsServerCredentialModel.objects.get(pk=1)
+            trustpoint_tls_server_credential_model = active_tls_credential_model.credential
+        except ActiveTrustpointTlsServerCredentialModel.DoesNotExist:
+            trustpoint_tls_server_credential_model = None
+
+        if not trustpoint_tls_server_credential_model:
             messages.add_message(self.request, messages.ERROR, 'No trust store available for download.')
             return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
 

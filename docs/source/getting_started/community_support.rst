@@ -43,7 +43,7 @@ There are multiple ways to engage with the Trustpoint community:
 
 - **GitHub**: Participate in discussions, open issues, or submit pull requests.
 - **Social Media**: For the latest updates and news about Trustpoint, follow us on `LinkedIn <https://www.linkedin.com/company/trustpoint-secure/>`_ .
-- **Discord**: Join our Discord server to chat with community members and the core Trustpoint team.
+- **Discord**: Join our `Discord server <https://discord.gg/j8xKW4DgZz>`_ to chat with community members and the core Trustpoint team.
 
 -------
 Support

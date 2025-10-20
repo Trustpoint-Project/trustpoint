@@ -16,6 +16,7 @@ from django.views.generic.edit import FormView
 from django import forms
 from notifications.models import NotificationConfig, WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
+from trustpoint.page_context import PageContextMixin
 
 from management.forms import SecurityConfigForm
 from management.models import SecurityConfig, LoggingConfig
@@ -27,18 +28,14 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
-def settings(request: HttpRequest, ) -> HttpResponse:
-    """Handle settings Configuration
-
-    Returns: HTTPResponse
-    """
-    context = {'page_category': 'management', 'page_name': 'settings'}
-
 LOG_LEVELS=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
-class SettingsView(SecurityLevelMixin, FormView):
+class SettingsView(PageContextMixin, SecurityLevelMixin, FormView):
     template_name = 'management/settings.html'
     form_class = SecurityConfigForm
     success_url = reverse_lazy('management:settings')
+
+    page_category = 'management'
+    page_name = 'settings'
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
