@@ -32,9 +32,13 @@ class CmpMessageResponder(AbstractMessageResponder):
     @staticmethod
     def build_response(context: RequestContext) -> None:
         """Respond to a CMP message."""
-        if context.issued_certificate and context.operation == 'initialization':
-            responder = CmpInitializationResponder()
-            return responder.build_response(context)
+        if context.issued_certificate:
+            if context.operation == 'initialization':
+                responder = CmpInitializationResponder()
+                return responder.build_response(context)
+            if context.operation == 'certification':
+                responder = CmpCertificationResponder()
+                return responder.build_response(context)
 
         exc_msg = 'No suitable responder found for this CMP message.'
         context.http_response_status = 500
@@ -98,6 +102,8 @@ class CmpMessageResponder(AbstractMessageResponder):
         shared_secret = context.cmp_shared_secret
         parsed_request_message: rfc4210.PKIMessage = context.parsed_message
 
+        # We are just copying protection parameters from the request message
+        # TODO(Air): Check if that is needed for compatibility and/or could lead to too weak parameters  # noqa: FIX002
         pbm_parameters_bitstring = parsed_request_message['header']['protectionAlg']['parameters']
         decoded_pbm, _ = decoder.decode(pbm_parameters_bitstring, asn1Spec=rfc4210.PBMParameter())
 
@@ -165,7 +171,7 @@ class CmpMessageResponder(AbstractMessageResponder):
 
 
 class CmpInitializationResponder(CmpMessageResponder):
-    """Respond to a CMP initialization request with the issued certificate."""
+    """Respond to a CMP initialization request (IR) with the issued certificate (IP)."""
 
     @staticmethod
     def _build_base_ip_message(
@@ -275,6 +281,116 @@ class CmpInitializationResponder(CmpMessageResponder):
             )
         else:
             pki_message = CmpInitializationResponder._sign_pki_message(
+                pki_message=pki_message, context=context
+            )
+
+        encoded_message = encoder.encode(pki_message)
+
+        if context.device and context.device.onboarding_config:
+            context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+            context.device.onboarding_config.save()
+        context.http_response_status = 200
+        context.http_response_content = encoded_message
+        context.http_response_content_type = 'application/pkixcmp'
+
+
+class CmpCertificationResponder(CmpMessageResponder):
+    """Respond to a CMP certification request (CR) with the issued certificate (CP)."""
+
+    @staticmethod
+    def _build_base_cp_message(
+            parsed_message: rfc4210.PKIMessage,
+            issued_cert: x509.Certificate,
+            issuer_credential: CredentialModel,
+            sender_kid: rfc2459.KeyIdentifier,
+    ) -> rfc4210.PKIMessage:
+        """Builds the CR response message (without the protection)."""
+        cp_header = CmpCertificationResponder._build_response_message_header(
+            serialized_pyasn1_message=parsed_message,
+            sender_kid=sender_kid,
+            issuer_cert=issuer_credential.get_certificate())
+
+        cp_extra_certs = univ.SequenceOf()
+
+        certificate_chain = [
+            issuer_credential.get_certificate(),
+            *issuer_credential.get_certificate_chain(),
+        ]
+        for certificate in certificate_chain:
+            der_bytes = certificate.public_bytes(encoding=Encoding.DER)
+            asn1_certificate, _ = decoder.decode(der_bytes, asn1Spec=rfc4210.CMPCertificate())
+            cp_extra_certs.append(asn1_certificate)
+
+        cp_body = rfc4210.PKIBody()
+        cp_body['cp'] = rfc4210.CertRepMessage().subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 3)
+        )
+        cp_body['cp']['caPubs'] = univ.SequenceOf().subtype(
+            sizeSpec=rfc4210.constraint.ValueSizeConstraint(1, rfc4210.MAX),
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 1),
+        )
+        # TODO(AlexHx8472): Add TLS Server Certificate Root CA  # noqa: FIX002
+
+        cert_response = rfc4210.CertResponse()
+        cert_response['certReqId'] = 0
+
+        pki_status_info = rfc4210.PKIStatusInfo()
+        pki_status_info['status'] = 0
+        cert_response['status'] = pki_status_info
+
+        cmp_cert = rfc4210.CMPCertificate().subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 0)
+        )
+
+        encoded_cert = issued_cert.public_bytes(encoding=Encoding.DER)
+        der_cert, _ = decoder.decode(encoded_cert, asn1Spec=rfc4210.CMPCertificate())
+        cmp_cert.setComponentByName('tbsCertificate', der_cert['tbsCertificate'])
+        cmp_cert.setComponentByName('signatureValue', der_cert['signatureValue'])
+        cmp_cert.setComponentByName('signatureAlgorithm', der_cert['signatureAlgorithm'])
+        cert_or_enc_cert = rfc4210.CertOrEncCert()
+        cert_or_enc_cert['certificate'] = cmp_cert
+
+        cert_response['certifiedKeyPair']['certOrEncCert'] = cert_or_enc_cert
+
+        cp_body['cp']['response'].append(cert_response)
+
+        cp_message = rfc4210.PKIMessage()
+        cp_message['header'] = cp_header
+        cp_message['body'] = cp_body
+        for extra_cert in cp_extra_certs:
+            cp_message['extraCerts'].append(extra_cert)
+
+        return cp_message
+
+    @staticmethod
+    def build_response(context: RequestContext) -> None:
+        """Respond to a CMP initialization message with the issued certificate."""
+        if context.issued_certificate is None:
+            exc_msg = 'Issued certificate is not set in the context.'
+            raise ValueError(exc_msg)
+
+        if context.issuer_credential is None:
+            exc_msg = 'Issuer credential is not set in the context.'
+            raise ValueError(exc_msg)
+        issuing_ca_credential = context.issuer_credential
+
+        sender_ski = x509.SubjectKeyIdentifier.from_public_key(issuing_ca_credential.get_certificate().public_key())
+        sender_kid = rfc2459.KeyIdentifier(sender_ski.digest).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2)
+        )
+
+        pki_message = CmpCertificationResponder._build_base_cp_message(
+            parsed_message=context.parsed_message,
+            issued_cert=context.issued_certificate,
+            sender_kid=sender_kid,
+            issuer_credential=issuing_ca_credential,
+        )
+        if context.cmp_shared_secret:
+            pki_message = CmpCertificationResponder._add_protection_shared_secret(
+                pki_message=pki_message, context=context
+            )
+        else:
+            pki_message = CmpCertificationResponder._sign_pki_message(
                 pki_message=pki_message, context=context
             )
 

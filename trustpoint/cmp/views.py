@@ -993,14 +993,7 @@ class CmpInitializationRequestView(View):
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class CmpCertificationRequestView(
-    CmpHttpMixin,
-    CmpRequestedDomainExtractorMixin,
-    CmpPkiMessageSerializerMixin,
-    CmpRequestTemplateExtractorMixin,
-    CmpResponseBuilderMixin,
-    View
-):
+class CmpCertificationRequestView(View):
     """Handles CMP Certification Request Messages."""
 
     http_method_names = ('post',)
@@ -1289,6 +1282,38 @@ class CmpCertificationRequestView(
         **kwargs: Any,
     ) -> HttpResponse:
         """Handles the POST requests to the CMP CR endpoint."""
+        domain_name = cast('str', kwargs.get('domain_name'))
+        # Default to 'tls-client' if not provided (TBD)
+        cert_profile = cast('str', kwargs.get('certificate_profile', 'tls-client'))
+
+        ctx = RequestContext(raw_message=request,
+                                      domain_str=domain_name,
+                                      protocol='cmp',
+                                      operation='certification',
+                                      certificate_template=cert_profile)
+
+        validator = CmpHttpRequestValidator()
+        validator.validate(ctx)
+
+        parser = CmpMessageParser()
+        parser.parse(ctx)
+
+        authenticator = CmpAuthentication()
+        authenticator.authenticate(ctx)
+
+        authorizer = CmpAuthorization(['tls-server', 'tls-client', 'domaincredential'], ['certification'])
+        authorizer.authorize(ctx)
+
+        ProfileValidator.validate(ctx)
+
+        CertificateIssueProcessor().process_operation(ctx)
+
+        CmpMessageResponder.build_response(ctx)
+
+        return LoggedHttpResponse(content=ctx.http_response_content,
+                                  status=ctx.http_response_status,
+                                  content_type=ctx.http_response_content_type)
+
         del args, kwargs, request  # request not accessed directly
         self._check_header(serialized_pyasn1_message=self.serialized_pyasn1_message)
 

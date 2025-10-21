@@ -1,6 +1,8 @@
 """Provides the `EstAuthentication` class using the Composite pattern for modular EST authentication."""
 
 from abc import ABC, abstractmethod
+from multiprocessing import context
+import re
 from typing import Never
 
 from cryptography import x509
@@ -631,7 +633,7 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
 
         try:
             cmp_signer_cert = self._extract_and_validate_certificate(context)
-            device = self._authenticate_device(cmp_signer_cert, context)
+            device = self._authenticate_device(context)
             self._verify_protection_and_finalize(context, cmp_signer_cert, device)
 
         except Exception as e:
@@ -694,24 +696,40 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
         # Extract CMP signer certificate (first extra cert)
         cmp_signer_extra_cert = extra_certs[0]
         der_cmp_signer_cert = encoder.encode(cmp_signer_extra_cert)
-        return x509.load_der_x509_certificate(der_cmp_signer_cert)
+        context.client_certificate = x509.load_der_x509_certificate(der_cmp_signer_cert)
+        return context.client_certificate
 
-    def _authenticate_device(self, cmp_signer_cert: x509.Certificate, context: RequestContext) -> DeviceModel:
+    def _authenticate_device(self, context: RequestContext) -> DeviceModel:
         """Authenticate the device using the CMP signer certificate."""
-        del context
-        device_info = self._extract_device_info(cmp_signer_cert)
+        device_info = self._extract_device_info(context.client_certificate)
+        if device_info['device_id'] is None:
+            self.logger.warning(
+                'Device ID missing in CMP signer cert subject. Falling back to fingerprint-based DB lookup.'
+            )
+            ClientCertificateAuthentication().authenticate(context)
+            if context.device:
+                return context.device
+
         device = self._lookup_device(device_info)
-        self._validate_device(device, device_info, cmp_signer_cert)
+        self._validate_device(device, device_info, context.client_certificate)
         return device
 
     def _extract_device_info(self, cmp_signer_cert: x509.Certificate) -> dict[str, str | int]:
         """Extract device information from certificate subject."""
         try:
-            device_id = int(cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.USER_ID)[0].value)
-            device_serial_number_raw = cmp_signer_cert.subject.get_attributes_for_oid(
-                x509.NameOID.SERIAL_NUMBER)[0].value
-            domain_name_raw = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.DOMAIN_COMPONENT)[0].value
-            common_name = cmp_signer_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0]
+            subj = cmp_signer_cert.subject
+
+            user_ids = subj.get_attributes_for_oid(x509.NameOID.USER_ID)
+            device_id = user_ids[0].value if user_ids else None
+
+            serial_nos = subj.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)
+            device_serial_number_raw = serial_nos[0].value if serial_nos else None
+
+            domain_components = subj.get_attributes_for_oid(x509.NameOID.DOMAIN_COMPONENT)
+            domain_name_raw = domain_components[0].value if domain_components else None
+
+            common_names = subj.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+            common_name = common_names[0].value if common_names else None
 
             # Parse serial number value
             if isinstance(device_serial_number_raw, str):
@@ -719,8 +737,7 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             elif isinstance(device_serial_number_raw, bytes):
                 device_serial_number = device_serial_number_raw.decode()
             else:
-                err_msg = 'Failed to parse serial number value'
-                self._raise_type_error(err_msg)
+                device_serial_number = None
 
             # Parse domain name value
             if isinstance(domain_name_raw, str):
@@ -728,20 +745,18 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             elif isinstance(domain_name_raw, bytes):
                 domain_name = domain_name_raw.decode()
             else:
-                err_msg = 'Failed to parse domain name value'
-                self._raise_type_error(err_msg)
+                domain_name = None
 
             # Parse common name value
-            if isinstance(common_name.value, str):
-                common_name_value = common_name.value
-            elif isinstance(common_name.value, bytes):
-                common_name_value = common_name.value.decode()
+            if isinstance(common_name, str):
+                common_name_value = common_name
+            elif isinstance(common_name, bytes):
+                common_name_value = common_name.decode()
             else:
-                err_msg = 'Failed to parse common name value'
-                self._raise_type_error(err_msg)
+                common_name_value = None
 
             # Verify this is a domain credential
-            if common_name_value != 'Trustpoint Domain Credential':
+            if not common_name_value or re.sub(r'[^a-zA-Z0-9]', '', common_name_value) != 'TrustpointDomainCredential':
                 err_msg = 'Not a domain credential.'
                 self._raise_value_error(err_msg)
 
@@ -772,7 +787,7 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             self, device: DeviceModel, device_info: dict[str, str | int], cmp_signer_cert: x509.Certificate) -> None:
         """Validate device properties and certificate."""
         # Validate device serial number
-        if device_info['serial_number'] != device.serial_number:
+        if device_info['serial_number'] and device_info['serial_number'] != device.serial_number:
             err_msg = 'SN mismatch'
             self.logger.warning('CMP signature-based certification failed', extra={'error_message': err_msg})
             self._raise_value_error(err_msg)
@@ -783,7 +798,7 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             self.logger.warning('CMP signature-based certification failed', extra={'error_message': err_msg})
             self._raise_value_error(err_msg)
 
-        if device_info['domain_name'] != device.domain.unique_name:
+        if device_info['domain_name'] and device_info['domain_name'] != device.domain.unique_name:
             err_msg = 'Domain mismatch.'
             self.logger.warning('CMP signature-based certification failed', extra={'error_message': err_msg})
             self._raise_value_error(err_msg)
