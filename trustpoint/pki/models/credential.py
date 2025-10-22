@@ -434,6 +434,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         Returns:
             CredentialModel: The stored credential model.
         """
+        cls.logger.info(
+            'Starting to save credential of type: %(credential_type)s',
+            extra={'credential_type': credential_type}
+        )
         if normalized_credential_serializer.certificate is None:
             msg = 'Certificate cannot be None'
             raise ValueError(msg)
@@ -552,6 +556,17 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 pkcs11_private_key=pkcs11_private_key
             )
 
+        cls.logger.info(
+            'Credential created - ID: %(credential_id)s, Type: %(credential_type)s, '
+            'Has software key: %(has_software_key)s, Has HSM key: %(has_hsm_key)s',
+            extra={
+                'credential_id': credential_model.id,
+                'credential_type': credential_type,
+                'has_software_key': bool(private_key_pem),
+                'has_hsm_key': pkcs11_private_key is not None
+            }
+        )
+
         PrimaryCredentialCertificate.objects.create(
             certificate=certificate, credential=credential_model, is_primary=True
         )
@@ -564,6 +579,11 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 order=order,
                 primary_certificate=credential_model.certificate
             )
+
+        cls.logger.info(
+            'Successfully saved credential with ID: %(credential_id)s',
+            extra={'credential_id': credential_model.id}
+        )
 
         return credential_model
 
@@ -655,6 +675,9 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         """
         if self.private_key:
             return PrivateKeySerializer.from_pem(self.private_key.encode()).as_crypto()
+        
+        if self.pkcs11_private_key:
+            return self.get_pkcs11_private_key()
 
         err_msg = 'Failed to get private key information.'
         raise RuntimeError(err_msg)
@@ -681,11 +704,31 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     def get_private_key_serializer(self) -> PrivateKeySerializer:
         """Gets a serializer of the credential private key.
 
+        For PKCS#11 keys, since the private key cannot be exported, this method returns
+        a PrivateKeySerializer constructed from the public key extracted from the certificate.
+        This allows code that needs the public key (via .public_key_serializer) to work
+        with both software-stored and HSM-stored credentials.
+
         Returns:
-            PrivateKey: The credential private key abstraction.
+            PrivateKeySerializer: The credential private key serializer.
+
+        Raises:
+            RuntimeError: If no private key information is available.
         """
         if self.private_key:
             return PrivateKeySerializer.from_pem(self.private_key.encode())
+
+        if self.pkcs11_private_key:
+            # For PKCS#11 keys, we can't export the private key, but we can
+            # create a PrivateKeySerializer from the public key in the certificate
+            # This allows .public_key_serializer to work correctly
+            try:
+                pkcs11_key = self.get_pkcs11_private_key()
+                # PrivateKeySerializer can wrap the PKCS#11 key object
+                return PrivateKeySerializer(pkcs11_key)
+            except Exception as e:
+                err_msg = f'Failed to get PKCS#11 private key: {e}'
+                raise RuntimeError(err_msg) from e
 
         err_msg = 'Failed to get private key information.'
         raise RuntimeError(err_msg)

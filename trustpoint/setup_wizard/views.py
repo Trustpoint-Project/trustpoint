@@ -26,6 +26,7 @@ from management.forms import KeyStorageConfigForm
 from management.models import KeyStorageConfig, PKCS11Token
 from pki.models import CertificateModel, CredentialModel, IssuingCaModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from trustpoint.logger import LoggerMixin
 
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import (
@@ -36,7 +37,6 @@ from setup_wizard.forms import (
     StartupWizardTlsCertificateForm,
 )
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
-from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
@@ -408,7 +408,13 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView):
             if storage_type == KeyStorageConfig.StorageType.SOFTHSM:
                 return redirect('setup_wizard:hsm_setup', hsm_type='softhsm', permanent=False)
             if storage_type == KeyStorageConfig.StorageType.PHYSICAL_HSM:
-                return redirect('setup_wizard:hsm_setup', hsm_type='physical', permanent=False)
+                    messages.add_message(
+                                    self.request,
+                                    messages.ERROR,
+                                    'Physical HSM is coming soon.'
+                                )
+                # return redirect('setup_wizard:hsm_setup', hsm_type='physical', permanent=False)
+
             messages.add_message(
                 self.request,
                 messages.ERROR,

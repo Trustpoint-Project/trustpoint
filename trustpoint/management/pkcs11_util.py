@@ -270,7 +270,10 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
 
             self._session = self._token.open(user_pin=self._user_pin, rw=True)
         except pkcs11.exceptions.UserAlreadyLoggedIn:
-            pass
+            # User is already logged in, but we still need to open a session
+            # Open without providing user_pin since already authenticated
+            if self._token is not None:
+                self._session = self._token.open(rw=True)
         except Exception as e:
             msg = f'Failed to initialize PKCS#11 session: {e}; lib_path: {self._lib_path} token: {self._token_label} '
             raise RuntimeError(msg) from e
@@ -1070,14 +1073,14 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
 
         Args:
             data (bytes): Data to be signed.
-            padding (Optional[asym_padding.AsymmetricPadding]): Padding scheme to use (if applicable).
-            algorithm (ec.EllipticCurveSignatureAlgorithm): The signature algorithm to use for signing.
+            signature_algorithm (ec.EllipticCurveSignatureAlgorithm): The signature algorithm to use for signing.
 
         Returns:
             bytes: The ECDSA signature.
 
         Raises:
             ValueError: If unsupported hash algorithm.
+            NotImplementedError: If non-ECDSA algorithm is provided.
         """
         if self._key is None:
             self.load_key()
@@ -1094,16 +1097,11 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         digest.update(data)
         hashed = digest.finalize()
 
-        mechanism = self.EC_MECHANISMS.get(type(signature_algorithm.algorithm))
-        if mechanism is None:
-            msg = f'Unsupported EC algorithm: {type(signature_algorithm.algorithm)}'
-            self._raise_value_error(msg)
-
         if self._key is None:
             msg = 'EC private key is not loaded.'
             self._raise_value_error(msg)
 
-        return self._key.sign(hashed, mechanism=mechanism)
+        return self._key.sign(hashed, mechanism=Mechanism.ECDSA)
 
     def public_key(self) -> ec.EllipticCurvePublicKey:
         """Return the cached or retrieved EC public key.
@@ -1132,12 +1130,29 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             raise ValueError(msg) from e
 
         try:
-            x, y = public.public_key
-        except AttributeError as e:
-            msg = 'EC public key point is missing or invalid.'
+            ec_point = public[Attribute.EC_POINT]
+
+            if not ec_point or len(ec_point) < 3 or ec_point[0] != 0x04:
+                msg = 'EC public key point is missing or has invalid format.'
+                raise ValueError(msg)
+            curve = self.curve
+            coord_size = (curve.key_size + 7) // 8
+
+            point_data = ec_point[1:]  # Skip the 0x04 prefix
+            if len(point_data) != 2 * coord_size:
+                msg = f'EC point data has invalid length: expected {2 * coord_size}, got {len(point_data)}.'
+                raise ValueError(msg)
+
+            x_bytes = point_data[:coord_size]
+            y_bytes = point_data[coord_size:]
+
+            x = int.from_bytes(x_bytes, 'big')
+            y = int.from_bytes(y_bytes, 'big')
+
+        except (AttributeError, KeyError, IndexError, TypeError) as e:
+            msg = f'Failed to extract EC public key point: {e}'
             raise ValueError(msg) from e
 
-        curve = self.curve
         pub_numbers = ec.EllipticCurvePublicNumbers(x, y, curve)
         self._public_key = pub_numbers.public_key()
         return self._public_key
@@ -1159,10 +1174,8 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             private_numbers = private_key.private_numbers()
             public_numbers = private_numbers.public_numbers
 
-            # Get curve information
             curve = private_numbers.public_numbers.curve
 
-            # Determine the curve parameters
             if isinstance(curve, ec.SECP256R1):
                 curve_params = b'\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07'  # secp256r1 OID
             elif isinstance(curve, ec.SECP384R1):
@@ -1177,7 +1190,6 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
                 """Convert integer to bytes in big-endian format with specified length."""
                 return value.to_bytes(byte_length, byteorder='big')
 
-            # Calculate key size and coordinate size
             key_size = curve.key_size
             coord_size = (key_size + 7) // 8
             private_value_size = coord_size
@@ -1305,21 +1317,32 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             ec.EllipticCurve: The curve object.
 
         Raises:
-            ValueError: If the key size is not supported.
+            ValueError: If the curve parameters cannot be determined or are not supported.
         """
         if self._key is None:
             self.load_key()
         if self._key is None:
-            msg = 'EC private key is not loaded and key size cannot be determined.'
+            msg = 'EC private key is not loaded and curve cannot be determined.'
             raise ValueError(msg)
-        key_size = self._key.key_length
 
-        for curve_class, length in self.CURVE_KEY_LENGTHS.items():
-            if length == key_size:
-                return curve_class()
+        try:
+            curve_params = self._key[Attribute.EC_PARAMS]
+        except (KeyError, AttributeError) as e:
+            msg = f'Failed to get EC_PARAMS from key: {e}'
+            raise ValueError(msg) from e
 
-        msg = f'Unsupported EC key size: {key_size}'
-        raise ValueError(msg)
+        curve_oid_map = {
+            b'\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07': ec.SECP256R1(),  # secp256r1
+            b'\x06\x05\x2b\x81\x04\x00\x22': ec.SECP384R1(),  # secp384r1
+            b'\x06\x05\x2b\x81\x04\x00\x23': ec.SECP521R1(),  # secp521r1
+        }
+
+        curve = curve_oid_map.get(curve_params)
+        if curve is None:
+            msg = f'Unsupported EC curve with params: {curve_params.hex() if curve_params else "None"}'
+            raise ValueError(msg)
+
+        return curve
 
     def __copy__(self) -> 'Pkcs11ECPrivateKey':
         """Return the same instance since copying is not supported for PKCS#11 keys.

@@ -38,9 +38,6 @@
                 <div class="col-md-4">
                     <div class="card h-100">
                         <div class="card-body text-center">
-                            <svg class="bi mb-3" width="48" height="48" fill="currentColor">
-                                <use href="{% static 'img/icons.svg' %}#icon-computer"></use>
-                            </svg>
                             <h5 class="card-title">{% trans 'Software Storage' %}</h5>
                             <p class="card-text">
                                 {% trans 'Store cryptographic keys in software without encryption' %}
@@ -63,9 +60,6 @@
                 <div class="col-md-4">
                     <div class="card h-100">
                         <div class="card-body text-center">
-                            <svg class="bi mb-3" width="48" height="48" fill="currentColor">
-                                <use href="{% static 'img/icons.svg' %}#icon-shield"></use>
-                            </svg>
                             <h5 class="card-title">{% trans 'SoftHSM Container' %}</h5>
                             <p class="card-text">
                                 {% trans 'Software-based HSM with encryption and key storage' %}
@@ -84,31 +78,24 @@
                     </div>
                 </div>
 
-                <!-- Physical HSM Option -->
+<!-- Physical HSM Option -->
                 <div class="col-md-4">
-                    <div class="card h-100">
+                    <div class="card h-100 opacity-75">
                         <div class="card-body text-center">
-                            <svg class="bi mb-3" width="48" height="48" fill="currentColor">
-                                <use href="{% static 'img/icons.svg' %}#icon-hardware"></use>
-                            </svg>
                             <h5 class="card-title">{% trans 'Physical HSM' %}</h5>
                             <p class="card-text">
                                 {% trans 'Hardware-based secure cryptographic storage device' %}
                             </p>
-                            <span class="badge bg-success mb-3">{% trans 'High Security' %}</span>
+                            <span class="badge bg-success mb-2">{% trans 'High Security' %}</span>
+                            <span class="badge bg-secondary mb-3">{% trans 'Coming Soon' %}</span>
                         </div>
                         <div class="card-footer">
-                            <form method="post" class="d-inline">
-                                {% csrf_token %}
-                                <input type="hidden" name="storage_type" value="physical_hsm">
-                                <button type="submit" class="btn btn-outline-primary w-100">
-                                    {% trans 'Select Physical HSM' %}
-                                </button>
-                            </form>
+                            <button type="button" class="btn btn-outline-secondary w-100" disabled>
+                                {% trans 'Select Physical HSM' %}
+                            </button>
                         </div>
                     </div>
                 </div>
-            </div>
 
             <!-- Form errors -->
             {% if form.non_field_errors %}

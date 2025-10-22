@@ -294,10 +294,24 @@ class Command(BaseCommand, LoggerMixin):
                     try:
                         device_model.save()
                         if device_model.pk:
+                            onboarding_protocol_display = (
+                                device_model.onboarding_config.get_onboarding_protocol_display()
+                                if device_model.onboarding_config
+                                else 'No Onboarding'
+                            )
+                            pki_protocols = (
+                                device_model.onboarding_config.get_pki_protocols()
+                                if device_model.onboarding_config
+                                else device_model.no_onboarding_config.get_pki_protocols()
+                                if device_model.no_onboarding_config
+                                else []
+                            )
+
                             self.log_and_stdout(
-                                f"Creating device '{device_model.common_name}' (ID {device_model.pk}) in domain '{device_model.domain}' with "
-                                f"Serial Number: {device_model.serial_number}; Onboarding Protocol: {device_model.onboarding_protocol}; "
-                                f"PKI Protocol: {device_model.pki_protocol}"
+                                f"Creating device '{device_model.common_name}' (ID {device_model.pk}) "
+                                f"in domain '{device_model.domain}' with Serial Number: {device_model.serial_number}; "
+                                f"Onboarding Protocol: {onboarding_protocol_display}; "
+                                f"PKI Protocols: {[p.label for p in pki_protocols]}"
                             )
                         else:
                             self.log_and_stdout(f"Device '{device_name}' was not saved correctly.", level='warning')
