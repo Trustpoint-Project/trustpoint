@@ -13,6 +13,7 @@ from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.shortcuts import redirect
@@ -729,6 +730,8 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView):
         return super().get_context_data(**kwargs)
 
 
+class BackupRestoreView(View, LoggerMixin):
+    """Upload a dump file and restore the database from it."""
     def form_valid(self, form: BackupPasswordForm) -> HttpResponse:
         """Handle valid form submission."""
         password = form.cleaned_data.get('password')
@@ -913,6 +916,10 @@ class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
 
         temp_dir = settings.BACKUP_FILE_PATH
         temp_path = temp_dir / backup_file.name
+        # save upload
+        with open(temp_path, 'wb+') as f:
+            for chunk in backup_file.chunks():
+                f.write(chunk)
 
         try:
             # Save uploaded file
@@ -920,6 +927,23 @@ class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
                 for chunk in backup_file.chunks():
                     f.write(chunk)
 
+        try:
+            self.logger.info(f'Restore process started {backup_file.name}')
+            call_command('trustpointrestore', '--filepath', str(temp_path))
+            messages.success(request, f'Trustpoint restored from {backup_file.name}')
+        except CommandError as e:
+            messages.error(request, str(e))
+        except FileNotFoundError as e:
+            messages.error(request, f'Backup file not found: {e}')
+        except PermissionError:
+            messages.error(request, 'Permission denied while processing the backup.')
+        except subprocess.CalledProcessError:
+            messages.error(request, 'Backup processing failed (pg_restore/awk).')
+        except Exception as e:
+            messages.error(request, f'Error restoring. {e}')
+        else:
+            return redirect('users:login')
+        return redirect('setup_wizard:initial')
             # Restore database
             call_command('dbrestore', '-z', '--noinput', '-I', str(temp_path))
 
@@ -1356,10 +1380,12 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
             HttpResponse: A response with the trust store content or an error message.
         """
         try:
-            trustpoint_tls_server_credential_model = CredentialModel.objects.get(
-                credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
-            )
-        except CredentialModel.DoesNotExist:
+            active_tls_credential_model = ActiveTrustpointTlsServerCredentialModel.objects.get(pk=1)
+            trustpoint_tls_server_credential_model = active_tls_credential_model.credential
+        except ActiveTrustpointTlsServerCredentialModel.DoesNotExist:
+            trustpoint_tls_server_credential_model = None
+
+        if not trustpoint_tls_server_credential_model:
             messages.add_message(self.request, messages.ERROR, 'No trust store available for download.')
             return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
 

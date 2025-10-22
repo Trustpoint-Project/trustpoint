@@ -18,7 +18,7 @@ from trustpoint_core.serializer import (
     PrivateKeyReference,
     PrivateKeySerializer,
 )
-from util.field import UniqueNameValidator
+from util.field import UniqueNameValidator, get_certificate_name
 
 from pki.models import DevIdRegistration, IssuingCaModel, OwnerCredentialModel
 from pki.models.certificate import CertificateModel
@@ -65,6 +65,36 @@ class DevIdRegistrationForm(forms.ModelForm[DevIdRegistration]):
             'serial_number_pattern': 'Serial Number Pattern (Regex)',
         }
 
+    unique_name = forms.CharField(
+        max_length=256,
+        label=_('[Optional] Unique Name'),
+        widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
+        required=False,
+        validators=[UniqueNameValidator()],
+    )
+
+    def clean(self) -> None:
+        """Cleans and validates the form data.
+
+        Ensures the unique name is not already used if provided.
+
+        Raises:
+            ValidationError: If the unique name is not unique.
+        """
+        cleaned_data = super().clean()
+        unique_name = cleaned_data.get('unique_name')
+        truststore_name = cleaned_data.get('truststore')
+
+        if not unique_name and truststore_name:
+            unique_name = truststore_name.unique_name
+            cleaned_data['unique_name'] = unique_name
+
+        if unique_name and DevIdRegistration.objects.filter(unique_name=unique_name).exists():
+            error_message = 'DevID Registration with the provided name already exists.'
+            raise ValidationError(error_message)
+
+        self.cleaned_data = cleaned_data
+
 
 class TruststoreAddForm(forms.Form):
     """Form for adding a new truststore.
@@ -81,9 +111,9 @@ class TruststoreAddForm(forms.Form):
 
     unique_name = forms.CharField(
         max_length=256,
-        label=_('Unique Name') + ' ' + UniqueNameValidator.form_label,
+        label=_('[Optional] Unique Name'),
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
-        required=True,
+        required=False,
         validators=[UniqueNameValidator()],
     )
 
@@ -138,10 +168,18 @@ class TruststoreAddForm(forms.Form):
             raise ValidationError(error_message) from exception
 
         try:
+            certs = certificate_collection_serializer.as_crypto()
+            if not unique_name:
+                unique_name = get_certificate_name(certs[0])
+
+            if TruststoreModel.objects.filter(unique_name=unique_name).exists():
+                error_message = 'Truststore with the provided name already exists.'
+                raise ValidationError(error_message)
+
             trust_store_model = self._save_trust_store(
                 unique_name=unique_name,
                 intended_usage=TruststoreModel.IntendedUsage(int(intended_usage)),
-                certificates=certificate_collection_serializer.as_crypto(),
+                certificates=certs,
             )
         except Exception as exception:
             raise ValidationError(str(exception)) from exception
@@ -347,9 +385,9 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
 
     unique_name = forms.CharField(
         max_length=256,
-        label=_('Unique Name') + ' ' + UniqueNameValidator.form_label,
+        label=_('[Optional] Unique Name'),
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
-        required=True,
+        required=False,
         validators=[UniqueNameValidator()],
     )
 
@@ -427,6 +465,13 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             raise ValidationError(err_msg)
 
         try:
+            if not unique_name:
+                unique_name = get_certificate_name(cert_crypto)
+
+            if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
+                error_message = 'Unique name is already taken. Choose another one.'
+                raise ValidationError(error_message)
+
             IssuingCaModel.create_new_issuing_ca(
                 unique_name=unique_name,
                 credential_serializer=credential_serializer,
@@ -461,8 +506,9 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
 
     unique_name = forms.CharField(
         max_length=256,
-        label=_('Unique Name') + ' ' + UniqueNameValidator.form_label,
+        label=_('[Optional] Unique Name'),
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
+        required=False,
         validators=[UniqueNameValidator()],
     )
     ca_certificate = forms.FileField(label=_('Issuing CA Certificate (.cer, .der, .pem, .p7b, .p7c)'), required=True)
@@ -474,18 +520,6 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         label=_('[Optional] Private Key File Password'),
         required=False,
     )
-
-    def clean_unique_name(self) -> str:
-        """Validates the unique name to ensure it does not already exist in the database.
-
-        Raises:
-            ValidationError: If an Issuing CA with the provided name already exists.
-        """
-        unique_name = self.cleaned_data['unique_name']
-        if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
-            error_message = 'Issuing CA with the provided name already exists.'
-            raise ValidationError(error_message)
-        return unique_name
 
     def clean_private_key_file(self) -> PrivateKeySerializer:
         """Validates and parses the uploaded private key file.
@@ -634,7 +668,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
                 cleaned_data.get('ca_certificate_chain') if cleaned_data.get('ca_certificate_chain') else None
             )
 
-            if not unique_name or not private_key_serializer or not ca_certificate_serializer:
+            if not private_key_serializer or not ca_certificate_serializer:
                 return
 
             credential_serializer = CredentialSerializer.from_serializers(
@@ -652,6 +686,13 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
                 PrivateKeyReference.from_private_key(private_key=credential_serializer.private_key,
                                                      key_label=unique_name,
                                                      location=PrivateKeyLocation.HSM_PROVIDED))
+
+            if not unique_name:
+              unique_name = get_certificate_name(cert)
+
+            if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
+                error_message = 'Unique name is already taken. Choose another one.'
+                raise ValidationError(error_message)
 
             IssuingCaModel.create_new_issuing_ca(
                 unique_name=unique_name,
@@ -687,8 +728,9 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
 
     unique_name = forms.CharField(
         max_length=256,
-        label=_('Unique Name') + ' ' + UniqueNameValidator.form_label,
+        label=_('[Optional] Unique Name'),
         widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
+        required=False,
         validators=[UniqueNameValidator()],
     )
     certificate = forms.FileField(label=_('DevOwnerID Certificate (.cer, .der, .pem, .p7b, .p7c)'), required=True)
@@ -700,18 +742,6 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
         label=_('[Optional] Private Key File Password'),
         required=False,
     )
-
-    def clean_unique_name(self) -> str:
-        """Validates the unique name to ensure it does not already exist in the database.
-
-        Raises:
-            ValidationError: If an Issuing CA with the provided name already exists.
-        """
-        unique_name = self.cleaned_data['unique_name']
-        if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
-            error_message = 'Owner Credential with the provided name already exists.'
-            raise ValidationError(error_message)
-        return unique_name
 
     def clean_private_key_file(self) -> PrivateKeySerializer:
         """Validates and parses the uploaded private key file.
@@ -844,8 +874,21 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
                 cleaned_data.get('certificate_chain') if cleaned_data.get('certificate_chain') else None
             )
 
-            if not unique_name or not private_key_serializer or not certificate_serializer:
+            if not private_key_serializer or not certificate_serializer:
                 return
+
+            if not unique_name:
+                name_from_cert = get_certificate_name(certificate_serializer.as_crypto())
+                if not name_from_cert:
+                    return
+                unique_name = name_from_cert
+
+            if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
+                error_message = 'Owner Credential with the provided name already exists.'
+                raise ValidationError(error_message)
+
+            cleaned_data['unique_name'] = unique_name
+            self.cleaned_data = cleaned_data
 
             credential_serializer = CredentialSerializer.from_serializers(
                 private_key_serializer=private_key_serializer,

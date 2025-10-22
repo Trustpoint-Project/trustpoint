@@ -123,9 +123,9 @@ class AokiCmpClient:
             '-extracerts', f'{CERTS_DIR}/{self.idevid_truststore_file}',
             '-subject', '/CN=Trustpoint Domain Credential',
             '-newkey', f'{CERTS_DIR}/domain_credential_key.pem',
-            '-certout', f'{CERTS_DIR}/domain-credential-certificate.pem',
+            '-certout', f'{CERTS_DIR}/dc_cert.pem',
             '-chainout', f'{CERTS_DIR}/chain_without_root.pem',
-            '-extracertsout', f'{CERTS_DIR}/domain-credential-full-chain.pem',
+            '-extracertsout', f'{CERTS_DIR}/full_chain.pem',
             '-trusted', f'{CERTS_DIR}/{self.owner_truststore_file}',
             #'-tls_used'
         )
@@ -146,7 +146,7 @@ class AokiCmpClient:
 
 if __name__ == '__main__':
     client = AokiCmpClient(
-        server_url='https://localhost:443', # or 'https://localhost:443' for production/Docker
+        server_url='https://localhost:443', # or 'http://localhost:8000' for dev
         cert_file='idevid.pem',
         key_file='idevid_pk.pem',
         idevid_truststore_file='idevid_ca.pem',

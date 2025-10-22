@@ -26,6 +26,7 @@ from util.encrypted_fields import EncryptedCharField
 from util.field import UniqueNameValidator
 
 from pki.models import CertificateModel
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -1034,17 +1035,10 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
             err_msg = _('The provided certificate is not a valid DevOwnerID; it does not contain a SAN extension.')
             raise ValidationError(err_msg) from e
 
-        san_parts_expected_length = 5  # Expected number of parts in the SAN URI
-
         for san in san_extension.value:
             if isinstance(san, x509.UniformResourceIdentifier):
                 san_uri_str = san.value
-                san_parts = san_uri_str.split('.')
-                if (
-                    len(san_parts) == san_parts_expected_length
-                    and san_parts[1] == 'dev-owner'
-                    and san_parts[-1] == 'alt'
-                ):
+                if san_uri_str.startswith('dev-owner:'):
                     idevid_refs.add(san_uri_str)
         if not idevid_refs:
             raise ValidationError(_(
