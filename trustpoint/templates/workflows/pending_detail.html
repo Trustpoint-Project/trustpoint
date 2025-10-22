@@ -1,0 +1,80 @@
+{% extends 'trustpoint/base.html' %}
+{% load static %}
+
+{% block content %}
+  <h1>Workflow Instance Details</h1>
+
+  <p><strong>Instance ID:</strong> {{ inst.id }}</p>
+  <p>
+    <strong>Workflow:</strong> <a href="{% url 'workflows:definition_wizard' %}?edit={{ inst.definition.id }}">{{ inst.definition.name }}</a><br>
+    <strong>State:</strong> {{ inst.state }}<br>
+    <strong>Requested At:</strong> {{ inst.created_at|date:"Y/m/d, H:i:s" }}
+  </p>
+
+  <hr>
+
+  <h3>Request</h3>
+  <ul>
+    <li><strong>CA:</strong>
+      <a href="{% url 'pki:issuing_cas-config' payload.ca_id %}">
+        {{ ca_name }}
+      </a>
+    </li>
+    <li>
+      <strong>Domain:</strong>
+      <a href="{% url 'pki:domains-config' payload.domain_id %}">
+        {{ domain_name }}
+      </a>
+    </li>
+    <li><strong>Protocol:</strong> {{ payload.protocol }}</li>
+    <li><strong>Operation:</strong> {{ payload.operation }}</li>
+    <li><strong>Enrollment request ID:</strong> {{ payload.fingerprint }}</li>
+  </ul>
+
+  <hr>
+
+  <h3>Device</h3>
+  <ul>
+    {% if payload.device_id %}
+      <li>
+        <strong>Device:</strong>
+        <a href="{% url clm_url pk=payload.device_id %}">
+          {{ device_name }}
+        </a>
+      </li>
+      <li>
+        <strong>Serial number:</strong>
+          {{ device_serial_number }}
+      </li>
+    {% endif %}
+  </ul>
+
+  <hr>
+
+  <h3>CSR Details</h3>
+  {% if csr_info %}
+    {% if csr_info.error %}
+      <div class="alert alert-warning">{{ csr_info.error }}</div>
+    {% else %}
+      <ul>
+        <li><strong>Subject:</strong> {{ csr_info.subject }}</li>
+        {% if csr_info.common_name %}
+          <li><strong>Common Name:</strong> {{ csr_info.common_name }}</li>
+        {% endif %}
+        {% if csr_info.sans %}
+          <li><strong>SANs:</strong> {{ csr_info.sans|join:", " }}</li>
+        {% endif %}
+        <li><strong>Key Algorithm:</strong> {{ csr_info.key_algorithm }}</li>
+        <li><strong>Signature Algorithm:</strong> {{ csr_info.signature_algorithm }}</li>
+      </ul>
+    {% endif %}
+  {% else %}
+    <p>No CSR data available.</p>
+  {% endif %}
+
+  <p>
+    <a href="{% url 'workflows:pending_list' %}" class="btn btn-secondary">
+      ← Back to Pending
+    </a>
+  </p>
+{% endblock %}
