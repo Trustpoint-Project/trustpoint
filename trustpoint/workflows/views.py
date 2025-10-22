@@ -31,6 +31,7 @@ from django.views import View
 from django.views.generic import ListView
 from pki.models import DomainModel, IssuingCaModel
 from trustpoint_core.oid import AlgorithmIdentifier
+from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_DEVICES_SUBCATEGORY, PageContextMixin
 from util.email import MailTemplates
 
 from workflows.models import (
@@ -613,8 +614,11 @@ class PendingApprovalsView(ListView[WorkflowInstance]):
         return context
 
 
-class WorkflowInstanceDetailView(View):
+class WorkflowInstanceDetailView(PageContextMixin, View):
     """Show detailed info for a pending workflow instance."""
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name_for_redirect = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
     template_name = 'workflows/pending_detail.html'
 
@@ -623,21 +627,14 @@ class WorkflowInstanceDetailView(View):
         inst = get_object_or_404(WorkflowInstance, pk=instance_id)
         payload = inst.payload or {}
 
-        # Lookup CA/Domain/Device names
-        ca_name = None
         if payload.get('ca_id'):
             ca = get_object_or_404(IssuingCaModel, pk=payload['ca_id'])
-            ca_name = ca.unique_name
 
-        domain_name = None
         if payload.get('domain_id'):
             dm = get_object_or_404(DomainModel, pk=payload['domain_id'])
-            domain_name = dm.unique_name
 
-        device_name = None
         if payload.get('device_id'):
             dv = get_object_or_404(DeviceModel, pk=payload['device_id'])
-            device_name = dv.common_name
 
         # Parse CSR if present
         csr_info: dict[str, Any] | None = None
@@ -670,12 +667,14 @@ class WorkflowInstanceDetailView(View):
         context = {
             'inst': inst,
             'payload': payload,
-            'ca_name': ca_name,
-            'domain_name': domain_name,
-            'device_name': device_name,
+            'ca_name': ca.unique_name,
+            'domain_name': dm.unique_name,
+            'device_name': dv.common_name,
+            'device_serial_number': dv.serial_number,
             'csr_info': csr_info,
             'page_category': 'workflows',
             'page_name': 'pending',
+            'clm_url' : f'{self.page_category}:{self.page_name_for_redirect}_certificate_lifecycle_management',
         }
         return render(request, self.template_name, context)
 

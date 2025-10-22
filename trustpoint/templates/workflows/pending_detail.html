@@ -8,43 +8,43 @@
   <p>
     <strong>Workflow:</strong> <a href="{% url 'workflows:definition_wizard' %}?edit={{ inst.definition.id }}">{{ inst.definition.name }}</a><br>
     <strong>State:</strong> {{ inst.state }}<br>
-    <strong>Current Step:</strong> {{ inst.current_step }}<br>
-    <strong>Requested At:</strong> {{ inst.created_at|date:"SHORT_DATETIME_FORMAT" }}
+    <strong>Requested At:</strong> {{ inst.created_at|date:"Y/m/d, H:i:s" }}
   </p>
 
-  
   <hr>
 
-  <h3>Payload</h3>
+  <h3>Request</h3>
   <ul>
+    <li><strong>CA:</strong>
+      <a href="{% url 'pki:issuing_cas-config' payload.ca_id %}">
+        {{ ca_name }}
+      </a>
+    </li>
+    <li>
+      <strong>Domain:</strong>
+      <a href="{% url 'pki:domains-config' payload.domain_id %}">
+        {{ domain_name }}
+      </a>
+    </li>
     <li><strong>Protocol:</strong> {{ payload.protocol }}</li>
     <li><strong>Operation:</strong> {{ payload.operation }}</li>
-    <li><strong>Fingerprint:</strong> {{ payload.fingerprint }}</li>
+    <li><strong>Enrollment request ID:</strong> {{ payload.fingerprint }}</li>
+  </ul>
 
-    {% if payload.ca_id %}
-      <li>
-        <strong>CA:</strong>
-        <a href="{% url 'pki:issuing_cas-config' payload.ca_id %}">
-          {{ ca_name }}
-        </a>
-      </li>
-    {% endif %}
+  <hr>
 
-    {% if payload.domain_id %}
-      <li>
-        <strong>Domain:</strong>
-        <a href="{% url 'pki:domains-config' payload.domain_id %}">
-          {{ domain_name }}
-        </a>
-      </li>
-    {% endif %}
-
+  <h3>Device</h3>
+  <ul>
     {% if payload.device_id %}
       <li>
         <strong>Device:</strong>
-        <a href="{% url 'devices:certificate_lifecycle_management' payload.device_id %}">
+        <a href="{% url clm_url pk=payload.device_id %}">
           {{ device_name }}
         </a>
+      </li>
+      <li>
+        <strong>Serial number:</strong>
+          {{ device_serial_number }}
       </li>
     {% endif %}
   </ul>

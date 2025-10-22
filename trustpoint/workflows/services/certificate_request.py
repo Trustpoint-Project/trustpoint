@@ -32,15 +32,15 @@ class CertificateRequestHandler:
         payload: dict[str, Any],
         **_: Any,
     ) -> dict[str, Any]:
-        def _norm(v):  # normalize IDs
+        def _norm(v: Any) -> int | None:  # normalize IDs
             try:
                 return int(v) if v is not None else None
             except (TypeError, ValueError):
                 return None
 
-        ca = _norm(ca_id)
-        dom = _norm(domain_id)
-        dev = _norm(device_id)
+        ca_id = _norm(ca_id)
+        domain_id = _norm(domain_id)
+        device_id = _norm(device_id)
 
         csr_pem = payload.get('csr_pem')
         if not isinstance(csr_pem, str):
@@ -58,9 +58,9 @@ class CertificateRequestHandler:
             EnrollmentRequest.objects.filter(
                 protocol=protocol,
                 operation=operation,
-                ca_id=ca,
-                domain_id=dom,
-                device_id=dev,
+                ca_id=ca_id,
+                domain_id=domain_id,
+                device_id=device_id,
                 fingerprint=fingerprint,
                 template=template,
                 finalized=False,
@@ -74,9 +74,9 @@ class CertificateRequestHandler:
             req = EnrollmentRequest.objects.create(
                 protocol=protocol,
                 operation=operation,
-                ca_id=ca,
-                domain_id=dom,
-                device_id=dev,
+                ca_id=ca_id,
+                domain_id=domain_id,
+                device_id=device_id,
                 fingerprint=fingerprint,
                 template=template,
                 aggregate_state=EnrollmentRequest.STATE_PENDING,
@@ -87,9 +87,9 @@ class CertificateRequestHandler:
         definitions = (
             WorkflowDefinition.objects.filter(published=True)
             .filter(
-                Q(scopes__ca_id=ca) | Q(scopes__ca_id__isnull=True),
-                Q(scopes__domain_id=dom) | Q(scopes__domain_id__isnull=True),
-                Q(scopes__device_id=dev) | Q(scopes__device_id__isnull=True),
+                Q(scopes__ca_id=ca_id) | Q(scopes__ca_id__isnull=True),
+                Q(scopes__domain_id=domain_id) | Q(scopes__domain_id__isnull=True),
+                Q(scopes__device_id=device_id) | Q(scopes__device_id__isnull=True),
             )
             .distinct()
         )
@@ -122,11 +122,11 @@ class CertificateRequestHandler:
                 full_payload = {
                     'protocol': protocol,
                     'operation': operation,
-                    'ca_id': ca,
-                    'domain_id': dom,
-                    'device_id': dev,
+                    'ca_id': ca_id,
+                    'domain_id': domain_id,
+                    'device_id': device_id,
                     'fingerprint': fingerprint,
-                    **{k: v for k, v in payload.items()},
+                    **dict(payload.items()),
                 }
                 with transaction.atomic():
                     inst = WorkflowInstance.objects.create(

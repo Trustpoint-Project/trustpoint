@@ -33,43 +33,42 @@ export function buildDesignTimeCatalog({ state }) {
   }
 
   _catalogCache = {
-    usage: 'Insert variables using {{ ctx.<path> }}, e.g. {{ ctx.workflow.id }} or {{ ctx.steps.step_2.outputs.webhook.status }}',
+    usage: 'Insert variables using {{ ctx.<path> }}, e.g. {{ ctx.workflow.id }}',
     groups: [
       {
         key: 'workflow', label: 'Workflow', vars: [
           { key: 'workflow.id',   label: 'Workflow ID' },
           { key: 'workflow.name', label: 'Workflow Name' },
+          { key: 'workflow.instance_id',           label: 'Instance ID' },
+          { key: 'instance.instance_state',        label: 'Instance State' },
         ],
       },
       {
-        key: 'instance', label: 'Instance', vars: [
-          { key: 'instance.id',           label: 'Instance ID' },
-          { key: 'instance.state',        label: 'Instance State' },
-          { key: 'instance.current_step', label: 'Current Step ID' },
-        ],
+        key: 'device', label: 'Device', vars: [
+          { key: 'device.common_name', label: 'Device common name' },
+          { key: 'device.serial_number', label: 'Device serial number' },
+          { key: 'device.domain', label: 'Device domain' },
+          { key: 'device.device_type', label: 'Device type' },
+          { key: 'device.created_at', label: 'Device created at' },
+
+        ]
       },
       {
-        key: 'payload', label: 'Payload', vars: [
-          { key: 'payload.protocol',    label: 'Protocol' },
-          { key: 'payload.operation',   label: 'Operation' },
-          { key: 'payload.ca_id',       label: 'CA ID' },
-          { key: 'payload.domain_id',   label: 'Domain ID' },
-          { key: 'payload.device_id',   label: 'Device ID' },
-          { key: 'payload.fingerprint', label: 'CSR Fingerprint' },
-        ],
-      },
-      {
-        key: 'csr', label: 'CSR (parsed)', vars: [
-          { key: 'csr.subject',         label: 'CSR Subject' },
-          { key: 'csr.common_name',     label: 'Common Name' },
-          { key: 'csr.sans',            label: 'SubjectAltNames' },
-          { key: 'csr.public_key_type', label: 'Public Key Type' },
+        key: 'request', label: 'Request', vars: [
+          { key: 'request.protocol',    label: 'Protocol' },
+          { key: 'request.operation',   label: 'Operation' },
+          { key: 'request.enrollment_request_id', label: 'Enrollment request fingerprint' },
+          { key: 'request.csr_pem',   label: 'CSR pem' },
+          { key: 'request.subject',         label: 'CSR Subject' },
+          { key: 'request.common_name',     label: 'Common Name' },
+          { key: 'request.sans',            label: 'SubjectAltNames' },
+          { key: 'request.public_key_type', label: 'Public Key Type' },
         ],
       },
       { key: 'steps', label: 'Steps', vars: stepVars },
       {
         key: 'vars', label: 'Saved Vars', vars: [
-          { key: 'vars', label: 'vars (whole map)' },
+          { key: 'vars', label: 'vars' },
         ],
       },
     ],

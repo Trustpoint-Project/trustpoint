@@ -31,57 +31,62 @@ class Triggers:
         operation='simpleenroll',
         handler='certificate_request',
     )
-    est_simplereenroll = Trigger(
-        key='est_simplereenroll',
-        protocol='EST',
-        operation='simplereenroll',
-        handler='certificate_request',
-    )
-    est_cacerts = Trigger(
-        key='est_cacerts',
-        protocol='EST',
-        operation='cacerts',
-        handler='certificate_issued',
-    )
-    est_csrattrs = Trigger(
-        key='est_csrattrs',
-        protocol='EST',
-        operation='csrattrs',
-        handler='certificate_request',
-    )
 
-    cmp_certrequest = Trigger(
-        key='cmp_certrequest',
-        protocol='CMP',
-        operation='certRequest',
-        handler='certificate_request',
-    )
-    cmp_revocationrequest = Trigger(
-        key='cmp_revocationrequest',
-        protocol='CMP',
-        operation='revocationRequest',
-        handler='certificate_request',
-    )
+    # est_simplereenroll = Trigger(
+    #     key='est_simplereenroll',
+    #     protocol='EST',
+    #     operation='simplereenroll',
+    #     handler='certificate_request',
+    # )
 
-    scep_pkioperation = Trigger(
-        key='scep_pkioperation',
-        protocol='SCEP',
-        operation='PKIOperation',
-        handler='certificate_request',
-    )
+    # est_cacerts = Trigger(
+    #     key='est_cacerts',
+    #     protocol='EST',
+    #     operation='',
+    #     handler='certificate_issued',
+    # )
 
-    device_created = Trigger(
-        key='device_created',
-        protocol='',
-        operation='',
-        handler='device_created',
-    )
-    device_deleted = Trigger(
-        key='device_deleted',
-        protocol='',
-        operation='',
-        handler='device_deleted',
-    )
+    # est_csrattrs = Trigger(
+    #     key='est_csrattrs',
+    #     protocol='EST',
+    #     operation='csrattrs',
+    #     handler='certificate_request',
+    # )
+
+    # cmp_certrequest = Trigger(
+    #     key='cmp_certrequest',
+    #     protocol='CMP',
+    #     operation='certRequest',
+    #     handler='certificate_request',
+    # )
+
+    # cmp_revocationrequest = Trigger(
+    #     key='cmp_revocationrequest',
+    #     protocol='CMP',
+    #     operation='revocationRequest',
+    #     handler='certificate_request',
+    # )
+
+    # scep_pkioperation = Trigger(
+    #     key='scep_pkioperation',
+    #     protocol='SCEP',
+    #     operation='PKIOperation',
+    #     handler='certificate_request',
+    # )
+
+    # device_created = Trigger(
+    #     key='device_created',
+    #     protocol='',
+    #     operation='',
+    #     handler='device_created',
+    # )
+
+    # device_deleted = Trigger(
+    #     key='device_deleted',
+    #     protocol='',
+    #     operation='',
+    #     handler='device_deleted',
+    # )
 
     @classmethod
     def all(cls) -> list[Trigger]:

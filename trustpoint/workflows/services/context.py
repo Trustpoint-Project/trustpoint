@@ -35,6 +35,7 @@ from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
 from django.conf import settings
 
+from devices.models import DeviceModel
 from workflows.models import WorkflowInstance
 
 __all__ = [
@@ -178,7 +179,7 @@ def build_context(instance: WorkflowInstance) -> dict[str, Any]:
     step_contexts: dict[str, Any] = dict(instance.step_contexts or {})
 
     # Optional CSR enrichment
-    csr_info = _parse_csr_info(payload.get('csr_pem'))
+    csr_info = _parse_csr_info(payload.get('csr_pem')) or {}
 
     # Per-step outputs (exclude reserved keys like "$vars")
     steps_by_id: dict[str, Any] = {}
@@ -193,19 +194,37 @@ def build_context(instance: WorkflowInstance) -> dict[str, Any]:
     step_names: dict[str, str] = {raw: _safe_step_key(raw) for raw in steps_by_id}
     steps_safe: dict[str, Any] = {step_names[raw]: value for raw, value in steps_by_id.items()}
 
+    # Get devuice
+    device = DeviceModel.objects.get(pk=payload.get('device_id', ''))
+
     # Global variables bucket ($vars in engine)
     vars_map: dict[str, Any] = dict(step_contexts.get('$vars') or {})
 
+    request = dict({
+            'protocol': payload.get('protocol'),
+            'operation': payload.get('operation'),
+            'enrollment_request_id': payload.get('fingerprint'),
+            'csr_pem': payload.get('csr_pem'),
+        }, **csr_info)
+
     ctx: dict[str, Any] = {
         'meta': {'schema': CTX_SCHEMA_VERSION},
-        'workflow': {'id': str(instance.definition_id), 'name': instance.definition.name},
-        'instance': {'id': str(instance.id), 'state': instance.state, 'current_step': instance.current_step},
-        'payload': payload,
-        'csr': csr_info,  # may be None
-        'steps_by_id': steps_by_id,  # raw ids (use bracket syntax if accessing in templates)
-        'steps_safe': steps_safe,  # safe names like "step_2"
-        'steps': steps_safe,  # alias → recommended for templates: {{ ctx.steps.step_2 }}
-        'step_names': step_names,  # {"step-2": "step_2"}
+        'workflow': {
+            'id': str(instance.definition.pk),
+            'name': instance.definition.name,
+            'instance_id': instance.id,
+            'instance_state': instance.state
+        },
+        'device': {
+            'common_name': device.common_name,
+            'serial_number': device.serial_number,
+            'device_id': device.pk,
+            'domain': device.domain,
+            'device_type': device.device_type,
+            'created_at': device.created_at,
+        },
+        'request': request,
+        'steps': steps_safe,
         'vars': vars_map,
     }
     return ctx
