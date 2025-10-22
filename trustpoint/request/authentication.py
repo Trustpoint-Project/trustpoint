@@ -1,15 +1,21 @@
 """Provides the `EstAuthentication` class using the Composite pattern for modular EST authentication."""
 
-from abc import ABC, abstractmethod
-from multiprocessing import context
 import re
+from abc import ABC, abstractmethod
 from typing import Never
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingPkiProtocol, OnboardingProtocol
+from devices.models import (
+    DeviceModel,
+    IssuedCredentialModel,
+    NoOnboardingConfigModel,
+    OnboardingConfigModel,
+    OnboardingPkiProtocol,
+    OnboardingProtocol,
+)
 from pki.models import CredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
@@ -248,8 +254,13 @@ class IDevIDAuthentication(AuthenticationComponent, LoggerMixin):
                 self.logger.info('Successfully authenticated device via IDevID')
                 context.device = device_or_none
                 if not context.domain:
-                    context.domain = context.device.domain
-                    context.domain_str = context.domain.unique_name
+                    device_domain = context.device.domain
+                    if not device_domain:
+                        error_message = 'IDevID authentication failed: Device domain is not set.'
+                        self.logger.warning('IDevID authentication failed: Device domain is not set')
+                        self._raise_idevid_error(error_message)
+                    context.domain = device_domain
+                    context.domain_str = device_domain.unique_name
             else:
                 error_message = 'IDevID authentication failed: No device associated.'
                 self.logger.warning('IDevID authentication failed: No device associated')
@@ -298,8 +309,7 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
         try:
             sender_kid = self._extract_sender_kid(context)
             device = self._get_device(sender_kid)
-            self._validate_device_configuration(device, sender_kid)
-            device_config = device.onboarding_config or device.no_onboarding_config
+            device_config = self._validate_device_configuration(device, sender_kid)
             self._verify_hmac_protection(context, device_config.cmp_shared_secret)
             self._finalize_authentication(context, device, sender_kid)
 
@@ -367,14 +377,16 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
             self.logger.warning(error_message)
             raise ValueError(error_message) from None
 
-    def _validate_device_configuration(self, device: DeviceModel, sender_kid: int) -> None:
+    def _validate_device_configuration(self, device: DeviceModel, sender_kid: int
+                                       ) -> OnboardingConfigModel | NoOnboardingConfigModel:
         """Validate device has required shared secret configuration."""
         device_config = device.onboarding_config or device.no_onboarding_config
-        if not device_config.cmp_shared_secret:
+        if not device_config or not device_config.cmp_shared_secret:
             error_message = 'CMP shared secret authentication failed: Device has no shared secret configured.'
             self.logger.warning(
                 'Device %s (ID: %s) has no CMP shared secret configured', device.common_name, sender_kid)
             self._raise_cmp_error(error_message)
+        return device_config
 
     def _verify_hmac_protection(self, context: RequestContext, shared_secret: str) -> None:
         """Verify HMAC-based protection and store shared secret for response."""
@@ -701,7 +713,11 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
 
     def _authenticate_device(self, context: RequestContext) -> DeviceModel:
         """Authenticate the device using the CMP signer certificate."""
-        device_info = self._extract_device_info(context.client_certificate)
+        cmp_signer_cert = context.client_certificate
+        if not cmp_signer_cert:
+            err_msg = 'CMP signer certificate is missing in context client_certificate.'
+            self._raise_value_error(err_msg)
+        device_info = self._extract_device_info(cmp_signer_cert)
         if device_info['device_id'] is None:
             self.logger.warning(
                 'Device ID missing in CMP signer cert subject. Falling back to fingerprint-based DB lookup.'
@@ -711,10 +727,10 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
                 return context.device
 
         device = self._lookup_device(device_info)
-        self._validate_device(device, device_info, context.client_certificate)
+        self._validate_device(device, device_info, cmp_signer_cert)
         return device
 
-    def _extract_device_info(self, cmp_signer_cert: x509.Certificate) -> dict[str, str | int]:
+    def _extract_device_info(self, cmp_signer_cert: x509.Certificate) -> dict[str, str | int | None]:
         """Extract device information from certificate subject."""
         try:
             subj = cmp_signer_cert.subject
@@ -723,7 +739,7 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             device_id = user_ids[0].value if user_ids else None
 
             serial_nos = subj.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)
-            device_serial_number_raw = serial_nos[0].value if serial_nos else None
+            serial_no_raw = serial_nos[0].value if serial_nos else None
 
             domain_components = subj.get_attributes_for_oid(x509.NameOID.DOMAIN_COMPONENT)
             domain_name_raw = domain_components[0].value if domain_components else None
@@ -731,29 +747,17 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             common_names = subj.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
             common_name = common_names[0].value if common_names else None
 
+            if isinstance(device_id, bytes):
+                device_id = device_id.decode()
+
             # Parse serial number value
-            if isinstance(device_serial_number_raw, str):
-                device_serial_number = device_serial_number_raw
-            elif isinstance(device_serial_number_raw, bytes):
-                device_serial_number = device_serial_number_raw.decode()
-            else:
-                device_serial_number = None
+            device_serial_number = serial_no_raw.decode() if isinstance(serial_no_raw, bytes) else serial_no_raw
 
             # Parse domain name value
-            if isinstance(domain_name_raw, str):
-                domain_name = domain_name_raw
-            elif isinstance(domain_name_raw, bytes):
-                domain_name = domain_name_raw.decode()
-            else:
-                domain_name = None
+            domain_name = domain_name_raw.decode() if isinstance(domain_name_raw, bytes) else domain_name_raw
 
             # Parse common name value
-            if isinstance(common_name, str):
-                common_name_value = common_name
-            elif isinstance(common_name, bytes):
-                common_name_value = common_name.decode()
-            else:
-                common_name_value = None
+            common_name_value = common_name.decode() if isinstance(common_name, bytes) else common_name
 
             # Verify this is a domain credential
             if not common_name_value or re.sub(r'[^a-zA-Z0-9]', '', common_name_value) != 'TrustpointDomainCredential':
@@ -771,11 +775,20 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
                 'common_name': common_name_value
             }
 
-    def _lookup_device(self, device_info: dict[str, str | int]) -> DeviceModel:
+    def _lookup_device(self, device_info: dict[str, str | int | None]) -> DeviceModel:
         """Look up the device by ID."""
-        try:
-            return DeviceModel.objects.get(pk=device_info['device_id'])
-        except DeviceModel.DoesNotExist:
+        device_model = None
+        if device_info['device_id']:
+            try:
+                device_model = DeviceModel.objects.get(pk=device_info['device_id'])
+            except DeviceModel.DoesNotExist:
+                device_model = None
+                self.logger.warning(
+                    'Device with ID %s not found in database.',
+                    device_info['device_id']
+                )
+
+        if not device_model:
             error_message = 'Device not found.'
             self.logger.warning(
                 'CMP signature-based certification failed: Device not found',
@@ -783,8 +796,11 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             )
             self._raise_value_error(error_message)
 
+        return device_model
+
     def _validate_device(
-            self, device: DeviceModel, device_info: dict[str, str | int], cmp_signer_cert: x509.Certificate) -> None:
+            self, device: DeviceModel, device_info: dict[str, str | int | None], cmp_signer_cert: x509.Certificate
+        ) -> None:
         """Validate device properties and certificate."""
         # Validate device serial number
         if device_info['serial_number'] and device_info['serial_number'] != device.serial_number:

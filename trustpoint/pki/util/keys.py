@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, get_args
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.db import models
+from trustpoint_core.crypto_types import PublicKey
 from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
 from trustpoint_core.serializer import PrivateKeySerializer
 
 if TYPE_CHECKING:
+    from typing import Any, TypeGuard
+
     from trustpoint_core.crypto_types import PrivateKey
 
     from pki.models.domain import DomainModel
@@ -85,3 +88,15 @@ class CryptographyUtils:
 
         err_msg = 'A suitable hash algorithm is not yet specified for the given private key type.'
         raise ValueError(err_msg)
+
+
+def is_supported_public_key(public_key: Any) -> TypeGuard[PublicKey]:
+    """TypeGuard function that narrows down the public key type.
+
+    Args:
+        public_key: The loaded public key to check if it is supported.
+
+    Returns:
+        True if it is supported, False otherwise.
+    """
+    return isinstance(public_key, get_args(PublicKey))

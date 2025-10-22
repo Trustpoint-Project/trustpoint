@@ -7,6 +7,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from devices.issuer import CredentialSaver
 from devices.models import IssuedCredentialModel
 from pki.models import CredentialModel
+from pki.util.keys import is_supported_public_key
 from trustpoint.logger import LoggerMixin
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
@@ -67,11 +68,13 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
             exc_msg = 'Certificate request must be set in the context to issue a certificate.'
             raise ValueError(exc_msg)
 
+        cert_req = context.cert_requested
         ca = context.domain.get_issuing_ca_or_value_error()
-        if isinstance(context.cert_requested, x509.CertificateBuilder):
-            public_key = context.cert_requested._public_key  # noqa: SLF001
-        else:
-            public_key = context.cert_requested.public_key()
+        public_key = cert_req._public_key if isinstance(cert_req, x509.CertificateBuilder) else cert_req.public_key()  # noqa: SLF001
+
+        if not is_supported_public_key(public_key):
+            err_msg = f'The public key in the certificate is missing or of unsupported type: {type(public_key)}.'
+            raise TypeError(err_msg)
 
         issuing_credential = ca.credential
         issuer_certificate = issuing_credential.get_certificate()

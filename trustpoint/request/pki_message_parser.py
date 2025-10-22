@@ -1,19 +1,21 @@
 """Provides the `PkiMessageParser` class for parsing PKI messages."""
 import base64
 import contextlib
+import ipaddress
 import re
 from abc import ABC, abstractmethod
-from typing import Any, Never
+from typing import Any, Never, get_args
 
 from cmp.util import NameParser
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+from cryptography.hazmat.primitives.asymmetric.types import CertificatePublicKeyTypes
 from cryptography.hazmat.primitives.serialization import load_der_public_key
 from cryptography.x509.oid import ExtensionOID
 from pki.models import DomainModel
 from pyasn1.codec.ber import decoder as ber_decoder  # type: ignore[import-untyped]
 from pyasn1.codec.der import decoder as der_decoder  # type: ignore[import-untyped]
-from pyasn1.codec.der import encoder as der_encoder  # type: ignore[import-untyped]
+from pyasn1.codec.der import encoder as der_encoder
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
 from trustpoint.logger import LoggerMixin
 
@@ -101,15 +103,15 @@ class EstCsrSignatureVerification(ParsingComponent, LoggerMixin):
         """Validates the signature of the CSR stored in the context."""
         csr = context.cert_requested
         if csr is None:
-            error_message = 'CSR not found in the parsing context. Ensure it was parsed before signature verification.'
+            err_msg = 'CSR not found in the parsing context. Ensure it was parsed before signature verification.'
             self.logger.warning('EST CSR signature verification failed: CSR not found in context')
-            self._raise_validation_error(error_message)
+            self._raise_validation_error(err_msg)
 
         if not isinstance(csr, x509.CertificateSigningRequest):
-            error_message = 'CSR signature verification only supported for EST requests with CertificateSigningRequest objects.'
-            self.logger.warning('EST CSR signature verification failed: Expected CertificateSigningRequest, got %s', 
+            err_msg = 'CSR signature verification only supports EST requests with CertificateSigningRequest objects.'
+            self.logger.warning('EST CSR signature verification failed: Expected CertificateSigningRequest, got %s',
                               type(csr).__name__)
-            self._raise_validation_error(error_message)
+            self._raise_validation_error(err_msg)
 
         public_key = csr.public_key()
         signature_hash_algorithm = csr.signature_hash_algorithm
@@ -162,7 +164,7 @@ class DomainParsing(ParsingComponent, LoggerMixin):
         domain_str = context.domain_str
         if not domain_str:
             error_msg = 'Domain str missing in request context, deferring domain resolution to authentication step'
-            self.logger.warning('Domain parsing failed: Domain string is missing')
+            self.logger.warning(error_msg)
             return
         if domain_str == '.aoki':
             self.logger.info('Special domain ".aoki" detected, deferring domain resolution to authentication step')
@@ -478,6 +480,10 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             self.logger.exception(error_message)
             raise ValueError(error_message) from e
 
+        if not isinstance(public_key, get_args(CertificatePublicKeyTypes)):
+            err_msg = f'Unsupported public key type in CMP certTemplate: {type(public_key)}.'
+            raise TypeError(err_msg)
+
         return builder.public_key(public_key)
 
     def _raise_not_implemented_error(self, message: str) -> None:
@@ -566,8 +572,6 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         ipv6_byte_length: int
     ) -> None:
         """Handle IP address parsing for SAN."""
-        import ipaddress
-
         try:
             ip_bytes = name_value.asOctets()
             if len(ip_bytes) == ipv4_byte_length:
