@@ -3,11 +3,10 @@
 from typing import Any
 
 from django.contrib import messages
-from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import TemplateView
 
-from management.models import KeyStorageConfig
+from management.models import KeyStorageConfig, PKCS11Token
 
 
 class KeyStorageConfigView(TemplateView):
@@ -30,7 +29,6 @@ class KeyStorageConfigView(TemplateView):
                 if config.hsm_config:
                     context['hsm_config'] = config.hsm_config
                 else:
-                    from management.models import PKCS11Token
                     try:
                         context['hsm_config'] = PKCS11Token.objects.first()
                     except PKCS11Token.DoesNotExist:

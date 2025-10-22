@@ -6,11 +6,11 @@ import base64
 import os
 from typing import Any, Never
 
-from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from management.models import KeyStorageConfig, PKCS11Token
 
 
 class EncryptedTextField(models.TextField[str, str]):
@@ -47,7 +47,6 @@ class EncryptedTextField(models.TextField[str, str]):
             ValidationError: If crypto storage config is not found or there's an error accessing it.
         """
         try:
-            from management.models import KeyStorageConfig
 
             crypto_config = KeyStorageConfig.objects.first()
             if not crypto_config:
@@ -74,8 +73,6 @@ class EncryptedTextField(models.TextField[str, str]):
         Raises:
             ValidationError: If no PKCS#11 token is configured or DEK unavailable.
         """
-        from management.models import PKCS11Token
-
         token = PKCS11Token.objects.first()
         if not token:
             raise ValidationError(_('No PKCS#11 token configured for encryption.'))
@@ -245,8 +242,6 @@ class EncryptedCharField(models.CharField[str, str]):
             ValidationError: If crypto storage config is not found or there's an error accessing it.
         """
         try:
-            from management.models import KeyStorageConfig
-
             crypto_config = KeyStorageConfig.objects.first()
             if not crypto_config:
                 msg = 'No crypto storage configuration found. Please configure storage type first.'
@@ -265,8 +260,6 @@ class EncryptedCharField(models.CharField[str, str]):
 
     def get_dek(self) -> bytes:
         """Get the DEK from PKCS#11 token, preferring cached value."""
-        from management.models import PKCS11Token
-
         token = PKCS11Token.objects.first()
         if not token:
             raise ValidationError(_('No PKCS#11 token configured for encryption.'))

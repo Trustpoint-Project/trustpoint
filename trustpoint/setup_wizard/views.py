@@ -3,24 +3,21 @@
 from __future__ import annotations
 
 import logging
-import os
 import re
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
-from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.core.management import call_command
-from django.db import connection
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
+from django.utils.translation import gettext_lazy as _
 from django.views.generic import FormView, TemplateView, View
 from management.forms import KeyStorageConfigForm
 from management.models import KeyStorageConfig, PKCS11Token
@@ -108,7 +105,7 @@ def execute_shell_script(script: Path, *args: str) -> None:
         err_msg = f'The script path {script_path} is not a valid file.'
         raise ValueError(err_msg)
 
-    command = ['sudo', str(script_path)] + list(args)
+    command = ['sudo', str(script_path), *list(args)]
 
     # This method is executing all paths it gets.
     # The security is actually implemented using a sudoers file within the linux system -> noqa: S603.
@@ -138,8 +135,6 @@ class StartupWizardRedirect:
         Raises:
             ValueError: If the wizard state is unrecognized or invalid.
         """
-        from management.models import KeyStorageConfig
-
         state_to_url = {
             SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE: 'setup_wizard:crypto_storage_setup',
             SetupWizardState.WIZARD_SETUP_HSM: 'setup_wizard:hsm_setup',
@@ -255,8 +250,6 @@ class HsmSetupMixin(LoggerMixin):
     def _assign_token_to_crypto_storage(self, token: PKCS11Token, hsm_type: str) -> None:
         """Assign the created token to the appropriate crypto storage configuration."""
         try:
-            from management.models import KeyStorageConfig
-
             config = KeyStorageConfig.get_config()
 
             if hsm_type == 'softhsm' and config.storage_type == KeyStorageConfig.StorageType.SOFTHSM:
@@ -401,8 +394,6 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView):
 
             self.logger.info('Crypto storage configured with type: %s', storage_type)
 
-            from management.models import KeyStorageConfig
-
             if storage_type == KeyStorageConfig.StorageType.SOFTWARE:
                 return redirect('setup_wizard:setup_mode', permanent=False)
             if storage_type == KeyStorageConfig.StorageType.SOFTHSM:
@@ -413,7 +404,7 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView):
                                     messages.ERROR,
                                     'Physical HSM is coming soon.'
                                 )
-                # return redirect('setup_wizard:hsm_setup', hsm_type='physical', permanent=False)
+                # return redirect('setup_wizard:hsm_setup', hsm_type='physical', permanent=False)  # noqa: ERA001
 
             messages.add_message(
                 self.request,
@@ -483,7 +474,6 @@ class SetupWizardHsmSetupView(HsmSetupMixin, FormView):
             return redirect('setup_wizard:crypto_storage_setup', permanent=False)
 
         try:
-            from management.models import KeyStorageConfig
             config = KeyStorageConfig.get_config()
 
             expected_storage_type = (
@@ -498,7 +488,7 @@ class SetupWizardHsmSetupView(HsmSetupMixin, FormView):
                     f'{hsm_type.title()} HSM setup is only available when {hsm_type.title()} HSM storage is selected.'
                 )
                 return redirect('setup_wizard:crypto_storage_setup', permanent=False)
-        except Exception:
+        except Exception:  # noqa: BLE001
             return redirect('setup_wizard:crypto_storage_setup', permanent=False)
 
         return super().dispatch(request, *args, **kwargs)
@@ -645,15 +635,14 @@ class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView):
         try:
             if 'generate_credential' in self.request.POST:
                 return redirect('setup_wizard:generate_tls_server_credential', permanent=False)
-            elif 'import_credential' in self.request.POST:
+            if 'import_credential' in self.request.POST:
                 return redirect('setup_wizard:import_tls_server_credential', permanent=False)
-            else:
-                messages.add_message(
-                    self.request,
-                    messages.ERROR,
-                    'Invalid option selected.'
-                )
-                return redirect('setup_wizard:select_tls_server_credential', permanent=False)
+            messages.add_message(
+                self.request,
+                messages.ERROR,
+                'Invalid option selected.'
+            )
+            return redirect('setup_wizard:select_tls_server_credential', permanent=False)
 
         except subprocess.CalledProcessError as exception:
             err_msg = f'Setup mode script failed: {self._map_exit_code_to_message(exception.returncode)}'
@@ -813,7 +802,7 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
     def handle_backup_password_recovery(self, backup_password: str) -> bool:
         """Handle DEK recovery using backup password.
 
-        Uses the existing KEK to wrap the recovered DEK and stores everything 
+        Uses the existing KEK to wrap the recovered DEK and stores everything
         in the model for normal operation.
 
         Args:
@@ -836,7 +825,7 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
             # Verify the backup password and recover the DEK
             try:
                 dek_bytes = token.get_dek_with_backup_password(backup_password)
-            except (RuntimeError, ValueError) as e:
+            except (RuntimeError, ValueError):
                 self.logger.exception('Invalid backup password provided for token %s', token.label)
                 self.logger.exception('The restore process needs to be redone with the correct backup password.')
                 messages.add_message(
@@ -880,12 +869,12 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
             except Exception as e:  # noqa: BLE001
                 self.logger.warning('Failed to cache DEK for token %s: %s', token.label, e)
 
-        except Exception as e:
-            self.logger.exception('Unexpected error during backup password recovery: %s', e)
+        except Exception:
+            self.logger.exception('Unexpected error during backup password recovery')
             messages.add_message(
                 self.request,
                 messages.ERROR,
-                f'Unexpected error during backup password recovery: {e}'
+                'Unexpected error during backup password recovery'
             )
             return False
         else:
@@ -955,9 +944,9 @@ class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
 
                     self.logger.info('Backup restore completed successfully from file: %s', backup_file.name)
 
-        except Exception as e:
+        except Exception:
             messages.add_message(request, messages.ERROR, 'Error occurred during restore operation.')
-            self.logger.exception('Exception restoring database from %s: %s', backup_file.name, e)
+            self.logger.exception('Exception restoring database from %s', backup_file.name)
             return redirect('setup_wizard:restore_options')
         finally:
             # Clean up temporary file
@@ -1007,7 +996,7 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
         try:
             # Attempt to recover DEK using backup password
             success = self.handle_backup_password_recovery(backup_password)
-            
+
             if not success:
                 # Error messages are already added by handle_backup_password_recovery
                 return self.form_invalid(form)
@@ -1028,17 +1017,17 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             messages.add_message(self.request, messages.ERROR, err_msg)
             self.logger.exception(err_msg)
             return self.form_invalid(form)
-            
+
         except FileNotFoundError:
             err_msg = f'Auto restore script not found: {SCRIPT_WIZARD_AUTORESTORE_PASSWORD}'
             messages.add_message(self.request, messages.ERROR, err_msg)
             self.logger.exception(err_msg)
             return self.form_invalid(form)
-            
-        except Exception as exc:
+
+        except Exception:
             err_msg = 'An unexpected error occurred during auto restore password recovery.'
             messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception('Unexpected error during auto restore: %s', exc)
+            self.logger.exception('Unexpected error during auto restore')
             return self.form_invalid(form)
 
     def form_invalid(self, form: PasswordAutoRestoreForm) -> HttpResponse:
@@ -1215,8 +1204,6 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
 
     def get_success_url(self) -> str:
         """Return the success URL based on storage type."""
-        from management.models import KeyStorageConfig
-
         try:
             config = KeyStorageConfig.get_config()
             if config.storage_type in [

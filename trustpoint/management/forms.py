@@ -213,7 +213,6 @@ class KeyStorageConfigForm(forms.ModelForm):
 
     class Meta:
         """ModelForm Meta configuration for KeyStorageConfig."""
-        from management.models import KeyStorageConfig
         model = KeyStorageConfig
         fields: ClassVar[list[str]] = ['storage_type']
 
@@ -228,8 +227,6 @@ class KeyStorageConfigForm(forms.ModelForm):
 
     def save(self, *, commit: bool = True) -> KeyStorageConfigForm:
         """Save the form, ensuring singleton behavior."""
-        from management.models import KeyStorageConfig
-
         instance = KeyStorageConfig.get_or_create_default()
         instance.storage_type = self.cleaned_data['storage_type']
 

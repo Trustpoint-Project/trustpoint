@@ -9,20 +9,20 @@ from cryptography.hazmat.primitives import hashes
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+from trustpoint.logger import LoggerMixin
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
-    PrivateKeySerializer,
     PrivateKeyLocation,
     PrivateKeyReference,
+    PrivateKeySerializer,
 )
 from util.field import UniqueNameValidator
 
 from pki.models import DevIdRegistration, IssuingCaModel, OwnerCredentialModel
 from pki.models.certificate import CertificateModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
-from trustpoint.logger import LoggerMixin
 
 
 class DevIdAddMethodSelectForm(forms.Form):
@@ -106,7 +106,7 @@ class TruststoreAddForm(forms.Form):
         if TruststoreModel.objects.filter(unique_name=unique_name).exists():
             error_message = 'Truststore with the provided name already exists.'
             raise ValidationError(error_message)
-        return cast(str, unique_name)
+        return cast('str', unique_name)
 
     def clean(self) -> None:
         """Cleans and validates the form data.
@@ -119,12 +119,12 @@ class TruststoreAddForm(forms.Form):
             ValidationError: If the truststore file cannot be read, the unique name
             is not unique, or an unexpected error occurs during initialization.
         """
-        cleaned_data = cast(dict[str, Any], super().clean())
+        cleaned_data = cast('dict[str, Any]', super().clean())
         unique_name = cleaned_data.get('unique_name')
         intended_usage = cleaned_data.get('intended_usage')
 
         try:
-            trust_store_file = cast(bytes, cleaned_data.get('trust_store_file').read())
+            trust_store_file = cast('bytes', cleaned_data.get('trust_store_file').read())
         except (OSError, AttributeError) as original_exception:
             error_message = _(
                 'Unexpected error occurred while trying to get file contents. Please see logs for further details.'
@@ -319,7 +319,7 @@ class IssuingCaFileTypeSelectForm(forms.Form):
         method_select (ChoiceField): A dropdown to select the file type for the Issuing CA.
     """
 
-    # TODO(AlexHx8472): do we need .jks? Java Keystore
+    # TODO(AlexHx8472): do we need .jks? Java Keystore  # noqa: FIX002
     method_select = forms.ChoiceField(
         label=_('File Type'),
         choices=[
@@ -355,7 +355,7 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
 
     pkcs12_file = forms.FileField(label=_('PKCS#12 File (.p12, .pfx)'), required=True)
     pkcs12_password = forms.CharField(
-        # hack, force autocomplete off in chrome with: one-time-code
+        # hack, force autocomplete off in chrome with: one-time-code  # noqa: FIX004
         widget=forms.PasswordInput(attrs={'autocomplete': 'one-time-code'}),
         label=_('[Optional] PKCS#12 password'),
         required=False,
@@ -371,7 +371,7 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
             error_message = 'Unique name is already taken. Choose another one.'
             raise ValidationError(error_message)
-        return cast(str, unique_name)
+        return cast('str', unique_name)
 
     def clean(self) -> None:
         """Cleans and validates the entire form.
@@ -432,9 +432,10 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
                 credential_serializer=credential_serializer,
                 issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.LOCAL_PKCS11,
             )
-        # TODO(AlexHx8472): Filter credentials and check if any issuing ca corresponds to it.
-        # TODO(AlexHx8472): If it does get and display the name of the issuing ca in the message.
-        # TODO(AlexHx8472): If not, give information about the credential usage that is already in the db.
+        # TODO(AlexHx8472): Filter credentials and check if any issuing ca corresponds to it.  # noqa: FIX002
+        # TODO(AlexHx8472): If it does get and display the name of the issuing ca in the message.  # noqa: FIX002
+        # TODO(AlexHx8472): If not, give information about the credential usage  # noqa: FIX002
+        # TODO(AlexHx8472): that is already in the db.  # noqa: FIX002
         except ValidationError:
             raise
         except Exception as exception:
@@ -468,7 +469,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
     ca_certificate_chain = forms.FileField(label=_('[Optional] Certificate Chain (.pem, .p7b, .p7c).'), required=False)
     private_key_file = forms.FileField(label=_('Private Key File (.key, .pem)'), required=True)
     private_key_file_password = forms.CharField(
-        # hack, force autocomplete off in chrome with: one-time-code
+        # hack, force autocomplete off in chrome with: one-time-code  # noqa: FIX004
         widget=forms.PasswordInput(attrs={'autocomplete': 'one-time-code'}),
         label=_('[Optional] Private Key File Password'),
         required=False,
@@ -600,6 +601,17 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
 
         return None
 
+    def _raise_validation_error(self, message: str) -> None:
+        """Helper method to raise a ValidationError with a given message.
+
+        Args:
+            message (str): The error message to be included in the ValidationError.
+
+        Raises:
+            ValidationError: Always raised with the provided message.
+        """
+        raise ValidationError(message)
+
     def clean(self) -> None:
         """Cleans and validates the form data.
 
@@ -634,8 +646,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             pk = credential_serializer.private_key
             cert = credential_serializer.certificate
             if pk.public_key() != cert.public_key():
-                err_msg = 'The provided private key does not match the Issuing CA certificate.'
-                raise ValidationError(err_msg)
+                self._raise_validation_error('The provided private key does not match the Issuing CA certificate.')
 
             credential_serializer.private_key_reference = (
                 PrivateKeyReference.from_private_key(private_key=credential_serializer.private_key,
@@ -647,9 +658,10 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
                 credential_serializer=credential_serializer,
                 issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.LOCAL_PKCS11,
             )
-        # TODO(AlexHx8472): Filter credentials and check if any issuing ca corresponds to it.
-        # TODO(AlexHx8472): If it does get and display the name of the issuing ca in the message.
-        # TODO(AlexHx8472): If not, give information about the credential usage that is already in the db.
+        # TODO(AlexHx8472): Filter credentials and check if any issuing ca corresponds to it.  # noqa: FIX002
+        # TODO(AlexHx8472): If it does get and display the name of the issuing ca in the message.  # noqa: FIX002
+        # TODO(AlexHx8472): If not, give information about the credential usage # noqa: FIX002
+        # TODO(AlexHx8472): that is already in the db.  # noqa: FIX002
         except ValidationError:
             raise
         except Exception as exception:
@@ -683,7 +695,7 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
     certificate_chain = forms.FileField(label=_('[Optional] Certificate Chain (.pem, .p7b, .p7c).'), required=False)
     private_key_file = forms.FileField(label=_('Private Key File (.key, .pem)'), required=True)
     private_key_file_password = forms.CharField(
-        # hack, force autocomplete off in chrome with: one-time-code
+        # hack, force autocomplete off in chrome with: one-time-code  # noqa: FIX004
         widget=forms.PasswordInput(attrs={'autocomplete': 'one-time-code'}),
         label=_('[Optional] Private Key File Password'),
         required=False,

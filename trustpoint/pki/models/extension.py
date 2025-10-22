@@ -761,7 +761,7 @@ class SubjectKeyIdentifierExtension(CertificateExtension, models.Model):
     Stores the Subject Key Identifier (SKI) extension of an X.509 certificate.
     """
 
-    # TODO(Anyone): Add critical and storage mechanism
+    # TODO(Anyone): Add critical and storage mechanism  # noqa: FIX002
 
     # The key_identifier is a hex-encoded, uppercase string representing the SKI
     key_identifier = models.CharField(max_length=256, editable=False, verbose_name='Key Identifier', unique=True)

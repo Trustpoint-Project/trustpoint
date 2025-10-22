@@ -1,5 +1,6 @@
 """PKCS#11 Utility Functions."""
-
+import contextlib
+import types
 from abc import ABC, abstractmethod
 from types import TracebackType
 from typing import Any, ClassVar, Never
@@ -18,9 +19,8 @@ from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from cryptography.hazmat.primitives.serialization import Encoding, KeySerializationEncryption, PrivateFormat
 from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass, lib
 from pkcs11.exceptions import NoSuchKey, PKCS11Error  # type: ignore[import-untyped]
-from trustpoint_core.oid import NamedCurve
-
 from trustpoint.logger import LoggerMixin
+from trustpoint_core.oid import NamedCurve
 
 
 class Pkcs11Utilities(LoggerMixin):
@@ -270,8 +270,6 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
 
             self._session = self._token.open(user_pin=self._user_pin, rw=True)
         except pkcs11.exceptions.UserAlreadyLoggedIn:
-            # User is already logged in, but we still need to open a session
-            # Open without providing user_pin since already authenticated
             if self._token is not None:
                 self._session = self._token.open(rw=True)
         except Exception as e:
@@ -434,8 +432,6 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
         """
         return self
 
-    import types
-
     def __exit__(
         self,
         exc_type: type[BaseException] | None,
@@ -542,8 +538,6 @@ class Pkcs11AESKey:
 
     def close(self) -> None:
         """Close PKCS#11 session."""
-        import contextlib
-
         if self._session:
             with contextlib.suppress(Exception):
                 self._session.close()
@@ -1053,7 +1047,7 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             msg = 'PKCS#11 session is not initialized.'
             self._raise_value_error(msg)
 
-        pub, priv = self._session.generate_keypair(
+        _, priv = self._session.generate_keypair(
             KeyType.EC,
             key_length,
             public_template=final_public_template,
@@ -1132,7 +1126,9 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         try:
             ec_point = public[Attribute.EC_POINT]
 
-            if not ec_point or len(ec_point) < 3 or ec_point[0] != 0x04:
+            ec_uncompressed_point_prefix = 0x04
+            ec_point_min_length = 3
+            if not ec_point or len(ec_point) < ec_point_min_length or ec_point[0] != ec_uncompressed_point_prefix:
                 msg = 'EC public key point is missing or has invalid format.'
                 raise ValueError(msg)
             curve = self.curve

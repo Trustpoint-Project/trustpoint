@@ -1,4 +1,6 @@
 """Models concerning the Trustpoint settings."""
+from __future__ import annotations
+
 import hashlib
 import os
 import secrets
@@ -15,7 +17,6 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from notifications.models import WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
-
 from trustpoint.logger import LoggerMixin
 
 
@@ -327,7 +328,7 @@ class KeyStorageConfig(models.Model):
         Returns:
             KeyStorageConfig: The configuration instance
         """
-        config, created = cls.objects.get_or_create(
+        config, _ = cls.objects.get_or_create(
             pk=1,
             defaults={
                 'storage_type': cls.StorageType.SOFTWARE
