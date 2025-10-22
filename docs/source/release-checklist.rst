@@ -5,7 +5,7 @@ Release Checklist
 ------------------------
 Pre-release Preparations
 ------------------------
-- Update version number in :code:`settings.py` file.
+- Update version number in :code:`pyproject.toml` and :code:`docs/source/conf.py` files.
 - Update :code:`CHANGELOG.md` with new features, fixes, and improvements.
 - Review :code:`pyproject.toml`
   - Update dependencies if needed.

@@ -77,7 +77,7 @@ Trustpoint offers several methods for obtaining the Domain Credential:
 
 - **User Interface**: Manage certificates and devices through an intuitive web-based UI.
 - **Dashboard**: View the status of devices and certificates.
-- **Deployment**: Easily deploy TrustPoint using Docker for simplified installation and scaling.
+- **Deployment**: Easily deploy Trustpoint using Docker for simplified installation and scaling.
 - **Certificate Management Protocol (CMP)**: Supports CMP for automated certificate management, allowing easy
   integration with other CMP-compliant systems.
 - **Certificate Lifecycle Management**: Revoke certificates, issue CRLs, deploy short-lived certificates

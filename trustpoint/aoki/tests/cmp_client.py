@@ -146,7 +146,7 @@ class AokiCmpClient:
 
 if __name__ == '__main__':
     client = AokiCmpClient(
-        server_url='http://localhost:8000', # or 'https://localhost:443' for production/Docker
+        server_url='https://localhost:443', # or 'http://localhost:8000' for dev
         cert_file='idevid.pem',
         key_file='idevid_pk.pem',
         idevid_truststore_file='idevid_ca.pem',

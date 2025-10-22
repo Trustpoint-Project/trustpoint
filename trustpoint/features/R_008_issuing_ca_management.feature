@@ -14,7 +14,7 @@ Feature: Add and delete new Issuing CAs
     When the admin clicks on "Import From PKCS#12 File"
     Then the system should display a form page where a file can be uploaded
     When the admin uploads a valid PKCS12 issuing CA file
-    And the admin clicks the "Add new issuing CA" button
+    And the admin clicks the "Add new issuing CA" button to add "test_CA"
     Then the system should display a confirmation message stating "Successfully added Issuing CA"
     Then the issuing CA "test_CA" "appears" in the list of available CAs
 
@@ -25,7 +25,7 @@ Feature: Add and delete new Issuing CAs
     When the admin clicks on "Import From PKCS#12 File"
     Then the system should display a form page where a file can be uploaded
     When the admin uploads a broken PKCS12 issuing CA file
-    And the admin clicks the "Add new issuing CA" button
+    And the admin clicks the "Add new issuing CA" button to add "test_CA"
     Then the response payload should include an error message stating "Failed to parse"
     And the issuing CA "test_CA" "does not appear" in the list of available CAs
 
@@ -37,7 +37,7 @@ Feature: Add and delete new Issuing CAs
     When the admin clicks on "Import From PKCS#12 File"
     Then the system should display a form page where a file can be uploaded
     When the admin uploads a duplicated PKCS12 issuing CA file
-    And the admin clicks the "Add new issuing CA" button
+    And the admin clicks the "Add new issuing CA" button to add "test_CA_duplicate"
     Then the response payload should include an error message stating "UNIQUE constraint failed"
     And the issuing CA "test_CA" "appears" in the list of available CAs
 
@@ -51,7 +51,7 @@ Feature: Add and delete new Issuing CAs
     And the certificate file of type <cert_type> is "valid"
     And the certificate file is "a CA certificate"
     And the certificate chain of type <cert_chain> is "valid"
-    And the admin clicks the "Add new issuing CA" button
+    And the admin clicks the "Add new issuing CA" button to add "test_CA"
     Then the system should display a confirmation message stating "Successfully added Issuing CA"
     Then the issuing CA "test_CA" "appears" in the list of available CAs
 
@@ -74,7 +74,7 @@ Feature: Add and delete new Issuing CAs
     And the certificate file of type "_ee.pem" is "valid"
     And the certificate file is "an end entity certificate"
     And the certificate chain of type ".pem" is "valid"
-    And the admin clicks the "Add new issuing CA" button
+    And the admin clicks the "Add new issuing CA" button to add "test_CA"
     Then the response payload should include an error message stating "The provided certificate is not a CA certificate."
     And the issuing CA "test_CA" "does not appear" in the list of available CAs
 
@@ -87,7 +87,7 @@ Feature: Add and delete new Issuing CAs
     When the key file of type ".pem" is "valid"
     And the certificate file of type ".pem" is "valid"
     When the key and the certificate file are not matching
-    And the admin clicks the "Add new issuing CA" button
+    And the admin clicks the "Add new issuing CA" button to add "test_CA"
     Then the response payload should include an error message stating "The provided private key does not match the Issuing CA certificate."
     And the issuing CA "test_CA" "does not appear" in the list of available CAs
 
@@ -101,7 +101,7 @@ Feature: Add and delete new Issuing CAs
   #   And the certificate file is "a CA certificate"
   #   And the certificate chain of type ".pem" is "valid"
   #   And the certificate chain does not contain the issuer of the certificate file
-  #   And the admin clicks the "Add new issuing CA" button
+  #   And the admin clicks the "Add new issuing CA" button to add "test_CA"
   #   Then the system should display an error message
   #   And the issuing CA "test_CA" "does not appear" in the list of available CAs
 

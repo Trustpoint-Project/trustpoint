@@ -180,6 +180,7 @@ tests/data/issuing_ca
 tests/data/issuing_cas
 *.p12
 !tests/data/**/*.p12
+trustpoint/aoki/tests/certs/*.pem
 
 docs/build/
 

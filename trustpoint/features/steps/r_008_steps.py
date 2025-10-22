@@ -95,21 +95,21 @@ def step_when_duplicate_pkcs12_file_import(context: runner.Context) -> None:  # 
     assert os.path.exists(pkcs12_file_path), f"File not found: {pkcs12_file_path}"
     context.pkcs12_file_path = pkcs12_file_path
 
-@when('the admin clicks the "Add new issuing CA" button')
-def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG001
+@when('the admin clicks the "Add new issuing CA" button to add "{ca_name}"')
+def step_when_pkcs12_file_import(context: runner.Context, ca_name: str) -> None:  # noqa: ARG001
     """The admin click the button to submit form.
 
     Args:
         context (runner.Context): Behave context.
+        ca_name (str): Issuing CA name.
     """
     if hasattr(context, "pkcs12_file_path"):
         with open(context.pkcs12_file_path, "rb") as f:
             data = {
-                'unique_name': "test_CA",
+                'unique_name': ca_name,
                 'pkcs12_password': "testing321",
                 'pkcs12_file': f
             }
-            # Adjust the URL to match the form action for your backend
             context.response = context.authenticated_client.post(
                 "/pki/issuing-cas/add/file-import/pkcs12",
                 data=data,
@@ -124,7 +124,6 @@ def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG0
                 'private_key_file': key_file,
                 'ca_certificate': cert_file
             }
-            # Adjust the URL to match the form action for your backend
             context.response = context.authenticated_client.post(
                 "/pki/issuing-cas/add/file-import/separate-files",
                 data=separate_file_form_data,
