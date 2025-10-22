@@ -241,17 +241,16 @@ class TestDomainParsing:
         assert mock_context.domain == mock_domain
 
     def test_parse_missing_domain(self):
-        """Test parsing with missing domain string."""
+        """Test parsing with missing domain string.
+
+        It is not mandatory to have a domain at this stage (e.g. general endpoint without path segment).
+        Domain can be resolved from device in authentication step.
+        """
         mock_context = Mock(spec=RequestContext)
         mock_context.domain_str = None
 
         parser = DomainParsing()
-
-        try:
-            parser.parse(mock_context)
-            assert False, 'Expected ValueError to be raised'
-        except ValueError as e:
-            assert 'Domain is missing in the request context.' in str(e)
+        parser.parse(mock_context)
 
     def test_parse_domain_validation_error(self):
         """Test domain validation error handling."""
@@ -347,7 +346,7 @@ class TestCmpPkiMessageParsing:
 
         parser = CmpPkiMessageParsing()
 
-        with patch('request.pki_message_parser.decoder.decode', return_value=(mock_pki_message, None)), \
+        with patch('request.pki_message_parser.ber_decoder.decode', return_value=(mock_pki_message, None)), \
              patch.object(parser, '_extract_signer_certificate'):
             parser.parse(mock_context)
 
@@ -390,7 +389,7 @@ class TestCmpPkiMessageParsing:
 
         parser = CmpPkiMessageParsing()
 
-        with patch('request.pki_message_parser.decoder.decode', side_effect=ValueError('Decode error')):
+        with patch('request.pki_message_parser.ber_decoder.decode', side_effect=ValueError('Decode error')):
             try:
                 parser.parse(mock_context)
                 assert False, 'Expected ValueError to be raised'
@@ -406,7 +405,7 @@ class TestCmpPkiMessageParsing:
 
         parser = CmpPkiMessageParsing()
 
-        with patch('request.pki_message_parser.decoder.decode', side_effect=TypeError('Type error')):
+        with patch('request.pki_message_parser.ber_decoder.decode', side_effect=TypeError('Type error')):
             try:
                 parser.parse(mock_context)
                 assert False, 'Expected ValueError to be raised'
@@ -467,7 +466,7 @@ class TestCmpMessageParser:
         """Test CmpMessageParser initialization."""
         parser = CmpMessageParser()
 
-        assert len(parser.components) == 6
+        assert len(parser.components) == 5
         assert isinstance(parser.components[0], CmpPkiMessageParsing)
 
     def test_parse_delegation(self):

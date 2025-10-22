@@ -342,6 +342,7 @@ class TestClientCertificateValidation:
         context = RequestContext()
         context.raw_message = MagicMock()
         context.raw_message.headers = {'SSL_CLIENT_CERT': cert_pem}
+        context.raw_message.META = {'SSL_CLIENT_CERT': cert_pem}
 
         validator.validate(context)
         assert context.client_certificate is not None
@@ -352,6 +353,7 @@ class TestClientCertificateValidation:
         context = RequestContext()
         context.raw_message = MagicMock()
         context.raw_message.headers = {'Other-Header': 'value'}
+        context.raw_message.META = {'Other-Header': 'value'}
 
         validator.validate(context)
 
@@ -361,6 +363,7 @@ class TestClientCertificateValidation:
         context = RequestContext()
         context.raw_message = MagicMock()
         context.raw_message.headers = {'SSL_CLIENT_CERT': 'invalid cert'}
+        context.raw_message.META = {'SSL_CLIENT_CERT': 'invalid cert'}
 
         try:
             validator.validate(context)
@@ -381,18 +384,14 @@ class TestClientCertificateValidation:
             assert 'Raw message is missing from the context' in str(e)
 
     def test_validate_missing_headers(self):
-        """Test ValueError when headers are missing."""
+        """Test validation is skipped when headers/META are missing."""
         validator = ClientCertificateValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
         context.raw_message.headers = None
+        context.raw_message.META = None
 
-        try:
-            validator.validate(context)
-            assert False, 'Expected ValueError to be raised'
-        except ValueError as e:
-            assert 'Raw message is missing headers' in str(e)
-
+        validator.validate(context)
 
 class TestIntermediateCertificatesValidation:
     """Test IntermediateCertificatesValidation class."""

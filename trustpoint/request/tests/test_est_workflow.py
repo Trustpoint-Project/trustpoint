@@ -129,7 +129,7 @@ class TestESTHelper(LoggerMixin):
             path=f'/.well-known/{protocol_str}/{domain_str}/{certtemplate_str}/{operation_str}',
             data=csr.public_bytes(serialization.Encoding.DER),
             content_type='application/pkcs10',
-            HTTP_SSL_CLIENT_CERT=cert_pem,
+            SSL_CLIENT_CERT=cert_pem,
         )
 
         # Build mock context

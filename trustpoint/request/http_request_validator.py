@@ -175,9 +175,8 @@ class ClientCertificateValidation(ValidationComponent, LoggerMixin):
             raise ValueError(error_message)
 
         if not hasattr(context.raw_message, 'META') or not context.raw_message.META:
-            error_message = 'Raw message is missing META.'
-            self.logger.warning('Client certificate validation failed: Raw message META is missing')
-            raise ValueError(error_message)
+            self.logger.debug('Client certificate validation skipped: Raw message META is missing')
+            return
 
         ssl_client_cert = context.raw_message.META.get('SSL_CLIENT_CERT')
 

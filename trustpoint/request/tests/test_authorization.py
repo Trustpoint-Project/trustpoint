@@ -262,7 +262,7 @@ class TestDomainScopeValidation:
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert f"Unauthorized domain: '{domain}'" in str(exc_info.value)
+        assert f"Unauthorized requested domain: '{domain}'" in str(exc_info.value)
         assert f"Device domain: '{different_domain}'" in str(exc_info.value)
 
     def test_domain_scope_validation_failure_missing_device(self, domain_instance) -> None:
@@ -309,7 +309,7 @@ class TestDomainScopeValidation:
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert f"Unauthorized domain: '{domain}'" in str(exc_info.value)
+        assert f"Unauthorized requested domain: '{domain}'" in str(exc_info.value)
         assert "Device domain: 'None'" in str(exc_info.value)
 
 
@@ -601,7 +601,7 @@ class TestEstAuthorization:
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert f"Unauthorized domain: '{domain_credential_est_onboarding['domain']}'" in str(exc_info.value)
+        assert f"Unauthorized requested domain: '{domain_credential_est_onboarding['domain']}'" in str(exc_info.value)
 
     def test_est_authorization_missing_device(self, domain_credential_est_onboarding) -> None:
         """Test EST authorization failure due to missing device."""
