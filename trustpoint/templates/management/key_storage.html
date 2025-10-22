@@ -15,7 +15,11 @@
                     </svg>
                     {% trans 'Key storage configuration not found.' %}
                 </div>
-            {% else %}                
+            {% else %}
+                <div class="alert alert-info">
+                    <strong>{% trans 'Information:' %}</strong>
+                    {% trans 'Changing the storage type after initial configuration is not currently supported. The storage type is set during the initial setup wizard and cannot be modified afterwards.' %}
+                </div>                
                 <div class="row g-4 mb-4">
                     <!-- Software Storage Option -->
                     <div class="col-md-4">
