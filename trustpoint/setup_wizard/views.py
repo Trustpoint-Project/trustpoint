@@ -254,13 +254,13 @@ class HsmSetupMixin(LoggerMixin):
             config = KeyStorageConfig.get_config()
 
             if hsm_type == 'softhsm' and config.storage_type == KeyStorageConfig.StorageType.SOFTHSM:
-                config.softhsm_config = token
-                config.save(update_fields=['softhsm_config'])
+                config.hsm_config = token
+                config.save(update_fields=['hsm_config'])
                 self.logger.info('Assigned SoftHSM token %s to crypto storage configuration', token.label)
 
             elif hsm_type == 'physical' and config.storage_type == KeyStorageConfig.StorageType.PHYSICAL_HSM:
-                config.physical_hsm_config = token
-                config.save(update_fields=['physical_hsm_config'])
+                config.hsm_config = token
+                config.save(update_fields=['hsm_config'])
                 self.logger.info('Assigned Physical HSM token %s to crypto storage configuration', token.label)
 
             else:
@@ -729,6 +729,73 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView):
         """Add additional context data."""
         return super().get_context_data(**kwargs)
 
+    def form_valid(self, form: BackupPasswordForm) -> HttpResponse:
+        """Handle valid form submission."""
+        password = form.cleaned_data.get('password')
+
+        try:
+            token = PKCS11Token.objects.first()
+            if not token:
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    'No PKCS#11 token found. This should not happen in the backup password step.'
+                )
+                self.logger.error('No PKCS11Token found in backup password step')
+                return redirect('setup_wizard:demo_data', permanent=False)
+
+            token.set_backup_password(password)
+            execute_shell_script(SCRIPT_WIZARD_BACKUP_PASSWORD)
+
+            messages.add_message(
+                self.request,
+                messages.SUCCESS,
+                'Backup password set successfully.'
+            )
+            self.logger.info('Backup password set for token: %s', token.label)
+            return super().form_valid(form)
+
+        except Exception as exc:
+            error_mapping = {
+                subprocess.CalledProcessError: lambda e: (
+                    f'Backup password script failed: '
+                    f'{self._map_exit_code_to_message(e.returncode)}'
+                ),
+                FileNotFoundError: lambda _: f'Backup password script not found: {SCRIPT_WIZARD_BACKUP_PASSWORD}',
+                PKCS11Token.DoesNotExist: lambda e: str(e),
+                ValueError: lambda e: f'Invalid input: {e!s}',
+                RuntimeError: lambda e: f'Failed to set backup password: {e!s}',
+            }
+            err_msg = error_mapping.get(type(exc), lambda _:
+                                        'An unexpected error occurred while setting up backup password.')(exc)
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+
+            if isinstance(exc, (ValueError, RuntimeError)):
+                return self.form_invalid(form)
+            return redirect('setup_wizard:backup_password', permanent=False)
+
+    def form_invalid(self, form: BackupPasswordForm) -> HttpResponse:
+        """Handle invalid form submission."""
+        messages.add_message(
+            self.request,
+            messages.ERROR,
+            'Please correct the errors below and try again.'
+        )
+        return super().form_invalid(form)
+
+    @staticmethod
+    def _map_exit_code_to_message(return_code: int) -> str:
+        """Map script exit codes to meaningful error messages."""
+        error_messages = {
+            1: 'Invalid arguments provided to backup password script.',
+            2: 'Trustpoint is not in the WIZARD_BACKUP_PASSWORD state.',
+            3: 'Found multiple wizard state files. The wizard state seems to be corrupted.',
+            4: 'Failed to remove the WIZARD_BACKUP_PASSWORD state file.',
+            5: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred during backup password setup.')
+
 
 class BackupRestoreView(View, LoggerMixin):
     """Upload a dump file and restore the database from it."""
@@ -916,35 +983,13 @@ class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
 
         temp_dir = settings.BACKUP_FILE_PATH
         temp_path = temp_dir / backup_file.name
-        # save upload
-        with open(temp_path, 'wb+') as f:
-            for chunk in backup_file.chunks():
-                f.write(chunk)
-
+  
         try:
             # Save uploaded file
             with temp_path.open('wb+') as f:
                 for chunk in backup_file.chunks():
                     f.write(chunk)
 
-        try:
-            self.logger.info(f'Restore process started {backup_file.name}')
-            call_command('trustpointrestore', '--filepath', str(temp_path))
-            messages.success(request, f'Trustpoint restored from {backup_file.name}')
-        except CommandError as e:
-            messages.error(request, str(e))
-        except FileNotFoundError as e:
-            messages.error(request, f'Backup file not found: {e}')
-        except PermissionError:
-            messages.error(request, 'Permission denied while processing the backup.')
-        except subprocess.CalledProcessError:
-            messages.error(request, 'Backup processing failed (pg_restore/awk).')
-        except Exception as e:
-            messages.error(request, f'Error restoring. {e}')
-        else:
-            return redirect('users:login')
-        return redirect('setup_wizard:initial')
-            # Restore database
             call_command('dbrestore', '-z', '--noinput', '-I', str(temp_path))
 
             # Execute trustpoint restore command
@@ -968,10 +1013,24 @@ class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
 
                     self.logger.info('Backup restore completed successfully from file: %s', backup_file.name)
 
-        except Exception:
-            messages.add_message(request, messages.ERROR, 'Error occurred during restore operation.')
-            self.logger.exception('Exception restoring database from %s', backup_file.name)
-            return redirect('setup_wizard:restore_options')
+        except CommandError as e:
+            messages.error(request, str(e))
+        except FileNotFoundError as e:
+            err_msg = f'Backup file not found: {backup_file.name}'
+            self.logger.exception(err_msg)
+            messages.error(request, err_msg)
+        except PermissionError:
+            err_msg = f'Permission denied accessing backup file: {backup_file.name}'
+            self.logger.exception(err_msg)
+            messages.error(request, err_msg)
+        except subprocess.CalledProcessError:
+            err_msg = f'Backup processing failed (pg_restore/awk) for file: {backup_file.name}'
+            self.logger.exception(err_msg)
+            messages.error(request, err_msg)
+        except Exception as e:
+            err_msg = f'Unexpected error restoring database from {backup_file.name}: {e}'
+            self.logger.exception(err_msg)
+            messages.error(request, err_msg)
         finally:
             # Clean up temporary file
             try:
