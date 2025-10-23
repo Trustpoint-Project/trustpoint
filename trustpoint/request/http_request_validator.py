@@ -5,9 +5,9 @@ import itertools
 from abc import ABC, abstractmethod
 
 from cryptography import x509
+from trustpoint.logger import LoggerMixin
 
 from request.request_context import RequestContext
-from trustpoint.logger import LoggerMixin
 
 
 class ValidationComponent(ABC):
@@ -182,6 +182,10 @@ class ClientCertificateValidation(ValidationComponent, LoggerMixin):
 
         if ssl_client_cert is None:
             self.logger.debug('Client certificate validation skipped: No SSL_CLIENT_CERT present')
+            return
+
+        if not ssl_client_cert or not ssl_client_cert.strip():
+            self.logger.debug('Client certificate validation skipped: SSL_CLIENT_CERT is empty')
             return
 
         try:
