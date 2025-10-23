@@ -1203,7 +1203,7 @@ class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView
 
     def _get_cmp_tls_client_profile_cmd_section(self, *, hidden: bool = False) -> HelpSection:
         cmp_command = CmpClientCertificateCommandBuilder.get_tls_client_profile_command(
-            host=self.host + '/tls-client',
+            host=self.host + '/tls-client/' + self.operation,
             cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
         )
         openssl_cmd_tls_client_profile_row = HelpRow(
