@@ -178,12 +178,23 @@ class HsmSetupForm(forms.Form):
     def clean(self) -> dict[str, Any]:
         """Custom validation for the form."""
         cleaned_data = super().clean()
+        if cleaned_data is None:
+            err_msg = (
+                'Unexpected error occurred. Failed to get the cleaned_data '
+                'of the HsmSetupForm instance.'
+            )
+            raise forms.ValidationError(err_msg)
+
         hsm_type = cleaned_data.get('hsm_type')
 
         if hsm_type == 'softhsm':
             cleaned_data['label'] = 'Trustpoint-SoftHSM'
             cleaned_data['slot'] = 0
             cleaned_data['module_path'] = '/usr/local/lib/libpkcs11-proxy.so'
+        if hsm_type == 'physical':
+            raise forms.ValidationError(_('Physical HSM is not yet supported.'))
+        if hsm_type != 'softhsm':
+            self.add_error('hsm_type', _('Unsupported HSM type: %(hsm_type)s') % {'hsm_type': hsm_type})
 
         return cleaned_data
 
@@ -192,21 +203,30 @@ class HsmSetupForm(forms.Form):
         hsm_type = self.data.get('hsm_type')
         if hsm_type == 'softhsm':
             return 'Trustpoint-SoftHSM'
-        return self.cleaned_data.get('label', '')
+        value = self.cleaned_data.get('label')
+        if isinstance(value, str):
+            return value
+        return ''
 
     def clean_slot(self) -> int:
         """Clean slot number field."""
         hsm_type = self.data.get('hsm_type')
         if hsm_type == 'softhsm':
             return 0
-        return self.cleaned_data.get('slot')
+        value = self.cleaned_data.get('slot')
+        if isinstance(value, int):
+            return value
+        return 0
 
     def clean_module_path(self) -> str:
         """Clean module path field."""
         hsm_type = self.data.get('hsm_type')
         if hsm_type == 'softhsm':
             return '/usr/local/lib/libpkcs11-proxy.so'
-        return self.cleaned_data.get('module_path', '')
+        value = self.cleaned_data.get('module_path')
+        if isinstance(value, str):
+            return value
+        return ''
 
 class BackupPasswordForm(forms.Form):
     """Form for setting up backup password for PKCS#11 token."""
@@ -243,7 +263,7 @@ class BackupPasswordForm(forms.Form):
         """
         password = self.cleaned_data.get('password')
 
-        if not password:
+        if not isinstance(password, str) or not password:
             raise forms.ValidationError(_('Password is required.'))
 
         try:
@@ -263,6 +283,12 @@ class BackupPasswordForm(forms.Form):
             ValidationError: If validation fails.
         """
         cleaned_data = super().clean()
+        if cleaned_data is None:
+            err_msg = (
+                'Unexpected error occurred. Failed to get the cleaned_data '
+                'of the BackupPasswordForm instance.'
+            )
+            raise forms.ValidationError(err_msg)
         password = cleaned_data.get('password')
         confirm_password = cleaned_data.get('confirm_password')
 
@@ -360,7 +386,7 @@ class PasswordAutoRestoreForm(forms.Form):
         """
         password = self.cleaned_data.get('password')
 
-        if not password:
+        if not isinstance(password, str) or not password:
             raise forms.ValidationError(_('Password is required.'))
 
         return password

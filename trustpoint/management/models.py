@@ -5,9 +5,9 @@ import hashlib
 import os
 import secrets
 from pathlib import Path
-from typing import ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
-import pkcs11
+import pkcs11  # type: ignore[import-untyped]
 from argon2.low_level import Type, hash_secret_raw
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -18,6 +18,9 @@ from django.utils.translation import gettext_lazy as _
 from notifications.models import WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 from trustpoint.logger import LoggerMixin
+
+if TYPE_CHECKING:
+    from management.pkcs11_util import Pkcs11AESKey
 
 
 class SecurityConfig(models.Model):
@@ -39,7 +42,7 @@ class SecurityConfig(models.Model):
         max_length=24, choices=AutoGenPkiKeyAlgorithm, default=AutoGenPkiKeyAlgorithm.RSA2048
     )
 
-    NOTIFICATION_CONFIGURATIONS: ClassVar[dict] = {
+    NOTIFICATION_CONFIGURATIONS: ClassVar[dict[str, dict[str, Any]]] = {
         SecurityModeChoices.DEV: {
             'cert_expiry_warning_days': 10,
             'issuing_ca_expiry_warning_days': 10,
@@ -160,15 +163,16 @@ class TlsSettings(models.Model):
         try:
             network_settings = cls.objects.get(id=1)
             ipv4_address = network_settings.ipv4_address
+            if ipv4_address is None:
+                return '127.0.0.1'
         except cls.DoesNotExist:
-            ipv4_address = '127.0.0.1'
-
-        return ipv4_address
-
+            return '127.0.0.1'
+        else:
+            return ipv4_address
 
 class AppVersion(models.Model):
     """Model representing the application version and its last update timestamp."""
-    objects: models.Manager['AppVersion']
+    objects: models.Manager[AppVersion]
 
     version = models.CharField(max_length=17)
     container_id = models.CharField(
@@ -185,7 +189,7 @@ class AppVersion(models.Model):
 
     def __str__(self) -> str:
         """Return a string representation for the AppVersion."""
-        build_info = f' (Build: {self.container_build_id})' if self.container_build_id else ''
+        build_info = f' (Build: {self.container_id})' if self.container_id else ''
         return f'{self.version}{build_info} @ {self.last_updated.isoformat()}'
 
 
@@ -253,7 +257,7 @@ class BackupOptions(models.Model):
         """Return a string representation of the backup options."""
         return f'{self.user}@{self.host}:{self.port} ({self.auth_method})'
 
-    def save(self, *args: object, **kwargs: object) -> None:
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Ensure only one instance exists (singleton pattern)."""
         self.full_clean()
 
@@ -306,11 +310,11 @@ class KeyStorageConfig(models.Model):
 
     def __str__(self) -> str:
         """Return a string representation of the storage configuration."""
-        status = 'Active' if self.is_active else 'Inactive'
+        status = 'Active' if self.hsm_config is not None else 'Inactive'
         return f'{self.get_storage_type_display()} ({status})'
 
     @classmethod
-    def get_config(cls) -> 'KeyStorageConfig':
+    def get_config(cls) -> KeyStorageConfig:
         """Get the crypto storage configuration (singleton).
 
         Returns:
@@ -322,7 +326,7 @@ class KeyStorageConfig(models.Model):
         return cls.objects.get(pk=1)
 
     @classmethod
-    def get_or_create_default(cls) -> 'KeyStorageConfig':
+    def get_or_create_default(cls) -> KeyStorageConfig:
         """Get the configuration or create a default one.
 
         Returns:
@@ -439,6 +443,7 @@ class PKCS11Token(models.Model, LoggerMixin):
                 lib_path=self.module_path,
                 user_pin=self.get_pin()
             )
+            aes_key = cast('Pkcs11AESKey', aes_key)
 
             try:
                 try:
@@ -459,7 +464,7 @@ class PKCS11Token(models.Model, LoggerMixin):
                 else:
                     return True
 
-                aes_key.generate_key(key_length=key_length)
+                aes_key.generate_key(key_length)
                 self.logger.info(
                     "Generated KEK '%s' in token '%s'",
                     self.KEK_ENCRYPTION_KEY_LABEL,
@@ -508,7 +513,7 @@ class PKCS11Token(models.Model, LoggerMixin):
                 self.encrypted_dek = wrapped_data
                 self.save(update_fields=['encrypted_dek'])
 
-        except (OSError, ValueError, RuntimeError) as e:
+        except (OSError, ValueError, TypeError, RuntimeError) as e:
             self.logger.exception('Failed to generate and wrap DEK for token %s', self.label)
             msg = f'DEK generation/wrapping failed: {e}'
             raise RuntimeError(msg) from e
@@ -528,7 +533,7 @@ class PKCS11Token(models.Model, LoggerMixin):
             RuntimeError: If wrapping fails
         """
         session = None
-
+        wrapped_data: bytes | None = None
         try:
             pkcs11_lib = pkcs11.lib(self.module_path)
             pkcs11_token = pkcs11_lib.get_token(token_label=self.label)
@@ -565,14 +570,31 @@ class PKCS11Token(models.Model, LoggerMixin):
             msg = f'Failed to wrap DEK: {e}'
             raise RuntimeError(msg) from e
         else:
-            return wrapped_data
-
+            wrapped_data = self.wrap_dek(dek_bytes)
+            if isinstance(wrapped_data, (memoryview, bytearray)):
+                wrapped_data = bytes(wrapped_data)
+            elif not isinstance(wrapped_data, bytes):
+                msg = f'wrap_dek returned unexpected type: {type(wrapped_data)!r}'
+                raise TypeError(msg)
         finally:
             if session:
                 try:
                     session.close()
                 except Exception as cleanup_error:  # noqa: BLE001
                     self.logger.warning('Failed to close session: %s', cleanup_error)
+
+        if wrapped_data is None:
+            msg = 'wrap_dek failed to produce wrapped_data'
+            raise RuntimeError(msg)
+        if isinstance(wrapped_data, (memoryview, bytearray)):
+            wrapped_bytes = bytes(wrapped_data)
+        elif isinstance(wrapped_data, bytes):
+            wrapped_bytes = wrapped_data
+        else:
+            msg = f'wrap_dek returned unexpected type: {type(wrapped_data)!r}'
+            raise TypeError(msg)
+
+        return wrapped_bytes
 
     def _pad_to_block_size(self, data: bytes, block_size: int) -> bytes:
         """Pad data to block size using PKCS#7 padding.
@@ -630,9 +652,20 @@ class PKCS11Token(models.Model, LoggerMixin):
         self.logger.info('get_dek() called for token %s with cache key: %s', self.label, cache_key)
 
         cached_dek = cache.get(cache_key)
-        if cached_dek:
-            self.logger.info('Cache HIT - Retrieved DEK from cache for token %s', self.label)
-            return cached_dek
+        if cached_dek is not None:
+            # Some cache backends may store memoryview/bytearray — normalize to bytes
+            if isinstance(cached_dek, (memoryview, bytearray)):
+                cached_bytes = bytes(cached_dek)
+            elif isinstance(cached_dek, bytes):
+                cached_bytes = cached_dek
+            else:
+                err_msg = f'Unexpected cached DEK type: {type(cached_dek)!r}'
+                self.logger.error(err_msg)
+                raise RuntimeError(err_msg)
+
+            if cached_bytes is not None:
+                self.logger.info('Cache HIT - Retrieved DEK from cache for token %s', self.label)
+                return cached_bytes
 
         self.logger.info('Cache MISS - No cached DEK found for token %s, unwrapping DEK', self.label)
 
@@ -700,7 +733,15 @@ class PKCS11Token(models.Model, LoggerMixin):
             return bytes(self.encrypted_dek)
         if self.encrypted_dek is None:
             self._raise_no_dek()
-        return self.encrypted_dek
+        value = self.encrypted_dek
+        if value is None:
+            self._raise_no_dek()
+        if isinstance(value, memoryview):
+            return bytes(value)
+        if isinstance(value, (bytes, bytearray)):
+            return bytes(value)
+        msg = f'Unexpected encrypted_dek type: {type(value)!r}'
+        raise RuntimeError(msg)
 
 
     def _unwrap_dek(self) -> bytes:
@@ -859,8 +900,14 @@ class PKCS11Token(models.Model, LoggerMixin):
             bytes | None: The cached DEK bytes if available, None otherwise.
         """
         cache_key = f'{self.DEK_CACHE_LABEL}-{self.label}'
-        return cache.get(cache_key)
-
+        value = cache.get(cache_key)
+        if value is None:
+            return None
+        if isinstance(value, memoryview):
+            return bytes(value)
+        if isinstance(value, bytes):
+            return value
+        return None
 
     def clear_dek_cache(self) -> None:
         """Clear the cached DEK from memory."""

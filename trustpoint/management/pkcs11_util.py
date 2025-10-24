@@ -496,8 +496,13 @@ class Pkcs11AESKey:
         if self._session is None:
             self._initialize()
 
+        session = self._session
+        if session is None:
+            msg = 'PKCS#11 session is not initialized.'
+            raise RuntimeError(msg)
+
         try:
-            self._key = self._session.get_key(
+            self._key = session.get_key(
                 label=self._key_label,
                 key_type=pkcs11.KeyType.AES
             )
@@ -525,8 +530,13 @@ class Pkcs11AESKey:
             if self._session is None:
                 self._initialize()
 
+            session = self._session
+            if session is None:
+                msg = 'PKCS#11 session is not initialized.'
+                raise RuntimeError(msg)
+
             try:
-                self._key = self._session.generate_key(
+                self._key = session.generate_key(
                     pkcs11.KeyType.AES,
                     key_length=key_length,
                     label=self._key_label,

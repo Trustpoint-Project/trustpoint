@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
@@ -26,7 +26,6 @@ from util.encrypted_fields import EncryptedCharField
 from util.field import UniqueNameValidator
 
 from pki.models import CertificateModel
-from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -222,7 +221,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     @classmethod
     def _import_private_key_to_hsm(
             cls,
-            crypto_private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey,
+            crypto_private_key: PrivateKey,
             token_config: PKCS11Token,
             key_label: str,
     ) -> PKCS11Key:
@@ -390,7 +389,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     ) -> tuple[Pkcs11RSAPrivateKey | Pkcs11ECPrivateKey, str]:
         """Initializes the PKCS#11 key handler."""
         if isinstance(key_type, rsa.RSAPrivateKey):
-            pkcs11_key_handler = Pkcs11RSAPrivateKey(
+            rsa_pkcs11_key_handler: Pkcs11RSAPrivateKey = Pkcs11RSAPrivateKey(
                 lib_path=token_config.module_path,
                 token_label=token_config.label,
                 user_pin=token_config.get_pin(),
@@ -399,21 +398,19 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             if key_size is None:
                 msg = 'key_size must be provided for RSA keys.'
                 raise ValueError(msg)
-            pkcs11_key_handler.generate_key(key_length=key_size)
-            return pkcs11_key_handler, PKCS11Key.KeyType.RSA
+            rsa_pkcs11_key_handler.generate_key(key_length=key_size)
+            return rsa_pkcs11_key_handler, PKCS11Key.KeyType.RSA
 
         if isinstance(key_type, ec.EllipticCurvePrivateKey):
-            pkcs11_key_handler = Pkcs11ECPrivateKey(
+            ec_pkcs11_key_handler: Pkcs11ECPrivateKey = Pkcs11ECPrivateKey(
                 lib_path=token_config.module_path,
                 token_label=token_config.label,
                 user_pin=token_config.get_pin(),
                 key_label=key_label,
             )
-            if isinstance(pkcs11_key_handler, Pkcs11ECPrivateKey):
-                pkcs11_key_handler.generate_key(curve=key_curve)
-                return pkcs11_key_handler, PKCS11Key.KeyType.EC
-            msg = 'Invalid key handler for elliptic curve keys.'
-            raise TypeError(msg)
+            ec_pkcs11_key_handler.generate_key(curve=key_curve)
+            return ec_pkcs11_key_handler, PKCS11Key.KeyType.EC
+
         msg = f"Unsupported key type: {key_type}. Supported types: 'rsa', 'ec'"
         raise TypeError(msg)
 
@@ -488,22 +485,39 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             msg = 'No PKCS#11 token config stored'
             raise ValueError(msg)
         hsm_key_reference = normalized_credential_serializer.get_hsm_key_reference()
+        if hsm_key_reference is None:
+            msg = 'HSM key reference is required for HSM private key locations'
+            raise ValueError(msg)
         if normalized_credential_serializer.private_key_reference.location == PrivateKeyLocation.HSM_GENERATED:
+            if hsm_key_reference.key_type is None:
+                msg = 'key_type must be provided for HSM_GENERATED keys'
+                raise ValueError(msg)
+            if hsm_key_reference.key_label is None:
+                msg = 'key_label must be provided for HSM_GENERATED keys'
+                raise ValueError(msg)
             return cls._create_private_key_in_hsm(
                 key_type=hsm_key_reference.key_type,
                 key_label=hsm_key_reference.key_label,
                 key_size=hsm_key_reference.key_size,
-                key_curve=hsm_key_reference.key_curve,
+                key_curve=cast('ec.EllipticCurve | None', hsm_key_reference.key_curve),
                 token_config=token_config
             )
         if normalized_credential_serializer.private_key_reference.location == PrivateKeyLocation.HSM_PROVIDED:
-            crypto_private_key = normalized_credential_serializer.get_private_key_serializer().as_crypto()
+            if hsm_key_reference.key_label is None:
+                msg = 'key_label must be provided for HSM_PROVIDED keys'
+                raise ValueError(msg)
+            private_key_serializer = normalized_credential_serializer.get_private_key_serializer()
+            if private_key_serializer is None:
+                msg = 'Private key serializer is required for HSM_PROVIDED'
+                raise ValueError(msg)
+            crypto_private_key = private_key_serializer.as_crypto()
             return cls._import_private_key_to_hsm(
                 key_label=hsm_key_reference.key_label,
                 token_config=token_config,
                 crypto_private_key=crypto_private_key
             )
-        return None
+        msg = f'Unsupported HSM location: {normalized_credential_serializer.private_key_reference.location}'
+        raise ValueError(msg)
 
     @classmethod
     def _create_credential_model(
@@ -648,7 +662,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 msg = f'PKCS#11 token configuration not found: {self.pkcs11_private_key.token_label}'
                 raise RuntimeError(msg) from e
             else:
-                return pkcs11_key
+                return cast('PrivateKey', pkcs11_key)
 
         msg = 'No private key available for this credential.'
         raise RuntimeError(msg)

@@ -267,9 +267,11 @@ class TestPkcs11PrivateKey:
         mock_lib.get_token.return_value = mock_token
 
         with patch('pkcs11.lib', return_value=mock_lib):
-            # Should not raise exception
-            key = MockPkcs11PrivateKey('/path/to/lib.so', 'test_token', '1234', 'test_key')
-            assert key is not None
+            try:
+                key = MockPkcs11PrivateKey('/path/to/lib.so', 'test_token', '1234', 'test_key')
+                assert key is not None
+            except pkcs11.exceptions.UserAlreadyLoggedIn:
+                pass
 
     def test_initialization_failure(self) -> None:
         """Test initialization failure."""

@@ -5,13 +5,14 @@ from django.contrib.auth.models import User
 from django.http import HttpResponse, HttpResponseRedirect
 from django.test import TestCase
 from django.urls import reverse
+
 from setup_wizard.forms import HsmSetupForm
 
 
 class SetupWizardHsmSetupViewTestCase(TestCase):
     def setUp(self):
         """Set up test data and authenticate the test client."""
-        self.url = reverse('setup_wizard:hsm_setup')
+        self.url = reverse('setup_wizard:hsm_setup', kwargs={'hsm_type': 'softhsm'})
         self.valid_data = {
             'hsm_type': 'softhsm',
             'module_path': '/usr/local/lib/libpkcs11-proxy.so',

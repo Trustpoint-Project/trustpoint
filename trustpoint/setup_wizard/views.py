@@ -6,7 +6,7 @@ import logging
 import re
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable, NoReturn, cast
 
 from django.conf import settings
 from django.contrib import messages
@@ -29,6 +29,7 @@ from trustpoint.logger import LoggerMixin
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import (
     BackupPasswordForm,
+    BackupRestoreForm,
     EmptyForm,
     HsmSetupForm,
     PasswordAutoRestoreForm,
@@ -149,7 +150,7 @@ class StartupWizardRedirect:
             SetupWizardState.WIZARD_AUTO_RESTORE_PASSWORD: 'setup_wizard:auto_restore_password',
         }
 
-        if wizard_state == 'WIZARD_SETUP_HSM':
+        if wizard_state == SetupWizardState.WIZARD_SETUP_HSM:
             try:
                 config = KeyStorageConfig.get_config()
                 if config.storage_type == KeyStorageConfig.StorageType.SOFTHSM:
@@ -175,6 +176,7 @@ class StartupWizardRedirect:
 
 class HsmSetupMixin(LoggerMixin):
     """Mixin that provides common HSM setup functionality for both initial setup and auto restore."""
+    request: HttpRequest
     form_class = HsmSetupForm
     template_name = 'setup_wizard/hsm_setup.html'
     http_method_names = ('get', 'post')
@@ -205,7 +207,7 @@ class HsmSetupMixin(LoggerMixin):
         except Exception as exc:  # noqa: BLE001
             return self._handle_hsm_setup_exception(exc)
 
-        return super().form_valid(form)
+        return FormView.form_valid(cast('FormView[HsmSetupForm]', self), form)
 
     def _validate_hsm_inputs(self, module_path: str, slot: str, label: str) -> bool:
         """Validate HSM input fields and add error messages if invalid."""
@@ -361,7 +363,7 @@ class HsmSetupMixin(LoggerMixin):
         msg = 'Subclasses must implement get_expected_wizard_state()'
         raise NotImplementedError(msg)
 
-class SetupWizardCryptoStorageView(LoggerMixin, FormView):
+class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
     """View for handling crypto storage setup during the setup wizard."""
 
     http_method_names = ('get', 'post')
@@ -604,7 +606,7 @@ class SetupWizardSetupModeView(TemplateView):
 
         return super().get(*args, **kwargs)
 
-class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView):
+class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView[EmptyForm]):
     """View for selecting the TLS server credential during setup."""
 
     http_method_names = ('get', 'post')
@@ -725,7 +727,7 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView):
 
         return super().dispatch(request, *args, **kwargs)
 
-    def get_context_data(self, **kwargs: Any) -> dict:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data."""
         return super().get_context_data(**kwargs)
 
@@ -744,75 +746,14 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView):
                 self.logger.error('No PKCS11Token found in backup password step')
                 return redirect('setup_wizard:demo_data', permanent=False)
 
-            token.set_backup_password(password)
-            execute_shell_script(SCRIPT_WIZARD_BACKUP_PASSWORD)
-
-            messages.add_message(
-                self.request,
-                messages.SUCCESS,
-                'Backup password set successfully.'
-            )
-            self.logger.info('Backup password set for token: %s', token.label)
-            return super().form_valid(form)
-
-        except Exception as exc:
-            error_mapping = {
-                subprocess.CalledProcessError: lambda e: (
-                    f'Backup password script failed: '
-                    f'{self._map_exit_code_to_message(e.returncode)}'
-                ),
-                FileNotFoundError: lambda _: f'Backup password script not found: {SCRIPT_WIZARD_BACKUP_PASSWORD}',
-                PKCS11Token.DoesNotExist: lambda e: str(e),
-                ValueError: lambda e: f'Invalid input: {e!s}',
-                RuntimeError: lambda e: f'Failed to set backup password: {e!s}',
-            }
-            err_msg = error_mapping.get(type(exc), lambda _:
-                                        'An unexpected error occurred while setting up backup password.')(exc)
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-
-            if isinstance(exc, (ValueError, RuntimeError)):
-                return self.form_invalid(form)
-            return redirect('setup_wizard:backup_password', permanent=False)
-
-    def form_invalid(self, form: BackupPasswordForm) -> HttpResponse:
-        """Handle invalid form submission."""
-        messages.add_message(
-            self.request,
-            messages.ERROR,
-            'Please correct the errors below and try again.'
-        )
-        return super().form_invalid(form)
-
-    @staticmethod
-    def _map_exit_code_to_message(return_code: int) -> str:
-        """Map script exit codes to meaningful error messages."""
-        error_messages = {
-            1: 'Invalid arguments provided to backup password script.',
-            2: 'Trustpoint is not in the WIZARD_BACKUP_PASSWORD state.',
-            3: 'Found multiple wizard state files. The wizard state seems to be corrupted.',
-            4: 'Failed to remove the WIZARD_BACKUP_PASSWORD state file.',
-            5: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
-        }
-        return error_messages.get(return_code, 'An unknown error occurred during backup password setup.')
-
-
-class BackupRestoreView(View, LoggerMixin):
-    """Upload a dump file and restore the database from it."""
-    def form_valid(self, form: BackupPasswordForm) -> HttpResponse:
-        """Handle valid form submission."""
-        password = form.cleaned_data.get('password')
-
-        try:
-            token = PKCS11Token.objects.first()
-            if not token:
+            if not isinstance(password, str):
                 messages.add_message(
                     self.request,
                     messages.ERROR,
-                    'No PKCS#11 token found. This should not happen in the backup password step.'
+                    'Invalid password provided.'
                 )
-                self.logger.error('No PKCS11Token found in backup password step')
-                return redirect('setup_wizard:demo_data', permanent=False)
+                self.logger.error('Invalid password type provided in backup password step')
+                return self.form_invalid(form)
 
             token.set_backup_password(password)
             execute_shell_script(SCRIPT_WIZARD_BACKUP_PASSWORD)
@@ -827,19 +768,21 @@ class BackupRestoreView(View, LoggerMixin):
 
         except Exception as exc:
             error_mapping = {
-                subprocess.CalledProcessError: lambda e: (
+                subprocess.CalledProcessError: lambda e, _: (
                     f'Backup password script failed: '
                     f'{self._map_exit_code_to_message(e.returncode)}'
                 ),
-                FileNotFoundError: lambda _: f'Backup password script not found: {SCRIPT_WIZARD_BACKUP_PASSWORD}',
-                PKCS11Token.DoesNotExist: lambda e: str(e),
-                ValueError: lambda e: f'Invalid input: {e!s}',
-                RuntimeError: lambda e: f'Failed to set backup password: {e!s}',
+                FileNotFoundError: lambda _, __: f'Backup password script not found: {SCRIPT_WIZARD_BACKUP_PASSWORD}',
+                PKCS11Token.DoesNotExist: lambda e, _: str(e),
+                ValueError: lambda e, _: f'Invalid input: {e!s}',
+                RuntimeError: lambda e, _: f'Failed to set backup password: {e!s}',
             }
-            err_msg = error_mapping.get(type(exc), lambda _:
-                                        'An unexpected error occurred while setting up backup password.')(exc)
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
+            default_handler: Callable[[BaseException, Any], str] = lambda _, __: (  # noqa: E731
+                'An unexpected error occurred while setting up backup password.'
+            )
+            handler = error_mapping.get(type(exc), default_handler)
+            messages.add_message(self.request, messages.ERROR, handler(exc, None))
+            self.logger.exception(handler(exc, None))
 
             if isinstance(exc, (ValueError, RuntimeError)):
                 return self.form_invalid(form)
@@ -868,6 +811,7 @@ class BackupRestoreView(View, LoggerMixin):
 
 class BackupPasswordRecoveryMixin(LoggerMixin):
     """Mixin that provides backup password recovery functionality."""
+    request: HttpRequest
 
     def handle_backup_password_recovery(self, backup_password: str) -> bool:
         """Handle DEK recovery using backup password.
@@ -968,8 +912,6 @@ class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
         Returns:
             HttpResponse: A redirect to the appropriate page based on the outcome.
         """
-        from setup_wizard.forms import BackupRestoreForm
-
         form = BackupRestoreForm(request.POST, request.FILES)
 
         if not form.is_valid():
@@ -1041,7 +983,7 @@ class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
 
         return redirect('users:login')
 
-class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, FormView):
+class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, FormView[PasswordAutoRestoreForm]):
     """View for handling backup password entry during auto restore process.
 
     This view allows users to enter the backup password needed to recover
@@ -1065,7 +1007,7 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
 
         return super().dispatch(request, *args, **kwargs)
 
-    def get_context_data(self, **kwargs: Any) -> dict:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data."""
         context = super().get_context_data(**kwargs)
         context['page_title'] = _('Auto Restore - Enter Backup Password')
@@ -1077,14 +1019,11 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
         backup_password = form.cleaned_data.get('password')
 
         try:
-            # Attempt to recover DEK using backup password
-            success = self.handle_backup_password_recovery(backup_password)
+            success = self.handle_backup_password_recovery(cast('str', backup_password))
 
             if not success:
-                # Error messages are already added by handle_backup_password_recovery
                 return self.form_invalid(form)
 
-            # Execute the transition script to complete auto restore
             execute_shell_script(SCRIPT_WIZARD_AUTORESTORE_PASSWORD)
 
             messages.add_message(
@@ -1220,7 +1159,7 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
 
             return super().form_valid(form)
         except subprocess.CalledProcessError as exception:
-            err_msg = f'Script error: {self._get_error_message_from_return_code(exception.returncode)}'
+            err_msg = f'Script error: {self._map_exit_code_to_message(exception.returncode)}'
             messages.add_message(self.request, messages.ERROR, err_msg)
             self.logger.exception(err_msg)
             return redirect('setup_wizard:setup_mode', permanent=False)
@@ -1293,10 +1232,10 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
                 KeyStorageConfig.StorageType.SOFTHSM,
                 KeyStorageConfig.StorageType.PHYSICAL_HSM
             ]:
-                return reverse_lazy('setup_wizard:backup_password')
-            return reverse_lazy('setup_wizard:demo_data')
+                return str(reverse_lazy('setup_wizard:backup_password'))
+            return str(reverse_lazy('setup_wizard:demo_data'))
         except KeyStorageConfig.DoesNotExist:
-            return reverse_lazy('setup_wizard:demo_data')
+            return str(reverse_lazy('setup_wizard:demo_data'))
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests for the TLS Server Credential application view.
@@ -1400,7 +1339,7 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
             self.logger.exception(err_msg)
             return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
 
-    def _raise_tls_credential_error(self, message: str) -> None:
+    def _raise_tls_credential_error(self, message: str) -> NoReturn:
         """Raise a TrustpointTlsServerCredentialError with a given message.
 
         Args:
@@ -1509,7 +1448,8 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
         """Writes the private key, certificate, and trust store PEM files to disk.
 
         Args:
-            credential_model (CredentialModel): The credential model instance containing the keys and certificates.
+            credential_model (CredentialModel): The credential model instance containing
+            the keys and certificates.
         """
         private_key_pem = credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
         certificate_pem = credential_model.get_certificate_serializer().as_pem().decode()
@@ -1720,7 +1660,7 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User
     """
 
     http_method_names = ('get', 'post')
-    form_class = UserCreationForm
+    form_class: type[UserCreationForm[User]] = UserCreationForm
     template_name = 'setup_wizard/create_super_user.html'
     success_url = reverse_lazy('users:login')
 

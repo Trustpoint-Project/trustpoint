@@ -4,8 +4,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import resolve, reverse
 
-from management.views import IndexView, backup, logging, security, tls
-from trustpoint.management.views import key_storage
+from management.views import IndexView, backup, logging, tls, key_storage, settings
 
 
 class SettingsUrlsTestCase(TestCase):
@@ -15,37 +14,37 @@ class SettingsUrlsTestCase(TestCase):
         self.client.force_login(self.user)
 
     def test_index_url(self):
-        """Test the settings index URL."""
-        url = reverse('settings:index')
-        self.assertEqual(url, '/settings/')
+        """Test the management index URL."""
+        url = reverse('management:index')
+        self.assertEqual(url, '/management/')
 
         resolver = resolve(url)
-        self.assertEqual(resolver.view_name, 'settings:index')
+        self.assertEqual(resolver.view_name, 'management:index')
         self.assertEqual(resolver.func.view_class, IndexView)
 
     def test_logging_files_url(self):
         """Test the logging files table URL."""
-        url = reverse('settings:logging-files')
-        self.assertEqual(url, '/settings/logging/files/')
+        url = reverse('management:logging-files')
+        self.assertEqual(url, '/management/logging/files/')
 
         resolver = resolve(url)
-        self.assertEqual(resolver.view_name, 'settings:logging-files')
+        self.assertEqual(resolver.view_name, 'management:logging-files')
         self.assertEqual(resolver.func.view_class, logging.LoggingFilesTableView)
 
     def test_logging_files_details_url(self):
         """Test the logging files details URL."""
         # Test with main log file
-        url = reverse('settings:logging-files-details', kwargs={'filename': 'trustpoint.log'})
-        self.assertEqual(url, '/settings/logging/files/details/trustpoint.log')
+        url = reverse('management:logging-files-details', kwargs={'filename': 'trustpoint.log'})
+        self.assertEqual(url, '/management/logging/files/details/trustpoint.log')
 
         resolver = resolve(url)
-        self.assertEqual(resolver.view_name, 'settings:logging-files-details')
+        self.assertEqual(resolver.view_name, 'management:logging-files-details')
         self.assertEqual(resolver.func.view_class, logging.LoggingFilesDetailsView)
         self.assertEqual(resolver.kwargs['filename'], 'trustpoint.log')
 
         # Test with numbered log file
-        url = reverse('settings:logging-files-details', kwargs={'filename': 'trustpoint.log.1'})
-        self.assertEqual(url, '/settings/logging/files/details/trustpoint.log.1')
+        url = reverse('management:logging-files-details', kwargs={'filename': 'trustpoint.log.1'})
+        self.assertEqual(url, '/management/logging/files/details/trustpoint.log.1')
 
         resolver = resolve(url)
         self.assertEqual(resolver.kwargs['filename'], 'trustpoint.log.1')
@@ -53,17 +52,17 @@ class SettingsUrlsTestCase(TestCase):
     def test_logging_files_download_url(self):
         """Test the logging files download URL."""
         # Test with main log file
-        url = reverse('settings:logging-files-download', kwargs={'filename': 'trustpoint.log'})
-        self.assertEqual(url, '/settings/logging/files/download/trustpoint.log')
+        url = reverse('management:logging-files-download', kwargs={'filename': 'trustpoint.log'})
+        self.assertEqual(url, '/management/logging/files/download/trustpoint.log')
 
         resolver = resolve(url)
-        self.assertEqual(resolver.view_name, 'settings:logging-files-download')
+        self.assertEqual(resolver.view_name, 'management:logging-files-download')
         self.assertEqual(resolver.func.view_class, logging.LoggingFilesDownloadView)
         self.assertEqual(resolver.kwargs['filename'], 'trustpoint.log')
 
         # Test with numbered log file
-        url = reverse('settings:logging-files-download', kwargs={'filename': 'trustpoint.log.12345'})
-        self.assertEqual(url, '/settings/logging/files/download/trustpoint.log.12345')
+        url = reverse('management:logging-files-download', kwargs={'filename': 'trustpoint.log.12345'})
+        self.assertEqual(url, '/management/logging/files/download/trustpoint.log.12345')
 
         resolver = resolve(url)
         self.assertEqual(resolver.kwargs['filename'], 'trustpoint.log.12345')
@@ -71,12 +70,12 @@ class SettingsUrlsTestCase(TestCase):
     def test_logging_files_download_multiple_url(self):
         """Test the logging files download multiple URL."""
         # Test with tar.gz format
-        url = reverse('settings:logging-files-download-multiple',
+        url = reverse('management:logging-files-download-multiple',
                     kwargs={'archive_format': 'tar.gz', 'filenames': '/trustpoint.log/trustpoint.log.1'})
-        self.assertEqual(url, '/settings/logging/files/download/tar.gz/trustpoint.log/trustpoint.log.1')
+        self.assertEqual(url, '/management/logging/files/download/tar.gz/trustpoint.log/trustpoint.log.1')
 
         resolver = resolve(url)
-        self.assertEqual(resolver.view_name, 'settings:logging-files-download-multiple')
+        self.assertEqual(resolver.view_name, 'management:logging-files-download-multiple')
         self.assertEqual(resolver.func.view_class, logging.LoggingFilesDownloadMultipleView)
         self.assertEqual(resolver.kwargs['archive_format'], 'tar.gz')
         self.assertEqual(resolver.kwargs['filenames'], '/trustpoint.log/trustpoint.log.1')

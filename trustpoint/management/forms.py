@@ -9,6 +9,7 @@ from crispy_forms.layout import Fieldset, Layout
 from django import forms
 from django.utils.translation import gettext_lazy as _
 from pki.util.keys import AutoGenPkiKeyAlgorithm
+from trustpoint.logger import LoggerMixin
 
 from management.models import BackupOptions, KeyStorageConfig, PKCS11Token, SecurityConfig
 from management.security import manager
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
     from typing import Any, ClassVar
 
 
-class SecurityConfigForm(forms.ModelForm):
+class SecurityConfigForm(forms.ModelForm[SecurityConfig], LoggerMixin):
     """Security configuration model form."""
 
     FEATURE_TO_FIELDS: ClassVar[dict[type[SecurityFeature], list[str]]] = {
@@ -40,7 +41,7 @@ class SecurityConfigForm(forms.ModelForm):
 
         # Disable form fields that correspond to features not allowed
         for feature_cls in features_not_allowed:
-            field_names = self.FEATURE_TO_FIELDS.get(feature_cls, [])
+            field_names = self.FEATURE_TO_FIELDS.get(type(feature_cls), [])
             for field_name in field_names:
                 if field_name in self.fields:
                     self.fields[field_name].widget.attrs['disabled'] = 'disabled'
@@ -93,9 +94,25 @@ class SecurityConfigForm(forms.ModelForm):
     def clean_auto_gen_pki_key_algorithm(self) -> AutoGenPkiKeyAlgorithm:
         """Keep the current value of `auto_gen_pki_key_algorithm` from the instance if the field was disabled."""
         form_value = self.cleaned_data.get('auto_gen_pki_key_algorithm')
-        if form_value is None:
-            return self.instance.auto_gen_pki_key_algorithm if self.instance else AutoGenPkiKeyAlgorithm.RSA2048
-        return form_value
+        if isinstance(form_value, AutoGenPkiKeyAlgorithm):
+            return form_value
+        if isinstance(form_value, str):
+            try:
+                return AutoGenPkiKeyAlgorithm(form_value)
+            except ValueError:
+                return AutoGenPkiKeyAlgorithm.RSA2048
+
+        if self.instance:
+            inst_val = getattr(self.instance, 'auto_gen_pki_key_algorithm', None)
+            if isinstance(inst_val, AutoGenPkiKeyAlgorithm):
+                return inst_val
+            if isinstance(inst_val, str):
+                try:
+                    return AutoGenPkiKeyAlgorithm(inst_val)
+                except Exception as exc:  # noqa: BLE001
+                    self.logger.warning(exc, 'Exception occurred while parsing auto_gen_pki_key_algorithm')
+
+        return AutoGenPkiKeyAlgorithm.RSA2048
 
 
 class BackupOptionsForm(forms.ModelForm[BackupOptions]):
@@ -197,7 +214,7 @@ class IPv4AddressForm(forms.Form):
         ipv4_field = cast('forms.ChoiceField', self.fields['ipv4_address'])
         ipv4_field.choices = [(ip, ip) for ip in san_ips]
 
-class KeyStorageConfigForm(forms.ModelForm):
+class KeyStorageConfigForm(forms.ModelForm[KeyStorageConfig]):
     """Form for configuring cryptographic material storage options."""
 
     storage_type = forms.ChoiceField(
@@ -225,14 +242,17 @@ class KeyStorageConfigForm(forms.ModelForm):
         cleaned_data: dict[str, Any] = super().clean() or {}
         return cleaned_data
 
-    def save(self, *, commit: bool = True) -> KeyStorageConfigForm:
-        """Save the form, ensuring singleton behavior."""
+    def save_with_commit(self) -> KeyStorageConfig:
+        """Save the form with commit, ensuring singleton behavior."""
         instance = KeyStorageConfig.get_or_create_default()
         instance.storage_type = self.cleaned_data['storage_type']
+        instance.save(update_fields=['storage_type', 'last_updated'])
+        return instance
 
-        if commit:
-            instance.save(update_fields=['storage_type', 'last_updated'])
-
+    def save_without_commit(self) -> KeyStorageConfig:
+        """Save the form without commit, ensuring singleton behavior."""
+        instance = KeyStorageConfig.get_or_create_default()
+        instance.storage_type = self.cleaned_data['storage_type']
         return instance
 
 class PKCS11ConfigForm(forms.Form):
@@ -283,7 +303,6 @@ class PKCS11ConfigForm(forms.Form):
         try:
             token = PKCS11Token.objects.first()
             if token:
-                self.fields['hsm_type'].initial = token.hsm_type
                 self.fields['label'].initial = token.label
                 self.fields['slot'].initial = token.slot
                 self.fields['module_path'].initial = token.module_path
