@@ -287,7 +287,7 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
             )
 
-            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+            active_tls, _created = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
             active_tls.credential = trustpoint_tls_server_credential
             active_tls.save()
         except ValidationError:
@@ -468,7 +468,7 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
             )
 
-            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+            active_tls, _created = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
             active_tls.credential = trustpoint_tls_server_credential
             active_tls.save()
 

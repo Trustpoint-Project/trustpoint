@@ -45,6 +45,8 @@ SCRIPT_WIZARD_DEMO_DATA = STATE_FILE_DIR / Path('wizard_demo_data.sh')
 SCRIPT_WIZARD_CREATE_SUPER_USER = STATE_FILE_DIR / Path('wizard_create_super_user.sh')
 SCRIPT_WIZARD_RESTORE = STATE_FILE_DIR / Path('wizard_restore.sh')
 
+SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL = STATE_FILE_DIR / Path('update_tls.sh')
+
 
 logger = logging.getLogger(__name__)
 

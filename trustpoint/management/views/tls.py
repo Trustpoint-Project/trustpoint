@@ -17,6 +17,7 @@ from setup_wizard.tls_credential import TlsServerCredentialGenerator
 
 from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.models import TlsSettings
+from management.management.commands.update_tls import Command as UpdateTlsCommand
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -261,6 +262,7 @@ class ActivateTlsServerView(View):
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: dict[str, Any]) -> HttpResponse:
         """Handle a valid form submission for TLS Server Credential activation."""
+        del args
         cert_id = kwargs['pk']
         tls_certificate = CredentialModel.objects.get(
             certificate__id=cert_id)
@@ -268,12 +270,6 @@ class ActivateTlsServerView(View):
         active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
         active_tls.credential = tls_certificate
         active_tls.save()
+        UpdateTlsCommand().handle()  # Apply new Apache TLS configuration
         messages.success(request, 'TLS Server certificate activated successfully')
         return redirect(reverse('management:tls'))
-
-
-
-
-
-
-
