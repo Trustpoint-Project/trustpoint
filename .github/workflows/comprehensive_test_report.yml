@@ -29,7 +29,7 @@ jobs:
           trustpoint/ 
           
       - name: Upload unit test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: unit-test-results
           path: reports/allure-results/unit
@@ -54,7 +54,7 @@ jobs:
           trustpoint/features/
 
       - name: Upload BDD results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: always()
         with:
           name: bdd-test-results
@@ -78,13 +78,13 @@ jobs:
           path: gh-pages
 
       - name: Download unit-test-results
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: unit-test-results
           path: unit-test-results
 
       - name: Download bdd-test-results
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: bdd-test-results
           path: bdd-test-results
