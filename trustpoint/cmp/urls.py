@@ -8,30 +8,32 @@ app_name = 'cmp'
 
 urlpatterns = [
     path(
-        'initialization/<str:domain>/<str:template>',
+        'p/<str:domain_name>/<str:certificate_profile>/initialization',
         views.CmpInitializationRequestView.as_view(),
-        name='initialization_template',
+        name='initialization_profile',
     ),
     path(
-        'initialization/<str:domain>/<str:template>/',
+        'p/<str:domain_name>/<str:certificate_profile>/initialization/',
         views.CmpInitializationRequestView.as_view(),
-        name='initialization_template_slash',
+        name='initialization_profile_slash',
     ),
 
-    path('initialization/<str:domain>', views.CmpInitializationRequestView.as_view(), name='initialization'),
-    path('initialization/<str:domain>/', views.CmpInitializationRequestView.as_view(), name='initialization_slash'),
-
+    path('p/<str:domain_name>/initialization', views.CmpInitializationRequestView.as_view(), name='initialization'),
+    path('p/<str:domain_name>/initialization/',
+         views.CmpInitializationRequestView.as_view(),
+         name='initialization_slash'
+    ),
     path(
-        'certification/<str:domain>/<str:template>',
+        'p/<str:domain_name>/<str:certificate_profile>/certification',
         views.CmpCertificationRequestView.as_view(),
         name='certification_template',
     ),
     path(
-        'certification/<str:domain>/<str:template>/',
+        'p/<str:domain_name>/<str:certificate_profile>/certification/',
         views.CmpCertificationRequestView.as_view(),
         name='certification_template_slash',
     ),
 
-    path('certification/<str:domain>', views.CmpCertificationRequestView.as_view(), name='certification'),
-    path('certification/<str:domain>/', views.CmpCertificationRequestView.as_view(), name='certification_slash'),
+    path('p/<str:domain_name>/certification', views.CmpCertificationRequestView.as_view(), name='certification'),
+    path('p/<str:domain_name>/certification/', views.CmpCertificationRequestView.as_view(), name='certification_slash'),
 ]
