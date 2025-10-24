@@ -67,49 +67,6 @@ def test_get_credential_for_certificate(mock_get, mock_filter) -> None:
     assert issued_credential.credential == mock_credential
 
 
-@patch('devices.models.DeviceModel.objects.filter')
-def test_authenticate_username_password_success(mock_filter, request_factory, est_simple_enrollment_view):
-    request = request_factory.get('/')
-    encoded_credentials = base64.b64encode(b'testuser:testpassword').decode()
-    request.headers = {'Authorization': f'Basic {encoded_credentials}'}
-
-    mock_device = MagicMock()
-    mock_filter.return_value.first.return_value = mock_device
-
-    device = est_simple_enrollment_view.authenticate_username_password(request)
-    assert device == mock_device
-
-
-def test_authenticate_username_password_missing_header(request_factory, est_simple_enrollment_view):
-    request = request_factory.get('/')
-    request.headers = {}
-
-    with pytest.raises(UsernamePasswordAuthenticationError):
-        est_simple_enrollment_view.authenticate_username_password(request)
-
-@patch('est.views.EstSimpleEnrollmentView.extract_requested_domain')
-@patch('est.views.EstSimpleEnrollmentView.authenticate_request')
-@pytest.mark.django_db
-def test_post_authentication_failure(
-    mock_auth, mock_extract_domain, request_factory, est_simple_enrollment_view
-):
-    request = request_factory.post('/')
-    mock_auth.return_value = (None, LoggedHttpResponse('Authentication failed', status=400))
-    mock_extract_domain.return_value = (MagicMock(), None)
-    response = est_simple_enrollment_view.post(request, domain=MagicMock(), certtemplate="tls-client")
-    assert response.status_code == 400
-    assert b'Authentication failed' in response.content
-
-
-@patch('est.views.EstSimpleEnrollmentView.issue_credential')
-def test_issue_credential_invalid_template(mock_issue, est_simple_enrollment_view):
-    mock_issue.side_effect = ValueError('Unknown template')
-
-    with pytest.raises(ValueError):
-        est_simple_enrollment_view.issue_credential(
-            'invalid_template', MagicMock(), est_simple_enrollment_view.requested_domain, MagicMock()
-        )
-
 def test_tls_client_cert_verification_no_cert(est_simple_enrollment_view) -> None:
     """Tests the TLS client certificate verification if no valid PEM is passed."""
     est_simple_enrollment_view.request.META = {

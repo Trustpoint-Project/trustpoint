@@ -276,6 +276,7 @@ class ApacheTLSClientCertExtractor:
 
         return (client_cert, intermediate_cas)
 
+
 class CertificateVerifier:
     """Methods for verifying client and server certificates."""
 
@@ -318,5 +319,5 @@ class CertificateVerifier:
         if untrusted_intermediates is None:
             untrusted_intermediates = []
 
-        chain = verifier.verify(cert, [])
+        chain = verifier.verify(cert, untrusted_intermediates)
         return chain

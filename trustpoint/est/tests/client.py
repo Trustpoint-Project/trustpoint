@@ -1,3 +1,4 @@
+"""Basic test EST client implementation."""
 import base64
 import logging
 
@@ -9,8 +10,10 @@ from cryptography.hazmat.primitives.serialization.pkcs7 import load_der_pkcs7_ce
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+#ruff: noqa: LOG015
 
 class ESTClient:
+    """EST Client representing a single EST request."""
     def __init__(
         self,
         est_url,
@@ -118,7 +121,7 @@ class ESTClient:
                 cert_file.write(cert_pem)
             logging.info("Certificate received and saved as '%s'", cert_path)
         else:
-            logging.error('Enrollment failed: %s', response.text)
+            logging.error('Enrollment failed (%i): %s', response.status_code, response.text)
 
     def reenroll(self, cert_path, key_path=None, generate_new_key=False) -> None:
         """Performs EST reenrollment using an existing certificate.
@@ -184,7 +187,7 @@ class ESTClient:
                 cert_file.write(cert_pem)
             logging.info("Reenrollment successful. Certificate saved as '%s'", cert_path)
         else:
-            logging.error('Reenrollment failed: %s', response.text)
+            logging.error('Reenrollment failed (%i): %s', response.status_code, response.text)
 
     def get_ca_certificates(self) -> None:
         """Retrieves CA certificates from the EST /cacerts endpoint."""
@@ -207,7 +210,7 @@ class ESTClient:
                 with open(f'ca_cert{i}.pem', 'wb') as cert_file:
                     cert_file.write(pem)
         else:
-            logging.error('Failed to retrieve CA certificates: %s', response.text)
+            logging.error('Failed to retrieve CA certificates (%i): %s', response.status_code, response.text)
 
 
 if __name__ == '__main__':
