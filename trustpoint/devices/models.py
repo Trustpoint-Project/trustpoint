@@ -405,22 +405,6 @@ class DeviceModel(CustomDeleteActionModel):
         """Gets the EST username."""
         return self.common_name
 
-    @property
-    def signature_suite(self) -> oid.SignatureSuite | None:
-        """Gets the corresponding SignatureSuite object."""
-        if self.domain is None:
-            return None
-        return oid.SignatureSuite.from_certificate(
-            self.domain.get_issuing_ca_or_value_error().credential.get_certificate_serializer().as_crypto()
-        )
-
-    @property
-    def public_key_info(self) -> oid.PublicKeyInfo | None:
-        """Gets the corresponding PublicKeyInfo object."""
-        if self.signature_suite is None:
-            return None
-        return self.signature_suite.public_key_info
-
     def clean(self) -> None:
         """Validation before saving the model."""
         if not (self.onboarding_config or self.no_onboarding_config):

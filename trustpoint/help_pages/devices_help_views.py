@@ -177,12 +177,14 @@ class AbstractNoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[D
         if not self.object.domain:
             err_msg = _('No domain is configured for this device.')
             raise Http404(err_msg)
+        # @TODO: When device is onboarded on multiple domains make sure to select the correct domain
+        self.domain = self.object.domain
         self.certificate_profile = self.kwargs.get('certificate_template')
         if not self.certificate_profile:
             err_msg = _('Failed to get certificate profile')
         self.host = (
             f'{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}/'
-            f'.well-known/cmp/certification/{ self.object.domain.unique_name }')
+            f'.well-known/cmp/certification/{ self.domain.unique_name }')
 
 
         help_page = HelpPage(heading=_non_lazy('Help - CMP Shared-Secret (HMAC)'), sections=[
@@ -296,7 +298,7 @@ class AbstractNoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[D
         )
 
     def _get_summary_section(self) -> HelpSection:
-        if self.object.domain is None:
+        if self.domain is None:
             raise ValueError
         certificate_request_url = (
             f'https://{self.host}<certificate_profile>'
@@ -313,7 +315,7 @@ class AbstractNoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[D
         )
         public_key_type_row = HelpRow(
             key=_non_lazy('Required Public Key Type'),
-            value=str(self.object.public_key_info),
+            value=str(self.domain.public_key_info),
             value_render_type=ValueRenderType.CODE
         )
         shared_secret_row = HelpRow(
@@ -356,15 +358,14 @@ class AbstractNoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[D
         )
 
     def _get_key_gen_command(self) -> str:
-        device: DeviceModel = self.object
-        if device.domain is None:
+        if self.domain is None:
             raise Http404(DeviceWithoutDomainErrorMsg)
 
-        if not device.public_key_info:
+        if not self.domain.public_key_info:
             raise Http404(PublicKeyInfoMissingErrorMsg)
         try:
             return KeyGenCommandBuilder.get_key_gen_command(
-                public_key_info=device.public_key_info,
+                public_key_info=self.domain.public_key_info,
                 cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
             )
         except Exception as exception:
@@ -372,6 +373,7 @@ class AbstractNoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[D
 
     def _get_shared_secret(self) -> str:
         return self.no_onboarding_config.cmp_shared_secret
+    
 
 
 class DeviceNoOnboardingCmpSharedSecretHelpView(AbstractNoOnboardingCmpSharedSecretHelpView):
@@ -423,10 +425,11 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
             raise Http404(err_msg)
         self.no_onboarding_config = self.object.no_onboarding_config
 
-        if not self.object.domain:
+        if not self.domain:
             err_msg = _('No domain is configured for this device.')
             raise Http404(err_msg)
-        self.domain = self.object.domain
+        # @TODO: When device is onboarded on multiple domains make sure to select the correct domain
+        self.domain = self.domain
         self.certificate_profile = self.kwargs.get('certificate_template')
         if not self.certificate_profile:
             err_msg = _('Failed to get certificate profile')
@@ -576,11 +579,11 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
         )
 
     def _get_summary_section(self) -> HelpSection:
-        if self.object.domain is None:
+        if self.domain is None:
             raise ValueError
         certificate_request_url = (
             f'https://{ self.host }/.well-known/est/'
-            f'{ self.object.domain.unique_name }/<certificate_profile>/simpleenroll/'
+            f'{ self.domain.unique_name }/<certificate_profile>/simpleenroll/'
         )
         url_row = HelpRow(
             key=format_html(_non_lazy('Certificate Request URL')),
@@ -589,7 +592,7 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
         )
         public_key_type_row = HelpRow(
             key=_non_lazy('Required Public Key Type'),
-            value=str(self.object.public_key_info),
+            value=str(self.domain.public_key_info),
             value_render_type=ValueRenderType.CODE
         )
         est_username_row = HelpRow(
@@ -641,15 +644,14 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
         )
 
     def _get_key_gen_command(self) -> str:
-        device: DeviceModel = self.object
-        if device.domain is None:
+        if self.domain is None:
             raise Http404(DeviceWithoutDomainErrorMsg)
 
-        if not device.public_key_info:
+        if not self.domain.public_key_info:
             raise Http404(PublicKeyInfoMissingErrorMsg)
         try:
             return KeyGenCommandBuilder.get_key_gen_command(
-                public_key_info=device.public_key_info,
+                public_key_info=self.domain.public_key_info,
                 cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
             )
         except Exception as exception:
@@ -742,10 +744,11 @@ class AbstractOnboardingDomainCredentialCmpSharedSecretHelpView(PageContextMixin
             raise Http404(err_msg)
         self.onboarding_config = self.object.onboarding_config
 
-        if not self.object.domain:
+        if not self.domain:
             err_msg = _('No domain is configured for this device.')
             raise Http404(err_msg)
-        self.domain = self.object.domain
+        # @TODO: When device is onboarded on multiple domains make sure to select the correct domain
+        self.domain = self.domain
 
         self.host = (
             f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}'
@@ -800,7 +803,7 @@ class AbstractOnboardingDomainCredentialCmpSharedSecretHelpView(PageContextMixin
 
 
     def _get_summary_section(self) -> HelpSection:
-        if self.object.domain is None:
+        if self.domain is None:
             raise ValueError
         certificate_request_url = (
             f'https://{self.host}/domaincredential'
@@ -817,7 +820,7 @@ class AbstractOnboardingDomainCredentialCmpSharedSecretHelpView(PageContextMixin
         )
         public_key_type_row = HelpRow(
             key=_non_lazy('Required Public Key Type'),
-            value=str(self.object.public_key_info),
+            value=str(self.domain.public_key_info),
             value_render_type=ValueRenderType.CODE
         )
         shared_secret_row = HelpRow(
@@ -860,15 +863,14 @@ class AbstractOnboardingDomainCredentialCmpSharedSecretHelpView(PageContextMixin
         )
 
     def _get_key_gen_command(self) -> str:
-        device: DeviceModel = self.object
-        if device.domain is None:
+        if self.domain is None:
             raise Http404(DeviceWithoutDomainErrorMsg)
 
-        if not device.public_key_info:
+        if not self.domain.public_key_info:
             raise Http404(PublicKeyInfoMissingErrorMsg)
         try:
             return KeyGenCommandBuilder.get_key_gen_command(
-                public_key_info=device.public_key_info,
+                public_key_info=self.domain.public_key_info,
                 cred_number=len(IssuedCredentialModel.objects.filter(device=self.object)),
                 key_name='domain-credential-key.pem'
             )
@@ -929,10 +931,11 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
             raise Http404(err_msg)
         self.onboarding_config = self.object.onboarding_config
 
-        if not self.object.domain:
+        if not self.domain:
             err_msg = _('No domain is configured for this device.')
             raise Http404(err_msg)
-        self.domain = self.object.domain
+        # @TODO: When device is onboarded on multiple domains make sure to select the correct domain
+        self.domain = self.domain
         self.certificate_profile = 'domaincredential'
         if not self.certificate_profile:
             err_msg = _('Failed to get certificate profile')
@@ -1002,11 +1005,11 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
 
 
     def _get_summary_section(self) -> HelpSection:
-        if self.object.domain is None:
+        if self.domain is None:
             raise ValueError
         certificate_request_url = (
             f'https://{ self.host }/.well-known/est/'
-            f'{ self.object.domain.unique_name }/<certificate_profile>/simpleenroll/'
+            f'{ self.domain.unique_name }/<certificate_profile>/simpleenroll/'
         )
         url_row = HelpRow(
             key=format_html(_non_lazy('Certificate Request URL')),
@@ -1015,7 +1018,7 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
         )
         public_key_type_row = HelpRow(
             key=_non_lazy('Required Public Key Type'),
-            value=str(self.object.public_key_info),
+            value=str(self.domain.public_key_info),
             value_render_type=ValueRenderType.CODE
         )
         est_username_row = HelpRow(
@@ -1055,15 +1058,14 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
         )
 
     def _get_key_gen_command(self) -> str:
-        device: DeviceModel = self.object
-        if device.domain is None:
+        if self.domain is None:
             raise Http404(DeviceWithoutDomainErrorMsg)
 
-        if not device.public_key_info:
+        if not self.domain.public_key_info:
             raise Http404(PublicKeyInfoMissingErrorMsg)
         try:
             return KeyGenCommandBuilder.get_key_gen_command(
-                public_key_info=device.public_key_info,
+                public_key_info=self.domain.public_key_info,
                 cred_number=len(IssuedCredentialModel.objects.filter(device=self.object)),
                 key_name='domain-credential-key.pem'
             )
@@ -1160,9 +1162,11 @@ class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView
         if not self.object.domain:
             err_msg = _('No domain is configured for this device.')
             raise Http404(err_msg)
+        # @TODO: When device is onboarded on multiple domains make sure to select the correct domain
+        self.domain = self.object.domain
         self.host = (
             f'{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}/'
-            f'.well-known/cmp/certification/{ self.object.domain.unique_name }')
+            f'.well-known/cmp/certification/{ self.domain.unique_name }')
 
 
         help_page = HelpPage(heading=_non_lazy('Help - CMP Shared-Secret (HMAC)'), sections=[
@@ -1269,7 +1273,7 @@ class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView
         )
 
     def _get_summary_section(self) -> HelpSection:
-        if self.object.domain is None:
+        if self.object is None:
             raise ValueError
         certificate_request_url = (
             f'https://{self.host}/<certificate_profile>'
@@ -1281,7 +1285,7 @@ class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView
         )
         public_key_type_row = HelpRow(
             key=_non_lazy('Required Public Key Type'),
-            value=str(self.object.public_key_info),
+            value=str(self.domain.public_key_info),
             value_render_type=ValueRenderType.CODE
         )
 
@@ -1321,18 +1325,18 @@ class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView
         if device.domain is None:
             raise Http404(DeviceWithoutDomainErrorMsg)
 
-        if not device.public_key_info:
+        if not self.domain.public_key_info:
             raise Http404(PublicKeyInfoMissingErrorMsg)
         try:
             return KeyGenCommandBuilder.get_key_gen_command(
-                public_key_info=device.public_key_info,
+                public_key_info=self.domain.public_key_info,
                 cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
             )
         except Exception as exception:
             raise Http404(exception) from exception
 
     def _get_cmp_issuer_root_ca_pk(self) -> None | int:
-        domain = self.object.domain
+        domain = self.domain
         if not domain:
             err_msg = 'domain not configured'
             raise ValueError(err_msg)
@@ -1422,10 +1426,11 @@ class AbstractDeviceOnboardingEstDomainCredentialHelpView(PageContextMixin, Deta
             raise Http404(err_msg)
         self.onboarding_config = self.object.onboarding_config
 
-        if not self.object.domain:
+        if not self.domain:
             err_msg = _('No domain is configured for this device.')
             raise Http404(err_msg)
-        self.domain = self.object.domain
+        # @TODO: When device is onboarded on multiple domains make sure to select the correct domain
+        self.domain = self.domain
         self.certificate_profile = self.kwargs.get('certificate_template')
         if not self.certificate_profile:
             err_msg = _('Failed to get certificate profile')
@@ -1573,11 +1578,11 @@ class AbstractDeviceOnboardingEstDomainCredentialHelpView(PageContextMixin, Deta
         )
 
     def _get_summary_section(self) -> HelpSection:
-        if self.object.domain is None:
+        if self.domain is None:
             raise ValueError
         certificate_request_url = (
             f'https://{ self.host }/.well-known/est/'
-            f'{ self.object.domain.unique_name }/<certificate_profile>/simpleenroll/'
+            f'{ self.domain.unique_name }/<certificate_profile>/simpleenroll/'
         )
         url_row = HelpRow(
             key=format_html(_non_lazy('Certificate Request URL')),
@@ -1586,7 +1591,7 @@ class AbstractDeviceOnboardingEstDomainCredentialHelpView(PageContextMixin, Deta
         )
         public_key_type_row = HelpRow(
             key=_non_lazy('Required Public Key Type'),
-            value=str(self.object.public_key_info),
+            value=str(self.domain.public_key_info),
             value_render_type=ValueRenderType.CODE
         )
 
@@ -1623,15 +1628,14 @@ class AbstractDeviceOnboardingEstDomainCredentialHelpView(PageContextMixin, Deta
         )
 
     def _get_key_gen_command(self) -> str:
-        device: DeviceModel = self.object
-        if device.domain is None:
+        if self.domain is None:
             raise Http404(DeviceWithoutDomainErrorMsg)
 
-        if not device.public_key_info:
+        if not self.domain.public_key_info:
             raise Http404(PublicKeyInfoMissingErrorMsg)
         try:
             return KeyGenCommandBuilder.get_key_gen_command(
-                public_key_info=device.public_key_info,
+                public_key_info=self.domain.public_key_info,
                 cred_number=len(IssuedCredentialModel.objects.filter(device=self.object))
             )
         except Exception as exception:
