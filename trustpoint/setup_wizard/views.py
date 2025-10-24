@@ -384,7 +384,7 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
     def form_valid(self, form: KeyStorageConfigForm) -> HttpResponse:
         """Handle valid form submission and determine next step based on storage type."""
         try:
-            config = form.save()
+            config = form.save_with_commit()
             storage_type = config.storage_type
 
             execute_shell_script(SCRIPT_WIZARD_SETUP_CRYPTO_STORAGE, storage_type)

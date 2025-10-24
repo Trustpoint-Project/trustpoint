@@ -537,7 +537,19 @@ class PKCS11Token(models.Model, LoggerMixin):
         try:
             pkcs11_lib = pkcs11.lib(self.module_path)
             pkcs11_token = pkcs11_lib.get_token(token_label=self.label)
-            session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
+
+            # Try to open a session with the user PIN, handling if already logged in
+            try:
+                session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
+            except pkcs11.UserAlreadyLoggedIn:
+                # If user is already logged in, logout and try again
+                self.logger.debug('User already logged in to token %s, logging out and retrying', self.label)
+                try:
+                    pkcs11_token.logout()
+                except Exception as logout_error:  # noqa: BLE001
+                    self.logger.warning('Failed to logout before reopening session: %s', logout_error)
+                # Retry opening the session
+                session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
 
             wrap_key = session.get_key(
                 key_type=pkcs11.KeyType.AES,
@@ -569,13 +581,6 @@ class PKCS11Token(models.Model, LoggerMixin):
         except Exception as e:
             msg = f'Failed to wrap DEK: {e}'
             raise RuntimeError(msg) from e
-        else:
-            wrapped_data = self.wrap_dek(dek_bytes)
-            if isinstance(wrapped_data, (memoryview, bytearray)):
-                wrapped_data = bytes(wrapped_data)
-            elif not isinstance(wrapped_data, bytes):
-                msg = f'wrap_dek returned unexpected type: {type(wrapped_data)!r}'
-                raise TypeError(msg)
         finally:
             if session:
                 try:
