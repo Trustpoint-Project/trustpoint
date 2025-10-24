@@ -1,6 +1,7 @@
 """Management command to initialize the Trustpoint on container startup."""
 
 import io
+from pathlib import Path
 
 from django.conf import settings as django_settings
 from django.core.management import call_command
@@ -31,6 +32,12 @@ class Command(BaseCommand):
         """Run migrations (if enabled) and preparatory Django management cmds."""
         self.stdout.write('Start initializing the trustpoint...')
         current = django_settings.APP_VERSION
+
+        try:
+            with Path('/etc/hostname').open('r') as f:
+                container_id = f.read().strip()
+        except FileNotFoundError:
+            container_id = 'unknown'
         if not options.get('nomigrations'):
             setup_msg: str = _('Starting setup script...')
             self.stdout.write(_(setup_msg))
@@ -40,6 +47,7 @@ class Command(BaseCommand):
 
             ver, _created = AppVersion.objects.get_or_create(pk=1)
             ver.version = current
+            ver.container_id = container_id
             ver.save()
         with io.StringIO() as fake_out:
             self.stdout.write('Collecting static files...')
@@ -51,5 +59,16 @@ class Command(BaseCommand):
 
         if options.get('tls'):
             self.stdout.write('Preparing TLS certificate...')
+            from management.models import KeyStorageConfig
+            crypto_config, created = KeyStorageConfig.objects.get_or_create(
+                pk=1,
+                defaults={
+                    'storage_type': KeyStorageConfig.StorageType.SOFTWARE,
+                }
+            )
+            if created:
+                self.stdout.write('Created software crypto storage configuration')
+            else:
+                self.stdout.write('Using existing crypto storage configuration')
             call_command('tls_cred', '--write_out')
             self.stdout.write('Done')

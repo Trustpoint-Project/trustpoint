@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist
 from django.urls import reverse_lazy
-from django.utils.translation import gettext as _
 from django.views.generic import FormView
 from pki.models import GeneralNameIpAddress
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -65,7 +64,7 @@ class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
 
         san_ips = []
         san_dns_names = []
-        issuer_details: dict[str, Optional[str]] = {
+        issuer_details: dict[str, str | None] = {
             'country': None,
             'organization': None,
             'common_name': None,

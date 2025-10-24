@@ -16,6 +16,11 @@ from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
+from trustpoint.views.base import (
+    BulkDeleteView,
+    PrimaryKeyListFromPrimaryKeyString,
+    SortableTableMixin,
+)
 from trustpoint_core.archiver import ArchiveFormat, Archiver
 from trustpoint_core.serializer import CertificateFormat
 
@@ -23,11 +28,6 @@ from pki.forms import TruststoreAddForm
 from pki.models import DomainModel
 from pki.models.truststore import TruststoreModel
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import (
-    BulkDeleteView,
-    PrimaryKeyListFromPrimaryKeyString,
-    SortableTableMixin,
-)
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar

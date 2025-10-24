@@ -19,12 +19,18 @@ echo "PostgreSQL database is available!"
 
 run_as_www_data "uv run trustpoint/manage.py managestartup"
 
-# 12) Configure apache
+echo "Unwrapping DEK..."
+if run_as_www_data "uv run trustpoint/manage.py unwrap_dek --token-label 'TrustPoint-SoftHSM'"; then
+    echo "DEK unwrapping completed successfully"
+else
+    echo "DEK unwrapping failed or no DEK found, continuing startup..."
+fi
+
+# Configure apache
 /etc/trustpoint/wizard/transition/configure_apache.sh
 
 # Configure TLS
 /etc/trustpoint/wizard/transition/update_tls.sh
-
 
 echo "Starting cron service..."
 cron

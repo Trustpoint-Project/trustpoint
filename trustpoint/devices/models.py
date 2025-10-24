@@ -20,6 +20,7 @@ from pki.models.truststore import TruststoreModel
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 from trustpoint_core import oid
 from util.db import CustomDeleteActionModel
+from util.encrypted_fields import EncryptedCharField
 
 if TYPE_CHECKING:
     from typing import Any
@@ -148,8 +149,8 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
     )
 
     # these will be dropped after successfull onboarding
-    est_password = models.CharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
-    cmp_shared_secret = models.CharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
+    est_password = EncryptedCharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
+    cmp_shared_secret = EncryptedCharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
 
     idevid_trust_store = models.ForeignKey(
         TruststoreModel,
@@ -451,7 +452,7 @@ class IssuedCredentialModel(CustomDeleteActionModel):
         blank=False,
     )
     device = models.ForeignKey(
-        DeviceModel, verbose_name=_('Device'), on_delete=models.PROTECT, related_name='issued_credentials'
+        'devices.DeviceModel', verbose_name=_('Device'), on_delete=models.PROTECT, related_name='issued_credentials'
     )
     domain = models.ForeignKey(
         DomainModel, verbose_name=_('Domain'), on_delete=models.PROTECT, related_name='issued_credentials'
@@ -542,7 +543,7 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
 
     issued_credential_model = models.OneToOneField(IssuedCredentialModel, on_delete=models.CASCADE)
     otp = models.CharField(_('OTP'), max_length=32, default='')
-    device = models.ForeignKey(DeviceModel, on_delete=models.CASCADE)
+    device = models.ForeignKey('devices.DeviceModel', on_delete=models.CASCADE)
     attempts = models.IntegerField(_('Attempts'), default=0)
     download_token = models.CharField(_('Download Token'), max_length=64, default='')
     token_created_at = models.DateTimeField(_('Token Created'), null=True)
