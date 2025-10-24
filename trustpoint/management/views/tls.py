@@ -18,6 +18,8 @@ from trustpoint.logger import LoggerMixin
 
 from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.models import TlsSettings
+from management.management.commands.update_tls import Command as UpdateTlsCommand
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -25,9 +27,14 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
-class TlsView(FormView[IPv4AddressForm]):
+class TlsSettingsContextMixin:
+    """Mixin which adds data to the context for the TLS settings application."""
+
+    extra_context: ClassVar = {'page_category': 'management', 'page_name': 'tls'}
+
+
+class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
     """View to display certificate details, including Subject Alternative Name (SAN) and associated IP addresses."""
-    extra_context: ClassVar[dict[str, str]] = {'page_category': 'management', 'page_name': 'tls'}
     template_name = 'management/tls.html'
     form_class = IPv4AddressForm
     success_url = reverse_lazy('management:tls')
@@ -256,6 +263,7 @@ class ActivateTlsServerView(View):
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: dict[str, Any]) -> HttpResponse:
         """Handle a valid form submission for TLS Server Credential activation."""
+        del args
         cert_id = kwargs['pk']
         tls_certificate = CredentialModel.objects.get(
             certificate__id=cert_id)
@@ -263,12 +271,6 @@ class ActivateTlsServerView(View):
         active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
         active_tls.credential = tls_certificate
         active_tls.save()
+        UpdateTlsCommand().handle()  # Apply new Apache TLS configuration
         messages.success(request, 'TLS Server certificate activated successfully')
         return redirect(reverse('management:tls'))
-
-
-
-
-
-
-

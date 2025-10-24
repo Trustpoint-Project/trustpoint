@@ -61,6 +61,8 @@ SCRIPT_WIZARD_RESTORE = STATE_FILE_DIR / Path('wizard_restore.sh')
 SCRIPT_WIZARD_AUTO_RESTORE_SET = STATE_FILE_DIR / Path('wizard_auto_restore_set.sh')
 SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS = STATE_FILE_DIR / Path('wizard_auto_restore_success.sh')
 
+SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL = STATE_FILE_DIR / Path('update_tls.sh')
+
 
 logger = logging.getLogger(__name__)
 
