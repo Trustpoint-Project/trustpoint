@@ -126,7 +126,7 @@ class CmpSharedSecretCommandBuilder:
             '-cmd ir \\\n'
             '-implicit_confirm \\\n'
             '-tls_used \\\n'
-            f'-server { host }/.well-known/cmp/initialization/{ domain_name } \\\n'
+            f'-server { host }/.well-known/cmp/p/{ domain_name }/initialization \\\n'
             f'-ref { pk } \\\n'
             f'-secret pass:{ shared_secret } \\\n'
             f'-subject "/CN=Trustpoint-Domain-Credential" \\\n'
