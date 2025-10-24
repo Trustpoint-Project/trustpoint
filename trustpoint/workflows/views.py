@@ -195,7 +195,7 @@ class DefinitionDetailView(View):
         meta = wf.definition
 
         # strip out auto-IDs, leave only type+params for wizard
-        steps = [{'type': n['type'], 'params': n.get('params', {})} for n in meta.get('nodes', [])]
+        steps = [{'type': n['type'], 'params': n.get('params', {})} for n in meta.get('steps', [])]
 
         # scopes out with names
         scopes_out: list[dict[str, str]] = []
@@ -325,19 +325,19 @@ class WorkflowDefinitionImportView(View):
         # 3) definition
         definition = data.get('definition')
         if not isinstance(definition, dict):
-            errs.append('"definition" must be an object with "triggers" and "nodes".')
+            errs.append('"definition" must be an object with "triggers" and "steps".')
             return errs, None
 
         triggers_in = definition.get('triggers')
-        nodes_in = definition.get('nodes')
+        steps_in = definition.get('steps')
 
         if not isinstance(triggers_in, list):
             errs.append('"definition.triggers" must be a list.')
             triggers_in = []
 
-        if not isinstance(nodes_in, list):
-            errs.append('"definition.nodes" must be a list.')
-            nodes_in = []
+        if not isinstance(steps_in, list):
+            errs.append('"definition.steps" must be a list.')
+            steps_in = []
 
         # 4) validate triggers (soft, but informative)
         triggers_out: list[dict[str, str]] = []
@@ -352,24 +352,24 @@ class WorkflowDefinitionImportView(View):
                 errs.append(f'triggers[{i}] is missing "handler", "protocol", or "operation".')
             triggers_out.append({'handler': handler, 'protocol': protocol, 'operation': operation})
 
-        # 5) validate nodes/steps
+        # 5) validate steps
         steps_out: list[dict[str, Any]] = []
-        for i, n in enumerate(nodes_in):
+        for i, n in enumerate(steps_in):
             if not isinstance(n, dict):
-                errs.append(f'nodes[{i}] must be an object with "type" and "params".')
+                errs.append(f'steps[{i}] must be an object with "type" and "params".')
                 continue
             typ = str(n.get('type') or '')
             par = n.get('params') or {}
             if not typ:
-                errs.append(f'nodes[{i}] is missing non-empty "type".')
+                errs.append(f'steps[{i}] is missing non-empty "type".')
             if not isinstance(par, dict):
-                errs.append(f'nodes[{i}].params must be an object.')
+                errs.append(f'steps[{i}].params must be an object.')
                 par = {}
             steps_out.append({'type': typ, 'params': par})
 
         # 6) At least something meaningful?
         if not steps_out:
-            errs.append('No steps found in "definition.nodes".')
+            errs.append('No steps found in "definition.steps".')
 
         if errs:
             return errs, None
@@ -572,7 +572,7 @@ class WorkflowWizardView(View):
 
 
 class WorkflowDefinitionDeleteView(View):
-    """POST-only: deletes the WorkflowDefinition if no non-finalized WorkflowInstance exists for it."""
+    """POST-only: deletes the WorkflowDefinition""" # if no non-finalized WorkflowInstance exists for it."""
 
     def post(self, request: HttpRequest, pk: UUID, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
         """Delete a workflow definition by ID."""
@@ -691,9 +691,7 @@ class SignalInstanceView(View):
 
         advance_instance(inst, signal=action)
         inst.refresh_from_db()
-
-        # IMPORTANT: keep the parent request aggregate in sync
-        if inst.enrollment_request_id:
+        if inst.enrollment_request:
             try:
                 recompute_request_state(inst.enrollment_request)
             except Exception:

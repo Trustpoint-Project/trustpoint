@@ -8,14 +8,14 @@ from django.db import transaction
 
 from workflows.models import WorkflowInstance
 from workflows.services.context import VARS_MAX_BYTES, compact_context_blob
-from workflows.services.executors.factory import NodeExecutorFactory
-from workflows.services.types import ExecStatus, NodeResult
+from workflows.services.executors.factory import StepExecutorFactory
+from workflows.services.types import ExecStatus, ExecutorResult
 
 
-def _current_node(inst: WorkflowInstance) -> dict[str, Any]:
-    for n in inst.get_steps():
-        if n['id'] == inst.current_step:
-            return n
+def _current_step(inst: WorkflowInstance) -> dict[str, Any]:
+    for step in inst.get_steps():
+        if step['id'] == inst.current_step:
+            return step
     raise ValueError(f'Unknown current_step {inst.current_step!r}')
 
 
@@ -59,9 +59,9 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
     Advance an instance until WAITING or a terminal outcome is reached.
 
     Rules:
-      - Executors return NodeResult(status, context?, vars?).
+      - Executors return ExecutorResult(status, context?, vars?).
       - Engine stores compacted per-step context.
-      - Engine merges NodeResult.vars into global $vars (no overwrite of different values).
+      - Engine merges ExecutorResult.vars into global $vars (no overwrite of different values).
       - Size guard on $vars (VARS_MAX_BYTES).
       - APPROVED acts like PASSED if there is a next step; becomes terminal only at the end.
     """
@@ -75,14 +75,14 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
             inst.state = WorkflowInstance.STATE_RUNNING
             inst.save(update_fields=['state'])
 
-        # allow last node to return COMPLETED
+        # allow last step to return COMPLETED
         budget = _max_pass_hops(inst) + 1
         for _ in range(budget):
-            node_meta = _current_node(inst)
-            node_type = str(node_meta.get('type') or '')
+            step_meta = _current_step(inst)
+            step_type = str(step_meta.get('type') or '')
 
-            executor = NodeExecutorFactory.create(node_type)
-            result: NodeResult = executor.execute(inst, signal)
+            executor = StepExecutorFactory.create(step_type)
+            result: ExecutorResult = executor.execute(inst, signal)
 
             # Persist step context (compacted)
             if result.context is not None:
@@ -127,7 +127,7 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
 
             if status == ExecStatus.WAITING:
                 inst.state = (
-                    WorkflowInstance.STATE_AWAITING if node_type == 'Approval'
+                    WorkflowInstance.STATE_AWAITING if step_type == 'Approval'
                     else WorkflowInstance.STATE_RUNNING
                 )
                 inst.save(update_fields=['state'])

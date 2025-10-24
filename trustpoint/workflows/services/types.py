@@ -18,8 +18,8 @@ class ExecStatus(Enum):
 
 
 @dataclass(frozen=True)
-class NodeResult:
-    """Result returned by a node executor.
+class ExecutorResult:
+    """Result returned by a step executor.
 
     Attributes:
         status: Execution status guiding engine behavior.

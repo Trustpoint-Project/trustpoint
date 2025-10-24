@@ -8,14 +8,14 @@ import requests
 from django.template import Context, Template
 
 from workflows.models import WorkflowInstance
-from workflows.services.context import set_in
-from workflows.services.executors.factory import AbstractNodeExecutor
-from workflows.services.types import ExecStatus, NodeResult
+from workflows.services.context import build_context, set_in
+from workflows.services.executors.factory import AbstractStepExecutor
+from workflows.services.types import ExecStatus, ExecutorResult
 
 logger = logging.getLogger(__name__)
 
 
-class WebhookExecutor(AbstractNodeExecutor):
+class WebhookExecutor(AbstractStepExecutor):
     """Execute an outbound HTTP call and optionally export values to $vars.
 
     - URL, headers, and string body templating with Django templates using a 'ctx' dict
@@ -28,9 +28,9 @@ class WebhookExecutor(AbstractNodeExecutor):
         Accepts either "serial" or "vars.serial" (we strip optional "vars." and store under $vars).
     """
 
-    def do_execute(self, instance: WorkflowInstance, _signal: str | None) -> NodeResult:
-        node = next(n for n in instance.get_steps() if n['id'] == instance.current_step)
-        params = dict(node.get('params') or {})
+    def do_execute(self, instance: WorkflowInstance, _signal: str | None) -> ExecutorResult:
+        step = next(n for n in instance.get_steps() if n['id'] == instance.current_step)
+        params = dict(step.get('params') or {})
 
         method = str(params.get('method') or 'POST').upper()
         url_tpl = str(params.get('url') or '').strip()
@@ -54,8 +54,7 @@ class WebhookExecutor(AbstractNodeExecutor):
         result_source = str(params.get('result_source') or 'auto').strip().lower()  # auto|json|text|status|headers
         exports = list(params.get('exports') or [])
 
-        # Build minimal template context
-        ctx = _build_ctx(instance)
+        ctx: dict[str, Any] = build_context(instance)
         dj_ctx = Context({'ctx': ctx})
 
         # Render URL and header values; render body when it is a string
@@ -63,7 +62,7 @@ class WebhookExecutor(AbstractNodeExecutor):
             url = Template(url_tpl).render(dj_ctx)
         except Exception as exc:
             logger.exception('Webhook: URL template render failed')
-            return NodeResult(
+            return ExecutorResult(
                 status=ExecStatus.FAIL,
                 context={'type': 'Webhook', 'ok': False, 'status': 'failed', 'error': f'URL template error: {exc!s}', 'outputs': {}},
             )
@@ -86,7 +85,7 @@ class WebhookExecutor(AbstractNodeExecutor):
                 rendered = Template(body_raw).render(dj_ctx)
             except Exception as exc:
                 logger.exception('Webhook: body template render failed')
-                return NodeResult(
+                return ExecutorResult(
                     status=ExecStatus.FAIL,
                     context={'type': 'Webhook', 'ok': False, 'status': 'failed', 'error': f'Body template error: {exc!s}', 'outputs': {}},
                 )
@@ -102,7 +101,7 @@ class WebhookExecutor(AbstractNodeExecutor):
             resp = requests.request(method, url, headers=headers, timeout=timeout_secs, auth=auth, **data_kwargs)
         except Exception as exc:
             logger.exception('Webhook: request failed')
-            return NodeResult(
+            return ExecutorResult(
                 status=ExecStatus.FAIL,
                 context={'type': 'Webhook', 'ok': False, 'status': 'failed', 'error': f'HTTP request failed: {exc!s}', 'outputs': {}},
             )
@@ -162,7 +161,7 @@ class WebhookExecutor(AbstractNodeExecutor):
                 except Exception:
                     pass
 
-        return NodeResult(status=ExecStatus.PASSED, context=step_ctx, vars=(flat_vars or None))
+        return ExecutorResult(status=ExecStatus.PASSED, context=step_ctx, vars=(flat_vars or None))
 
 
 # ---------------------------- helpers ----------------------------
@@ -172,23 +171,6 @@ def _safe_int(v: Any, *, default: int) -> int:
         return int(v)
     except Exception:  # noqa: BLE001
         return default
-
-
-def _build_ctx(instance: WorkflowInstance) -> dict[str, Any]:
-    # Aggregate vars from prior steps (flat $vars map)
-    acc_vars: dict[str, Any] = {}
-    sc = instance.step_contexts or {}
-    prior = sc.get('$vars')
-    if isinstance(prior, dict):
-        acc_vars.update(prior)
-
-    return {
-        'workflow': {'id': str(instance.definition_id), 'name': instance.definition.name},
-        'instance': {'id': str(instance.id), 'state': instance.state, 'current_step': instance.current_step},
-        'payload': dict(instance.payload or {}),
-        'vars': acc_vars,
-    }
-
 
 def _select_source_value(resp: requests.Response, resp_json: Any | None, source: str) -> Any:
     if source == 'status':

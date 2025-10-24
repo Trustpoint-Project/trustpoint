@@ -35,10 +35,11 @@ urlpatterns = [
     path('api/devices/', DeviceListView.as_view(), name='api_devices'),
     path('api/triggers/', TriggerListView.as_view(), name='api_triggers'),
     path('api/mail-templates/', MailTemplateListView.as_view(), name='api_mail_templates'),
+    path('api/wizard-prefill/', WizardPrefillView.as_view(), name='api_wizard_prefill'),
 
     # load one definition for “edit” in the wizard
     path('api/definitions/<uuid:pk>/', DefinitionDetailView.as_view(), name='definition_detail'),
-    path('context-catalog/<uuid:instance_id>/', ContextCatalogView.as_view(), name='context_catalog'),
+    path('api/context-catalog/<uuid:instance_id>/', ContextCatalogView.as_view(), name='context_catalog'),
 
     # main UI
     path('', WorkflowDefinitionListView.as_view(), name='definition_list'),
@@ -46,7 +47,6 @@ urlpatterns = [
     path('definitions/<uuid:pk>/publish/', WorkflowDefinitionPublishView.as_view(), name='definition_publish'),
     path('definitions/<uuid:pk>/export/', WorkflowDefinitionExportView.as_view(), name='definition_export'),
     path('definitions/import/', WorkflowDefinitionImportView.as_view(), name='definition_import'),
-    path('api/wizard-prefill/', WizardPrefillView.as_view(), name='api_wizard_prefill'),
 
     # delete workflow definition
     path(

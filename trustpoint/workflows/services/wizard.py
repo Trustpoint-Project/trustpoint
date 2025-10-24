@@ -13,7 +13,7 @@ def transform_to_definition_schema(
     triggers: list[dict[str, str]],
     steps: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Build the full workflow-definition JSON from simple wizard input.
+    """Build the full workflow-definition JSON from wizard input.
 
     Args:
         triggers: List of items like ``{"protocol": str, "operation": str}``.
@@ -22,11 +22,11 @@ def transform_to_definition_schema(
     Returns:
         A dict with keys:
             - ``triggers``: the input triggers as-is.
-            - ``nodes``: list of nodes with auto-generated IDs ``step-1``, ``step-2``, ...
-            - ``transitions``: linear transitions wiring each node to the next on signal ``"next"``.
+            - ``steps``: list of steps with auto-generated IDs ``step-1``, ``step-2``, ...
+            - ``transitions``: linear transitions wiring each step to the next on signal ``"next"``.
     """
-    # 1) Nodes with auto IDs step-1, step-2, ...
-    nodes: list[dict[str, Any]] = [
+    # 1) Steps with auto IDs step-1, step-2, ...
+    steps_list: list[dict[str, Any]] = [
         {
             'id': f'step-{idx}',
             'type': step['type'],
@@ -38,15 +38,15 @@ def transform_to_definition_schema(
     # 2) Linear transitions (perf-friendly list comprehension)
     transitions: list[dict[str, str]] = [
         {
-            'from': nodes[i]['id'],
+            'from': steps_list[i]['id'],
             'on': 'next',
-            'to': nodes[i + 1]['id'],
+            'to': steps_list[i + 1]['id'],
         }
-        for i in range(len(nodes) - 1)
+        for i in range(len(steps_list) - 1)
     ]
 
     return {
         'triggers': triggers,
-        'nodes': nodes,
+        'steps': steps_list,
         'transitions': transitions,
     }

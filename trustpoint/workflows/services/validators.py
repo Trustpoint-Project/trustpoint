@@ -8,7 +8,7 @@ from typing import Any
 from django.utils.translation import gettext as _
 from util.email import normalize_addresses
 
-from workflows.services.executors.factory import NodeExecutorFactory
+from workflows.services.executors.factory import StepExecutorFactory
 from workflows.triggers import Triggers
 
 # ----------------------------- helpers -----------------------------
@@ -48,7 +48,7 @@ def _known_trigger_triples() -> set[tuple[str, str, str]]:
 
 
 def _registered_step_types() -> set[str]:
-    return {str(x) for x in NodeExecutorFactory.registered_types()}
+    return {str(x) for x in StepExecutorFactory.registered_types()}
 
 
 def _positive_int(value: Any) -> bool:

@@ -13,12 +13,12 @@ from django.db.models import JSONField
 # -------------------------------
 
 class WorkflowDefinition(models.Model):
-    """Blueprint of a workflow: triggers, nodes, transitions."""
+    """Blueprint of a workflow: triggers, steps, transitions."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)
     version = models.PositiveIntegerField(default=1)
     published = models.BooleanField(default=False)
-    definition = JSONField()  # {"triggers":[...], "nodes":[...]}
+    definition = JSONField()  # {"triggers":[...], "steps":[...]}
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -179,7 +179,7 @@ class EnrollmentRequest(models.Model):
 # -------------------------------
 
 class WorkflowInstance(models.Model):
-    """Tracks an active or completed run through a workflow's nodes."""
+    """Tracks an active or completed run through a workflow's steps."""
     # possible states
     STATE_STARTING = 'Starting'
     STATE_RUNNING = 'Running'
@@ -214,7 +214,7 @@ class WorkflowInstance(models.Model):
         help_text='Parent request for EST fan-out orchestration.',
     )
 
-    current_step = models.CharField(max_length=100, help_text='The node-ID we are currently at (e.g. "step-1")')
+    current_step = models.CharField(max_length=100, help_text='The step-ID we are currently at (e.g. "step-1")')
     state = models.CharField(max_length=32, choices=STATE_CHOICES, default=STATE_STARTING)
 
     payload = JSONField(help_text='Immutable inputs (eg. CSR fingerprint, CA/Domain/Device IDs)')
@@ -254,18 +254,18 @@ class WorkflowInstance(models.Model):
             self.save(update_fields=['finalized'])
 
     def get_steps(self) -> list[dict[str, Any]]:
-        """Return the ordered list of nodes from the workflow definition."""
-        return cast('list[dict[str, Any]]', self.definition.definition.get('nodes', []))
+        """Return the ordered list of steps from the workflow definition."""
+        return cast('list[dict[str, Any]]', self.definition.definition.get('steps', []))
 
     def get_current_step_index(self) -> int:
-        """Return the index of ``self.current_step`` in the node list, or raise."""
-        for idx, node in enumerate(self.get_steps()):
-            if node['id'] == self.current_step:
+        """Return the index of ``self.current_step`` in the steps list, or raise."""
+        for idx, step in enumerate(self.get_steps()):
+            if step['id'] == self.current_step:
                 return idx
         raise ValueError(f'Unknown current_step {self.current_step!r}')
 
     def get_next_step(self) -> str | None:
-        """Return the node-ID of the next step, or None if at the end."""
+        """Return the step-ID of the next step, or None if at the end."""
         idx = self.get_current_step_index()
         steps = self.get_steps()
         if idx + 1 < len(steps):
@@ -273,6 +273,6 @@ class WorkflowInstance(models.Model):
         return None
 
     def is_last_approval_step(self) -> bool:
-        """Return True if the current step is the last Approval node in the workflow."""
-        approval_ids = [node['id'] for node in self.get_steps() if node['type'] == 'Approval']
+        """Return True if the current step is the last Approval step in the workflow."""
+        approval_ids = [step['id'] for step in self.get_steps() if step['type'] == 'Approval']
         return bool(approval_ids and self.current_step == approval_ids[-1])

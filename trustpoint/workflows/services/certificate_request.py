@@ -98,8 +98,8 @@ class CertificateRequestHandler:
 
         for wf in definitions:
             meta = wf.definition or {}
-            nodes = meta.get('nodes', [])
-            if not nodes:
+            steps = meta.get('steps', [])
+            if not steps:
                 continue
 
             triggers = meta.get('triggers', [])
@@ -118,7 +118,7 @@ class CertificateRequestHandler:
 
             created = False
             if inst is None:
-                first_step = nodes[0]['id']
+                first_step = steps[0]['id']
                 full_payload = {
                     'protocol': protocol,
                     'operation': operation,

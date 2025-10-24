@@ -14,14 +14,14 @@ from util.email import (
 )
 
 from workflows.services.context import build_context
-from workflows.services.executors.factory import AbstractNodeExecutor
-from workflows.services.types import ExecStatus, NodeResult
+from workflows.services.executors.factory import AbstractStepExecutor
+from workflows.services.types import ExecStatus, ExecutorResult
 
 if TYPE_CHECKING:
     from workflows.models import WorkflowInstance
 
 
-class EmailExecutor(AbstractNodeExecutor):
+class EmailExecutor(AbstractStepExecutor):
     """Send an email using either a named template or a simple subject/body.
 
     Params (validated upstream):
@@ -33,9 +33,9 @@ class EmailExecutor(AbstractNodeExecutor):
       - cc, bcc: optional CSV/iterables
     """
 
-    def do_execute(self, instance: WorkflowInstance, _signal: str | None) -> NodeResult:  # pragma: no cover
-        node = next(n for n in instance.get_steps() if n['id'] == instance.current_step)
-        params: dict[str, Any] = dict(node.get('params') or {})
+    def do_execute(self, instance: WorkflowInstance, _signal: str | None) -> ExecutorResult:  # pragma: no cover
+        step = next(n for n in instance.get_steps() if n['id'] == instance.current_step)
+        params: dict[str, Any] = dict(step.get('params') or {})
 
         to = normalize_addresses(params.get('recipients'))
         cc = normalize_addresses(params.get('cc'))
@@ -43,7 +43,7 @@ class EmailExecutor(AbstractNodeExecutor):
         from_email = (params.get('from_email') or getattr(settings, 'DEFAULT_FROM_EMAIL', None)) or None
 
         if not to:
-            return NodeResult(
+            return ExecutorResult(
                 status=ExecStatus.FAIL,
                 context={
                     'type': 'Email',
@@ -65,7 +65,7 @@ class EmailExecutor(AbstractNodeExecutor):
         if template_key:
             tpl = MailTemplates.get_by_key(template_key)
             if not tpl:
-                return NodeResult(
+                return ExecutorResult(
                     status=ExecStatus.FAIL,
                     context={
                         'type': 'Email',
@@ -82,7 +82,7 @@ class EmailExecutor(AbstractNodeExecutor):
             try:
                 subject = dj.from_string(subj_tpl_src).render(template_ctx).strip()
             except TemplateSyntaxError as exc:
-                return NodeResult(
+                return ExecutorResult(
                     status=ExecStatus.FAIL,
                     context={
                         'type': 'Email',
@@ -93,7 +93,7 @@ class EmailExecutor(AbstractNodeExecutor):
                     },
                 )
             except Exception as exc:  # noqa: BLE001
-                return NodeResult(
+                return ExecutorResult(
                     status=ExecStatus.FAIL,
                     context={
                         'type': 'Email',
@@ -116,7 +116,7 @@ class EmailExecutor(AbstractNodeExecutor):
                 )
                 send_email(payload)
             except Exception as exc:  # noqa: BLE001
-                return NodeResult(
+                return ExecutorResult(
                     status=ExecStatus.FAIL,
                     context={
                         'type': 'Email',
@@ -133,7 +133,7 @@ class EmailExecutor(AbstractNodeExecutor):
                     },
                 )
 
-            return NodeResult(
+            return ExecutorResult(
                 status=ExecStatus.PASSED,
                 context={
                     'type': 'Email',
@@ -156,7 +156,7 @@ class EmailExecutor(AbstractNodeExecutor):
         subject_src = (params.get('subject') or '').strip()
         body_src = (params.get('body') or '').strip()
         if not subject_src or not body_src:
-            return NodeResult(
+            return ExecutorResult(
                 status=ExecStatus.FAIL,
                 context={
                     'type': 'Email',
@@ -175,7 +175,7 @@ class EmailExecutor(AbstractNodeExecutor):
             subject = dj.from_string(subj_tpl_src).render(template_ctx).strip()
             body = dj.from_string(body_tpl_src).render(template_ctx)
         except TemplateSyntaxError as exc:
-            return NodeResult(
+            return ExecutorResult(
                 status=ExecStatus.FAIL,
                 context={
                     'type': 'Email',
@@ -186,7 +186,7 @@ class EmailExecutor(AbstractNodeExecutor):
                 },
             )
         except Exception as exc:  # noqa: BLE001
-            return NodeResult(
+            return ExecutorResult(
                 status=ExecStatus.FAIL,
                 context={
                     'type': 'Email',
@@ -207,7 +207,7 @@ class EmailExecutor(AbstractNodeExecutor):
                 from_email=from_email,
             )
         except Exception as exc:  # noqa: BLE001
-            return NodeResult(
+            return ExecutorResult(
                 status=ExecStatus.FAIL,
                 context={
                     'type': 'Email',
@@ -218,7 +218,7 @@ class EmailExecutor(AbstractNodeExecutor):
                 },
             )
 
-        return NodeResult(
+        return ExecutorResult(
             status=ExecStatus.PASSED,
             context={
                 'type': 'Email',
