@@ -351,7 +351,7 @@ class PKCS11Token(models.Model, LoggerMixin):
 
     KEK_ENCRYPTION_KEY_LABEL = 'trustpoint-kek'
     DEK_CACHE_LABEL = 'trustpoint-dek-chache'
-    WRAPPED_DEK_LENGTH = 40  # Expected length of wrapped DEK in bytes
+    WRAPPED_DEK_LENGTH = 40  # Expected length of wrapped DEK in bytes (8 bytes IV + 32 bytes encrypted DEK)
 
     # Argon2 configuration
     ARGON2_TIME_COST = 3        # Number of iterations
@@ -557,19 +557,17 @@ class PKCS11Token(models.Model, LoggerMixin):
             )
 
             # Use AES encryption instead of key wrapping since AES-KEY-WRAP is not supported
-            # Generate a random IV for AES-ECB (though ECB doesn't use IV, we'll use it for compatibility)
-            iv = os.urandom(16)  # 16 bytes for AES block size
+            # Generate a random IV for AES-ECB (though ECB doesn't use IV, we'll prepend for consistency)
+            iv = os.urandom(8)  # 8 bytes for consistency
 
-            # Pad the DEK to AES block size (16 bytes) - manual padding for ECB
-            padded_dek = self._pad_to_block_size(dek_bytes, 16)
-
-            # Encrypt using AES-ECB (no IV needed but we'll prepend random bytes for security)
+            # DEK is already 32 bytes (multiple of 16), no padding needed for AES-ECB
+            # Encrypt using AES-ECB
             encrypted_data = wrap_key.encrypt(
-                padded_dek,
+                dek_bytes,
                 mechanism=pkcs11.Mechanism.AES_ECB
             )
 
-            # Return IV + encrypted data for consistency with other encryption methods
+            # Return IV + encrypted data (8 + 32 = 40 bytes)
             wrapped_data = iv + encrypted_data
 
         except pkcs11.NoSuchKey as e:
@@ -752,6 +750,9 @@ class PKCS11Token(models.Model, LoggerMixin):
     def _unwrap_dek(self) -> bytes:
         """Unwrap the DEK using the HSM AES key.
 
+        If a legacy wrapped DEK is detected, it will be automatically
+        migrated to the new format.
+
         Returns:
             bytes: The unwrapped DEK
 
@@ -770,6 +771,7 @@ class PKCS11Token(models.Model, LoggerMixin):
             session, wrap_key = self._open_session_and_get_wrap_key()
             dek_bytes = self._unwrap_with_key(wrap_key, wrapped_data)
             self._validate_dek_bytes(dek_bytes)
+
         except pkcs11.NoSuchKey as e:
             self._handle_no_such_key(e)
         except Exception as e:  # noqa: BLE001
@@ -808,24 +810,25 @@ class PKCS11Token(models.Model, LoggerMixin):
     def _unwrap_with_key(self, wrap_key: pkcs11.Key, wrapped_data: bytes) -> bytes:
         """Unwrap the DEK using the provided wrapping key.
 
+        Handles both new format (8 bytes IV + 32 bytes encrypted DEK) and
+        legacy format (16 bytes IV + 48 bytes padded encrypted DEK).
+
         Args:
             wrap_key (pkcs11.Key): The wrapping key.
             wrapped_data (bytes): The wrapped DEK data.
 
         Returns:
-            tuple[bytes, None]: The unwrapped DEK and None (no key object for encryption method).
+            bytes: The unwrapped DEK.
         """
         try:
-            # Extract IV and encrypted data (IV not used for ECB but kept for consistency)
-            encrypted_data = wrapped_data[16:]
 
-            # Decrypt using AES-ECB
-            decrypted_data = wrap_key.decrypt(
+            encrypted_data = wrapped_data[8:]
+
+            # Decrypt using AES-ECB (no unpadding needed as DEK is exactly 32 bytes)
+            return wrap_key.decrypt(
                 encrypted_data,
                 mechanism=pkcs11.Mechanism.AES_ECB
             )
-
-            return self._unpad_from_block_size(decrypted_data)
 
         except Exception as e:
             msg = f'Failed to unwrap DEK: {e}'

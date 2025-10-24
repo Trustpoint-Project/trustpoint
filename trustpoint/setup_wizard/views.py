@@ -854,7 +854,7 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
                 )
                 return False
 
-            # Wrap the recovered DEK with the existing KEK (no new KEK generation)
+            # Wrap the recovered DEK with the existing KEK
             try:
                 wrapped_dek = token.wrap_dek(dek_bytes)
 
@@ -934,26 +934,34 @@ class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
 
             call_command('dbrestore', '-z', '--noinput', '-I', str(temp_path))
 
-            # Execute trustpoint restore command
-            call_command('trustpointrestore')
-
-            # Handle backup password for DEK recovery if provided
+            # Handle backup password for DEK recovery FIRST if provided
+            # This must happen before trustpointrestore because it accesses encrypted fields
+            # The DEK needs to be recovered before trying to decrypt credentials
             if backup_password:
-                success = self._handle_backup_password_recovery(backup_password)
+                success = self.handle_backup_password_recovery(backup_password)
                 if not success:
                     messages.add_message(
                         request,
                         messages.ERROR,
                         'Database restored successfully, but backup password recovery failed.'
                     )
-                else:
-                    messages.add_message(
-                        request,
-                        messages.SUCCESS,
-                        f'Trustpoint restored successfully from {backup_file.name}'
-                    )
+                    return redirect('users:login')
+            else:
+                self.logger.warning(
+                    'No backup password provided, skipping DEK recovery. '
+                    'Encrypted fields may not be accessible.'
+                )
 
-                    self.logger.info('Backup restore completed successfully from file: %s', backup_file.name)
+            # Execute trustpoint restore command (after DEK recovery)
+            call_command('trustpointrestore')
+
+            messages.add_message(
+                request,
+                messages.SUCCESS,
+                f'Trustpoint restored successfully from {backup_file.name}'
+            )
+
+            self.logger.info('Backup restore completed successfully from file: %s', backup_file.name)
 
         except CommandError as e:
             messages.error(request, str(e))
