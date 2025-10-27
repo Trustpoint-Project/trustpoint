@@ -9,11 +9,17 @@ from django.urls import reverse_lazy
 from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
-from trustpoint_core.serializer import CertificateFormat
+from drf_yasg.utils import swagger_auto_schema
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from trustpoint_core.archiver import ArchiveFormat, Archiver
+from trustpoint_core.serializer import CertificateFormat
 
 from pki.models import CertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from pki.serializer.certificate import CertificateSerializer
+from pki.services.certificate import CertificateService
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTableMixin
 
@@ -265,3 +271,24 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
         response['Content-Disposition'] = 'attachment; filename="server_cert.pem"'
 
         return response
+
+class CertificateViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing Device instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+    queryset = CertificateModel.objects.all().order_by('-created_at')
+    serializer_class = CertificateSerializer
+    permission_classes: ClassVar = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary='List certificates',
+        operation_description='Retrieve certificates from the database.',
+        tags=['certificates']
+    )
+    def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+        """API endpoint to get all certificates."""
+        certificates = CertificateService().get_certificates()
+        serializer = CertificateSerializer(certificates, many=True)
+        return Response(serializer.data)

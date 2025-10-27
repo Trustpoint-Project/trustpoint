@@ -81,6 +81,7 @@ urlpatterns += [
 
     # API URLs
     path('api/', include('devices.api_urls')),
+    path('api/', include('pki.api_urls')),
 
     # JWT endpoints
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),

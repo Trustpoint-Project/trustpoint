@@ -162,7 +162,7 @@ class TruststoreAddForm(forms.Form):
                 error_message = 'Truststore with the provided name already exists.'
                 raise ValidationError(error_message)
 
-            trust_store_model = self._save_trust_store(
+            trust_store_model = self.save_trust_store(
                 unique_name=unique_name,
                 intended_usage=TruststoreModel.IntendedUsage(int(intended_usage)),
                 certificates=certs,
@@ -173,9 +173,10 @@ class TruststoreAddForm(forms.Form):
         self.cleaned_data['truststore'] = trust_store_model
 
     @staticmethod
-    def _save_trust_store(
+    def save_trust_store(
         unique_name: str, intended_usage: TruststoreModel.IntendedUsage, certificates: list[x509.Certificate]
     ) -> TruststoreModel:
+        """Save all certificates of a truststore."""
         saved_certs: list[CertificateModel] = []
 
         for certificate in certificates:
@@ -526,7 +527,6 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             err_msg = _('Failed to parse the private key file. Either wrong password or file corrupted.')
             raise ValidationError(err_msg) from exception
 
-
     def clean_ca_certificate(self) -> CertificateSerializer:
         """Validates and parses the uploaded Issuing CA certificate file.
 
@@ -633,7 +633,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             credential_serializer = CredentialSerializer.from_serializers(
                 private_key_serializer=private_key_serializer,
                 certificate_serializer=ca_certificate_serializer,
-                certificate_collection_serializer=ca_certificate_chain_serializer
+                certificate_collection_serializer=ca_certificate_chain_serializer,
             )
 
             pk = credential_serializer.private_key
@@ -643,7 +643,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
                 raise ValidationError(err_msg)
 
             if not unique_name:
-              unique_name = get_certificate_name(cert)
+                unique_name = get_certificate_name(cert)
 
             if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
                 error_message = 'Unique name is already taken. Choose another one.'
@@ -733,7 +733,6 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
             err_msg = _('Failed to parse the private key file. Either wrong password or file corrupted.')
             raise ValidationError(err_msg) from exception
 
-
     def clean_certificate(self) -> CertificateSerializer:
         """Validates and parses the uploaded certificate file.
 
@@ -774,8 +773,7 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
             if credential_qs.exists():
                 credential_in_db = credential_qs.first()
                 err_msg = (
-                    f'Owner Credential {credential_in_db.unique_name} is already configured '
-                    'with the same DevOwnerID.'
+                    f'Owner Credential {credential_in_db.unique_name} is already configured with the same DevOwnerID.'
                 )
                 raise ValidationError(err_msg)
 
@@ -846,9 +844,9 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
             self.cleaned_data = cleaned_data
 
             credential_serializer = CredentialSerializer.from_serializers(
-                private_key_serializer= private_key_serializer,
+                private_key_serializer=private_key_serializer,
                 certificate_serializer=certificate_serializer,
-                certificate_collection_serializer=certificate_chain_serializer
+                certificate_collection_serializer=certificate_chain_serializer,
             )
 
             OwnerCredentialModel.create_new_owner_credential(

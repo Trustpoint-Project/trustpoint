@@ -16,12 +16,18 @@ from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
+from drf_yasg.utils import swagger_auto_schema
+from rest_framework import status, viewsets
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from trustpoint_core.archiver import ArchiveFormat, Archiver
 from trustpoint_core.serializer import CertificateFormat
 
 from pki.forms import TruststoreAddForm
 from pki.models import DomainModel
 from pki.models.truststore import TruststoreModel
+from pki.serializer.truststore import TruststoreSerializer
+from pki.services.truststore import TruststoreService
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
@@ -298,3 +304,47 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
         messages.success(self.request, _('Successfully deleted {count} Truststore(s).').format(count=deleted_count))
 
         return response
+
+
+class TruststoreViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing Truststore instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+
+    queryset = TruststoreModel.objects.all().order_by('-created_at')
+    serializer_class = TruststoreSerializer
+    permission_classes: ClassVar = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary='Create a new truststore',
+        operation_description='Add a new truststore by providing its unique_name, intended_usage and trust_store_file.',
+        tags=['truststores'],
+    )
+    def create(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+        """API endpoint to create truststore."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        truststore = TruststoreService().create(
+            unique_name=serializer.validated_data.get('unique_name'),
+            intended_usage=serializer.validated_data['intended_usage'],
+            trust_store_file=serializer.validated_data['trust_store_file'],
+        )
+
+        return Response(
+            TruststoreSerializer(truststore).data,
+            status=status.HTTP_201_CREATED
+        )
+
+    @swagger_auto_schema(
+        operation_summary='List Truststores',
+        operation_description='Retrieve truststore from the database.',
+        tags=['truststores'],
+    )
+    def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+        """API endpoint to get all truststores."""
+        certificates = TruststoreService().get_all()
+        serializer = TruststoreSerializer(certificates, many=True)
+        return Response(serializer.data)
