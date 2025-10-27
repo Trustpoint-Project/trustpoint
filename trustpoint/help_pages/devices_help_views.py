@@ -121,27 +121,6 @@ class ApplicationCertificateProfile(enum.Enum):
 #  ----------------------------------- Certificate Lifecycle Management - Help Pages -----------------------------------
 
 
-class GetRedirectMixin:
-    """Provides a get method that redirects to the ULR returned by get_redirect_url."""
-
-    get_redirect_url: Callable[..., str]
-
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Pro.
-
-        Args:
-            request: The django HttpRequest object.
-            *args: Positional arguments are passed to self.get_redirect.url()
-            **kwargs: Keyword arguments are passed to self.get_redirect.url()
-
-        Returns:
-            The corresponding redirect.
-        """
-        __ = request
-
-        return HttpResponseRedirect(self.get_redirect_url(*args, **kwargs))
-
-
 class AbstractNoOnboardingCmpSharedSecretHelpView(PageContextMixin, DetailView[DeviceModel]):
     """Abstract help view for the case of no onboarding using CMP shared-secret."""
 
