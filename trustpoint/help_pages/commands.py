@@ -46,6 +46,17 @@ class CmpSharedSecretCommandBuilder:
 
     @staticmethod
     def get_tls_client_profile_command(host: str, pk: int, shared_secret: str, cred_number: int) -> str:
+        """Gets the TLS-Client profile command.
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            pk: The primary key of the device in question used as Key Identifier (KID).
+            shared_secret: The shared secret.
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
@@ -64,6 +75,17 @@ class CmpSharedSecretCommandBuilder:
 
     @staticmethod
     def get_tls_server_profile_command(host: str, pk: int, shared_secret: str, cred_number: int) -> str:
+        """Get the TLS-Server profile command.
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            pk: The primary key of the device in question used as Key Identifier (KID).
+            shared_secret: The shared secret.
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
@@ -83,6 +105,17 @@ class CmpSharedSecretCommandBuilder:
 
     @staticmethod
     def get_opc_ua_client_profile_command(host: str, pk: int, shared_secret: str, cred_number: int) -> str:
+        """Get the OPC-UA-Client profile command.
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            pk: The primary key of the device in question used as Key Identifier (KID).
+            shared_secret: The shared secret.
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
@@ -102,6 +135,17 @@ class CmpSharedSecretCommandBuilder:
 
     @staticmethod
     def get_opc_ua_server_profile_command(host: str, pk: int, shared_secret: str, cred_number: int) -> str:
+        """Get the OPC-UA-Server profile command.
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            pk: The primary key of the device in question used as Key Identifier (KID).
+            shared_secret: The shared secret.
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
@@ -121,6 +165,17 @@ class CmpSharedSecretCommandBuilder:
 
     @staticmethod
     def get_domain_credential_profile_command(host: str, pk: int, shared_secret: str, domain_name: str) -> str:
+        """Get the domain credential profile command.
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            pk: The primary key of the device in question used as Key Identifier (KID).
+            shared_secret: The shared secret.
+            domain_name: The name of the domain will be used in the file names to mitigate overriding other files.
+
+        Returns:
+            The constructed command.
+        """
         return (
             'openssl cmp \\\n'
             '-cmd ir \\\n'
@@ -143,6 +198,15 @@ class EstUsernamePasswordCommandBuilder:
 
     @staticmethod
     def get_tls_client_profile_command(cred_number: int) -> str:
+        """Get the TLS-Client profile command.
+
+        Args:
+            cred_number: The credential number - counter of issued credentials.
+
+
+        Returns:
+            The constructed command.
+        """
         return (
             'openssl req \\\n'
             '-new \\\n'
@@ -154,6 +218,15 @@ class EstUsernamePasswordCommandBuilder:
 
     @staticmethod
     def get_tls_server_profile_command(cred_number: int) -> str:
+        """Get the TLS-Server profile command.
+
+        Args:
+            cred_number: The credential number - counter of issued credentials.
+
+
+        Returns:
+            The constructed command.
+        """
         return (
             'openssl req \\\n'
             '-new \\\n'
@@ -166,6 +239,15 @@ class EstUsernamePasswordCommandBuilder:
 
     @staticmethod
     def get_opc_ua_client_profile_command(cred_number: int) -> str:
+        """Get the OPC-UA-Client profile command.
+
+        Args:
+            cred_number: The credential number - counter of issued credentials.
+
+
+        Returns:
+            The constructed command.
+        """
         return (
             'openssl req \\\n'
             '-new \\\n'
@@ -178,6 +260,15 @@ class EstUsernamePasswordCommandBuilder:
 
     @staticmethod
     def get_opc_ua_server_profile_command(cred_number: int) -> str:
+        """Get the OPC-UA-Server profile command.
+
+        Args:
+            cred_number: The credential number - counter of issued credentials.
+
+
+        Returns:
+            The constructed command.
+        """
         return (
             'openssl req \\\n'
             '-new \\\n'
@@ -191,6 +282,17 @@ class EstUsernamePasswordCommandBuilder:
 
     @staticmethod
     def get_curl_enroll_command(est_username: str, est_password: str, host: str, cred_number: int) -> str:
+        """Get the curl enroll command.
+
+        Args:
+            est_username: The EST username to use.
+            est_password:The EST password to use.
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
         return (
             f'curl --user "{ est_username }:{ est_password }" \\\n'
             f'--cacert trustpoint-tls-trust-store.pem \\\n'
@@ -202,6 +304,14 @@ class EstUsernamePasswordCommandBuilder:
 
     @staticmethod
     def get_conversion_der_pem_command(cred_number: int) -> str:
+        """Get the conversion DER to PEM command.
+
+        Args:
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
         return (
             'openssl x509 \\\n'
             '-inform DER \\\n'
@@ -212,17 +322,32 @@ class EstUsernamePasswordCommandBuilder:
 
     @staticmethod
     def get_domain_credential_profile_command() -> str:
-            return (
-                'openssl req \\\n'
-                '-new \\\n'
-                '-key domain-credential-key.pem \\\n'
-                '-outform DER \\\n'
-                '-out csr-domain-credential.der \\\n'
-                '-subj "/CN=Trustpoint-Domain-Credential"'
-            )
+        """Get the domain credential profile command.
+
+        Returns:
+             The constructed command.
+        """
+        return (
+            'openssl req \\\n'
+            '-new \\\n'
+            '-key domain-credential-key.pem \\\n'
+            '-outform DER \\\n'
+            '-out csr-domain-credential.der \\\n'
+            '-subj "/CN=Trustpoint-Domain-Credential"'
+        )
 
     @staticmethod
     def get_curl_enroll_domain_credential_command(est_username: str, est_password: str, host: str) -> str:
+        """Get the curl domain credential command.
+
+        Args:
+            est_username: The EST username to use.
+            est_password:The EST password to use.
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+
+        Returns:
+            The constructed command.
+        """
         return (
             f'curl --user "{ est_username }:{ est_password }" \\\n'
             f'--cacert trustpoint-tls-trust-store.pem \\\n'
@@ -234,6 +359,11 @@ class EstUsernamePasswordCommandBuilder:
 
     @staticmethod
     def get_domain_credential_conversion_der_pem_command() -> str:
+        """Get the domain credential conversion DER to PEM command.
+
+        Returns:
+             The constructed command.
+        """
         return (
             'openssl x509 \\\n'
             '-inform DER \\\n'
@@ -244,9 +374,19 @@ class EstUsernamePasswordCommandBuilder:
 
 
 class CmpClientCertificateCommandBuilder:
+    """Builds CMP client-certificate commands for different certificate profiles."""
 
     @staticmethod
     def get_tls_client_profile_command(host: str, cred_number: int) -> str:
+        """Gets the TLS-Client profile command.
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
@@ -266,6 +406,15 @@ class CmpClientCertificateCommandBuilder:
 
     @staticmethod
     def get_tls_server_profile_command(host: str, cred_number: int) -> str:
+        """Gets the TLS-Server profile command.
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
@@ -286,6 +435,15 @@ class CmpClientCertificateCommandBuilder:
 
     @staticmethod
     def get_opc_ua_client_profile_command(host: str, cred_number: int) -> str:
+        """Gets the OPC-UA-Client profile command.
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
@@ -306,6 +464,15 @@ class CmpClientCertificateCommandBuilder:
 
     @staticmethod
     def get_opc_ua_server_profile_command(host: str, cred_number: int) -> str:
+        """Gets the OPC-UA-Server profile command.
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
@@ -330,17 +497,31 @@ class EstClientCertificateCommandBuilder:
 
     @staticmethod
     def get_domain_credential_profile_command() -> str:
-            return (
-                'openssl req \\\n'
-                '-new \\\n'
-                '-key domain-credential-key.pem \\\n'
-                '-outform DER \\\n'
-                '-out csr-domain-credential.der \\\n'
-                '-subj "/CN=Trustpoint-Domain-Credential"'
-            )
+        """Get the domain credential profile command.
+
+        Returns:
+            The constructed command.
+        """
+        return (
+            'openssl req \\\n'
+            '-new \\\n'
+            '-key domain-credential-key.pem \\\n'
+            '-outform DER \\\n'
+            '-out csr-domain-credential.der \\\n'
+            '-subj "/CN=Trustpoint-Domain-Credential"'
+        )
 
     @staticmethod
     def get_curl_enroll_application_credential(cred_number: int, host: str) -> str:
+        """Get the curl enroll application credential command.
+
+        Args:
+            cred_number: The credential number - counter of issued credentials.
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+
+        Returns:
+            The constructed command.
+        """
         return (
             'curl '
             f'--cert domain-credential-certificate.pem \\\n'
