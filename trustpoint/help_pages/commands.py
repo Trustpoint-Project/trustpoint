@@ -49,7 +49,7 @@ class CmpSharedSecretCommandBuilder:
         """Gets the TLS-Client profile command.
 
         Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
             pk: The primary key of the device in question used as Key Identifier (KID).
             shared_secret: The shared secret.
             cred_number: The credential number - counter of issued credentials.
@@ -78,7 +78,7 @@ class CmpSharedSecretCommandBuilder:
         """Get the TLS-Server profile command.
 
         Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
             pk: The primary key of the device in question used as Key Identifier (KID).
             shared_secret: The shared secret.
             cred_number: The credential number - counter of issued credentials.
@@ -108,7 +108,7 @@ class CmpSharedSecretCommandBuilder:
         """Get the OPC-UA-Client profile command.
 
         Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
             pk: The primary key of the device in question used as Key Identifier (KID).
             shared_secret: The shared secret.
             cred_number: The credential number - counter of issued credentials.
@@ -138,7 +138,7 @@ class CmpSharedSecretCommandBuilder:
         """Get the OPC-UA-Server profile command.
 
         Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
             pk: The primary key of the device in question used as Key Identifier (KID).
             shared_secret: The shared secret.
             cred_number: The credential number - counter of issued credentials.
@@ -168,7 +168,7 @@ class CmpSharedSecretCommandBuilder:
         """Get the domain credential profile command.
 
         Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
             pk: The primary key of the device in question used as Key Identifier (KID).
             shared_secret: The shared secret.
             domain_name: The name of the domain will be used in the file names to mitigate overriding other files.
@@ -287,7 +287,7 @@ class EstUsernamePasswordCommandBuilder:
         Args:
             est_username: The EST username to use.
             est_password:The EST password to use.
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
             cred_number: The credential number - counter of issued credentials.
 
         Returns:
@@ -343,7 +343,7 @@ class EstUsernamePasswordCommandBuilder:
         Args:
             est_username: The EST username to use.
             est_password:The EST password to use.
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
 
         Returns:
             The constructed command.
@@ -381,7 +381,7 @@ class CmpClientCertificateCommandBuilder:
         """Gets the TLS-Client profile command.
 
         Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
             cred_number: The credential number - counter of issued credentials.
 
         Returns:
@@ -409,7 +409,7 @@ class CmpClientCertificateCommandBuilder:
         """Gets the TLS-Server profile command.
 
         Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
             cred_number: The credential number - counter of issued credentials.
 
         Returns:
@@ -438,7 +438,7 @@ class CmpClientCertificateCommandBuilder:
         """Gets the OPC-UA-Client profile command.
 
         Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
             cred_number: The credential number - counter of issued credentials.
 
         Returns:
@@ -467,7 +467,7 @@ class CmpClientCertificateCommandBuilder:
         """Gets the OPC-UA-Server profile command.
 
         Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
             cred_number: The credential number - counter of issued credentials.
 
         Returns:
@@ -517,7 +517,7 @@ class EstClientCertificateCommandBuilder:
 
         Args:
             cred_number: The credential number - counter of issued credentials.
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/...
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
 
         Returns:
             The constructed command.
