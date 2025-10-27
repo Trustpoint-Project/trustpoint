@@ -6,14 +6,13 @@ import logging
 import re
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, NoReturn, cast
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.core.management import call_command
-from django.core.management.base import CommandError
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.shortcuts import redirect
@@ -39,6 +38,8 @@ from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from trustpoint_core.serializer import CertificateSerializer
 
 
@@ -177,9 +178,6 @@ class StartupWizardRedirect:
 class HsmSetupMixin(LoggerMixin):
     """Mixin that provides common HSM setup functionality for both initial setup and auto restore."""
     request: HttpRequest
-    form_class = HsmSetupForm
-    template_name = 'setup_wizard/hsm_setup.html'
-    http_method_names = ('get', 'post')
 
     def form_valid(self, form: HsmSetupForm) -> HttpResponse:
         """Handle form submission for HSM setup."""
@@ -313,7 +311,7 @@ class HsmSetupMixin(LoggerMixin):
         else:
             err_msg = 'An unexpected error occurred during HSM setup.'
         messages.add_message(self.request, messages.ERROR, err_msg)
-        self.logger.exception(err_msg)
+        self.logger.exception('An error occurred during HSM setup')
         return redirect(self.get_error_redirect_url(), permanent=False)
 
     @staticmethod
@@ -455,8 +453,12 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
         }
         return error_messages.get(return_code, 'An unknown error occurred during crypto storage setup.')
 
-class SetupWizardHsmSetupView(HsmSetupMixin, FormView):
+class SetupWizardHsmSetupView(HsmSetupMixin, FormView[HsmSetupForm]):
     """View for handling HSM setup during the setup wizard."""
+
+    form_class = HsmSetupForm
+    template_name = 'setup_wizard/hsm_setup.html'
+    http_method_names = ('get', 'post')
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Handle request dispatch and wizard state validation."""
@@ -519,7 +521,7 @@ class SetupWizardHsmSetupView(HsmSetupMixin, FormView):
 
     def get_success_url(self) -> str:
         """Return the success URL after HSM setup."""
-        return reverse_lazy('setup_wizard:setup_mode')
+        return str(reverse_lazy('setup_wizard:setup_mode'))
 
     def get_error_redirect_url(self) -> str:
         """Return the URL to redirect to on error."""
@@ -533,7 +535,7 @@ class SetupWizardHsmSetupView(HsmSetupMixin, FormView):
         """Return the expected wizard state for this view."""
         return SetupWizardState.WIZARD_SETUP_HSM
 
-class BackupAutoRestoreHsmView(HsmSetupMixin, FormView):
+class BackupAutoRestoreHsmView(HsmSetupMixin, FormView[HsmSetupForm]):
     """View for handling HSM setup during auto restore process."""
 
     success_url = reverse_lazy('setup_wizard:auto_restore_password')
@@ -633,7 +635,7 @@ class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView[EmptyForm])
         """Handle GET requests for the TLS server credential selection page."""
         return super().get(*args, **kwargs)
 
-    def form_valid(self, form: EmptyForm) -> HttpResponse:
+    def form_valid(self, _: EmptyForm) -> HttpResponse:
         """Handle form submission for TLS server credential selection."""
         try:
             if 'generate_credential' in self.request.POST:
@@ -647,11 +649,6 @@ class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView[EmptyForm])
             )
             return redirect('setup_wizard:select_tls_server_credential', permanent=False)
 
-        except subprocess.CalledProcessError as exception:
-            err_msg = f'Setup mode script failed: {self._map_exit_code_to_message(exception.returncode)}'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return redirect('setup_wizard:select_tls_server_credential', permanent=False)
         except FileNotFoundError:
             err_msg = f'Setup mode script not found: {SCRIPT_WIZARD_SETUP_MODE}'
             messages.add_message(self.request, messages.ERROR, err_msg)
@@ -698,7 +695,7 @@ class SetupWizardRestoreOptionsView(TemplateView):
 
         return super().get(*args, **kwargs)
 
-class SetupWizardBackupPasswordView(LoggerMixin, FormView):
+class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
     """View for setting up backup password for PKCS#11 token during the setup wizard.
 
     This view allows users to set a backup password that can be used to recover
@@ -766,27 +763,37 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView):
             self.logger.info('Backup password set for token: %s', token.label)
             return super().form_valid(form)
 
-        except Exception as exc:
-            error_mapping = {
-                subprocess.CalledProcessError: lambda e, _: (
-                    f'Backup password script failed: '
-                    f'{self._map_exit_code_to_message(e.returncode)}'
-                ),
-                FileNotFoundError: lambda _, __: f'Backup password script not found: {SCRIPT_WIZARD_BACKUP_PASSWORD}',
-                PKCS11Token.DoesNotExist: lambda e, _: str(e),
-                ValueError: lambda e, _: f'Invalid input: {e!s}',
-                RuntimeError: lambda e, _: f'Failed to set backup password: {e!s}',
-            }
-            default_handler: Callable[[BaseException, Any], str] = lambda _, __: (  # noqa: E731
-                'An unexpected error occurred while setting up backup password.'
-            )
-            handler = error_mapping.get(type(exc), default_handler)
-            messages.add_message(self.request, messages.ERROR, handler(exc, None))
-            self.logger.exception(handler(exc, None))
-
-            if isinstance(exc, (ValueError, RuntimeError)):
-                return self.form_invalid(form)
+        except subprocess.CalledProcessError as exc:
+            err_msg = f'Backup password script failed: {self._map_exit_code_to_message(exc.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
             return redirect('setup_wizard:backup_password', permanent=False)
+        except FileNotFoundError:
+            err_msg = f'Backup password script not found: {SCRIPT_WIZARD_BACKUP_PASSWORD}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:backup_password', permanent=False)
+        except PKCS11Token.DoesNotExist as exc:
+            err_msg = str(exc)
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:backup_password', permanent=False)
+        except ValueError as exc:
+            err_msg = f'Invalid input: {exc!s}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return self.form_invalid(form)
+        except RuntimeError as exc:
+            err_msg = f'Failed to set backup password: {exc!s}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return self.form_invalid(form)
+        except Exception as exc:
+            # General exception handling with specific messages
+            err_msg = f'An unexpected error occurred: {exc!s}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return self.form_invalid(form)
 
     def form_invalid(self, form: BackupPasswordForm) -> HttpResponse:
         """Handle invalid form submission."""
@@ -904,92 +911,103 @@ class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
     """Upload a dump file and restore the database from it with optional backup password."""
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        """Handle POST requests to upload a backup file and restore the database.
-
-        Args:
-            request (HttpRequest): The HTTP request containing the uploaded backup file.
-
-        Returns:
-            HttpResponse: A redirect to the appropriate page based on the outcome.
-        """
+        """Handle POST requests to upload a backup file and restore the database."""
         form = BackupRestoreForm(request.POST, request.FILES)
 
         if not form.is_valid():
-            for field, errors in form.errors.items():
-                for error in errors:
-                    messages.add_message(request, messages.ERROR, f'{field}: {error}')
-            return redirect('setup_wizard:restore_options')
+            return self._handle_invalid_form()
 
         backup_file = form.cleaned_data['backup_file']
         backup_password = form.cleaned_data.get('backup_password')
 
+        try:
+            return self._process_backup_file(backup_file, backup_password)
+        except subprocess.CalledProcessError as exception:
+            err_msg = f'Restore script failed: {self._map_exit_code_to_message(exception.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('users:login')
+        except FileNotFoundError:
+            err_msg = 'Restore script not found.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('users:login')
+        except Exception:
+            err_msg = 'An unexpected error occurred during the restore process.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('users:login')
+
+    def _handle_invalid_form(self) -> HttpResponse:
+        """Handle invalid form submission."""
+        messages.add_message(
+            self.request,
+            messages.ERROR,
+            'Please correct the errors below and try again.'
+        )
+        return redirect('users:login')
+
+    def _process_backup_file(self, backup_file: Any, backup_password: str | None) -> HttpResponse:
+        """Process the uploaded backup file."""
         temp_dir = settings.BACKUP_FILE_PATH
         temp_path = temp_dir / backup_file.name
-  
+
         try:
-            # Save uploaded file
-            with temp_path.open('wb+') as f:
-                for chunk in backup_file.chunks():
-                    f.write(chunk)
-
-            call_command('dbrestore', '-z', '--noinput', '-I', str(temp_path))
-
-            # Handle backup password for DEK recovery FIRST if provided
-            # This must happen before trustpointrestore because it accesses encrypted fields
-            # The DEK needs to be recovered before trying to decrypt credentials
-            if backup_password:
-                success = self.handle_backup_password_recovery(backup_password)
-                if not success:
-                    messages.add_message(
-                        request,
-                        messages.ERROR,
-                        'Database restored successfully, but backup password recovery failed.'
-                    )
-                    return redirect('users:login')
-            else:
-                self.logger.warning(
-                    'No backup password provided, skipping DEK recovery. '
-                    'Encrypted fields may not be accessible.'
-                )
-
-            # Execute trustpoint restore command (after DEK recovery)
-            call_command('trustpointrestore')
-
-            messages.add_message(
-                request,
-                messages.SUCCESS,
-                f'Trustpoint restored successfully from {backup_file.name}'
-            )
-
-            self.logger.info('Backup restore completed successfully from file: %s', backup_file.name)
-
-        except CommandError as e:
-            messages.error(request, str(e))
-        except FileNotFoundError as e:
-            err_msg = f'Backup file not found: {backup_file.name}'
-            self.logger.exception(err_msg)
-            messages.error(request, err_msg)
-        except PermissionError:
-            err_msg = f'Permission denied accessing backup file: {backup_file.name}'
-            self.logger.exception(err_msg)
-            messages.error(request, err_msg)
-        except subprocess.CalledProcessError:
-            err_msg = f'Backup processing failed (pg_restore/awk) for file: {backup_file.name}'
-            self.logger.exception(err_msg)
-            messages.error(request, err_msg)
-        except Exception as e:
-            err_msg = f'Unexpected error restoring database from {backup_file.name}: {e}'
-            self.logger.exception(err_msg)
-            messages.error(request, err_msg)
+            self._save_backup_file(backup_file, temp_path)
+            self._restore_database(backup_file, backup_password)
         finally:
-            # Clean up temporary file
-            try:
-                if temp_path.exists():
-                    temp_path.unlink()
-            except Exception as e:  # noqa: BLE001
-                self.logger.warning('Failed to clean up temporary file %s: %s', temp_path, e)
+            self._cleanup_temp_file(temp_path)
 
         return redirect('users:login')
+
+    def _save_backup_file(self, backup_file: Any, temp_path: Path) -> None:
+        """Save the uploaded backup file to a temporary location."""
+        with temp_path.open('wb+') as f:
+            for chunk in backup_file.chunks():
+                f.write(chunk)
+
+        call_command('dbrestore', '-z', '--noinput', '-I', str(temp_path))
+
+    def _restore_database(self, backup_file: Any, backup_password: str | None) -> None:
+        """Restore the database from the backup file."""
+        if backup_password:
+            success = self.handle_backup_password_recovery(backup_password)
+            if not success:
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    'Database restored successfully, but backup password recovery failed.'
+                )
+        else:
+            self.logger.warning(
+                'No backup password provided, skipping DEK recovery. '
+                'Encrypted fields may not be accessible.'
+            )
+        call_command('trustpointrestore')
+
+        messages.add_message(
+            self.request,
+            messages.SUCCESS,
+            f'Trustpoint restored successfully from {backup_file.name}'
+        )
+
+    def _cleanup_temp_file(self, temp_path: Path) -> None:
+        """Clean up the temporary backup file."""
+        try:
+            if temp_path.exists():
+                temp_path.unlink()
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning('Failed to clean up temporary file %s: %s', temp_path, e)
+
+    @staticmethod
+    def _map_exit_code_to_message(return_code: int) -> str:
+        """Map script exit codes to meaningful error messages."""
+        error_messages = {
+            1: 'State file WIZARD_SETUP_MODE not found.',
+            3: 'Failed to remove the WIZARD_SETUP_MODE state file.',
+            4: 'Failed to create the WIZARD_COMPLETED state file.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred during the restore process.')
 
 class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, FormView[PasswordAutoRestoreForm]):
     """View for handling backup password entry during auto restore process.
@@ -1583,14 +1601,14 @@ class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
         """Handle form submission for demo data setup."""
         try:
             if 'without-demo-data' in self.request.POST:
-                messages.add_message(self.request, messages.INFO, 'Setup Trustpoint with no demo data')
                 self._execute_notifications()
                 execute_shell_script(SCRIPT_WIZARD_DEMO_DATA)
+                messages.add_message(self.request, messages.SUCCESS, 'Setup Trustpoint with no demo data')
             elif 'with-demo-data' in self.request.POST:
-                messages.add_message(self.request, messages.INFO, 'Setup Trustpoint with demo data')
                 self._add_demo_data()
                 self._execute_notifications()
                 execute_shell_script(SCRIPT_WIZARD_DEMO_DATA)
+                messages.add_message(self.request, messages.SUCCESS, 'Setup Trustpoint with demo data')
             else:
                 messages.add_message(self.request, messages.ERROR, 'Invalid option selected for demo data setup.')
                 return redirect('setup_wizard:demo_data', permanent=False)

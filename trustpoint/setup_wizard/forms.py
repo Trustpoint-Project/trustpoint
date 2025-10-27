@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 from django import forms
 from django.contrib.auth.password_validation import validate_password
