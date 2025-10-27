@@ -22,9 +22,7 @@
                 <div>{{ cert.basic_constraints_extension.path_length_constraint }}</div>
             </div>
         </div>
-    {% else %}
-<div class="tp-kvp-list">
-    <div>{% trans 'No Basic Constraints Extension' %}</div>
-            </div>
+
+
     {% endif %}
 {% endblock basic_constraints_extension %}
