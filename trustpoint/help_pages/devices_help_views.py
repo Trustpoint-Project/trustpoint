@@ -69,11 +69,11 @@ class ApplicationCertificateProfile(enum.Enum):
     OPC_UA_SERVER = ApplicationCertificateProfileData('opc-ua-server', 'OPC-UA-Server Certificate')
 
     @property
-    def name(self) -> str:
-        """Return the name of the profile.
+    def profile_name(self) -> str:
+        """Return the profile name of the profile.
 
         Returns:
-            The name of the profile.
+            The profile name of the profile.
         """
         return self.value.name
 
@@ -87,14 +87,14 @@ class ApplicationCertificateProfile(enum.Enum):
         return self.value.label
 
     @classmethod
-    def from_name(cls, name: str) -> Self:
-        """Gets the ApplicationCertificateProfile matching the name.
+    def from_profile_name(cls, name: str) -> Self:
+        """Gets the ApplicationCertificateProfile matching the profile name.
 
         Returns:
             The matching ApplicationCertificateProfile.
 
         Raises:
-            ValueError: If no matching ApplicationCertifiateProfile is found for the name provided.
+            ValueError: If no matching ApplicationCertifiateProfile is found for the profile name provided.
         """
         for member in cls:
             if member.value.name == name:
@@ -113,7 +113,7 @@ class ApplicationCertificateProfile(enum.Enum):
             ValueError: If no matching ApplicationCertifiateProfile is found for the label provided.
         """
         for member in cls:
-            if member.value.name == label:
+            if member.value.label == label:
                 return member
         err_msg = f'No ApplicationCertificateProfile with name={label} found.'
         raise ValueError(err_msg)
