@@ -19,7 +19,7 @@ from devices.views import (
     DeviceWithoutDomainErrorMsg,
     PublicKeyInfoMissingErrorMsg,
 )
-from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import Http404
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext as _non_lazy
@@ -44,7 +44,6 @@ from trustpoint.page_context import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from typing import Any, Self
 
     from django.utils.safestring import SafeString
