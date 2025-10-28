@@ -432,6 +432,13 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         return self.CertificateStatus.OK
 
     @property
+    def days_left(self) -> int:
+        """Returns number of days from now until not_valid_after. If expired, returns 0."""
+        now = datetime.datetime.now(datetime.UTC)
+        if self.not_valid_after > now:
+            return (self.not_valid_after - now).days
+        return 0
+    @property
     def is_ca(self) -> bool:
         """Check if the certificate is a CA certificate."""
         return self.basic_constraints_extension is not None and self.basic_constraints_extension.ca
