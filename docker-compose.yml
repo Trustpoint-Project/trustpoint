@@ -10,22 +10,12 @@ services:
       - "443:443"
     depends_on:
       - postgres
-      - softhsm
-    volumes:
-      - ./trustpoint/settings:/var/www/html/trustpoint/trustpoint/settings
     environment:
       POSTGRES_DB: "trustpoint_db"
-      POSTGRES_USER_FILE: /run/secrets/db_user
-      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      DATABASE_USER: "admin"
+      DATABASE_PASSWORD: "testing321"
       DATABASE_HOST: "postgres"
       DATABASE_PORT: "5432"
-      HSM_PIN_FILE: /run/secrets/hsm_pin
-      HSM_SO_PIN_FILE: /run/secrets/hsm_so_pin
-    secrets:
-      - db_user
-      - db_password
-      - hsm_pin
-      - hsm_so_pin
 
   postgres:
     build:
@@ -38,31 +28,9 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      POSTGRES_USER_FILE: /run/secrets/db_user
-      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_USER: "admin"
+      POSTGRES_PASSWORD: "testing321"
       POSTGRES_DB: "trustpoint_db"
-    secrets:
-      - db_user
-      - db_password
-
-  softhsm:
-    build:
-      context: .
-      dockerfile: docker/softhsm/Dockerfile
-    container_name: softhsm
-    ports:
-      - "5657:5657"
-
-secrets:
-  db_user:
-    file: db_user.txt
-  db_password:
-    file: db_password.txt
-  hsm_pin:
-    file: hsm_pin.txt
-  hsm_so_pin:
-    file: hsm_so_pin.txt
-
 
 volumes:
   postgres_data:

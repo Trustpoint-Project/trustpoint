@@ -50,5 +50,5 @@ Support
 -------
 
 Trustpoint is provided as a free, open-source project for users who wish to self-host the software.
-If you run into an issue or have a question, the forum is the ideal starting point for support.
-Both the Trustpoint community and core developers regularly monitor the forum and respond to posts.
+If you run into an issue or have a question, Github Issues is the ideal starting point for support.
+Both the Trustpoint community and core developers regularly monitor the repository and respond to posts.

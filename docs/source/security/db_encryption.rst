@@ -4,7 +4,7 @@ Database Encryption in Trustpoint
 Overview
 --------
 
-Trustpoint implements a robust database encryption system to protect sensitive data such as EST passwords CMP shared secrets or private Keys for credentials which were created in Trustpoint. The system uses a two-tier key management approach with PKCS#11 hardware security module (HSM) integration, employing AES-256 encryption.
+Trustpoint implements a robust database encryption system to protect sensitive data such as EST passwords, CMP shared secrets, and private keys for credentials created in Trustpoint. The system uses a two-tier key management approach with PKCS#11 hardware security module (HSM) integration, employing AES-256-GCM encryption.
 
 Key Management Architecture
 ---------------------------
@@ -13,7 +13,7 @@ The encryption system follows a hierarchical key structure:
 
 1. **Key Encryption Key (KEK)** - A 256-bit AES key stored in the PKCS#11 HSM
 2. **Data Encryption Key (DEK)** - A 256-bit AES key encrypted by the KEK and stored in the database
-3. **Field Encryption** - Individual database fields encrypted using the DEK with AES-256-CBC
+3. **Field Encryption** - Individual database fields encrypted using the DEK with AES-256-GCM
 
 Key Generation Process
 ----------------------
@@ -36,9 +36,10 @@ DEK Generation and Wrapping
 The DEK is generated and wrapped during initial setup:
 
 1. Generate a random 256-bit key
-2. Create a temporary session object in the PKCS#11 token
-3. Use the KEK to wrap the DEK using AES Key Wrap mechanism
-4. Store the wrapped DEK in the database ``encrypted_dek`` field
+2. Open a session with the PKCS#11 token
+3. Use the KEK to wrap the DEK using AES-ECB encryption
+4. Prepend an 8-byte random IV to the encrypted DEK
+5. Store the wrapped DEK (40 bytes: 8-byte IV + 32-byte encrypted DEK) in the database ``encrypted_dek`` field
 
 Runtime Key Management
 ----------------------
@@ -53,7 +54,8 @@ When the Trustpoint container starts:
    
    - Open session with the PKCS#11 token
    - Retrieve the KEK using label ``trustpoint-kek``
-   - Unwrap the stored ``encrypted_dek`` using AES Key Wrap
+   - Extract the 8-byte IV and 32-byte encrypted DEK from ``encrypted_dek``
+   - Decrypt using AES-ECB with the KEK
    - Cache the decrypted DEK indefinitely
 
 3. The DEK remains in memory cache for the container's lifetime
@@ -61,10 +63,10 @@ When the Trustpoint container starts:
 DEK Caching Strategy
 ~~~~~~~~~~~~~~~~~~~~
 
-- **Cache Key**: ``trustpoint-dek-cache`` 
+- **Cache Key**: ``trustpoint-dek-chache-{token_label}`` (token-specific)
 - **Cache Duration**: Indefinite (``None`` timeout)
 - **Cache Backend**: Django's configured cache
-- **Security**: DEK is cleared from cache when PKCS11Token object is destroyed
+- **Security**: DEK can be manually cleared using ``clear_dek_cache()`` method
 
 Database Field Encryption
 --------------------------
@@ -82,24 +84,27 @@ Encryption Process
 
 When saving data to encrypted fields:
 
-1. **Retrieve DEK**: Get the cached DEK from the PKCS#11 token
-2. **Generate IV**: Create a random 16-byte initialization vector
-3. **Padding**: Apply PKCS#7 padding to the plaintext
-4. **Encryption**: Encrypt using AES-256-CBC with the DEK and IV
-5. **Encoding**: Base64 encode the concatenated IV + ciphertext
-6. **Storage**: Store the encoded result in the database
+1. **Check Encryption**: Verify if HSM-based encryption is enabled via ``KeyStorageConfig``
+2. **Retrieve DEK**: Get the cached DEK from the PKCS#11 token
+3. **Generate Nonce**: Create a random 12-byte nonce for GCM mode
+4. **Padding**: Add random padding (0-15 bytes) to obscure length patterns
+5. **Encryption**: Encrypt using AES-256-GCM with the DEK and nonce
+6. **Combine**: Concatenate nonce (12 bytes) + authentication tag (16 bytes) + ciphertext
+7. **Encoding**: Base64 encode the combined data
+8. **Storage**: Store the encoded result in the database
 
 Decryption Process
 ~~~~~~~~~~~~~~~~~~
 
 When reading data from encrypted fields:
 
-1. **Retrieve DEK**: Get the cached DEK
-2. **Decode**: Base64 decode the stored value
-3. **Extract Components**: Separate IV (first 16 bytes) and ciphertext
-4. **Decryption**: Decrypt using AES-256-CBC
-5. **Unpadding**: Remove PKCS#7 padding
-6. **Return**: Return the original plaintext
+1. **Check Encryption**: Verify if HSM-based encryption is enabled
+2. **Retrieve DEK**: Get the cached DEK
+3. **Decode**: Base64 decode the stored value
+4. **Extract Components**: Separate nonce (first 12 bytes), authentication tag (next 16 bytes), and ciphertext
+5. **Decryption**: Decrypt using AES-256-GCM and verify authentication tag
+6. **Unpadding**: Remove random padding based on last byte value
+7. **Return**: Return the original plaintext
 
 Protected Data Types
 --------------------
@@ -109,8 +114,15 @@ The following sensitive fields use database encryption:
 Device Model Fields
 ~~~~~~~~~~~~~~~~~~~
 
-- ``est_password`` (EncryptedCharField) - EST authentication passwords
-- ``cmp_shared_secret`` (EncryptedCharField) - CMP protocol shared secrets
+- ``est_password`` (EncryptedCharField, max_length=128) - EST authentication passwords
+- ``cmp_shared_secret`` (EncryptedCharField, max_length=128) - CMP protocol shared secrets
+
+Credential Model Fields
+~~~~~~~~~~~~~~~~~~~~~~~
+
+- ``private_key`` (EncryptedCharField, max_length=65536) - PEM-encoded private keys for credentials created in Trustpoint
+
+**Note**: Encryption is only active when ``KeyStorageConfig.storage_type`` is set to ``SOFTHSM`` or ``PHYSICAL_HSM``. When using software-based key storage, data is stored in plaintext.
 
 UML Sequence Diagram
 --------------------
@@ -149,16 +161,19 @@ UML Sequence Diagram
    Token --> Field: dek
    
    == Encryption Phase ==
-   Field -> Field: os.urandom(16) // Generate IV
-   Field -> Field: AES-256-CBC encrypt(data, dek, iv)
-   Field -> Field: base64.encode(iv + ciphertext)
+   Field -> Field: os.urandom(12) // Generate nonce
+   Field -> Field: Add random padding (0-15 bytes)
+   Field -> Field: AES-256-GCM encrypt(padded_data, dek, nonce)
+   Field -> Field: Get authentication tag
+   Field -> Field: base64.encode(nonce + tag + ciphertext)
    Field -> DB: store encrypted_value
    
    == Decryption Phase ==
    DB --> Field: encrypted_value
    Field -> Field: base64.decode(encrypted_value)
-   Field -> Field: split iv, ciphertext
-   Field -> Field: AES-256-CBC decrypt(ciphertext, dek, iv)
+   Field -> Field: split nonce, tag, ciphertext
+   Field -> Field: AES-256-GCM decrypt(ciphertext, dek, nonce, tag)
+   Field -> Field: Verify authentication and remove padding
    Field --> Field: plaintext
    
    @enduml
@@ -194,7 +209,7 @@ Security Properties
 **Key Management**
   - 256-bit DEK provides strong cryptographic security
   - KEK stored in HSM prevents key extraction
-  - AES Key Wrap (RFC 3394) used for DEK protection
+  - AES-ECB encryption used for DEK wrapping (8-byte IV prepended for format consistency)
 
 Field Encryption/Decryption Workflow
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -263,9 +278,11 @@ HSM Unavailable
 
 If the PKCS#11 token becomes unavailable:
 
-- Encrypted fields will raise ``ValidationError`` during access
+- Encrypted fields will raise ``ValidationError`` during read/write operations
 - The system logs detailed error messages for debugging
-- Cache is automatically cleared to prevent stale key usage
+- Manual intervention required to restore HSM connectivity
+
+**Note**: The DEK remains cached in memory, so existing processes can continue using encrypted fields until the application restarts.
 
 Corrupted DEK
 ~~~~~~~~~~~~~
@@ -273,8 +290,9 @@ Corrupted DEK
 If the wrapped DEK becomes corrupted:
 
 - The system detects invalid wrapped data during unwrapping
-- Error messages indicate potential data corruption
-- Manual DEK regeneration may be required (data loss will occur)
+- Error messages indicate potential data corruption  
+- Manual DEK regeneration using ``generate_and_wrap_dek()`` will be required
+- **Warning**: Regenerating the DEK will make all previously encrypted data unrecoverable
 
 Key Rotation
 ~~~~~~~~~~~~

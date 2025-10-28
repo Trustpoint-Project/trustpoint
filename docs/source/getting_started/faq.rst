@@ -20,7 +20,6 @@ The development team comprises:
 - **Companies:**
   - achelos
   - asvin
-  - Keyfactor
 
 - **Research Institutions and Universities:**
   - Campus Schwarzwald

@@ -42,10 +42,14 @@ RSA Key Operations
 - Supported hash algorithms: SHA-256, SHA-384, SHA-512, SHA-224
 - Pre-hashed data signing capability
 
-**Public Key Operations**:
+**Encryption/Decryption Operations**:
+- RSA-OAEP padding support for encryption/decryption
+- PKCS#1 v1.5 padding support
 - Public key extraction for certificate generation
-- RSA encryption/decryption operations
-- Key wrapping and unwrapping
+
+**Key Import**:
+- Import existing RSA private keys from cryptography library to HSM
+- Keys stored as non-extractable in HSM
 
 EC (Elliptic Curve) Key Operations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -57,14 +61,17 @@ EC (Elliptic Curve) Key Operations
 
 **Signing Operations**:
 - ECDSA signature generation
-- Deterministic ECDSA (RFC 6979) support
-- Hash algorithm flexibility (SHA-256, SHA-384, SHA-512)
+- Supported hash algorithms: SHA-256, SHA-384, SHA-512
+- Data is hashed before signing (pre-hashed data not supported)
 - ASN.1 DER encoded signatures
+- Mechanism mapping: ECDSA_SHA256, ECDSA_SHA384, ECDSA_SHA512
 
 **Key Management**:
 - Named curve support via OID mapping
 - Public key point extraction
-- EC parameter validation
+- Key import from cryptography library to HSM
+- Keys marked as non-extractable (EXTRACTABLE=False)
+- Encryption/decryption not supported (EC is for signing only)
 
 AES Key Operations
 ~~~~~~~~~~~~~~~~~~
@@ -74,10 +81,11 @@ AES Key Operations
 - Supported key lengths: 128, 192, 256 bits
 - Primary use for KEK storage
 
-**Key Wrapping**:
-- AES Key Wrap (RFC 3394) mechanism
+**Encryption/Decryption Operations**:
+- AES-ECB encryption for DEK wrapping
 - DEK wrapping and unwrapping operations
-- Secure key transport between software and HSM
+- Note: AES Key Wrap (RFC 3394) not supported by SoftHSM2
+- 8-byte random IV prepended to encrypted data for format consistency
 
 General HSM Operations
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -98,9 +106,14 @@ General HSM Operations
 - Label-based key retrieval
 
 **Random Number Generation**:
-- Hardware random number generation
-- Entropy seeding capabilities
-- Cryptographically secure randomness
+- Uses OS-level randomness (``os.urandom()``) for DEK generation
+- SoftHSM provides cryptographically secure random generation
+- Used for nonce/IV generation in encryption operations
+
+**Digest Operations**:
+- Hardware-accelerated hashing via HSM
+- Supported algorithms: SHA-224, SHA-256, SHA-384, SHA-512
+- Mechanism mapping: SHA224, SHA256, SHA384, SHA512
 
 Architecture
 ------------
@@ -156,9 +169,10 @@ Key Components
 - Separate database container with encrypted fields
 
 **Key Management**:
-- KEK stored in HSM, never exported
-- DEK wrapped by KEK, cached at startup
-- Database fields encrypted with AES-256-CBC
+- KEK stored in HSM, marked as non-extractable (SENSITIVE=True, EXTRACTABLE=False)
+- DEK wrapped by KEK using AES-ECB, cached at startup
+- Database fields encrypted with AES-256-GCM
+- Token-specific cache keys: ``trustpoint-dek-chache-{token_label}``
 
 Docker Integration
 ------------------
@@ -180,3 +194,4 @@ secrets:
 environment:
   HSM_PIN_FILE: /run/secrets/hsm_pin
   HSM_SO_PIN_FILE: /run/secrets/hsm_so_pin
+````
