@@ -64,28 +64,34 @@ class CredentialDownloadForm(forms.Form):
 
     password = forms.CharField(
         label=_('Password'),
-        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'}),
+        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password','id': 'id_password'}),
         help_text=_('Must be at least %d characters long.') % PASSWORD_MIN_LENGTH,
-    )
-    confirm_password = forms.CharField(
-        label=_('Confirm Password'), widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'})
+        required=False,
     )
 
-    def clean(self) -> dict[str, Any]:
-        """Checks if the passwords match and if the password is long enough."""
-        cleaned_data = self.cleaned_data
-        password = cleaned_data.get('password')
-        confirm_password = cleaned_data.get('confirm_password')
+    @staticmethod
+    def get_suggested_password(length: int = 16) -> str:
+        """Generates a secure suggested password.
 
-        if password and confirm_password:
-            if password != confirm_password:
-                self.add_error('confirm_password', _('Passwords do not match.'))
+        Args:
+            length: Length of the password to generate. Defaults to 16.
 
-            pass_to_short_err_msg = _('Password must be at least %d characters long.') % PASSWORD_MIN_LENGTH
-            if len(password) < PASSWORD_MIN_LENGTH:
-                self.add_error('password', pass_to_short_err_msg)
+        Returns:
+            A secure random password string.
+        """
+        return secrets.token_urlsafe(length)
 
-        return cleaned_data
+    def clean_password(self) -> str:
+        """Validates that the password meets minimum length requirements if provided."""
+        password = self.cleaned_data.get('password', '').strip()
+
+        # Only validate length if a password is actually provided
+        if password and len(password) < PASSWORD_MIN_LENGTH:
+            err_msg = _('Password must be at least %d characters long.') % PASSWORD_MIN_LENGTH
+            raise forms.ValidationError(err_msg)
+
+        return password
+
 
 
 class BaseCredentialForm(forms.Form):
