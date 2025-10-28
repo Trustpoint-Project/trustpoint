@@ -62,7 +62,7 @@ COPY --chown=www-data:www-data ./ ./
 RUN if [ "${BRANCH}" != "" ]; then \
         apt update -y && apt install -y git; \
         rm -rf /var/www/html/trustpoint/; \
-        git clone -b "${BRANCH}" https://github.com/TrustPoint-Project/trustpoint.git /var/www/html/trustpoint/; \
+        git clone -b "${BRANCH}" https://github.com/Trustpoint-Project/trustpoint.git /var/www/html/trustpoint/; \
         apt remove -y git; \
     fi && \
     chmod 755 /var/www/html/trustpoint/ && \
