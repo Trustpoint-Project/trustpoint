@@ -312,6 +312,9 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
     def get_queryset(self) -> QuerySet[CertificateModel]:
         """Return only certificates associated with the domain's issued credentials."""
         domain: DomainModel = self.get_domain()
+        if domain.issuing_ca is None:
+            msg = 'Domain has no issuing CA configured.'
+            raise Http404(msg)
         # PyCharm TypeChecker issue - this passes mypy
         # noinspection PyTypeChecker
         # TODO(AlexHx8472): This must be limited to the actual domain.

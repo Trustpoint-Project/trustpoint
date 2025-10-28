@@ -20,14 +20,9 @@ if TYPE_CHECKING:
     from django.http import HttpResponse
 
 
-class TlsSettingsContextMixin:
-    """Mixin which adds data to the context for the TLS settings application."""
-
-    extra_context: ClassVar = {'page_category': 'management', 'page_name': 'tls'}
-
-
-class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
+class TlsView(FormView[IPv4AddressForm]):
     """View to display certificate details, including Subject Alternative Name (SAN) and associated IP addresses."""
+    extra_context: ClassVar[dict[str, str]] = {'page_category': 'management', 'page_name': 'tls'}
     template_name = 'management/tls.html'
     form_class = IPv4AddressForm
     success_url = reverse_lazy('management:tls')

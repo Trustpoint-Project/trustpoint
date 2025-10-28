@@ -5,7 +5,7 @@ import hashlib
 import os
 import secrets
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast
 
 import pkcs11  # type: ignore[import-untyped]
 from argon2.low_level import Type, hash_secret_raw
@@ -20,7 +20,9 @@ from pki.util.keys import AutoGenPkiKeyAlgorithm
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
+
     from management.pkcs11_util import Pkcs11AESKey
+
 
 
 class SecurityConfig(models.Model):
@@ -428,7 +430,7 @@ class PKCS11Token(models.Model, LoggerMixin):
         Raises:
             RuntimeError: If key generation fails
         """
-        from pki.models import PKCS11Key
+        from pki.models.credential import PKCS11Key
 
         try:
             kek, _ = PKCS11Key.objects.get_or_create(
@@ -806,6 +808,17 @@ class PKCS11Token(models.Model, LoggerMixin):
             label=self.KEK_ENCRYPTION_KEY_LABEL
         )
         return session, wrap_key
+    
+    def _raise_type_error(self, msg: str) -> NoReturn:
+        """Raise a TypeError with the given message.
+
+        Args:
+            msg (str): The error message.
+
+        Raises:
+            TypeError: Always raised with the provided message.
+        """
+        raise TypeError(msg)
 
     def _unwrap_with_key(self, wrap_key: pkcs11.Key, wrapped_data: bytes) -> bytes:
         """Unwrap the DEK using the provided wrapping key.
@@ -825,10 +838,15 @@ class PKCS11Token(models.Model, LoggerMixin):
             encrypted_data = wrapped_data[8:]
 
             # Decrypt using AES-ECB (no unpadding needed as DEK is exactly 32 bytes)
-            return wrap_key.decrypt(
+            decrypted_data = wrap_key.decrypt(
                 encrypted_data,
                 mechanism=pkcs11.Mechanism.AES_ECB
             )
+
+            if isinstance(decrypted_data, bytes):
+                return decrypted_data
+            msg = f'Decrypt returned unexpected type: {type(decrypted_data)!r}'
+            self._raise_type_error(msg)
 
         except Exception as e:
             msg = f'Failed to unwrap DEK: {e}'

@@ -235,10 +235,10 @@ class BackupManageView(SortableTableFromListMixin, ListView[Any]):
             messages.success(request, 'Backup settings saved successfully.')
             return redirect(self.success_url)
 
-        error_messages = []
+        error_messages: list[str] = []
         for field, errors in form.errors.items():
             if field == '__all__':
-                error_messages.extend(errors)
+                error_messages.extend(str(error) for error in errors)
             else:
                 error_messages.extend([f'{field.capitalize()}: {error}' for error in errors])
 
