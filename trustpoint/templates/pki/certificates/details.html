@@ -1,5 +1,11 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
+{% load static %}
+
+{% block head %}
+    <script src="{% static 'js/copy_clipboard.js' %}"></script>
+{% endblock head %}
+
 {% block content %}
 
 <div class="card" style="display: flex; flex-direction: column; height: calc(100vh - 120px);">
@@ -67,7 +73,30 @@
         <div class="tp-card-btn-footer m-1">
             <button type="button" value="Back" class="btn btn-secondary btn-half" onClick="history.back()">{% trans 'Back' %}</button>
             <a href="{% url 'pki:certificates' %}" class="btn btn-secondary btn-half">{% trans 'Cancel' %}</a>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#pemModal">{% trans 'Show PEM' %}</button>
             <a href="{% url 'pki:certificate-download' pk=cert.id %}" class="btn btn-primary">{% trans 'Download' %}</a>
+        </div>
+    </div>
+</div>
+
+<!-- PEM Modal -->
+<div class="modal fade" id="pemModal" tabindex="-1" aria-labelledby="pemModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pemModalLabel">{% trans "Certificate PEM" %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Close' %}"></button>
+            </div>
+            <div class="modal-body">
+                <div class="copy-container" style="position: relative;">
+                    <pre class="command-text" style="background-color: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 5px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 12px; max-height: 500px;">{{ cert.cert_pem }}</pre>
+                    <button type="button" class="copy-button" data-tooltip="Copy to clipboard" aria-label="Copy to clipboard" style="position: absolute; top: 10px; right: 10px;">
+                        <svg class="icon icon-copy" width="24" height="24" fill="currentColor">
+                            <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
+                        </svg>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </div>

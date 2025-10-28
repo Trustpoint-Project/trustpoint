@@ -21,15 +21,15 @@
             </div>
         </div>
         <div>
-            <div>{% trans 'Not valid before (UTC)' %}</div>
-            <div>{{ cert.not_valid_before }}</div>
+            <div>{% trans 'Not valid before' %}</div>
+            <div>{{ cert.not_valid_before|date:"Y-m-d H:i:s" }} UTC</div>
         </div>
         <div>
-            <div>{% trans 'Not valid after (UTC)' %}</div>
-            <div>{{ cert.not_valid_after }}</div>
+            <div>{% trans 'Not valid after' %}</div>
+            <div>{{ cert.not_valid_after|date:"Y-m-d H:i:s" }} UTC</div>
         </div>
         <div>
-            <div>{% trans 'Days Left' %}</div>
+            <div>{% trans 'Days Until Expiration' %}</div>
             <div>
                 {% if cert.days_left <= 3 %}
                     <span class="badge bg-danger">
