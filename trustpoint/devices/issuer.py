@@ -115,6 +115,49 @@ class SaveCredentialToDbMixin:
         return issued_credential_model
 
 
+class CredentialSaver(SaveCredentialToDbMixin):
+    """A basic class for saving credentials to the database."""
+    def __init__(self, device: DeviceModel, domain: DomainModel) -> None:
+        """Initializes the Credential Saver.
+
+        Args:
+            device: The device for which the credential is saved.
+            domain: The domain associated with the credential.
+        """
+        self._device = device
+        self._domain = domain
+
+    @property
+    def device(self) -> DeviceModel:
+        """Gets the device associated with this credential saver.
+
+        Returns:
+            DeviceModel: The device linked to the issued credential.
+        """
+        return self._device
+
+    @property
+    def domain(self) -> DomainModel:
+        """Gets the domain associated with this credential saver.
+
+        Returns:
+            DomainModel: The domain linked to the issued credential.
+        """
+        return self._domain
+
+    def save_keyless_credential(
+        self,
+        certificate: x509.Certificate,
+        certificate_chain: list[x509.Certificate],
+        common_name: str,
+        issued_credential_type: IssuedCredentialModel.IssuedCredentialType,
+        issued_credential_purpose: IssuedCredentialModel.IssuedCredentialPurpose,
+    ) -> IssuedCredentialModel:
+        """Saves a keyless (i.e. private key stays on requesting device) credential to the database."""
+        return self._save_keyless_credential(
+            certificate, certificate_chain, common_name, issued_credential_type, issued_credential_purpose)
+
+
 class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
     """Base class for issuing TLS credentials.
 
