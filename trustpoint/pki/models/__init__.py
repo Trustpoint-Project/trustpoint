@@ -22,12 +22,14 @@ from .issuing_ca import IssuingCaModel
 from .credential import CredentialAlreadyExistsError, CredentialModel, CertificateChainOrderModel, OwnerCredentialModel
 from .domain import DomainModel
 from .devid_registration import DevIdRegistration
+from .cert_profile import CertificateProfileModel
 from .truststore import TruststoreModel, TruststoreOrderModel
 
 __all__ = [
     'AttributeTypeAndValue',
     'CertificateExtension',
     'CertificateModel',
+    'CertificateProfileModel',
     'CredentialAlreadyExistsError',
     'CredentialModel',
     'DevIdRegistration',
