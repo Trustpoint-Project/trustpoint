@@ -17,9 +17,8 @@ from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.logger import LoggerMixin
 
 from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
-from management.models import TlsSettings
 from management.management.commands.update_tls import Command as UpdateTlsCommand
-from trustpoint.logger import LoggerMixin
+from management.models import TlsSettings
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
