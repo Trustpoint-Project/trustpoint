@@ -14,11 +14,11 @@ from pki.models import GeneralNameIpAddress
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, CertificateModel, CredentialModel
 from setup_wizard.forms import StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
+from trustpoint.logger import LoggerMixin
 
 from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
-from management.models import TlsSettings
 from management.management.commands.update_tls import Command as UpdateTlsCommand
-from trustpoint.logger import LoggerMixin
+from management.models import TlsSettings
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -70,7 +70,7 @@ class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
 
         san_ips = []
         san_dns_names = []
-        issuer_details: dict[str, Optional[str]] = {
+        issuer_details: dict[str, str | None] = {
             'country': None,
             'organization': None,
             'common_name': None,

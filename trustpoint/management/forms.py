@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Fieldset, Layout
+from cryptography.x509 import Certificate
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
@@ -14,6 +15,7 @@ from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 from pki.util.x509 import CertificateVerifier
+from trustpoint.logger import LoggerMixin
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -24,7 +26,6 @@ from trustpoint_core.serializer import (
 from management.models import BackupOptions, SecurityConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
-from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -232,10 +233,14 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             validators=[
               RegexValidator(
                   regex=r"^localhost$|^(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$",
-                  message="Enter a valid domain name (e.g. example.com)."
+                  message='Enter a valid domain name (e.g. example.com).'
               )
         ]
     )
+
+    def _raise_validation_error(self, message: str) -> None:
+        """Raises a validation error with the given message."""
+        raise ValidationError(message)
 
     def clean(self) -> None:
         """Cleans and validates the entire form.
@@ -253,8 +258,11 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         if not cleaned_data:  # only for typing, cleaned_data should always be a dict, but not entirely sure
             exc_msg = 'No data was provided.'
             raise ValidationError(exc_msg)
+        pkcs12_file = cleaned_data.get('pkcs12_file')
+        if pkcs12_file is None:
+            self._raise_validation_error('No PKCS#12 file was uploaded.')
         try:
-            pkcs12_raw = cleaned_data.get('pkcs12_file').read()
+            pkcs12_raw = pkcs12_file.read()
             pkcs12_password = cleaned_data.get('pkcs12_password')
             domain_name = cleaned_data.get('domain_name')
         except (OSError, AttributeError) as original_exception:
@@ -280,8 +288,12 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             raise ValidationError(err_msg) from exception
 
         try:
-            CertificateVerifier.verify_server_cert(tls_credential_serializer.certificate,
-                domain_name)
+            certificate = tls_credential_serializer.certificate
+            if certificate is None:
+                self._raise_validation_error('The provided PKCS#12 file does not contain a valid certificate.')
+            if not isinstance(certificate, Certificate):
+                self._raise_validation_error('Invalid credential: certificate is not a valid x509.Certificate.')
+            CertificateVerifier.verify_server_cert(certificate,  domain_name)
             trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
                 credential_serializer=tls_credential_serializer,
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
@@ -330,25 +342,19 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         ]
     )
 
-    def clean_private_key_file(self) -> PrivateKeySerializer:
-        """Validates and parses the uploaded private key file.
+    def clean_private_key_file(self) -> bytes:
+        """Validates the uploaded private key file.
 
-        This method checks if the private key file is provided, ensures it meets
-        size constraints, and validates its contents. If a password is provided,
-        it is used to decrypt the private key. Raises validation errors for missing,
-        oversized, or corrupted private key files.
+        This method checks if the private key file is provided and ensures it meets
+        size constraints. The actual parsing happens in clean() where the password is available.
 
         Returns:
-            PrivateKeySerializer: A serializer containing the parsed private key.
+            bytes: The raw bytes of the private key file.
 
         Raises:
-            ValidationError: If the private key file is missing, too large, or
-            corrupted, or if the password is invalid or incompatible.
+            ValidationError: If the private key file is missing or too large.
         """
         private_key_file = self.cleaned_data.get('private_key_file')
-        private_key_file_password = (
-            self.data.get('private_key_file_password') if self.data.get('private_key_file_password') else None
-        )
 
         if not private_key_file:
             err_msg = 'No private key file was uploaded.'
@@ -360,12 +366,7 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             err_msg = 'Private key file is too large, max. 64 kiB.'
             raise ValidationError(err_msg)
 
-        try:
-            return PrivateKeySerializer.from_bytes(private_key_file.read(), private_key_file_password)
-        except Exception as exception:
-            err_msg = _('Failed to parse the private key file. Either wrong password or file corrupted.')
-            raise ValidationError(err_msg) from exception
-
+        return bytes(private_key_file.read())
 
     def clean_tls_certificate(self) -> CertificateSerializer:
         """Validates and parses the uploaded TLS certificate file.
@@ -396,7 +397,7 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         try:
             certificate_serializer = CertificateSerializer.from_bytes(tls_certificate.read())
         except Exception as exception:
-            err_msg = _('Failed to parse the TLS certificate. Seems to be corrupted.')
+            err_msg = 'Failed to parse the TLS certificate. Seems to be corrupted.'
             raise ValidationError(err_msg) from exception
 
         return certificate_serializer
@@ -427,6 +428,10 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
 
         return None
 
+    def _raise_validation_error(self, message: str) -> None:
+        """Raises a validation error with the given message."""
+        raise forms.ValidationError(message)
+
     def clean(self) -> None:
         """Cleans and validates the form data.
 
@@ -441,27 +446,54 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         try:
             cleaned_data = super().clean()
             if not cleaned_data:
-                return
+                return cleaned_data
 
-            private_key_serializer = cleaned_data.get('private_key_file')
+            private_key_bytes = cleaned_data.get('private_key_file')
+            private_key_password = cleaned_data.get('private_key_file_password')
             tls_certificate_serializer = cleaned_data.get('tls_certificate')
             tls_certificate_chain_serializer = (
                 cleaned_data.get('tls_certificate_chain') if cleaned_data.get('tls_certificate_chain') else None
             )
             domain_name = cleaned_data.get('domain_name')
 
-            if not private_key_serializer or not tls_certificate_serializer:
-                return
+            try:
+                domain_name = str(domain_name)
+            except Exception as original_exception:
+                err_msg = 'The provided domain name is invalid.'
+                raise ValidationError(err_msg) from original_exception
+
+            if not private_key_bytes or not tls_certificate_serializer:
+                return cleaned_data
+
+            if private_key_password:
+                try:
+                    private_key_password_bytes = private_key_password.encode()
+                except Exception as original_exception:
+                    error_message = 'The private key password contains invalid data that cannot be encoded in UTF-8.'
+                    raise ValidationError(error_message) from original_exception
+            else:
+                private_key_password_bytes = None
+
+            try:
+                private_key_serializer = PrivateKeySerializer.from_bytes(
+                    private_key_bytes,
+                    private_key_password_bytes
+                )
+            except Exception as exception:
+                err_msg = _('Failed to parse the private key file. Either wrong password or file corrupted.')
+                raise ValidationError(err_msg) from exception
 
             credential_serializer = CredentialSerializer.from_serializers(
-                private_key_serializer= private_key_serializer,
+                private_key_serializer=private_key_serializer,
                 certificate_serializer=tls_certificate_serializer,
                 certificate_collection_serializer=tls_certificate_chain_serializer
             )
 
+            certificate = credential_serializer.certificate
+            if certificate is None or not isinstance(certificate, Certificate):
+                self._raise_validation_error('Invalid credential: certificate is not a valid x509.Certificate.')
 
-            CertificateVerifier.verify_server_cert(credential_serializer.certificate,
-                domain_name)
+            CertificateVerifier.verify_server_cert(certificate, domain_name)
 
             trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
                 credential_serializer=credential_serializer,
