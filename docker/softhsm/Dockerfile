@@ -40,4 +40,4 @@ ENV SOFTHSM2_CONF=/etc/softhsm/softhsm.conf
 EXPOSE 5657
 
 # Start PKCS#11 Proxy with Unix socket and bridge to TCP port
-CMD sh -c 'pkcs11-daemon /usr/lib/aarch64-linux-gnu/softhsm/libsofthsm2.so /tmp/pkcs11-socket & sleep 2 && socat TCP-LISTEN:5657,fork,reuseaddr UNIX-CONNECT:/tmp/pkcs11-socket/socket.pkcs11'
+CMD sh -c 'pkcs11-daemon /usr/lib/softhsm/libsofthsm2.so /tmp/pkcs11-socket & sleep 2 && socat TCP-LISTEN:5657,fork,reuseaddr UNIX-CONNECT:/tmp/pkcs11-socket/socket.pkcs11'
