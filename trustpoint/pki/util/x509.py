@@ -5,12 +5,14 @@ from __future__ import annotations
 import datetime
 import itertools
 import logging
+from datetime import UTC
 from typing import TYPE_CHECKING, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509.oid import NameOID
+from cryptography.x509.verification import PolicyBuilder, Store
 from trustpoint_core.serializer import CredentialSerializer
 
 from pki.models import IssuingCaModel
@@ -273,3 +275,49 @@ class ApacheTLSClientCertExtractor:
             intermediate_cas.append(ca_cert)
 
         return (client_cert, intermediate_cas)
+
+
+class CertificateVerifier:
+    """Methods for verifying client and server certificates."""
+
+    @staticmethod
+    def verify_server_cert(
+        cert: x509.Certificate,
+        subject: str,
+        untrusted_intermediates: list[x509.Certificate] | None = None,
+        verification_time: datetime.datetime | None = None
+    ) -> list[x509.Certificate]:
+        """Verifies a server's TLS certificate against a trusted certificate store.
+
+        Args:
+            cert (x509.Certificate): The DER- or PEM-encoded leaf server certificate to verify.
+            subject (str): The expected DNS name or hostname to match against the certificate's Subject Alternative Name (SAN).
+            untrusted_intermediates (list[x509.Certificate]): DER- or PEM-encoded intermediate certificates that are not trusted by default but provided to assist chain building.
+            verification_time (datetime): Certificate verification time
+
+        Returns:
+            list[x509.Certificate]: A validated certificate chain from the leaf certificate up to a trusted root.
+
+        Raises:
+            VerificationError: If a valid chain cannot be constructed.
+            UnsupportedGeneralNameType: If a valid chain exists, but contains an unsupported general name type.
+        """
+        # with open(certifi.where(), "rb") as pems:
+        #     trusted_certs = x509.load_pem_x509_certificates(pems.read())
+
+        trust_store = Store([cert])
+
+        if verification_time is None:
+            verification_time =  datetime.datetime.now(UTC)
+        verifier = (
+            PolicyBuilder()
+            .store(trust_store)
+            .time(verification_time)
+            .build_server_verifier(x509.DNSName(subject))
+        )
+
+        if untrusted_intermediates is None:
+            untrusted_intermediates = []
+
+        chain = verifier.verify(cert, untrusted_intermediates)
+        return chain

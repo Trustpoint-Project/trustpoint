@@ -104,3 +104,4 @@ class StartupWizardTlsCertificateForm(forms.Form):
             err_msg = 'At least one SAN entry is required.'
             raise forms.ValidationError(err_msg)
         return cleaned_data
+

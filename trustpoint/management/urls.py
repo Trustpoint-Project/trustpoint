@@ -27,6 +27,28 @@ urlpatterns = [
     path('loglevel/change', settings.ChangeLogLevelView.as_view(), name='change-loglevel'),
     path('settings/', settings.SettingsView.as_view(), name='settings'),
     path('tls/', tls.TlsView.as_view(), name='tls'),
+    path('tls/add/method-select/', tls.TlsAddMethodSelectView.as_view(),
+        name='tls-add-method_select',
+    ),
+    path('tls/add/generate-tls', tls.GenerateTlsCertificateView.as_view(),
+        name='tls-generate',
+    ),
+    path(
+        'tls/add/file-import/pkcs12',
+        tls.TlsAddFileImportPkcs12View.as_view(),
+        name='tls-add-file_import-pkcs12',
+    ),
+    path(
+        'tls/add/file-import/separate-files',
+        tls.TlsAddFileImportSeparateFilesView.as_view(),
+        name='tls-add-file_import-separate_files',
+    ),
+    path('tls/activate/<int:pk>', tls.ActivateTlsServerView.as_view(), name='activate-tls'),
+    path(
+        'backups/',
+        backup.BackupManageView.as_view(extra_context={'page_category': 'management', 'page_name': 'backup'}),
+        name='backups'
+    ),
     path(
         'backups/',
         backup.BackupManageView.as_view(extra_context={'page_category': 'management', 'page_name': 'backup'}),
