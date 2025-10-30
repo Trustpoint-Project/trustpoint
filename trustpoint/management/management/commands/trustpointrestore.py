@@ -121,6 +121,11 @@ class Command(BaseCommand):
             active_tls = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
             tls_server_credential_model = active_tls.credential
 
+            if not tls_server_credential_model:
+                error_msg = _('TLS credential not found')
+                self.stdout.write(self.style.ERROR(error_msg))
+                return
+
             private_key_pem = tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
             certificate_pem = tls_server_credential_model.get_certificate_serializer().as_pem().decode()
             trust_store_pem = tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
@@ -150,7 +155,7 @@ class Command(BaseCommand):
                 raise subprocess.CalledProcessError(result.returncode, str(script_path))
 
             self.stdout.write('Restoration successful.')
-            sha256_fingerprint = active_tls.credential.get_certificate().fingerprint(hashes.SHA256())
+            sha256_fingerprint = tls_server_credential_model.get_certificate().fingerprint(hashes.SHA256())
             formatted = ':'.join(f'{b:02X}' for b in sha256_fingerprint)
             self.stdout.write(f'TLS SHA256 fingerprint: {(formatted)}')
 

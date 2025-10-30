@@ -20,7 +20,6 @@ The development team comprises:
 - **Companies:**
   - achelos
   - asvin
-  - Keyfactor
 
 - **Research Institutions and Universities:**
   - Campus Schwarzwald
@@ -75,10 +74,10 @@ To build and run Trustpoint as a Docker image:
 How can I contribute to the Trustpoint project?
 --------------------------------------------------
 Contributions are welcome. You can fork the repository, make your changes, and submit a pull request.
-Ensure that your contributions align with the `project's guidelines and standards <https://github.com/TrustPoint-Project/trustpoint/blob/main/AUTHORS.md>`_.
+Ensure that your contributions align with the `project's guidelines and standards <https://github.com/Trustpoint-Project/trustpoint/blob/main/AUTHORS.md>`_.
 
 1. What license does Trustpoint use?
 ------------------------------------
 Trustpoint is released under the MIT license.
 This allows for broad usage, modification, and distribution of the software, promoting open collaboration and development.
-You can find the license `here <https://github.com/TrustPoint-Project/trustpoint/blob/main/LICENSE>`_
+You can find the license `here <https://github.com/Trustpoint-Project/trustpoint/blob/main/LICENSE>`_

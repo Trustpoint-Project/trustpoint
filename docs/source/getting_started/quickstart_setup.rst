@@ -24,7 +24,7 @@ The ``tp_wizard.sh`` offers a convenient guided CLI for setting up a Docker cont
 
    .. code-block:: bash
 
-       git clone https://github.com/TrustPoint-Project/trustpoint.git
+       git clone https://github.com/Trustpoint-Project/trustpoint.git
        cd trustpoint
 
 2. **Interactively configure** the Trustpoint environment using the script
@@ -70,7 +70,7 @@ Step-by-Step Setup (Build container) 🔧
 
    .. code-block:: bash
 
-       git clone https://github.com/TrustPoint-Project/trustpoint.git
+       git clone https://github.com/Trustpoint-Project/trustpoint.git
        cd trustpoint
 
    This command downloads the Trustpoint source code to your local machine and navigates into the project directory.
@@ -151,7 +151,7 @@ Step-by-Step Setup (Build container) 🔧
 
    .. code-block:: bash
 
-       git clone https://github.com/TrustPoint-Project/trustpoint.git
+       git clone https://github.com/Trustpoint-Project/trustpoint.git
        cd trustpoint
 
    This command downloads the Trustpoint source code to your local machine and navigates into the project directory.

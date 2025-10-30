@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist
 from django.urls import reverse_lazy
-from django.utils.translation import gettext as _
 from django.views.generic import FormView
 from pki.models import GeneralNameIpAddress
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -21,14 +20,9 @@ if TYPE_CHECKING:
     from django.http import HttpResponse
 
 
-class TlsSettingsContextMixin:
-    """Mixin which adds data to the context for the TLS settings application."""
-
-    extra_context: ClassVar = {'page_category': 'management', 'page_name': 'tls'}
-
-
-class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
+class TlsView(FormView[IPv4AddressForm]):
     """View to display certificate details, including Subject Alternative Name (SAN) and associated IP addresses."""
+    extra_context: ClassVar[dict[str, str]] = {'page_category': 'management', 'page_name': 'tls'}
     template_name = 'management/tls.html'
     form_class = IPv4AddressForm
     success_url = reverse_lazy('management:tls')
@@ -65,7 +59,7 @@ class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
 
         san_ips = []
         san_dns_names = []
-        issuer_details: dict[str, Optional[str]] = {
+        issuer_details: dict[str, str | None] = {
             'country': None,
             'organization': None,
             'common_name': None,

@@ -19,8 +19,8 @@ class Command(BaseCommand):
     TRUSTSTORE_RELATIVE_PATHS = MappingProxyType(
         {
             'ecc1/ecc1_chain.pem': 'EC-256',
-            'ecc2/ecc2_chain.pem': 'EC-283',
-            'ecc3/ecc3_chain.pem': 'EC-570',
+            'ecc2/ecc2_chain.pem': 'EC-384',
+            'ecc3/ecc3_chain.pem': 'EC-521',
             'rsa2/rsa2_chain.pem': 'RSA-2048',
             'rsa3/rsa3_chain.pem': 'RSA-3072',
             'rsa4/rsa4_chain.pem': 'RSA-4096',

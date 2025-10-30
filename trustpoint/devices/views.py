@@ -22,6 +22,13 @@ from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
+from trustpoint.logger import LoggerMixin
+from trustpoint.page_context import (
+    DEVICES_PAGE_CATEGORY,
+    DEVICES_PAGE_DEVICES_SUBCATEGORY,
+    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
+    PageContextMixin,
+)
 from trustpoint_core.archiver import Archiver
 from trustpoint_core.serializer import CredentialFileFormat
 from util.mult_obj_views import get_primary_keys_from_str_as_list_of_ints
@@ -60,13 +67,6 @@ from devices.models import (
     RemoteDeviceCredentialDownloadModel,
 )
 from devices.revocation import DeviceCredentialRevocation
-from trustpoint.logger import LoggerMixin
-from trustpoint.page_context import (
-    DEVICES_PAGE_CATEGORY,
-    DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
-    PageContextMixin,
-)
 from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:

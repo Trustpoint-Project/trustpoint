@@ -14,6 +14,7 @@ from django.contrib import admin
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
+from trustpoint.logger import LoggerMixin
 from trustpoint_core.oid import (
     AlgorithmIdentifier,
     CertificateExtensionOid,
@@ -45,7 +46,6 @@ from pki.models.extension import (
     SubjectInformationAccessExtension,
     SubjectKeyIdentifierExtension,
 )
-from trustpoint.logger import LoggerMixin
 
 __all__ = ['CertificateModel', 'RevokedCertificateModel']
 

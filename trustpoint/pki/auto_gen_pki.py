@@ -123,6 +123,9 @@ class AutoGenPki:
 
             # Root CA: revoke the Issuing CA certificate
             root_cert = issuing_ca.credential.get_root_ca_certificate()
+            if root_cert is None:
+                log.error('Root CA certificate not found for auto-generated PKI Issuing CA')
+                return
             subject_public_bytes = root_cert.subject.public_bytes().hex().upper()
             try:
                 root_ca = IssuingCaModel.objects.get(

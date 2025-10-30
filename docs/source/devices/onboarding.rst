@@ -135,7 +135,7 @@ enabling secure authentication with Trustpoint.
 Using the Trustpoint Client (Work in Progress)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Trustpoint provides a user-friendly client application that simplifies the onboarding process. The Trustpoint client is available at `Trustpoint Client GitHub <https://github.com/TrustPoint-Project/trustpoint-client>`_. This method is recommended for users who prefer a guided approach to onboarding.
+Trustpoint provides a user-friendly client application that simplifies the onboarding process. The Trustpoint client is available at `Trustpoint Client GitHub <https://github.com/Trustpoint-Project/trustpoint-client>`_. This method is recommended for users who prefer a guided approach to onboarding.
 
 How It Works:
 

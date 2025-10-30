@@ -1,8 +1,7 @@
 """Management command to create a new local backup."""
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from django.conf import settings as django_settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandParser
 

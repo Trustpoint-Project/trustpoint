@@ -187,3 +187,4 @@ docs/build/
 collected_static
 
 _*.sh
+.github/copilot-instructions.md
