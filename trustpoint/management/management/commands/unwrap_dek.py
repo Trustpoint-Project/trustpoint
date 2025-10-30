@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management.base import BaseCommand
-
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:

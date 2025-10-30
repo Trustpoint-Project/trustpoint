@@ -2,7 +2,6 @@
 
 import ipaddress
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
 
 from cryptography.hazmat.primitives import hashes
 from django.core.management.base import BaseCommand, CommandParser
@@ -10,7 +9,6 @@ from pki.models.credential import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from setup_wizard.views import APACHE_PATH
-
 from trustpoint.logger import LoggerMixin
 
 APACHE_KEY_PATH = APACHE_PATH / Path('apache-tls-server-key.key')

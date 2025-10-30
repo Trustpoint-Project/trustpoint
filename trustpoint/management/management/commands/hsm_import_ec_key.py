@@ -2,6 +2,7 @@
 
 from cryptography.hazmat.primitives.asymmetric import ec
 from django.core.management.base import BaseCommand, CommandError
+
 from management.models import PKCS11Token
 from management.pkcs11_util import Pkcs11ECPrivateKey
 
@@ -29,13 +30,13 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         """Execute the command."""
-        self.stdout.write("Importing EC key to HSM...")
+        self.stdout.write('Importing EC key to HSM...')
 
         try:
             # Get token configuration
             token_config = PKCS11Token.objects.first()
             if not token_config:
-                raise CommandError("No PKCS11 token configured")
+                raise CommandError('No PKCS11 token configured')
 
             # Generate EC key
             curve_map = {
@@ -67,18 +68,18 @@ class Command(BaseCommand):
 
                 try:
                     ec_key_handler.load_key()
-                    self.stdout.write("Key loading test successful")
+                    self.stdout.write('Key loading test successful')
 
                     public_key = ec_key_handler.public_key()
                     if public_key:
-                        self.stdout.write("Public key retrieval successful")
+                        self.stdout.write('Public key retrieval successful')
 
                 except Exception as e:
-                    self.stdout.write(f"Warning: Key test failed: {e}")
+                    self.stdout.write(f'Warning: Key test failed: {e}')
                 finally:
                     ec_key_handler.close()
             else:
-                raise CommandError("Failed to import EC key to HSM")
+                raise CommandError('Failed to import EC key to HSM')
 
         except Exception as e:
-            raise CommandError(f"Error importing EC key: {e}") from e
+            raise CommandError(f'Error importing EC key: {e}') from e

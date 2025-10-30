@@ -38,7 +38,6 @@ from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
 
     from trustpoint_core.serializer import CertificateSerializer
 
@@ -1066,6 +1065,11 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
         )
         return super().form_invalid(form)
 
+    def _raise_runtime_error(self, message: str) -> None:
+        """Helper method to raise RuntimeError with logging."""
+        self.logger.error(message)
+        raise RuntimeError(message)
+
     def _extract_tls_certificates(self) -> None:
         """Extract TLS certificates from database and write to files for Apache configuration.
 
@@ -1079,15 +1083,14 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             tls_server_credential_model = active_tls.credential
 
             if not tls_server_credential_model:
-                error_msg = 'TLS credential not found in database'
-                raise RuntimeError(error_msg)
+                self._raise_runtime_error('TLS credential not found in database')
 
-            # Extract PEM-encoded credentials
+            tls_server_credential_model = cast('CredentialModel', tls_server_credential_model)
+
             private_key_pem = tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
             certificate_pem = tls_server_credential_model.get_certificate_serializer().as_pem().decode()
             trust_store_pem = tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
 
-            # Write to files
             APACHE_KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
             APACHE_KEY_PATH.write_text(private_key_pem)
             APACHE_CERT_PATH.write_text(certificate_pem)
