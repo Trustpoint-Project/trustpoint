@@ -161,7 +161,7 @@ class CmpSharedSecretCommandBuilder:
         )
 
     @staticmethod
-    def get_domain_credential_profile_command(host: str, pk: int, shared_secret: str, domain_name: str) -> str:
+    def get_domain_credential_profile_command(host: str, pk: int, shared_secret: str) -> str:
         """Get the domain credential profile command.
 
         Args:
@@ -178,7 +178,7 @@ class CmpSharedSecretCommandBuilder:
             '-cmd ir \\\n'
             '-implicit_confirm \\\n'
             '-tls_used \\\n'
-            f'-server {host}/.well-known/cmp/p/{domain_name}/initialization \\\n'
+            f'-server {host} \\\n'
             f'-ref {pk} \\\n'
             f'-secret pass:{shared_secret} \\\n'
             f'-subject "/CN=Trustpoint-Domain-Credential" \\\n'
