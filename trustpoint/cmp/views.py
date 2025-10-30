@@ -57,7 +57,7 @@ class CmpInitializationRequestView(View):
 
         authorizer = CmpAuthorization(
             ['tls-server', 'tls-client', 'opc-ua-server', 'opc-ua-client', 'domaincredential'],
-            ['certification']
+            ['initialization', 'certification']
         )
         authorizer.authorize(ctx)
 
