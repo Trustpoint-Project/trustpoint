@@ -63,6 +63,7 @@ Welcome to Trustpoint's documentation!
 
    development/development
    development/architecture/credentials
+   development/auto_restore
    development/sbom
    devices/workflow
 
