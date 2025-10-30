@@ -2,132 +2,17 @@
 {% load i18n static %}
 
 {% block content %}
-    {# ────────────────────────────────────────────── #}
-    {#       TOP CARD: Backup Settings Form         #}
-    {# ────────────────────────────────────────────── #}
-    <div class="card mb-4">
-        <div class="card-header">
-            <h2 class="h5 mb-0">{% trans "Backup Settings" %}</h2>
-        </div>
-        <div class="card-body">
-            <form method="post">
-                {% csrf_token %}
-                {{ backup_options_form.non_field_errors }}
-
-                <div class="form-check mb-3">
-                    {{ backup_options_form.local_storage }}
-                    {{ backup_options_form.local_storage.label_tag }}
-                    {{ backup_options_form.local_storage.errors }}
-                </div>
-
-                <div class="alert alert-info" id="localBackupAlert" role="alert" style="display: none;">
-                    {% trans "Note: Backups will be stored locally inside the container." %}
-                </div>
-
-
-                <hr>
-
-                <div class="form-check mb-3">
-                    {{ backup_options_form.sftp_storage }}
-                    {{ backup_options_form.sftp_storage.label_tag }}
-                    {{ backup_options_form.sftp_storage.errors }}
-                </div>
-
-                <div id="dependent-options" style="display: none;">
-
-                    <div class="alert alert-info" role="alert">
-                        {% trans "Note: Backups will be stored remotely via the SFTP protocol." %}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ backup_options_form.host.label_tag }}
-                        {{ backup_options_form.host }}
-                        {{ backup_options_form.host.errors }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ backup_options_form.port.label_tag }}
-                        {{ backup_options_form.port }}
-                        {{ backup_options_form.port.errors }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ backup_options_form.user.label_tag }}
-                        {{ backup_options_form.user }}
-                        {{ backup_options_form.user.errors }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ backup_options_form.auth_method.label_tag }}
-                        {{ backup_options_form.auth_method }}
-                        {{ backup_options_form.auth_method.errors }}
-                    </div>
-
-                    <div class="mb-3 password-fields"
-                         style="{% if backup_options_form.initial.auth_method != 'password' %}display:none;{% endif %}">
-                        {{ backup_options_form.password.label_tag }}
-                        {{ backup_options_form.password }}
-                        {{ backup_options_form.password.errors }}
-                    </div>
-
-                    <div class="mb-3 ssh-key-fields"
-                         style="{% if backup_options_form.initial.auth_method != 'ssh_key' %}display:none;{% endif %}">
-                        {{ backup_options_form.private_key.label_tag }}
-                        {{ backup_options_form.private_key }}
-                        {{ backup_options_form.private_key.errors }}
-                    </div>
-
-                    <div class="mb-3 ssh-key-fields"
-                         style="{% if backup_options_form.initial.auth_method != 'ssh_key' %}display:none;{% endif %}">
-                        {{ backup_options_form.key_passphrase.label_tag }}
-                        {{ backup_options_form.key_passphrase }}
-                        {{ backup_options_form.key_passphrase.errors }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ backup_options_form.remote_directory.label_tag }}
-                        {{ backup_options_form.remote_directory }}
-                        {{ backup_options_form.remote_directory.errors }}
-                        <small class="form-text text-muted">
-                            {% trans "Remote directory on SFTP server (e.g. /backups/). Required if using SFTP." %}
-                        </small>
-                    </div>
-
-                    <hr>
-
-                    <button type="submit" name="test_sftp_connection" class="btn btn-outline-primary me-2">
-                        {% trans "Test Connection" %}
-                    </button>
-
-                    <hr>
-
-                </div>
-
-
-                <div class="d-flex">
-                    <button type="submit" name="save_backup_settings" class="btn btn-success me-2">
-                        {% trans "Save Settings" %}
-                    </button>
-                    <button type="submit" name="reset_backup_settings" class="btn btn-danger">
-                        {% trans "Reset Settings" %}
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <hr>
 
     {# ────────────────────────────────────────────── #}
-    {#       SECOND CARD: Backup Management Table    #}
+    {#       Local Backup Management Table    #}
     {# ────────────────────────────────────────────── #}
     <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <h1 class="m-0">{% trans "Backup management" %}</h1>
-            <form method="post" class="m-0">
+            <h1 class="m-0">{% trans "Local Backup management" %}</h1>
+            <form method="post" class="m-0 d-flex gap-2">
                 {% csrf_token %}
-                <button type="submit" name="create_backup" class="btn btn-primary">
-                    {% trans "Create new backup" %}
+                <button type="submit" name="create_local_backup" class="btn btn-primary">
+                    {% trans "Create Local Backup" %}
                 </button>
             </form>
         </div>
@@ -216,6 +101,120 @@
         </form>
     </div>
 
+    <hr>
+
+    {# ────────────────────────────────────────────── #}
+    {#       SFTP Backup Settings Form         #}
+    {# ────────────────────────────────────────────── #}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h2 class="h5 mb-0">{% trans "SFTP Backup" %}</h2>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                {{ backup_options_form.non_field_errors }}
+
+                <div class="form-check mb-3">
+                    {{ backup_options_form.enable_sftp_storage }}
+                    {{ backup_options_form.enable_sftp_storage.label_tag }}
+                    {{ backup_options_form.enable_sftp_storage.errors }}
+                </div>
+
+                <div id="dependent-options" style="{% if not backup_options_form.initial.enable_sftp_storage %}display: none;{% endif %}">
+                    <div class="alert alert-info" role="alert">
+                        {% trans "Note: Backups will be stored remotely via the SFTP protocol." %}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ backup_options_form.host.label_tag }}
+                        {{ backup_options_form.host }}
+                        {{ backup_options_form.host.errors }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ backup_options_form.port.label_tag }}
+                        {{ backup_options_form.port }}
+                        {{ backup_options_form.port.errors }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ backup_options_form.user.label_tag }}
+                        {{ backup_options_form.user }}
+                        {{ backup_options_form.user.errors }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ backup_options_form.auth_method.label_tag }}
+                        {{ backup_options_form.auth_method }}
+                        {{ backup_options_form.auth_method.errors }}
+                    </div>
+
+                    <div class="mb-3 password-fields"
+                        style="{% if backup_options_form.initial.auth_method != 'password' %}display:none;{% endif %}">
+                        {{ backup_options_form.password.label_tag }}
+                        {{ backup_options_form.password }}
+                        {{ backup_options_form.password.errors }}
+                    </div>
+
+                    <div class="mb-3 ssh-key-fields"
+                        style="{% if backup_options_form.initial.auth_method != 'ssh_key' %}display:none;{% endif %}">
+                        {{ backup_options_form.private_key.label_tag }}
+                        {{ backup_options_form.private_key }}
+                        {{ backup_options_form.private_key.errors }}
+                    </div>
+
+                    <div class="mb-3 ssh-key-fields"
+                        style="{% if backup_options_form.initial.auth_method != 'ssh_key' %}display:none;{% endif %}">
+                        {{ backup_options_form.key_passphrase.label_tag }}
+                        {{ backup_options_form.key_passphrase }}
+                        {{ backup_options_form.key_passphrase.errors }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ backup_options_form.remote_directory.label_tag }}
+                        {{ backup_options_form.remote_directory }}
+                        {{ backup_options_form.remote_directory.errors }}
+                        <small class="form-text text-muted">
+                            {% trans "Remote directory on SFTP server (e.g. /backups/). Required if using SFTP." %}
+                        </small>
+                    </div>
+
+                    <hr>
+
+                    <div id="sftp-action-buttons" style="{% if not has_saved_settings %}display: none;{% endif %}">
+                        <button type="submit" name="test_sftp_connection" class="btn btn-outline-primary me-2">
+                            {% trans "Test Connection" %}
+                        </button>
+                        <button type="submit" name="create_sftp_backup" class="btn btn-primary">
+                            {% trans "Create SFTP Backup" %}
+                        </button>
+                    </div>
+
+                    <hr>
+                </div>
+
+                <div class="d-flex">
+                    <button type="submit" name="save_backup_settings" class="btn btn-success me-2">
+                        {% trans "Save Settings" %}
+                    </button>
+                    <button type="submit" name="reset_backup_settings" class="btn btn-danger" {% if not has_saved_settings %}disabled{% endif %}>
+                        {% trans "Reset Settings" %}
+                    </button>
+                </div>
+            </form>
+            {% if backup_options_form.errors %}
+                <div class="alert alert-danger mt-3">
+                    {% for field, errors in backup_options_form.errors.items %}
+                        {% for error in errors %}
+                            <div>{{ error }}</div>
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
     <script>
         // “Select All” checkbox behavior:
         document.getElementById('select-all').addEventListener('change', function (e) {
@@ -241,33 +240,21 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            const localStorageCheckbox = document.querySelector('input[name="local_storage"]');
-            const sftpStorageCheckbox = document.querySelector('input[name="sftp_storage"]');
-
+            const sftpStorageCheckbox = document.querySelector('input[name="enable_sftp_storage"]');
             const dependentOptions = document.getElementById('dependent-options');
-            const infoAlertLocal = document.getElementById('localBackupAlert');
-
-            function toggleVisibilityBasedOnLocalStorage() {
-                if (localStorageCheckbox.checked) {
-                    infoAlertLocal.style.display = 'block';
-                } else {
-                    infoAlertLocal.style.display = 'none';
-                }
-            }
 
             function toggleVisibilityBasedOnSftpStorage() {
-                if (sftpStorageCheckbox.checked) {
+                if (sftpStorageCheckbox && sftpStorageCheckbox.checked) {
                     dependentOptions.style.display = 'block';
                 } else {
                     dependentOptions.style.display = 'none';
                 }
             }
 
-            localStorageCheckbox.addEventListener('change', toggleVisibilityBasedOnLocalStorage);
-            sftpStorageCheckbox.addEventListener('change', toggleVisibilityBasedOnSftpStorage);
-
-            toggleVisibilityBasedOnLocalStorage();
-            toggleVisibilityBasedOnSftpStorage();
+            if (sftpStorageCheckbox) {
+                sftpStorageCheckbox.addEventListener('change', toggleVisibilityBasedOnSftpStorage);
+                toggleVisibilityBasedOnSftpStorage();
+            }
         });
     </script>
 
