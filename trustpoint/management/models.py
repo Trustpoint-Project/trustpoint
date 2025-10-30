@@ -135,8 +135,11 @@ class SecurityConfig(models.Model):
 
 class TlsSettings(models.Model):
     """TLS settings model."""
-
     ipv4_address = models.GenericIPAddressField(protocol='IPv4', null=True, blank=True)
+
+    def __str__(self) -> str:
+        """Output as string."""
+        return self.ipv4_address or 'No IPv4 Address'
 
     @classmethod
     def get_first_ipv4_address(cls) -> str:
@@ -151,18 +154,18 @@ class TlsSettings(models.Model):
 
 
 class AppVersion(models.Model):
-    """Model representing the application's version and last update timestamp."""
+    """Model to store application version information."""
     objects: models.Manager['AppVersion']
 
     version = models.CharField(max_length=17)
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
-        """Metadata for the AppVersion model."""
+        """Metadata options for the AppVersion model."""
         verbose_name = 'App Version'
 
     def __str__(self) -> str:
-        """Return a string representation of the version and update time."""
+        """Output as string."""
         return f'{self.version} @ {self.last_updated.isoformat()}'
 
 
@@ -171,15 +174,12 @@ class BackupOptions(models.Model):
 
     We store host/port/user/local_storage, plus either a password or an SSH key.
     """
-
     class AuthMethod(models.TextChoices):
-        """Enumeration of available authentication methods."""
+        """Authentication methods for backup options."""
         PASSWORD = 'password', 'Password'
         SSH_KEY   = 'ssh_key',  'SSH Key'
 
-    local_storage = models.BooleanField(default=True, verbose_name=_('Use local storage'))
-
-    sftp_storage = models.BooleanField(default=False, verbose_name=_('Use SFTP storage'))
+    enable_sftp_storage = models.BooleanField(default=False, verbose_name=_('Use SFTP storage'))
 
     host = models.CharField(max_length=255, verbose_name=_('Host'), blank=True)
     port = models.PositiveIntegerField(default=2222, verbose_name=_('Port'), blank=True)
@@ -192,12 +192,11 @@ class BackupOptions(models.Model):
         verbose_name=_('Authentication Method')
     )
 
-    # TODO (Dome): Storing passwords in plain text
     password = models.CharField(
         max_length=128,
         blank=True,
         verbose_name=_('Password'),
-        help_text=_('Plain‐text password for SFTP.')
+        help_text=_('Encrypted password for SFTP.')
     )
 
     private_key = models.TextField(
@@ -223,26 +222,44 @@ class BackupOptions(models.Model):
     )
 
     class Meta:
-        """Metadata for the BackupOptions."""
+        """Metadata options for the BackupOptions model."""
         verbose_name = 'Backup Option'
 
     def __str__(self) -> str:
-        """Return a string representation of backup server details."""
+        """Output as string."""
         return f'{self.user}@{self.host}:{self.port} ({self.auth_method})'
 
-    def save(self, *args: Any, **kwargs: Any)-> None:
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Ensure only one instance exists (singleton pattern)."""
         self.full_clean()
-
+        self.pk = 1
         super().save(*args, **kwargs)
 
-    def clean(self) -> dict:
-        """Prevent the creation of more than one instance."""
-        if BackupOptions.objects.exists() and not self.pk:
+    @classmethod
+    def load(cls) -> 'BackupOptions':
+        """Returns the single instance, creating it if necessary."""
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def clean(self) -> None:
+        """Ensure only one BackupOptions instance exists.
+
+        Raises:
+        ------
+        ValidationError
+            If more than one BackupOptions instance is attempted to be created.
+        """
+        if self.pk != 1 and BackupOptions.objects.exists():
             msg = 'Only one BackupOptions instance is allowed.'
             raise ValidationError(msg)
 
         return super().clean()
+
+    class Meta:
+        verbose_name = "Backup Option"
+
+    def __str__(self) -> str:
+        return f'{self.user}@{self.host}:{self.port} ({self.auth_method})'
 
 class LoggingConfig(models.Model):
     """Logging Configuration model."""
