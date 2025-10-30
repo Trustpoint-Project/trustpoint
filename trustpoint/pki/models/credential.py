@@ -740,10 +740,6 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     def get_last_in_chain(self) -> None | CertificateModel:
         """Gets the root ca certificate model, if any."""
         last_certificate_in_chain = self.certificatechainordermodel_set.order_by('order').last()
-        logger = logging.getLogger()
-        logger.error('abc')
-        logger.error(last_certificate_in_chain)
-        logger.error(self.certificate)
         if last_certificate_in_chain is None:
             return self.certificate
         return last_certificate_in_chain.certificate
