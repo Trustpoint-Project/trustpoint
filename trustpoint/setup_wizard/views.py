@@ -59,7 +59,8 @@ SCRIPT_WIZARD_BACKUP_PASSWORD = STATE_FILE_DIR / Path('wizard_backup_password.sh
 SCRIPT_WIZARD_DEMO_DATA = STATE_FILE_DIR / Path('wizard_demo_data.sh')
 SCRIPT_WIZARD_CREATE_SUPER_USER = STATE_FILE_DIR / Path('wizard_create_super_user.sh')
 SCRIPT_WIZARD_RESTORE = STATE_FILE_DIR / Path('wizard_restore.sh')
-SCRIPT_WIZARD_AUTORESTORE_PASSWORD = STATE_FILE_DIR / Path('wizard_autorestorepassword.sh')
+SCRIPT_WIZARD_AUTO_RESTORE_SET = STATE_FILE_DIR / Path('wizard_auto_restore_set.sh')
+SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS = STATE_FILE_DIR / Path('wizard_auto_restore_success.sh')
 
 
 logger = logging.getLogger(__name__)
@@ -147,7 +148,6 @@ class StartupWizardRedirect:
             SetupWizardState.WIZARD_DEMO_DATA: 'setup_wizard:demo_data',
             SetupWizardState.WIZARD_CREATE_SUPER_USER: 'setup_wizard:create_super_user',
             SetupWizardState.WIZARD_COMPLETED: 'users:login',
-            SetupWizardState.WIZARD_AUTO_RESTORE_HSM: 'setup_wizard:auto_restore_hsm',
             SetupWizardState.WIZARD_AUTO_RESTORE_PASSWORD: 'setup_wizard:auto_restore_password',
         }
 
@@ -534,38 +534,6 @@ class SetupWizardHsmSetupView(HsmSetupMixin, FormView[HsmSetupForm]):
     def get_expected_wizard_state(self) -> SetupWizardState:
         """Return the expected wizard state for this view."""
         return SetupWizardState.WIZARD_SETUP_HSM
-
-class BackupAutoRestoreHsmView(HsmSetupMixin, FormView[HsmSetupForm]):
-    """View for handling HSM setup during auto restore process."""
-
-    success_url = reverse_lazy('setup_wizard:auto_restore_password')
-
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Handle request dispatch and wizard state validation."""
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != self.get_expected_wizard_state():
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
-
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_setup_type(self) -> str:
-        """Return the setup type for the HSM script."""
-        return 'auto_restore_setup'
-
-    def get_error_redirect_url(self) -> str:
-        """Return the URL to redirect to on error."""
-        return 'setup_wizard:auto_restore_hsm'
-
-    def get_success_context(self) -> str:
-        """Return context string for success messages."""
-        return 'for auto restore'
-
-    def get_expected_wizard_state(self) -> SetupWizardState:
-        """Return the expected wizard state for this view."""
-        return SetupWizardState.WIZARD_AUTO_RESTORE_HSM
 
 class SetupWizardSetupModeView(TemplateView):
     """View for the initial step of the setup wizard.
@@ -1050,7 +1018,18 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             if not success:
                 return self.form_invalid(form)
 
-            execute_shell_script(SCRIPT_WIZARD_AUTORESTORE_PASSWORD)
+            # Extract TLS certificates from database before completing
+            self.logger.info('Extracting Trustpoint TLS certificates from database')
+            try:
+                self._extract_tls_certificates()
+            except Exception as e:
+                err_msg = f'Failed to extract TLS certificates: {e}'
+                self.logger.exception(err_msg)
+                messages.add_message(self.request, messages.ERROR, err_msg)
+                return self.form_invalid(form)
+
+            # Now execute the success script which will configure Apache and TLS
+            execute_shell_script(SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS)
 
             messages.add_message(
                 self.request,
@@ -1067,7 +1046,7 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             return self.form_invalid(form)
 
         except FileNotFoundError:
-            err_msg = f'Auto restore script not found: {SCRIPT_WIZARD_AUTORESTORE_PASSWORD}'
+            err_msg = f'Auto restore script not found: {SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS}'
             messages.add_message(self.request, messages.ERROR, err_msg)
             self.logger.exception(err_msg)
             return self.form_invalid(form)
@@ -1086,6 +1065,44 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             'Please correct the errors below and try again.'
         )
         return super().form_invalid(form)
+
+    def _extract_tls_certificates(self) -> None:
+        """Extract TLS certificates from database and write to files for Apache configuration.
+
+        This is called during auto restore to prepare TLS files before Apache configuration.
+
+        Raises:
+            RuntimeError: If TLS credential extraction fails.
+        """
+        try:
+            active_tls = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
+            tls_server_credential_model = active_tls.credential
+
+            if not tls_server_credential_model:
+                error_msg = 'TLS credential not found in database'
+                raise RuntimeError(error_msg)
+
+            # Extract PEM-encoded credentials
+            private_key_pem = tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
+            certificate_pem = tls_server_credential_model.get_certificate_serializer().as_pem().decode()
+            trust_store_pem = tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
+
+            # Write to files
+            APACHE_KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
+            APACHE_KEY_PATH.write_text(private_key_pem)
+            APACHE_CERT_PATH.write_text(certificate_pem)
+            APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+
+            self.logger.info('TLS certificates extracted successfully')
+
+        except ActiveTrustpointTlsServerCredentialModel.DoesNotExist as e:
+            error_msg = 'Active TLS credential not found in database'
+            self.logger.exception(error_msg)
+            raise RuntimeError(error_msg) from e
+        except Exception as e:
+            error_msg = f'Failed to extract TLS certificates: {e}'
+            self.logger.exception(error_msg)
+            raise RuntimeError(error_msg) from e
 
     @staticmethod
     def _map_exit_code_to_message(return_code: int) -> str:
@@ -1674,7 +1691,6 @@ class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
             4: 'Failed to create WIZARD_CREATE_SUPER_USER state file.',
         }
         return error_messages.get(return_code, 'An unknown error occurred while executing the demo data script.')
-
 
 class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User]]):
     """View for handling the creation of a superuser during the setup wizard.

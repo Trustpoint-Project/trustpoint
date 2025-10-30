@@ -1,10 +1,10 @@
 #!/bin/bash
-# This script will transition from the WIZARD_COMPLETED state to the WIZARD_AUTO_RESTORE state.
-# This is used when an automatic restore operation is triggered.
+# This script will transition from the WIZARD_COMPLETED state to the WIZARD_AUTO_RESTORE_PASSWORD state.
+# This is used when an automatic restore operation is triggered and the HSM is already configured.
 
 STATE_FILE_DIR="/etc/trustpoint/wizard/state/"
 WIZARD_COMPLETED="/etc/trustpoint/wizard/state/WIZARD_COMPLETED"
-WIZARD_AUTO_RESTORE_HSM="/etc/trustpoint/wizard/state/WIZARD_AUTO_RESTORE_HSM"
+WIZARD_AUTO_RESTORE_PASSWORD="/etc/trustpoint/wizard/state/WIZARD_AUTO_RESTORE_PASSWORD"
 
 # Logging function
 log() {
@@ -31,12 +31,12 @@ then
     exit 3
 fi
 
-# Creates the WIZARD_AUTO_RESTORE_HSM state file.
-if ! touch "$WIZARD_AUTO_RESTORE_HSM"
+# Creates the WIZARD_AUTO_RESTORE_PASSWORD state file.
+if ! touch "$WIZARD_AUTO_RESTORE_PASSWORD"
 then
-    echo "ERROR: Failed to create the WIZARD_AUTO_RESTORE_HSM state file."
+    echo "ERROR: Failed to create the WIZARD_AUTO_RESTORE_PASSWORD state file."
     exit 4
 fi
 
-log "Transitioned to WIZARD_AUTO_RESTORE_HSM state for automatic restore operation."
+log "Transitioned to WIZARD_AUTO_RESTORE_PASSWORD state for automatic restore operation."
 exit 0

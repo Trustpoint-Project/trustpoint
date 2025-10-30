@@ -152,7 +152,7 @@ class Command(BaseCommand, LoggerMixin):
             )
 
             try:
-                aes_key.load_aes_key()
+                aes_key.load_key()
                 self.log_and_stdout(f'KEK "{token.KEK_ENCRYPTION_KEY_LABEL}" loaded successfully')
             finally:
                 aes_key.close()

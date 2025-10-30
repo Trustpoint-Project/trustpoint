@@ -24,19 +24,35 @@ if [[ 1 -ne STATE_COUNT ]]; then
     exit 2
 fi
 
-# Removes the current WIZARD_AUTO_RESTORE state file.
-if ! rm "$WIZARD_AUTO_RESTORE"
+if ! rm "$WIZARD_AUTO_RESTORE_PASSWORD"
 then
-    echo "ERROR: Failed to remove the WIZARD_AUTO_RESTORE state file."
+    echo "ERROR: Failed to remove the WIZARD_AUTO_RESTORE_PASSWORD state file."
     exit 3
 fi
 
-# Creates the WIZARD_COMPLETED state file.
 if ! touch "$WIZARD_COMPLETED"
 then
     echo "ERROR: Failed to create the WIZARD_COMPLETED state file."
     exit 4
 fi
 
-log "Transitioned from WIZARD_AUTO_RESTORE to WIZARD_COMPLETED state. Automatic restore operation completed."
+log "Transitioned from WIZARD_AUTO_RESTORE_PASSWORD to WIZARD_COMPLETED state. Automatic restore operation completed."
+
+log "Configuring Apache and TLS after successful auto restore..."
+
+TRANSITION_DIR="/etc/trustpoint/wizard/transition"
+
+# Configure Apache
+if ! "$TRANSITION_DIR/configure_apache.sh"; then
+    log "ERROR: Failed to configure Apache"
+    exit 5
+fi
+
+# Configure TLS
+if ! "$TRANSITION_DIR/update_tls.sh"; then
+    log "ERROR: Failed to update TLS configuration"
+    exit 6
+fi
+
+log "Apache and TLS configuration completed successfully"
 exit 0
