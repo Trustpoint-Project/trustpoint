@@ -14,7 +14,7 @@
             <div>{{ cert.signature_algorithm }}</div>
         </div>
 
-        {% if cert.signature_algorithm_padding_scheme != 'None' %}
+        {% if cert.signature_algorithm_padding_scheme != '' %}
             <div>
                 <div>{% trans 'Signature Algorithm Padding Scheme' %}</div>
                 <div>{{ cert.signature_algorithm_padding_scheme }}</div>
@@ -38,7 +38,7 @@
         <div>
             <div>{% trans 'Signature Algorithm Key Size' %}</div>
             <div>
-                {{ cert.issuer_references.first.spki_key_size }} Bits
+                {{ cert.spki_key_size }} Bits
             </div>
         </div>
     </div>

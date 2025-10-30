@@ -119,7 +119,7 @@
                                     <div>{{ issuing_ca_certificate.spki_algorithm }}</div>
                                 </div>
     
-                                {% if issuing_ca_certificate.spki_ec_curve_oid != 'None' %}
+                                {% if issuing_ca_certificate.spki_ec_curve_oid != '' %}
                                     <div>
                                         <div>Public Key Curve OID</div>
                                         <div>{{ issuing_ca_certificate.spki_ec_curve_oid }}</div>

@@ -13,14 +13,14 @@
             <div>{{ cert.spki_algorithm }}</div>
         </div>
 
-        {% if cert.issuer and cert.spki_ec_curve_oid != 'None' %}
+        {% if cert.issuer and cert.spki_ec_curve_oid != '' %}
             <div>
                 <div>{% trans 'Public Key Curve OID' %}</div>
                 <div>{{ cert.spki_ec_curve_oid }}</div>
             </div>
         {% endif %}
 
-        {% if cert.issuer and cert.spki_ec_curve %}
+        {% if cert.issuer and cert.spki_ec_curve_oid %}
             <div>
                 <div>{% trans 'Public Key Curve' %}</div>
                 <div>{{ cert.spki_ec_curve }}</div>

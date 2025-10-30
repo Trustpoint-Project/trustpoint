@@ -1,7 +1,8 @@
 {% load i18n %}
 {% block basic_constraints_extension %}
+ <h2>{% trans 'Basic Constraints Extension' %}</h2><hr class="hr-m">
     {% if cert.basic_constraints_extension %}
-        <h2>{% trans 'Basic Constraints Extension' %}</h2><hr class="hr-m">
+
         <div class="tp-kvp-list">
             <div>
                 <div>{% trans 'Extension OID' %}</div>
@@ -11,7 +12,7 @@
                 <div>{% trans 'Critical' %}</div>
                 <div>{{ cert.basic_constraints_extension.critical }}</div>
             </div>
-            <hr>
+
             <div>
                 <div>{% trans 'CA' %}</div>
                 <div>{{ cert.basic_constraints_extension.ca }}</div>
@@ -21,5 +22,7 @@
                 <div>{{ cert.basic_constraints_extension.path_length_constraint }}</div>
             </div>
         </div>
+
+
     {% endif %}
 {% endblock basic_constraints_extension %}
