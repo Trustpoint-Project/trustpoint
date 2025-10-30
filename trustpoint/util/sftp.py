@@ -49,7 +49,6 @@ class SftpClient:
         self.private_key_text: str | None = _get('private_key', '') or None
         self.passphrase: str | None = _get('key_passphrase', '') or None
 
-        self.store_locally: bool = bool(_get('local_storage', default=False))
         self.remote_directory: str = (_get('remote_directory', '') or '').strip()
 
         if self.auth_method:
@@ -127,7 +126,7 @@ class SftpClient:
             msg = f'SSH error: {e}'
             raise SftpError(msg) from e
         except (socket.gaierror, OSError) as e:
-            msg = f'Could not connect to {self.host}:{self.port} – {e}'
+            msg = f'Could not connect to {self.host}:{self.port} - {e}'
             raise SftpError(msg) from e
 
     def test_connection(self) -> None:
