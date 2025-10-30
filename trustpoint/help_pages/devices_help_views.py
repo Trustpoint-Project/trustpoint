@@ -1051,11 +1051,11 @@ class AbstractDeviceOnboardingEstDomainCredentialHelpView(PageContextMixin, Deta
             raise Http404(err_msg)
         self.onboarding_config = self.object.onboarding_config
 
-        if not self.domain:
+        if not self.object.domain:
             err_msg = _('No domain is configured for this device.')
             raise Http404(err_msg)
         # @TODO: When device is onboarded on multiple domains make sure to select the correct domain
-        self.domain = self.domain
+        self.domain = self.object.domain
         self.certificate_profile = self.kwargs.get('certificate_template')
         if not self.certificate_profile:
             err_msg = _('Failed to get certificate profile')
