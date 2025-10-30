@@ -55,7 +55,10 @@ class CmpInitializationRequestView(View):
         authenticator = CmpAuthentication()
         authenticator.authenticate(ctx)
 
-        authorizer = CmpAuthorization(['tls-server', 'tls-client', 'domaincredential'], ['initialization'])
+        authorizer = CmpAuthorization(
+            ['tls-server', 'tls-client', 'opc-ua-server', 'opc-ua-client', 'domaincredential'],
+            ['certification']
+        )
         authorizer.authorize(ctx)
 
         ProfileValidator.validate(ctx)
@@ -102,7 +105,10 @@ class CmpCertificationRequestView(View):
         authenticator = CmpAuthentication()
         authenticator.authenticate(ctx)
 
-        authorizer = CmpAuthorization(['tls-server', 'tls-client', 'domaincredential'], ['certification'])
+        authorizer = CmpAuthorization(
+            ['tls-server', 'tls-client', 'opc-ua-server', 'opc-ua-client', 'domaincredential'],
+            ['certification']
+        )
         authorizer.authorize(ctx)
 
         ProfileValidator.validate(ctx)

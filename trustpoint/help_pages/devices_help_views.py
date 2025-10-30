@@ -395,23 +395,14 @@ class DeviceNoOnboardingCmpSharedSecretHelpView(BaseHelpView):
     """Help view for the case of no onboarding using CMP shared-secret for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = NoOnboardingCmpSharedSecretStrategy(
-        allowed_app_cert_profiles=[ApplicationCertificateProfile.TLS_CLIENT, ApplicationCertificateProfile.TLS_SERVER]
-    )
+    strategy = NoOnboardingCmpSharedSecretStrategy(allowed_app_cert_profiles=list(ApplicationCertificateProfile))
 
 
 class OpcUaGdsNoOnboardingCmpSharedSecretHelpView(BaseHelpView):
     """Help view for the case of no onboarding using CMP shared-secret for OPC-UA GDS abstractions."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingCmpSharedSecretStrategy(
-        allowed_app_cert_profiles=[
-            ApplicationCertificateProfile.TLS_CLIENT,
-            ApplicationCertificateProfile.TLS_SERVER,
-            ApplicationCertificateProfile.OPC_UA_CLIENT,
-            ApplicationCertificateProfile.OPC_UA_SERVER,
-        ]
-    )
+    strategy = NoOnboardingCmpSharedSecretStrategy(allowed_app_cert_profiles=list(ApplicationCertificateProfile))
 
 
 class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
@@ -541,23 +532,14 @@ class DeviceNoOnboardingEstUsernamePasswordHelpView(BaseHelpView):
     """Help view for the case of no onboarding using CMP shared-secret generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = NoOnboardingEstUsernamePasswordStrategy(
-        allowed_app_cert_profiles=[ApplicationCertificateProfile.TLS_CLIENT, ApplicationCertificateProfile.TLS_SERVER]
-    )
+    strategy = NoOnboardingEstUsernamePasswordStrategy(allowed_app_cert_profiles=list(ApplicationCertificateProfile))
 
 
 class OpcUaGdsNoOnboardingEstUsernamePasswordHelpView(BaseHelpView):
     """Help view for the case of no onboarding using CMP shared-secret for OPC-UA GDS abstractions."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingEstUsernamePasswordStrategy(
-        allowed_app_cert_profiles=[
-            ApplicationCertificateProfile.TLS_CLIENT,
-            ApplicationCertificateProfile.TLS_SERVER,
-            ApplicationCertificateProfile.OPC_UA_CLIENT,
-            ApplicationCertificateProfile.OPC_UA_SERVER,
-        ]
-    )
+    strategy = NoOnboardingEstUsernamePasswordStrategy(allowed_app_cert_profiles=list(ApplicationCertificateProfile))
 
 
 # --------------------- Onboarding - Domain Credential - Shared Secrets - Help Page Implementations --------------------
@@ -721,14 +703,14 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
 
 
 class DeviceOnboardingDomainCredentialEstUsernamePasswordHelpView(BaseHelpView):
-    """abc."""
+    """Help view for the case of onboarding using EST username & password for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
     strategy = OnboardingDomainCredentialEstUsernamePasswordStrategy()
 
 
 class OpcUaGdsOnboardingDomainCredentialEstUsernamePasswordHelpView(BaseHelpView):
-    """abc."""
+    """Help view for the case of onboarding using EST username & password for OPC-UA GDS abstractions."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = OnboardingDomainCredentialEstUsernamePasswordStrategy()
