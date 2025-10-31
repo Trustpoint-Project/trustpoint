@@ -6,6 +6,8 @@ DEVICES_PAGE_CATEGORY = 'devices'
 DEVICES_PAGE_DEVICES_SUBCATEGORY = 'devices'
 DEVICES_PAGE_OPC_UA_SUBCATEGORY = 'opc_ua_gds'
 
+PKI_PAGE_CATEGORY = 'pki'
+PKI_PAGE_DOMAIN_SUBCATEGORY = 'domains'
 
 class PageContextMixin:
     """Mixin which adds data to the context for the devices application."""
