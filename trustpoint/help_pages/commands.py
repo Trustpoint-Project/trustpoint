@@ -488,6 +488,33 @@ class CmpClientCertificateCommandBuilder:
             f'-extracertsout full-chain-{cred_number}.pem'
         )
 
+    @staticmethod
+    def get_idevid_domain_credential_command(host: str) -> str:
+        """Gets the idevid domain credential command.
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
+
+        Returns:
+            The constructed command.
+        """
+        return (
+            'openssl cmp \\\n'
+            '-cmd ir \\\n'
+            '-implicit_confirm \\\n'
+            f'-server {host} \\\n'
+            '-tls_used \\\n'
+            '-cert idevid.pem \\\n'
+            '-key idevid.key \\\n'
+            '-extracerts idevid_chain.pem \\\n'
+            '-subject "/CN=Trustpoint Domain Credential" \\\n'
+            '-newkey domain_credential_key.pem \\\n'
+            '-certout domain_credential_cert.pem \\\n'
+            '-chainout chain_without_root.pem \\\n'
+            '-extracertsout full_chain.pem \\\n'
+            '-srvcert issuing_ca_cert.pem'
+        )
+
 
 class EstClientCertificateCommandBuilder:
     """Builds EST username-password commands for different certificate profiles."""
@@ -514,7 +541,7 @@ class EstClientCertificateCommandBuilder:
 
         Args:
             cred_number: The credential number - counter of issued credentials.
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./est/...
 
         Returns:
             The constructed command.
@@ -529,3 +556,76 @@ class EstClientCertificateCommandBuilder:
             f'-o certificate-{cred_number}.der \\\n'
             f'{host}'
         )
+
+    @staticmethod
+    def get_idevid_gen_csr_command() -> str:
+        """Gets the IDevID gen CSR command.
+
+        Returns:
+            The constructed command.
+        """
+        return (
+            'openssl req \\\n'
+            '-new \\\n'
+            '-key idevid.key \\\n'
+            '-outform der \\\n'
+            '-out domain_credential_csr.der \\\n'
+            '-subj "/CN="'
+        )
+
+    @staticmethod
+    def get_idevid_enroll_domain_credential_command(host: str) -> str:
+        """Gets the IDevID enroll domain credential command.
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./est/...
+
+        Returns:
+            The constructed command.
+        """
+        return (
+            'curl \\\n'
+            '--cert idevid.pem \\\n'
+            '--key idevid.key \\\n'
+            '--cacert server_cert.pem \\\n'
+            '--header "Content-Type: application/pkcs10" \\\n'
+            '--data-binary "@domain_credential_csr.der" \\\n'
+            '-o certificate.der \\\n'
+            f'{host}'
+        )
+
+    @staticmethod
+    def get_idevid_der_pem_conversion_command() -> str:
+        """Gets the IDevID DER to PEM conversion command.
+
+        Returns:
+            The constructed command.
+        """
+        return 'openssl x509 \\\n-inform der \\\n-in certificate.der \\\n-out certificate.pem'
+
+    @staticmethod
+    def get_idevid_ca_certs_command(host: str) -> str:
+        """Gets the IDevID ca certs command.
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./est/...
+
+        Returns:
+            The constructed command.
+        """
+        return (
+            'curl -X GET \\\n'
+            f'"{host}" \\\n'
+            '--cacert server_cert.pem \\\n'
+            '-H "Accept: application/pkcs7-mime" \\\n'
+            '| base64 --decode > cacerts.p7b'
+        )
+
+    @staticmethod
+    def get_idevid_pkcs7_pem_conversion_command() -> str:
+        """Gets the IDevID PKCS#7 to PEM conversion command.
+
+        Returns:
+            The constructed command.
+        """
+        return 'openssl pkcs7 \\\n-print_certs \\\n-inform DER \\\n-in cacerts.p7b \\\n-out cacerts.pem'
