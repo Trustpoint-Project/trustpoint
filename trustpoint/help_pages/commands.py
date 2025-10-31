@@ -65,7 +65,7 @@ class CmpSharedSecretCommandBuilder:
             f'-subject "/CN=Trustpoint-TLS-Client-Credential-{cred_number}" \\\n'
             '-days 10 \\\n'
             f'-newkey key-{cred_number}.pem \\\n'
-            '-certout cert.pem \\\n'
+            f'-certout certificate-{cred_number}.pem \\\n'
             '-chainout chain-without-root.pem \\\n'
             '-extracertsout full-chain.pem'
         )
@@ -95,7 +95,7 @@ class CmpSharedSecretCommandBuilder:
             '-days 10 \\\n'
             '-sans "critical 127.0.0.1 ::1 localhost" \\\n'
             f'-newkey key-{cred_number}.pem \\\n'
-            '-certout cert.pem \\\n'
+            f'-certout certificate-{cred_number}.pem \\\n'
             '-chainout chain-without-root.pem \\\n'
             '-extracertsout full-chain.pem'
         )
@@ -125,7 +125,7 @@ class CmpSharedSecretCommandBuilder:
             '-days 10 \\\n'
             f'-sans "critical URI:trustpoint.opc-ua-uri.de/credential-{cred_number}" \\\n'
             f'-newkey key-{cred_number}.pem \\\n'
-            '-certout cert.pem \\\n'
+            f'-certout certificate-{cred_number}.pem \\\n'
             '-chainout chain-without-root.pem \\\n'
             '-extracertsout full-chain.pem'
         )
@@ -155,7 +155,7 @@ class CmpSharedSecretCommandBuilder:
             '-days 10 \\\n'
             f'-sans "critical 127.0.0.1 ::1 localhost URI::trustpoint.opc-ua-uri.de/credential-{cred_number}" \\\n'
             f'-newkey key-{cred_number}.pem \\\n'
-            '-certout cert.pem \\\n'
+            f'-certout certificate-{cred_number}.pem \\\n'
             '-chainout chain-without-root.pem \\\n'
             '-extracertsout full-chain.pem'
         )
