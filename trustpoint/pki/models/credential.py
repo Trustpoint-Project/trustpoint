@@ -26,6 +26,7 @@ from util.encrypted_fields import EncryptedCharField
 from util.field import UniqueNameValidator
 
 from pki.models import CertificateModel
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -454,6 +455,8 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         Returns:
             CertificateModel: The saved certificate model instance.
         """
+        certificate = CertificateModel.save_certificate(normalized_credential_serializer.certificate)
+        # TODO(AlexHx8472): Verify that the credential is valid in respect to the credential_type!!!  # noqa: FIX002
         if normalized_credential_serializer.certificate is None:
             msg = 'Certificate cannot be None'
             raise ValueError(msg)
