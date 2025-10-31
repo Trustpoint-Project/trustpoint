@@ -8,6 +8,7 @@ from cryptography import x509
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
+from trustpoint.logger import LoggerMixin
 from trustpoint_core import oid
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
@@ -15,12 +16,10 @@ from trustpoint_core.serializer import (
     CredentialSerializer,
     PrivateKeySerializer,
 )
-import logging
 from util.db import CustomDeleteActionModel
 from util.field import UniqueNameValidator
 
 from pki.models import CertificateModel
-from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -30,7 +29,13 @@ if TYPE_CHECKING:
     from trustpoint_core.crypto_types import PrivateKey
 
 
-__all__ = ['CertificateChainOrderModel', 'CredentialAlreadyExistsError', 'CredentialModel', 'IDevIDReferenceModel', 'OwnerCredentialModel',]
+__all__ = [
+    'CertificateChainOrderModel',
+    'CredentialAlreadyExistsError',
+    'CredentialModel',
+    'IDevIDReferenceModel',
+    'OwnerCredentialModel',
+]
 
 
 class CredentialAlreadyExistsError(ValidationError):
@@ -147,7 +152,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             CredentialModel: The stored credential model.
         """
         certificate = CertificateModel.save_certificate(normalized_credential_serializer.certificate)
-        # TODO(AlexHx8472): Verify that the credential is valid in respect to the credential_type!!!
+        # TODO(AlexHx8472): Verify that the credential is valid in respect to the credential_type!!!  # noqa: FIX002
 
         credential_model = cls.objects.create(
             certificate=certificate,
@@ -455,7 +460,7 @@ class CertificateChainOrderModel(models.Model):
         """
         return self.__repr__()
 
-    # TODO(AlexHx8472): Validate certificate chain!
+    # TODO(AlexHx8472): Validate certificate chain!  # noqa: FIX002
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Stores a CertificateChainOrderModel in the database.
 
@@ -626,7 +631,12 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
                 if san_uri_str.startswith('dev-owner:'):
                     idevid_refs.add(san_uri_str)
         if not idevid_refs:
-            raise ValidationError(_('The provided certificate is not a valid DevOwnerID; it does not contain a valid IDevID reference in the SAN.'))
+            raise ValidationError(
+                _(
+                    'The provided certificate is not a valid DevOwnerID; '
+                    'it does not contain a valid IDevID reference in the SAN.'
+                )
+            )
 
         credential_type = CredentialModel.CredentialTypeChoice.DEV_OWNER_ID
 

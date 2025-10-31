@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from cryptography.hazmat.primitives import serialization
-from devices.views import ActiveTrustpointTlsServerCredentialModelMissingErrorMsg, NamedCurveMissingForEccErrorMsg
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
@@ -18,19 +16,17 @@ from django.views.generic import DeleteView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import CreateView, FormView, UpdateView
 from django.views.generic.list import ListView
-from management.models import TlsSettings
-from trustpoint_core import oid
-
-from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
-from pki.models import CertificateModel, DevIdRegistration, DomainModel, IssuingCaModel
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TruststoreModel
-from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
     ContextDataMixin,
     ListInDetailView,
     SortableTableMixin,
 )
+
+from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
+from pki.models import CertificateModel, DevIdRegistration, DomainModel, IssuingCaModel
+from pki.models.truststore import TruststoreModel
+from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -123,7 +119,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds (no) additional context data."""
         context = super().get_context_data(**kwargs)
-        domain: DomainModel = cast(DomainModel, self.get_object())
+        domain: DomainModel = cast('DomainModel', self.get_object())
 
         issued_credentials = domain.issued_credentials.all()
 
@@ -314,7 +310,7 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
         domain: DomainModel = self.get_domain()
         # PyCharm TypeChecker issue - this passes mypy
         # noinspection PyTypeChecker
-        # TODO(AlexHx8472): This must be limited to the actual domain.
+        # TODO(AlexHx8472): This must be limited to the actual domain.  # noqa: FIX002
         return CertificateModel.objects.filter(
             issuer_public_bytes=domain.issuing_ca.credential.certificate.subject_public_bytes
         )
