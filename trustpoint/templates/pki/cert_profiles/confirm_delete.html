@@ -1,0 +1,55 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load static %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+    <form method="POST" autocomplete="off">
+        {% csrf_token %}
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h1>{% trans 'Confirm Certificate Profile Deletion' %}</h1>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="tp-card-centered-content">
+                    {% for profile in profiles %}
+                        <h2>({{ forloop.counter }}) {% trans 'Certificate Profile' %}: {{ profile.unique_name }}</h2>
+                        <hr class="hr-m">
+                        <div class="tp-kvp-list">
+                            <div>
+                                <div>{% trans 'Certificate Profile' %}</div>
+                                <div>
+                                    <a href="{% url 'pki:certificate-profiles' pk=profile.id %}">
+                                        {{ profile.unique_name }}
+                                    </a>
+                                </div>
+                            </div>
+                            <div>
+                                <div>{% trans 'Serial Number' %}</div>
+                                <div>{{ owner_credential.credential.certificate.serial_number }}</div>
+                            </div>
+                            <div>
+                                <div>Fingerprint (SHA256)</div>
+                                <div>{{ owner_credential.credential.certificate.sha256_fingerprint }}</div>
+                            </div>
+                            <div>
+                                <div>Valid for number of IDevIDs</div>
+                                <div>{{ owner_credential.idevid_ref_set.count }}</div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="card-footer d-flex">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'pki:owner_credentials' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                    <button type="submit" class="btn btn-danger">{% trans 'Delete DevOwnerIDs' %}</button>
+                </div>
+            </div>
+        </div>
+    </form>
+{% endblock content %}

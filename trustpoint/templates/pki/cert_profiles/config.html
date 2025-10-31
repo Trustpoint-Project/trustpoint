@@ -1,0 +1,43 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+
+<div class="card">
+
+    <div class="card-header">
+        <div class="">
+            <h1>{% trans 'Edit Certificate Profile' %}</h1>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="tp-card-centered-content">
+            <h2>{% trans 'General' %}</h2>
+            <hr class="hr-m">
+            <div class="tp-kvp-list">
+                <div>
+                    <div>{% trans 'Unique Name' %}</div>
+                    <div>{{ profile.unique_name }}</div>
+                </div>
+            </div>
+            <h2>{% trans 'Profile Details' %}</h2>
+            <hr class="hr-m">
+            <textarea class="form-control" id="json-editor" rows="10" readonly></textarea>
+        </div>
+    </div>
+    <div class="card-footer d-flex">
+        <div class="tp-card-btn-footer m-1">
+            <a href="{% url 'pki:cert_profiles' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
+        </div>
+    </div>
+</div>
+
+{{ profile.profile_json|json_script:"json-data" }}
+
+<script>
+    const data = JSON.parse(document.getElementById("json-data").textContent);
+    document.getElementById("json-editor").value = JSON.stringify(data, null, 4);
+</script>
+
+{% endblock content %}

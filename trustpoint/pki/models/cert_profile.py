@@ -1,6 +1,7 @@
 """Module for certificate profile related models."""
 
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 
 from pki.models.domain import DomainModel
@@ -10,7 +11,11 @@ class CertificateProfileModel(models.Model):
     """Model representing a certificate profile."""
 
     unique_name = models.CharField(max_length=255, unique=True)
+    verbose_name = models.CharField(max_length=255, blank=True, default='')
     profile_json = models.JSONField()
+
+    created_at = models.DateTimeField(verbose_name=_('Created-At'), auto_now_add=True)
+    updated_at = models.DateTimeField(verbose_name=_('Updated-At'), auto_now=True)
 
     class Meta(TypedModelMeta):
         """Meta information."""
@@ -38,7 +43,10 @@ class DomainAllowedCertificateProfileModel(models.Model):
 
     class Meta(TypedModelMeta):
         """Meta information."""
-        unique_together = ('domain', 'certificate_profile')
+        unique_together = (
+            ('domain', 'certificate_profile'),
+            ('domain', 'alias'),
+        )
 
     def __str__(self) -> str:
         """String representation of the DomainAllowedCertificateProfileModel."""
