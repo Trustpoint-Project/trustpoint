@@ -52,9 +52,15 @@
         </div>
         <div class="card-footer">
             <div class="tp-card-btn-footer">
-                <a href="{% url clm_url pk=device.pk %}" class="btn btn-primary">
-                    {% trans 'Back to Certificate Lifecycle Management Summary' %}
-                </a>
+                {% if clm_url %}
+                    <a href="{% url clm_url pk=device.pk %}" class="btn btn-primary">
+                        {% trans 'Back to Certificate Lifecycle Management Summary' %}
+                    </a>
+                {% elif back_url %}
+                    <a href="{% url back_url pk=idevid_registration.domain.pk %}" class="btn btn-primary">
+                        {% trans 'Back to Domain Configuration' %}
+                    </a>
+                {% endif %}
             </div>
         </div>
     </div>
