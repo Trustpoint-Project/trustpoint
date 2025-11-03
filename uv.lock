@@ -1392,7 +1392,7 @@ wheels = [
 
 [[package]]
 name = "trustpoint"
-version = "0.3.0"
+version = "0.4.0.dev1"
 source = { editable = "." }
 dependencies = [
     { name = "crispy-bootstrap5" },
