@@ -56,10 +56,14 @@
                             </label>
                             {{ form.module_path }}
                             {% if form.module_path.help_text %}
-                                <div class="form-text">{{ form.module_path.help_text }}</div>
+                                <div class="form-text light-only">{{ form.module_path.help_text }}</div>
+                                <div class="form-text dark-only text-light">{{ form.module_path.help_text }}</div>
                             {% endif %}
                             {% if form.module_path.errors %}
-                                <div class="invalid-feedback d-block">
+                                <div class="invalid-feedback d-block light-only">
+                                    {{ form.module_path.errors }}
+                                </div>
+                                <div class="invalid-feedback d-block dark-only text-light">
                                     {{ form.module_path.errors }}
                                 </div>
                             {% endif %}
@@ -71,10 +75,14 @@
                             </label>
                             {{ form.slot }}
                             {% if form.slot.help_text %}
-                                <div class="form-text">{{ form.slot.help_text }}</div>
+                                <div class="form-text light-only">{{ form.slot.help_text }}</div>
+                                <div class="form-text dark-only text-light">{{ form.slot.help_text }}</div>
                             {% endif %}
                             {% if form.slot.errors %}
-                                <div class="invalid-feedback d-block">
+                                <div class="invalid-feedback d-block light-only">
+                                    {{ form.slot.errors }}
+                                </div>
+                                <div class="invalid-feedback d-block dark-only text-light">
                                     {{ form.slot.errors }}
                                 </div>
                             {% endif %}
@@ -86,10 +94,14 @@
                             </label>
                             {{ form.label }}
                             {% if form.label.help_text %}
-                                <div class="form-text">{{ form.label.help_text }}</div>
+                                <div class="form-text light-only">{{ form.label.help_text }}</div>
+                                <div class="form-text dark-only text-light">{{ form.label.help_text }}</div>
                             {% endif %}
                             {% if form.label.errors %}
-                                <div class="invalid-feedback d-block">
+                                <div class="invalid-feedback d-block light-only">
+                                    {{ form.label.errors }}
+                                </div>
+                                <div class="invalid-feedback d-block dark-only text-light">
                                     {{ form.label.errors }}
                                 </div>
                             {% endif %}

@@ -692,8 +692,15 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add additional context data."""
-        return super().get_context_data(**kwargs)
+        """Add password requirements to the context."""
+        context = super().get_context_data(**kwargs)
+        context['password_requirements'] = [
+            _('Your password can’t be too similar to your other personal information.'),  # noqa: RUF001
+            _('Your password must contain at least 8 characters.'),
+            _('Your password can’t be a commonly used password.'),  # noqa: RUF001
+            _('Your password can’t be entirely numeric.'),  # noqa: RUF001
+        ]
+        return context
 
     def form_valid(self, form: BackupPasswordForm) -> HttpResponse:
         """Handle valid form submission."""

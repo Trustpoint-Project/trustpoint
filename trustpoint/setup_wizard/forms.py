@@ -152,15 +152,15 @@ class HsmSetupForm(forms.Form):
 
             self.fields['module_path'].widget.attrs.update({
                 'readonly': True,
-                'class': 'form-control bg-light'
+                'class': 'form-control'
             })
             self.fields['slot'].widget.attrs.update({
                 'readonly': True,
-                'class': 'form-control bg-light'
+                'class': 'form-control'
             })
             self.fields['label'].widget.attrs.update({
                 'readonly': True,
-                'class': 'form-control bg-light'
+                'class': 'form-control'
             })
 
         elif hsm_type == 'physical':
