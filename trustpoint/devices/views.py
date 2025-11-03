@@ -1510,6 +1510,7 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
         context['is_browser_dl'] = self.is_browser_download
         context['show_browser_dl'] = not self.is_browser_download
         context['issued_credential'] = issued_credential
+        context['suggested_password'] = CredentialDownloadForm.get_suggested_password()
 
         if 'form' not in kwargs:
             context['form'] = self.form_class()
@@ -1538,6 +1539,7 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
         form = self.form_class(self.request.POST)
 
         if form.is_valid():
+
             password = form.cleaned_data['password'].encode()
 
             try:
