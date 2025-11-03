@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from cryptography.hazmat.primitives import serialization
-from devices.views import ActiveTrustpointTlsServerCredentialModelMissingErrorMsg, NamedCurveMissingForEccErrorMsg
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
@@ -18,19 +16,17 @@ from django.views.generic import DeleteView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import CreateView, FormView, UpdateView
 from django.views.generic.list import ListView
-from management.models import TlsSettings
-from trustpoint_core import oid
-
-from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
-from pki.models import CertificateModel, DevIdRegistration, DomainModel, IssuingCaModel
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TruststoreModel
-from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
     ContextDataMixin,
     ListInDetailView,
     SortableTableMixin,
 )
+
+from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
+from pki.models import CertificateModel, DevIdRegistration, DomainModel, IssuingCaModel
+from pki.models.truststore import TruststoreModel
+from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -123,7 +119,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds (no) additional context data."""
         context = super().get_context_data(**kwargs)
-        domain: DomainModel = cast(DomainModel, self.get_object())
+        domain: DomainModel = cast('DomainModel', self.get_object())
 
         issued_credentials = domain.issued_credentials.all()
 
@@ -314,7 +310,7 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
         domain: DomainModel = self.get_domain()
         # PyCharm TypeChecker issue - this passes mypy
         # noinspection PyTypeChecker
-        # TODO(AlexHx8472): This must be limited to the actual domain.
+        # TODO(AlexHx8472): This must be limited to the actual domain.  # noqa: FIX002
         return CertificateModel.objects.filter(
             issuer_public_bytes=domain.issuing_ca.credential.certificate.subject_public_bytes
         )
@@ -334,7 +330,7 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
 class OnboardingMethodSelectIdevidHelpView(DomainContextMixin, DetailView[DevIdRegistration]):
     """View to select the protocol for IDevID enrollment."""
 
-    template_name = 'help/idevid_method_select.html'
+    template_name = 'pki/domains/idevid_method_select.html'
     context_object_name = 'devid_registration'
     model = DevIdRegistration
 
@@ -345,76 +341,3 @@ class OnboardingMethodSelectIdevidHelpView(DomainContextMixin, DetailView[DevIdR
 
         return context
 
-
-class OnboardingIdevidRegistrationHelpView(DomainContextMixin, DetailView[DevIdRegistration]):
-    """Help view for the IDevID Registration, which displays the required OpenSSL commands."""
-
-    http_method_names = ('get',)
-
-    model = DevIdRegistration
-    context_object_name = 'devid_registration'
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds information about the required OpenSSL commands to the context.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            The context to render the page.
-        """
-        context = super().get_context_data(**kwargs)
-        context['pk'] = self.kwargs.get('pk')
-        devid_registration: DevIdRegistration = self.object
-
-        if devid_registration.domain.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.RSA:
-            domain_credential_key_gen_command = (
-                f'openssl genrsa -out domain_credential_key.pem {devid_registration.domain.public_key_info.key_size}'
-            )
-            key_gen_command = f'openssl genrsa -out key.pem {devid_registration.domain.public_key_info.key_size}'
-        elif devid_registration.domain.public_key_info.public_key_algorithm_oid == oid.PublicKeyAlgorithmOid.ECC:
-            if not devid_registration.domain.public_key_info.named_curve:
-                raise Http404(NamedCurveMissingForEccErrorMsg)
-            domain_credential_key_gen_command = (
-                f'openssl ecparam -name {devid_registration.domain.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out domain_credential_key.pem'
-            )
-            key_gen_command = (
-                f'openssl ecparam -name {devid_registration.domain.public_key_info.named_curve.ossl_curve_name} '
-                f'-genkey -noout -out key.pem'
-            )
-        else:
-            err_msg = 'Unsupported public key algorithm'
-            raise ValueError(err_msg)
-
-        ipv4_address = TlsSettings.get_first_ipv4_address()
-
-        context['host'] = f'{ipv4_address}:{self.request.META.get("SERVER_PORT", "443")}'
-        context['domain_credential_key_gen_command'] = domain_credential_key_gen_command
-        context['key_gen_command'] = key_gen_command
-        context['issuing_ca_pem'] = (
-            devid_registration.domain.get_issuing_ca_or_value_error().credential.get_certificate()
-            .public_bytes(encoding=serialization.Encoding.PEM)
-            .decode()
-        )
-        tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
-        if not tls_cert or not tls_cert.credential:
-            raise Http404(ActiveTrustpointTlsServerCredentialModelMissingErrorMsg)
-        context['trustpoint_server_certificate'] = (
-            tls_cert.credential.certificate.get_certificate_serializer().as_pem().decode('utf-8')
-        )
-        context['public_key_info'] = devid_registration.domain.public_key_info
-        context['domain'] = devid_registration.domain
-        return context
-
-
-class OnboardingCmpIdevidRegistrationHelpView(OnboardingIdevidRegistrationHelpView):
-    """Help view for the CMP IDevID Registration, which displays the required OpenSSL commands."""
-
-    template_name = 'help/cmp_idevid.html'
-
-
-class OnboardingEstIdevidRegistrationHelpView(OnboardingIdevidRegistrationHelpView):
-    """Help view for the EST IDevID Registration, which displays the required OpenSSL commands."""
-
-    template_name = 'help/est_idevid.html'

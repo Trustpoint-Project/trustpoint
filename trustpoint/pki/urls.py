@@ -1,6 +1,7 @@
 """URL configuration for the PKI application."""
 
 from django.urls import path, re_path
+from help_pages import pki_help_views
 
 from pki.views import certificates, domains, issuing_cas, owner_credentials, truststores
 from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
@@ -123,12 +124,12 @@ urlpatterns = [
     ),
     path(
         'domains/config/<int:pk>/help/cmp-idevid-registration/',
-        domains.OnboardingCmpIdevidRegistrationHelpView.as_view(),
+        pki_help_views.OnboardingCmpIdevidRegistrationHelpView.as_view(),
         name='help_onboarding_cmp_idevid_registration',
     ),
     path(
         'domains/config/<int:pk>/help/est-idevid-registration/',
-        domains.OnboardingEstIdevidRegistrationHelpView.as_view(),
+        pki_help_views.OnboardingEstIdevidRegistrationHelpView.as_view(),
         name='help_onboarding_est_idevid_registration',
     ),
     path('domains/detail/<int:pk>/', domains.DomainDetailView.as_view(), name='domains-detail'),

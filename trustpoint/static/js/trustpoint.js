@@ -345,11 +345,5 @@ function displayOnly(sectionIdToDisplay) {
 }
 
 certProfileSelect?.addEventListener("change", function() {
-    let a = certProfileSelect.value;
-    console.log(a);
-    displayOnly(a);
-    for (const [id, el] of Object.entries(sections)) {
-        console.log(id, el);
-    }
-    
+    displayOnly(certProfileSelect.value);   
 });
