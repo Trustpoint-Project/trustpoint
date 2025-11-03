@@ -246,7 +246,7 @@ class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView[Any]):
             self.logger.warning('SFTP test form invalid.')
             for field, errors in form.errors.items():
                 for error in errors:
-                    self.logger.warning('Form error: %(field)s: %(error)s', extra={'field': field, 'error': error})
+                    self.logger.warning('Form error: %s: %s', field, error)
 
         self.object_list = self.get_queryset()
         context = self.get_context_data()
@@ -272,7 +272,7 @@ class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView[Any]):
                 error_messages.extend([f'{field.capitalize()}: {error}' for error in errors])
 
         for err_msg in error_messages:
-            self.logger.warning('Backup settings form error: %(error_msg)s', extra={'error_msg': err_msg})
+            self.logger.warning('Backup settings form error: %s', err_msg)
             messages.error(request, err_msg)
 
         self.object_list = self.get_queryset()
