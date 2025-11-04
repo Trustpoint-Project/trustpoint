@@ -1,5 +1,5 @@
 """Models concerning the Trustpoint settings."""
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -102,7 +102,7 @@ class SecurityConfig(models.Model):
     def __str__(self) -> str:
         """Output as string."""
         return f'{self.security_mode}'
-    
+
     def apply_security_settings(self) -> None:
         """Apply appropriate configuration values based on the security mode."""
         if self.security_mode and self.notification_config:
@@ -134,14 +134,13 @@ class SecurityConfig(models.Model):
 
 
 class TlsSettings(models.Model):
-    """TLS settings model"""
+    """TLS settings model."""
 
-    ipv4_address = models.GenericIPAddressField(protocol="IPv4", null=True, blank=True)
+    ipv4_address = models.GenericIPAddressField(protocol='IPv4', null=True, blank=True)
 
     @classmethod
     def get_first_ipv4_address(cls) -> str:
         """Get the first IPv4 address or a default value."""
-
         try:
             network_settings = cls.objects.get(id=1)
             ipv4_address = network_settings.ipv4_address
@@ -152,24 +151,29 @@ class TlsSettings(models.Model):
 
 
 class AppVersion(models.Model):
+    """Model representing the application's version and last update timestamp."""
     objects: models.Manager['AppVersion']
 
     version = models.CharField(max_length=17)
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
+        """Metadata for the AppVersion model."""
         verbose_name = 'App Version'
 
     def __str__(self) -> str:
+        """Return a string representation of the version and update time."""
         return f'{self.version} @ {self.last_updated.isoformat()}'
 
 
 class BackupOptions(models.Model):
     """A singleton model (we always operate with pk=1) for backup settings.
+
     We store host/port/user/local_storage, plus either a password or an SSH key.
     """
 
     class AuthMethod(models.TextChoices):
+        """Enumeration of available authentication methods."""
         PASSWORD = 'password', 'Password'
         SSH_KEY   = 'ssh_key',  'SSH Key'
 
@@ -218,24 +222,27 @@ class BackupOptions(models.Model):
                   'Trailing slash is optional.'),
     )
 
-    def save(self, *args, **kwargs):
+    class Meta:
+        """Metadata for the BackupOptions."""
+        verbose_name = 'Backup Option'
+
+    def __str__(self) -> str:
+        """Return a string representation of backup server details."""
+        return f'{self.user}@{self.host}:{self.port} ({self.auth_method})'
+
+    def save(self, *args: Any, **kwargs: Any)-> None:
         """Ensure only one instance exists (singleton pattern)."""
         self.full_clean()
 
         super().save(*args, **kwargs)
 
-    def clean(self):
+    def clean(self) -> dict:
         """Prevent the creation of more than one instance."""
         if BackupOptions.objects.exists() and not self.pk:
-            raise ValidationError("Only one BackupOptions instance is allowed.")
+            msg = 'Only one BackupOptions instance is allowed.'
+            raise ValidationError(msg)
 
         return super().clean()
-
-    class Meta:
-        verbose_name = "Backup Option"
-
-    def __str__(self) -> str:
-        return f'{self.user}@{self.host}:{self.port} ({self.auth_method})'
 
 class LoggingConfig(models.Model):
     """Logging Configuration model."""

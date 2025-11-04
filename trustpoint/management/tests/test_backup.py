@@ -1,7 +1,6 @@
 """Test suite for the BackupOptions model."""
-from django.test import TestCase
 from django.core.exceptions import ValidationError
-
+from django.test import TestCase
 from management.forms import BackupOptionsForm
 from management.models import BackupOptions
 
@@ -11,34 +10,32 @@ class BackupOptionsModelTest(TestCase):
 
     def test_singleton_creation(self) -> None:
         """Test that attempts to create more than one BackupOptions instance."""
-
         BackupOptions.objects.create(
-            host="localhost",
+            host='localhost',
             port=22,
-            user="user",
+            user='user',
             local_storage=True
         )
         with self.assertRaises(ValidationError):
             BackupOptions.objects.create(
-                host="remote",
+                host='remote',
                 port=22,
-                user="another_user",
+                user='another_user',
                 local_storage=False
             )
 
     def test_singleton_save_overwrite(self) -> None:
         """Test that saving an existing BackupOptions instance overwrites its values."""
-
         instance = BackupOptions.objects.create(
-            host="localhost",
+            host='localhost',
             port=22,
-            user="user",
+            user='user',
             local_storage=True
         )
-        instance.host = "updated_host"
+        instance.host = 'updated_host'
         instance.save()
         self.assertEqual(BackupOptions.objects.count(), 1)
-        self.assertEqual(BackupOptions.objects.first().host, "updated_host")
+        self.assertEqual(BackupOptions.objects.first().host, 'updated_host')
 
 class BackupOptionsFormTest(TestCase):
     """Test suite for the BackupOptionsForm, ensuring validation logic."""
@@ -59,9 +56,9 @@ class BackupOptionsFormTest(TestCase):
         self.assertFalse(form.is_valid())
         error_message = form.errors.as_text()
 
-        self.assertIn("Host", error_message)
-        self.assertIn("Username", error_message)
-        self.assertIn("Remote Directory", error_message)
+        self.assertIn('Host', error_message)
+        self.assertIn('Username', error_message)
+        self.assertIn('Remote Directory', error_message)
 
     def test_sftp_password_auth_without_password(self) -> None:
         """Test validation fails when password is not provided for PASSWORD auth method."""
@@ -77,7 +74,7 @@ class BackupOptionsFormTest(TestCase):
         form = BackupOptionsForm(data=form_data)
 
         self.assertFalse(form.is_valid())
-        self.assertIn("Password is required when using password authentication.", form.errors['password'])
+        self.assertIn('Password is required when using password authentication.', form.errors['password'])
 
     def test_sftp_ssh_key_auth_without_private_key(self) -> None:
         """Test validation fails when private_key is not provided for SSH_KEY auth method."""
@@ -93,7 +90,7 @@ class BackupOptionsFormTest(TestCase):
         form = BackupOptionsForm(data=form_data)
 
         self.assertFalse(form.is_valid())
-        self.assertIn("Private key is required when using SSH Key authentication.", form.errors['private_key'])
+        self.assertIn('Private key is required when using SSH Key authentication.', form.errors['private_key'])
 
     def test_valid_sftp_password_auth(self) -> None:
         """Test that SFTP with PASSWORD auth method and valid password passes validation."""
