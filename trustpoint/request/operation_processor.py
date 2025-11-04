@@ -28,6 +28,8 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
 
     def process_operation(self, context: RequestContext) -> None:
         """Process the certificate issuance operation."""
+        if context.enrollment_request and not context.enrollment_request.is_valid():
+            return
         # decide which processor to use based on domain configuration
         if context.domain and context.domain.issuing_ca:
             processor = LocalCaCertificateIssueProcessor()

@@ -3,10 +3,8 @@
 
 function normalizeEmails(value) {
   if (!value) return [];
-  const parts = Array.isArray(value)
-    ? value.map(String)
-    : String(value).split(',');
-  return parts.map(s => s.trim()).filter(Boolean);
+  const parts = Array.isArray(value) ? value.map(String) : String(value).split(',');
+  return parts.map((s) => s.trim()).filter(Boolean);
 }
 
 const SEGMENT_CHARS = new Set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.'.split(''));
@@ -16,20 +14,18 @@ function isDotPath(s) {
   for (const ch of s) if (!SEGMENT_CHARS.has(ch)) return false;
   const parts = s.split('.');
   // Strip underscores for the alnum check (fix: previously a no-op)
-  return parts.every(p =>
-    p &&
-    (/[A-Za-z_]/.test(p[0])) &&
-    (/^[A-Za-z0-9]+$/.test(p.replaceAll('_','')))
+  return parts.every(
+    (p) => p && /[A-Za-z_]/.test(p[0]) && /^[A-Za-z0-9]+$/.test(p.replaceAll('_', ''))
   );
 }
 
 function knownTriples(triggersMap) {
-  // Build set of (handler, protocol, operation) from the API map.
+  // Build set of (handler, protocol_lc, operation) from the API map (protocol normalized).
   const set = new Set();
-  Object.values(triggersMap || {}).forEach(t => {
-    const h = (t.handler || '').trim();
-    const p = (t.protocol || '').trim();
-    const o = (t.operation || '').trim();
+  Object.values(triggersMap || {}).forEach((t) => {
+    const h = String(t.handler || '').trim();
+    const p = String(t.protocol || '').trim().toLowerCase();
+    const o = String(t.operation || '').trim();
     set.add([h, p, o].join('||'));
     // allow empty p/o for non-certificate handlers (defensive)
     if (!p && !o) set.add([h, '', ''].join('||'));
@@ -46,9 +42,10 @@ export function validateWizardState(state, triggersMap) {
   }
 
   // trigger (we only support single trigger in UI)
-  const h = (state.handler || '').trim();
-  const p = (state.protocol || '').trim();
-  const o = (state.operation || '').trim();
+  const h = String(state.handler || '').trim();
+  const p = String(state.protocol || '').trim().toLowerCase();
+  const o = String(state.operation || '').trim();
+
   if (!h) {
     errors.push('Event type (handler) is required.');
   } else {
@@ -98,19 +95,27 @@ export function validateWizardState(state, triggersMap) {
       if (s.type === 'Webhook') {
         const url = (params.url || '').trim();
         if (!/^https?:\/\//i.test(url)) {
-          errors.push(`Step #${i} (Webhook): url is required and must start with http:// or https://.`);
+          errors.push(
+            `Step #${i} (Webhook): url is required and must start with http:// or https://.`
+          );
         }
         const method = (params.method || 'POST').toUpperCase();
-        if (!['GET','POST','PUT','PATCH','DELETE'].includes(method)) {
-          errors.push(`Step #${i} (Webhook): method must be one of GET, POST, PUT, PATCH, DELETE.`);
+        if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+          errors.push(
+            `Step #${i} (Webhook): method must be one of GET, POST, PUT, PATCH, DELETE.`
+          );
         }
         const resultTo = (params.result_to || '').trim();
         if (resultTo && !isDotPath(resultTo)) {
-          errors.push(`Step #${i} (Webhook): result_to must be a variable path like "serial_number" or "http.status".`);
+          errors.push(
+            `Step #${i} (Webhook): result_to must be a variable path like "serial_number" or "http.status".`
+          );
         }
         const resultSource = (params.result_source || 'auto').trim().toLowerCase();
-        if (resultSource && !['auto','json','text','status','headers'].includes(resultSource)) {
-          errors.push(`Step #${i} (Webhook): result_source must be one of auto/json/text/status/headers.`);
+        if (resultSource && !['auto', 'json', 'text', 'status', 'headers'].includes(resultSource)) {
+          errors.push(
+            `Step #${i} (Webhook): result_source must be one of auto/json/text/status/headers.`
+          );
         }
         const exportsArr = params.exports || [];
         if (exportsArr != null && !Array.isArray(exportsArr)) {
@@ -121,17 +126,36 @@ export function validateWizardState(state, triggersMap) {
             const fromPath = String((e && e.from_path) || '').trim();
             const toPath = String((e && e.to_path) || '').trim();
             if (!fromPath) {
-              errors.push(`Step #${i} (Webhook): export #${j+1} from_path is required.`);
-            } else if (!(fromPath === 'status' || fromPath === 'text' || fromPath === 'json' || fromPath === 'headers' ||
-                       fromPath.startsWith('json.') || fromPath.startsWith('headers.'))) {
-              errors.push(`Step #${i} (Webhook): export #${j+1} from_path must be "status", "text", "json[.path]" or "headers[.path]".`);
-            } else if ((fromPath.startsWith('json.') || fromPath.startsWith('headers.')) && !isDotPath(fromPath)) {
-              errors.push(`Step #${i} (Webhook): export #${j+1} from_path has an invalid path segment.`);
+              errors.push(`Step #${i} (Webhook): export #${j + 1} from_path is required.`);
+            } else if (
+              !(
+                fromPath === 'status' ||
+                fromPath === 'text' ||
+                fromPath === 'json' ||
+                fromPath === 'headers' ||
+                fromPath.startsWith('json.') ||
+                fromPath.startsWith('headers.')
+              )
+            ) {
+              errors.push(
+                `Step #${i} (Webhook): export #${j + 1} from_path must be "status", "text", "json[.path]" or "headers[.path]".`
+              );
+            } else if (
+              (fromPath.startsWith('json.') || fromPath.startsWith('headers.')) &&
+              !isDotPath(fromPath)
+            ) {
+              errors.push(
+                `Step #${i} (Webhook): export #${j + 1} from_path has an invalid path segment.`
+              );
             }
             if (!toPath || !isDotPath(toPath)) {
-              errors.push(`Step #${i} (Webhook): export #${j+1} to_path must be a variable path like "serial_number" or "http.status".`);
+              errors.push(
+                `Step #${i} (Webhook): export #${j + 1} to_path must be a variable path like "serial_number" or "http.status".`
+              );
             } else if (seen.has(toPath)) {
-              errors.push(`Step #${i} (Webhook): duplicate to_path "${toPath}" in exports.`);
+              errors.push(
+                `Step #${i} (Webhook): duplicate to_path "${toPath}" in exports.`
+              );
             } else {
               seen.add(toPath);
             }
@@ -142,9 +166,15 @@ export function validateWizardState(state, triggersMap) {
   }
 
   // scopes (support Set or Array gracefully)
-  const caCount = Array.isArray(state.scopes?.CA) ? state.scopes.CA.length : (state.scopes?.CA?.size || 0);
-  const domCount = Array.isArray(state.scopes?.Domain) ? state.scopes.Domain.length : (state.scopes?.Domain?.size || 0);
-  const devCount = Array.isArray(state.scopes?.Device) ? state.scopes.Device.length : (state.scopes?.Device?.size || 0);
+  const caCount = Array.isArray(state.scopes?.CA)
+    ? state.scopes.CA.length
+    : state.scopes?.CA?.size || 0;
+  const domCount = Array.isArray(state.scopes?.Domain)
+    ? state.scopes.Domain.length
+    : state.scopes?.Domain?.size || 0;
+  const devCount = Array.isArray(state.scopes?.Device)
+    ? state.scopes.Device.length
+    : state.scopes?.Device?.size || 0;
   const scopeCount = (caCount || 0) + (domCount || 0) + (devCount || 0);
   if (scopeCount === 0) {
     errors.push('At least one scope (CA/Domain/Device) is required.');

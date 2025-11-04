@@ -4,12 +4,12 @@ from django.db import transaction
 
 from workflows.models import EnrollmentRequest, WorkflowInstance
 
-TERMINAL_GOOD = {WorkflowInstance.STATE_APPROVED, WorkflowInstance.STATE_COMPLETED}
-NONFINAL_ACTIVE = {WorkflowInstance.STATE_STARTING, WorkflowInstance.STATE_RUNNING, WorkflowInstance.STATE_AWAITING}
+TERMINAL_GOOD = {WorkflowInstance.STATE_APPROVED, WorkflowInstance.STATE_PASSED}
+NONFINAL_ACTIVE = {WorkflowInstance.STATE_RUNNING, WorkflowInstance.STATE_AWAITING}
 
 
 def recompute_request_state(req: EnrollmentRequest) -> None:
-    """Aggregate instances → req.aggregate_state.
+    """Aggregate instances → req.aggregated_state.
 
       - Rejected  if any instance is Rejected
       - Pending   if any instance is Starting/Running/AwaitingApproval
@@ -23,25 +23,24 @@ def recompute_request_state(req: EnrollmentRequest) -> None:
         states = list(qs.values_list('state', flat=True))
 
         if not states:
-            req.aggregate_state = EnrollmentRequest.STATE_NOMATCH
-            req.save(update_fields=['aggregate_state'])
+            req.aggregated_state = EnrollmentRequest.STATE_NOMATCH
+            req.save(update_fields=['aggregated_state'])
             return
 
         if any(s == WorkflowInstance.STATE_REJECTED for s in states):
-            req.aggregate_state = EnrollmentRequest.STATE_REJECTED
-            req.save(update_fields=['aggregate_state'])
+            req.aggregated_state = EnrollmentRequest.STATE_REJECTED
+            req.save(update_fields=['aggregated_state'])
             return
 
         if any(s in NONFINAL_ACTIVE for s in states):
-            req.aggregate_state = EnrollmentRequest.STATE_PENDING
-            req.save(update_fields=['aggregate_state'])
+            req.aggregated_state = EnrollmentRequest.STATE_PENDING
+            req.save(update_fields=['aggregated_state'])
             return
 
         if all(s in TERMINAL_GOOD for s in states):
-            req.aggregate_state = EnrollmentRequest.STATE_APPROVED
-            req.save(update_fields=['aggregate_state'])
+            req.aggregated_state = EnrollmentRequest.STATE_APPROVED
+            req.save(update_fields=['aggregated_state'])
             return
 
-        # Fallback: treat unknown combos as Pending
-        req.aggregate_state = EnrollmentRequest.STATE_PENDING
-        req.save(update_fields=['aggregate_state'])
+        # Fallback: treat unknown combos as Failed
+        req.finalize_to(EnrollmentRequest.STATE_FAILED)

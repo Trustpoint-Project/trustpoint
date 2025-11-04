@@ -427,11 +427,13 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
             raise Http404(err_msg)
         self.no_onboarding_config = self.object.no_onboarding_config
 
-        if not self.domain:
+        print('WHAT IS SELF: ')
+
+        if not self.object.domain:
             err_msg = _('No domain is configured for this device.')
             raise Http404(err_msg)
         # @TODO: When device is onboarded on multiple domains make sure to select the correct domain
-        self.domain = self.domain
+        self.domain = self.object.domain
         self.certificate_profile = self.kwargs.get('certificate_template')
         if not self.certificate_profile:
             err_msg = _('Failed to get certificate profile')
@@ -746,11 +748,11 @@ class AbstractOnboardingDomainCredentialCmpSharedSecretHelpView(PageContextMixin
             raise Http404(err_msg)
         self.onboarding_config = self.object.onboarding_config
 
-        if not self.domain:
+        if not self.object.domain:
             err_msg = _('No domain is configured for this device.')
             raise Http404(err_msg)
         # @TODO: When device is onboarded on multiple domains make sure to select the correct domain
-        self.domain = self.domain
+        self.domain = self.object.domain
 
         self.host = (
             f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}'
@@ -933,11 +935,11 @@ class AbstractOnboardingDomainCredentialEstUsernamePasswordHelpView(PageContextM
             raise Http404(err_msg)
         self.onboarding_config = self.object.onboarding_config
 
-        if not self.domain:
+        if not self.object.domain:
             err_msg = _('No domain is configured for this device.')
             raise Http404(err_msg)
         # @TODO: When device is onboarded on multiple domains make sure to select the correct domain
-        self.domain = self.domain
+        self.domain = self.object.domain
         self.certificate_profile = 'domaincredential'
         if not self.certificate_profile:
             err_msg = _('Failed to get certificate profile')
@@ -1338,7 +1340,7 @@ class AbstractOnboardingCmpDomainCredentialHelpView(PageContextMixin, DetailView
             raise Http404(exception) from exception
 
     def _get_cmp_issuer_root_ca_pk(self) -> None | int:
-        domain = self.domain
+        domain = self.object.domain
         if not domain:
             err_msg = 'domain not configured'
             raise ValueError(err_msg)
@@ -1428,11 +1430,11 @@ class AbstractDeviceOnboardingEstDomainCredentialHelpView(PageContextMixin, Deta
             raise Http404(err_msg)
         self.onboarding_config = self.object.onboarding_config
 
-        if not self.domain:
+        if not self.object.domain:
             err_msg = _('No domain is configured for this device.')
             raise Http404(err_msg)
         # @TODO: When device is onboarded on multiple domains make sure to select the correct domain
-        self.domain = self.domain
+        self.domain = self.object.domain
         self.certificate_profile = self.kwargs.get('certificate_template')
         if not self.certificate_profile:
             err_msg = _('Failed to get certificate profile')

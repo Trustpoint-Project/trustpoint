@@ -41,9 +41,15 @@ def _is_http_url(s: str) -> bool:
 
 
 def _known_trigger_triples() -> set[tuple[str, str, str]]:
+    """Return set of (handler, protocol_lc, operation) from Triggers (protocol normalized)."""
     triples: set[tuple[str, str, str]] = set()
     for t in Triggers.all():
-        triples.add((t.handler, t.protocol or '', t.operation or ''))
+        h = (t.handler or '').strip()
+        p = (t.protocol or '').strip().lower()
+        o = (t.operation or '').strip()
+        triples.add((h, p, o))
+        if not p and not o:
+            triples.add((h, '', ''))
     return triples
 
 
@@ -271,7 +277,7 @@ def _validate_triggers(payload: dict[str, Any], errors: list[str]) -> None:
             continue
 
         handler = (t.get('handler') or '').strip()
-        protocol = (t.get('protocol') or '').strip()
+        protocol = (t.get('protocol') or '').strip().lower()  # canonical lower
         operation = (t.get('operation') or '').strip()
 
         if not handler:

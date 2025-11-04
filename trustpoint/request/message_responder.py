@@ -6,6 +6,7 @@ from cryptography.hazmat.primitives._serialization import Encoding
 from devices.models import OnboardingStatus
 
 from request.request_context import RequestContext
+from workflows.models import EnrollmentRequest
 
 
 class AbstractMessageResponder(ABC):
@@ -23,10 +24,27 @@ class EstMessageResponder(AbstractMessageResponder):
     @staticmethod
     def build_response(context: RequestContext) -> None:
         """Respond to an EST message."""
-        if context.issued_certificate and context.operation in ['simpleenroll', 'simplereenroll']:
-            responder = EstCertificateMessageResponder()
-            return responder.build_response(context)
+        if not context.enrollment_request:
+            exc_msg = 'No enrollment request is set in the context.'
+            raise ValueError(exc_msg)
 
+        workflow_state = context.enrollment_request.aggregated_state
+
+        if workflow_state == EnrollmentRequest.STATE_PENDING:
+            context.http_response_status = 202
+            context.http_response_content_type = 'text/plain'
+            context.http_response_content = 'Enrollment request pending manual approval.'
+            return None
+        if workflow_state == EnrollmentRequest.STATE_REJECTED:
+            context.enrollment_request.finalize_to(EnrollmentRequest.STATE_REJECTED)
+            context.http_response_status = 403
+            context.http_response_content_type = 'text/plain'
+            context.http_response_content = 'Enrollment request Rejected.'
+            return None
+        if context.enrollment_request.is_valid() and context.operation in ['simpleenroll', 'simplereenroll']:
+            responder = EstCertificateMessageResponder()
+            context.enrollment_request.finalize_to(EnrollmentRequest.STATE_FINALIZED)
+            return responder.build_response(context)
         exc_msg = 'No suitable responder found for this EST message.'
         context.http_response_status = 500
         context.http_response_content = exc_msg
@@ -39,6 +57,9 @@ class EstCertificateMessageResponder(EstMessageResponder):
     @staticmethod
     def build_response(context: RequestContext) -> None:
         """Respond to an EST enrollment message with the issued certificate."""
+
+        
+
         if context.issued_certificate is None:
             exc_msg = 'Issued certificate is not set in the context.'
             raise ValueError(exc_msg)

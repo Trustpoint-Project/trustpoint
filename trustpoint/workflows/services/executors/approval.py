@@ -16,10 +16,7 @@ class ApprovalExecutor(AbstractStepExecutor):
 
     def do_execute(self, instance: WorkflowInstance, signal: str | None) -> ExecutorResult:
         # First visit (no signal) → WAITING
-        if signal is None and instance.state in {
-            WorkflowInstance.STATE_STARTING,
-            WorkflowInstance.STATE_RUNNING,
-        }:
+        if signal is None and instance.state is WorkflowInstance.STATE_RUNNING:
             return ExecutorResult(
                 status=ExecStatus.WAITING,
                 context={

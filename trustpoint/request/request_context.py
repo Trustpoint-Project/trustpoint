@@ -8,7 +8,11 @@ from cryptography.x509.base import CertificateBuilder
 from devices.models import DeviceModel
 from django.http import HttpRequest
 from pki.models import CredentialModel, DomainModel
-from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
+from pyasn1_modules.rfc4210 import PKIMessage
+
+from workflows.triggers import Trigger
+from workflows.models import EnrollmentRequest
+from workflows.services.types import ExecutorResult  # type: ignore[import-untyped]
 
 
 @dataclass
@@ -43,6 +47,9 @@ class RequestContext:
     # consider adding http_response_headers: dict[str, str] | None = None
     http_response_content: bytes | str | None = None
     http_response_content_type: str | None = None
+
+    enrollment_request: EnrollmentRequest | None = None
+    event: Trigger | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the context to a dictionary."""

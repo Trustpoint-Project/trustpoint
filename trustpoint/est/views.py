@@ -18,9 +18,8 @@ from request.operation_processor import CertificateIssueProcessor
 from request.pki_message_parser import EstMessageParser
 from request.profile_validator import ProfileValidator
 from request.request_context import RequestContext
+from request.workflow_handler import WorkflowHandler
 from trustpoint.logger import LoggerMixin
-from workflows.models import EnrollmentRequest
-from workflows.services.event_dispatcher import EventDispatcher
 from workflows.triggers import Triggers
 
 
@@ -86,6 +85,8 @@ class EstSimpleEnrollmentView(LoggerMixin, View):
     based on the certificate template specified in the request.
     """
 
+    EVENT = Triggers.est_simpleenroll
+
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
         """Handle POST requests for simple enrollment."""
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
@@ -103,6 +104,7 @@ class EstSimpleEnrollmentView(LoggerMixin, View):
                 operation='simpleenroll',
                 domain_str=domain_name,
                 certificate_template=cert_template,
+                event=self.EVENT
             )
         except Exception:
             err_msg = 'Failed to set up request context.'
@@ -127,6 +129,8 @@ class EstSimpleEnrollmentView(LoggerMixin, View):
             est_authorizer.authorize(ctx)
 
             ProfileValidator.validate(ctx)
+
+            WorkflowHandler().handle(ctx)
 
             CertificateIssueProcessor().process_operation(ctx)
 

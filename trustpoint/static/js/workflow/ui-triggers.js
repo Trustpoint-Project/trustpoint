@@ -6,19 +6,29 @@ import { state, setHandler, setProtocol, setOperation } from './state.js';
 
 export function renderTriggersUI({ els, onChange }) {
   if (!els || !els.handlerEl || !els.protoEl || !els.opEl || !els.protoContainer || !els.opContainer) {
-    // fail-soft if markup isn't wired yet
     return;
   }
 
-  const mapValues = Object.values(state.triggersMap || {});
-  const uniq = arr => [...new Set(arr)];
-  const byHandler = h => (t) => (t.handler || '') === (h || '');
-  const byHandlerProto = (h, p) => (t) => (t.handler || '') === (h || '') && (t.protocol || '') === (p || '');
+  const norm = (s) => (s == null ? '' : String(s)).trim();
+  const nproto = (s) => norm(s).toLowerCase();
+
+  // Materialize triggers from map and pre-compute normalized protocol
+  const mapValues = Object.values(state.triggersMap || {}).map((t) => ({
+    handler: norm(t.handler),
+    protocol: norm(t.protocol),
+    protocol_lc: nproto(t.protocol),
+    operation: norm(t.operation),
+  }));
+
+  const uniq = (arr) => [...new Set(arr)];
+  const byHandler = (h) => (t) => norm(t.handler) === norm(h);
+  const byHandlerProto = (h, pLc) => (t) =>
+    norm(t.handler) === norm(h) && t.protocol_lc === nproto(pLc);
 
   // ---- Handlers ----
-  const handlers = uniq(mapValues.map(t => t.handler).filter(Boolean)).sort();
+  const handlers = uniq(mapValues.map((t) => t.handler).filter(Boolean)).sort();
   els.handlerEl.innerHTML = '';
-  handlers.forEach(h => {
+  handlers.forEach((h) => {
     const opt = new Option(h.replace(/_/g, ' '), h);
     if (h === state.handler) opt.selected = true;
     els.handlerEl.add(opt);
@@ -30,19 +40,20 @@ export function renderTriggersUI({ els, onChange }) {
 
   // ---- Protocols (for selected handler) ----
   const relevant = mapValues.filter(byHandler(state.handler));
-  const protos = uniq(relevant.map(t => t.protocol).filter(Boolean)).sort();
+  const protosLc = uniq(relevant.map((t) => t.protocol_lc).filter(Boolean)).sort();
 
-  if (protos.length) {
+  if (protosLc.length) {
     els.protoContainer.style.display = '';
     els.protoEl.innerHTML = '';
-    protos.forEach(p => {
+    protosLc.forEach((p) => {
+      // display as stored (lowercased), value is lowercased canonical
       const opt = new Option(p, p);
-      if (p === state.protocol) opt.selected = true;
+      if (p === nproto(state.protocol)) opt.selected = true;
       els.protoEl.add(opt);
     });
-    if (!state.protocol) {
-      setProtocol(protos[0]);
-      els.protoEl.value = state.protocol;
+    if (!state.protocol || !protosLc.includes(nproto(state.protocol))) {
+      setProtocol(protosLc[0]);
+      els.protoEl.value = nproto(state.protocol);
     }
   } else {
     els.protoContainer.style.display = 'none';
@@ -54,19 +65,19 @@ export function renderTriggersUI({ els, onChange }) {
   const ops = uniq(
     mapValues
       .filter(byHandlerProto(state.handler, state.protocol))
-      .map(t => t.operation)
+      .map((t) => t.operation)
       .filter(Boolean)
   ).sort();
 
   if (ops.length) {
     els.opContainer.style.display = '';
     els.opEl.innerHTML = '';
-    ops.forEach(o => {
+    ops.forEach((o) => {
       const opt = new Option(o, o);
       if (o === state.operation) opt.selected = true;
       els.opEl.add(opt);
     });
-    if (!state.operation) {
+    if (!state.operation || !ops.includes(state.operation)) {
       setOperation(ops[0]);
       els.opEl.value = state.operation;
     }
@@ -79,13 +90,11 @@ export function renderTriggersUI({ els, onChange }) {
   // ---- Wire events (assign, not addEventListener → avoids stacking) ----
   els.handlerEl.onchange = () => {
     setHandler(els.handlerEl.value);
-    // changing handler resets protocol/operation internally; re-render
     renderTriggersUI({ els, onChange });
     onChange();
   };
   els.protoEl.onchange = () => {
-    setProtocol(els.protoEl.value);
-    // changing protocol resets operation; re-render
+    setProtocol(els.protoEl.value); // value is canonical lowercased protocol
     renderTriggersUI({ els, onChange });
     onChange();
   };

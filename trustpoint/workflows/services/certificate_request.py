@@ -65,7 +65,7 @@ class CertificateRequestHandler:
                 template=template,
                 finalized=False,
             )
-            .exclude(aggregate_state__in=EnrollmentRequest.TERMINAL_STATES)
+            .exclude(aggregated_state__in=EnrollmentRequest.TERMINAL_STATES)
             .order_by('-created_at')
             .first()
         )
@@ -79,7 +79,7 @@ class CertificateRequestHandler:
                 device_id=device_id,
                 fingerprint=fingerprint,
                 template=template,
-                aggregate_state=EnrollmentRequest.STATE_PENDING,
+                aggregated_state=EnrollmentRequest.STATE_PENDING,
                 finalized=False,
             )
 
@@ -133,13 +133,13 @@ class CertificateRequestHandler:
                         definition=wf,
                         enrollment_request=req,
                         current_step=first_step,
-                        state=WorkflowInstance.STATE_STARTING,
+                        state=WorkflowInstance.STATE_RUNNING,
                         payload=full_payload,
                     )
                 created = True
 
             # Advance fresh/active instances
-            if inst.state in {WorkflowInstance.STATE_STARTING, WorkflowInstance.STATE_RUNNING}:
+            if inst.state is WorkflowInstance.STATE_RUNNING:
                 advance_instance(inst)
                 inst.refresh_from_db()
 
@@ -166,7 +166,7 @@ class CertificateRequestHandler:
             }
 
         return {
-            'status': req.aggregate_state,   # EST will branch on this
+            'status': req.aggregated_state,   # EST will branch on this
             'request_id': str(req.id),
             'instances': per_instance,
         }

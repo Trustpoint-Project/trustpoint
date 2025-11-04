@@ -55,8 +55,7 @@ def _deep_merge_no_overwrite(dst: dict[str, Any], src: dict[str, Any]) -> None:
 
 
 def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
-    """
-    Advance an instance until WAITING or a terminal outcome is reached.
+    """Advance an instance until WAITING or a terminal outcome is reached.
 
     Rules:
       - Executors return ExecutorResult(status, context?, vars?).
@@ -71,11 +70,7 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
         if inst.finalized:
             return
 
-        if inst.state == WorkflowInstance.STATE_STARTING:
-            inst.state = WorkflowInstance.STATE_RUNNING
-            inst.save(update_fields=['state'])
-
-        # allow last step to return COMPLETED
+        # allow last step to return FINALIZED
         budget = _max_pass_hops(inst) + 1
         for _ in range(budget):
             step_meta = _current_step(inst)
@@ -111,7 +106,7 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
                 if _advance_pointer(inst):
                     signal = None  # consume one-shot signal
                     continue
-                inst.state = WorkflowInstance.STATE_COMPLETED
+                inst.state = WorkflowInstance.STATE_PASSED
                 inst.save(update_fields=['state'])
                 break
 
@@ -139,7 +134,7 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
                 break
 
             if status == ExecStatus.COMPLETED:
-                inst.state = WorkflowInstance.STATE_COMPLETED
+                inst.state = WorkflowInstance.STATE_FINALIZED
                 inst.finalize()
                 inst.save(update_fields=['state'])
                 break
