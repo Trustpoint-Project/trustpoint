@@ -42,7 +42,9 @@
                     <input type="checkbox" name="row_checkbox" value="{{ domain.id }}"/>
                 </td>
                 <td>{{ domain.unique_name }}</td>
-                <td>{{ domain.issuing_ca.unique_name }}</td>
+                <td>
+                    <a href="{% url 'pki:issuing_cas-detail' domain.issuing_ca.pk %}">{{ domain.issuing_ca.unique_name }}</a>
+                </td>
                 <td>{{ domain.devices.count }}</td>
                 <td>{{ domain.signature_suite }}</td>
                 <td>{{ domain.created_at }}</td>
