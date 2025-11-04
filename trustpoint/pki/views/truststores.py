@@ -16,8 +16,9 @@ from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import status, viewsets
+from rest_framework import filters, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from trustpoint_core.archiver import ArchiveFormat, Archiver
@@ -316,6 +317,14 @@ class TruststoreViewSet(viewsets.ModelViewSet):
     queryset = TruststoreModel.objects.all().order_by('-created_at')
     serializer_class = TruststoreSerializer
     permission_classes: ClassVar = [IsAuthenticated]
+    filter_backends: ClassVar = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter
+    ]
+    filterset_fields: ClassVar = ['intended_usage']
+    search_fields: ClassVar = ['unique_name']
+    ordering_fields: ClassVar = ['unique_name', 'created_at']
 
     @swagger_auto_schema(
         operation_summary='Create a new truststore',
@@ -345,6 +354,15 @@ class TruststoreViewSet(viewsets.ModelViewSet):
     )
     def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
         """API endpoint to get all truststores."""
-        certificates = TruststoreService().get_all()
-        serializer = TruststoreSerializer(certificates, many=True)
-        return Response(serializer.data)
+        queryset = self.get_queryset()
+
+        for backend in list(self.filter_backends):
+            queryset = backend().filter_queryset(self.request, queryset, self)
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
