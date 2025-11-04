@@ -1,4 +1,6 @@
+"""Management app decorators."""
 from functools import wraps
+from typing import Any
 
 from django.core.exceptions import PermissionDenied
 
@@ -30,7 +32,7 @@ def security_level(feature_name: SecurityFeature):
 
     def decorator(func):
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any):
             if not SecurityManager.is_feature_allowed(feature_name):
                 raise PermissionDenied('Security level does not allow access to feature: %s' % feature_name)
             return func(*args, **kwargs)

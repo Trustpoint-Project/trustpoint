@@ -15,7 +15,6 @@ from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 from pki.util.x509 import CertificateVerifier
-from trustpoint.logger import LoggerMixin
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -26,19 +25,20 @@ from trustpoint_core.serializer import (
 from management.models import BackupOptions, SecurityConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
-    from typing import Any, ClassVar
+    from typing import ClassVar
 
 
 class SecurityConfigForm(forms.ModelForm):
     """Security configuration model form."""
 
-    FEATURE_TO_FIELDS: dict[type[SecurityFeature], list[str]] = {
+    FEATURE_TO_FIELDS: ClassVar[dict[type[SecurityFeature], list[str]]] = {
         AutoGenPkiFeature: ['auto_gen_pki', 'auto_gen_pki_key_algorithm'],
     }
 
-    def __init__(self, *args: Any, **kwargs: Any):
+    def __init__(self, *args: Any, **kwargs: Any)-> None:
         """Initialize the SecurityConfigForm."""
         super().__init__(*args, **kwargs)
 
@@ -58,7 +58,7 @@ class SecurityConfigForm(forms.ModelForm):
                 if field_name in self.fields:
                     self.fields[field_name].widget.attrs['disabled'] = 'disabled'
 
-        # Disable option to change alorithm if AutoGenPKI is already enabled
+        # Disable option to change algorithm if AutoGenPKI is already enabled
         if self.instance and self.instance.auto_gen_pki:
             self.fields['auto_gen_pki_key_algorithm'].widget.attrs['disabled'] = 'disabled'
 
@@ -99,6 +99,7 @@ class SecurityConfigForm(forms.ModelForm):
     )
 
     class Meta:
+        """Metadata for the SecurityConfig model."""
         model = SecurityConfig
         fields: ClassVar[list[str]] = ['security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm']
 
@@ -232,7 +233,7 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         label=_('Domain-Name'), initial='localhost', required=False,
             validators=[
               RegexValidator(
-                  regex=r"^localhost$|^(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$",
+                  regex=r'^localhost$|^(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$',
                   message='Enter a valid domain name (e.g. example.com).'
               )
         ]
@@ -336,8 +337,8 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         label=_('Domain-Name'), initial='localhost', required=False,
             validators=[
               RegexValidator(
-                  regex=r"^localhost$|^(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$",
-                  message="Enter a valid domain name (e.g. example.com)."
+                  regex=r'^localhost$|^(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$',
+                  message='Enter a valid domain name (e.g. example.com).'
               )
         ]
     )

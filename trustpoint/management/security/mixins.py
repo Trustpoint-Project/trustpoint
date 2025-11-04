@@ -1,6 +1,7 @@
+"""Management app mixins."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
 from django.shortcuts import redirect
@@ -15,14 +16,14 @@ if TYPE_CHECKING:
 class SecurityLevelMixin:
     """A mixin that provides security feature checks for Django views."""
 
-    def __init__(self, security_feature: SecurityFeature = None, *args, **kwargs) -> None:
+    def __init__(self, security_feature: SecurityFeature = None, *args: Any, **kwargs: Any) -> None:
         """Initializes the SecurityLevelMixin with the specified security feature and redirect URL.
 
         Parameters:
         -----------
         security_feature : SecurityFeatures, optional
             The feature to check against the current security level (default is None).
-        no_permisson_url : str, optional
+        no_permission_url : str, optional
             The URL to which the user is redirected if the feature is not allowed (default is None).
         *args, **kwargs:
             Additional arguments passed to the superclass initializer.
@@ -31,7 +32,7 @@ class SecurityLevelMixin:
         self.sec = SecurityManager()
         self.security_feature = security_feature
 
-    def get_security_level(self):
+    def get_security_level(self) -> str:
         """Returns the security mode of the current security level instance.
 
         Returns:
@@ -45,14 +46,14 @@ class SecurityLevelMixin:
 class SecurityLevelMixinRedirect(SecurityLevelMixin):
     """A mixin that provides security feature checks for Django views with redirect feature."""
 
-    def __init__(self, disabled_by_security_level_url=None, *args, **kwargs) -> None:
+    def __init__(self, disabled_by_security_level_url=None, *args: Any, **kwargs: Any) -> None:
         """Initializes the SecurityLevelMixin with the specified security feature and redirect URL.
 
         Parameters:
         -----------
         security_feature : SecurityFeatures, optional
             The feature to check against the current security level (default is None).
-        no_permisson_url : str, optional
+        no_permission_url : str, optional
             The URL to which the user is redirected if the feature is not allowed (default is None).
         *args, **kwargs:
             Additional arguments passed to the superclass initializer.
@@ -60,7 +61,7 @@ class SecurityLevelMixinRedirect(SecurityLevelMixin):
         super().__init__(*args, **kwargs)
         self.disabled_by_security_level_url = disabled_by_security_level_url
 
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(self, request, *args: Any, **kwargs: Any):
         """If the feature is not allowed, the user is redirected to the disabled_by_security_level_url with an error message.
 
         Parameters:
