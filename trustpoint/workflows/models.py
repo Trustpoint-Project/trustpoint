@@ -8,6 +8,10 @@ from typing import Any, cast
 from django.db import models
 from django.db.models import JSONField
 
+from devices.models import DeviceModel
+from pki.models.domain import DomainModel
+from pki.models.issuing_ca import IssuingCaModel
+
 # -------------------------------
 # Workflow definitions + scoping
 # -------------------------------
@@ -96,9 +100,9 @@ class EnrollmentRequest(models.Model):
     # Identity tuple (NOT unique → allow a new attempt after terminal)
     protocol = models.CharField(max_length=50)
     operation = models.CharField(max_length=50)
-    ca_id = models.IntegerField(null=True, blank=True)
-    domain_id = models.IntegerField(null=True, blank=True)
-    device_id = models.IntegerField(null=True, blank=True)
+    device = models.ForeignKey(DeviceModel, on_delete=models.CASCADE, related_name='device', null=True, blank=True)
+    domain = models.ForeignKey(DomainModel, on_delete=models.CASCADE, related_name='domain', null=True, blank=True)
+    ca = models.ForeignKey(IssuingCaModel, on_delete=models.CASCADE, related_name='ca', null=True, blank=True)
     fingerprint = models.CharField(max_length=128)  # CSR fingerprint (sha256 hex)
     template = models.CharField(max_length=100, null=True, blank=True)
 

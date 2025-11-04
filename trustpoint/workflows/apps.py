@@ -22,5 +22,4 @@ class WorkflowsConfig(AppConfig):
         are registered with the framework.
         """
         # Import for side effects: module-level code performs registrations.
-        import_module('workflows.services.certificate_request')
         import_module('workflows.services.executors')

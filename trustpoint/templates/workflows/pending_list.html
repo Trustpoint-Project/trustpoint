@@ -7,9 +7,10 @@
   <table class="table">
     <thead>
       <tr>
-        <th>Instance ID</th>
+        <th>Device</th>
+        <th>Domain</th>
+        <th>protocol</th>
         <th>Workflow</th>
-        <th>Current Step</th>
         <th>Requested At</th>
         <th class="text-end">Action</th>
       </tr>
@@ -18,16 +19,22 @@
       {% for inst in instances %}
         <tr>
           <td>
-            {{ inst.id }}
+            {{ inst.enrollment_request.device.common_name }}
             <a
               href="{% url 'workflows:pending_detail' inst.id %}"
               class="btn-info ms-2"
             >
-              Details
+              ({{ inst.enrollment_request.device.serial_number }})
             </a>
           </td>
-          <td>{{ inst.definition.name }}</td>
-          <td>{{ inst.current_step }}</td>
+          <td>{{ inst.enrollment_request.domain.unique_name }}</td>
+          <td>{{ inst.enrollment_request.protocol }}</td>
+          <td>
+            <a
+              href="{% url 'workflows:definition_wizard'%}?edit={{ inst.definition.id }}"
+              class="btn-info ms-2"
+            >{{ inst.definition }}
+            </a></td>
           <td>{{ inst.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
           <td class="text-end">
             <form
