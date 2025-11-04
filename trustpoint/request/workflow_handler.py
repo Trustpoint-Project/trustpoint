@@ -1,63 +1,102 @@
+"""Handles the workflow engine logic during a request."""
 from __future__ import annotations
 
 import hashlib
 import logging
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
 from django.db import transaction
 from django.db.models import Q
-
+from trustpoint.logger import LoggerMixin
 from workflows.models import EnrollmentRequest, WorkflowDefinition, WorkflowInstance
 from workflows.services.engine import advance_instance
 from workflows.services.handler_lookup import register_handler
 from workflows.services.request_aggregator import recompute_request_state  # NEW
 
+from request.request_context import RequestContext
+
 if TYPE_CHECKING:
     from uuid import UUID
 
-logger = logging.getLogger(__name__)
+class AbstractWorkflowHandler(ABC, LoggerMixin):
+    """Abstract base class for workflow handler."""
+
+    @abstractmethod
+    def handle(self, context: RequestContext) -> None:
+        """Execute workflow logic."""
 
 
-@register_handler('certificate_request')
-class CertificateRequestHandler:
-    def __call__(  # noqa: PLR0913
+class WorkflowHandler(ABC, LoggerMixin):
+    """Abstract base class for workflow handler."""
+
+    def handle(self, context: RequestContext) -> None:
+        """Selects correct workflow handler based on event."""
+        if not context.event:
+            msg = 'No event found for the Workflow.'
+            self.logger.error(msg)
+        elif context.event.handler == 'certificate_request':
+            CertificateRequestHandler().handle(context=context)
+
+
+class CertificateRequestHandler(WorkflowHandler):
+    """Manages workflows triggered by certificate request events."""
+
+    def _validate_context(self, context: RequestContext) -> tuple[bool, str]:
+        """Validate the context for the worfklow request handler."""
+        if not context.domain:
+            return (False, 'No domain found')
+        if not context.device:
+            return (False, 'No device found')
+        if not context.parsed_message:
+            return (False, 'No CSR found')
+
+        return (True, '')
+
+    def handle(
         self,
-        *,
-        protocol: str,
-        operation: str,
-        ca_id: int | UUID | None,
-        domain_id: int | UUID | None,
-        device_id: int | UUID | None,
-        payload: dict[str, Any],
+        context: RequestContext,
+        payload: dict[str, Any] | None = None,
         **_: Any,
-    ) -> dict[str, Any]:
+    ) -> None:
+        """Execute workflow logic."""
         def _norm(v: Any) -> int | None:  # normalize IDs
             try:
                 return int(v) if v is not None else None
             except (TypeError, ValueError):
                 return None
 
-        ca_id = _norm(ca_id)
-        domain_id = _norm(domain_id)
-        device_id = _norm(device_id)
+        if not context.domain:
+            raise ValueError
+        if not context.device:
+            raise ValueError
+        if not context.cert_requested:
+            raise ValueError
+        if not context.cert_requested:
+            raise ValueError
+        if not context.protocol:
+            raise ValueError
+        if not context.operation:
+            raise ValueError
+        if not payload:
+            payload = {}
 
-        csr_pem = payload.get('csr_pem')
-        if not isinstance(csr_pem, str):
-            return {'status': 'error', 'msg': 'Missing or invalid csr_pem'}
-        try:
-            csr = x509.load_pem_x509_csr(csr_pem.encode('utf-8'))
-        except Exception as exc:  # noqa: BLE001
-            return {'status': 'error', 'msg': f'Invalid CSR: {exc!s}'}
+
+        ca_id = _norm(context.domain.get_issuing_ca_or_value_error().pk)
+        domain_id = _norm(context.domain.pk)
+        device_id = _norm(context.device.pk)
+
+        csr = context.cert_requested
 
         fingerprint = hashlib.sha256(csr.tbs_certrequest_bytes).hexdigest()
-        template = str(payload.get('template') or '') or None
+        template = context.certificate_template
 
         # Find or create an open EnrollmentRequest
         req = (
             EnrollmentRequest.objects.filter(
-                protocol=protocol,
-                operation=operation,
+                protocol=context.protocol,
+                operation=context.operation,
                 ca_id=ca_id,
                 domain_id=domain_id,
                 device_id=device_id,
@@ -72,8 +111,8 @@ class CertificateRequestHandler:
 
         if req is None:
             req = EnrollmentRequest.objects.create(
-                protocol=protocol,
-                operation=operation,
+                protocol=context.protocol,
+                operation=context.operation,
                 ca_id=ca_id,
                 domain_id=domain_id,
                 device_id=device_id,
@@ -103,7 +142,7 @@ class CertificateRequestHandler:
                 continue
 
             events = meta.get('events', [])
-            if not any(t.get('protocol') == protocol and t.get('operation') == operation for t in events):
+            if not any(t.get('protocol') == context.protocol and t.get('operation') == context.operation for t in events):
                 continue
 
             # Reuse regardless of finalized flag (to avoid duplicates forever)
@@ -120,8 +159,8 @@ class CertificateRequestHandler:
             if inst is None:
                 first_step = steps[0]['id']
                 full_payload = {
-                    'protocol': protocol,
-                    'operation': operation,
+                    'protocol': context.protocol,
+                    'operation': context.operation,
                     'ca_id': ca_id,
                     'domain_id': domain_id,
                     'device_id': device_id,
@@ -158,15 +197,4 @@ class CertificateRequestHandler:
         req.refresh_from_db()
 
         # If truly no matching definitions, reflect NoMatch
-        if not per_instance:
-            return {
-                'status': EnrollmentRequest.STATE_NOMATCH,
-                'request_id': str(req.id),
-                'instances': [],
-            }
-
-        return {
-            'status': req.aggregated_state,   # EST will branch on this
-            'request_id': str(req.id),
-            'instances': per_instance,
-        }
+        context.enrollment_request = req

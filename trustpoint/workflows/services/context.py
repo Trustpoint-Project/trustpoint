@@ -9,7 +9,7 @@ Schema (top-level keys produced by :func:`build_context`):
 - meta.schema:     integer schema version
 - workflow:        {"id": str, "name": str}
 - instance:        {"id": str, "state": str, "current_step": str}
-- payload:         dict (original trigger payload)
+- payload:         dict (original event payload)
 - csr:             dict | None  (best-effort CSR parse: subject/common_name/sans/public_key_type)
 - steps_by_id:     dict[str, Any]   raw step ids (e.g. "step-2")
 - steps_safe:      dict[str, Any]   safe keys usable with dot lookup (e.g. "step_2")

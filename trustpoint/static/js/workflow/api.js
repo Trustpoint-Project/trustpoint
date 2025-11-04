@@ -6,7 +6,7 @@ async function fetchJSON(url) {
 }
 
 export const api = {
-  triggers:      () => fetchJSON('/workflows/api/triggers/'),
+  events:      () => fetchJSON('/workflows/api/events/'),
   mailTemplates: () => fetchJSON('/workflows/api/mail-templates/'),
   scopes:        (kind) => fetchJSON(`/workflows/api/${kind.toLowerCase()}s/`),
 

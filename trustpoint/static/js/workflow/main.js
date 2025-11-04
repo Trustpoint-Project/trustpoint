@@ -1,7 +1,7 @@
 // Workflow wizard bootstrapper: deterministic load order + single render path.
 import { api } from './api.js';
 import { state, setName, buildPayload, addStep } from './state.js';
-import { renderTriggersUI } from './ui-triggers.js';
+import { renderEventsUI } from './ui-events.js';
 import { renderStepsUI } from './steps.js';
 import { initScopesUI } from './scopes.js';
 import { renderPreview } from './preview.js';
@@ -17,11 +17,11 @@ const getCookie = (name) => (document.cookie.match(new RegExp(`(^| )${name}=([^;
 
 // ---------- DOM refs ----------
 const els = {
-  handlerEl:      $('trigger-handler'),
+  handlerEl:      $('event-handler'),
   protoContainer: $('proto-container'),
   opContainer:    $('op-container'),
-  protoEl:        $('trigger-protocol'),
-  opEl:           $('trigger-operation'),
+  protoEl:        $('event-protocol'),
+  opEl:           $('event-operation'),
 
   wfNameEl:       $('wf-name'),
 
@@ -70,8 +70,8 @@ async function hydrateFromDefinition(id) {
   state.name = data.name || '';
   if (els.wfNameEl) els.wfNameEl.value = state.name;
 
-  // trigger
-  const tr = (data.triggers && data.triggers[0]) || {};
+  // event
+  const tr = (data.events && data.events[0]) || {};
   state.handler   = tr.handler   || '';
   state.protocol  = tr.protocol  || '';
   state.operation = tr.operation || '';
@@ -100,8 +100,8 @@ async function hydrateFromPrefillIfAny() {
   state.name = pre.name || '';
   if (els.wfNameEl) els.wfNameEl.value = state.name;
 
-  // trigger
-  const t = (pre.triggers && pre.triggers[0]) || {};
+  // event
+  const t = (pre.events && pre.events[0]) || {};
   state.handler   = t.handler   || '';
   state.protocol  = t.protocol  || '';
   state.operation = t.operation || '';
@@ -133,8 +133,8 @@ async function hydrateScopeChoiceNames() {
 
 // ---------- unified render ----------
 async function renderAll() {
-  // Triggers (depends on loaded triggers map)
-  renderTriggersUI({
+  // Events (depends on loaded events map)
+  renderEventsUI({
     els: {
       handlerEl: els.handlerEl,
       protoContainer: els.protoContainer,
@@ -181,7 +181,7 @@ function wireSaveButtons() {
     buttonEl.textContent = 'Saving…';
 
     try {
-      const clientErrors = validateWizardState(state, state.triggersMap);
+      const clientErrors = validateWizardState(state, state.eventMap);
       if (clientErrors.length) {
         renderErrors(els.errorsEl, clientErrors);
         return;
@@ -223,12 +223,12 @@ async function init() {
   const varPanel = new VarPanel({ getState: () => state });
   varPanel.mount();
 
-  // 1) Load catalogs (triggers + mail templates) upfront
+  // 1) Load catalogs (events + mail templates) upfront
   const [trigs, mailTpls] = await Promise.all([
-    api.triggers().catch(() => ({})),
+    api.events().catch(() => ({})),
     api.mailTemplates().catch(() => ({ groups: [] })),
   ]);
-  state.triggersMap   = trigs || {};
+  state.eventMap   = trigs || {};
   state.mailTemplates = mailTpls && mailTpls.groups ? mailTpls : { groups: [] };
 
   // 2) Decide data source: edit > prefill > empty

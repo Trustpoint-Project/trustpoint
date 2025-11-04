@@ -1,10 +1,10 @@
-// static/js/ui-triggers.js
-// Renders the trigger selector (handler → protocol → operation) from state.triggersMap.
+// static/js/ui-events.js
+// Renders the event selector (handler → protocol → operation) from state.eventsMap.
 // Keeps state mutations via setHandler/setProtocol/setOperation and re-renders on changes.
 
 import { state, setHandler, setProtocol, setOperation } from './state.js';
 
-export function renderTriggersUI({ els, onChange }) {
+export function renderEventsUI({ els, onChange }) {
   if (!els || !els.handlerEl || !els.protoEl || !els.opEl || !els.protoContainer || !els.opContainer) {
     return;
   }
@@ -12,8 +12,8 @@ export function renderTriggersUI({ els, onChange }) {
   const norm = (s) => (s == null ? '' : String(s)).trim();
   const nproto = (s) => norm(s).toLowerCase();
 
-  // Materialize triggers from map and pre-compute normalized protocol
-  const mapValues = Object.values(state.triggersMap || {}).map((t) => ({
+  // Materialize events from map and pre-compute normalized protocol
+  const mapValues = Object.values(state.eventMap || {}).map((t) => ({
     handler: norm(t.handler),
     protocol: norm(t.protocol),
     protocol_lc: nproto(t.protocol),
@@ -90,12 +90,12 @@ export function renderTriggersUI({ els, onChange }) {
   // ---- Wire events (assign, not addEventListener → avoids stacking) ----
   els.handlerEl.onchange = () => {
     setHandler(els.handlerEl.value);
-    renderTriggersUI({ els, onChange });
+    renderEventsUI({ els, onChange });
     onChange();
   };
   els.protoEl.onchange = () => {
     setProtocol(els.protoEl.value); // value is canonical lowercased protocol
-    renderTriggersUI({ els, onChange });
+    renderEventsUI({ els, onChange });
     onChange();
   };
   els.opEl.onchange = () => {

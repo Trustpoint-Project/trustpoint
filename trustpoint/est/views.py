@@ -20,7 +20,7 @@ from request.profile_validator import ProfileValidator
 from request.request_context import RequestContext
 from request.workflow_handler import WorkflowHandler
 from trustpoint.logger import LoggerMixin
-from workflows.triggers import Triggers
+from workflows.events import Events
 
 
 class UsernamePasswordAuthenticationError(Exception):
@@ -85,7 +85,7 @@ class EstSimpleEnrollmentView(LoggerMixin, View):
     based on the certificate template specified in the request.
     """
 
-    EVENT = Triggers.est_simpleenroll
+    EVENT = Events.est_simpleenroll
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
         """Handle POST requests for simple enrollment."""

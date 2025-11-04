@@ -1,7 +1,7 @@
 """Utilities to transform wizard input into a workflow definition schema.
 
 This module exposes a single helper to convert simple wizard-provided lists
-of triggers and steps into the internal workflow-definition JSON structure.
+of events and steps into the internal workflow-definition JSON structure.
 """
 
 from __future__ import annotations
@@ -10,18 +10,18 @@ from typing import Any
 
 
 def transform_to_definition_schema(
-    triggers: list[dict[str, str]],
+    events: list[dict[str, str]],
     steps: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Build the full workflow-definition JSON from wizard input.
 
     Args:
-        triggers: List of items like ``{"protocol": str, "operation": str}``.
+        events: List of items like ``{"protocol": str, "operation": str}``.
         steps: Ordered list of items like ``{"type": str, "params": dict[str, Any]}``.
 
     Returns:
         A dict with keys:
-            - ``triggers``: the input triggers as-is.
+            - ``events``: the input events as-is.
             - ``steps``: list of steps with auto-generated IDs ``step-1``, ``step-2``, ...
             - ``transitions``: linear transitions wiring each step to the next on signal ``"next"``.
     """
@@ -46,7 +46,7 @@ def transform_to_definition_schema(
     ]
 
     return {
-        'triggers': triggers,
+        'events': events,
         'steps': steps_list,
         'transitions': transitions,
     }

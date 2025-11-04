@@ -10,7 +10,7 @@ from django.http import HttpRequest
 from pki.models import CredentialModel, DomainModel
 from pyasn1_modules.rfc4210 import PKIMessage
 
-from workflows.triggers import Trigger
+from workflows.events import Event
 from workflows.models import EnrollmentRequest
 from workflows.services.types import ExecutorResult  # type: ignore[import-untyped]
 
@@ -49,7 +49,7 @@ class RequestContext:
     http_response_content_type: str | None = None
 
     enrollment_request: EnrollmentRequest | None = None
-    event: Trigger | None = None
+    event: Event | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the context to a dictionary."""

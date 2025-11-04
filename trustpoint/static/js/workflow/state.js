@@ -15,7 +15,7 @@ export const state = {
 
   scopes: { CA: new Set(), Domain: new Set(), Device: new Set() },
 
-  triggersMap: {},                 // GET /workflows/api/triggers/
+  eventMap: {},                 // GET /workflows/api/events/
   mailTemplates: { groups: [] },   // GET /workflows/api/mail-templates/
   scopesChoices: {
     CA: new Map(), Domain: new Map(), Device: new Map(), // id->name
@@ -91,7 +91,7 @@ export function buildPayload() {
   return {
     ...(state.editId ? { id: state.editId } : {}),
     name: state.name,
-    triggers: [{
+    events: [{
       handler:  state.handler || '',
       protocol: state.protocol || '',
       operation: state.operation || '',

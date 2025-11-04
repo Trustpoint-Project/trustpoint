@@ -19,10 +19,10 @@ function isDotPath(s) {
   );
 }
 
-function knownTriples(triggersMap) {
+function knownTriples(eventsMap) {
   // Build set of (handler, protocol_lc, operation) from the API map (protocol normalized).
   const set = new Set();
-  Object.values(triggersMap || {}).forEach((t) => {
+  Object.values(eventsMap || {}).forEach((t) => {
     const h = String(t.handler || '').trim();
     const p = String(t.protocol || '').trim().toLowerCase();
     const o = String(t.operation || '').trim();
@@ -33,7 +33,7 @@ function knownTriples(triggersMap) {
   return set;
 }
 
-export function validateWizardState(state, triggersMap) {
+export function validateWizardState(state, eventsMap) {
   const errors = [];
 
   // name
@@ -41,7 +41,7 @@ export function validateWizardState(state, triggersMap) {
     errors.push('Name is required.');
   }
 
-  // trigger (we only support single trigger in UI)
+  // event (we only support single event in UI)
   const h = String(state.handler || '').trim();
   const p = String(state.protocol || '').trim().toLowerCase();
   const o = String(state.operation || '').trim();
@@ -49,7 +49,7 @@ export function validateWizardState(state, triggersMap) {
   if (!h) {
     errors.push('Event type (handler) is required.');
   } else {
-    const triples = knownTriples(triggersMap);
+    const triples = knownTriples(eventsMap);
     if (h === 'certificate_request') {
       if (!p || !o) {
         errors.push('Protocol and operation are required for certificate_request.');

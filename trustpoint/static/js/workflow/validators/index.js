@@ -4,7 +4,7 @@ import { validateWebhook } from './webhook.js';
 import { validateApproval } from './approval.js';
 import { validateCondition } from './condition.js';
 
-export function validateWizardState(state, triggersMap) {
+export function validateWizardState(state, eventsMap) {
   const errors = [];
 
   // name
@@ -12,11 +12,11 @@ export function validateWizardState(state, triggersMap) {
     errors.push('Name is required.');
   }
 
-  // trigger selection (condensed, same logic as before)
+  // event selection (condensed, same logic as before)
   const h = (state.handler || '').trim();
   const p = (state.protocol || '').trim();
   const o = (state.operation || '').trim();
-  const triples = new Set(Object.values(triggersMap || {}).map(t => [t.handler || '', t.protocol || '', t.operation || ''].join('||')));
+  const triples = new Set(Object.values(eventsMap || {}).map(t => [t.handler || '', t.protocol || '', t.operation || ''].join('||')));
   if (!h) errors.push('Event type (handler) is required.');
   else {
     const key = h === 'certificate_request' ? [h, p, o].join('||') : [h, p || '', o || ''].join('||');

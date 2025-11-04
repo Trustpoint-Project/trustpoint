@@ -15,7 +15,7 @@ from workflows.views import (
     MailTemplateListView,
     PendingApprovalsView,
     SignalInstanceView,
-    TriggerListView,
+    EventsListView,
     WizardPrefillView,
     WorkflowDefinitionDeleteView,
     WorkflowDefinitionExportView,
@@ -33,7 +33,7 @@ urlpatterns = [
     path('api/cas/', CAListView.as_view(), name='api_cas'),
     path('api/domains/', DomainListView.as_view(), name='api_domains'),
     path('api/devices/', DeviceListView.as_view(), name='api_devices'),
-    path('api/triggers/', TriggerListView.as_view(), name='api_triggers'),
+    path('api/events/', EventsListView.as_view(), name='api_events'),
     path('api/mail-templates/', MailTemplateListView.as_view(), name='api_mail_templates'),
     path('api/wizard-prefill/', WizardPrefillView.as_view(), name='api_wizard_prefill'),
 

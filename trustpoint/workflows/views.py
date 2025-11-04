@@ -30,8 +30,8 @@ from django.utils.timezone import now as tz_now
 from django.views import View
 from django.views.generic import ListView
 from pki.models import DomainModel, IssuingCaModel
-from trustpoint_core.oid import AlgorithmIdentifier
 from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_DEVICES_SUBCATEGORY, PageContextMixin
+from trustpoint_core.oid import AlgorithmIdentifier
 from util.email import MailTemplates
 
 from workflows.models import (
@@ -45,7 +45,7 @@ from workflows.services.engine import advance_instance
 from workflows.services.request_aggregator import recompute_request_state
 from workflows.services.validators import validate_wizard_payload
 from workflows.services.wizard import transform_to_definition_schema
-from workflows.triggers import Triggers
+from workflows.events import Events
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -94,11 +94,11 @@ class MailTemplateListView(View):
         return JsonResponse({'groups': groups})
 
 
-class TriggerListView(View):
-    """API endpoint returning all triggers."""
+class EventsListView(View):
+    """API endpoint returning all events."""
 
     def get(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
-        """Return JSON with all available triggers.
+        """Return JSON with all available events.
 
         Args:
             _request: The HTTP request.
@@ -106,15 +106,15 @@ class TriggerListView(View):
             **_kwargs: Unused keyword args.
 
         Returns:
-            A JsonResponse containing triggers keyed by trigger ID.
+            A JsonResponse containing events keyed by event ID.
         """
         data = {
-            t.key: {
-                'protocol':  t.protocol,
-                'operation': t.operation,
-                'handler':   t.handler,
+            e.key: {
+                'protocol':  e.protocol,
+                'operation': e.operation,
+                'handler':   e.handler,
             }
-            for t in Triggers.all()
+            for e in Events.all()
         }
         return JsonResponse(data)
 
@@ -232,7 +232,7 @@ class DefinitionDetailView(View):
             {
                 'id': str(wf.id),
                 'name': wf.name,
-                'triggers': meta.get('triggers', []),
+                'events': meta.get('events', []),
                 'steps': steps,
                 'scopes': scopes_out,
             }
@@ -306,9 +306,9 @@ class WorkflowDefinitionImportView(View):
     # ---- helpers ----
 
     def _validate_and_transform_export(self, data: dict[str, Any]) -> tuple[list[str], dict[str, Any] | None]:
-        """
-        Returns (errors, prefill) where prefill is:
-          { name, triggers: [{handler, protocol, operation}], steps: [{type, params}], scopes:{} }
+        """Returns (errors, prefill) where prefill is.
+
+        { name, events: [{handler, protocol, operation}], steps: [{type, params}], scopes:{} }
         """
         errs: list[str] = []
 
@@ -325,32 +325,32 @@ class WorkflowDefinitionImportView(View):
         # 3) definition
         definition = data.get('definition')
         if not isinstance(definition, dict):
-            errs.append('"definition" must be an object with "triggers" and "steps".')
+            errs.append('"definition" must be an object with "events" and "steps".')
             return errs, None
 
-        triggers_in = definition.get('triggers')
+        events_in = definition.get('events')
         steps_in = definition.get('steps')
 
-        if not isinstance(triggers_in, list):
-            errs.append('"definition.triggers" must be a list.')
-            triggers_in = []
+        if not isinstance(events_in, list):
+            errs.append('"definition.events" must be a list.')
+            events_in = []
 
         if not isinstance(steps_in, list):
             errs.append('"definition.steps" must be a list.')
             steps_in = []
 
-        # 4) validate triggers (soft, but informative)
-        triggers_out: list[dict[str, str]] = []
-        for i, t in enumerate(triggers_in):
+        # 4) validate events (soft, but informative)
+        events_out: list[dict[str, str]] = []
+        for i, t in enumerate(events_in):
             if not isinstance(t, dict):
-                errs.append(f'triggers[{i}] must be an object.')
+                errs.append(f'events[{i}] must be an object.')
                 continue
             handler  = str(t.get('handler')  or '')
             protocol = str(t.get('protocol') or '')
             operation= str(t.get('operation')or '')
             if not handler or not protocol or not operation:
-                errs.append(f'triggers[{i}] is missing "handler", "protocol", or "operation".')
-            triggers_out.append({'handler': handler, 'protocol': protocol, 'operation': operation})
+                errs.append(f'events[{i}] is missing "handler", "protocol", or "operation".')
+            events_out.append({'handler': handler, 'protocol': protocol, 'operation': operation})
 
         # 5) validate steps
         steps_out: list[dict[str, Any]] = []
@@ -376,7 +376,7 @@ class WorkflowDefinitionImportView(View):
 
         prefill = {
             'name': name,
-            'triggers': triggers_out,
+            'events': events_out,
             'steps': steps_out,
             'scopes': {},  # never import scopes; user will choose for this environment
         }
@@ -473,8 +473,8 @@ class WorkflowWizardView(View):
         if errors:
             return JsonResponse({'error': 'Validation failed', 'errors': errors}, status=400)
 
-        name, triggers_typed, steps_typed, scopes_list = self._parse_payload_for_save(data)
-        definition = transform_to_definition_schema(triggers_typed, steps_typed)
+        name, events_typed, steps_typed, scopes_list = self._parse_payload_for_save(data)
+        definition = transform_to_definition_schema(events_typed, steps_typed)
         scopes_list = self._dedupe_scopes(scopes_list)
 
         # NEW: published flag from payload (default to False = draft)
@@ -519,14 +519,14 @@ class WorkflowWizardView(View):
     ) -> tuple[str, list[dict[str, str]], list[dict[str, Any]], list[dict[str, Any]]]:
         name = str(data.get('name') or '').strip()
 
-        triggers_raw = list(data.get('triggers') or [])
-        triggers_typed: list[dict[str, str]] = [
+        events_raw = list(data.get('events') or [])
+        events_typed: list[dict[str, str]] = [
             {
                 'handler':  str((t or {}).get('handler', '')),
                 'protocol': str((t or {}).get('protocol', '')),
                 'operation': str((t or {}).get('operation', '')),
             }
-            for t in triggers_raw
+            for t in events_raw
         ]
 
         steps_raw = list(data.get('steps') or [])
@@ -538,7 +538,7 @@ class WorkflowWizardView(View):
         scopes_in = data.get('scopes', {})
         scopes_list = WorkflowWizardView._flatten_scopes(scopes_in)
 
-        return name, triggers_typed, steps_typed, scopes_list
+        return name, events_typed, steps_typed, scopes_list
 
     @staticmethod
     def _flatten_scopes(scopes_in: Any) -> list[dict[str, Any]]:

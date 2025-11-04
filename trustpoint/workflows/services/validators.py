@@ -9,7 +9,7 @@ from django.utils.translation import gettext as _
 from util.email import normalize_addresses
 
 from workflows.services.executors.factory import StepExecutorFactory
-from workflows.triggers import Triggers
+from workflows.events import Events
 
 # ----------------------------- helpers -----------------------------
 
@@ -40,10 +40,10 @@ def _is_http_url(s: str) -> bool:
     return isinstance(s, str) and s.strip().lower().startswith(('http://', 'https://'))
 
 
-def _known_trigger_triples() -> set[tuple[str, str, str]]:
-    """Return set of (handler, protocol_lc, operation) from Triggers (protocol normalized)."""
+def _known_event_triples() -> set[tuple[str, str, str]]:
+    """Return set of (handler, protocol_lc, operation) from Events (protocol normalized)."""
     triples: set[tuple[str, str, str]] = set()
-    for t in Triggers.all():
+    for t in Events.all():
         h = (t.handler or '').strip()
         p = (t.protocol or '').strip().lower()
         o = (t.operation or '').strip()
@@ -264,16 +264,16 @@ def _validate_name(payload: dict[str, Any], errors: list[str]) -> None:
         _error(errors, _('Name is required.'))
 
 
-def _validate_triggers(payload: dict[str, Any], errors: list[str]) -> None:
-    triggers = payload.get('triggers')
-    if not isinstance(triggers, list) or not triggers:
-        _error(errors, _('At least one trigger is required.'))
+def _validate_events(payload: dict[str, Any], errors: list[str]) -> None:
+    events = payload.get('events')
+    if not isinstance(events, list) or not events:
+        _error(errors, _('At least one event is required.'))
         return
 
-    triples = _known_trigger_triples()
-    for i, t in enumerate(triggers, start=1):
+    triples = _known_event_triples()
+    for i, t in enumerate(events, start=1):
         if not isinstance(t, dict):
-            _error(errors, _('Trigger #%s is not an object.') % i)
+            _error(errors, _('Event #%s is not an object.') % i)
             continue
 
         handler = (t.get('handler') or '').strip()
@@ -281,19 +281,19 @@ def _validate_triggers(payload: dict[str, Any], errors: list[str]) -> None:
         operation = (t.get('operation') or '').strip()
 
         if not handler:
-            _error(errors, _('Trigger #%s: handler is required.') % i)
+            _error(errors, _('Event #%s: handler is required.') % i)
             continue
 
         needs_po = handler == 'certificate_request'
         if needs_po and (not protocol or not operation):
             _error(
                 errors,
-                _('Trigger #%s: protocol and operation are required for certificate_request.') % i,
+                _('Event #%s: protocol and operation are required for certificate_request.') % i,
             )
 
         key = (handler, protocol, operation) if needs_po else (handler, protocol or '', operation or '')
         if key not in triples:
-            _error(errors, _('Trigger #%s: unknown handler/protocol/operation combination.') % i)
+            _error(errors, _('Event #%s: unknown handler/protocol/operation combination.') % i)
 
 
 def _validate_steps(payload: dict[str, Any], errors: list[str]) -> None:
@@ -351,7 +351,7 @@ def validate_wizard_payload(payload: dict[str, Any]) -> list[str]:
     """Validate the wizard JSON (pre-transform)."""
     errors: list[str] = []
     _validate_name(payload, errors)
-    _validate_triggers(payload, errors)
+    _validate_events(payload, errors)
     _validate_steps(payload, errors)
     _validate_scopes(payload, errors)
     return errors
