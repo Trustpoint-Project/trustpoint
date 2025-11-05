@@ -28,7 +28,7 @@ THRESHOLD_LOGGER: int = 400
 class LoggedHttpResponse(HttpResponse, LoggerMixin):
     """Custom HttpResponse that logs and prints error messages automatically."""
 
-    def __init__(self, content: str | bytes = b'', status: int | None = None, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, content: str | bytes | None = b'', status: int | None = None, *args: Any, **kwargs: Any) -> None:
         """Initialize the LoggedHttpResponse instance.
 
         Args:
@@ -37,6 +37,9 @@ class LoggedHttpResponse(HttpResponse, LoggerMixin):
             *args (Any): Additional positional arguments passed to HttpResponse.
             **kwargs (Any): Additional keyword arguments passed to HttpResponse.
         """
+        if content is None:
+            content = b''
+
         if status and status >= THRESHOLD_LOGGER:
             if isinstance(content, bytes):
                 content = content.decode('utf-8')
