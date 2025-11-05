@@ -22,6 +22,7 @@ from trustpoint.logger import LoggerMixin
 class UsernamePasswordAuthenticationError(Exception):
     """Exception raised for username and password authentication failures."""
 
+
 THRESHOLD_LOGGER: int = 400
 
 
@@ -61,7 +62,7 @@ class EstRequestedDomainExtractorMixin:
 
     requested_domain: DomainModel | None
 
-    def extract_requested_domain(self, domain_name: str)  -> tuple[DomainModel | None, LoggedHttpResponse | None]:
+    def extract_requested_domain(self, domain_name: str) -> tuple[DomainModel | None, LoggedHttpResponse | None]:
         """Extracts the requested domain and sets the relevant certificate and signature suite.
 
         :return: The response from the parent class's dispatch method.
@@ -88,7 +89,7 @@ class EstSimpleEnrollmentView(LoggerMixin, View):
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
         del args
 
-        # TODO: This should really be done by the message parser,
+        # TODO(AirCoookie): This should really be done by the message parser,   # noqa: FIX002
         # it also needs to handle the case where one or both are omitted
         try:
             domain_name = cast('str', kwargs.get('domain'))
@@ -118,8 +119,8 @@ class EstSimpleEnrollmentView(LoggerMixin, View):
 
             est_authorizer = EstAuthorization(
                 # Allowed templates are TODO and might depend on authentication method
-                allowed_templates=['tls-client','tls-server', 'opc-ua-client', 'opc-ua-server', 'domaincredential'],
-                allowed_operations=['simpleenroll']
+                allowed_templates=['tls-client', 'tls-server', 'opc-ua-client', 'opc-ua-server', 'domaincredential'],
+                allowed_operations=['simpleenroll'],
             )
             est_authorizer.authorize(ctx)
 
@@ -136,7 +137,7 @@ class EstSimpleEnrollmentView(LoggerMixin, View):
         return LoggedHttpResponse(
             content=ctx.http_response_content,
             status=ctx.http_response_status,
-            content_type=ctx.http_response_content_type
+            content_type=ctx.http_response_content_type,
         )
 
 
@@ -154,7 +155,7 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
         del args
 
-        # TODO: This should really be done by the message parser,
+        # TODO(AirCoookie): This should really be done by the message parser,   # noqa: FIX002
         # it also needs to handle the case where one or both are omitted
         try:
             domain_name = cast('str', kwargs.get('domain'))
@@ -184,8 +185,8 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
 
             est_authorizer = EstAuthorization(
                 # Allowed templates are TODO and might depend on authentication method
-                allowed_templates=['tls-client','tls-server', 'opc-ua-client', 'opc-ua-server', 'domaincredential'],
-                allowed_operations=['simplereenroll']
+                allowed_templates=['tls-client', 'tls-server', 'opc-ua-client', 'opc-ua-server', 'domaincredential'],
+                allowed_operations=['simplereenroll'],
             )
             est_authorizer.authorize(ctx)
 
@@ -202,9 +203,8 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
         return LoggedHttpResponse(
             content=ctx.http_response_content,
             status=ctx.http_response_status,
-            content_type=ctx.http_response_content_type
+            content_type=ctx.http_response_content_type,
         )
-
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -230,7 +230,6 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
             requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
 
             if not http_response and requested_domain:
-
                 if not requested_domain.issuing_ca:
                     return LoggedHttpResponse('The requested domain has no issuing CA configured', status=500)
 
@@ -238,13 +237,13 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
                 pkcs7_certs = ca_credential_serializer.get_full_chain_as_serializer().as_pkcs7_der()
                 b64_pkcs7 = base64.b64encode(pkcs7_certs).decode()
 
-                formatted_b64_pkcs7 = '\n'.join([b64_pkcs7[i:i + 64] for i in range(0, len(b64_pkcs7), 64)])
+                formatted_b64_pkcs7 = '\n'.join([b64_pkcs7[i : i + 64] for i in range(0, len(b64_pkcs7), 64)])
 
                 http_response = LoggedHttpResponse(
                     formatted_b64_pkcs7.encode(),
                     status=200,
                     content_type='application/pkcs7-mime',
-                    headers={'Content-Transfer-Encoding': 'base64'}
+                    headers={'Content-Transfer-Encoding': 'base64'},
                 )
 
                 if 'Vary' in http_response:
@@ -256,9 +255,7 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
                 http_response = LoggedHttpResponse('Something went wrong during EST getcacerts.', status=500)
 
         except Exception as e:  # noqa:BLE001
-            return LoggedHttpResponse(
-                f'Error retrieving CA certificates: {e!s}', status=500
-            )
+            return LoggedHttpResponse(f'Error retrieving CA certificates: {e!s}', status=500)
         else:
             return http_response
 
@@ -275,6 +272,4 @@ class EstCsrAttrsView(View, LoggerMixin):
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
         del request, args, kwargs
 
-        return LoggedHttpResponse(
-            'csrattrs/ is not supported', status=404
-        )
+        return LoggedHttpResponse('csrattrs/ is not supported', status=404)
