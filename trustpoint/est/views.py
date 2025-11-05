@@ -9,7 +9,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from pki.models.domain import DomainModel
 from request.authentication import EstAuthentication
-from request.authorization import CertificateTemplateAuthorization, EstAuthorization, EstOperationAuthorization
+from request.authorization import EstAuthorization
 from request.http_request_validator import EstHttpRequestValidator
 from request.message_responder import EstErrorMessageResponder, EstMessageResponder
 from request.operation_processor import CertificateIssueProcessor
