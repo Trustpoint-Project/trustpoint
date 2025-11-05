@@ -19,6 +19,7 @@ from request.request_context import RequestContext
 
 if TYPE_CHECKING:
     from typing import Any
+
     from django.http import HttpRequest, HttpResponse
 
 
@@ -40,11 +41,13 @@ class CmpInitializationRequestView(View):
         # Default to 'domaincredential' if not provided
         cert_profile = cast('str', kwargs.get('certificate_profile', 'domaincredential'))
 
-        ctx = RequestContext(raw_message=request,
-                                      domain_str=domain_name,
-                                      protocol='cmp',
-                                      operation='initialization',
-                                      certificate_template=cert_profile)
+        ctx = RequestContext(
+            raw_message=request,
+            domain_str=domain_name,
+            protocol='cmp',
+            operation='initialization',
+            certificate_template=cert_profile,
+        )
 
         validator = CmpHttpRequestValidator()
         validator.validate(ctx)
@@ -57,7 +60,7 @@ class CmpInitializationRequestView(View):
 
         authorizer = CmpAuthorization(
             ['tls-server', 'tls-client', 'opc-ua-server', 'opc-ua-client', 'domaincredential'],
-            ['initialization', 'certification']
+            ['initialization', 'certification'],
         )
         authorizer.authorize(ctx)
 
@@ -67,9 +70,11 @@ class CmpInitializationRequestView(View):
 
         CmpMessageResponder.build_response(ctx)
 
-        return LoggedHttpResponse(content=ctx.http_response_content,
-                                  status=ctx.http_response_status,
-                                  content_type=ctx.http_response_content_type)
+        return LoggedHttpResponse(
+            content=ctx.http_response_content,
+            status=ctx.http_response_status,
+            content_type=ctx.http_response_content_type,
+        )
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -90,11 +95,13 @@ class CmpCertificationRequestView(View):
         # Default to 'tls-client' if not provided (TBD)
         cert_profile = cast('str', kwargs.get('certificate_profile', 'tls-client'))
 
-        ctx = RequestContext(raw_message=request,
-                                      domain_str=domain_name,
-                                      protocol='cmp',
-                                      operation='certification',
-                                      certificate_template=cert_profile)
+        ctx = RequestContext(
+            raw_message=request,
+            domain_str=domain_name,
+            protocol='cmp',
+            operation='certification',
+            certificate_template=cert_profile,
+        )
 
         validator = CmpHttpRequestValidator()
         validator.validate(ctx)
@@ -106,8 +113,7 @@ class CmpCertificationRequestView(View):
         authenticator.authenticate(ctx)
 
         authorizer = CmpAuthorization(
-            ['tls-server', 'tls-client', 'opc-ua-server', 'opc-ua-client', 'domaincredential'],
-            ['certification']
+            ['tls-server', 'tls-client', 'opc-ua-server', 'opc-ua-client', 'domaincredential'], ['certification']
         )
         authorizer.authorize(ctx)
 
@@ -117,6 +123,8 @@ class CmpCertificationRequestView(View):
 
         CmpMessageResponder.build_response(ctx)
 
-        return LoggedHttpResponse(content=ctx.http_response_content,
-                                  status=ctx.http_response_status,
-                                  content_type=ctx.http_response_content_type)
+        return LoggedHttpResponse(
+            content=ctx.http_response_content,
+            status=ctx.http_response_status,
+            content_type=ctx.http_response_content_type,
+        )
