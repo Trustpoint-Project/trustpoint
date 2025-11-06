@@ -31,6 +31,7 @@ class ProfileValidator(LoggerMixin):
             'type': 'cert_profile',
             'subj': {'allow':'*'},
             'ext': {
+                'allow_implicit': True,
                 'crl': {'uris': ['http://localhost/crl/2']},
             },
             'validity': {

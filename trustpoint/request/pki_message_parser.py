@@ -504,6 +504,10 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
                     extension_obj: x509.Extension[Any]
                     if ext_oid == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string:
                         extension_obj = self._parse_subject_alternative_name(ext_value_bytes, critical=is_critical)
+                    elif ext_oid == ExtensionOID.BASIC_CONSTRAINTS.dotted_string:
+                        extension_obj = self._parse_basic_constraints(ext_value_bytes, critical=is_critical)
+                    elif ext_oid == ExtensionOID.KEY_USAGE.dotted_string:
+                        extension_obj = self._parse_key_usage(ext_value_bytes, critical=is_critical)
                     elif ext_oid == ExtensionOID.CERTIFICATE_POLICIES.dotted_string:
                         extension_obj = self._parse_certificate_policies(ext_value_bytes, critical=is_critical)
                     else:
@@ -586,6 +590,58 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         except (ValueError, TypeError) as ip_error:
             self.logger.warning('Failed to parse IP address: %(error)s',
                                 extra={'error': str(ip_error)})
+            
+    def _parse_basic_constraints(
+        self, value: bytes, *, critical: bool
+    ) -> x509.Extension[x509.BasicConstraints]:
+        """Parse Basic Constraints extension manually."""
+        try:
+            basic_constraints_asn1, _ = der_decoder.decode(value, asn1Spec=rfc2459.BasicConstraints())
+            is_ca = bool(basic_constraints_asn1.getComponentByName('cA'))
+            path_length = None
+            if basic_constraints_asn1.getComponentByName('pathLenConstraint').hasValue():
+                path_length = int(basic_constraints_asn1.getComponentByName('pathLenConstraint'))
+
+            basic_constraints = x509.BasicConstraints(ca=is_ca, path_length=path_length)
+            return x509.Extension(
+                oid=ExtensionOID.BASIC_CONSTRAINTS,
+                critical=critical,
+                value=basic_constraints
+            )
+        except Exception:
+            self.logger.exception('Failed to parse Basic Constraints extension.')
+            raise
+
+    @staticmethod
+    def _get_usage_flag(asn1: rfc2459.KeyUsage, name: str) -> bool:
+        idx = rfc2459.KeyUsage.namedValues[name]
+        return bool(asn1[idx]) if idx < len(asn1) else False
+
+    def _parse_key_usage(self, value: bytes, *, critical: bool) -> x509.Extension[x509.KeyUsage]:
+        """Parse Key Usage extension manually."""
+        try:
+            key_usage_asn1, _ = der_decoder.decode(value, asn1Spec=rfc2459.KeyUsage())
+
+            key_usage = x509.KeyUsage(
+                digital_signature=self._get_usage_flag(key_usage_asn1, 'digitalSignature'),
+                content_commitment=self._get_usage_flag(key_usage_asn1, 'nonRepudiation'),
+                key_encipherment=self._get_usage_flag(key_usage_asn1, 'keyEncipherment'),
+                data_encipherment=self._get_usage_flag(key_usage_asn1, 'dataEncipherment'),
+                key_agreement=self._get_usage_flag(key_usage_asn1, 'keyAgreement'),
+                key_cert_sign=self._get_usage_flag(key_usage_asn1, 'keyCertSign'),
+                crl_sign=self._get_usage_flag(key_usage_asn1, 'cRLSign'),
+                encipher_only=self._get_usage_flag(key_usage_asn1, 'encipherOnly'),
+                decipher_only=self._get_usage_flag(key_usage_asn1, 'decipherOnly')
+            )
+
+            return x509.Extension(
+                oid=ExtensionOID.KEY_USAGE,
+                critical=critical,
+                value=key_usage
+            )
+        except Exception:
+            self.logger.exception('Failed to parse Key Usage extension.')
+            raise
 
     def _parse_certificate_policies(self, value: bytes, *, critical: bool) -> x509.Extension[x509.CertificatePolicies]:
         """Parse Certificate Policies extension manually."""
