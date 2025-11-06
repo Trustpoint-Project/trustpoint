@@ -1,4 +1,4 @@
-"""Models concerning the Trustpoint settings."""
+"""Models for the Trustpoint Management app."""
 from __future__ import annotations
 
 import hashlib
@@ -200,15 +200,12 @@ class BackupOptions(models.Model):
 
     We store host/port/user/local_storage, plus either a password or an SSH key.
     """
-
     class AuthMethod(models.TextChoices):
         """Authentication methods for backup options."""
         PASSWORD = 'password', 'Password'
         SSH_KEY   = 'ssh_key',  'SSH Key'
 
-    local_storage = models.BooleanField(default=True, verbose_name=_('Use local storage'))
-
-    sftp_storage = models.BooleanField(default=False, verbose_name=_('Use SFTP storage'))
+    enable_sftp_storage = models.BooleanField(default=False, verbose_name=_('Use SFTP storage'))
 
     host = models.CharField(max_length=255, verbose_name=_('Host'), blank=True)
     port = models.PositiveIntegerField(default=2222, verbose_name=_('Port'), blank=True)
@@ -1221,6 +1218,32 @@ class PKCS11Token(models.Model, LoggerMixin):
 
 
 
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Ensure only one instance exists (singleton pattern)."""
+        self.full_clean()
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls) -> 'BackupOptions':
+        """Returns the single instance, creating it if necessary."""
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def clean(self) -> None:
+        """Ensure only one BackupOptions instance exists.
+
+        Raises:
+        ------
+        ValidationError
+            If more than one BackupOptions instance is attempted to be created.
+        """
+        if self.pk != 1 and BackupOptions.objects.exists():
+            msg = 'Only one BackupOptions instance is allowed.'
+            raise ValidationError(msg)
+
+        return super().clean()
 
 class LoggingConfig(models.Model):
     """Logging Configuration model."""

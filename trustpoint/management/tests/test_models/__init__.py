@@ -1,1 +1,1 @@
-"""Tests for the models used in the settings app."""
+"""Test suite for the management models."""

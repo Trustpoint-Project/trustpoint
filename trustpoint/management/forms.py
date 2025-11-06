@@ -122,8 +122,7 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
         """ModelForm Meta configuration for BackupOptions."""
         model = BackupOptions
         fields: ClassVar[list[str]] = [
-            'local_storage',
-            'sftp_storage',
+            'enable_sftp_storage',
             'host',
             'port',
             'user',
@@ -134,8 +133,7 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
             'remote_directory',
         ]
         widgets: ClassVar[dict[str, Any]] = {
-            'local_storage': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'sftp_storage': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'enable_sftp_storage': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'host': forms.TextInput(attrs={'class': 'form-control'}),
             'port': forms.NumberInput(attrs={'class': 'form-control'}),
             'user': forms.TextInput(attrs={'class': 'form-control'}),
@@ -154,37 +152,60 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
         """Validate required fields based on selected authentication method."""
         cleaned: dict[str, Any] = super().clean() or {}
         auth = cleaned.get('auth_method')
-        sftp_storage = cleaned.get('sftp_storage')
+        enable_sftp = cleaned.get('enable_sftp_storage')
 
-        if sftp_storage:
-            missing_fields = []
-            host = cleaned.get('host', '').strip()
-            user = cleaned.get('user', '').strip()
-            remote_directory = cleaned.get('remote_directory', '').strip()
-
-            if not host:
-                missing_fields.append('Host')
-            if not user:
-                missing_fields.append('Username')
-            if not remote_directory:
-                missing_fields.append('Remote Directory')
-
-            if missing_fields:
-                self.add_error(
-                    None ,
-                    f"The following fields are required when SFTP storage is enabled: {', '.join(missing_fields)}."
-                )
-
-        if auth:
-            pwd = cleaned.get('password', '').strip()
-            key = cleaned.get('private_key', '').strip()
-
-            if auth == BackupOptions.AuthMethod.PASSWORD and not pwd:
-                self.add_error('password', 'Password is required when using password authentication.')
-            if auth == BackupOptions.AuthMethod.SSH_KEY and not key:
-                self.add_error('private_key', 'Private key is required when using SSH Key authentication.')
+        if enable_sftp:
+            self._validate_sftp_fields(cleaned)
+            self._validate_authentication_fields(cleaned, auth)
 
         return cleaned
+
+    def _validate_sftp_fields(self, cleaned: dict[str, Any]) -> None:
+        """Validate required fields for SFTP storage."""
+        missing_fields = []
+        host = cleaned.get('host', '').strip()
+        user = cleaned.get('user', '').strip()
+        remote_directory = cleaned.get('remote_directory', '').strip()
+
+        if not host:
+            missing_fields.append('Host')
+        if not user:
+            missing_fields.append('Username')
+        if not remote_directory:
+            missing_fields.append('Remote Directory')
+
+        if missing_fields:
+            self.add_error(
+                None,
+                f"The following fields are required when SFTP storage is enabled: {', '.join(missing_fields)}."
+            )
+
+    def _validate_authentication_fields(self, cleaned: dict[str, Any], auth: Any) -> None:
+        """Validate fields based on the selected authentication method."""
+        pwd = cleaned.get('password', '').strip()
+        key = cleaned.get('private_key', '').strip()
+
+        if auth == BackupOptions.AuthMethod.PASSWORD:
+            self._validate_password_authentication(pwd, key, cleaned)
+        elif auth == BackupOptions.AuthMethod.SSH_KEY:
+            self._validate_ssh_key_authentication(pwd, key)
+
+    def _validate_password_authentication(self, pwd: str, key: str, cleaned: dict[str, Any]) -> None:
+        """Validate fields for password authentication."""
+        if not pwd:
+            self.add_error('password', 'Password is required when using password authentication.')
+        if key or cleaned.get('key_passphrase', '').strip():
+            self.add_error('private_key',
+                           'Private key and passphrase must be empty when using password authentication.')
+            self.add_error('key_passphrase',
+                           'Private key and passphrase must be empty when using password authentication.')
+
+    def _validate_ssh_key_authentication(self, pwd: str, key: str) -> None:
+        """Validate fields for SSH key authentication."""
+        if not key:
+            self.add_error('private_key', 'Private key is required when using SSH Key authentication.')
+        if pwd:
+            self.add_error('password', 'Password must be empty when using SSH key authentication.')
 
 
 class IPv4AddressForm(forms.Form):

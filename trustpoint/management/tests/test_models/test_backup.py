@@ -15,14 +15,14 @@ class BackupOptionsModelTest(TestCase):
             host='localhost',
             port=22,
             user='user',
-            local_storage=True
+            enable_sftp_storage=True
         )
         with self.assertRaises(ValidationError):
             BackupOptions.objects.create(
                 host='remote',
                 port=22,
                 user='another_user',
-                local_storage=False
+                enable_sftp_storage=False
             )
 
     def test_singleton_save_overwrite(self) -> None:
@@ -31,7 +31,7 @@ class BackupOptionsModelTest(TestCase):
             host='localhost',
             port=22,
             user='user',
-            local_storage=True
+            enable_sftp_storage=True
         )
         instance.host = 'updated_host'
         instance.save()
@@ -45,8 +45,7 @@ class BackupOptionsFormTest(TestCase):
         """Test that enabling SFTP storage without providing required fields."""
         # SFTP is enabled but without necessary fields like host and user
         form_data = {
-            'local_storage': False,
-            'sftp_storage': True,
+            'enable_sftp_storage': True,
             'host': '',
             'port': 2222,
             'user': '',
@@ -54,7 +53,7 @@ class BackupOptionsFormTest(TestCase):
         }
         form = BackupOptionsForm(data=form_data)
 
-        self.assertFalse(form.is_valid())
+        assert not form.is_valid()
         error_message = form.errors.as_text()
 
         self.assertIn('Host', error_message)
@@ -64,8 +63,7 @@ class BackupOptionsFormTest(TestCase):
     def test_sftp_password_auth_without_password(self) -> None:
         """Test validation fails when password is not provided for PASSWORD auth method."""
         form_data = {
-            'local_storage': False,
-            'sftp_storage': True,
+            'enable_sftp_storage': True,
             'host': 'localhost',
             'port': 22,
             'user': 'user',
@@ -80,8 +78,7 @@ class BackupOptionsFormTest(TestCase):
     def test_sftp_ssh_key_auth_without_private_key(self) -> None:
         """Test validation fails when private_key is not provided for SSH_KEY auth method."""
         form_data = {
-            'local_storage': False,
-            'sftp_storage': True,
+            'enable_sftp_storage': True,
             'host': 'localhost',
             'port': 22,
             'user': 'user',
@@ -96,8 +93,7 @@ class BackupOptionsFormTest(TestCase):
     def test_valid_sftp_password_auth(self) -> None:
         """Test that SFTP with PASSWORD auth method and valid password passes validation."""
         form_data = {
-            'local_storage': False,
-            'sftp_storage': True,
+            'enable_sftp_storage': True,
             'host': 'localhost',
             'port': 22,
             'user': 'user',
@@ -107,13 +103,12 @@ class BackupOptionsFormTest(TestCase):
         }
         form = BackupOptionsForm(data=form_data)
 
-        self.assertTrue(form.is_valid())
+        assert form.is_valid()
 
     def test_valid_sftp_ssh_key_auth(self) -> None:
         """Test that SFTP with SSH_KEY auth method and valid private_key passes validation."""
         form_data = {
-            'local_storage': False,
-            'sftp_storage': True,
+            'enable_sftp_storage': True,
             'host': 'localhost',
             'port': 22,
             'user': 'user',
@@ -123,6 +118,6 @@ class BackupOptionsFormTest(TestCase):
         }
         form = BackupOptionsForm(data=form_data)
 
-        self.assertTrue(form.is_valid())
+        assert form.is_valid()
 
 
