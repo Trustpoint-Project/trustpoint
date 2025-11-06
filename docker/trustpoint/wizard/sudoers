@@ -21,3 +21,4 @@ www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_restore.s
 www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_auto_restore_password_set.sh
 www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_auto_restore_success.sh
 www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_complete_setup.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_reset_to_crypto_storage.sh
