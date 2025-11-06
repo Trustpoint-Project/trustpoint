@@ -255,12 +255,6 @@ class BackupOptions(models.Model):
 
         return super().clean()
 
-    class Meta:
-        verbose_name = "Backup Option"
-
-    def __str__(self) -> str:
-        return f'{self.user}@{self.host}:{self.port} ({self.auth_method})'
-
 class LoggingConfig(models.Model):
     """Logging Configuration model."""
 
