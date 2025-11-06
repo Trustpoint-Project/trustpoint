@@ -24,7 +24,14 @@ from trustpoint.views.base import (
 )
 
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
-from pki.models import CertificateModel, DevIdRegistration, DomainModel, IssuingCaModel
+from pki.models import (
+    CertificateModel,
+    CertificateProfileModel,
+    DevIdRegistration,
+    DomainModel,
+    IssuingCaModel,
+    DomainAllowedCertificateProfileModel
+)
 from pki.models.truststore import TruststoreModel
 from trustpoint.settings import UIConfig
 
@@ -117,7 +124,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
     success_url = reverse_lazy('pki:domains')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds (no) additional context data."""
+        """Adds additional context data."""
         context = super().get_context_data(**kwargs)
         domain: DomainModel = cast('DomainModel', self.get_object())
 
@@ -126,6 +133,20 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         certificates = CertificateModel.objects.filter(
             credential__in=[issued_credential.credential for issued_credential in issued_credentials]
         )
+
+        context['profile_data'] = {
+            profile.id: {
+                'unique_name': profile.unique_name,
+                'alias': '',
+                'is_allowed': False
+            }
+            for profile in CertificateProfileModel.objects.all()
+        }
+
+        for allowed_profile in domain.certificate_profiles.all():
+            profile_id = allowed_profile.certificate_profile.id
+            context['profile_data'][profile_id]['alias'] = allowed_profile.alias
+            context['profile_data'][profile_id]['is_allowed'] = True
 
         context['certificates'] = certificates
         context['domain_options'] = {}
@@ -140,6 +161,32 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         del kwargs
 
         domain = self.get_object()
+
+        for profile in CertificateProfileModel.objects.all():
+            allowed_field = f'cert_p_allowed_{profile.id}'
+            alias_field = f'cert_p_alias_{profile.id}'
+
+            is_allowed = allowed_field in request.POST
+            alias_value = request.POST.get(alias_field, '').strip()
+
+            existing_relation = domain.certificate_profiles.filter(
+                certificate_profile=profile).first()
+
+            if is_allowed:
+                if not existing_relation:
+                    # Create new relation
+                    new_relation = DomainAllowedCertificateProfileModel(
+                        domain=domain,
+                        certificate_profile=profile,
+                        alias=alias_value
+                    )
+                    new_relation.save()
+                elif existing_relation.alias != alias_value:
+                        existing_relation.alias = alias_value
+                        existing_relation.save()
+            elif existing_relation:
+                # Remove existing relation
+                existing_relation.delete()
 
         domain.save()
 

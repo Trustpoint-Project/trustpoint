@@ -22,7 +22,7 @@ from .issuing_ca import IssuingCaModel
 from .credential import CredentialAlreadyExistsError, CredentialModel, CertificateChainOrderModel, OwnerCredentialModel
 from .domain import DomainModel
 from .devid_registration import DevIdRegistration
-from .cert_profile import CertificateProfileModel
+from .cert_profile import CertificateProfileModel, DomainAllowedCertificateProfileModel
 from .truststore import TruststoreModel, TruststoreOrderModel
 
 __all__ = [
@@ -34,6 +34,7 @@ __all__ = [
     'CredentialModel',
     'DevIdRegistration',
     'DomainModel',
+    'DomainAllowedCertificateProfileModel',
     'IssuingCaModel',
     'RevokedCertificateModel',
     'TruststoreModel',
