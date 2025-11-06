@@ -49,7 +49,7 @@ jobs:
         run: docker rm -f trustpoint
 
       - name: Reset database
-        run: uv run trustpoint/manage.py reset_db --force --no-user 
+        run: uv run trustpoint/manage.py reset_db --force --no-user --keep-all-migrations
 
       - name: Start fresh Trustpoint container
         run: docker run -d --name trustpoint --link postgres -p80:80 -p443:443 -ePOSTGRES_DB=trustpoint_db -eDATABASE_USER=admin -eDATABASE_PASSWORD=testing321 -eDATABASE_HOST=postgres -eDATABASE_PORT=5432 trustpointproject/trustpoint:latest
