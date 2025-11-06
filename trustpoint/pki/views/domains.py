@@ -16,7 +16,6 @@ from django.views.generic import DeleteView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import CreateView, FormView, UpdateView
 from django.views.generic.list import ListView
-from management.models import TlsSettings
 from trustpoint.views.base import (
     BulkDeleteView,
     ContextDataMixin,
@@ -27,7 +26,12 @@ from trustpoint_core import oid
 
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from pki.models import CertificateModel, DevIdRegistration, DomainModel, IssuingCaModel
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TruststoreModel
+from pki.models.truststore import TruststoreModel
+from trustpoint.settings import UIConfig
+
+from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
+from pki.models import CertificateModel, DevIdRegistration, DomainModel, IssuingCaModel
+from pki.models.truststore import TruststoreModel
 from trustpoint.settings import UIConfig
 
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm

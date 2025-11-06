@@ -26,7 +26,6 @@ from util.encrypted_fields import EncryptedCharField
 from util.field import UniqueNameValidator
 
 from pki.models import CertificateModel
-from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -36,12 +35,14 @@ if TYPE_CHECKING:
     from trustpoint_core.crypto_types import PrivateKey
 
 
-__all__ = ['CertificateChainOrderModel',
-           'CredentialAlreadyExistsError',
-           'CredentialModel',
-           'IDevIDReferenceModel',
-           'OwnerCredentialModel',
-           'PKCS11Key']
+__all__ = [
+    'CertificateChainOrderModel',
+    'CredentialAlreadyExistsError',
+    'CredentialModel',
+    'IDevIDReferenceModel',
+    'OwnerCredentialModel',
+    'PKCS11Key',
+]
 
 
 class CredentialAlreadyExistsError(ValidationError):
@@ -455,7 +456,6 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         Returns:
             CertificateModel: The saved certificate model instance.
         """
-        certificate = CertificateModel.save_certificate(normalized_credential_serializer.certificate)
         # TODO(AlexHx8472): Verify that the credential is valid in respect to the credential_type!!!  # noqa: FIX002
         if normalized_credential_serializer.certificate is None:
             msg = 'Certificate cannot be None'
