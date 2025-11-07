@@ -71,14 +71,6 @@ class StartupWizardRedirectTestCase(TestCase):
         expected_url = reverse('users:login')
         self.assertEqual(result.url, expected_url)
 
-    def test_redirect_by_state_auto_restore_hsm(self):
-        """Test redirect for WIZARD_AUTO_RESTORE_HSM state."""
-        result = StartupWizardRedirect.redirect_by_state(SetupWizardState.WIZARD_AUTO_RESTORE_HSM)
-
-        self.assertIsInstance(result, HttpResponseRedirect)
-        expected_url = reverse('setup_wizard:auto_restore_hsm')
-        self.assertEqual(result.url, expected_url)
-
     def test_redirect_by_state_auto_restore_password(self):
         """Test redirect for WIZARD_AUTO_RESTORE_PASSWORD state."""
         result = StartupWizardRedirect.redirect_by_state(SetupWizardState.WIZARD_AUTO_RESTORE_PASSWORD)
@@ -179,8 +171,6 @@ class StartupWizardRedirectTestCase(TestCase):
             SetupWizardState.WIZARD_DEMO_DATA,
             SetupWizardState.WIZARD_CREATE_SUPER_USER,
             SetupWizardState.WIZARD_COMPLETED,
-            SetupWizardState.WIZARD_AUTO_RESTORE_HSM,
-            SetupWizardState.WIZARD_AUTO_RESTORE_PASSWORD,
         ]
 
         for state in standard_states:

@@ -288,8 +288,6 @@ class SetupWizardUrlsTestCase(TestCase):
             'demo_data',
             'create_super_user',
             'restore',
-            'auto_restore_hsm',
-            'auto_restore_password',
         ]
 
         for url_name in simple_url_names:
@@ -374,8 +372,6 @@ class SetupWizardUrlsTestCase(TestCase):
             reverse('setup_wizard:tls_server_credential_apply_cancel'),
             reverse('setup_wizard:demo_data'),
             reverse('setup_wizard:restore'),
-            reverse('setup_wizard:auto_restore_hsm'),
-            reverse('setup_wizard:auto_restore_password'),
         ]
 
         urls_without_trailing_slash = [
