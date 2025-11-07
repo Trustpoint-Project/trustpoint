@@ -34,7 +34,7 @@ class PKCS11ConfigFormTestCase(TestCase):
 
     def test_clean_with_softhsm(self):
         """Test that the form sets default values for SoftHSM."""
-        form = PKCS11ConfigForm(data={})
+        form = PKCS11ConfigForm(data={'hsm_type': 'softhsm'})
         self.assertTrue(form.is_valid())
         cleaned_data = form.clean()
         self.assertEqual(cleaned_data['label'], 'Trustpoint-SoftHSM')
@@ -43,7 +43,7 @@ class PKCS11ConfigFormTestCase(TestCase):
 
     def test_clean_label_unique(self):
         """Test that the form always uses the SoftHSM label."""
-        form = PKCS11ConfigForm(data={'label': 'SomeOtherLabel'})
+        form = PKCS11ConfigForm(data={'hsm_type': 'softhsm', 'label': 'SomeOtherLabel'})
         self.assertTrue(form.is_valid())
         cleaned_data = form.clean()
         self.assertEqual(cleaned_data['label'], 'Trustpoint-SoftHSM')
@@ -60,6 +60,7 @@ class PKCS11ConfigFormTestCase(TestCase):
 
         form = PKCS11ConfigForm(
             data={
+                'hsm_type': 'softhsm',
                 'label': 'NewToken',  # This will be ignored
                 'slot': 3,  # This will be overridden
                 'module_path': '/usr/local/lib/libpkcs11-proxy.so',
@@ -72,6 +73,7 @@ class PKCS11ConfigFormTestCase(TestCase):
         mock_get_or_create.assert_called_once_with(
             label='Trustpoint-SoftHSM',
             defaults={
+                'hsm_type': 'softhsm',
                 'slot': 0,
                 'module_path': '/usr/local/lib/libpkcs11-proxy.so',
             }
@@ -91,6 +93,7 @@ class PKCS11ConfigFormTestCase(TestCase):
 
         form = PKCS11ConfigForm(
             data={
+                'hsm_type': 'softhsm',
                 'slot': 2,  # This will be overridden to 0 for SoftHSM
                 'module_path': '/usr/local/lib/libpkcs11-proxy.so',
             }
@@ -107,6 +110,7 @@ class PKCS11ConfigFormTestCase(TestCase):
         mock_get_or_create.assert_called_once_with(
             label='Trustpoint-SoftHSM',
             defaults={
+                'hsm_type': 'softhsm',
                 'slot': 0,
                 'module_path': '/usr/local/lib/libpkcs11-proxy.so',
             }

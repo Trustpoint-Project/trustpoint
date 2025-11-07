@@ -23,6 +23,7 @@ from devices.models import (
 from pki.models import CertificateModel, CredentialModel
 from pki.models.domain import DomainModel
 from pki.models.issuing_ca import IssuingCaModel
+from management.models import KeyStorageConfig
 from pki.util.x509 import CertificateGenerator
 from trustpoint_core.serializer import CredentialSerializer
 
@@ -70,6 +71,9 @@ DOMAIN_UNIQUE_NAME = 'domain_test_instance'
 @pytest.fixture
 def issuing_ca_instance() -> dict[str, Any]:
     """Fixture for a testing IssuingCaModel instance."""
+    # Ensure crypto storage config exists for encrypted fields
+    KeyStorageConfig.get_or_create_default()
+    
     cert, priv_key = CertificateGenerator.create_root_ca(cn=CA_COMMON_NAME)
     issuing_ca = CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=cert, private_key=priv_key, chain=[], unique_name=UNIQUE_NAME, ca_type=CA_TYPE
