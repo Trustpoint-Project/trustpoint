@@ -146,35 +146,62 @@ class CertificateTemplateAuthorization(AuthorizationComponent, LoggerMixin):
 
     def __init__(self, allowed_templates: list[str]) -> None:
         """Initialize the authorization component with a list of allowed certificate templates."""
-        self.allowed_templates = allowed_templates
+        self.allowed_templates = allowed_templates # TODO remove
 
     def authorize(self, context: RequestContext) -> None:
         """Authorize the request based on the certificate template."""
-        requested_template = context.certificate_template
+        requested_profile = context.certificate_template
 
-        if not requested_template:
-            error_message = 'Certificate template is missing in the context. Authorization denied.'
-            self.logger.warning('Certificate template authorization failed: Template information is missing')
+        if not requested_profile:
+            error_message = 'Certificate profile is missing in the context. Authorization denied.'
+            self.logger.warning('Certificate profile authorization failed: Profile information is missing')
             raise ValueError(error_message)
 
-        if requested_template not in self.allowed_templates:
-            context.http_response_content = f'Not authorized for requested certificate template "{requested_template}".'
+        if not context.domain:
+            error_message = 'Domain information is missing in the context. Authorization denied.'
+            self.logger.warning('Certificate profile authorization failed: Domain information is missing')
+            raise ValueError(error_message)
+        
+        allowed_profiles = context.domain.certificate_profiles.all()
+        allowed_profile_names = [profile.certificate_profile.unique_name for profile in allowed_profiles]
+        allowed_profile_names.extend(profile.alias for profile in allowed_profiles if profile.alias)
+
+        if requested_profile not in allowed_profile_names:
+            context.http_response_content = f'Not authorized for requested certificate profile "{requested_profile}".'
             context.http_response_status = 403
             error_message = (
-                f"Unauthorized certificate template: '{requested_template}'. "
-                f"Allowed templates: {', '.join(self.allowed_templates)}."
+                f"Unauthorized certificate profile: '{requested_profile}'. "
+                f"Allowed profiles: {', '.join(allowed_profile_names)}."
             )
             self.logger.warning(
                 (
-                    'Certificate template authorization failed: %(requested_template)s not in '
-                    'allowed templates %(allowed_templates)s'
+                    'Certificate profile authorization failed: %s not in '
+                    'allowed profiles %s'
                 ),
-                extra={'requested_template': requested_template, 'allowed_templates': self.allowed_templates})
+                requested_profile, self.allowed_templates)
             raise ValueError(error_message)
+        
+        # try query from alias first
+        profile_qs = context.domain.certificate_profiles.filter(alias=requested_profile)
+        if profile_qs.exists():
+            context.certificate_profile_model = profile_qs.first().certificate_profile
+        else:
+            # fall back to unique_name
+            profile_qs = context.domain.certificate_profiles.filter(
+                certificate_profile__unique_name=requested_profile
+            )
+            if profile_qs.exists():
+                context.certificate_profile_model = profile_qs.first().certificate_profile
+            else:
+                err_msg = f'Authorized certificate profile "{requested_profile}" not found in domain.'
+                context.http_response_content = err_msg
+                context.http_response_status = 403
+                self.logger.warning(err_msg)
+                raise ValueError(err_msg)
 
         self.logger.debug(
-            'Certificate template authorization successful for template: %(template)s',
-            extra={'template': requested_template}
+            'Certificate profile authorization successful for profile: %s',
+            requested_profile
         )
 
 

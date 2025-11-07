@@ -7,7 +7,7 @@ from cryptography.x509 import CertificateSigningRequest
 from cryptography.x509.base import CertificateBuilder
 from devices.models import DeviceModel
 from django.http import HttpRequest
-from pki.models import CredentialModel, DomainModel
+from pki.models import CertificateProfileModel, CredentialModel, DomainModel
 from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 
 
@@ -25,6 +25,8 @@ class RequestContext:
     domain_str: str | None = None
     domain: DomainModel | None = None
     device: DeviceModel | None = None
+
+    certificate_profile_model: CertificateProfileModel | None = None
 
     cert_requested: CertificateSigningRequest | CertificateBuilder | None = None
     cert_requested_profile_validated: CertificateBuilder | None = None

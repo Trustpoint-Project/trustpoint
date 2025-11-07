@@ -1,4 +1,5 @@
 """Handles Request Conversion to JSON and Profile Validation."""
+import json
 
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from pki.util.cert_req_converter import JSONCertRequestConverter
@@ -27,16 +28,17 @@ class ProfileValidator(LoggerMixin):
         # If it is allowed/defined in this domain, proceed to use this profile.
         # If no profile is given as part of the URL or it is not defined in the domain, try domain default profile(s)
         # First domain default profile which successfully validates is used.
-        cert_profile = {
-            'type': 'cert_profile',
-            'subj': {'allow':'*'},
-            'ext': {
-                'crl': {'uris': ['http://localhost/crl/2']},
-            },
-            'validity': {
-                'days': 30
-            }
-        }
+        # cert_profile = {
+        #     'type': 'cert_profile',
+        #     'subj': {'allow':'*'},
+        #     'ext': {
+        #         'crl': {'uris': ['http://localhost/crl/2']},
+        #     },
+        #     'validity': {
+        #         'days': 30
+        #     }
+        # }
+        cert_profile = json.loads(context.certificate_profile_model.profile_json)
 
         try:
             validated_request = JSONProfileVerifier(cert_profile).apply_profile_to_request(cert_request_json)
