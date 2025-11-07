@@ -35,7 +35,7 @@ export function getHintsForStep(step) {
   try {
     const rel = exec.hints?.(step) ?? [];
     // Always add the common, executor-agnostic fields at the top:
-    const common = ['status', 'ok', 'error', 'outputs'];
+    const common = ['status', 'error', 'outputs'];
     // Merge (dedupe, preserve order: common first, then type-specific)
     const seen = new Set();
     const out = [];
@@ -47,7 +47,7 @@ export function getHintsForStep(step) {
     });
     return out;
   } catch {
-    return ['status', 'ok', 'error', 'outputs'];
+    return ['status', 'error', 'outputs'];
   }
 }
 

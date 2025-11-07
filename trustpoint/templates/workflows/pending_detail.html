@@ -1,80 +1,215 @@
 {% extends 'trustpoint/base.html' %}
 {% load static %}
+{% load i18n %}
 
 {% block content %}
-  <h1>Workflow Instance Details</h1>
+<div class="card">
+  <div class="card-header">
+    <h1 class="mb-0">{% trans 'Workflow Instance Details' %}</h1>
+  </div>
 
-  <p><strong>Instance ID:</strong> {{ inst.id }}</p>
-  <p>
-    <strong>Workflow:</strong> <a href="{% url 'workflows:definition_wizard' %}?edit={{ inst.definition.id }}">{{ inst.definition.name }}</a><br>
-    <strong>State:</strong> {{ inst.state }}<br>
-    <strong>Requested At:</strong> {{ inst.created_at|date:"Y/m/d, H:i:s" }}
-  </p>
+  <div class="card-body">
+    {# --- Summary ---------------------------------------------------------------- #}
+    <h5 class="mb-3">{% trans 'Summary' %}</h5>
+    <dl class="row">
+      <dt class="col-sm-3">{% trans 'Instance ID' %}</dt>
+      <dd class="col-sm-9">{{ inst.id }}</dd>
 
-  <hr>
-
-  <h3>Request</h3>
-  <ul>
-    <li><strong>CA:</strong>
-      <a href="{% url 'pki:issuing_cas-config' payload.ca_id %}">
-        {{ ca_name }}
-      </a>
-    </li>
-    <li>
-      <strong>Domain:</strong>
-      <a href="{% url 'pki:domains-config' payload.domain_id %}">
-        {{ domain_name }}
-      </a>
-    </li>
-    <li><strong>Protocol:</strong> {{ payload.protocol }}</li>
-    <li><strong>Operation:</strong> {{ payload.operation }}</li>
-    <li><strong>Enrollment request ID:</strong> {{ payload.fingerprint }}</li>
-  </ul>
-
-  <hr>
-
-  <h3>Device</h3>
-  <ul>
-    {% if payload.device_id %}
-      <li>
-        <strong>Device:</strong>
-        <a href="{% url clm_url pk=payload.device_id %}">
-          {{ device_name }}
+      <dt class="col-sm-3">{% trans 'Workflow' %}</dt>
+      <dd class="col-sm-9">
+        <a href="{% url 'workflows:definition_wizard' %}?edit={{ inst.definition.id }}">
+          {{ inst.definition.name }}
         </a>
+      </dd>
+
+      <dt class="col-sm-3">{% trans 'State' %}</dt>
+      <dd class="col-sm-9">
+        <span class="badge bg-secondary">{{ inst.state }}</span>
+      </dd>
+
+      <dt class="col-sm-3">{% trans 'Current step' %}</dt>
+      <dd class="col-sm-9">
+        {% if current_step_label %}
+          {{ current_step_label }} <span class="text-muted">({{ inst.current_step }})</span>
+        {% else %}
+          <span class="text-muted">&mdash;</span>
+        {% endif %}
+      </dd>
+
+      <dt class="col-sm-3">{% trans 'Requested at' %}</dt>
+      <dd class="col-sm-9">{{ inst.created_at|date:"Y/m/d, H:i:s" }}</dd>
+
+      <dt class="col-sm-3">{% trans 'Last updated' %}</dt>
+      <dd class="col-sm-9">{{ inst.updated_at|date:"Y/m/d, H:i:s" }}</dd>
+
+      {% if inst.enrollment_request %}
+        <dt class="col-sm-3">{% trans 'Enrollment request state' %}</dt>
+        <dd class="col-sm-9">
+          {{ inst.enrollment_request.aggregated_state }}
+        </dd>
+      {% endif %}
+    </dl>
+
+    <hr>
+
+    {# --- Request info ----------------------------------------------------------- #}
+    <h5 class="mb-3">{% trans 'Request' %}</h5>
+    <ul>
+      <li>
+          <strong>{% trans 'Device' %}:</strong>
+          <a href="{% url clm_url pk=payload.device_id %}">
+            {{ device_name }} ({{ device_serial_number }})
+          </a>
+        </li>
+      <li>
+        <strong>{% trans 'Domain' %}:</strong>
+        {% if payload.domain_id and domain_name %}
+          <a href="{% url 'pki:domains-config' payload.domain_id %}">
+            {{ domain_name }}
+          </a>
+        {% else %}
+          <span class="text-muted">&mdash;</span>
+        {% endif %}
       </li>
       <li>
-        <strong>Serial number:</strong>
-          {{ device_serial_number }}
+        <strong>{% trans 'CA' %}:</strong>
+        {% if payload.ca_id and ca_name %}
+          <a href="{% url 'pki:issuing_cas-config' payload.ca_id %}">
+            {{ ca_name }}
+          </a>
+        {% else %}
+          <span class="text-muted">&mdash;</span>
+        {% endif %}
       </li>
-    {% endif %}
-  </ul>
 
-  <hr>
+      <li>
+        <strong>{% trans 'Protocol' %}:</strong>
+        {{ payload.protocol|default:inst.enrollment_request.protocol }}
+      </li>
 
-  <h3>CSR Details</h3>
-  {% if csr_info %}
-    {% if csr_info.error %}
-      <div class="alert alert-warning">{{ csr_info.error }}</div>
+      <li>
+        <strong>{% trans 'Operation' %}:</strong>
+        {{ payload.operation|default:inst.enrollment_request.operation }}
+      </li>
+
+      <li>
+        <strong>{% trans 'Enrollment request fingerprint' %}:</strong>
+        {{ payload.fingerprint|default:inst.enrollment_request.fingerprint }}
+      </li>
+    </ul>
+
+    <hr>
+
+    {# --- Steps / history -------------------------------------------------------- #}
+    <h5 class="mb-3">{% trans 'Workflow steps' %}</h5>
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th class="text-nowrap">{% trans 'Step' %}</th>
+          <th class="text-nowrap">{% trans 'Status' %}</th>
+          <th class="text-nowrap">{% trans 'Type' %}</th>
+          <th class="text-nowrap">{% trans 'Details' %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for step in steps %}
+          <tr>
+            <td>{{ step.label }}</td>
+            <td>
+              <span class="badge {{ step.badge_class }}">{{ step.status }}</span>
+            </td>
+            <td><code>{{ step.type }}</code></td>
+            <td>
+              {% if step.error or step.details %}
+                <ul class="mb-0">
+                  {% if step.error %}
+                    <li>
+                      <strong>{% trans 'Error' %}:</strong>
+                      <span class="text-danger">{{ step.error }}</span>
+                    </li>
+                  {% endif %}
+                  {% for key, value in step.details.items %}
+                    <li><strong>{{ key }}:</strong> {{ value }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <span class="text-muted">&mdash;</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4" class="text-center text-muted">
+              {% trans 'No step metadata is available for this instance.' %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+
+    <hr>
+
+    {# --- CSR -------------------------------------------------------------------- #}
+    <h5 class="mb-3">{% trans 'CSR details' %}</h5>
+    {% if csr_info %}
+      {% if csr_info.error %}
+        <div class="alert alert-warning">{{ csr_info.error }}</div>
+      {% else %}
+        <ul>
+          <li><strong>{% trans 'Subject' %}:</strong> {{ csr_info.subject }}</li>
+          {% if csr_info.common_name %}
+            <li><strong>{% trans 'Common Name' %}:</strong> {{ csr_info.common_name }}</li>
+          {% endif %}
+          {% if csr_info.sans %}
+            <li><strong>{% trans 'SANs' %}:</strong> {{ csr_info.sans|join:", " }}</li>
+          {% endif %}
+          <li><strong>{% trans 'Key Algorithm' %}:</strong> {{ csr_info.key_algorithm }}</li>
+          <li><strong>{% trans 'Signature Algorithm' %}:</strong> {{ csr_info.signature_algorithm }}</li>
+        </ul>
+      {% endif %}
     {% else %}
-      <ul>
-        <li><strong>Subject:</strong> {{ csr_info.subject }}</li>
-        {% if csr_info.common_name %}
-          <li><strong>Common Name:</strong> {{ csr_info.common_name }}</li>
-        {% endif %}
-        {% if csr_info.sans %}
-          <li><strong>SANs:</strong> {{ csr_info.sans|join:", " }}</li>
-        {% endif %}
-        <li><strong>Key Algorithm:</strong> {{ csr_info.key_algorithm }}</li>
-        <li><strong>Signature Algorithm:</strong> {{ csr_info.signature_algorithm }}</li>
-      </ul>
+      <p class="text-muted">{% trans 'No CSR data available.' %}</p>
     {% endif %}
-  {% else %}
-    <p>No CSR data available.</p>
-  {% endif %}
+    {% if csr_info %}
+      <hr>
+      
+      <h5 class="mb-3">{% trans 'CSR PEM' %}</h5>
+      {{ csr_pem }}
+    {% endif %}
 
-  <p>
-    <a href="{% url 'workflows:pending_list' %}" class="btn btn-secondary">
-      ← Back to Pending
-    </a>
-  </p>
+    {% if can_signal %}
+      <hr>
+      <h5 class="mb-3">{% trans 'Actions' %}</h5>
+      <form method="post" action="{% url 'workflows:signal' inst.id %}">
+        {% csrf_token %}
+        <button
+          type="submit"
+          name="action"
+          value="Approved"
+          class="btn btn-success me-2"
+        >
+          {% trans 'Approve' %}
+        </button>
+        <button
+          type="submit"
+          name="action"
+          value="Rejected"
+          class="btn btn-danger me-2"
+        >
+          {% trans 'Reject' %}
+        </button>
+        <a href="{% url 'workflows:pending_list' %}" class="btn btn-secondary">
+          &larr; {% trans 'Back to Pending' %}
+        </a>
+      </form>
+    {% else %}
+      <div class="mt-3">
+        <a href="{% url 'workflows:pending_list' %}" class="btn btn-secondary">
+          &larr; {% trans 'Back to Pending' %}
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}

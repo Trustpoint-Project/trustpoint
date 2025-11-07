@@ -21,7 +21,6 @@ class ApprovalExecutor(AbstractStepExecutor):
                 status=ExecStatus.WAITING,
                 context={
                     'type': 'Approval',
-                    'ok': False,
                     'status': 'waiting',
                     'error': None,
                     'outputs': {'awaiting': True},
@@ -34,7 +33,6 @@ class ApprovalExecutor(AbstractStepExecutor):
                 status=ExecStatus.REJECTED,
                 context={
                     'type': 'Approval',
-                    'ok': False,
                     'status': 'rejected',
                     'error': None,
                     'outputs': {'decision': 'Rejected'},
@@ -48,7 +46,6 @@ class ApprovalExecutor(AbstractStepExecutor):
                     status=ExecStatus.APPROVED,
                     context={
                         'type': 'Approval',
-                        'ok': True,
                         'status': 'approved',
                         'error': None,
                         'outputs': {'decision': 'Approved', 'last_approval': True},
@@ -58,7 +55,6 @@ class ApprovalExecutor(AbstractStepExecutor):
                 status=ExecStatus.PASSED,
                 context={
                     'type': 'Approval',
-                    'ok': True,
                     'status': 'passed',
                     'error': None,
                     'outputs': {'decision': 'Approved'},
@@ -70,7 +66,6 @@ class ApprovalExecutor(AbstractStepExecutor):
             status=ExecStatus.WAITING,
             context={
                 'type': 'Approval',
-                'ok': False,
                 'status': 'waiting',
                 'error': None,
                 'outputs': {'awaiting': True},

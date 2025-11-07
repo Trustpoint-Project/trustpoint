@@ -28,15 +28,16 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
+from devices.models import DeviceModel
 from django.conf import settings
 
-from devices.models import DeviceModel
-from workflows.models import WorkflowInstance
+if TYPE_CHECKING:
+    from workflows.models import WorkflowInstance
 
 __all__ = [
     'CTX_SCHEMA_VERSION',

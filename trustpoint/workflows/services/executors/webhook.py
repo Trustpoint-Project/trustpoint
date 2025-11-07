@@ -64,7 +64,7 @@ class WebhookExecutor(AbstractStepExecutor):
             logger.exception('Webhook: URL template render failed')
             return ExecutorResult(
                 status=ExecStatus.FAIL,
-                context={'type': 'Webhook', 'ok': False, 'status': 'failed', 'error': f'URL template error: {exc!s}', 'outputs': {}},
+                context={'type': 'Webhook', 'status': 'failed', 'error': f'URL template error: {exc!s}', 'outputs': {}},
             )
 
         headers: dict[str, str] = {}
@@ -87,7 +87,7 @@ class WebhookExecutor(AbstractStepExecutor):
                 logger.exception('Webhook: body template render failed')
                 return ExecutorResult(
                     status=ExecStatus.FAIL,
-                    context={'type': 'Webhook', 'ok': False, 'status': 'failed', 'error': f'Body template error: {exc!s}', 'outputs': {}},
+                    context={'type': 'Webhook', 'status': 'failed', 'error': f'Body template error: {exc!s}', 'outputs': {}},
                 )
             try:
                 data_kwargs['json'] = _json.loads(rendered)
@@ -103,7 +103,7 @@ class WebhookExecutor(AbstractStepExecutor):
             logger.exception('Webhook: request failed')
             return ExecutorResult(
                 status=ExecStatus.FAIL,
-                context={'type': 'Webhook', 'ok': False, 'status': 'failed', 'error': f'HTTP request failed: {exc!s}', 'outputs': {}},
+                context={'type': 'Webhook', 'status': 'failed', 'error': f'HTTP request failed: {exc!s}', 'outputs': {}},
             )
 
         # Try decode JSON; keep text also
@@ -116,7 +116,6 @@ class WebhookExecutor(AbstractStepExecutor):
         # Per-step context summary
         step_ctx: dict[str, Any] = {
             'type': 'Webhook',
-            'ok': True,
             'status': 'passed',
             'error': None,
             'outputs': {

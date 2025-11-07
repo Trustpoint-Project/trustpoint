@@ -2,23 +2,20 @@
 from __future__ import annotations
 
 import hashlib
-import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
-from cryptography import x509
+from cryptography.hazmat.primitives import serialization
+from cryptography.x509 import CertificateSigningRequest
 from django.db import transaction
 from django.db.models import Q
 from trustpoint.logger import LoggerMixin
 from workflows.models import EnrollmentRequest, WorkflowDefinition, WorkflowInstance
 from workflows.services.engine import advance_instance
-from workflows.services.handler_lookup import register_handler
-from workflows.services.request_aggregator import recompute_request_state  # NEW
-
-from request.request_context import RequestContext
+from workflows.services.request_aggregator import recompute_request_state
 
 if TYPE_CHECKING:
-    from uuid import UUID
+    from request.request_context import RequestContext
 
 class AbstractWorkflowHandler(ABC, LoggerMixin):
     """Abstract base class for workflow handler."""
@@ -82,12 +79,15 @@ class CertificateRequestHandler(WorkflowHandler):
         if not payload:
             payload = {}
 
+        csr = context.cert_requested
+        if not isinstance(csr, CertificateSigningRequest):
+            raise TypeError
+
 
         ca_id = _norm(context.domain.get_issuing_ca_or_value_error().pk)
         domain_id = _norm(context.domain.pk)
         device_id = _norm(context.device.pk)
 
-        csr = context.cert_requested
 
         fingerprint = hashlib.sha256(csr.tbs_certrequest_bytes).hexdigest()
         template = context.certificate_template
@@ -165,6 +165,7 @@ class CertificateRequestHandler(WorkflowHandler):
                     'domain_id': domain_id,
                     'device_id': device_id,
                     'fingerprint': fingerprint,
+                    'csr_pem': csr.public_bytes(encoding=serialization.Encoding.PEM).decode('utf-8'),
                     **dict(payload.items()),
                 }
                 with transaction.atomic():

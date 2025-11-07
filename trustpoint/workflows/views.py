@@ -9,7 +9,7 @@ This module provides Django class-based views for:
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 from cryptography import x509
@@ -34,6 +34,7 @@ from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_DEVICES_
 from trustpoint_core.oid import AlgorithmIdentifier
 from util.email import MailTemplates
 
+from workflows.filters import WorkflowFilter
 from workflows.models import (
     WorkflowDefinition,
     WorkflowInstance,
@@ -46,6 +47,7 @@ from workflows.services.request_aggregator import recompute_request_state
 from workflows.services.validators import validate_wizard_payload
 from workflows.services.wizard import transform_to_definition_schema
 from workflows.events import Events
+import contextlib
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -595,57 +597,168 @@ class PendingApprovalsView(ListView[WorkflowInstance]):
     template_name = 'workflows/pending_list.html'
     context_object_name = 'instances'
 
+    filterset_class = WorkflowFilter
+    default_sort_param = '-created_at'  # newest first
+
     def get_queryset(self) -> QuerySet[WorkflowInstance]:
-        """Filter queryset to only include pending workflow instances."""
-        return WorkflowInstance.objects.filter(state=WorkflowInstance.STATE_AWAITING, finalized=False)
+        base_qs = (
+            WorkflowInstance.objects.filter(
+                state=WorkflowInstance.STATE_AWAITING,
+                finalized=False,
+            )
+            .select_related(
+                'definition',
+                'enrollment_request',
+                'enrollment_request__device',
+                'enrollment_request__domain',
+            )
+        )
+
+        self.filterset = self.filterset_class(self.request.GET or None, queryset=base_qs)
+        qs: QuerySet[WorkflowInstance] = self.filterset.qs
+
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+        allowed_sorts = {
+            'enrollment_request__device__common_name',
+            '-enrollment_request__device__common_name',
+            'enrollment_request__domain__unique_name',
+            '-enrollment_request__domain__unique_name',
+            'enrollment_request__protocol',
+            '-enrollment_request__protocol',
+            'definition__name',
+            '-definition__name',
+            'created_at',
+            '-created_at',
+        }
+        if sort_param not in allowed_sorts:
+            sort_param = self.default_sort_param
+
+        return qs.order_by(sort_param)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds the page category and name to the context.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            The context to use for rendering the page.
-        """
+        """Adds page metadata, filter, and sorting information to the context."""
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'workflows'
         context['page_name'] = 'pending'
+        context['clm_url'] = (
+            f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management'
+        )
+
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+        context['current_sort'] = sort_param
+        context['filter'] = getattr(self, 'filterset', None)
+
+        params = self.request.GET.copy()
+        params.pop('sort', None)
+        context['preserve_qs'] = params.urlencode()
         return context
 
 
 class WorkflowInstanceDetailView(PageContextMixin, View):
-    """Show detailed info for a pending workflow instance."""
-
-    page_category = DEVICES_PAGE_CATEGORY
-    page_name_for_redirect = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    """Show detailed info for a pending workflow instance, including step summary."""
 
     template_name = 'workflows/pending_detail.html'
 
     def get(self, request: HttpRequest, instance_id: UUID, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Handle GET request for pending workflow detail view."""
-        inst = get_object_or_404(WorkflowInstance, pk=instance_id)
+        inst = get_object_or_404(
+            WorkflowInstance.objects.select_related(
+                'definition',
+                'enrollment_request',
+                'enrollment_request__device',
+                'enrollment_request__domain',
+                'enrollment_request__ca',
+            ),
+            pk=instance_id,
+        )
+
         payload = inst.payload or {}
 
-        if payload.get('ca_id'):
-            ca = get_object_or_404(IssuingCaModel, pk=payload['ca_id'])
+        # ---- Resolve CA / Domain / Device -------------------------------------
+        def _resolve(model_cls, payload_id, fallback):
+            if payload_id:
+                return get_object_or_404(model_cls, pk=payload_id)
+            return fallback
 
-        if payload.get('domain_id'):
-            dm = get_object_or_404(DomainModel, pk=payload['domain_id'])
+        enr = inst.enrollment_request
+        ca = _resolve(IssuingCaModel, payload.get('ca_id'), enr.ca if enr and enr.ca_id else None)
+        dm = _resolve(DomainModel, payload.get('domain_id'), enr.domain if enr and enr.domain_id else None)
+        dv = _resolve(DeviceModel, payload.get('device_id'), enr.device if enr and enr.device_id else None)
 
-        if payload.get('device_id'):
-            dv = get_object_or_404(DeviceModel, pk=payload['device_id'])
+        # ---- Steps + step contexts -------------------------------------------
+        steps_raw = inst.get_steps()
+        step_contexts: dict[str, dict[str, Any]] = inst.step_contexts or {}
 
-        # Parse CSR if present
+        try:
+            current_idx = inst.get_current_step_index()
+        except Exception:  # noqa: BLE001
+            current_idx = None
+
+        steps: list[dict[str, Any]] = []
+        current_step_label: str | None = None
+
+        def _normalize_status(raw_status: str | None, index0: int) -> tuple[str, str]:
+            """Return (display_status, bootstrap_badge_class)."""
+            if raw_status:
+                s = raw_status.lower()
+                if s in {'passed', 'approved', 'completed'}:
+                    return 'passed', 'bg-success'
+                if s in {'waiting', 'awaiting'}:
+                    return 'waiting', 'bg-secondary'
+                if s in {'running', 'in-progress'}:
+                    return 'In progress', 'bg-primary'
+                if s in {'rejected', 'failed'}:
+                    return s.capitalize(), 'bg-danger'
+
+            # fallback based on position vs current_idx
+            if current_idx is None:
+                return 'Unknown', 'bg-light text-muted'
+            if index0 < current_idx:
+                return 'Completed', 'bg-success'
+            if index0 == current_idx:
+                return 'In progress', 'bg-primary'
+            return 'Pending', 'bg-secondary'
+
+        for idx0, step_def in enumerate(steps_raw):
+            step_id = step_def.get('id') or f'step-{idx0 + 1}'
+            step_type = step_def.get('type', 'Unknown')
+            step_label = step_def.get('name') or step_def.get('label') or step_id
+
+            ctx = step_contexts.get(step_id, {}) or {}
+            raw_status = ctx.get('status')
+            display_status, badge_class = _normalize_status(raw_status, idx0)
+
+            if current_idx is not None and idx0 == current_idx:
+                current_step_label = step_label
+
+            # Error is highlighted separately; details are the "rest"
+            error_value = ctx.get('error')
+            details = {
+                k: v
+                for k, v in ctx.items()
+                if k not in {'status', 'ok'}  # keep 'error' and anything else
+            }
+
+            steps.append(
+                {
+                    'label': step_label,
+                    'type': step_type,
+                    'status': display_status,
+                    'badge_class': badge_class,
+                    'error': error_value,
+                    'details': details,
+                }
+            )
+
+        # ---- CSR parsing ------------------------------------------------------
         csr_info: dict[str, Any] | None = None
         csr_pem = payload.get('csr_pem')
-        if isinstance(csr_pem, str):
+        if isinstance(csr_pem, str) and csr_pem.strip():
             try:
                 csr_obj = x509.load_pem_x509_csr(csr_pem.encode('utf-8'))
-                # Common Name
+
                 cn_attrs = csr_obj.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
                 cn = cn_attrs[0].value if cn_attrs else None
-                # SANs
+
                 try:
                     san_ext = csr_obj.extensions.get_extension_for_class(x509.SubjectAlternativeName)
                     dns_sans = san_ext.value.get_values_for_type(x509.DNSName)
@@ -653,6 +766,7 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
                     sans = [*dns_sans, *ip_sans]
                 except ExtensionNotFound:
                     sans = []
+
                 sig_alg = AlgorithmIdentifier.from_dotted_string(csr_obj.signature_algorithm_oid.dotted_string)
                 csr_info = {
                     'subject': csr_obj.subject.rfc4514_string(),
@@ -667,17 +781,20 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
         context = {
             'inst': inst,
             'payload': payload,
-            'ca_name': ca.unique_name,
-            'domain_name': dm.unique_name,
-            'device_name': dv.common_name,
-            'device_serial_number': dv.serial_number,
+            'ca_name': ca.unique_name if ca else None,
+            'domain_name': dm.unique_name if dm else None,
+            'device_name': dv.common_name if dv else None,
+            'device_serial_number': dv.serial_number if dv else None,
             'csr_info': csr_info,
+            'csr_pem': csr_pem,
+            'steps': steps,
+            'current_step_label': current_step_label,
+            'can_signal': (inst.state == WorkflowInstance.STATE_AWAITING and not inst.finalized),
             'page_category': 'workflows',
             'page_name': 'pending',
-            'clm_url' : f'{self.page_category}:{self.page_name_for_redirect}_certificate_lifecycle_management',
+            'clm_url': f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management',
         }
         return render(request, self.template_name, context)
-
 
 class SignalInstanceView(View):
     """Endpoint to signal (approve/reject) a workflow instance via POST."""
@@ -692,14 +809,65 @@ class SignalInstanceView(View):
         advance_instance(inst, signal=action)
         inst.refresh_from_db()
         if inst.enrollment_request:
-            try:
+            with contextlib.suppress(Exception):
                 recompute_request_state(inst.enrollment_request)
-            except Exception:
-                pass
 
         if action == 'Approved':
             messages.success(request, f'Workflow {inst.id} approved and advanced.')
         else:
             messages.warning(request, f'Workflow {inst.id} was rejected.')
+
+        return redirect('workflows:pending_list')
+
+
+class BulkSignalInstancesView(View):
+    """Endpoint to signal (approve/reject) multiple workflow instances via POST."""
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        action = request.POST.get('action')
+        if action not in {'Approved', 'Rejected'}:
+            messages.error(request, f'Invalid bulk action: {action!r}')
+            return redirect('workflows:pending_list')
+
+        # Checkboxes use name="row_checkbox"
+        selected_ids: list[str] = request.POST.getlist('row_checkbox')
+
+        if not selected_ids:
+            messages.warning(request, 'Please select at least one workflow instance.')
+            return redirect('workflows:pending_list')
+
+        # Only operate on still-pending instances
+        instances_qs = WorkflowInstance.objects.filter(
+            id__in=selected_ids,
+            state=WorkflowInstance.STATE_AWAITING,
+            finalized=False,
+        ).select_related('enrollment_request')
+
+        if not instances_qs.exists():
+            messages.warning(request, 'No pending workflow instances matched your selection.')
+            return redirect('workflows:pending_list')
+
+        updated_count = 0
+
+        for inst in instances_qs:
+            advance_instance(inst, signal=action)
+            inst.refresh_from_db()
+            if inst.enrollment_request:
+                with contextlib.suppress(Exception):
+                    recompute_request_state(inst.enrollment_request)
+            updated_count += 1
+
+        if updated_count == 0:
+            messages.warning(request, 'No workflow instances were updated.')
+        elif action == 'Approved':
+            messages.success(
+                request,
+                f'{updated_count} workflow instance(s) approved and advanced.',
+            )
+        else:
+            messages.warning(
+                request,
+                f'{updated_count} workflow instance(s) rejected.',
+            )
 
         return redirect('workflows:pending_list')

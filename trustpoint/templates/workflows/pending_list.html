@@ -1,70 +1,169 @@
 {% extends 'trustpoint/base.html' %}
 {% load static %}
+{% load i18n %}
+{% load sort_tags %}
 
 {% block content %}
-  <h1>Pending Approvals</h1>
 
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Device</th>
-        <th>Domain</th>
-        <th>protocol</th>
-        <th>Workflow</th>
-        <th>Requested At</th>
-        <th class="text-end">Action</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for inst in instances %}
-        <tr>
-          <td>
-            {{ inst.enrollment_request.device.common_name }}
-            <a
-              href="{% url 'workflows:pending_detail' inst.id %}"
-              class="btn-info ms-2"
-            >
-              ({{ inst.enrollment_request.device.serial_number }})
-            </a>
-          </td>
-          <td>{{ inst.enrollment_request.domain.unique_name }}</td>
-          <td>{{ inst.enrollment_request.protocol }}</td>
-          <td>
-            <a
-              href="{% url 'workflows:definition_wizard'%}?edit={{ inst.definition.id }}"
-              class="btn-info ms-2"
-            >{{ inst.definition }}
-            </a></td>
-          <td>{{ inst.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-          <td class="text-end">
-            <form
-              action="{% url 'workflows:signal' inst.id %}"
-              method="post"
-              class="d-inline"
-            >
-              {% csrf_token %}
-              <button
-                name="action"
-                value="Approved"
-                class="btn btn-sm btn-success me-1"
-              >
-                Approve
-              </button>
-              <button
-                name="action"
-                value="Rejected"
-                class="btn btn-sm btn-danger"
-              >
-                Reject
-              </button>
-            </form>
-          </td>
-        </tr>
-      {% empty %}
-        <tr>
-          <td colspan="5" class="text-center">No pending workflows.</td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+  <div class="card-header">
+    <h1>{% trans 'Pending Approvals' %}</h1>
+  </div>
+
+  {% include 'workflows/table_filter.html' with table_url='workflows:pending_list' %}
+
+  {# Single outer form: used both for bulk actions and per-row actions #}
+  <form method="post" action="{% url 'workflows:pending_bulk_signal' %}" style="flex-grow: 1; display: flex; flex-direction: column;">
+    {% csrf_token %}
+
+    <div class="card-body text-start pt-0" style="overflow: auto; flex-grow: 1; max-height: 90%;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th id="checkbox-column"><input type="checkbox" /></th>
+
+            <th class="text-nowrap">
+              <a href="{% url_sort 'enrollment_request__device__common_name' %}">
+                {% trans 'Device' %}
+                {{ request|sort_icon:'enrollment_request__device__common_name' }}
+              </a>
+            </th>
+
+            <th class="text-nowrap">
+              <a href="{% url_sort 'enrollment_request__domain__unique_name' %}">
+                {% trans 'Domain' %}
+                {{ request|sort_icon:'enrollment_request__domain__unique_name' }}
+              </a>
+            </th>
+
+            <th class="text-nowrap">
+              <a href="{% url_sort 'enrollment_request__protocol' %}">
+                {% trans 'Protocol' %}
+                {{ request|sort_icon:'enrollment_request__protocol' }}
+              </a>
+            </th>
+
+            <th class="text-nowrap">
+              <a href="{% url_sort 'definition__name' %}">
+                {% trans 'Workflow' %}
+                {{ request|sort_icon:'definition__name' }}
+              </a>
+            </th>
+
+            <th class="text-nowrap">
+              <a href="{% url_sort 'created_at' %}">
+                {% trans 'Requested At' %}
+                {{ request|sort_icon:'created_at' }}
+              </a>
+            </th>
+
+            <th class="text-nowrap">
+              {% trans 'Request info' %}
+            </th>
+
+            <th class="text-nowrap text-end">
+              {% trans 'Action' %}
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for inst in instances %}
+            <tr>
+              <td class="row_checkbox">
+                <input type="checkbox" name="row_checkbox" value="{{ inst.id }}" />
+              </td>
+
+              <td>
+                {% if inst.enrollment_request.device %}
+                  <a href="{% url clm_url pk=inst.enrollment_request.device.pk %}">
+                    {{ inst.enrollment_request.device.common_name }}
+                    ({{ inst.enrollment_request.device.serial_number }})
+                  </a>
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
+
+              <td>
+                {% if inst.enrollment_request.domain %}
+                  {{ inst.enrollment_request.domain.unique_name }}
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
+
+              <td>{{ inst.enrollment_request.protocol }}</td>
+
+              <td>
+                <a
+                  href="{% url 'workflows:definition_wizard' %}?edit={{ inst.definition.id }}"
+                  class="btn-info ms-2"
+                >
+                  {{ inst.definition }}
+                </a>
+              </td>
+
+              <td>{{ inst.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+
+              <td>
+                <a
+                  href="{% url 'workflows:pending_detail' inst.id %}"
+                  class="btn-info ms-2"
+                >
+                  {% trans 'Details' %}
+                </a>
+              </td>
+
+              <td class="text-end">
+                {# Row-level Approve/Reject: still use this outer form, but override action #}
+                <button
+                  type="submit"
+                  name="action"
+                  value="Approved"
+                  class="btn btn-sm btn-success me-1"
+                  formaction="{% url 'workflows:signal' inst.id %}"
+                  formmethod="post"
+                >
+                  {% trans 'Approve' %}
+                </button>
+                <button
+                  type="submit"
+                  name="action"
+                  value="Rejected"
+                  class="btn btn-sm btn-danger"
+                  formaction="{% url 'workflows:signal' inst.id %}"
+                  formmethod="post"
+                >
+                  {% trans 'Reject' %}
+                </button>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="8" class="middle">
+                {% trans 'No pending workflows.' %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+      <div class="tp-card-btn-footer m-1">
+        <button type="submit" name="action" value="Approved" class="btn btn-success me-2">
+          {% trans 'Approve selected' %}
+        </button>
+        <button type="submit" name="action" value="Rejected" class="btn btn-danger">
+          {% trans 'Reject selected' %}
+        </button>
+      </div>
+      <div class="m-1">
+        {# Reserved for future help text / links #}
+      </div>
+    </div>
+  </form>
+</div>
+
 {% endblock %}

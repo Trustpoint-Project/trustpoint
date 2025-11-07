@@ -1,5 +1,6 @@
-{% block table_filter %}
 {% load i18n %}
+
+{% block table_filter %}
 
   {# --- Filter toggle + form --- #}
 
@@ -41,11 +42,11 @@
           {{ filter.form.domain }}
         </div>
 
-        <div class="col-auto">
+        <div class="col-auto mt-2">
           <button type="submit" class="btn btn-primary btn-sm">
             {% trans 'Apply' %}
           </button>
-          <a href="{% url table_url %}" class="btn btn-link btn-sm">
+          <a href="{% url table_url %}" class="btn btn-outline-secondary btn-sm">
             {% trans 'Reset' %}
           </a>
         </div>

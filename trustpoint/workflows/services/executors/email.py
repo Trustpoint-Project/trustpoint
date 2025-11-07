@@ -47,7 +47,6 @@ class EmailExecutor(AbstractStepExecutor):
                 status=ExecStatus.FAIL,
                 context={
                     'type': 'Email',
-                    'ok': False,
                     'status': 'failed',
                     'error': 'Missing recipients',
                     'outputs': {},
@@ -69,7 +68,6 @@ class EmailExecutor(AbstractStepExecutor):
                     status=ExecStatus.FAIL,
                     context={
                         'type': 'Email',
-                        'ok': False,
                         'status': 'failed',
                         'error': f'Unknown template {template_key!r}',
                         'outputs': {},
@@ -86,7 +84,6 @@ class EmailExecutor(AbstractStepExecutor):
                     status=ExecStatus.FAIL,
                     context={
                         'type': 'Email',
-                        'ok': False,
                         'status': 'failed',
                         'error': f'Subject template error: {exc}',
                         'outputs': {'mode': 'template', 'template': template_key},
@@ -97,7 +94,6 @@ class EmailExecutor(AbstractStepExecutor):
                     status=ExecStatus.FAIL,
                     context={
                         'type': 'Email',
-                        'ok': False,
                         'status': 'failed',
                         'error': str(exc),
                         'outputs': {'mode': 'template', 'template': template_key},
@@ -120,7 +116,6 @@ class EmailExecutor(AbstractStepExecutor):
                     status=ExecStatus.FAIL,
                     context={
                         'type': 'Email',
-                        'ok': False,
                         'status': 'failed',
                         'error': str(exc),
                         'outputs': {
@@ -137,7 +132,6 @@ class EmailExecutor(AbstractStepExecutor):
                 status=ExecStatus.PASSED,
                 context={
                     'type': 'Email',
-                    'ok': True,
                     'status': 'sent',
                     'error': None,
                     'outputs': {
@@ -160,7 +154,6 @@ class EmailExecutor(AbstractStepExecutor):
                 status=ExecStatus.FAIL,
                 context={
                     'type': 'Email',
-                    'ok': False,
                     'status': 'failed',
                     'error': 'Missing subject/body for custom email',
                     'outputs': {},
@@ -179,7 +172,6 @@ class EmailExecutor(AbstractStepExecutor):
                 status=ExecStatus.FAIL,
                 context={
                     'type': 'Email',
-                    'ok': False,
                     'status': 'failed',
                     'error': f'Template syntax error: {exc}',
                     'outputs': {'mode': 'custom'},
@@ -190,7 +182,6 @@ class EmailExecutor(AbstractStepExecutor):
                 status=ExecStatus.FAIL,
                 context={
                     'type': 'Email',
-                    'ok': False,
                     'status': 'failed',
                     'error': str(exc),
                     'outputs': {'mode': 'custom'},
@@ -211,7 +202,6 @@ class EmailExecutor(AbstractStepExecutor):
                 status=ExecStatus.FAIL,
                 context={
                     'type': 'Email',
-                    'ok': False,
                     'status': 'failed',
                     'error': str(exc),
                     'outputs': {'mode': 'custom', 'to': list(to), 'cc': list(cc), 'bcc': list(bcc)},
@@ -222,7 +212,6 @@ class EmailExecutor(AbstractStepExecutor):
             status=ExecStatus.PASSED,
             context={
                 'type': 'Email',
-                'ok': True,
                 'status': 'sent',
                 'error': None,
                 'outputs': {

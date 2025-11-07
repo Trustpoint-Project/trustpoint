@@ -223,6 +223,15 @@ async function init() {
   const varPanel = new VarPanel({ getState: () => state });
   varPanel.mount();
 
+  // Hook up the header button to toggle the panel
+  const varsBtn = document.getElementById('wf-vars-btn');
+  if (varsBtn) {
+    varsBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      varPanel.toggle();   // same behavior as Ctrl/⌘ + K
+    });
+  }
+
   // 1) Load catalogs (events + mail templates) upfront
   const [trigs, mailTpls] = await Promise.all([
     api.events().catch(() => ({})),
