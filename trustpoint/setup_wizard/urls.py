@@ -7,7 +7,9 @@ from setup_wizard.views import (
     SetupWizardCreateSuperUserView,
     SetupWizardDemoDataView,
     SetupWizardGenerateTlsServerCredentialView,
-    SetupWizardImportTlsServerCredentialView,
+    SetupWizardImportTlsServerCredentialMethodSelectView,
+    SetupWizardImportTlsServerCredentialPkcs12View,
+    SetupWizardImportTlsServerCredentialSeparateFilesView,
     SetupWizardInitialView,
     SetupWizardOptionsView,
     SetupWizardTlsServerCredentialApplyCancelView,
@@ -24,8 +26,18 @@ urlpatterns = [
     ),
     path(
         'import-tls-server-credential/',
-        SetupWizardImportTlsServerCredentialView.as_view(),
+        SetupWizardImportTlsServerCredentialMethodSelectView.as_view(),
         name='import_tls_server_credential',
+    ),
+    path(
+        'import-tls-server-credential/pkcs12/',
+        SetupWizardImportTlsServerCredentialPkcs12View.as_view(),
+        name='import_tls_server_credential_pkcs12',
+    ),
+    path(
+        'import-tls-server-credential/separate-files/',
+        SetupWizardImportTlsServerCredentialSeparateFilesView.as_view(),
+        name='import_tls_server_credential_separate_files',
     ),
     path(
         'options/',
