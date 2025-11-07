@@ -8,7 +8,6 @@ from django.urls import resolve, reverse
 from django.urls.exceptions import NoReverseMatch
 
 from setup_wizard.views import (
-    BackupAutoRestoreHsmView,
     BackupAutoRestorePasswordView,
     BackupRestoreView,
     SetupWizardBackupPasswordView,
@@ -181,14 +180,7 @@ class SetupWizardUrlsTestCase(TestCase):
         self.assertEqual(resolver.view_name, 'setup_wizard:restore')
         self.assertEqual(resolver.func.view_class, BackupRestoreView)
 
-    def test_auto_restore_hsm_url(self):
-        """Test auto restore HSM URL pattern."""
-        url = reverse('setup_wizard:auto_restore_hsm')
-        self.assertEqual(url, '/setup-wizard/auto_restore_hsm/')
 
-        resolver = resolve('/setup-wizard/auto_restore_hsm/')
-        self.assertEqual(resolver.view_name, 'setup_wizard:auto_restore_hsm')
-        self.assertEqual(resolver.func.view_class, BackupAutoRestoreHsmView)
 
     def test_auto_restore_password_url(self):
         """Test auto restore password URL pattern."""
@@ -215,7 +207,6 @@ class SetupWizardUrlsTestCase(TestCase):
             'setup_wizard:demo_data': SetupWizardDemoDataView,
             'setup_wizard:create_super_user': SetupWizardCreateSuperUserView,
             'setup_wizard:restore': BackupRestoreView,
-            'setup_wizard:auto_restore_hsm': BackupAutoRestoreHsmView,
             'setup_wizard:auto_restore_password': BackupAutoRestorePasswordView,
         }
 
@@ -483,7 +474,6 @@ class SetupWizardUrlsTestCase(TestCase):
         """Test that all URL patterns resolve to the expected view classes."""
         # Test that all imported view classes are actually used in URL patterns
         imported_views = {
-            BackupAutoRestoreHsmView,
             BackupAutoRestorePasswordView,
             BackupRestoreView,
             SetupWizardBackupPasswordView,
