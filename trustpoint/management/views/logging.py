@@ -136,7 +136,7 @@ class LoggingFilesDetailsView(PageContextMixin, LoggerMixin, TemplateView):
 
 
 class LoggingFilesDownloadView(PageContextMixin, LoggerMixin, TemplateView):
-    """View to download a single log file"""
+    """View to download a single log file."""
 
     http_method_names = ('get',)
 

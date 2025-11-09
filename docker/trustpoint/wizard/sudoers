@@ -15,3 +15,4 @@ www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_tls_serve
 www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_demo_data.sh
 www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_create_super_user.sh
 www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_restore.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/update_tls.sh

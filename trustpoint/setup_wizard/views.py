@@ -22,6 +22,8 @@ from pki.models import CertificateModel, CredentialModel, IssuingCaModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from trustpoint.logger import LoggerMixin
 
+from management.forms import TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
+
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import EmptyForm, StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
@@ -44,6 +46,8 @@ SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY_CANCEL = STATE_FILE_DIR / Path('wizard
 SCRIPT_WIZARD_DEMO_DATA = STATE_FILE_DIR / Path('wizard_demo_data.sh')
 SCRIPT_WIZARD_CREATE_SUPER_USER = STATE_FILE_DIR / Path('wizard_create_super_user.sh')
 SCRIPT_WIZARD_RESTORE = STATE_FILE_DIR / Path('wizard_restore.sh')
+
+SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL = STATE_FILE_DIR / Path('update_tls.sh')
 
 
 logger = logging.getLogger(__name__)
@@ -363,18 +367,23 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
         return error_messages.get(return_code, 'An unknown error occurred.')
 
 
-class SetupWizardImportTlsServerCredentialView(View):
-    """View for handling the import of TLS Server Credentials."""
+class SetupWizardImportTlsServerCredentialMethodSelectView(TemplateView):
+    """View for selecting the import method for TLS Server Credentials."""
 
     http_method_names = ('get',)
+    template_name = 'setup_wizard/import_method_select.html'
 
-    def get(self) -> HttpResponse:
-        """Handle GET requests for importing TLS Server Credentials.
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Override the dispatch method to enforce wizard state validation.
+
+        Args:
+            request (HttpRequest): The incoming HTTP request.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
 
         Returns:
-            HttpResponse: A redirect to the initial setup wizard page if the
-                          import feature is not implemented or the wizard state
-                          is incorrect.
+            HttpResponse: A redirect response to the appropriate page or
+                          the next handler in the dispatch chain.
         """
         if not DOCKER_CONTAINER:
             return redirect('users:login', permanent=False)
@@ -383,10 +392,151 @@ class SetupWizardImportTlsServerCredentialView(View):
         if wizard_state != SetupWizardState.WIZARD_INITIAL:
             return StartupWizardRedirect.redirect_by_state(wizard_state)
 
-        messages.add_message(
-            self.request, messages.ERROR, 'Import of the TLS-Server credential is not yet implemented.'
-        )
-        return redirect('setup_wizard:initial', permanent=False)
+        return super().dispatch(request, *args, **kwargs)
+
+
+class SetupWizardImportTlsServerCredentialPkcs12View(LoggerMixin, FormView[TlsAddFileImportPkcs12Form]):
+    """View for importing TLS Server Credentials using a PKCS#12 file in the setup wizard."""
+
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/import_tls_server_credential.html'
+    form_class = TlsAddFileImportPkcs12Form
+    success_url = reverse_lazy('setup_wizard:tls_server_credential_apply')
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Override the dispatch method to enforce wizard state validation.
+
+        Args:
+            request (HttpRequest): The incoming HTTP request.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
+
+        Returns:
+            HttpResponse: A redirect response to the appropriate page or
+                          the next handler in the dispatch chain.
+        """
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_INITIAL:
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form: TlsAddFileImportPkcs12Form) -> HttpResponse:
+        """Handle a valid form submission for TLS Server Credential import.
+
+        Args:
+            form: The validated form containing the uploaded PKCS#12 file.
+
+        Returns:
+            HttpResponseRedirect: Redirect to the success URL upon successful
+                                  credential import, or an error page if
+                                  an exception occurs.
+        """
+        try:
+            execute_shell_script(SCRIPT_WIZARD_INITIAL)
+            messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential imported successfully.')
+            return super().form_valid(form)
+        except subprocess.CalledProcessError as exception:
+            err_msg = f'Script error: {self._get_error_message_from_return_code(exception.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:initial', permanent=False)
+        except FileNotFoundError:
+            err_msg = f'Transition script not found: {SCRIPT_WIZARD_INITIAL}.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:initial', permanent=False)
+        except Exception:
+            err_msg = 'Error importing TLS Server Credential.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:initial', permanent=False)
+
+    def _get_error_message_from_return_code(self, return_code: int) -> str:
+        """Maps return codes to error messages."""
+        error_messages = {
+            1: 'Trustpoint is not in the WIZARD_INITIAL state. State file missing.',
+            2: 'Multiple state files detected. Wizard state is corrupted.',
+            3: 'Failed to remove the WIZARD_INITIAL state file.',
+            4: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred.')
+
+
+class SetupWizardImportTlsServerCredentialSeparateFilesView(
+    LoggerMixin, FormView[TlsAddFileImportSeparateFilesForm]
+):
+    """View for importing TLS Server Credentials using separate files in the setup wizard."""
+
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/import_tls_server_credential.html'
+    form_class = TlsAddFileImportSeparateFilesForm
+    success_url = reverse_lazy('setup_wizard:tls_server_credential_apply')
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Override the dispatch method to enforce wizard state validation.
+
+        Args:
+            request (HttpRequest): The incoming HTTP request.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
+
+        Returns:
+            HttpResponse: A redirect response to the appropriate page or
+                          the next handler in the dispatch chain.
+        """
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_INITIAL:
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form: TlsAddFileImportSeparateFilesForm) -> HttpResponse:
+        """Handle a valid form submission for TLS Server Credential import.
+
+        Args:
+            form: The validated form containing the uploaded certificate files.
+
+        Returns:
+            HttpResponseRedirect: Redirect to the success URL upon successful
+                                  credential import, or an error page if
+                                  an exception occurs.
+        """
+        try:
+            execute_shell_script(SCRIPT_WIZARD_INITIAL)
+            messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential imported successfully.')
+            return super().form_valid(form)
+        except subprocess.CalledProcessError as exception:
+            err_msg = f'Script error: {self._get_error_message_from_return_code(exception.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:initial', permanent=False)
+        except FileNotFoundError:
+            err_msg = f'Transition script not found: {SCRIPT_WIZARD_INITIAL}.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:initial', permanent=False)
+        except Exception:
+            err_msg = 'Error importing TLS Server Credential.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:initial', permanent=False)
+
+    def _get_error_message_from_return_code(self, return_code: int) -> str:
+        """Maps return codes to error messages."""
+        error_messages = {
+            1: 'Trustpoint is not in the WIZARD_INITIAL state. State file missing.',
+            2: 'Multiple state files detected. Wizard state is corrupted.',
+            3: 'Failed to remove the WIZARD_INITIAL state file.',
+            4: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred.')
 
 
 class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
