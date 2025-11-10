@@ -70,13 +70,6 @@ from devices.models import (
 )
 from devices.revocation import DeviceCredentialRevocation
 from devices.serializers import DeviceSerializer
-from trustpoint.logger import LoggerMixin
-from trustpoint.page_context import (
-    DEVICES_PAGE_CATEGORY,
-    DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
-    PageContextMixin,
-)
 from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:

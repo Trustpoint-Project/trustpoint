@@ -18,12 +18,10 @@ from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTa
 from trustpoint_core.archiver import ArchiveFormat, Archiver
 from trustpoint_core.oid import NameOid
 from trustpoint_core.serializer import CertificateFormat
-from trustpoint_core.serializer import CertificateFormat
 
 from pki.models import CertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.serializer.certificate import CertificateSerializer
-from pki.services.certificate import CertificateService
 from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:
