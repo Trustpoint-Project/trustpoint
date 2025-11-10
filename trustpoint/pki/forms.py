@@ -585,6 +585,15 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             err_msg = 'Private key file is too large, max. 64 kiB.'
             raise ValidationError(err_msg)
 
+        if private_key_file_password:
+            try:
+                private_key_file_password = private_key_file_password.encode('utf-8')
+            except Exception as original_exception:
+                err_msg = 'The private key password contains invalid data that cannot be encoded in UTF-8.'
+                raise ValidationError(err_msg) from original_exception
+        else:
+            private_key_file_password = None
+
         try:
             private_key_file = PrivateKeySerializer.from_bytes(private_key_file.read(), private_key_file_password)
         except Exception:  # noqa: BLE001
