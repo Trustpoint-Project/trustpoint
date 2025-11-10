@@ -8,7 +8,6 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
 from django.http import HttpResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
@@ -22,7 +21,7 @@ from trustpoint.views.base import (
 )
 
 from pki.forms import OwnerCredentialFileImportForm
-from pki.models import CertificateModel, OwnerCredentialModel
+from pki.models import OwnerCredentialModel
 from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:

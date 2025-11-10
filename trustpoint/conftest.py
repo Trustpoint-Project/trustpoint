@@ -9,23 +9,26 @@ from cryptography.hazmat._oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+from devices.issuer import LocalDomainCredentialIssuer, LocalTlsClientCredentialIssuer
+from devices.models import (
+    DeviceModel,
+    IssuedCredentialModel,
+    NoOnboardingConfigModel,
+    NoOnboardingPkiProtocol,
+    OnboardingConfigModel,
+    OnboardingPkiProtocol,
+    OnboardingProtocol,
+    RemoteDeviceCredentialDownloadModel,
+)
 from django.http import HttpRequest
 from django.test.client import RequestFactory
-
-from devices.issuer import LocalTlsClientCredentialIssuer, LocalDomainCredentialIssuer
-from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
-from devices.issuer import LocalTlsClientCredentialIssuer
-from devices.models import (
-    DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel,
-    NoOnboardingConfigModel, NoOnboardingPkiProtocol,
-    OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
-)
+from management.models import KeyStorageConfig
 from pki.models import CertificateModel, CredentialModel
 from pki.models.domain import DomainModel
 from pki.models.issuing_ca import IssuingCaModel
-from management.models import KeyStorageConfig
 from pki.util.x509 import CertificateGenerator
 from trustpoint_core.serializer import CredentialSerializer
+
 
 @pytest.fixture(autouse=True)
 def enable_db_access_for_all_tests(db: None) -> None:

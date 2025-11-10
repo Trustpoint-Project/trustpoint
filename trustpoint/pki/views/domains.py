@@ -22,22 +22,6 @@ from trustpoint.views.base import (
     ListInDetailView,
     SortableTableMixin,
 )
-from trustpoint_core import oid
-
-from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
-from pki.models import CertificateModel, DevIdRegistration, DomainModel, IssuingCaModel
-from pki.models.truststore import TruststoreModel
-from trustpoint.settings import UIConfig
-
-from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
-from pki.models import CertificateModel, DevIdRegistration, DomainModel, IssuingCaModel
-from pki.models.truststore import TruststoreModel
-from trustpoint.settings import UIConfig
-
-from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
-from pki.models import CertificateModel, DevIdRegistration, DomainModel, IssuingCaModel
-from pki.models.truststore import TruststoreModel
-from trustpoint.settings import UIConfig
 
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from pki.models import CertificateModel, DevIdRegistration, DomainModel, IssuingCaModel

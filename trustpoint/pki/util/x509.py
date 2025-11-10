@@ -158,7 +158,7 @@ class CertificateGenerator:
             algorithm=hash_algorithm,
         )
         return certificate, private_key
-    
+
     @staticmethod
     def create_test_pki(chain_depth: int = 0) -> tuple[list[x509.Certificate], list[PrivateKey]]:
         """Get a test PKI chain with a specified depth (excluding root CA). depth=0 is a self-signed EE."""
@@ -233,7 +233,7 @@ class CertificateGenerator:
                     f'Cannot create protected CA "{unique_name}": KeyStorageConfig not found. '
                     'Protected CAs require HSM storage configuration.'
                 )
-                logger.error(error_msg)
+                logger.exception(error_msg)
                 raise ValueError(error_msg) from e
 
             if config.storage_type in [
@@ -259,14 +259,14 @@ class CertificateGenerator:
         )
 
         issuing_ca = IssuingCaModel.create_new_issuing_ca(
-            unique_name=unique_name, 
-            credential_serializer=issuing_ca_credential_serializer, 
+            unique_name=unique_name,
+            credential_serializer=issuing_ca_credential_serializer,
             issuing_ca_type=ca_type
         )
 
         logger.info("Issuing CA '%s' saved successfully.", unique_name)
 
-        return cast(IssuingCaModel, issuing_ca)
+        return cast('IssuingCaModel', issuing_ca)
 
 
 class ClientCertificateAuthenticationError(Exception):
@@ -330,8 +330,10 @@ class CertificateVerifier:
 
         Args:
             cert (x509.Certificate): The DER- or PEM-encoded leaf server certificate to verify.
-            subject (str): The expected DNS name or hostname to match against the certificate's Subject Alternative Name (SAN).
-            untrusted_intermediates (list[x509.Certificate]): DER- or PEM-encoded intermediate certificates that are not trusted by default but provided to assist chain building.
+            subject (str): The expected DNS name or hostname to match against the certificate's
+                Subject Alternative Name (SAN).
+            untrusted_intermediates (list[x509.Certificate]): DER- or PEM-encoded intermediate certificates that are
+                not trusted by default but provided to assist chain building.
             verification_time (datetime): Certificate verification time
 
         Returns:
@@ -341,9 +343,6 @@ class CertificateVerifier:
             VerificationError: If a valid chain cannot be constructed.
             UnsupportedGeneralNameType: If a valid chain exists, but contains an unsupported general name type.
         """
-        # with open(certifi.where(), "rb") as pems:
-        #     trusted_certs = x509.load_pem_x509_certificates(pems.read())
-
         trust_store = Store([cert])
 
         if verification_time is None:
@@ -358,5 +357,5 @@ class CertificateVerifier:
         if untrusted_intermediates is None:
             untrusted_intermediates = []
 
-        chain = verifier.verify(cert, [])
-        return chain
+        return verifier.verify(cert, [])
+

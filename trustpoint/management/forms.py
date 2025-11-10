@@ -15,6 +15,7 @@ from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 from pki.util.x509 import CertificateVerifier
+from trustpoint.logger import LoggerMixin
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -22,10 +23,9 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from management.models import BackupOptions, SecurityConfig
+from management.models import BackupOptions, KeyStorageConfig, PKCS11Token, SecurityConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
-from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import ClassVar
@@ -109,7 +109,6 @@ class SecurityConfigForm(forms.ModelForm):
         if form_value is None:
             return self.instance.auto_gen_pki_key_algorithm if self.instance else AutoGenPkiKeyAlgorithm.RSA2048
         return form_value
-
 
 class BackupOptionsForm(forms.ModelForm[BackupOptions]):
     """Form for editing BackupOptions settings."""
@@ -202,7 +201,6 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
             self.add_error('private_key', 'Private key is required when using SSH Key authentication.')
         if pwd:
             self.add_error('password', 'Password must be empty when using SSH key authentication.')
-
 
 class IPv4AddressForm(forms.Form):
     """A form for selecting and updating an IPv4 address.
@@ -349,7 +347,7 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
     tls_certificate_chain = forms.FileField(label=_('[Optional] Certificate Chain (.pem, .p7b, .p7c).'), required=False)
     private_key_file = forms.FileField(label=_('Private Key File (.key, .pem)'), required=True)
     private_key_file_password = forms.CharField(
-        # hack, force autocomplete off in chrome with: one-time-code
+        # hack, force autocomplete off in chrome with: one-time-code  # noqa: FIX004
         widget=forms.PasswordInput(attrs={'autocomplete': 'one-time-code'}),
         label=_('[Optional] Private Key File Password'),
         required=False,
@@ -532,6 +530,148 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             err_msg = str(exception)
             raise ValidationError(err_msg) from exception
 
+class KeyStorageConfigForm(forms.ModelForm[KeyStorageConfig]):
+    """Form for configuring cryptographic material storage options."""
 
+    storage_type = forms.ChoiceField(
+        widget=forms.RadioSelect,
+        label=_('Storage Type'),
+        help_text=_('Select how cryptographic material should be stored'),
+        choices=[
+            ('software', _('Software Storage')),
+            ('softhsm', _('SoftHSM Container')),
+            ('physical_hsm', _('Physical HSM')),
+        ]
+    )
 
+    class Meta:
+        """ModelForm Meta configuration for KeyStorageConfig."""
+        model = KeyStorageConfig
+        fields: ClassVar[list[str]] = ['storage_type']
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the form."""
+        super().__init__(*args, **kwargs)
+
+    def clean(self) -> dict[str, Any]:
+        """Custom validation for the form."""
+        cleaned_data: dict[str, Any] = super().clean() or {}
+        return cleaned_data
+
+    def save_with_commit(self) -> KeyStorageConfig:
+        """Save the form with commit, ensuring singleton behavior."""
+        instance = KeyStorageConfig.get_or_create_default()
+        instance.storage_type = self.cleaned_data['storage_type']
+        instance.save(update_fields=['storage_type', 'last_updated'])
+        return instance
+
+    def save_without_commit(self) -> KeyStorageConfig:
+        """Save the form without commit, ensuring singleton behavior."""
+        instance = KeyStorageConfig.get_or_create_default()
+        instance.storage_type = self.cleaned_data['storage_type']
+        return instance
+
+class PKCS11ConfigForm(forms.Form):
+    """Form for configuring PKCS#11 settings including HSM PIN and token information."""
+
+    HSM_TYPE_CHOICES: ClassVar[list[tuple[str, Any]]] = [
+        ('softhsm', _('SoftHSM')),
+        ('physical', _('Physical HSM')),
+    ]
+
+    hsm_type = forms.ChoiceField(
+        choices=HSM_TYPE_CHOICES,
+        initial='softhsm',
+        widget=forms.RadioSelect,
+        label=_('HSM Type'),
+        help_text=_('Select the type of HSM to configure.')
+    )
+
+    label = forms.CharField(
+        label=_('Token Label'),
+        max_length=100,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        help_text=_('Unique label for the PKCS#11 token'),
+        required=False
+    )
+
+    slot = forms.IntegerField(
+        label=_('Slot Number'),
+        widget=forms.NumberInput(attrs={'class': 'form-control'}),
+        help_text=_('Slot number where the token is located'),
+        min_value=0,
+        required=False
+    )
+
+    module_path = forms.CharField(
+        label=_('Module Path'),
+        max_length=255,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        help_text=_('Path to the PKCS#11 module library file'),
+        initial='/usr/local/lib/libpkcs11-proxy.so',
+        required=False
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the PKCS11ConfigForm with existing token data if available."""
+        super().__init__(*args, **kwargs)
+
+        try:
+            token = PKCS11Token.objects.first()
+            if token:
+                self.fields['label'].initial = token.label
+                self.fields['slot'].initial = token.slot
+                self.fields['module_path'].initial = token.module_path
+        except PKCS11Token.DoesNotExist:
+            pass
+
+    def clean(self) -> dict[str, Any]:
+        """Custom validation for the form."""
+        cleaned_data: dict[str, Any] = super().clean() or {}
+        hsm_type = cleaned_data.get('hsm_type')
+
+        if hsm_type == 'softhsm':
+            cleaned_data['label'] = 'Trustpoint-SoftHSM'
+            cleaned_data['slot'] = 0
+            cleaned_data['module_path'] = '/usr/local/lib/libpkcs11-proxy.so'
+        elif hsm_type == 'physical':
+            raise forms.ValidationError(_('Physical HSM is not yet supported.'))
+
+        return cleaned_data
+
+    def clean_label(self) -> str:
+        """Validate that label is unique, excluding current token if updating."""
+        hsm_type = self.data.get('hsm_type')
+        if hsm_type == 'softhsm':
+            return 'Trustpoint-SoftHSM'
+
+        label = self.cleaned_data.get('label', '')
+        existing = PKCS11Token.objects.filter(label=label)
+
+        current_token = PKCS11Token.objects.first()
+        if current_token:
+            existing = existing.exclude(pk=current_token.pk)
+
+        if existing.exists():
+            raise forms.ValidationError(_('A token with this label already exists.'))
+
+        return str(label)
+
+    def save_token_config(self) -> PKCS11Token:
+        """Save or update token configuration."""
+        data = self.cleaned_data
+        token, created = PKCS11Token.objects.get_or_create(
+            label=data['label'],
+            defaults={
+                'hsm_type': data['hsm_type'],
+                'slot': data['slot'],
+                'module_path': data['module_path'],
+            }
+        )
+
+        if not created:
+            for field, value in data.items():
+                if field != 'label':
+                    setattr(token, field, value)
+            token.save()
+        return token
