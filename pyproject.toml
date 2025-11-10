@@ -1,6 +1,6 @@
 [project]
 name = "trustpoint"
-version = "0.3.0"
+version = "0.4.0.dev1"
 description = "Trustpoint Server Software"
 authors = [{ name = "Trustpoint-Project" }]
 requires-python = "==3.12.*"
@@ -21,15 +21,17 @@ dependencies = [
     "djangorestframework>=3.16.1",
     "djangorestframework-simplejwt>=5.5.1",
     "drf-yasg>=1.21.11",
+    "furo>=2024.8.6",
     "packaging>=25.0",
     "paramiko>=3.5.1",
     "psycopg>=3.2.10",
     "psycopg-binary>=3.2.10",
     "pyasn1>=0.6.1,<0.7",
     "pyasn1-modules>=0.4.1,<0.5",
+    "pydantic>=2.11.7",
     "trustpoint-core==0.2.5",
     "types-paramiko>=3.5.0.20250516",
-    "zeroconf>=0.147.2,<0.148",
+    "zeroconf>=0.148,<0.149",
 ]
 
 [dependency-groups]
@@ -50,8 +52,8 @@ dev = [
     "beautifulsoup4 >= 4.13.4",
     "ruff>=0.13.1",
     "requests>=2.32.3",
-    "behave>=1.2.7.dev6",
-    "behave-django>=1.6.0",
+    "behave==1.2.7.dev6",
+    "behave-django==1.7.0",
     "behave-html-pretty-formatter>=1.14.1",
     "allure-behave>=2.14.3",
     "allure-pytest>=2.14.3",

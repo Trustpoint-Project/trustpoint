@@ -117,7 +117,7 @@ class AokiCmpClient:
             'cmp',
             '-cmd', 'ir',
             '-implicit_confirm',
-            '-server', self.server_url + '/.well-known/cmp/initialization/.aoki/',
+            '-server', self.server_url + '/.well-known/cmp/p/.aoki/initialization',
             '-cert', f'{CERTS_DIR}/{self.cert_file}',
             '-key', f'{CERTS_DIR}/{self.key_file}',
             '-extracerts', f'{CERTS_DIR}/{self.idevid_truststore_file}',
@@ -146,7 +146,7 @@ class AokiCmpClient:
 
 if __name__ == '__main__':
     client = AokiCmpClient(
-        server_url='https://localhost:443', # or 'http://localhost:8000' for dev
+        server_url='http://localhost:8000', # or 'http://localhost:8000' for dev
         cert_file='idevid.pem',
         key_file='idevid_pk.pem',
         idevid_truststore_file='idevid_ca.pem',

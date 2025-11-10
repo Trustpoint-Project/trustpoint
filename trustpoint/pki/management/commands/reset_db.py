@@ -30,6 +30,9 @@ class Command(BaseCommand):
         parser.add_argument('--force', action='store_true', help='Force database reset without prompt.')
         parser.add_argument('--no-user', action='store_true', help='Skip superuser creation.')
         parser.add_argument(
+            '--keep-all-migrations', action='store_true',
+            help='Use in CI environments, does not regenerate migrations.')
+        parser.add_argument(
             '--initial-migrations', action='store_true',
             help='DO NOT USE! Breaks the DB of existing installations! Remove all migrations and create initial.')
 
@@ -46,8 +49,10 @@ class Command(BaseCommand):
         # Remove migration files
         self.stdout.write('Removing migration files...')
         keep_established = not options.get('initial_migrations', False)
+        do_makemigrations = not options.get('keep_all_migrations', False)
         base_path = Path(__file__).resolve().parent.parent.parent.parent
-        self._remove_migration_files(base_path, keep_established=keep_established)
+        if do_makemigrations:
+            self._remove_migration_files(base_path, keep_established=keep_established)
 
         # Reset database depending on engine
         engine = settings.DATABASES['default']['ENGINE']
@@ -60,11 +65,12 @@ class Command(BaseCommand):
             return
 
         # Run migrations
-        migration_name = 'tp_v' + settings.APP_VERSION.replace('.', '_')
-        if options.get('initial_migrations'):
-            migration_name = 'initial'
-        self.stdout.write('Running makemigrations...')
-        call_command('makemigrations', name=migration_name)
+        if do_makemigrations:
+            migration_name = 'tp_v' + settings.APP_VERSION.replace('.', '_')
+            if options.get('initial_migrations'):
+                migration_name = 'initial'
+            self.stdout.write('Running makemigrations...')
+            call_command('makemigrations', name=migration_name)
         self.stdout.write('Running migrate...')
         call_command('migrate')
 

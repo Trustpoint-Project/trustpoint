@@ -14,7 +14,10 @@ from drf_yasg.utils import swagger_auto_schema
 from rest_framework import filters, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTableMixin
 from trustpoint_core.archiver import ArchiveFormat, Archiver
+from trustpoint_core.oid import NameOid
+from trustpoint_core.serializer import CertificateFormat
 from trustpoint_core.serializer import CertificateFormat
 
 from pki.models import CertificateModel
@@ -22,7 +25,6 @@ from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.serializer.certificate import CertificateSerializer
 from pki.services.certificate import CertificateService
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTableMixin
 
 if TYPE_CHECKING:
     from typing import ClassVar
@@ -50,6 +52,7 @@ class CertificateTableView(CertificatesContextMixin, SortableTableMixin, ListVie
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'common_name'
 
+OID_MAP = {oid.dotted_string: oid.verbose_name for oid in NameOid}
 
 class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateModel]):
     """The certificate detail view."""
@@ -60,6 +63,38 @@ class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateMode
     template_name = 'pki/certificates/details.html'
     context_object_name = 'cert'
 
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adding map of attribute and its oid with its values.
+
+        Args:
+                   **kwargs: Keyword arguments passed to super().get_context_data().
+
+        Returns:
+               dict: The context data.
+        """
+        context = super().get_context_data(**kwargs)
+        cert = context['cert']
+
+        subject_entries = []
+        for entry in cert.subject.all():
+            name = OID_MAP.get(entry.oid)
+            subject_entries.append({
+                'oid': entry.oid,
+                'name': name,
+                'value': entry.value,
+            })
+        context['subject_entries'] = subject_entries
+        issuer_entries = []
+        for entry in cert.issuer.all():
+            name = OID_MAP.get(entry.oid)
+            issuer_entries.append({
+                'oid': entry.oid,
+                'name': name,
+                'value': entry.value,
+                'id': entry.id,
+            })
+        context['issuer_entries'] = issuer_entries
+        return context
 
 class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, DetailView[CertificateModel]):
     """View for downloading a single certificate."""
