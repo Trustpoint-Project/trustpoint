@@ -23,8 +23,9 @@ from pki.models.credential import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard import SetupWizardState
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
-from setup_wizard.views import APACHE_CERT_CHAIN_PATH, APACHE_CERT_PATH, APACHE_KEY_PATH, execute_shell_script
+from setup_wizard.views import execute_shell_script
 
+from management.apache_paths import APACHE_CERT_CHAIN_PATH, APACHE_CERT_PATH, APACHE_KEY_PATH
 from management.models import AppVersion, KeyStorageConfig, PKCS11Token
 
 # Constants
@@ -210,9 +211,14 @@ class StandardTlsCredentialStrategy(TlsCredentialStrategy):
             credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
         )
 
-        active_tls, created = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
-        active_tls.credential = trustpoint_tls_server_credential
-        active_tls.save()
+        try:
+            active_tls, created = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+            active_tls.credential = trustpoint_tls_server_credential
+            active_tls.save()
+        except Exception as e:
+            error_msg = f'Failed to save TLS credential to database: {e}'
+            context.output.write(context.output.error(error_msg))
+            raise RuntimeError(error_msg) from e
 
         context.output.write(f'ActiveTrustpoint TLS record {"created" if created else "updated"}')
 
@@ -225,7 +231,13 @@ class StandardTlsCredentialStrategy(TlsCredentialStrategy):
 
         APACHE_KEY_PATH.write_text(private_key_pem)
         APACHE_CERT_PATH.write_text(certificate_pem)
-        APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+
+        # Only write chain file if there's actually a chain (not empty)
+        if trust_store_pem.strip():
+            APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+        elif APACHE_CERT_CHAIN_PATH.exists():
+            # Remove chain file if it exists but chain is empty
+            APACHE_CERT_CHAIN_PATH.unlink()
 
         # Calculate and display fingerprint
         sha256_fingerprint = active_tls.credential.get_certificate().fingerprint(hashes.SHA256())
@@ -565,7 +577,13 @@ class RestoreSoftwareWizardCompletedStrategy(StartupStrategy):
 
             APACHE_KEY_PATH.write_text(private_key_pem)
             APACHE_CERT_PATH.write_text(certificate_pem)
-            APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+
+            # Only write chain file if there's actually a chain (not empty)
+            if trust_store_pem.strip():
+                APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+            elif APACHE_CERT_CHAIN_PATH.exists():
+                # Remove chain file if it exists but chain is empty
+                APACHE_CERT_CHAIN_PATH.unlink()
 
             context.output.write(context.output.success('TLS certificates extracted successfully'))
 

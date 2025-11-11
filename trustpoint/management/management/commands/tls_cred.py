@@ -1,19 +1,15 @@
 """This module defines a Django management command to generate a TLS credential for use in the dev environment."""
 
 import ipaddress
-from pathlib import Path
 
 from cryptography.hazmat.primitives import hashes
 from django.core.management.base import BaseCommand, CommandParser
 from pki.models.credential import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
-from setup_wizard.views import APACHE_PATH
 from trustpoint.logger import LoggerMixin
 
-APACHE_KEY_PATH = APACHE_PATH / Path('apache-tls-server-key.key')
-APACHE_CERT_PATH = APACHE_PATH / Path('apache-tls-server-cert.pem')
-APACHE_CERT_CHAIN_PATH = APACHE_PATH / Path('apache-tls-server-cert-chain.pem')
+from management.apache_paths import APACHE_CERT_CHAIN_PATH, APACHE_CERT_PATH, APACHE_KEY_PATH, APACHE_PATH
 
 
 class Command(BaseCommand, LoggerMixin):
@@ -95,8 +91,15 @@ class Command(BaseCommand, LoggerMixin):
                     self.log_and_stdout(f'Written private key to: {APACHE_KEY_PATH}')
                     APACHE_CERT_PATH.write_text(certificate_pem)
                     self.log_and_stdout(f'Written certificate to: {APACHE_CERT_PATH}')
-                    APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
-                    self.log_and_stdout(f'Written certificate chain to: {APACHE_CERT_CHAIN_PATH}')
+
+                    # Only write chain file if there's actually a chain (not empty)
+                    if trust_store_pem.strip():
+                        APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+                        self.log_and_stdout(f'Written certificate chain to: {APACHE_CERT_CHAIN_PATH}')
+                    elif APACHE_CERT_CHAIN_PATH.exists():
+                        # Remove chain file if it exists but chain is empty
+                        APACHE_CERT_CHAIN_PATH.unlink()
+                        self.log_and_stdout(f'Removed empty certificate chain file: {APACHE_CERT_CHAIN_PATH}')
 
                 sha256_fingerprint = active_tls.credential.get_certificate().fingerprint(hashes.SHA256())
                 formatted = ':'.join(f'{b:02X}' for b in sha256_fingerprint)

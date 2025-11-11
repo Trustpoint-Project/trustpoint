@@ -11,7 +11,9 @@ from setup_wizard.views import (
     SetupWizardDemoDataView,
     SetupWizardGenerateTlsServerCredentialView,
     SetupWizardHsmSetupView,
-    SetupWizardImportTlsServerCredentialView,
+    SetupWizardImportTlsServerCredentialMethodSelectView,
+    SetupWizardImportTlsServerCredentialPkcs12View,
+    SetupWizardImportTlsServerCredentialSeparateFilesView,
     SetupWizardRestoreOptionsView,
     SetupWizardSelectTlsServerCredentialView,
     SetupWizardSetupModeView,
@@ -38,6 +40,21 @@ urlpatterns = [
         name='select_tls_server_credential',
     ),
     path(
+        'import-tls-server-credential/',
+        SetupWizardImportTlsServerCredentialMethodSelectView.as_view(),
+        name='import_tls_server_credential',
+    ),
+    path(
+        'import-tls-server-credential/pkcs12/',
+        SetupWizardImportTlsServerCredentialPkcs12View.as_view(),
+        name='import_tls_server_credential_pkcs12',
+    ),
+    path(
+        'import-tls-server-credential/separate-files/',
+        SetupWizardImportTlsServerCredentialSeparateFilesView.as_view(),
+        name='import_tls_server_credential_separate_files',
+    ),
+    path(
         'backup-password/',
         SetupWizardBackupPasswordView.as_view(),
         name='backup_password',
@@ -46,11 +63,6 @@ urlpatterns = [
         'generate-tls-server-credential/',
         SetupWizardGenerateTlsServerCredentialView.as_view(),
         name='generate_tls_server_credential',
-    ),
-    path(
-        'import-tls-server-credential/',
-        SetupWizardImportTlsServerCredentialView.as_view(),
-        name='import_tls_server_credential',
     ),
     path(
         'restore_options/',

@@ -651,7 +651,7 @@ class PKCS11Token(models.Model, LoggerMixin):
             RuntimeError: If DEK cannot be retrieved or unwrapped
         """
         cache_key = f'{self.DEK_CACHE_LABEL}-{self.label}'
-        self.logger.info('get_dek() called for token %s with cache key: %s', self.label, cache_key)
+        self.logger.debug('get_dek() called for token %s with cache key: %s', self.label, cache_key)
 
         cached_dek = cache.get(cache_key)
         if cached_dek is not None:
@@ -666,14 +666,14 @@ class PKCS11Token(models.Model, LoggerMixin):
                 raise RuntimeError(err_msg)
 
             if cached_bytes is not None:
-                self.logger.info('Cache HIT - Retrieved DEK from cache for token %s', self.label)
+                self.logger.debug('Cache HIT - Retrieved DEK from cache for token %s', self.label)
                 return cached_bytes
 
-        self.logger.info('Cache MISS - No cached DEK found for token %s, unwrapping DEK', self.label)
+        self.logger.debug('Cache MISS - No cached DEK found for token %s, unwrapping DEK', self.label)
 
         try:
             dek = self._unwrap_dek()
-            self.logger.info('DEK unwrapped successfully, attempting to cache with key: %s', cache_key)
+            self.logger.debug('DEK unwrapped successfully, attempting to cache with key: %s', cache_key)
 
             # Set in cache
             cache.set(cache_key, dek, None)
@@ -681,7 +681,7 @@ class PKCS11Token(models.Model, LoggerMixin):
             # Verify it was cached
             verify_cached = cache.get(cache_key)
             if verify_cached:
-                self.logger.info('Cache SET successful - DEK cached for token %s', self.label)
+                self.logger.debug('Cache SET successful - DEK cached for token %s', self.label)
             else:
                 self.logger.error('Cache SET failed - DEK not cached for token %s', self.label)
 
@@ -690,7 +690,7 @@ class PKCS11Token(models.Model, LoggerMixin):
             msg = f'Failed to retrieve DEK: {e}'
             raise RuntimeError(msg) from e
         else:
-            self.logger.info('DEK retrieved successfully for token %s', self.label)
+            self.logger.debug('DEK retrieved successfully for token %s', self.label)
             return dek
 
     def _raise_no_dek(self) -> None:

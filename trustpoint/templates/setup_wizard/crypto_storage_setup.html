@@ -48,7 +48,7 @@
                             <form method="post" class="d-inline">
                                 {% csrf_token %}
                                 <input type="hidden" name="storage_type" value="software">
-                                <button type="submit" class="btn btn-outline-primary w-100">
+                                <button class="btn btn-primary w-100 mt-1" type="submit">
                                     {% trans 'Select Software Storage' %}
                                 </button>
                             </form>
@@ -70,7 +70,7 @@
                             <form method="post" class="d-inline">
                                 {% csrf_token %}
                                 <input type="hidden" name="storage_type" value="softhsm">
-                                <button type="submit" class="btn btn-outline-primary w-100">
+                                <button class="btn btn-primary w-100 mt-1" type="submit">
                                     {% trans 'Select SoftHSM' %}
                                 </button>
                             </form>

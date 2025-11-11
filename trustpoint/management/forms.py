@@ -12,7 +12,6 @@ from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
 from pki.models import CredentialModel
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 from pki.util.x509 import CertificateVerifier
 from trustpoint.logger import LoggerMixin
@@ -314,19 +313,19 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             if not isinstance(certificate, Certificate):
                 self._raise_validation_error('Invalid credential: certificate is not a valid x509.Certificate.')
             CertificateVerifier.verify_server_cert(certificate,  domain_name)
-            trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
+            self.saved_credential = CredentialModel.save_credential_serializer(
                 credential_serializer=tls_credential_serializer,
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
             )
-
-            active_tls, _created = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
-            active_tls.credential = trustpoint_tls_server_credential
-            active_tls.save()
         except ValidationError:
             raise
         except Exception as exception:
             err_msg = str(exception)
             raise ValidationError(err_msg) from exception
+
+    def get_saved_credential(self) -> CredentialModel:
+        """Return the saved credential."""
+        return self.saved_credential
 
 class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
     """Form for importing a TLS-Server Credential using separate files.
@@ -515,20 +514,19 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
 
             CertificateVerifier.verify_server_cert(certificate, domain_name)
 
-            trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
+            self.saved_credential = CredentialModel.save_credential_serializer(
                 credential_serializer=credential_serializer,
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
             )
-
-            active_tls, _created = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
-            active_tls.credential = trustpoint_tls_server_credential
-            active_tls.save()
-
         except ValidationError:
             raise
         except Exception as exception:
             err_msg = str(exception)
             raise ValidationError(err_msg) from exception
+
+    def get_saved_credential(self) -> CredentialModel:
+        """Return the saved credential."""
+        return self.saved_credential
 
 class KeyStorageConfigForm(forms.ModelForm[KeyStorageConfig]):
     """Form for configuring cryptographic material storage options."""

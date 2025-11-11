@@ -13,15 +13,17 @@ from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.core.management import call_command
+from django.db import connection
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import FormView, TemplateView, View
-from management.forms import KeyStorageConfigForm
+from management.forms import KeyStorageConfigForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.models import KeyStorageConfig, PKCS11Token
 from pki.models import CertificateModel, CredentialModel, IssuingCaModel
+from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from trustpoint.logger import LoggerMixin
 
@@ -42,27 +44,23 @@ if TYPE_CHECKING:
     from trustpoint_core.serializer import CertificateSerializer
 
 
-APACHE_PATH = Path(__file__).parent.parent.parent / 'docker/trustpoint/apache/tls'
-APACHE_KEY_PATH = APACHE_PATH / Path('apache-tls-server-key.key')
-APACHE_CERT_PATH = APACHE_PATH / Path('apache-tls-server-cert.pem')
-APACHE_CERT_CHAIN_PATH = APACHE_PATH / Path('apache-tls-server-cert-chain.pem')
+from management.apache_paths import (
+    APACHE_CERT_CHAIN_PATH,
+    APACHE_CERT_PATH,
+    APACHE_KEY_PATH,
+)
 
-STATE_FILE_DIR = Path('/etc/trustpoint/wizard/transition/')
-SCRIPT_WIZARD_SETUP_CRYPTO_STORAGE = STATE_FILE_DIR / Path('wizard_setup_crypto_storage.sh')
-SCRIPT_WIZARD_SETUP_HSM = STATE_FILE_DIR / Path('wizard_setup_hsm.sh')
-SCRIPT_WIZARD_SETUP_MODE = STATE_FILE_DIR / Path('wizard_setup_mode.sh')
-SCRIPT_WIZARD_SELECT_TLS_SERVER_CREDENTIAL = STATE_FILE_DIR / Path('wizard_select_tls_server_credential.sh')
-SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY = STATE_FILE_DIR / Path('wizard_tls_server_credential_apply.sh')
-SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY_CANCEL = STATE_FILE_DIR / Path('wizard_tls_server_credential_apply_cancel.sh')
-SCRIPT_WIZARD_BACKUP_PASSWORD = STATE_FILE_DIR / Path('wizard_backup_password.sh')
-SCRIPT_WIZARD_DEMO_DATA = STATE_FILE_DIR / Path('wizard_demo_data.sh')
-SCRIPT_WIZARD_CREATE_SUPER_USER = STATE_FILE_DIR / Path('wizard_create_super_user.sh')
-SCRIPT_WIZARD_RESTORE = STATE_FILE_DIR / Path('wizard_restore.sh')
-SCRIPT_WIZARD_AUTO_RESTORE_SET = STATE_FILE_DIR / Path('wizard_auto_restore_set.sh')
-SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS = STATE_FILE_DIR / Path('wizard_auto_restore_success.sh')
-
-SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL = STATE_FILE_DIR / Path('update_tls.sh')
-
+from setup_wizard.state_dir_paths import (
+    SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS,
+    SCRIPT_WIZARD_BACKUP_PASSWORD,
+    SCRIPT_WIZARD_CREATE_SUPER_USER,
+    SCRIPT_WIZARD_DEMO_DATA,
+    SCRIPT_WIZARD_SETUP_CRYPTO_STORAGE,
+    SCRIPT_WIZARD_SETUP_HSM,
+    SCRIPT_WIZARD_SETUP_MODE,
+    SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY,
+    SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY_CANCEL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -278,7 +276,7 @@ class HsmSetupMixin(LoggerMixin):
         try:
             token.generate_kek(key_length=256)
             self.logger.info('key encryption key (KEK) generated for token: %s', token.label)
-        except Exception as e:
+        except (subprocess.CalledProcessError, ValueError, RuntimeError) as e:
             self.logger.exception('Failed to generate key encryption key (KEK)')
             messages.add_message(self.request, messages.WARNING,
                                  f'HSM setup completed, but key encryption key (KEK) generation failed: {e!s}')
@@ -1103,7 +1101,13 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             APACHE_KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
             APACHE_KEY_PATH.write_text(private_key_pem)
             APACHE_CERT_PATH.write_text(certificate_pem)
-            APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+
+            # Only write chain file if there's actually a chain (not empty)
+            if trust_store_pem.strip():
+                APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+            elif APACHE_CERT_CHAIN_PATH.exists():
+                # Remove chain file if it exists but chain is empty
+                APACHE_CERT_CHAIN_PATH.unlink()
 
             self.logger.info('TLS certificates extracted successfully')
 
@@ -1240,18 +1244,23 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
         }
         return error_messages.get(return_code, 'An unknown error occurred during setup mode transition.')
 
-class SetupWizardImportTlsServerCredentialView(View):
-    """View for handling the import of TLS Server Credentials."""
+class SetupWizardImportTlsServerCredentialMethodSelectView(TemplateView):
+    """View for selecting the import method for TLS Server Credentials."""
 
     http_method_names = ('get',)
+    template_name = 'setup_wizard/import_method_select.html'
 
-    def get(self) -> HttpResponse:
-        """Handle GET requests for importing TLS Server Credentials.
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Override the dispatch method to enforce wizard state validation.
+
+        Args:
+            request (HttpRequest): The incoming HTTP request.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
 
         Returns:
-            HttpResponse: A redirect to the initial setup wizard page if the
-                          import feature is not implemented or the wizard state
-                          is incorrect.
+            HttpResponse: A redirect response to the appropriate page or
+                          the next handler in the dispatch chain.
         """
         if not DOCKER_CONTAINER:
             return redirect('users:login', permanent=False)
@@ -1260,10 +1269,226 @@ class SetupWizardImportTlsServerCredentialView(View):
         if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
             return StartupWizardRedirect.redirect_by_state(wizard_state)
 
-        messages.add_message(
-            self.request, messages.ERROR, 'Import of the TLS-Server credential is not yet implemented.'
-        )
-        return redirect('setup_wizard:setup_mode', permanent=False)
+        return super().dispatch(request, *args, **kwargs)
+
+
+class SetupWizardImportTlsServerCredentialPkcs12View(LoggerMixin, FormView[TlsAddFileImportPkcs12Form]):
+    """View for importing TLS Server Credentials using a PKCS#12 file in the setup wizard."""
+
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/import_tls_server_credential.html'
+    form_class = TlsAddFileImportPkcs12Form
+    success_url = reverse_lazy('setup_wizard:tls_server_credential_apply')
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Override the dispatch method to enforce wizard state validation.
+
+        Args:
+            request (HttpRequest): The incoming HTTP request.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
+
+        Returns:
+            HttpResponse: A redirect response to the appropriate page or
+                          the next handler in the dispatch chain.
+        """
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form: TlsAddFileImportPkcs12Form) -> HttpResponse:
+        """Handle a valid form submission for TLS Server Credential import.
+
+        Args:
+            form: The validated form containing the uploaded PKCS#12 file.
+
+        Returns:
+            HttpResponseRedirect: Redirect to the success URL upon successful
+                                  credential import, or an error page if
+                                  an exception occurs.
+        """
+        try:
+            tls_certificate = form.get_saved_credential()
+            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+            old_credential_id = active_tls.credential_id
+            active_tls.credential = tls_certificate
+            active_tls.save()
+            # Delete the old standard self-signed credential
+            if old_credential_id and old_credential_id != tls_certificate.id:
+                try:
+                    # Use raw SQL to bypass all model hooks and encrypted field access
+                    # First delete related records from through tables to handle foreign key constraints
+                    with connection.cursor() as cursor:
+                        # Delete from certificate chain order table
+                        cursor.execute(
+                            f'DELETE FROM {CertificateChainOrderModel._meta.db_table} WHERE credential_id = %s',  # noqa: SLF001,S608
+                            [old_credential_id]
+                        )
+                        # Delete from primary credential certificate table
+                        cursor.execute(
+                            f'DELETE FROM {PrimaryCredentialCertificate._meta.db_table} WHERE credential_id = %s',  # noqa: SLF001,S608
+                            [old_credential_id]
+                        )
+                        # Finally delete the credential itself
+                        cursor.execute(
+                            f'DELETE FROM {CredentialModel._meta.db_table} WHERE id = %s',  # noqa: SLF001,S608
+                            [old_credential_id]
+                        )
+                        deleted_count = cursor.rowcount
+                    if deleted_count > 0:
+                        self.logger.info('Deleted old TLS credential: %s', old_credential_id)
+                    else:
+                        self.logger.warning('No old TLS credential found with id: %s', old_credential_id)
+                except Exception as e:  # noqa: BLE001
+                    self.logger.warning('Failed to delete old TLS credential %s: %s', old_credential_id, e)
+            self.logger.info(
+                'Activated TLS credential: %s, certificate: %s',
+                tls_certificate.id, tls_certificate.certificate.id
+            )
+            execute_shell_script(SCRIPT_WIZARD_SETUP_MODE)
+            messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential imported successfully.')
+            return super().form_valid(form)
+        except subprocess.CalledProcessError as exception:
+            err_msg = f'Script error: {self._get_error_message_from_return_code(exception.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:setup_mode', permanent=False)
+        except FileNotFoundError:
+            err_msg = f'Transition script not found: {SCRIPT_WIZARD_SETUP_MODE}.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:setup_mode', permanent=False)
+        except Exception:
+            err_msg = 'Error importing TLS Server Credential.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:setup_mode', permanent=False)
+
+    def _get_error_message_from_return_code(self, return_code: int) -> str:
+        """Maps return codes to error messages."""
+        error_messages = {
+            1: 'Trustpoint is not in the WIZARD_SETUP_MODE state. State file missing.',
+            2: 'Multiple state files detected. Wizard state is corrupted.',
+            3: 'Failed to remove the WIZARD_SETUP_MODE state file.',
+            4: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred.')
+
+
+class SetupWizardImportTlsServerCredentialSeparateFilesView(
+    LoggerMixin, FormView[TlsAddFileImportSeparateFilesForm]
+):
+    """View for importing TLS Server Credentials using separate files in the setup wizard."""
+
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/import_tls_server_credential.html'
+    form_class = TlsAddFileImportSeparateFilesForm
+    success_url = reverse_lazy('setup_wizard:tls_server_credential_apply')
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Override the dispatch method to enforce wizard state validation.
+
+        Args:
+            request (HttpRequest): The incoming HTTP request.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
+
+        Returns:
+            HttpResponse: A redirect response to the appropriate page or
+                          the next handler in the dispatch chain.
+        """
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form: TlsAddFileImportSeparateFilesForm) -> HttpResponse:
+        """Handle a valid form submission for TLS Server Credential import.
+
+        Args:
+            form: The validated form containing the uploaded certificate files.
+
+        Returns:
+            HttpResponseRedirect: Redirect to the success URL upon successful
+                                  credential import, or an error page if
+                                  an exception occurs.
+        """
+        try:
+            tls_certificate = form.get_saved_credential()
+            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+            old_credential_id = active_tls.credential_id
+            active_tls.credential = tls_certificate
+            active_tls.save()
+            # Delete the old standard self-signed credential
+            if old_credential_id and old_credential_id != tls_certificate.id:
+                try:
+                    # Use raw SQL to bypass all model hooks and encrypted field access
+                    # First delete related records from through tables to handle foreign key constraints
+                    with connection.cursor() as cursor:
+                        # Delete from certificate chain order table
+                        cursor.execute(
+                            f'DELETE FROM {CertificateChainOrderModel._meta.db_table} WHERE credential_id = %s',  # noqa: SLF001,S608
+                            [old_credential_id]
+                        )
+                        # Delete from primary credential certificate table
+                        cursor.execute(
+                            f'DELETE FROM {PrimaryCredentialCertificate._meta.db_table} WHERE credential_id = %s',  # noqa: SLF001,S608
+                            [old_credential_id]
+                        )
+                        # Finally delete the credential itself
+                        cursor.execute(
+                            f'DELETE FROM {CredentialModel._meta.db_table} WHERE id = %s',  # noqa: SLF001,S608
+                            [old_credential_id]
+                        )
+                        deleted_count = cursor.rowcount
+                    if deleted_count > 0:
+                        self.logger.info('Deleted old TLS credential: %s', old_credential_id)
+                    else:
+                        self.logger.warning('No old TLS credential found with id: %s', old_credential_id)
+                except Exception as e:  # noqa: BLE001
+                    self.logger.warning('Failed to delete old TLS credential %s: %s', old_credential_id, e)
+            self.logger.info(
+                'Activated TLS credential: %s, certificate: %s',
+                tls_certificate.id, tls_certificate.certificate.id
+            )
+            execute_shell_script(SCRIPT_WIZARD_SETUP_MODE)
+            messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential imported successfully.')
+            return super().form_valid(form)
+        except subprocess.CalledProcessError as exception:
+            err_msg = f'Script error: {self._get_error_message_from_return_code(exception.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:setup_mode', permanent=False)
+        except FileNotFoundError:
+            err_msg = f'Transition script not found: {SCRIPT_WIZARD_SETUP_MODE}.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:setup_mode', permanent=False)
+        except Exception:
+            err_msg = 'Error importing TLS Server Credential.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:setup_mode', permanent=False)
+
+    def _get_error_message_from_return_code(self, return_code: int) -> str:
+        """Maps return codes to error messages."""
+        error_messages = {
+            1: 'Trustpoint is not in the WIZARD_SETUP_MODE state. State file missing.',
+            2: 'Multiple state files detected. Wizard state is corrupted.',
+            3: 'Failed to remove the WIZARD_SETUP_MODE state file.',
+            4: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred.')
+
 
 class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
     """View for handling the application of TLS Server Credentials in the setup wizard.
@@ -1512,7 +1737,13 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
 
         APACHE_KEY_PATH.write_text(private_key_pem)
         APACHE_CERT_PATH.write_text(certificate_pem)
-        APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+
+        # Only write chain file if there's actually a chain (not empty)
+        if trust_store_pem.strip():
+            APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+        elif APACHE_CERT_CHAIN_PATH.exists():
+            # Remove chain file if it exists but chain is empty
+            APACHE_CERT_CHAIN_PATH.unlink()
 
 class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
     """View for handling the cancellation of TLS Server Credential application.

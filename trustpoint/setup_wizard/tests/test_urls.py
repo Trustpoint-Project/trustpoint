@@ -16,7 +16,9 @@ from setup_wizard.views import (
     SetupWizardDemoDataView,
     SetupWizardGenerateTlsServerCredentialView,
     SetupWizardHsmSetupView,
-    SetupWizardImportTlsServerCredentialView,
+    SetupWizardImportTlsServerCredentialMethodSelectView,
+    SetupWizardImportTlsServerCredentialPkcs12View,
+    SetupWizardImportTlsServerCredentialSeparateFilesView,
     SetupWizardRestoreOptionsView,
     SetupWizardSelectTlsServerCredentialView,
     SetupWizardSetupModeView,
@@ -98,14 +100,7 @@ class SetupWizardUrlsTestCase(TestCase):
         self.assertEqual(resolver.view_name, 'setup_wizard:generate_tls_server_credential')
         self.assertEqual(resolver.func.view_class, SetupWizardGenerateTlsServerCredentialView)
 
-    def test_import_tls_server_credential_url(self):
-        """Test import TLS server credential URL pattern."""
-        url = reverse('setup_wizard:import_tls_server_credential')
-        self.assertEqual(url, '/setup-wizard/import-tls-server-credential/')
 
-        resolver = resolve('/setup-wizard/import-tls-server-credential/')
-        self.assertEqual(resolver.view_name, 'setup_wizard:import_tls_server_credential')
-        self.assertEqual(resolver.func.view_class, SetupWizardImportTlsServerCredentialView)
 
     def test_restore_options_url(self):
         """Test restore options URL pattern."""
@@ -200,7 +195,6 @@ class SetupWizardUrlsTestCase(TestCase):
             'setup_wizard:select_tls_server_credential': SetupWizardSelectTlsServerCredentialView,
             'setup_wizard:backup_password': SetupWizardBackupPasswordView,
             'setup_wizard:generate_tls_server_credential': SetupWizardGenerateTlsServerCredentialView,
-            'setup_wizard:import_tls_server_credential': SetupWizardImportTlsServerCredentialView,
             'setup_wizard:restore_options': SetupWizardRestoreOptionsView,
             'setup_wizard:tls_server_credential_apply': SetupWizardTlsServerCredentialApplyView,
             'setup_wizard:tls_server_credential_apply_cancel': SetupWizardTlsServerCredentialApplyCancelView,
@@ -478,7 +472,9 @@ class SetupWizardUrlsTestCase(TestCase):
             SetupWizardDemoDataView,
             SetupWizardGenerateTlsServerCredentialView,
             SetupWizardHsmSetupView,
-            SetupWizardImportTlsServerCredentialView,
+            SetupWizardImportTlsServerCredentialMethodSelectView,
+            SetupWizardImportTlsServerCredentialPkcs12View,
+            SetupWizardImportTlsServerCredentialSeparateFilesView,
             SetupWizardRestoreOptionsView,
             SetupWizardSelectTlsServerCredentialView,
             SetupWizardSetupModeView,

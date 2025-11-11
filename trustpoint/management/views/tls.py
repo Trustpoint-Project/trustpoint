@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.contrib import messages
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext as _
@@ -32,7 +32,7 @@ class TlsSettingsContextMixin:
     extra_context: ClassVar = {'page_category': 'management', 'page_name': 'tls'}
 
 
-class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
+class TlsView(LoggerMixin, TlsSettingsContextMixin, FormView[IPv4AddressForm]):
     """View to display certificate details, including Subject Alternative Name (SAN) and associated IP addresses."""
     template_name = 'management/tls.html'
     form_class = IPv4AddressForm
@@ -97,6 +97,10 @@ class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
 
         tls_certificates = CertificateModel.objects.filter(
             credential__credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER)
+
+        self.logger.info('TLS certificates count: %s', tls_certificates.count())
+        for cert in tls_certificates:
+            self.logger.info('TLS cert: %s, pk: %s', cert.common_name, cert.pk)
 
         context.update({
             'certificate': certificate,
@@ -227,7 +231,7 @@ class GenerateTlsCertificateView(LoggerMixin, FormView[StartupWizardTlsCertifica
             self.logger.exception(err_msg)
             return redirect('management:tls', permanent=False)
 
-class TlsAddFileImportPkcs12View(TlsSettingsContextMixin, FormView[TlsAddFileImportPkcs12Form]):
+class TlsAddFileImportPkcs12View(TlsSettingsContextMixin, FormView[TlsAddFileImportPkcs12Form], LoggerMixin):
     """View to import an TLS-Server Credential from a PKCS12 file."""
 
     template_name = 'management/tls/file_import.html'
@@ -236,13 +240,16 @@ class TlsAddFileImportPkcs12View(TlsSettingsContextMixin, FormView[TlsAddFileImp
 
     def form_valid(self, form: TlsAddFileImportPkcs12Form) -> HttpResponse:
         """Handle the case where the form is valid."""
+        self.logger.info('Successfully imported TLS-Server Credential from PKCS12 file')
         messages.success(
             self.request,
             _('Successfully added TLS-Server Credential.'),
         )
         return super().form_valid(form)
 
-class TlsAddFileImportSeparateFilesView(TlsSettingsContextMixin, FormView[TlsAddFileImportSeparateFilesForm]):
+class TlsAddFileImportSeparateFilesView(
+    TlsSettingsContextMixin, FormView[TlsAddFileImportSeparateFilesForm], LoggerMixin
+):
     """View to import an Issuing CA from separate PEM files."""
 
     template_name = 'management/tls/file_import.html'
@@ -251,25 +258,39 @@ class TlsAddFileImportSeparateFilesView(TlsSettingsContextMixin, FormView[TlsAdd
 
     def form_valid(self, form: TlsAddFileImportSeparateFilesForm) -> HttpResponse:
         """Handle the case where the form is valid."""
+        self.logger.info('Successfully imported TLS-Server Credential from separate PEM files')
         messages.success(
             self.request,
             _('Successfully added TLS-Server Credential.'),
         )
         return super().form_valid(form)
 
-class ActivateTlsServerView(View):
+class ActivateTlsServerView(View, LoggerMixin):
     """Activate a TLS server certificate."""
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: dict[str, Any]) -> HttpResponse:
         """Handle a valid form submission for TLS Server Credential activation."""
         del args
         cert_id = kwargs['pk']
-        tls_certificate = CredentialModel.objects.get(
-            certificate__id=cert_id)
+        self.logger.info('Activating TLS certificate with ID: %s', cert_id)
+        try:
+            tls_certificate = CredentialModel.objects.get(
+                certificate__id=cert_id)
+            self.logger.info('Found TLS credential: %s', tls_certificate.id)
 
-        active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
-        active_tls.credential = tls_certificate
-        active_tls.save()
-        UpdateTlsCommand().handle()  # Apply new Apache TLS configuration
-        messages.success(request, 'TLS Server certificate activated successfully')
+            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+            active_tls.credential = tls_certificate
+            active_tls.save()
+            UpdateTlsCommand().handle()  # Apply new Apache TLS configuration
+            self.logger.info(
+                'Activated TLS credential: %s, certificate: %s',
+                tls_certificate.id, tls_certificate.certificate.id
+            )
+            messages.success(request, 'TLS Server certificate activated successfully')
+        except (CredentialModel.DoesNotExist, ValidationError):
+            self.logger.exception('Failed to activate TLS certificate')
+            messages.error(request, 'Failed to activate TLS certificate')
+        except Exception:
+            self.logger.exception('Unexpected error activating TLS certificate')
+            messages.error(request, 'An unexpected error occurred while activating TLS certificate')
         return redirect(reverse('management:tls'))

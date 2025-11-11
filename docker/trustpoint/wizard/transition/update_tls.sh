@@ -55,10 +55,26 @@ fi
 
 # If Apache is running try to gracefully restart and reload the apache2 webserver.
 if pgrep apache2 >/dev/null; then
+   log INFO "Checking Apache configuration..."
+   if ! apache2ctl configtest; then
+       log "WARNING: Apache configuration test failed. TLS files updated, attempting restart anyway."
+       log "ERROR: Configtest output:"
+       apache2ctl configtest 2>&1 | while read -r line; do log "ERROR: $line"; done
+       exit 6
+   fi
    log INFO "Restarting Apache (graceful)"
    if ! apache2ctl graceful
      then
-         log "ERROR: Failed to gracefully restart Apache."
-         exit 13
+         log "WARNING: Graceful restart failed, attempting full restart..."
+         if ! apache2ctl restart; then
+             log "ERROR: Apache restart also failed. TLS files updated, but Apache may need manual intervention."
+             log "ERROR: Last 10 lines of /var/log/apache2/error.log:"
+             tail -10 /var/log/apache2/error.log 2>/dev/null | while read -r line; do log "ERROR: $line"; done || log "ERROR: Could not read error log"
+             log "ERROR: Apache status:"
+             apache2ctl status 2>&1 | while read -r line; do log "ERROR: $line"; done || log "ERROR: Could not get Apache status"
+             exit 7
+         else
+             log "INFO: Apache restarted successfully."
+         fi
      fi
 fi
