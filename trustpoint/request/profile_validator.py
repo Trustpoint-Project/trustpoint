@@ -22,6 +22,12 @@ class ProfileValidator(LoggerMixin):
         cert_request_json = JSONCertRequestConverter.to_json(context.cert_requested)
         cls.logger.info('Cert Request JSON: %s', cert_request_json)
 
+        if not context.certificate_profile_model:
+            exc_msg = 'Certificate profile model is not set in the context.'
+            context.http_response_content = 'Corresponding certificate profile is missing.'
+            context.http_response_status = 422
+            raise ValueError(exc_msg)
+
         # TODO: Get correct profile
         # How this will work eventually:
         # First, we check the requested profile ("template") from the URL.
