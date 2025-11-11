@@ -43,7 +43,7 @@ urlpatterns = [
     path('api/context-catalog/<uuid:instance_id>/', ContextCatalogView.as_view(), name='context_catalog'),
 
     # main UI
-    path('', WorkflowDefinitionListView.as_view(), name='definition_list'),
+    path('', WorkflowDefinitionListView.as_view(), name='definition_table'),
     path('wizard/', WorkflowWizardView.as_view(), name='definition_wizard'),
     path('definitions/<uuid:pk>/publish/', WorkflowDefinitionPublishView.as_view(), name='definition_publish'),
     path('definitions/<uuid:pk>/export/', WorkflowDefinitionExportView.as_view(), name='definition_export'),
@@ -57,8 +57,8 @@ urlpatterns = [
     ),
 
     # approval console
-    path('pending/', PendingApprovalsView.as_view(), name='pending_list'),
+    path('pending/', PendingApprovalsView.as_view(), name='pending_table'),
     path('pending/<uuid:instance_id>/', WorkflowInstanceDetailView.as_view(), name='pending_detail'),
-    path('pending/bulk-signal/', BulkSignalInstancesView.as_view(), name='pending_bulk_signal'),  
+    path('pending/bulk-signal/', BulkSignalInstancesView.as_view(), name='pending_bulk_signal'),
     path('instances/<uuid:instance_id>/signal/', SignalInstanceView.as_view(), name='signal'),
 ]

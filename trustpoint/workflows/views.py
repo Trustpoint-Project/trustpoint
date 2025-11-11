@@ -245,7 +245,7 @@ class WorkflowDefinitionListView(ListView[WorkflowDefinition]):
     """Show all workflow definitions."""
 
     model = WorkflowDefinition
-    template_name = 'workflows/definition_list.html'
+    template_name = 'workflows/definition_table.html'
     context_object_name = 'definitions'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -270,19 +270,19 @@ class WorkflowDefinitionImportView(View):
         f = request.FILES.get('file')
         if not f:
             messages.error(request, 'Please choose a JSON file to import.')
-            return redirect('workflows:definition_list')
+            return redirect('workflows:definition_table')
 
         try:
             raw = f.read().decode('utf-8', errors='strict')
         except Exception:
             messages.error(request, 'The uploaded file is not valid UTF-8 text.')
-            return redirect('workflows:definition_list')
+            return redirect('workflows:definition_table')
 
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as e:
             messages.error(request, f'Invalid JSON: line {e.lineno}, col {e.colno}.')
-            return redirect('workflows:definition_list')
+            return redirect('workflows:definition_table')
 
         # Validate export bundle and convert to wizard prefill
         errors, prefill = self._validate_and_transform_export(data)
@@ -294,7 +294,7 @@ class WorkflowDefinitionImportView(View):
                 messages.error(request, err)
             if len(errors) > self.MAX_ERRORS_TO_SHOW:
                 messages.error(request, f'(+{len(errors)-self.MAX_ERRORS_TO_SHOW} more issues)')
-            return redirect('workflows:definition_list')
+            return redirect('workflows:definition_table')
 
         # Stage prefill and go to wizard
         request.session['wizard_prefill'] = prefill
@@ -450,7 +450,7 @@ class WorkflowDefinitionPublishView(View):
             messages.info(request, f'Workflow "{wf.name}" paused (saved as draft).')
         else:
             messages.error(request, 'Invalid publish action.')
-        return redirect('workflows:definition_list')
+        return redirect('workflows:definition_table')
 
 
 class WorkflowWizardView(View):
@@ -587,14 +587,14 @@ class WorkflowDefinitionDeleteView(View):
         # else:  # noqa: ERA001
         wf.delete()
         messages.success(request, f'Workflow "{wf.name}" deleted.')
-        return redirect('workflows:definition_list')
+        return redirect('workflows:definition_table')
 
 
 class PendingApprovalsView(ListView[WorkflowInstance]):
     """Show all instances awaiting human approval."""
 
     model = WorkflowInstance
-    template_name = 'workflows/pending_list.html'
+    template_name = 'workflows/pending_table.html'
     context_object_name = 'instances'
 
     filterset_class = WorkflowFilter
@@ -804,7 +804,7 @@ class SignalInstanceView(View):
         action = request.POST.get('action')
         if action not in {'Approved', 'Rejected'}:
             messages.error(request, f'Invalid action: {action!r}')
-            return redirect('workflows:pending_list')
+            return redirect('workflows:pending_table')
 
         advance_instance(inst, signal=action)
         inst.refresh_from_db()
@@ -817,7 +817,7 @@ class SignalInstanceView(View):
         else:
             messages.warning(request, f'Workflow {inst.id} was rejected.')
 
-        return redirect('workflows:pending_list')
+        return redirect('workflows:pending_table')
 
 
 class BulkSignalInstancesView(View):
@@ -827,14 +827,14 @@ class BulkSignalInstancesView(View):
         action = request.POST.get('action')
         if action not in {'Approved', 'Rejected'}:
             messages.error(request, f'Invalid bulk action: {action!r}')
-            return redirect('workflows:pending_list')
+            return redirect('workflows:pending_table')
 
         # Checkboxes use name="row_checkbox"
         selected_ids: list[str] = request.POST.getlist('row_checkbox')
 
         if not selected_ids:
             messages.warning(request, 'Please select at least one workflow instance.')
-            return redirect('workflows:pending_list')
+            return redirect('workflows:pending_table')
 
         # Only operate on still-pending instances
         instances_qs = WorkflowInstance.objects.filter(
@@ -845,7 +845,7 @@ class BulkSignalInstancesView(View):
 
         if not instances_qs.exists():
             messages.warning(request, 'No pending workflow instances matched your selection.')
-            return redirect('workflows:pending_list')
+            return redirect('workflows:pending_table')
 
         updated_count = 0
 
@@ -870,4 +870,4 @@ class BulkSignalInstancesView(View):
                 f'{updated_count} workflow instance(s) rejected.',
             )
 
-        return redirect('workflows:pending_list')
+        return redirect('workflows:pending_table')

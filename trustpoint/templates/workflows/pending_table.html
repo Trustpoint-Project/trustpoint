@@ -10,7 +10,7 @@
     <h1>{% trans 'Pending Approvals' %}</h1>
   </div>
 
-  {% include 'workflows/table_filter.html' with table_url='workflows:pending_list' %}
+  {% include 'workflows/table_filter.html' with table_url='workflows:pending_table' %}
 
   {# Single outer form: used both for bulk actions and per-row actions #}
   <form method="post" action="{% url 'workflows:pending_bulk_signal' %}" style="flex-grow: 1; display: flex; flex-direction: column;">
