@@ -221,11 +221,35 @@ class CertificateGenerator:
             additional_certificates=chain
         )
 
+        # Determine private key location based on CA type and storage configuration
         if ca_type == IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED:
-            # For unprotected local CAs, always use software storage
+            # Unprotected local CAs always use software storage
             private_key_location = PrivateKeyLocation.SOFTWARE
+        elif ca_type in [
+            IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT,
+            IssuingCaModel.IssuingCaTypeChoice.AUTOGEN,
+        ]:
+            # Auto-generated CAs use the configured storage type
+            try:
+                config = KeyStorageConfig.get_config()
+            except KeyStorageConfig.DoesNotExist as e:
+                error_msg = (
+                    f'Cannot create auto-generated CA "{unique_name}": KeyStorageConfig not found. '
+                    'Please configure key storage first.'
+                )
+                logger.exception(error_msg)
+                raise ValueError(error_msg) from e
+
+            if config.storage_type in [
+                KeyStorageConfig.StorageType.SOFTHSM,
+                KeyStorageConfig.StorageType.PHYSICAL_HSM
+            ]:
+                private_key_location = PrivateKeyLocation.HSM_PROVIDED
+            else:
+                # Software storage
+                private_key_location = PrivateKeyLocation.SOFTWARE
         else:
-            # For protected CAs, HSM storage is required
+            # For protected CAs (LOCAL_PKCS11), HSM storage is required
             try:
                 config = KeyStorageConfig.get_config()
             except KeyStorageConfig.DoesNotExist as e:

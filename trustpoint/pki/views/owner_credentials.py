@@ -26,7 +26,6 @@ from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:
     from django.forms import Form
-    from django.http import HttpRequest
 
 
 class OwnerCredentialContextMixin(ContextDataMixin):

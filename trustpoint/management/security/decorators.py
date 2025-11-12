@@ -1,42 +1,45 @@
 """Management app decorators."""
+from __future__ import annotations
+
+from collections.abc import Callable
 from functools import wraps
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from django.core.exceptions import PermissionDenied
 
-from management.security import SecurityFeature
 from management.security.manager import SecurityManager
 
+if TYPE_CHECKING:
+    from management.security.features import SecurityFeature
 
-def security_level(feature_name: SecurityFeature):
+F = TypeVar('F', bound=Callable[..., Any])
+
+
+def security_level(feature: type[SecurityFeature] | SecurityFeature) -> Callable[[F], F]:
     """A decorator that checks whether a specific security feature is allowed based on the current security level.
 
     This decorator uses the SecurityManager to determine if the provided feature is permitted under the current
     security level. If the feature is not allowed, it raises a PermissionDenied exception.
 
-    Parameters:
-    -----------
-    feature_name : SecurityFeatures
-        The feature to check against the current security level.
+    Args:
+        feature: The feature class or instance to check against the current security level.
 
     Returns:
-    --------
-    function
-        The wrapped function that will only execute if the feature is allowed.
+        The decorated function that will only execute if the feature is allowed.
 
     Raises:
-    -------
-    PermissionDenied
-        If the security level does not permit the requested feature.
+        PermissionDenied: If the security level does not permit the requested feature.
     """
 
-    def decorator(func):
+    def decorator(func: F) -> F:
         @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any):
-            if not SecurityManager.is_feature_allowed(feature_name):
-                raise PermissionDenied('Security level does not allow access to feature: %s' % feature_name)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            manager = SecurityManager()
+            if not manager.is_feature_allowed(feature):
+                msg = f'Security level does not allow access to feature: {feature}'
+                raise PermissionDenied(msg)
             return func(*args, **kwargs)
 
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
     return decorator

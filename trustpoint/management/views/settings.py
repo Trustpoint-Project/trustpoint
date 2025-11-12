@@ -15,6 +15,7 @@ from django.views import View
 from django.views.generic.edit import FormView
 from notifications.models import NotificationConfig, WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
+from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
 
 from management.forms import SecurityConfigForm
@@ -29,7 +30,7 @@ if TYPE_CHECKING:
 
 
 LOG_LEVELS=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
-class SettingsView(PageContextMixin, SecurityLevelMixin, FormView[SecurityConfigForm]):
+class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[SecurityConfigForm]):
     """A view for managing security settings in the Trustpoint application.
 
     This view handles the display and processing of the SecurityConfigForm,
@@ -103,6 +104,11 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, FormView[SecurityConfig
         if 'auto_gen_pki' in form.changed_data:
             old_auto = getattr(old_conf, 'auto_gen_pki', None) if old_conf else None
             new_auto = form.cleaned_data.get('auto_gen_pki', None)
+            self.logger.info(
+                'auto_gen_pki changed: old=%s, new=%s',
+                old_auto,
+                new_auto
+            )
 
             if old_auto != new_auto and new_auto:
                 # autogen PKI got enabled
@@ -111,12 +117,17 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, FormView[SecurityConfig
                     messages.error(self.request, 'Auto-generated PKI key algorithm is missing.')
                     return redirect(self.success_url)
                 key_alg = AutoGenPkiKeyAlgorithm(key_alg_value)
-                feature = AutoGenPkiFeature()
-                self.sec.enable_feature(feature, {'key_algorithm': key_alg})
+                self.logger.info('Calling enable_feature for AutoGenPkiFeature with key_alg: %s', key_alg)
+                self.sec.enable_feature(AutoGenPkiFeature, {'key_algorithm': key_alg})
+                self.logger.info(
+                    'Auto-generated PKI enabled with key algorithm: %s',
+                    key_alg.name
+                )
 
             elif old_auto != new_auto and not new_auto:
                 # autogen PKI got disabled
                 AutoGenPkiFeature.disable()
+                self.logger.info('Auto-generated PKI disabled')
 
         messages.success(self.request, _('Your changes were saved successfully.'))
         return super().form_valid(form)
