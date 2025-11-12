@@ -801,6 +801,7 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
         )
 
 
+
         context['sections'] = sections
 
         return context
