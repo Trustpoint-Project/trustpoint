@@ -38,7 +38,7 @@ def test_auto_gen_pki(key_alg: AutoGenPkiKeyAlgorithm) -> None:
     mock_issued_credential = mock.MagicMock()
     mock_issued_credential.credential.certificate.certificate_status = CertificateModel.CertificateStatus.OK
 
-    def mock_get_auto_gen_pki():
+    def mock_get_auto_gen_pki(key_alg: AutoGenPkiKeyAlgorithm | None = None):
         if not hasattr(mock_get_auto_gen_pki, 'enabled') or not mock_get_auto_gen_pki.enabled:
             return None
         return mock_issuing_ca
