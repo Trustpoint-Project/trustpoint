@@ -75,7 +75,7 @@ class EnrollmentRequest(models.Model):
     """
 
     # Request-level aggregate states
-    STATE_PENDING = 'Pending'  # at least one child is Starting/Running/AwaitingApproval OR no children yet
+    STATE_AWAITING = 'AwaitingApproval'  # at least one child is Starting/Running/AwaitingApproval OR no children yet
     STATE_APPROVED = 'Approved'  # all children are Approved
     STATE_PASSED = 'Passed'
     STATE_REJECTED = 'Rejected'  # any child rejected
@@ -84,7 +84,7 @@ class EnrollmentRequest(models.Model):
     STATE_NOMATCH = 'NoMatch'
 
     STATE_CHOICES = (
-        (STATE_PENDING, 'Pending'),
+        (STATE_AWAITING, 'AwaitingApproval'),
         (STATE_APPROVED, 'Approved'),
         (STATE_PASSED, 'Passed'),
         (STATE_REJECTED, 'Rejected'),
@@ -92,8 +92,6 @@ class EnrollmentRequest(models.Model):
         (STATE_FINALIZED, 'Finalized'),
         (STATE_NOMATCH, 'NoMatch'),
     )
-
-    TERMINAL_STATES = {STATE_FAILED, STATE_FINALIZED}
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
@@ -106,7 +104,7 @@ class EnrollmentRequest(models.Model):
     fingerprint = models.CharField(max_length=128)  # CSR fingerprint (sha256 hex)
     template = models.CharField(max_length=100, null=True, blank=True)
 
-    aggregated_state = models.CharField(max_length=32, choices=STATE_CHOICES, default=STATE_PENDING)
+    aggregated_state = models.CharField(max_length=32, choices=STATE_CHOICES, default=STATE_AWAITING)
     finalized = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -140,7 +138,7 @@ class EnrollmentRequest(models.Model):
         """
         children = list(self.instances.all())  # via WorkflowInstance.enrollment_request related_name
         if not children:
-            return self.STATE_PENDING
+            return self.STATE_AWAITING
 
         inst_states = {c.state for c in children}
 
@@ -151,11 +149,11 @@ class EnrollmentRequest(models.Model):
         if WI.STATE_FAILED in inst_states:
             return self.STATE_FAILED
         if WI.STATE_AWAITING in inst_states or WI.STATE_RUNNING in inst_states:
-            return self.STATE_PENDING
+            return self.STATE_AWAITING
         if inst_states.issubset({WI.STATE_APPROVED, WI.STATE_FINALIZED}):
             return self.STATE_APPROVED
 
-        return self.STATE_PENDING
+        return self.STATE_AWAITING
 
     def is_valid(self) -> bool:
         return self.aggregated_state in {self.STATE_APPROVED, self.STATE_PASSED, self.STATE_NOMATCH}
@@ -168,17 +166,16 @@ class EnrollmentRequest(models.Model):
             self.save(update_fields=['aggregated_state', 'updated_at'])
         return self.aggregated_state
 
-    def finalize_to(self, final_status: str) -> None:
+    def finalize(self, final_status: str | None=None) -> None:
         """Finalize all non-finalized children."""
-        updates = []
-        if self.aggregated_state != final_status:
+        self.finalized = True
+        print('00000000000000')
+        if not final_status:
+            self.save(update_fields=['finalized'])
+            print('AAAAAAAAAA')
+        else:
             self.aggregated_state = final_status
-            updates.append('aggregated_state')
-        if not self.finalized:
-            self.finalized = True
-            updates.append('finalized')
-        if updates:
-            self.save(update_fields=updates)
+            self.save(update_fields=['aggregated_state', 'finalized'])
 
         for inst in self.instances.filter(finalized=False):
             inst.finalize()

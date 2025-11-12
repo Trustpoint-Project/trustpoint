@@ -36,6 +36,7 @@ from util.email import MailTemplates
 
 from workflows.filters import WorkflowFilter
 from workflows.models import (
+    EnrollmentRequest,
     WorkflowDefinition,
     WorkflowInstance,
     WorkflowScope,
@@ -603,7 +604,6 @@ class PendingApprovalsView(ListView[WorkflowInstance]):
     def get_queryset(self) -> QuerySet[WorkflowInstance]:
         base_qs = (
             WorkflowInstance.objects.filter(
-                state=WorkflowInstance.STATE_AWAITING,
                 finalized=False,
             )
             .select_related(
@@ -629,6 +629,8 @@ class PendingApprovalsView(ListView[WorkflowInstance]):
             '-definition__name',
             'created_at',
             '-created_at',
+            'state',
+            '-state',
         }
         if sort_param not in allowed_sorts:
             sort_param = self.default_sort_param
@@ -836,12 +838,19 @@ class BulkSignalInstancesView(View):
             messages.warning(request, 'Please select at least one workflow instance.')
             return redirect('workflows:pending_table')
 
-        # Only operate on still-pending instances
         instances_qs = WorkflowInstance.objects.filter(
             id__in=selected_ids,
-            state=WorkflowInstance.STATE_AWAITING,
             finalized=False,
         ).select_related('enrollment_request')
+
+        if action == 'Approved':
+            rejected_instances = instances_qs.filter(
+                state=WorkflowInstance.STATE_FAILED
+            )
+
+            if rejected_instances.exists():
+                messages.error(request, 'You cannot approve failed instances.')
+                return redirect('workflows:pending_table')
 
         if not instances_qs.exists():
             messages.warning(request, 'No pending workflow instances matched your selection.')
@@ -850,6 +859,8 @@ class BulkSignalInstancesView(View):
         updated_count = 0
 
         for inst in instances_qs:
+            print('inst: ')
+            print(inst)
             advance_instance(inst, signal=action)
             inst.refresh_from_db()
             if inst.enrollment_request:

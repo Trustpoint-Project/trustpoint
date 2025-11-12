@@ -33,7 +33,7 @@ def recompute_request_state(req: EnrollmentRequest) -> None:
             return
 
         if any(s in NONFINAL_ACTIVE for s in states):
-            req.aggregated_state = EnrollmentRequest.STATE_PENDING
+            req.aggregated_state = EnrollmentRequest.STATE_AWAITING
             req.save(update_fields=['aggregated_state'])
             return
 
@@ -43,4 +43,5 @@ def recompute_request_state(req: EnrollmentRequest) -> None:
             return
 
         # Fallback: treat unknown combos as Failed
-        req.finalize_to(EnrollmentRequest.STATE_FAILED)
+        req.aggregated_state = EnrollmentRequest.STATE_FAILED
+        req.save(update_fields=['aggregated_state'])

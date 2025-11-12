@@ -56,6 +56,13 @@
                 {{ request|sort_icon:'created_at' }}
               </a>
             </th>
+            
+            <th class="text-nowrap">
+              <a href="{% url_sort 'state' %}">
+                {% trans 'State' %}
+                {{ request|sort_icon:'state' }}
+              </a>
+            </th>
 
             <th class="text-nowrap">
               {% trans 'Request info' %}
@@ -105,6 +112,16 @@
               </td>
 
               <td>{{ inst.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+              
+              <td>
+                {% if inst.state == 'Approved' %}
+                  <span class="badge bg-success">{{ inst.state }}</span>                
+                {% elif inst.state == 'AwaitingApproval' %}
+                  <span class="badge bg-secondary">{{ inst.state }}</span>
+                {% else %}                
+                  <span class="badge bg-danger">{{ inst.state }}</span>
+                {% endif %}
+              </td>
 
               <td>
                 <a
@@ -116,7 +133,7 @@
               </td>
 
               <td class="text-end">
-                {# Row-level Approve/Reject: still use this outer form, but override action #}
+                {% if inst.state != 'Failed' %}
                 <button
                   type="submit"
                   name="action"
@@ -127,6 +144,7 @@
                 >
                   {% trans 'Approve' %}
                 </button>
+                {% endif %}
                 <button
                   type="submit"
                   name="action"

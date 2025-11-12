@@ -104,10 +104,12 @@ class CertificateRequestHandler(WorkflowHandler):
                 template=template,
                 finalized=False,
             )
-            .exclude(aggregated_state__in=EnrollmentRequest.TERMINAL_STATES)
             .order_by('-created_at')
             .first()
         )
+
+        print('REQ: ')
+        print(req)
 
         if req is None:
             req = EnrollmentRequest.objects.create(
@@ -118,7 +120,7 @@ class CertificateRequestHandler(WorkflowHandler):
                 device=context.device,
                 fingerprint=fingerprint,
                 template=template,
-                aggregated_state=EnrollmentRequest.STATE_PENDING,
+                aggregated_state=EnrollmentRequest.STATE_AWAITING,
                 finalized=False,
             )
 

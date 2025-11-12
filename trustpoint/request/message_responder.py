@@ -30,20 +30,30 @@ class EstMessageResponder(AbstractMessageResponder):
 
         workflow_state = context.enrollment_request.aggregated_state
 
-        if workflow_state == EnrollmentRequest.STATE_PENDING:
+        print('Workfow_state:')
+        print(workflow_state)
+
+        print(context.enrollment_request)
+
+        if workflow_state == EnrollmentRequest.STATE_AWAITING:
             context.http_response_status = 202
             context.http_response_content_type = 'text/plain'
             context.http_response_content = 'Enrollment request pending manual approval.'
             return None
         if workflow_state == EnrollmentRequest.STATE_REJECTED:
-            context.enrollment_request.finalize_to(EnrollmentRequest.STATE_REJECTED)
+            context.enrollment_request.finalize(EnrollmentRequest.STATE_REJECTED)
             context.http_response_status = 403
             context.http_response_content_type = 'text/plain'
             context.http_response_content = 'Enrollment request Rejected.'
             return None
+        if workflow_state == EnrollmentRequest.STATE_FAILED:
+            context.http_response_status = 500
+            context.http_response_content_type = 'text/plain'
+            context.http_response_content = 'Workflow failed. Need of human interaction.'
+            return None
         if context.enrollment_request.is_valid() and context.operation in ['simpleenroll', 'simplereenroll']:
             responder = EstCertificateMessageResponder()
-            context.enrollment_request.finalize_to(EnrollmentRequest.STATE_FINALIZED)
+            context.enrollment_request.finalize(EnrollmentRequest.STATE_FINALIZED)
             return responder.build_response(context)
         exc_msg = 'No suitable responder found for this EST message.'
         context.http_response_status = 500

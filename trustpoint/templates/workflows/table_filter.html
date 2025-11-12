@@ -47,6 +47,13 @@
             {{ filter.form.workflow }}
           </div>
 
+          <div class="col-md-2">
+            <label for="{{ filter.form.workflow.id_for_label }}" class="form-label">
+              {{ filter.form.state.label }}
+            </label>
+            {{ filter.form.state }}
+          </div>
+
           <div class="col-md-4 mt-2">
             <label class="form-label d-block">
               {% trans 'Requested between' %}

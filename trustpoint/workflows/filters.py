@@ -5,9 +5,16 @@ from __future__ import annotations
 import django_filters
 from django import forms
 from django.utils.translation import gettext_lazy as _
-
 from pki.models import DomainModel
-from workflows.models import WorkflowInstance, WorkflowDefinition
+
+from workflows.models import WorkflowDefinition, WorkflowInstance
+
+STATE_FILTER_CHOICES = (
+        (WorkflowInstance.STATE_AWAITING, 'AwaitingApproval'),
+        (WorkflowInstance.STATE_APPROVED, 'Approved'),
+        (WorkflowInstance.STATE_REJECTED, 'Rejected'),
+        (WorkflowInstance.STATE_FAILED, 'Failed'),
+    )
 
 
 class WorkflowFilter(django_filters.FilterSet):
@@ -54,6 +61,15 @@ class WorkflowFilter(django_filters.FilterSet):
         label=_('Workflow'),
         field_name='definition',
         queryset=WorkflowDefinition.objects.all(),
+        widget=forms.Select(
+            attrs={'class': 'form-select form-select-sm'},
+        ),
+    )
+
+    state = django_filters.ChoiceFilter(
+        label=_('State'),
+        field_name='state',
+        choices=STATE_FILTER_CHOICES,
         widget=forms.Select(
             attrs={'class': 'form-select form-select-sm'},
         ),

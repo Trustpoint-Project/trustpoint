@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 from django.db import transaction
 
-from workflows.models import WorkflowInstance
+from workflows.models import EnrollmentRequest, WorkflowInstance
 from workflows.services.context import VARS_MAX_BYTES, compact_context_blob
 from workflows.services.executors.factory import StepExecutorFactory
 from workflows.services.types import ExecStatus, ExecutorResult
@@ -69,6 +69,8 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
 
         if inst.finalized:
             return
+        if inst.state == WorkflowInstance.STATE_FAILED and signal == 'Rejected':
+            cast('EnrollmentRequest', inst.enrollment_request).finalize()
 
         # allow last step to return FINALIZED
         budget = _max_pass_hops(inst) + 1
@@ -93,8 +95,7 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
                 _deep_merge_no_overwrite(vars_map, dict(result.vars))
                 if _size_bytes(vars_map) > VARS_MAX_BYTES:
                     inst.state = WorkflowInstance.STATE_FAILED
-                    inst.finalize()
-                    inst.save(update_fields=['state', 'finalized'])
+                    inst.save(update_fields=['state'])
                     break
                 sc['$vars'] = vars_map
                 inst.step_contexts = sc
@@ -141,12 +142,10 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
 
             if status == ExecStatus.FAIL:
                 inst.state = WorkflowInstance.STATE_FAILED
-                inst.finalize()
-                inst.save(update_fields=['state', 'finalized'])
+                inst.save(update_fields=['state'])
                 break
 
             # Defensive fallback
             inst.state = WorkflowInstance.STATE_FAILED
-            inst.finalize()
-            inst.save(update_fields=['state', 'finalized'])
+            inst.save(update_fields=['state'])
             break

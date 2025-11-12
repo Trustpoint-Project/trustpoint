@@ -427,8 +427,6 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
             raise Http404(err_msg)
         self.no_onboarding_config = self.object.no_onboarding_config
 
-        print('WHAT IS SELF: ')
-
         if not self.object.domain:
             err_msg = _('No domain is configured for this device.')
             raise Http404(err_msg)
@@ -440,7 +438,6 @@ class AbstractNoOnboardingEstUsernamePasswordHelpView(PageContextMixin, DetailVi
         self.host = (
             f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}'
         )
-
 
         help_page = HelpPage(heading=_non_lazy('Help - EST Username & Password'), sections=[
             self._get_summary_section(),

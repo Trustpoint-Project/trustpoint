@@ -122,14 +122,15 @@
             <td>
               {% if step.error or step.details %}
                 <ul class="mb-0">
-                  {% if step.error %}
-                    <li>
-                      <strong>{% trans 'Error' %}:</strong>
-                      <span class="text-danger">{{ step.error }}</span>
-                    </li>
-                  {% endif %}
                   {% for key, value in step.details.items %}
+                    {% if step.error and key == 'error' %}
+                      <li>
+                        <strong>{% trans 'Error' %}:</strong>
+                        <span class="text-danger">{{ step.error }}</span>
+                      </li>
+                    {% else %}
                     <li><strong>{{ key }}:</strong> {{ value }}</li>
+                    {% endif %}
                   {% endfor %}
                 </ul>
               {% else %}
@@ -177,9 +178,8 @@
       <h5 class="mb-3">{% trans 'CSR PEM' %}</h5>
       {{ csr_pem }}
     {% endif %}
-
+    <hr>
     {% if can_signal %}
-      <hr>
       <h5 class="mb-3">{% trans 'Actions' %}</h5>
       <form method="post" action="{% url 'workflows:signal' inst.id %}">
         {% csrf_token %}
@@ -191,6 +191,7 @@
         >
           {% trans 'Approve' %}
         </button>
+    {% endif %}
         <button
           type="submit"
           name="action"
@@ -203,13 +204,6 @@
           &larr; {% trans 'Back to Pending' %}
         </a>
       </form>
-    {% else %}
-      <div class="mt-3">
-        <a href="{% url 'workflows:pending_table' %}" class="btn btn-secondary">
-          &larr; {% trans 'Back to Pending' %}
-        </a>
-      </div>
-    {% endif %}
   </div>
 </div>
 {% endblock %}
