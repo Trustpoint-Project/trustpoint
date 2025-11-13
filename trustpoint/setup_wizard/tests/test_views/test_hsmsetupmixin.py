@@ -231,7 +231,7 @@ class HsmSetupMixinTestCase(TestCase):
         with patch.object(self.view, 'logger'), patch('setup_wizard.views.redirect') as mock_redirect:
             mock_redirect.return_value = HttpResponseRedirect('/error/')
             result = self.view._handle_hsm_setup_exception(exc)
-            mock_redirect.assert_called_once_with('/error/', permanent=False)
+            mock_redirect.assert_called_once_with('/error/', hsm_type='softhsm', permanent=False)
 
         messages = list(get_messages(self.request))
         self.assertTrue(any('Failed to initialize HSM token' in str(msg) for msg in messages))
@@ -249,7 +249,7 @@ class HsmSetupMixinTestCase(TestCase):
         with patch('setup_wizard.views.redirect') as mock_redirect:
             mock_redirect.return_value = HttpResponseRedirect('/error/')
             result = self.view.form_valid(form)
-            mock_redirect.assert_called_once_with('/error/', permanent=False)
+            mock_redirect.assert_called_once_with('/error/', hsm_type='physical', permanent=False)
 
         messages = list(get_messages(self.request))
         self.assertTrue(any('Physical HSM is not yet supported' in str(msg) for msg in messages))

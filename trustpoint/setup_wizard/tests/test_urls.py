@@ -8,6 +8,7 @@ from django.urls import resolve, reverse
 from django.urls.exceptions import NoReverseMatch
 
 from setup_wizard.views import (
+    AutoRestoreHsmSetupView,
     BackupAutoRestorePasswordView,
     BackupRestoreView,
     SetupWizardBackupPasswordView,
@@ -464,6 +465,7 @@ class SetupWizardUrlsTestCase(TestCase):
         """Test that all URL patterns resolve to the expected view classes."""
         # Test that all imported view classes are actually used in URL patterns
         imported_views = {
+            AutoRestoreHsmSetupView,
             BackupAutoRestorePasswordView,
             BackupRestoreView,
             SetupWizardBackupPasswordView,
