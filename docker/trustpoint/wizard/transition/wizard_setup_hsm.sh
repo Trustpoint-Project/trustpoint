@@ -6,6 +6,7 @@ export PKCS11_PROXY_SOCKET="${PKCS11_PROXY_SOCKET:-tcp://softhsm:5657}"
 
 STATE_FILE_DIR="/etc/trustpoint/wizard/state/"
 WIZARD_SETUP_HSM="/etc/trustpoint/wizard/state/WIZARD_SETUP_HSM"
+WIZARD_SETUP_HSM_AUTORESTORE="/etc/trustpoint/wizard/state/WIZARD_SETUP_HSM_AUTORESTORE"
 WIZARD_SETUP_MODE="/etc/trustpoint/wizard/state/WIZARD_SETUP_MODE"
 WIZARD_AUTO_RESTORE_PASSWORD="/etc/trustpoint/wizard/state/WIZARD_AUTO_RESTORE_PASSWORD"
 
@@ -47,8 +48,8 @@ if [ -z "$SETUP_TYPE" ]; then
 fi
 
 # Checks if the state file is present.
-if [ ! -f "$WIZARD_SETUP_HSM" ]; then
-    echo "ERROR: Trustpoint is not in the WIZARD_SETUP_HSM state."
+if [ ! -f "$WIZARD_SETUP_HSM" ] && [ ! -f "$WIZARD_SETUP_HSM_AUTORESTORE" ]; then
+    echo "ERROR: Trustpoint is not in the WIZARD_SETUP_HSM or WIZARD_SETUP_HSM_AUTORESTORE state."
     exit 2
 fi
 
@@ -118,15 +119,16 @@ fi
 
 log "HSM access test successful."
 
-# Removes the current WIZARD_SETUP_HSM state file.
-if ! rm "$WIZARD_SETUP_HSM"
-then
-    echo "ERROR: Failed to remove the WIZARD_SETUP_HSM state file."
-    exit 12
-fi
 
 # Create the appropriate next state file based on setup type
 if [ "$SETUP_TYPE" = "init_setup" ]; then
+    # Removes the current WIZARD_SETUP_HSM state file.
+    if ! rm "$WIZARD_SETUP_HSM"
+    then
+        echo "ERROR: Failed to remove the WIZARD_SETUP_HSM state file."
+        exit 12
+    fi
+
     if ! touch "$WIZARD_SETUP_MODE"
     then
         echo "ERROR: Failed to create the WIZARD_SETUP_MODE state file."
@@ -134,6 +136,12 @@ if [ "$SETUP_TYPE" = "init_setup" ]; then
     fi
     log "SUCCESS: Transitioned to WIZARD_SETUP_MODE state for initial setup."
 elif [ "$SETUP_TYPE" = "auto_restore_setup" ]; then
+    if ! rm "$WIZARD_SETUP_HSM_AUTORESTORE"
+    then
+        echo "ERROR: Failed to remove the WIZARD_SETUP_HSM_AUTORESTORE state file."
+        exit 12
+    fi
+
     if ! touch "$WIZARD_AUTO_RESTORE_PASSWORD"
     then
         echo "ERROR: Failed to create the WIZARD_AUTO_RESTORE_PASSWORD state file."

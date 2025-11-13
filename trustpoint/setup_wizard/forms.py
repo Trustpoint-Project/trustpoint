@@ -371,7 +371,6 @@ class PasswordAutoRestoreForm(forms.Form):
             'autocomplete': 'new-password',
         }),
         label=_('Backup Password'),
-        help_text=_('Enter a strong password to secure your backup encryption key.'),
         required=True
     )
 

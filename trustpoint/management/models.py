@@ -415,6 +415,32 @@ class PKCS11Token(models.Model, LoggerMixin):
         """
         return f'{self.label} (Slot {self.slot})'
 
+    @classmethod
+    def load(cls) -> PKCS11Token:
+        """Returns the single instance, creating it if necessary."""
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Ensure only one instance exists (singleton pattern)."""
+        self.full_clean()
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def clean(self) -> None:
+        """Ensure only one PKCS11Token instance exists.
+
+        Raises:
+        ------
+        ValidationError
+            If more than one PKCS11Token instance is attempted to be created.
+        """
+        if self.pk != 1 and PKCS11Token.objects.exists():
+            msg = 'Only one PKCS11Token instance is allowed.'
+            raise ValidationError(msg)
+
+        return super().clean()
+
     def generate_kek(self, key_length: int = 256) -> bool:
         """Generate the KEK (key encryption key) in the PKCS#11 token.
 
@@ -484,6 +510,48 @@ class PKCS11Token(models.Model, LoggerMixin):
             self.logger.exception("Failed to generate KEK for token '%s'", self.label)
             msg = f'Failed to generate KEK: {e!s}'
             raise RuntimeError(msg) from e
+
+    def load_kek(self) -> bool:
+        """Load and verify the KEK (key encryption key) exists on the PKCS#11 token.
+
+        This method checks if the KEK actually exists on the physical HSM,
+        not just in the database. It attempts to load the key from the HSM.
+
+        Returns:
+            bool: True if KEK exists on HSM, False otherwise
+        """
+        try:
+            if not self.kek:
+                self.logger.debug("No KEK reference in database for token '%s'", self.label)
+                return False
+
+            aes_key = self.kek.get_pkcs11_key_instance(
+                lib_path=self.module_path,
+                user_pin=self.get_pin()
+            )
+            aes_key = cast('Pkcs11AESKey', aes_key)
+
+            try:
+                aes_key.load_key()
+                self.logger.debug(
+                    "KEK '%s' verified to exist on HSM token '%s'",
+                    self.KEK_ENCRYPTION_KEY_LABEL,
+                    self.label
+                )
+            except pkcs11.NoSuchKey:
+                self.logger.warning(
+                    "KEK reference exists in database but not on HSM token '%s'",
+                    self.label
+                )
+                return False
+            else:
+                return True
+            finally:
+                aes_key.close()
+
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning("Failed to load KEK for token '%s': %s", self.label, e)
+            return False
 
     def generate_and_wrap_dek(self, dek_size: int = 32) -> bytes:
         """Generate a new DEK and wrap it using the HSM AES key.
@@ -805,7 +873,7 @@ class PKCS11Token(models.Model, LoggerMixin):
             label=self.KEK_ENCRYPTION_KEY_LABEL
         )
         return session, wrap_key
-    
+
     def _raise_type_error(self, msg: str) -> NoReturn:
         """Raise a TypeError with the given message.
 
@@ -1215,35 +1283,6 @@ class PKCS11Token(models.Model, LoggerMixin):
         except Exception as e:
             msg = f'Failed to decrypt DEK with BEK: {e}'
             raise ValueError(msg) from e
-
-
-
-
-    def save(self, *args: Any, **kwargs: Any) -> None:
-        """Ensure only one instance exists (singleton pattern)."""
-        self.full_clean()
-        self.pk = 1
-        super().save(*args, **kwargs)
-
-    @classmethod
-    def load(cls) -> 'BackupOptions':
-        """Returns the single instance, creating it if necessary."""
-        obj, _ = cls.objects.get_or_create(pk=1)
-        return obj
-
-    def clean(self) -> None:
-        """Ensure only one BackupOptions instance exists.
-
-        Raises:
-        ------
-        ValidationError
-            If more than one BackupOptions instance is attempted to be created.
-        """
-        if self.pk != 1 and BackupOptions.objects.exists():
-            msg = 'Only one BackupOptions instance is allowed.'
-            raise ValidationError(msg)
-
-        return super().clean()
 
 class LoggingConfig(models.Model):
     """Logging Configuration model."""

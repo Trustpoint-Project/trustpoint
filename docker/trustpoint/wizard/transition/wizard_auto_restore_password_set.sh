@@ -1,10 +1,10 @@
 #!/bin/bash
-# This script will transition from the WIZARD_COMPLETED state to the WIZARD_AUTO_RESTORE_PASSWORD state.
+# This script will transition from the WIZARD_SETUP_CRYPTO_STORAGE state to the WIZARD_AUTO_RESTORE_PASSWORD state.
 # This is used when an automatic restore operation is triggered and the HSM is already configured.
 
 STATE_FILE_DIR="/etc/trustpoint/wizard/state/"
-WIZARD_COMPLETED="/etc/trustpoint/wizard/state/WIZARD_COMPLETED"
-WIZARD_AUTO_RESTORE_PASSWORD="/etc/trustpoint/wizard/state/WIZARD_AUTO_RESTORE_PASSWORD"
+WIZARD_SETUP_CRYPTO_STORAGE="/etc/trustpoint/wizard/state/WIZARD_SETUP_CRYPTO_STORAGE"
+WIZARD_SETUP_HSM_AUTORESTORE="/etc/trustpoint/wizard/state/WIZARD_SETUP_HSM_AUTORESTORE"
 
 # Logging function
 log() {
@@ -12,8 +12,8 @@ log() {
 }
 
 # Checks if the state file is present.
-if [ ! -f "$WIZARD_COMPLETED" ]; then
-    echo "ERROR: Trustpoint is not in the WIZARD_COMPLETED state."
+if [ ! -f "$WIZARD_SETUP_CRYPTO_STORAGE" ]; then
+    echo "ERROR: Trustpoint is not in the WIZARD_SETUP_CRYPTO_STORAGE state."
     exit 1
 fi
 
@@ -24,19 +24,19 @@ if [[ 1 -ne STATE_COUNT ]]; then
     exit 2
 fi
 
-# Removes the current WIZARD_COMPLETED state file.
-if ! rm "$WIZARD_COMPLETED"
+# Removes the current WIZARD_SETUP_CRYPTO_STORAGE state file.
+if ! rm "$WIZARD_SETUP_CRYPTO_STORAGE"
 then
-    echo "ERROR: Failed to remove the WIZARD_COMPLETED state file."
+    echo "ERROR: Failed to remove the WIZARD_SETUP_CRYPTO_STORAGE state file."
     exit 3
 fi
 
 # Creates the WIZARD_AUTO_RESTORE_PASSWORD state file.
-if ! touch "$WIZARD_AUTO_RESTORE_PASSWORD"
+if ! touch "$WIZARD_SETUP_HSM_AUTORESTORE"
 then
-    echo "ERROR: Failed to create the WIZARD_AUTO_RESTORE_PASSWORD state file."
+    echo "ERROR: Failed to create the WIZARD_SETUP_HSM_AUTORESTORE state file."
     exit 4
 fi
 
-log "Transitioned to WIZARD_AUTO_RESTORE_PASSWORD state for automatic restore operation."
+log "Transitioned to WIZARD_SETUP_HSM_AUTORESTORE state for automatic restore operation."
 exit 0

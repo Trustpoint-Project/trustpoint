@@ -11,6 +11,7 @@ from management.models import KeyStorageConfig
 if TYPE_CHECKING:
     from packaging.version import Version
 
+    from management.models import PKCS11Token
     from management.util.startup_strategies import OutputWriter, StartupContext
 
 
@@ -32,6 +33,8 @@ class StartupContextBuilder:
         self.storage_type: KeyStorageConfig.StorageType | None = None
         self.is_hsm: bool = False
         self.dek_accessible: bool = False
+        self.has_kek: bool = False
+        self.has_backup_encrypted_dek: bool = False
 
     def with_db_version(self, db_version: Version) -> StartupContextBuilder:
         """Set the database version.
@@ -114,6 +117,10 @@ class StartupContextBuilder:
             self.output.write(f'encrypted_dek present: {bool(token.encrypted_dek)}')
             self.output.write(f'bek_encrypted_dek present: {bool(token.bek_encrypted_dek)}')
 
+            self.has_backup_encrypted_dek = bool(token.bek_encrypted_dek)
+
+            self.has_kek = self._check_kek_exists_on_hsm(token)
+
             if not token.encrypted_dek and not token.bek_encrypted_dek:
                 self.output.write('>>> No DEK found - backup password required')
                 self.dek_accessible = False
@@ -123,6 +130,11 @@ class StartupContextBuilder:
             if cached_dek:
                 self.output.write('>>> DEK available in cache - system operational')
                 self.dek_accessible = True
+                return self
+
+            if not self.has_kek:
+                self.output.write('>>> KEK not available on HSM - cannot unwrap DEK')
+                self.dek_accessible = False
                 return self
 
             self.output.write('Attempting to unwrap DEK to verify KEK accessibility...')
@@ -143,6 +155,32 @@ class StartupContextBuilder:
             self.output.write(f'Error checking DEK status: {e}')
             self.dek_accessible = False
         return self
+
+    def _check_kek_exists_on_hsm(self, token: PKCS11Token) -> bool:
+        """Check if the KEK actually exists on the physical HSM.
+
+        This method verifies that the KEK is not just referenced in the database,
+        but actually exists on the physical HSM by attempting to load it.
+
+        Args:
+            token: The PKCS11Token to check.
+
+        Returns:
+            bool: True if KEK exists on HSM, False otherwise.
+        """
+        try:
+            kek_exists = token.load_kek()
+
+            if kek_exists:
+                self.output.write('>>> KEK verified to exist on HSM')
+            else:
+                self.output.write('>>> KEK does not exist on HSM')
+
+        except Exception as e:  # noqa: BLE001
+            self.output.write(f'>>> Error checking for KEK on HSM: {e}')
+            return False
+        else:
+            return kek_exists
 
     def build(self) -> StartupContext:
         """Build the StartupContext object.
@@ -174,6 +212,8 @@ class StartupContextBuilder:
             wizard_state_raw=self.wizard_state,
             storage_type=self.storage_type,
             dek_cache_state=dek_cache,
+            has_kek=self.has_kek,
+            has_backup_encrypted_dek=self.has_backup_encrypted_dek,
             output=self.output,
         )
 

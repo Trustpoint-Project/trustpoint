@@ -3,6 +3,7 @@
 from django.urls import path
 
 from setup_wizard.views import (
+    AutoRestoreHsmSetupView,
     BackupAutoRestorePasswordView,
     BackupRestoreView,
     SetupWizardBackupPasswordView,
@@ -32,6 +33,11 @@ urlpatterns = [
         'hsm-setup/<str:hsm_type>/',
         SetupWizardHsmSetupView.as_view(),
         name='hsm_setup',
+    ),
+    path(
+        'auto-restore-hsm-setup/<str:hsm_type>/',
+        AutoRestoreHsmSetupView.as_view(),
+        name='auto_restore_hsm_setup',
     ),
     path('setup_mode/', SetupWizardSetupModeView.as_view(), name='setup_mode'),
     path(

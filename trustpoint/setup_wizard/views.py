@@ -147,10 +147,11 @@ class StartupWizardRedirect:
             SetupWizardState.WIZARD_DEMO_DATA: 'setup_wizard:demo_data',
             SetupWizardState.WIZARD_CREATE_SUPER_USER: 'setup_wizard:create_super_user',
             SetupWizardState.WIZARD_COMPLETED: 'users:login',
+            SetupWizardState.WIZARD_SETUP_HSM_AUTORESTORE: 'setup_wizard:auto_restore_hsm_setup',
             SetupWizardState.WIZARD_AUTO_RESTORE_PASSWORD: 'setup_wizard:auto_restore_password',
         }
 
-        if wizard_state == SetupWizardState.WIZARD_SETUP_HSM:
+        if wizard_state in [SetupWizardState.WIZARD_SETUP_HSM, SetupWizardState.WIZARD_SETUP_HSM_AUTORESTORE]:
             try:
                 config = KeyStorageConfig.get_config()
                 if config.storage_type == KeyStorageConfig.StorageType.SOFTHSM:
@@ -185,14 +186,14 @@ class HsmSetupMixin(LoggerMixin):
 
         if hsm_type != 'softhsm':
             messages.add_message(self.request, messages.ERROR, 'Physical HSM is not yet supported.')
-            return redirect(self.get_error_redirect_url(), permanent=False)
+            return redirect(self.get_error_redirect_url(), hsm_type=hsm_type, permanent=False)
 
         module_path = cleaned_data['module_path']
         slot = str(cleaned_data['slot'])
         label = cleaned_data['label']
 
         if not self._validate_hsm_inputs(module_path, slot, label):
-            return redirect(self.get_error_redirect_url(), permanent=False)
+            return redirect(self.get_error_redirect_url(), hsm_type=hsm_type, permanent=False)
 
         try:
             result = self._run_hsm_setup_script(module_path, slot, label)
@@ -303,6 +304,7 @@ class HsmSetupMixin(LoggerMixin):
 
     def _handle_hsm_setup_exception(self, exc: Exception) -> HttpResponse:
         """Handle exceptions during HSM setup and add appropriate error messages."""
+        hsm_type = self.request.POST.get('hsm_type', 'softhsm')
         if isinstance(exc, subprocess.CalledProcessError):
             err_msg = f'HSM setup failed: {self._map_exit_code_to_message(exc.returncode)}'
         elif isinstance(exc, FileNotFoundError):
@@ -311,32 +313,25 @@ class HsmSetupMixin(LoggerMixin):
             err_msg = 'An unexpected error occurred during HSM setup.'
         messages.add_message(self.request, messages.ERROR, err_msg)
         self.logger.exception('An error occurred during HSM setup')
-        return redirect(self.get_error_redirect_url(), permanent=False)
+        return redirect(self.get_error_redirect_url(), hsm_type=hsm_type, permanent=False)
 
     @staticmethod
     def _map_exit_code_to_message(return_code: int) -> str:
         """Map script exit codes to meaningful error messages."""
         error_messages = {
             1: 'Invalid number of arguments provided to HSM setup script.',
-            2: 'Trustpoint is not in the WIZARD_SETUP_HSM state.',
+            2: 'Trustpoint is not in the WIZARD_SETUP_HSM or WIZARD_SETUP_HSM_AUTORESTORE state.',
             3: 'Found multiple wizard state files. The wizard state seems to be corrupted.',
             4: 'HSM SO PIN file not found or not readable.',
             5: 'HSM PIN file not found or not readable.',
             6: 'HSM SO PIN is empty or could not be read from file.',
             7: 'HSM PIN is empty or could not be read from file.',
             8: 'PKCS#11 module not found.',
-            9: 'Failed to initialize HSM token.',
-            10: 'Failed to initialize user PIN for HSM.',
-            11: 'Failed to access HSM with configured PIN.',
-            12: 'Failed to remove the WIZARD_SETUP_HSM state file.',
+            9: 'Failed to initialize HSM token or set user PIN.',
+            12: 'Failed to remove the WIZARD_SETUP_HSM or WIZARD_SETUP_HSM_AUTORESTORE state file.',
             13: 'Failed to create the WIZARD_SETUP_MODE state file.',
-            14: 'Failed to set ownership of SoftHSM tokens to www-data.',
-            15: 'Failed to set permissions on SoftHSM tokens.',
-            16: 'Failed to set permissions on SoftHSM config file.',
-            17: 'Failed to set permissions on /var/lib/softhsm directory.',
-            18: 'www-data still cannot access token directory after permission changes.',
             19: 'Failed to access HSM slot as www-data user.',
-            20: 'Failed to create the WIZARD_AUTO_RESTORE state file.',
+            20: 'Failed to create the WIZARD_AUTO_RESTORE_PASSWORD state file.',
         }
         return error_messages.get(return_code, 'An unknown error occurred during HSM setup.')
 
@@ -797,8 +792,9 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
     def handle_backup_password_recovery(self, backup_password: str) -> bool:
         """Handle DEK recovery using backup password.
 
-        Uses the existing KEK to wrap the recovered DEK and stores everything
-        in the model for normal operation.
+        This method handles two scenarios:
+        1. Standard recovery: KEK exists, use it to wrap the recovered DEK
+        2. New KEK scenario: No KEK or KEK doesn't match, generate new KEK first
 
         Args:
             backup_password: The backup password provided by user
@@ -807,62 +803,23 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
             bool: True if recovery was successful, False otherwise
         """
         try:
-            # Get the PKCS11Token (should exist after database restore)
-            token = PKCS11Token.objects.first()
+            token = self._get_token_for_recovery()
             if not token:
-                self.logger.warning('No PKCS11Token found after restore for backup password recovery')
                 return False
 
-            if not token.has_backup_encryption():
-                self.logger.warning('No backup encryption found for token %s, skipping password recovery', token.label)
+            has_kek = self._ensure_kek_exists(token)
+            if has_kek is None:
                 return False
 
-            # Verify the backup password and recover the DEK
-            try:
-                dek_bytes = token.get_dek_with_backup_password(backup_password)
-            except (RuntimeError, ValueError):
-                self.logger.exception('Invalid backup password provided for token %s', token.label)
-                self.logger.exception('The restore process needs to be redone with the correct backup password.')
-                messages.add_message(
-                    self.request,
-                    messages.ERROR,
-                    'Invalid backup password provided. DEK recovery failed. '
-                )
-                messages.add_message(
-                    self.request,
-                    messages.ERROR,
-                    'The restore process needs to be redone with the correct backup password.'
-                )
+            dek_bytes = self._recover_dek_with_password(token, backup_password)
+            if not dek_bytes:
                 return False
 
-            # Wrap the recovered DEK with the existing KEK
-            try:
-                wrapped_dek = token.wrap_dek(dek_bytes)
-
-                # Update the token with the newly wrapped DEK
-                token.encrypted_dek = wrapped_dek
-                token.save(update_fields=['encrypted_dek'])
-
-                self.logger.info('Successfully wrapped recovered DEK with existing KEK for token %s', token.label)
-
-            except RuntimeError as e:
-                self.logger.exception('Failed to wrap recovered DEK for token %s', token.label)
-                messages.add_message(
-                    self.request,
-                    messages.ERROR,
-                    f'Failed to wrap recovered DEK with existing KEK: {e}'
-                )
+            if not self._wrap_and_save_dek(token, dek_bytes, had_kek=has_kek):
                 return False
 
-            try:
-                cached_dek = token.get_dek()
-                if cached_dek:
-                    self.logger.info('DEK successfully cached for token %s after backup recovery', token.label)
-                else:
-                    self.logger.warning('Failed to cache DEK for token %s after backup recovery', token.label)
-
-            except Exception as e:  # noqa: BLE001
-                self.logger.warning('Failed to cache DEK for token %s: %s', token.label, e)
+            self._cache_dek(token)
+            self._log_success(token, had_kek=has_kek)
 
         except Exception:
             self.logger.exception('Unexpected error during backup password recovery')
@@ -873,13 +830,201 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
             )
             return False
         else:
-            self.logger.info('Successfully completed backup password recovery for token %s', token.label)
+            return True
+
+    def _get_token_for_recovery(self) -> PKCS11Token | None:
+        """Get the PKCS11Token for recovery."""
+        token = PKCS11Token.objects.first()
+        if not token:
+            self.logger.warning('No PKCS11Token found after restore for backup password recovery')
+            return None
+
+        if not token.has_backup_encryption():
+            self.logger.warning('No backup encryption found for token %s, skipping password recovery', token.label)
+            return None
+
+        return token
+
+    def _ensure_kek_exists(self, token: PKCS11Token) -> bool | None:
+        """Ensure KEK exists on the token, generate if needed.
+
+        Returns:
+            bool: True if KEK already existed, False if newly generated, None on error
+        """
+        has_kek = bool(token.kek)
+
+        if not has_kek:
+            self.logger.info('No KEK found on token %s - generating new KEK', token.label)
+            try:
+                token.generate_kek(key_length=256)
+                self.logger.info('New KEK generated successfully for token %s', token.label)
+            except (subprocess.CalledProcessError, ValueError, RuntimeError) as e:
+                self.logger.exception('Failed to generate new KEK for token %s', token.label)
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    f'Failed to generate new KEK: {e}'
+                )
+                return None
+
+        return has_kek
+
+    def _recover_dek_with_password(self, token: PKCS11Token, backup_password: str) -> bytes | None:
+        """Recover DEK using backup password."""
+        try:
+            return token.get_dek_with_backup_password(backup_password)
+        except (RuntimeError, ValueError):
+            self.logger.exception('Invalid backup password provided for token %s', token.label)
+            self.logger.exception('The restore process needs to be redone with the correct backup password.')
             messages.add_message(
                 self.request,
-                messages.SUCCESS,
-                'DEK successfully recovered using backup password and re-secured with new HSM key.'
+                messages.ERROR,
+                'Invalid backup password provided. DEK recovery failed. '
             )
+            messages.add_message(
+                self.request,
+                messages.ERROR,
+                'The restore process needs to be redone with the correct backup password.'
+            )
+            return None
+
+    def _wrap_and_save_dek(self, token: PKCS11Token, dek_bytes: bytes, *,had_kek: bool) -> bool:
+        """Wrap recovered DEK with KEK and save."""
+        try:
+            wrapped_dek = token.wrap_dek(dek_bytes)
+            token.encrypted_dek = wrapped_dek
+            token.save(update_fields=['encrypted_dek'])
+
+            kek_status = 'newly generated' if not had_kek else 'existing'
+            self.logger.info(
+                'Successfully wrapped recovered DEK with %s KEK for token %s',
+                kek_status,
+                token.label
+            )
+        except RuntimeError as e:
+            self.logger.exception('Failed to wrap recovered DEK for token %s', token.label)
+            messages.add_message(
+                self.request,
+                messages.ERROR,
+                f'Failed to wrap recovered DEK with KEK: {e}'
+            )
+            return False
+        else:
             return True
+
+    def _cache_dek(self, token: PKCS11Token) -> None:
+        """Cache the DEK for immediate use."""
+        try:
+            cached_dek = token.get_dek()
+            if cached_dek:
+                self.logger.info('DEK successfully cached for token %s after backup recovery', token.label)
+            else:
+                self.logger.warning('Failed to cache DEK for token %s after backup recovery', token.label)
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning('Failed to cache DEK for token %s: %s', token.label, e)
+
+    def _log_success(self, token: PKCS11Token, *, had_kek: bool) -> None:
+        """Log successful recovery."""
+        recovery_type = 'with new KEK generation' if not had_kek else 'with existing KEK'
+        self.logger.info(
+            'Successfully completed backup password recovery for token %s %s',
+            token.label,
+            recovery_type
+        )
+        messages.add_message(
+            self.request,
+            messages.SUCCESS,
+            'DEK successfully recovered using backup password and re-secured with HSM key.'
+        )
+
+
+class AutoRestoreHsmSetupView(HsmSetupMixin, FormView[HsmSetupForm]):
+    """View for handling HSM setup during auto restore process.
+
+    This view initializes the SoftHSM token when restoring to a new HSM installation
+    where the old KEK is lost. It uses the wizard_setup_hsm.sh script with 'auto_restore_setup' mode.
+    """
+
+    form_class = HsmSetupForm
+    template_name = 'setup_wizard/hsm_setup.html'
+    http_method_names = ('get', 'post')
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle request dispatch and wizard state validation."""
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != self.get_expected_wizard_state():
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        hsm_type = kwargs.get('hsm_type')
+        if hsm_type not in ['softhsm', 'physical']:
+            messages.add_message(
+                self.request,
+                messages.ERROR,
+                'Invalid HSM type specified.'
+            )
+            return redirect('users:login', permanent=False)
+
+        try:
+            config = KeyStorageConfig.get_config()
+
+            expected_storage_type = (
+                KeyStorageConfig.StorageType.SOFTHSM if hsm_type == 'softhsm'
+                else KeyStorageConfig.StorageType.PHYSICAL_HSM
+            )
+
+            if config.storage_type != expected_storage_type:
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    f'Auto restore HSM setup is only available when {hsm_type.title()} HSM storage is selected.'
+                )
+                return redirect('users:login', permanent=False)
+        except Exception:  # noqa: BLE001
+            return redirect('users:login', permanent=False)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form(self, form_class: type[HsmSetupForm] | None = None) -> HsmSetupForm:
+        """Return a form instance with appropriate defaults based on HSM type."""
+        if form_class is None:
+            form_class = self.get_form_class()
+
+        hsm_type = self.kwargs.get('hsm_type')
+        form_kwargs = self.get_form_kwargs()
+
+        return form_class(hsm_type, **form_kwargs)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add HSM type to template context."""
+        context = super().get_context_data(**kwargs)
+        context['hsm_type'] = self.kwargs.get('hsm_type')
+        context['hsm_type_display'] = self.kwargs.get('hsm_type').replace('_', ' ').title()
+        context['is_auto_restore'] = True
+        return context
+
+    def get_setup_type(self) -> str:
+        """Return the setup type for the HSM script (auto_restore_setup)."""
+        return 'auto_restore_setup'
+
+    def get_success_url(self) -> str:
+        """Return the success URL after HSM setup."""
+        return str(reverse_lazy('setup_wizard:auto_restore_password'))
+
+    def get_error_redirect_url(self) -> str:
+        """Return the URL to redirect to on error."""
+        return 'setup_wizard:auto_restore_hsm_setup'
+
+    def get_success_context(self) -> str:
+        """Return context string for success messages."""
+        return 'for auto restore'
+
+    def get_expected_wizard_state(self) -> SetupWizardState:
+        """Return the expected wizard state for this view."""
+        return SetupWizardState.WIZARD_SETUP_HSM_AUTORESTORE
+
 
 class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
     """Upload a dump file and restore the database from it with optional backup password."""
@@ -1024,7 +1169,6 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             if not success:
                 return self.form_invalid(form)
 
-            # Extract TLS certificates from database before completing
             self.logger.info('Extracting Trustpoint TLS certificates from database')
             try:
                 self._extract_tls_certificates()
@@ -1034,13 +1178,20 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
                 messages.add_message(self.request, messages.ERROR, err_msg)
                 return self.form_invalid(form)
 
-            # Now execute the success script which will configure Apache and TLS
             execute_shell_script(SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS)
+
+            self._deactivate_all_issuing_cas()
 
             messages.add_message(
                 self.request,
                 messages.SUCCESS,
                 'Auto restore completed successfully. You can now log in.'
+            )
+            messages.add_message(
+                self.request,
+                messages.WARNING,
+                'All Certificate Authorities have been deactivated because their private keys are no longer '
+                'available after HSM change.'
             )
             self.logger.info('Auto restore completed successfully with backup password recovery')
             return super().form_valid(form)
@@ -1077,6 +1228,31 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
         self.logger.error(message)
         raise RuntimeError(message)
 
+    def _deactivate_all_issuing_cas(self) -> None:
+        """Deactivate all Issuing CAs after HSM change.
+
+        When restoring to a new HSM, the private keys from the old HSM are no longer
+        available. This method deactivates all CAs to prevent operations that would
+        require the missing private keys.
+        """
+        try:
+            active_cas = IssuingCaModel.objects.filter(is_active=True)
+            count = active_cas.count()
+
+            if count > 0:
+                active_cas.update(is_active=False)
+                self.logger.info(
+                    'Deactivated %d Certificate Authority(ies) due to HSM change - '
+                    'private keys no longer available',
+                    count
+                )
+            else:
+                self.logger.info('No active Certificate Authorities found to deactivate')
+
+        except Exception:
+            self.logger.exception('Failed to deactivate Certificate Authorities')
+            # Don't raise - this is not critical enough to fail the restore process
+
     def _extract_tls_certificates(self) -> None:
         """Extract TLS certificates from database and write to files for Apache configuration.
 
@@ -1102,11 +1278,9 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             APACHE_KEY_PATH.write_text(private_key_pem)
             APACHE_CERT_PATH.write_text(certificate_pem)
 
-            # Only write chain file if there's actually a chain (not empty)
             if trust_store_pem.strip():
                 APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
             elif APACHE_CERT_CHAIN_PATH.exists():
-                # Remove chain file if it exists but chain is empty
                 APACHE_CERT_CHAIN_PATH.unlink()
 
             self.logger.info('TLS certificates extracted successfully')

@@ -14,6 +14,6 @@ SCRIPT_WIZARD_BACKUP_PASSWORD = STATE_FILE_DIR / Path('wizard_backup_password.sh
 SCRIPT_WIZARD_DEMO_DATA = STATE_FILE_DIR / Path('wizard_demo_data.sh')
 SCRIPT_WIZARD_CREATE_SUPER_USER = STATE_FILE_DIR / Path('wizard_create_super_user.sh')
 SCRIPT_WIZARD_RESTORE = STATE_FILE_DIR / Path('wizard_restore.sh')
-SCRIPT_WIZARD_AUTO_RESTORE_SET = STATE_FILE_DIR / Path('wizard_auto_restore_set.sh')
+SCRIPT_WIZARD_AUTO_RESTORE_SET = STATE_FILE_DIR / Path('wizard_auto_restore_password_set.sh')
 SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS = STATE_FILE_DIR / Path('wizard_auto_restore_success.sh')
 SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL = STATE_FILE_DIR / Path('update_tls.sh')

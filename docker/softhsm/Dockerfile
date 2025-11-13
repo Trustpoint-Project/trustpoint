@@ -12,6 +12,7 @@ RUN apt-get update && \
     libssl-dev \
     libseccomp-dev \
     socat \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # Clone and build pkcs11-proxy

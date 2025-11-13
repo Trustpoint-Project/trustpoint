@@ -1,11 +1,8 @@
-"""Startup strategies for Trustpoint initialization and restoration.
-
-This module implements a strategy pattern for handling different startup scenarios
-based on database state, version, wizard completion, and storage configuration.
-"""
+"""Startup strategies for Trustpoint initialization and restoration."""
 
 import io
 import ipaddress
+import socket
 import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -22,6 +19,7 @@ from pki.models import PKCS11Key
 from pki.models.credential import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard import SetupWizardState
+from setup_wizard.state_dir_paths import SCRIPT_WIZARD_AUTO_RESTORE_SET
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from setup_wizard.views import execute_shell_script
 
@@ -93,6 +91,9 @@ class StartupScenario(Enum):
     RESTORE_SOFTHSM_WIZARD_INCOMPLETE_DEK_CACHED = auto()
     RESTORE_SOFTHSM_WIZARD_INCOMPLETE_DEK_NOT_CACHED = auto()
 
+    # SoftHSM storage with new KEK (old KEK lost, needs backup password)
+    RESTORE_SOFTHSM_NEW_KEK_WIZARD_COMPLETED = auto()
+
     # Physical HSM storage (not yet supported, but included for completeness)
     RESTORE_PHYSICAL_HSM_WIZARD_COMPLETED_DEK_CACHED = auto()
     RESTORE_PHYSICAL_HSM_WIZARD_COMPLETED_DEK_NOT_CACHED = auto()
@@ -121,6 +122,10 @@ class StartupContext:
 
     # Output writer
     output: OutputWriter
+
+    # HSM key state (only applicable for HSM storage methods)
+    has_kek: bool = False  # Whether a KEK exists on the HSM
+    has_backup_encrypted_dek: bool = False  # Whether bek_encrypted_dek exists in DB
 
     @property
     def is_wizard_completed(self) -> bool:
@@ -154,6 +159,29 @@ class StartupContext:
             msg = 'DEK cache state is only applicable for HSM storage'
             raise ValueError(msg)
         return self.dek_cache_state == DekCacheState.CACHED
+
+    @property
+    def is_new_kek_scenario(self) -> bool:
+        """Check if this is a new KEK scenario (old KEK lost, requires backup password).
+
+        This scenario occurs when:
+        - Using HSM storage
+        - DEK is not cached
+        - KEK does NOT exist on the HSM (old KEK lost from previous installation)
+        - Backup-encrypted DEK exists in the database
+
+        Note: We don't check wizard_completed here because the wizard state might be
+        inconsistent if restoring a database from a previous installation.
+
+        Returns:
+            True if this is a new KEK scenario requiring backup password recovery.
+        """
+        return (
+            self.is_hsm_storage
+            and not self.is_dek_cached
+            and not self.has_kek  # KEK is missing (old KEK lost)
+            and self.has_backup_encrypted_dek  # But we have backup-encrypted DEK
+        )
 
 
 class StartupStrategy(ABC):
@@ -191,6 +219,14 @@ class TlsCredentialStrategy(ABC):
 class StandardTlsCredentialStrategy(TlsCredentialStrategy):
     """Standard TLS credential generation using TlsServerCredentialGenerator."""
 
+    def __init__(self, *, save_to_db: bool = True) -> None:
+        """Initialize with save_to_db flag.
+
+        Args:
+            save_to_db: Whether to save the credential to database. Defaults to True.
+        """
+        self.save_to_db = save_to_db
+
     def generate_and_save_tls_credential(self, context: StartupContext) -> None:
         """Generate TLS credentials and save to database and files."""
         context.output.write('Generating TLS Server Credential...')
@@ -203,31 +239,46 @@ class StandardTlsCredentialStrategy(TlsCredentialStrategy):
         )
         tls_server_credential = generator.generate_tls_server_credential()
 
-        context.output.write('Saving credential to database...')
+        if self.save_to_db:
+            context.output.write('Saving credential to database...')
 
-        # Save to database
-        trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
-            credential_serializer=tls_server_credential,
-            credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
-        )
+            trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
+                credential_serializer=tls_server_credential,
+                credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+            )
 
-        try:
-            active_tls, created = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
-            active_tls.credential = trustpoint_tls_server_credential
-            active_tls.save()
-        except Exception as e:
-            error_msg = f'Failed to save TLS credential to database: {e}'
-            context.output.write(context.output.error(error_msg))
-            raise RuntimeError(error_msg) from e
+            try:
+                active_tls, created = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+                active_tls.credential = trustpoint_tls_server_credential
+                active_tls.save()
+            except Exception as e:
+                error_msg = f'Failed to save TLS credential to database: {e}'
+                context.output.write(context.output.error(error_msg))
+                raise RuntimeError(error_msg) from e
 
-        context.output.write(f'ActiveTrustpoint TLS record {"created" if created else "updated"}')
+            context.output.write(f'ActiveTrustpoint TLS record {"created" if created else "updated"}')
 
-        # Write TLS files to Apache paths
-        context.output.write(f'Writing TLS files to {APACHE_KEY_PATH.parent}...')
+            context.output.write(f'Writing TLS files to {APACHE_KEY_PATH.parent}...')
 
-        private_key_pem = active_tls.credential.get_private_key_serializer().as_pkcs8_pem().decode()
-        certificate_pem = active_tls.credential.get_certificate_serializer().as_pem().decode()
-        trust_store_pem = active_tls.credential.get_certificate_chain_serializer().as_pem().decode()
+            private_key_pem = active_tls.credential.get_private_key_serializer().as_pkcs8_pem().decode()
+            certificate_pem = active_tls.credential.get_certificate_serializer().as_pem().decode()
+            trust_store_pem = active_tls.credential.get_certificate_chain_serializer().as_pem().decode()
+        else:
+            context.output.write('Skipping database save for temporary TLS...')
+
+            context.output.write(f'Writing TLS files to {APACHE_KEY_PATH.parent}...')
+
+            private_key_serializer = tls_server_credential.get_private_key_serializer()
+            if private_key_serializer is None:
+                error_msg = 'TLS server credential private key serializer is None'
+                raise ValueError(error_msg)
+            private_key_pem = private_key_serializer.as_pkcs8_pem().decode()
+            certificate_serializer = tls_server_credential.get_certificate_serializer()
+            if certificate_serializer is None:
+                error_msg = 'TLS server credential certificate serializer is None'
+                raise ValueError(error_msg)
+            certificate_pem = certificate_serializer.as_pem().decode()
+            trust_store_pem = certificate_pem
 
         APACHE_KEY_PATH.write_text(private_key_pem)
         APACHE_CERT_PATH.write_text(certificate_pem)
@@ -239,8 +290,17 @@ class StandardTlsCredentialStrategy(TlsCredentialStrategy):
             # Remove chain file if it exists but chain is empty
             APACHE_CERT_CHAIN_PATH.unlink()
 
-        # Calculate and display fingerprint
-        sha256_fingerprint = active_tls.credential.get_certificate().fingerprint(hashes.SHA256())
+        if self.save_to_db:
+            if active_tls.credential is not None:
+                sha256_fingerprint = active_tls.credential.get_certificate().fingerprint(hashes.SHA256())
+            else:
+                error_msg = 'Active TLS credential is None'
+                raise ValueError(error_msg)
+        else:
+            if tls_server_credential.certificate is None:
+                error_msg = 'TLS server credential certificate is None'
+                raise ValueError(error_msg)
+            sha256_fingerprint = tls_server_credential.certificate.fingerprint(hashes.SHA256())
         formatted = ':'.join(f'{b:02X}' for b in sha256_fingerprint)
 
         context.output.write(context.output.success('TLS credential generated successfully'))
@@ -274,6 +334,10 @@ class StandardInitializationStrategy(InitializationStrategy):
     def initialize(self, context: StartupContext, *, with_tls: bool = False) -> None:
         """Initialize Trustpoint with standard workflow."""
         context.output.write('Initializing Trustpoint...')
+
+        # Check SoftHSM connectivity if using SoftHSM storage
+        if context.is_softhsm_storage:
+            self._check_softhsm_connectivity(context)
 
         # Run migrations
         context.output.write('Running database migrations...')
@@ -321,6 +385,47 @@ class StandardInitializationStrategy(InitializationStrategy):
             self.tls_strategy.generate_and_save_tls_credential(context)
 
         context.output.write(context.output.success('Trustpoint initialization complete'))
+
+    def _raise_runtime_error(self, error_msg: str) -> None:
+        """Raise a RuntimeError.
+
+        Args:
+            error_msg: The error message to log and raise.
+
+        Raises:
+            RuntimeError: Always raised with the provided error message.
+        """
+        raise RuntimeError(error_msg)
+
+    def _check_softhsm_connectivity(self, context: StartupContext) -> None:
+        """Check if SoftHSM daemon is reachable.
+
+        Args:
+            context: The startup context.
+
+        Raises:
+            RuntimeError: If SoftHSM daemon is not reachable.
+        """
+        context.output.write('Checking SoftHSM daemon connectivity...')
+
+        try:
+            # Try to connect to softhsm on port 5657 (default SoftHSM daemon port)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)  # 5 second timeout
+            result = sock.connect_ex(('softhsm', 5657))
+            sock.close()
+
+            if result == 0:
+                context.output.write('SoftHSM daemon is reachable on softhsm:5657')
+            else:
+                error_msg = 'SoftHSM daemon is not reachable on softhsm:5657 - connection refused'
+                context.output.write(context.output.error(error_msg))
+                self._raise_runtime_error(error_msg)
+
+        except Exception as e:
+            error_msg = f'Failed to check SoftHSM connectivity: {e}'
+            context.output.write(context.output.error(error_msg))
+            raise RuntimeError(error_msg) from e
 
 
 # ============================================================================
@@ -684,26 +789,92 @@ class RestoreSoftHsmWizardCompletedDekNotCachedStrategy(StartupStrategy):
     def _set_auto_restore_state(context: StartupContext) -> None:
         """Transition to WIZARD_AUTO_RESTORE_PASSWORD state."""
         context.output.write('Transitioning to auto restore password entry')
-        script_path = Path('/etc/trustpoint/wizard/transition/wizard_auto_restore_password_set.sh')
+        script_path = SCRIPT_WIZARD_AUTO_RESTORE_SET
 
-        if not (script_path.is_file() and script_path.is_absolute()
-                and script_path.match('/etc/trustpoint/wizard/transition/*.sh')):
-            error_msg = f'Invalid or untrusted script path: {script_path}'
-            context.output.write(context.output.error(error_msg))
-            raise RuntimeError(error_msg)
-
-        command = ['/usr/bin/sudo', str(script_path)]
         try:
-            subprocess.run(command, check=True, capture_output=True, text=True)  # noqa: S603
+            execute_shell_script(script_path)
             context.output.write(context.output.success('Transitioned to WIZARD_AUTO_RESTORE_PASSWORD state'))
-        except subprocess.CalledProcessError as e:
-            error_msg = f'Failed to set auto restore password state: {e.stderr}'
+
+        except subprocess.CalledProcessError as exc:
+            error_msg = (
+                f'Auto restore password state transition failed: '
+                f'{RestoreSoftHsmWizardCompletedDekNotCachedStrategy._map_exit_code_to_message(exc.returncode)}'
+            )
             context.output.write(context.output.error(error_msg))
-            raise RuntimeError(error_msg) from e
+            raise RuntimeError(error_msg) from exc
+
         except FileNotFoundError as e:
             error_msg = f'Auto restore password script not found: {script_path}'
             context.output.write(context.output.error(error_msg))
             raise RuntimeError(error_msg) from e
+
+    @staticmethod
+    def _map_exit_code_to_message(return_code: int) -> str:
+        """Map script exit codes to meaningful error messages."""
+        error_messages = {
+            1: 'Trustpoint is not in the WIZARD_SETUP_CRYPTO_STORAGE state.',
+            2: 'Found multiple wizard state files; the wizard state seems to be corrupted.',
+            3: 'Failed to remove the WIZARD_SETUP_CRYPTO_STORAGE state file.',
+            4: 'Failed to create the WIZARD_AUTO_RESTORE_PASSWORD state file.',
+        }
+        return error_messages.get(
+            return_code,
+            'An unknown error occurred during auto restore password state transition.'
+        )
+
+
+class RestoreSoftHsmNewKekWizardCompletedStrategy(StartupStrategy):
+    """Strategy: SoftHSM + New KEK (old KEK lost) + Wizard completed - generate temp TLS, wait for backup password.
+
+    This scenario occurs when:
+    - Trustpoint container and SoftHSM are new (fresh installation)
+    - But there's an existing database with encrypted data
+    - The database was encrypted with a KEK that no longer exists on the new SoftHSM
+    - The wizard was previously completed
+
+    The strategy:
+    1. Generates a temporary TLS certificate (since DB TLS cert is encrypted and inaccessible)
+    2. Transitions to WIZARD_AUTO_RESTORE_PASSWORD state
+    3. Waits for user to input backup password
+    4. BackupAutoRestorePasswordView will:
+       - Generate a new KEK on the new SoftHSM
+       - Decrypt the DEK using the backup password
+       - Re-wrap the DEK with the new KEK
+       - Extract and activate the actual TLS certificate from the database
+       - Complete the wizard
+    """
+
+    def __init__(self, tls_strategy: TlsCredentialStrategy | None = None) -> None:
+        """Initialize with optional TLS credential strategy.
+
+        Args:
+            tls_strategy: The TLS credential strategy to use.
+                Defaults to StandardTlsCredentialStrategy with save_to_db=False
+                to avoid database operations when DEK is not accessible.
+        """
+        self.tls_strategy = tls_strategy or StandardTlsCredentialStrategy(save_to_db=False)
+
+    def execute(self, context: StartupContext) -> None:
+        """Generate temporary TLS certificate and trigger auto restore flow."""
+        context.output.write(self.get_description())
+        context.output.write('>>> New SoftHSM detected with encrypted database')
+        context.output.write('>>> Old KEK is unavailable - backup password required')
+        context.output.write('>>> Generating temporary TLS certificate for initial access')
+
+        self.tls_strategy.generate_and_save_tls_credential(context)
+
+        context.output.write('>>> Transitioning to auto restore flow')
+        context.output.write('>>> User must provide backup password to:')
+        context.output.write('>>>   1. Generate new KEK on new SoftHSM')
+        context.output.write('>>>   2. Decrypt DEK with backup password')
+        context.output.write('>>>   3. Re-wrap DEK with new KEK')
+        context.output.write('>>>   4. Activate actual TLS certificate from database')
+
+        RestoreSoftHsmWizardCompletedDekNotCachedStrategy._set_auto_restore_state(context)  # noqa: SLF001
+
+    def get_description(self) -> str:
+        """Get strategy description."""
+        return '>>> SOFTHSM Storage | NEW KEK (OLD KEK LOST) | Wizard COMPLETED | REQUIRES BACKUP PASSWORD'
 
 
 class RestoreSoftHsmWizardIncompleteDekCachedStrategy(StartupStrategy):
@@ -737,9 +908,11 @@ class RestoreSoftHsmWizardIncompleteDekNotCachedStrategy(StartupStrategy):
         """Initialize with optional TLS credential strategy.
 
         Args:
-            tls_strategy: The TLS credential strategy to use. Defaults to StandardTlsCredentialStrategy.
+            tls_strategy: The TLS credential strategy to use.
+                Defaults to StandardTlsCredentialStrategy with save_to_db=False
+                to generate temporary TLS for wizard reset.
         """
-        self.tls_strategy = tls_strategy or StandardTlsCredentialStrategy()
+        self.tls_strategy = tls_strategy or StandardTlsCredentialStrategy(save_to_db=False)
 
     def execute(self, context: StartupContext) -> None:
         """Reset wizard to WIZARD_SETUP_CRYPTO_STORAGE state and generate TLS certificates."""
@@ -878,10 +1051,18 @@ class StartupStrategySelector:
     @staticmethod
     def _select_softhsm_strategy(context: StartupContext) -> StartupStrategy:
         """Select strategy for SOFTHSM storage."""
+        # Check for new KEK scenario FIRST (before checking wizard state)
+        # This is important because the wizard state might be inconsistent if
+        # the database is from a previous installation
+        if context.is_new_kek_scenario:
+            return RestoreSoftHsmNewKekWizardCompletedStrategy()
+
         if context.is_wizard_completed:
+            # Standard scenarios for completed wizard
             if context.is_dek_cached:
                 return RestoreSoftHsmWizardCompletedDekCachedStrategy()
             return RestoreSoftHsmWizardCompletedDekNotCachedStrategy()
+
         # Wizard incomplete
         if context.is_dek_cached:
             return RestoreSoftHsmWizardIncompleteDekCachedStrategy()

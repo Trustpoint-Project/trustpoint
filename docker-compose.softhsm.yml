@@ -9,8 +9,10 @@ services:
       - "80:80"
       - "443:443"
     depends_on:
-      - postgres
-      - softhsm
+      postgres:
+        condition: service_started
+      softhsm:
+        condition: service_healthy
     volumes:
       - ./trustpoint/settings:/var/www/html/trustpoint/trustpoint/settings
     environment:
@@ -52,6 +54,11 @@ services:
     container_name: softhsm
     ports:
       - "5657:5657"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5657"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 secrets:
   db_user:
