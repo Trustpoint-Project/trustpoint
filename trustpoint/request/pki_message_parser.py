@@ -508,6 +508,10 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
                         extension_obj = self._parse_basic_constraints(ext_value_bytes, critical=is_critical)
                     elif ext_oid == ExtensionOID.KEY_USAGE.dotted_string:
                         extension_obj = self._parse_key_usage(ext_value_bytes, critical=is_critical)
+                    elif ext_oid == ExtensionOID.EXTENDED_KEY_USAGE.dotted_string:
+                        extension_obj = self._parse_extended_key_usage(ext_value_bytes, critical=is_critical)
+                    elif ext_oid == ExtensionOID.SUBJECT_KEY_IDENTIFIER.dotted_string:
+                        extension_obj = self._parse_subject_key_identifier(ext_value_bytes, critical=is_critical)
                     elif ext_oid == ExtensionOID.CERTIFICATE_POLICIES.dotted_string:
                         extension_obj = self._parse_certificate_policies(ext_value_bytes, critical=is_critical)
                     else:
@@ -641,6 +645,44 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             )
         except Exception:
             self.logger.exception('Failed to parse Key Usage extension.')
+            raise
+
+    def _parse_extended_key_usage(self, value: bytes, *, critical: bool) -> x509.Extension[x509.ExtendedKeyUsage]:
+        """Parse Extended Key Usage extension manually."""
+        try:
+            eku_asn1, _ = der_decoder.decode(value, asn1Spec=rfc2459.ExtKeyUsageSyntax())
+            eku_oids = []
+
+            for i in range(len(eku_asn1)):
+                eku_oid = str(eku_asn1.getComponentByPosition(i))
+                eku_oids.append(x509.ObjectIdentifier(eku_oid))
+
+            extended_key_usage = x509.ExtendedKeyUsage(eku_oids)
+
+            return x509.Extension(
+                oid=ExtensionOID.EXTENDED_KEY_USAGE,
+                critical=critical,
+                value=extended_key_usage
+            )
+        except Exception:
+            self.logger.exception('Failed to parse Extended Key Usage extension.')
+            raise
+
+    def _parse_subject_key_identifier(self, value: bytes, *, critical: bool) -> x509.Extension[x509.SubjectKeyIdentifier]:
+        """Parse Subject Key Identifier extension manually."""
+        try:
+            ski_asn1, _ = der_decoder.decode(value, asn1Spec=rfc2459.SubjectKeyIdentifier())
+            ski_bytes = bytes(ski_asn1)
+
+            subject_key_identifier = x509.SubjectKeyIdentifier(digest=ski_bytes)
+
+            return x509.Extension(
+                oid=ExtensionOID.SUBJECT_KEY_IDENTIFIER,
+                critical=critical,
+                value=subject_key_identifier
+            )
+        except Exception:
+            self.logger.exception('Failed to parse Subject Key Identifier extension.')
             raise
 
     def _parse_certificate_policies(self, value: bytes, *, critical: bool) -> x509.Extension[x509.CertificatePolicies]:
