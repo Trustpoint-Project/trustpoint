@@ -28,23 +28,13 @@ class ProfileValidator(LoggerMixin):
             context.http_response_status = 422
             raise ValueError(exc_msg)
 
-        # TODO: Get correct profile
-        # How this will work eventually:
-        # First, we check the requested profile ("template") from the URL.
-        # If it is allowed/defined in this domain, proceed to use this profile.
-        # If no profile is given as part of the URL or it is not defined in the domain, try domain default profile(s)
-        # First domain default profile which successfully validates is used.
-        # cert_profile = {
-        #     'type': 'cert_profile',
-        #     'subj': {'allow':'*'},
-        #     'ext': {
-        #         'crl': {'uris': ['http://localhost/crl/2']},
-        #     },
-        #     'validity': {
-        #         'days': 30
-        #     }
-        # }
-        cert_profile = json.loads(context.certificate_profile_model.profile_json)
+        try:
+            cert_profile = json.loads(context.certificate_profile_model.profile_json)
+        except json.JSONDecodeError as e:
+            exc_msg = f'Error decoding certificate profile JSON: {e}'
+            context.http_response_content = 'Certificate profile data is corrupted.'
+            context.http_response_status = 500
+            raise ValueError(exc_msg) from e
 
         try:
             validated_request = JSONProfileVerifier(cert_profile).apply_profile_to_request(cert_request_json)

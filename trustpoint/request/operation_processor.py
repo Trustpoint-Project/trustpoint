@@ -1,4 +1,5 @@
 """Carries out the requested operation after authentication and authorization."""
+import contextlib
 from abc import ABC, abstractmethod
 from typing import get_args
 
@@ -6,6 +7,8 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from devices.issuer import CredentialSaver
 from devices.models import IssuedCredentialModel
+from django.http import HttpRequest
+from management.models import TlsSettings
 from pki.models import CredentialModel
 from pki.util.keys import is_supported_public_key
 from trustpoint.logger import LoggerMixin
@@ -55,6 +58,18 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
 
 class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
     """Operation processor for issuing certificates via a local CA."""
+
+    def _get_crl_distribution_point_url(self, request: HttpRequest | None, ca_id: int) -> str:
+        """Get the CRL distribution point URL for this Issuing CA.
+
+        Returns:
+            str: The CRL distribution point URL.
+        """
+        port = request.META.get('SERVER_PORT', '') if request else ''
+        if port == '443': # CRL always served via HTTP
+            port = ''
+        port_str = f':{port}' if port else ''
+        return f'http://{TlsSettings.get_first_ipv4_address()}{port_str}/crl/{ca_id}'
 
     def process_operation(self, context: RequestContext) -> None:
         """Process the certificate issuance operation."""
@@ -130,10 +145,18 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
                 False,
             ),
             x509.SubjectKeyIdentifier: (x509.SubjectKeyIdentifier.from_public_key(public_key), False),
+            x509.CRLDistributionPoints: (x509.CRLDistributionPoints([
+                x509.DistributionPoint(
+                    full_name=[x509.UniformResourceIdentifier(
+                        self._get_crl_distribution_point_url(context.raw_message, ca.id)
+                    )], relative_name=None, reasons=None, crl_issuer=None
+                ),
+            ]), False),
         }
 
         for ext, critical in default_extensions.values():
-            certificate_builder = certificate_builder.add_extension(ext, critical)
+            with contextlib.suppress(ValueError): # extension already present
+                certificate_builder = certificate_builder.add_extension(ext, critical)
 
         signed_cert = certificate_builder.sign(
             private_key=issuing_credential.get_private_key_serializer().as_crypto(),
