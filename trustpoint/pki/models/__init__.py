@@ -19,7 +19,11 @@ from .extension import (
 )
 from .certificate import CertificateModel, RevokedCertificateModel
 from .issuing_ca import IssuingCaModel
-from .credential import CredentialAlreadyExistsError, CredentialModel, CertificateChainOrderModel, OwnerCredentialModel
+from .credential import (CredentialAlreadyExistsError,
+                         CredentialModel,
+                         CertificateChainOrderModel,
+                         OwnerCredentialModel,
+                         PKCS11Key)
 from .domain import DomainModel
 from .devid_registration import DevIdRegistration
 from .cert_profile import CertificateProfileModel, DomainAllowedCertificateProfileModel
@@ -33,12 +37,13 @@ __all__ = [
     'CredentialAlreadyExistsError',
     'CredentialModel',
     'DevIdRegistration',
-    'DomainModel',
     'DomainAllowedCertificateProfileModel',
+    'DomainModel',
+    'GeneralNameIpAddress',
     'IssuingCaModel',
+    'OwnerCredentialModel',
+    'PKCS11Key',
     'RevokedCertificateModel',
     'TruststoreModel',
     'TruststoreOrderModel',
-    'GeneralNameIpAddress',
-    'OwnerCredentialModel',
 ]

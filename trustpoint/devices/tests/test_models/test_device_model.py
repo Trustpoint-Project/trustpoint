@@ -199,7 +199,7 @@ def test_device_creation_without_common_name(domain_instance: dict[str, Any]) ->
     """Test for device creation without a common name."""
     domain = domain_instance['domain']
 
-    with pytest.raises(IntegrityError, match='NOT NULL constraint failed: devices_devicemodel.common_name'):
+    with pytest.raises(IntegrityError, match=r'(null value in column "common_name" of relation "devices_devicemodel" violates not-null constraint|NOT NULL constraint failed: devices_devicemodel\.common_name)'):
         DeviceModel.objects.create(
             common_name=None,  # type: ignore[misc]
             serial_number='MISSING_COMMON_NAME',

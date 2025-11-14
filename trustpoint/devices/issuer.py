@@ -10,6 +10,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from pki.models.credential import CredentialModel
 from pki.util.keys import KeyGenerator
+from trustpoint.logger import LoggerMixin
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
     from trustpoint_core.crypto_types import PublicKey
 
 
-class SaveCredentialToDbMixin:
+class SaveCredentialToDbMixin(LoggerMixin):
     """Mixin to handle saving credentials to the database."""
 
     @property
@@ -54,22 +55,47 @@ class SaveCredentialToDbMixin:
         Returns:
             The saved issued credential model.
         """
-        credential_model = CredentialModel.save_credential_serializer(
-            credential_serializer=credential, credential_type=CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL
+        self.logger.info(
+            "Saving credential for device '%s' (ID: %s) "
+            "in domain '%s' - CN: '%s', "
+            "Type: %s, Purpose: %s",
+            self.device.common_name,
+            self.device.pk,
+            self.domain.unique_name,
+            common_name,
+            issued_credential_type.label,
+            issued_credential_purpose.label,
         )
+        try:
+            credential_model = CredentialModel.save_credential_serializer(
+                credential_serializer=credential, credential_type=CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL
+            )
 
-        issued_credential_model = IssuedCredentialModel(
-            issued_credential_type=issued_credential_type,
-            issued_credential_purpose=issued_credential_purpose,
-            common_name=common_name,
-            credential=credential_model,
-            device=self.device,
-            domain=self.domain,
-        )
+            issued_credential_model = IssuedCredentialModel(
+                issued_credential_type=issued_credential_type,
+                issued_credential_purpose=issued_credential_purpose,
+                common_name=common_name,
+                credential=credential_model,
+                device=self.device,
+                domain=self.domain,
+            )
 
-        issued_credential_model.save()
+            issued_credential_model.save()
 
-        return issued_credential_model
+        except Exception:
+            self.logger.exception(
+                "Failed to save credential for device '%s' (ID: %s)",
+                self.device.common_name,
+                self.device.pk,
+            )
+            raise
+        else:
+            self.logger.info(
+                "Successfully saved IssuedCredentialModel (ID: %s) for device '%s'",
+                issued_credential_model.pk,
+                self.device.common_name
+            )
+            return issued_credential_model
 
     def _save_keyless_credential(
         self,
@@ -79,40 +105,67 @@ class SaveCredentialToDbMixin:
         issued_credential_type: IssuedCredentialModel.IssuedCredentialType,
         issued_credential_purpose: IssuedCredentialModel.IssuedCredentialPurpose,
     ) -> IssuedCredentialModel:
-        # check for existing issued credentials
-        existing_credentials = IssuedCredentialModel.objects.filter(
-            device=self.device,
-            domain=self.domain,
-            issued_credential_type=issued_credential_type,
-            issued_credential_purpose=issued_credential_purpose,
-            common_name=common_name,
-        )
-        for issued_credential in existing_credentials:
-            cred_model: CredentialModel = issued_credential.credential
-            if cred_model.certificate.subjects_match(certificate.subject):
-                # if the certificate already exists, we need to update the certificate (e.g. reenroll)
-                cred_model.update_keyless_credential(certificate, certificate_chain)
-                cred_model.save()
-                return issued_credential
 
-        credential_model = CredentialModel.save_keyless_credential(
-            certificate=certificate,
-            certificate_chain=certificate_chain,
-            credential_type=CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
+        self.logger.info(
+            "Saving keyless credential for device '%s' (ID: %s) "
+            "in domain '%s' - CN: '%s', "
+            "Type: %s, Purpose: %s",
+            self.device.common_name,
+            self.device.pk,
+            self.domain.unique_name,
+            common_name,
+            issued_credential_type.label,
+            issued_credential_purpose.label,
         )
 
-        issued_credential_model = IssuedCredentialModel(
-            issued_credential_type=issued_credential_type,
-            issued_credential_purpose=issued_credential_purpose,
-            common_name=common_name,
-            credential=credential_model,
-            device=self.device,
-            domain=self.domain,
-        )
+        try:
+            # check for existing issued credentials
+            existing_credentials = IssuedCredentialModel.objects.filter(
+                device=self.device,
+                domain=self.domain,
+                issued_credential_type=issued_credential_type,
+                issued_credential_purpose=issued_credential_purpose,
+                common_name=common_name,
+            )
+            for issued_credential in existing_credentials:
+                cred_model: CredentialModel = issued_credential.credential
+                if cred_model.certificate.subjects_match(certificate.subject):
+                    # if the certificate already exists, we need to update the certificate (e.g. reenroll)
+                    cred_model.update_keyless_credential(certificate, certificate_chain)
+                    cred_model.save()
+                    return issued_credential
 
-        issued_credential_model.save()
+            credential_model = CredentialModel.save_keyless_credential(
+                certificate=certificate,
+                certificate_chain=certificate_chain,
+                credential_type=CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
+            )
 
-        return issued_credential_model
+            issued_credential_model = IssuedCredentialModel(
+                issued_credential_type=issued_credential_type,
+                issued_credential_purpose=issued_credential_purpose,
+                common_name=common_name,
+                credential=credential_model,
+                device=self.device,
+                domain=self.domain,
+            )
+
+            issued_credential_model.save()
+
+        except Exception:
+            self.logger.exception(
+                "Failed to save keyless credential for device '%s' (ID: %s)",
+                self.device.common_name,
+                self.device.pk
+            )
+        else:
+            self.logger.info(
+                "Successfully saved keyless IssuedCredentialModel (ID: %s) for device '%s'",
+                issued_credential_model.pk,
+                self.device.common_name
+            )
+            return issued_credential_model
+
 
 
 class CredentialSaver(SaveCredentialToDbMixin):
@@ -247,6 +300,28 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
             'serial_number': device.serial_number,
         }
 
+    def _raise_value_error(self, message: str) -> None:
+        """Raises a ValueError with the given message.
+
+        Args:
+            message: The error message to include in the exception.
+
+        Raises:
+            ValueError: Always raised with the provided message.
+        """
+        raise ValueError(message)
+
+    def _raise_type_error(self, message: str) -> None:
+        """Raises a TypeError with the given message.
+
+        Args:
+            message: The error message to include in the exception.
+
+        Raises:
+            TypeError: Always raised with the provided message.
+        """
+        raise TypeError(message)
+
     def _build_certificate(
         self,
         common_name: str,
@@ -265,78 +340,105 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
         Returns:
             The generated X.509 certificate.
         """
-        issuing_credential = self.domain.get_issuing_ca_or_value_error().credential
-        issuer_certificate = issuing_credential.get_certificate()
-        hash_algorithm_enum = SignatureSuite.from_certificate(issuer_certificate).algorithm_identifier.hash_algorithm
-        if hash_algorithm_enum is None:
-            err_msg = 'Failed to get hash algorithm.'
-            raise ValueError(err_msg)
-        hash_algorithm = hash_algorithm_enum.hash_algorithm()
+        self.logger.info(
+            "Building certificate for CN: '%s', validity: %s days, device: '%s' (ID: %s)",
+            common_name,
+            validity_days,
+            self.device.common_name,
+            self.device.pk
+        )
+        try:
+            issuing_credential = self.domain.get_issuing_ca_or_value_error().credential
+            issuer_certificate = issuing_credential.get_certificate()
+            hash_algorithm_enum = SignatureSuite.from_certificate(
+                issuer_certificate
+            ).algorithm_identifier.hash_algorithm
+            if hash_algorithm_enum is None:
+                err_msg = 'Failed to get hash algorithm.'
+                self._raise_value_error(err_msg)
+            hash_algorithm = hash_algorithm_enum.hash_algorithm()
 
-        if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
-            err_msg = f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
-            raise TypeError(err_msg)
+            if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
+                err_msg = (
+                    f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, '
+                    f'but found {type(hash_algorithm)}'
+                )
+                self._raise_type_error(err_msg)
 
-        one_day = datetime.timedelta(days=1)
+            one_day = datetime.timedelta(days=1)
 
-        certificate_builder = x509.CertificateBuilder()
-        certificate_builder = certificate_builder.subject_name(
-            x509.Name(
-                [
-                    x509.NameAttribute(x509.NameOID.COMMON_NAME, common_name),
-                    x509.NameAttribute(x509.NameOID.PSEUDONYM, self.pseudonym),
-                    x509.NameAttribute(x509.NameOID.DOMAIN_COMPONENT, self.domain_component),
-                    x509.NameAttribute(x509.NameOID.SERIAL_NUMBER, self.serial_number),
-                    x509.NameAttribute(x509.NameOID.USER_ID, str(self.device.pk)),
-                ]
+            certificate_builder = x509.CertificateBuilder()
+            certificate_builder = certificate_builder.subject_name(
+                x509.Name(
+                    [
+                        x509.NameAttribute(x509.NameOID.COMMON_NAME, common_name),
+                        x509.NameAttribute(x509.NameOID.PSEUDONYM, self.pseudonym),
+                        x509.NameAttribute(x509.NameOID.DOMAIN_COMPONENT, self.domain_component),
+                        x509.NameAttribute(x509.NameOID.SERIAL_NUMBER, self.serial_number),
+                        x509.NameAttribute(x509.NameOID.USER_ID, str(self.device.pk)),
+                    ]
+                )
             )
-        )
-        certificate_builder = certificate_builder.issuer_name(
-            self.domain.get_issuing_ca_or_value_error().credential.get_certificate().subject
-        )
-        certificate_builder = certificate_builder.not_valid_before(datetime.datetime.now(datetime.UTC) - one_day)
-        certificate_builder = certificate_builder.not_valid_after(
-            datetime.datetime.now(datetime.UTC) + (one_day * validity_days)
-        )
-        certificate_builder = certificate_builder.serial_number(x509.random_serial_number())
-        certificate_builder = certificate_builder.public_key(public_key)
+            certificate_builder = certificate_builder.issuer_name(
+                self.domain.get_issuing_ca_or_value_error().credential.get_certificate().subject
+            )
+            certificate_builder = certificate_builder.not_valid_before(datetime.datetime.now(datetime.UTC) - one_day)
+            certificate_builder = certificate_builder.not_valid_after(
+                datetime.datetime.now(datetime.UTC) + (one_day * validity_days)
+            )
+            certificate_builder = certificate_builder.serial_number(x509.random_serial_number())
+            certificate_builder = certificate_builder.public_key(public_key)
 
-        default_extensions = {
-            x509.BasicConstraints: (x509.BasicConstraints(ca=False, path_length=None), False),
-            x509.KeyUsage: (
-                x509.KeyUsage(
-                    digital_signature=True,
-                    content_commitment=False,
-                    key_encipherment=False,
-                    data_encipherment=False,
-                    key_agreement=True,
-                    key_cert_sign=False,
-                    crl_sign=False,
-                    encipher_only=False,
-                    decipher_only=False,
+            default_extensions = {
+                x509.BasicConstraints: (x509.BasicConstraints(ca=False, path_length=None), False),
+                x509.KeyUsage: (
+                    x509.KeyUsage(
+                        digital_signature=True,
+                        content_commitment=False,
+                        key_encipherment=False,
+                        data_encipherment=False,
+                        key_agreement=True,
+                        key_cert_sign=False,
+                        crl_sign=False,
+                        encipher_only=False,
+                        decipher_only=False,
+                    ),
+                    True,
                 ),
-                True,
-            ),
-            x509.AuthorityKeyIdentifier: (
-                x509.AuthorityKeyIdentifier.from_issuer_public_key(
-                    issuing_credential.get_private_key_serializer().public_key_serializer.as_crypto()
+                x509.AuthorityKeyIdentifier: (
+                    x509.AuthorityKeyIdentifier.from_issuer_public_key(
+                        issuing_credential.get_private_key_serializer().public_key_serializer.as_crypto()
+                    ),
+                    False,
                 ),
-                False,
-            ),
-            x509.SubjectKeyIdentifier: (x509.SubjectKeyIdentifier.from_public_key(public_key), False),
-        }
+                x509.SubjectKeyIdentifier: (x509.SubjectKeyIdentifier.from_public_key(public_key), False),
+            }
 
-        if extra_extensions:
-            for ext, critical in extra_extensions:
-                default_extensions[type(ext)] = (ext, critical)
+            if extra_extensions:
+                for ext, critical in extra_extensions:
+                    default_extensions[type(ext)] = (ext, critical)
 
-        for ext, critical in default_extensions.values():
-            certificate_builder = certificate_builder.add_extension(ext, critical)
+            for ext, critical in default_extensions.values():
+                certificate_builder = certificate_builder.add_extension(ext, critical)
 
-        return certificate_builder.sign(
-            private_key=self.domain.get_issuing_ca_or_value_error().credential.get_private_key_serializer().as_crypto(),
-            algorithm=hash_algorithm,
-        )
+            certificate = certificate_builder.sign(
+                private_key=self.domain.get_issuing_ca_or_value_error().credential.get_private_key_serializer().as_crypto(),
+                algorithm=hash_algorithm,
+            )
+
+        except Exception:
+            self.logger.exception(
+                "Failed to build certificate for CN: '%s'",
+                common_name,
+            )
+            raise
+        else:
+            self.logger.info(
+                "Successfully built certificate for CN: '%s' for device '%s'",
+                common_name,
+                self.device.common_name
+            )
+            return certificate
 
 
 class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
