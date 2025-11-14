@@ -180,7 +180,7 @@ class CertificateTemplateAuthorization(AuthorizationComponent, LoggerMixin):
                 ),
                 requested_profile, self.allowed_templates)
             raise ValueError(error_message)
-        
+
         # try query from alias first
         profile_qs = context.domain.certificate_profiles.filter(alias=requested_profile)
         if profile_qs.exists():
