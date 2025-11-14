@@ -16,18 +16,25 @@ from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
-from trustpoint.views.base import (
-    BulkDeleteView,
-    PrimaryKeyListFromPrimaryKeyString,
-    SortableTableMixin,
-)
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_yasg.utils import swagger_auto_schema
+from rest_framework import filters, status, viewsets
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from trustpoint_core.archiver import ArchiveFormat, Archiver
 from trustpoint_core.serializer import CertificateFormat
 
 from pki.forms import TruststoreAddForm
 from pki.models import DomainModel
 from pki.models.truststore import TruststoreModel
+from pki.serializer.truststore import TruststoreSerializer
+from pki.services.truststore import TruststoreService
 from trustpoint.settings import UIConfig
+from trustpoint.views.base import (
+    BulkDeleteView,
+    PrimaryKeyListFromPrimaryKeyString,
+    SortableTableMixin,
+)
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -298,3 +305,64 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
         messages.success(self.request, _('Successfully deleted {count} Truststore(s).').format(count=deleted_count))
 
         return response
+
+
+class TruststoreViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing Truststore instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+
+    queryset = TruststoreModel.objects.all().order_by('-created_at')
+    serializer_class = TruststoreSerializer
+    permission_classes: ClassVar = [IsAuthenticated]
+    filter_backends: ClassVar = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter
+    ]
+    filterset_fields: ClassVar = ['intended_usage']
+    search_fields: ClassVar = ['unique_name']
+    ordering_fields: ClassVar = ['unique_name', 'created_at']
+
+    @swagger_auto_schema(
+        operation_summary='Create a new truststore',
+        operation_description='Add a new truststore by providing its unique_name, intended_usage and trust_store_file.',
+        tags=['truststores'],
+    )
+    def create(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+        """API endpoint to create truststore."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        truststore = TruststoreService().create(
+            unique_name=serializer.validated_data.get('unique_name'),
+            intended_usage=serializer.validated_data['intended_usage'],
+            trust_store_file=serializer.validated_data['trust_store_file'],
+        )
+
+        return Response(
+            TruststoreSerializer(truststore).data,
+            status=status.HTTP_201_CREATED
+        )
+
+    @swagger_auto_schema(
+        operation_summary='List Truststores',
+        operation_description='Retrieve truststore from the database.',
+        tags=['truststores'],
+    )
+    def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+        """API endpoint to get all truststores."""
+        queryset = self.get_queryset()
+
+        for backend in list(self.filter_backends):
+            queryset = backend().filter_queryset(self.request, queryset, self)
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

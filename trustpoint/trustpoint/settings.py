@@ -265,6 +265,8 @@ INSTALLED_APPS = [
     'crispy_bootstrap5',
     'django_filters',
     'dbbackup',
+    'rest_framework',
+    'drf_yasg',
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
@@ -399,3 +401,29 @@ class UIConfig:
 
     paginate_by: ClassVar[int] = 50
     notifications_paginate_by: ClassVar[int] = 5
+
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ],
+}
+
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'description': 'Enter JWT token as: Bearer {token}',
+            'name': 'Authorization',
+            'in': 'header',
+        }
+    },
+    'USE_SESSION_AUTH': False,  # disables Django login in Swagger UI
+}
