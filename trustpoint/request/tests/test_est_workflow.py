@@ -7,7 +7,7 @@ from pki.util.cert_profile import JSONProfileVerifier
 from pki.util.cert_req_converter import JSONCertRequestConverter
 
 from request.authentication import EstAuthentication
-from request.authorization import CertificateTemplateAuthorization, EstAuthorization, EstOperationAuthorization
+from request.authorization import CertificateProfileAuthorization, EstAuthorization, EstOperationAuthorization
 from request.http_request_validator import EstHttpRequestValidator
 from request.operation_processor import CertificateIssueProcessor
 from request.pki_message_parser import EstMessageParser
@@ -32,7 +32,7 @@ class TestESTHelper(LoggerMixin):
 
         est_username = device.est_username
         est_password = device.no_onboarding_config.est_password
-        certtemplate_str = 'tls-client'
+        certtemplate_str = 'tls_server'
         operation_str = 'simpleenroll'
         common_name = device.common_name
         expected_domain = device.domain
@@ -64,14 +64,14 @@ class TestESTHelper(LoggerMixin):
                                       domain_str=domain_str,
                                       protocol=protocol_str,
                                       operation=operation_str,
-                                      certificate_template=certtemplate_str)
+                                      cert_profile_str=certtemplate_str)
 
         validator = EstHttpRequestValidator()
 
         parser = EstMessageParser()
         est_authenticator = EstAuthentication()
         est_authorizer = EstAuthorization()
-        est_authorizer.add(CertificateTemplateAuthorization(['tls-client']))
+        est_authorizer.add(CertificateProfileAuthorization())
         est_authorizer.add(EstOperationAuthorization(['simpleenroll']))
 
         validator.validate(mock_context)
@@ -110,7 +110,7 @@ class TestESTHelper(LoggerMixin):
         device = domain_credential_est_onboarding.get('device')
         domain_credential = domain_credential_est_onboarding.get('domain_credential')
 
-        certtemplate_str = 'tls-client'
+        certtemplate_str = 'tls_server'
         operation_str = 'simpleenroll'
         protocol_str = 'est'
         domain_str = device.domain.unique_name
@@ -138,14 +138,14 @@ class TestESTHelper(LoggerMixin):
             domain_str=domain_str,
             protocol=protocol_str,
             operation=operation_str,
-            certificate_template=certtemplate_str,
+            cert_profile_str=certtemplate_str,
         )
 
         validator = EstHttpRequestValidator()
         parser = EstMessageParser()
         authenticator = EstAuthentication()
         authorizer = EstAuthorization()
-        authorizer.add(CertificateTemplateAuthorization([certtemplate_str]))
+        authorizer.add(CertificateProfileAuthorization())
         authorizer.add(EstOperationAuthorization([operation_str]))
 
         # Run request validation

@@ -26,15 +26,18 @@ from .credential import (CredentialAlreadyExistsError,
                          PKCS11Key)
 from .domain import DomainModel
 from .devid_registration import DevIdRegistration
+from .cert_profile import CertificateProfileModel, DomainAllowedCertificateProfileModel
 from .truststore import TruststoreModel, TruststoreOrderModel
 
 __all__ = [
     'AttributeTypeAndValue',
     'CertificateExtension',
     'CertificateModel',
+    'CertificateProfileModel',
     'CredentialAlreadyExistsError',
     'CredentialModel',
     'DevIdRegistration',
+    'DomainAllowedCertificateProfileModel',
     'DomainModel',
     'GeneralNameIpAddress',
     'IssuingCaModel',

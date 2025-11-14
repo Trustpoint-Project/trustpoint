@@ -69,6 +69,7 @@
                     <a href="{% url 'pki:domains' %}" class="tp-menu-item {% if page_name == 'domains' %}tp-menu-active{% endif %}">{% trans 'Domains' %}</a>
                     <a href="{% url 'pki:issuing_cas' %}" class="tp-menu-item {% if page_name == 'issuing_cas' %}tp-menu-active{% endif %}">{% trans 'Issuing CAs' %}</a>
                     <a href="{% url 'pki:certificates' %}" class="tp-menu-item {% if page_name == 'certificates' %}tp-menu-active{% endif %}">{% trans 'Certificates' %}</a>
+                    <a href="{% url 'pki:cert_profiles' %}" class="tp-menu-item {% if page_name == 'cert_profiles' %}tp-menu-active{% endif %}">{% trans 'Certificate Profiles' %}</a>
                     <a href="{% url 'pki:truststores' %}" class="tp-menu-item {% if page_name == 'truststores' %}tp-menu-active{% endif %}">{% trans 'Truststores' %}</a>
                     <a href="{% url 'pki:owner_credentials' %}" class="tp-menu-item {% if page_name == 'owner_credentials' %}tp-menu-active{% endif %}">{% trans 'DevOwnerIDs' %}</a>
                 </div>

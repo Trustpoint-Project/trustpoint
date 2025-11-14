@@ -191,19 +191,18 @@ class DomainParsing(ParsingComponent, LoggerMixin):
             self.logger.debug("Domain lookup successful: Found domain '%s'", domain_name)
             return domain
 
-class CertTemplateParsing(ParsingComponent, LoggerMixin):
-    """Parses the certificate template from the request context object."""
+class CertProfileParsing(ParsingComponent, LoggerMixin):
+    """Parses the certificate profile from the request context object."""
 
     def parse(self, context: RequestContext) -> None:
-        """Extract and validate the certificate template, then add it to the context."""
-        certtemplate_str = context.certificate_template
-        if not certtemplate_str:
-            error_message = 'Certificate template is missing in the request context.'
-            self.logger.warning('Certificate template parsing failed: Template string is missing')
+        """Extract and validate the certificate profile, then add it to the context."""
+        certprofile_str = context.cert_profile_str
+        if not certprofile_str:
+            error_message = 'Certificate profile is missing in the request context.'
+            self.logger.warning('Certificate profile parsing failed: Profile string is missing')
             raise ValueError(error_message)
 
-        context.certificate_template = certtemplate_str
-        self.logger.info("Certificate template parsing successful: Template '%s'", certtemplate_str)
+        self.logger.info("Certificate profile parsing successful: Profile '%s'", certprofile_str)
 
 
 class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
@@ -504,6 +503,14 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
                     extension_obj: x509.Extension[Any]
                     if ext_oid == ExtensionOID.SUBJECT_ALTERNATIVE_NAME.dotted_string:
                         extension_obj = self._parse_subject_alternative_name(ext_value_bytes, critical=is_critical)
+                    elif ext_oid == ExtensionOID.BASIC_CONSTRAINTS.dotted_string:
+                        extension_obj = self._parse_basic_constraints(ext_value_bytes, critical=is_critical)
+                    elif ext_oid == ExtensionOID.KEY_USAGE.dotted_string:
+                        extension_obj = self._parse_key_usage(ext_value_bytes, critical=is_critical)
+                    elif ext_oid == ExtensionOID.EXTENDED_KEY_USAGE.dotted_string:
+                        extension_obj = self._parse_extended_key_usage(ext_value_bytes, critical=is_critical)
+                    elif ext_oid == ExtensionOID.SUBJECT_KEY_IDENTIFIER.dotted_string:
+                        extension_obj = self._parse_subject_key_identifier(ext_value_bytes, critical=is_critical)
                     elif ext_oid == ExtensionOID.CERTIFICATE_POLICIES.dotted_string:
                         extension_obj = self._parse_certificate_policies(ext_value_bytes, critical=is_critical)
                     else:
@@ -586,6 +593,96 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         except (ValueError, TypeError) as ip_error:
             self.logger.warning('Failed to parse IP address: %(error)s',
                                 extra={'error': str(ip_error)})
+            
+    def _parse_basic_constraints(
+        self, value: bytes, *, critical: bool
+    ) -> x509.Extension[x509.BasicConstraints]:
+        """Parse Basic Constraints extension manually."""
+        try:
+            basic_constraints_asn1, _ = der_decoder.decode(value, asn1Spec=rfc2459.BasicConstraints())
+            is_ca = bool(basic_constraints_asn1.getComponentByName('cA'))
+            path_length = None
+            if basic_constraints_asn1.getComponentByName('pathLenConstraint').hasValue():
+                path_length = int(basic_constraints_asn1.getComponentByName('pathLenConstraint'))
+
+            basic_constraints = x509.BasicConstraints(ca=is_ca, path_length=path_length)
+            return x509.Extension(
+                oid=ExtensionOID.BASIC_CONSTRAINTS,
+                critical=critical,
+                value=basic_constraints
+            )
+        except Exception:
+            self.logger.exception('Failed to parse Basic Constraints extension.')
+            raise
+
+    @staticmethod
+    def _get_usage_flag(asn1: rfc2459.KeyUsage, name: str) -> bool:
+        idx = rfc2459.KeyUsage.namedValues[name]
+        return bool(asn1[idx]) if idx < len(asn1) else False
+
+    def _parse_key_usage(self, value: bytes, *, critical: bool) -> x509.Extension[x509.KeyUsage]:
+        """Parse Key Usage extension manually."""
+        try:
+            key_usage_asn1, _ = der_decoder.decode(value, asn1Spec=rfc2459.KeyUsage())
+
+            key_usage = x509.KeyUsage(
+                digital_signature=self._get_usage_flag(key_usage_asn1, 'digitalSignature'),
+                content_commitment=self._get_usage_flag(key_usage_asn1, 'nonRepudiation'),
+                key_encipherment=self._get_usage_flag(key_usage_asn1, 'keyEncipherment'),
+                data_encipherment=self._get_usage_flag(key_usage_asn1, 'dataEncipherment'),
+                key_agreement=self._get_usage_flag(key_usage_asn1, 'keyAgreement'),
+                key_cert_sign=self._get_usage_flag(key_usage_asn1, 'keyCertSign'),
+                crl_sign=self._get_usage_flag(key_usage_asn1, 'cRLSign'),
+                encipher_only=self._get_usage_flag(key_usage_asn1, 'encipherOnly'),
+                decipher_only=self._get_usage_flag(key_usage_asn1, 'decipherOnly')
+            )
+
+            return x509.Extension(
+                oid=ExtensionOID.KEY_USAGE,
+                critical=critical,
+                value=key_usage
+            )
+        except Exception:
+            self.logger.exception('Failed to parse Key Usage extension.')
+            raise
+
+    def _parse_extended_key_usage(self, value: bytes, *, critical: bool) -> x509.Extension[x509.ExtendedKeyUsage]:
+        """Parse Extended Key Usage extension manually."""
+        try:
+            eku_asn1, _ = der_decoder.decode(value, asn1Spec=rfc2459.ExtKeyUsageSyntax())
+            eku_oids = []
+
+            for i in range(len(eku_asn1)):
+                eku_oid = str(eku_asn1.getComponentByPosition(i))
+                eku_oids.append(x509.ObjectIdentifier(eku_oid))
+
+            extended_key_usage = x509.ExtendedKeyUsage(eku_oids)
+
+            return x509.Extension(
+                oid=ExtensionOID.EXTENDED_KEY_USAGE,
+                critical=critical,
+                value=extended_key_usage
+            )
+        except Exception:
+            self.logger.exception('Failed to parse Extended Key Usage extension.')
+            raise
+
+    def _parse_subject_key_identifier(self, value: bytes, *, critical: bool) -> x509.Extension[x509.SubjectKeyIdentifier]:
+        """Parse Subject Key Identifier extension manually."""
+        try:
+            ski_asn1, _ = der_decoder.decode(value, asn1Spec=rfc2459.SubjectKeyIdentifier())
+            ski_bytes = bytes(ski_asn1)
+
+            subject_key_identifier = x509.SubjectKeyIdentifier(digest=ski_bytes)
+
+            return x509.Extension(
+                oid=ExtensionOID.SUBJECT_KEY_IDENTIFIER,
+                critical=critical,
+                value=subject_key_identifier
+            )
+        except Exception:
+            self.logger.exception('Failed to parse Subject Key Identifier extension.')
+            raise
 
     def _parse_certificate_policies(self, value: bytes, *, critical: bool) -> x509.Extension[x509.CertificatePolicies]:
         """Parse Certificate Policies extension manually."""
@@ -692,7 +789,7 @@ class CmpMessageParser(CompositeParsing):
         self.add(CmpHeaderValidation())
         self.add(CmpBodyValidation())
         self.add(DomainParsing())
-        self.add(CertTemplateParsing())
+        self.add(CertProfileParsing())
 
 
 class EstMessageParser(CompositeParsing):
@@ -703,7 +800,5 @@ class EstMessageParser(CompositeParsing):
         super().__init__()
         self.add(EstPkiMessageParsing())
         self.add(DomainParsing())
-        self.add(CertTemplateParsing())
+        self.add(CertProfileParsing())
         self.add(EstCsrSignatureVerification())
-
-

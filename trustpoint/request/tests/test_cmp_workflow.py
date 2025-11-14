@@ -31,7 +31,7 @@ class TestCMPHelper(LoggerMixin):
         protocol_str = 'cmp'
         operation_str_long = 'certification'
         operation_str_short = 'cr'
-        certtemplate_str = 'tls-server'
+        certtemplate_str = 'tls_server'
 
         cmp_factory = (CompositeCMPCommand('test_cmp', 'Test CMP command')
         .add_component(BasicCMPArgs(cmd=operation_str_short))
@@ -59,12 +59,12 @@ class TestCMPHelper(LoggerMixin):
                                       domain_str=domain_str,
                                       protocol=protocol_str,
                                       operation=operation_str_long,
-                                      certificate_template=certtemplate_str)
+                                      cert_profile_str=certtemplate_str)
 
         validator = CmpHttpRequestValidator()
         parser = CmpMessageParser()
         authenticator = CmpAuthentication()
-        authorizer = CmpAuthorization(['tls-server', 'tls-client'], ['certification'])
+        authorizer = CmpAuthorization(['certification'])
 
         validator.validate(mock_context)
 
@@ -99,7 +99,7 @@ class TestCMPHelper(LoggerMixin):
         protocol_str = 'cmp'
         operation_str_long = 'certification'
         operation_str_short = 'cr'
-        certtemplate_str = 'tls-server'
+        certtemplate_str = 'tls_server'
         port = 18443
 
         cert_pem = domain_credential.credential.certificate.cert_pem
@@ -137,12 +137,12 @@ class TestCMPHelper(LoggerMixin):
                                       domain_str=domain_str,
                                       protocol=protocol_str,
                                       operation=operation_str_long,
-                                      certificate_template=certtemplate_str)
+                                      cert_profile_str=certtemplate_str)
 
         validator = CmpHttpRequestValidator()
         parser = CmpMessageParser()
         authenticator = CmpAuthentication()
-        authorizer = CmpAuthorization(['tls-server', 'tls-client'], ['certification'])
+        authorizer = CmpAuthorization(['certification'])
 
         # Validate the request
         validator.validate(mock_context)
@@ -198,7 +198,7 @@ class TestCMPHelper(LoggerMixin):
         # Setup: Prepare a device with invalid credentials
         device = cmp_device_without_onboarding['device']
         domain_str = device.domain.unique_name
-        certtemplate_str = 'tls-server'
+        certtemplate_str = 'tls_server'
         invalid_shared_secret = 'invalid_shared_secret'
 
         # Create CMP factory with invalid credentials
@@ -246,7 +246,7 @@ class TestCMPHelper(LoggerMixin):
                 domain_str=domain_str,
                 protocol='cmp',
                 operation='certification',
-                certificate_template=certtemplate_str,
+                cert_profile_str=certtemplate_str,
             )
 
             validator = CmpHttpRequestValidator()

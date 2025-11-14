@@ -7,7 +7,7 @@ from pki.models.domain import DomainModel
 
 from request.authorization import (
     AuthorizationComponent,
-    CertificateTemplateAuthorization,
+    CertificateProfileAuthorization,
     CompositeAuthorization,
     DomainScopeValidation,
     EstAuthorization,
@@ -162,67 +162,64 @@ class TestEstOperationAuthorization:  # Changed from TestOperationAuthorization
         auth.authorize(context)
 
 
-class TestCertificateTemplateAuthorization:
-    """Test cases for CertificateTemplateAuthorization."""
+class TestCertificateProfileAuthorization:
+    """Test cases for CertificateProfileAuthorization."""
 
-    def test_certificate_template_authorization_success(self) -> None:
+    def test_cert_profile_authorization_success(self, domain_instance, cert_profile_instance) -> None:
         """Test successful certificate template authorization."""
-        allowed_templates = ['tls-client', 'tls-server']
-        auth = CertificateTemplateAuthorization(allowed_templates)
+        auth = CertificateProfileAuthorization()
 
         context = Mock(spec=RequestContext)
-        context.certificate_template = 'tls-client'
+        context.cert_profile_str = 'domain_credential'
+        context.domain = domain_instance['domain']
 
         # Should not raise an exception
         auth.authorize(context)
 
-    def test_certificate_template_authorization_failure_invalid_template(self) -> None:
-        """Test certificate template authorization failure with invalid template."""
-        allowed_templates = ['tls-client', 'tls-server']
-        auth = CertificateTemplateAuthorization(allowed_templates)
+    def test_cert_profile_authorization_failure_invalid_profile(self, domain_instance, cert_profile_instance) -> None:
+        """Test certificate profile authorization failure with invalid profile."""
+        auth = CertificateProfileAuthorization()
 
         context = Mock(spec=RequestContext)
-        context.certificate_template = 'invalid_template'
+        context.cert_profile_str = 'invalid_profile'
+        context.domain = domain_instance['domain']
 
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert "Unauthorized certificate template: 'invalid_template'" in str(exc_info.value)
-        assert 'Allowed templates: tls-client, tls-server' in str(exc_info.value)
+        assert "Unauthorized certificate profile: 'invalid_profile'" in str(exc_info.value)
+        assert 'Allowed profiles:' in str(exc_info.value)
+        assert 'domain_credential' in str(exc_info.value)
 
-    def test_certificate_template_authorization_failure_missing_template(self) -> None:
-        """Test certificate template authorization failure with missing template."""
-        allowed_templates = ['tls-client']
-        auth = CertificateTemplateAuthorization(allowed_templates)
-
+    def test_cert_profile_str_authorization_failure_missing_profile(self, domain_instance, cert_profile_instance) -> None:
+        """Test certificate profile authorization failure with missing profile string."""
+        auth = CertificateProfileAuthorization()
         context = Mock(spec=RequestContext)
-        context.certificate_template = None
+        context.cert_profile_str = None
 
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert 'Certificate template is missing in the context. Authorization denied.' in str(exc_info.value)
+        assert 'Certificate profile is missing in the context. Authorization denied.' in str(exc_info.value)
 
-    def test_certificate_template_authorization_failure_empty_template(self) -> None:
-        """Test certificate template authorization failure with empty template string."""
-        allowed_templates = ['tls-client']
-        auth = CertificateTemplateAuthorization(allowed_templates)
+    def test_cert_profile_str_authorization_failure_empty_profile(self) -> None:
+        """Test certificate profile authorization failure with empty profile string."""
+        auth = CertificateProfileAuthorization()
 
         context = Mock(spec=RequestContext)
-        context.certificate_template = ''
+        context.cert_profile_str = ''
 
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert 'Certificate template is missing in the context. Authorization denied.' in str(exc_info.value)
+        assert 'Certificate profile is missing in the context. Authorization denied.' in str(exc_info.value)
 
-    def test_certificate_template_authorization_single_template(self) -> None:
-        """Test certificate template authorization with single allowed template."""
-        allowed_templates = ['tls-client']
-        auth = CertificateTemplateAuthorization(allowed_templates)
-
+    def test_cert_profile_str_authorization_alias(self, domain_instance, cert_profile_instance) -> None:
+        """Test certificate profile authorization with single allowed profile."""
+        auth = CertificateProfileAuthorization()
         context = Mock(spec=RequestContext)
-        context.certificate_template = 'tls-client'
+        context.cert_profile_str = 'test_profile_alias' # Using alias for profile 'domain_credential'
+        context.domain = domain_instance['domain']
 
         # Should not raise an exception
         auth.authorize(context)
@@ -465,8 +462,8 @@ class TestEstAuthorization:
         # Check component types
         component_types = [type(comp).__name__ for comp in auth.components]
         expected_types = [
-            'CertificateTemplateAuthorization',
             'DomainScopeValidation', 
+            'CertificateProfileAuthorization',
             'ManualAuthorization',
             'ProtocolAuthorization',
             'EstOperationAuthorization'
@@ -501,19 +498,18 @@ class TestEstAuthorization:
         assert operation_component is not None
         assert operation_component.allowed_operations == ['simpleenroll', 'simplereenroll']
 
-    def test_est_authorization_certificate_template_component_configuration(self) -> None:
+    def test_est_authorization_cert_profile_str_component_configuration(self) -> None:
         """Test that EST authorization configures certificate template component correctly."""
         auth = EstAuthorization()
 
         # Find the certificate template authorization component
         template_component = None
         for component in auth.components:
-            if isinstance(component, CertificateTemplateAuthorization):
+            if isinstance(component, CertificateProfileAuthorization):
                 template_component = component
                 break
 
         assert template_component is not None
-        assert template_component.allowed_templates == ['tls-client']
 
     def test_est_authorization_full_success(self, domain_credential_est_onboarding) -> None:
         """Test full EST authorization success."""
@@ -523,7 +519,7 @@ class TestEstAuthorization:
         context = Mock(spec=RequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
-        context.certificate_template = 'tls-client'
+        context.cert_profile_str = 'tls_server'
         context.device = Mock()
         context.device.domain = domain_credential_est_onboarding['domain']
         context.device.common_name = 'test-device'
@@ -539,7 +535,7 @@ class TestEstAuthorization:
         context = Mock(spec=RequestContext)
         context.protocol = 'cmp'  # Wrong protocol
         context.operation = 'simpleenroll'
-        context.certificate_template = 'tls-client'
+        context.cert_profile_str = 'tls_server'
         context.device = Mock()
         context.device.domain = domain_credential_est_onboarding['domain']
         context.domain = domain_credential_est_onboarding['domain']
@@ -556,7 +552,7 @@ class TestEstAuthorization:
         context = Mock(spec=RequestContext)
         context.protocol = 'est'
         context.operation = 'invalid_operation'  # Wrong operation
-        context.certificate_template = 'tls-client'
+        context.cert_profile_str = 'tls_server'
         context.device = Mock()
         context.device.domain = domain_credential_est_onboarding['domain']
         context.domain = domain_credential_est_onboarding['domain']
@@ -566,14 +562,14 @@ class TestEstAuthorization:
 
         assert "Unauthorized operation: 'invalid_operation'" in str(exc_info.value)
 
-    def test_est_authorization_certificate_template_failure(self, domain_credential_est_onboarding) -> None:
+    def test_est_authorization_cert_profile_str_failure(self, domain_credential_est_onboarding) -> None:
         """Test EST authorization failure due to wrong certificate template."""
         auth = EstAuthorization()
 
         context = Mock(spec=RequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
-        context.certificate_template = 'invalid_template'  # Wrong template
+        context.cert_profile_str = 'invalid_template'  # Wrong template
         context.device = Mock()
         context.device.domain = domain_credential_est_onboarding['domain']
         context.domain = domain_credential_est_onboarding['domain']
@@ -581,7 +577,7 @@ class TestEstAuthorization:
         with pytest.raises(ValueError) as exc_info:
             auth.authorize(context)
 
-        assert "Unauthorized certificate template: 'invalid_template'" in str(exc_info.value)
+        assert "Unauthorized certificate profile: 'invalid_template'" in str(exc_info.value)
 
     def test_est_authorization_domain_scope_failure(self, domain_credential_est_onboarding) -> None:
         """Test EST authorization failure due to domain scope mismatch."""
@@ -593,7 +589,7 @@ class TestEstAuthorization:
         context = Mock(spec=RequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
-        context.certificate_template = 'tls-client'
+        context.cert_profile_str = 'tls_server'
         context.device = Mock()
         context.device.domain = different_domain  # Different domain
         context.domain = domain_credential_est_onboarding['domain']
@@ -610,7 +606,7 @@ class TestEstAuthorization:
         context = Mock(spec=RequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
-        context.certificate_template = 'tls-client'
+        context.cert_profile_str = 'tls_server'
         context.device = None  # Missing device
         context.domain = domain_credential_est_onboarding['domain']
 
@@ -626,7 +622,7 @@ class TestEstAuthorization:
         context = Mock(spec=RequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
-        context.certificate_template = 'tls-client'
+        context.cert_profile_str = 'tls_server'
         context.device = Mock()
         context.device.domain = domain_credential_est_onboarding['domain']
         context.domain = None  # Missing domain

@@ -1,4 +1,5 @@
 """Handles Request Conversion to JSON and Profile Validation."""
+import json
 
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from pki.util.cert_req_converter import JSONCertRequestConverter
@@ -21,22 +22,19 @@ class ProfileValidator(LoggerMixin):
         cert_request_json = JSONCertRequestConverter.to_json(context.cert_requested)
         cls.logger.info('Cert Request JSON: %s', cert_request_json)
 
-        # TODO: Get correct profile  # noqa: TD002
-        # How this will work eventually:
-        # First, we check the requested profile ("template") from the URL.
-        # If it is allowed/defined in this domain, proceed to use this profile.
-        # If no profile is given as part of the URL or it is not defined in the domain, try domain default profile(s)
-        # First domain default profile which successfully validates is used.
-        cert_profile = {
-            'type': 'cert_profile',
-            'subj': {'allow':'*'},
-            'ext': {
-                'crl': {'uris': ['http://localhost/crl/2']},
-            },
-            'validity': {
-                'days': 30
-            }
-        }
+        if not context.certificate_profile_model:
+            exc_msg = 'Certificate profile model is not set in the context.'
+            context.http_response_content = 'Corresponding certificate profile is missing.'
+            context.http_response_status = 422
+            raise ValueError(exc_msg)
+
+        try:
+            cert_profile = json.loads(context.certificate_profile_model.profile_json)
+        except json.JSONDecodeError as e:
+            exc_msg = f'Error decoding certificate profile JSON: {e}'
+            context.http_response_content = 'Certificate profile data is corrupted.'
+            context.http_response_status = 500
+            raise ValueError(exc_msg) from e
 
         try:
             validated_request = JSONProfileVerifier(cert_profile).apply_profile_to_request(cert_request_json)

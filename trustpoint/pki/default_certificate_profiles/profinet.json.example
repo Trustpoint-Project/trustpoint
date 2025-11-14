@@ -1,0 +1,15 @@
+{
+    "type": "cert_profile",
+    "subj": {
+        "allow":"*"
+    },
+    "reject_mods": false,
+    "ext": {
+        "basic_constraints": {
+            "ca": false
+        }
+    },
+    "validity": {
+        "days": 10
+    }
+}

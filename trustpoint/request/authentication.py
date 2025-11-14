@@ -681,7 +681,7 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             return False
 
         # Check application certificate template is present
-        if not context.certificate_template:
+        if not context.cert_profile_str:
             error_message = 'Missing application certificate template.'
             self.logger.warning(
                 'CMP signature-based certification failed: Missing application certificate template')

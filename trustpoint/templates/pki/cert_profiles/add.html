@@ -1,0 +1,30 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+    <form method="POST" autocomplete="off" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h1>{% trans 'Add new Certificate Profile' %}</h1>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="tp-card-centered-content">
+                    <h2>{% trans 'File Import' %}</h2>
+                    <hr>
+
+                    {{ form|crispy }}
+                </div>
+            </div>
+            <div class="card-footer d-flex">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'pki:owner_credentials' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                    <button type="submit" class="btn btn-primary">{% trans 'Add new Certificate Profile' %}</button>
+                </div>
+            </div>
+        </div>
+    </form>
+{% endblock content %}
