@@ -1,8 +1,11 @@
 {% load i18n %}
 {% block key_usage_extension %}
-    {% if cert.key_usage_extension %}
-        <h2>{% trans 'Key Usage Extension' %}</h2><hr class="hr-m">
-        <div class="tp-kvp-list">
+
+
+        {% if cert.key_usage_extension %}
+ <h2>{% trans 'Key Usage Extension' %}</h2><hr class="hr-m">
+<div class="tp-kvp-list">
+
             <div>
                 <div>{% trans 'Extension OID' %}</div>
                 <div>{{ cert.key_usage_extension.extension_oid }}</div>
@@ -11,7 +14,7 @@
                 <div>{% trans 'Critical' %}</div>
                 <div>{{ cert.key_usage_extension.critical }}</div>
             </div>
-            <hr>
+
             <div>
                 <div>{% trans 'Digital Signature' %}</div>
                 <div>{{ cert.key_usage_extension.digital_signature }}</div>
@@ -49,6 +52,7 @@
                 <div>{{ cert.key_usage_extension.decipher_only }}</div>
             </div>
         </div>
+
 
     {% endif %}
 {% endblock key_usage_extension %}

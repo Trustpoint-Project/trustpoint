@@ -7,7 +7,7 @@ from django.views.generic.base import RedirectView
 
 
 class IndexView(RedirectView):
-    """Index view"""
+    """Index view."""
 
     permanent = True
     pattern_name = 'management:settings'

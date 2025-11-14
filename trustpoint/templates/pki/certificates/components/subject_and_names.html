@@ -7,16 +7,49 @@
         <div>
             <div>{% trans 'Subject' %}</div>
             <div>
-                {% for entry in cert.subject.all %}
-                    {{ entry }}<br>
-                {% endfor %}
+                <style>
+                .subject-table {
+                    border-collapse: collapse;
+                    margin-top: 6px;
+                    margin-bottom: 12px;
+                }
+                .subject-table td {
+                    padding: 2px 18px 2px 0;
+                    text-align: left;
+                    vertical-align: top;
+                    border: none;
+                }
+                .subject-table td:first-child {
+                    min-width: 140px;
+                    max-width: 220px;
+                }
+                .subject-table td:nth-child(2) {
+                    min-width: 115px;
+                    color: #b0b0b0;
+                }
+                .subject-table td:last-child {
+                    min-width: 100px;
+                }
+                </style>
+                <table class="subject-table">
+                  {% for entry in subject_entries %}
+                  <tr>
+                      {% if entry.name %}
+                        <td><strong>{{ entry.name }}</strong></td>
+                        <td>({{ entry.oid }})</td>
+                      {% else %}
+                        <td></td>
+                        <td>{{ entry.oid }}</td>
+                      {% endif %}
+                      <td>{{ entry.value }}</td>
+                  </tr>
+                  {% endfor %}
+                </table>
             </div>
         </div>
 
-        <div>
-            <div>{% trans 'Common Name' %}</div>
-            <div>{{ cert.common_name }}</div>
-        </div>
-    </div>
+        {% if cert.common_name %}
 
+        {% endif %}
+    </div>
 {% endblock subject_and_names %}

@@ -9,13 +9,20 @@ from django.urls import reverse_lazy
 from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
-from trustpoint_core.serializer import CertificateFormat
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_yasg.utils import swagger_auto_schema
+from rest_framework import filters, status, viewsets
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTableMixin
 from trustpoint_core.archiver import ArchiveFormat, Archiver
+from trustpoint_core.oid import NameOid
+from trustpoint_core.serializer import CertificateFormat
 
 from pki.models import CertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from pki.serializer.certificate import CertificateSerializer
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTableMixin
 
 if TYPE_CHECKING:
     from typing import ClassVar
@@ -43,6 +50,7 @@ class CertificateTableView(CertificatesContextMixin, SortableTableMixin, ListVie
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'common_name'
 
+OID_MAP = {oid.dotted_string: oid.verbose_name for oid in NameOid}
 
 class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateModel]):
     """The certificate detail view."""
@@ -53,6 +61,38 @@ class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateMode
     template_name = 'pki/certificates/details.html'
     context_object_name = 'cert'
 
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adding map of attribute and its oid with its values.
+
+        Args:
+                   **kwargs: Keyword arguments passed to super().get_context_data().
+
+        Returns:
+               dict: The context data.
+        """
+        context = super().get_context_data(**kwargs)
+        cert = context['cert']
+
+        subject_entries = []
+        for entry in cert.subject.all():
+            name = OID_MAP.get(entry.oid)
+            subject_entries.append({
+                'oid': entry.oid,
+                'name': name,
+                'value': entry.value,
+            })
+        context['subject_entries'] = subject_entries
+        issuer_entries = []
+        for entry in cert.issuer.all():
+            name = OID_MAP.get(entry.oid)
+            issuer_entries.append({
+                'oid': entry.oid,
+                'name': name,
+                'value': entry.value,
+                'id': entry.id,
+            })
+        context['issuer_entries'] = issuer_entries
+        return context
 
 class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, DetailView[CertificateModel]):
     """View for downloading a single certificate."""
@@ -252,10 +292,11 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
     context_object_name = 'certificate'
 
     def get(self, _request: HttpRequest, pk: str | None = None, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Download the active Trustpoint TLS server certificate"""
+        """Download the active Trustpoint TLS server certificate."""
         tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
         if not tls_cert:
-            raise Http404('No TLS server certificate available. Are you on the development server?')
+            msg = 'No TLS server certificate available. Are you on the development server?'
+            raise Http404(msg)
 
         tls_server_certificate = tls_cert.credential.certificate.get_certificate_serializer()
 
@@ -265,3 +306,41 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
         response['Content-Disposition'] = 'attachment; filename="server_cert.pem"'
 
         return response
+
+class CertificateViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing Device instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+    queryset = CertificateModel.objects.all().order_by('-created_at')
+    serializer_class = CertificateSerializer
+    permission_classes: ClassVar = [IsAuthenticated]
+    filter_backends: ClassVar = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter
+    ]
+    filterset_fields: ClassVar = ['serial_number', 'not_valid_before']
+    search_fields: ClassVar = ['common_name', 'sha256_fingerprint']
+    ordering_fields: ClassVar = ['common_name', 'created_at']
+
+    @swagger_auto_schema(
+        operation_summary='List certificates',
+        operation_description='Retrieve certificates from the database.',
+        tags=['certificates']
+    )
+    def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+        """API endpoint to get all certificates."""
+        queryset = self.get_queryset()
+
+        for backend in list(self.filter_backends):
+            queryset = backend().filter_queryset(self.request, queryset, self)
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

@@ -12,19 +12,13 @@ until pg_isready -h "$DATABASE_HOST" -p "$DATABASE_PORT" &>/dev/null; do
 done
 echo "PostgreSQL database is available!"
 
-# run_as_www_data "uv run trustpoint/manage.py reset_db --force"
-# run_as_www_data "uv run trustpoint/manage.py inittrustpoint"
-# run_as_www_data "uv run trustpoint/manage.py tls_cred"
-# run_as_www_data "uv run trustpoint/manage.py add_domains_and_devices"
+run_as_www_data "uv run trustpoint/manage.py startup_manager"
 
-run_as_www_data "uv run trustpoint/manage.py managestartup"
-
-# 12) Configure apache
+# Configure apache (always needed)
 /etc/trustpoint/wizard/transition/configure_apache.sh
 
-# Configure TLS
+# Configure TLS (always needed - will gracefully handle missing files)
 /etc/trustpoint/wizard/transition/update_tls.sh
-
 
 echo "Starting cron service..."
 cron

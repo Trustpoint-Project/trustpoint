@@ -1,16 +1,64 @@
 {% load i18n %}
 
 {% block validity %}
-    <h2>{% trans 'Validity' %}</h2>
+    <h2>{% trans 'Lifecycle' %}</h2>
     <hr class="hr-m">
     <div class="tp-kvp-list">
         <div>
+            <div>{% trans 'Certificate Status' %}</div>
+            <div>
+                {% if cert.certificate_status == "REV" %}
+                    <span class="badge bg-danger">{{ cert.certificate_status.label }}</span>
+                {% elif cert.certificate_status == "EXP" %}
+                    <span class="badge bg-warning text-dark">{{ cert.certificate_status.label }}</span>
+                {% elif cert.certificate_status == "NYV" %}
+                    <span class="badge bg-info text-dark">{{ cert.certificate_status.label }}</span>
+                {% elif cert.certificate_status == "OK" %}
+                    <span class="badge bg-success">{{ cert.certificate_status.label }}</span>
+                {% else %}
+                    <span class="badge bg-secondary">{{ cert.certificate_status.label }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <div>
             <div>{% trans 'Not valid before' %}</div>
-            <div>{{ cert.not_valid_before }}</div>
+            <div>{{ cert.not_valid_before|date:"Y-m-d H:i:s" }} UTC</div>
         </div>
         <div>
             <div>{% trans 'Not valid after' %}</div>
-            <div>{{ cert.not_valid_after }}</div>
+            <div>{{ cert.not_valid_after|date:"Y-m-d H:i:s" }} UTC</div>
+        </div>
+        <div>
+            <div>{% trans 'Days Until Expiration' %}</div>
+            <div>
+                {% if cert.days_left <= 3 %}
+                    <span class="badge bg-danger">
+                        {{ cert.days_left }} {% trans "days" %}
+                        {% if cert.days_left == 1 %}
+                            – {% trans "URGENT" %}
+                        {% endif %}
+                    </span>
+                {% elif cert.days_left <= 10 %}
+                    <span class="badge bg-warning text-dark">
+                        {{ cert.days_left }} {% trans "days" %}
+                        – {% trans "Soon" %}
+                    </span>
+                {% elif cert.days_left <= 31 %}
+                    <span class="badge bg-warning text-dark" style="color:#795500;background:#fffde7; border:1px solid #ffc107;">
+                        {{ cert.days_left }} {% trans "days" %}
+                        – {% trans "Month" %}
+                    </span>
+                {% elif cert.days_left == 0 %}
+                    <span class="badge bg-danger">
+                        {% trans "Expired" %}
+                    </span>
+                {% else %}
+                    <span class="badge bg-success">
+                        {{ cert.days_left }} {% trans "days" %}
+                        – {% trans "Valid" %}
+                    </span>
+                {% endif %}
+            </div>
         </div>
     </div>
 {% endblock validity %}

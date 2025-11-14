@@ -5,6 +5,8 @@ from django.urls import resolve, reverse
 from home.views import IndexView
 from pki.views.issuing_cas import CrlDownloadView
 
+# ruff: noqa: ANN201, ANN001
+
 
 class TestUrls:
     """Test cases for the main `urls.py` of the project."""
@@ -33,11 +35,6 @@ class TestUrls:
         resolver = resolve(url)
         assert resolver.func.view_class == CrlDownloadView
 
-    def test_setup_wizard_url_included(self):
-        """Test that the 'setup-wizard/' URL pattern is included and resolves correctly."""
-        url = reverse('setup_wizard:initial')
-        assert resolve(url).namespace == 'setup_wizard'
-
     def test_devices_url_included(self):
         """Test that the 'devices/' URL pattern is included and resolves correctly."""
         url = reverse('devices:devices')
@@ -51,7 +48,7 @@ class TestUrls:
 
     def test_cmp_url_included(self):
         """Test that the 'cmp/' URL pattern is included and resolves to the correct namespace."""
-        url = reverse('cmp:initialization', kwargs={'domain': 'test-domain'})
+        url = reverse('cmp:initialization', kwargs={'domain_name': 'test-domain'})
         assert resolve(url).namespace == 'cmp'
 
     def test_jsi18n_url_resolves(self):

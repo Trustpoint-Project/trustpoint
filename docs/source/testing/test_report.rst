@@ -21,9 +21,9 @@ This action can be found here:
 
 The current status of all test executions is |pytest|.
 
-.. |pytest| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/pytest.yml/badge.svg
+.. |pytest| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml/badge.svg
     :alt: Pytest
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/pytest.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml
 
 ========================
 Integration Test Results
@@ -58,69 +58,69 @@ For more detailed output please visit the corresponding github action pages.
    _`F_001`, "NTEU must be able to execute R_001 and R_002.", "|F_001_badge|"
 
 
-.. |R_001_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_001_feature_test.yml/badge.svg
+.. |R_001_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_001_feature_test.yml/badge.svg
     :alt: R_001_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_001_feature_test.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_001_feature_test.yml
 
-.. |R_003_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_003_feature_test.yml/badge.svg
+.. |R_003_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_003_feature_test.yml/badge.svg
     :alt: R_003_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_003_feature_test.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_003_feature_test.yml
 
-.. |R_004_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_004_feature_test.yml/badge.svg
+.. |R_004_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_004_feature_test.yml/badge.svg
     :alt: R_004_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_004_feature_test.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_004_feature_test.yml
 
-.. |R_005_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/docker-test-compose.yml/badge.svg
+.. |R_005_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/docker-test-compose.yml/badge.svg
     :alt: R_005_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/docker-test-compose.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/docker-test-compose.yml
 
-.. |R_006_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_006_feature_test.yml/badge.svg
+.. |R_006_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_006_feature_test.yml/badge.svg
     :alt: R_006_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_006_feature_test.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_006_feature_test.yml
 
-.. |R_007_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_007_feature_test.yml/badge.svg
+.. |R_007_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_007_feature_test.yml/badge.svg
     :alt: R_007_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_007_feature_test.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_007_feature_test.yml
 
-.. |R_008_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_008_feature_test.yml/badge.svg
+.. |R_008_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_008_feature_test.yml/badge.svg
     :alt: R_008_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_008_feature_test.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_008_feature_test.yml
 
-.. |R_010_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_010_feature_test.yml/badge.svg
+.. |R_010_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_010_feature_test.yml/badge.svg
     :alt: R_010_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_010_feature_test.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_010_feature_test.yml
 
-.. |R_011_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_011_feature_test.yml/badge.svg
+.. |R_011_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_011_feature_test.yml/badge.svg
     :alt: R_011_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_011_feature_test.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_011_feature_test.yml
 
-.. |R_012_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_012_feature_test.yml/badge.svg
+.. |R_012_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_012_feature_test.yml/badge.svg
     :alt: R_012_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_012_feature_test.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_012_feature_test.yml
 
-.. |R_013_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_013_feature_test.yml/badge.svg
+.. |R_013_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_013_feature_test.yml/badge.svg
     :alt: R_013_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_013_feature_test.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_013_feature_test.yml
 
-.. |R_101_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_101_feature_test.yml/badge.svg
+.. |R_101_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_101_feature_test.yml/badge.svg
     :alt: R_101_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_101_feature_test.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_101_feature_test.yml
 
-.. |R_102_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml/badge.svg
+.. |R_102_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml/badge.svg
     :alt: R_102_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml
 
-.. |R_103_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_103_feature_test.yml/badge.svg
+.. |R_103_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_103_feature_test.yml/badge.svg
     :alt: R_103_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_103_feature_test.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_103_feature_test.yml
 
-.. |R_104_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_104_feature_test.yml/badge.svg
+.. |R_104_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_104_feature_test.yml/badge.svg
     :alt: R_104_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_104_feature_test.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_104_feature_test.yml
 
-.. |F_001_badge| image:: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/f_001_feature_test.yml/badge.svg
+.. |F_001_badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/f_001_feature_test.yml/badge.svg
     :alt: F_001_badge
-    :target: https://github.com/TrustPoint-Project/trustpoint/actions/workflows/f_001_feature_test.yml
+    :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/f_001_feature_test.yml
 
 ===========================
 Defect and Incident Reports
