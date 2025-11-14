@@ -80,6 +80,7 @@ PUBLIC_PATHS = [
     '/.well-known/est',
     '/aoki',
     '/crl',
+    '/signer/api/sign',
 ]
 
 # ------------- Functions --------------
@@ -249,6 +250,8 @@ INSTALLED_APPS = [
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
     'est.apps.EstConfig',
+    'signer.apps.SignerConfig',
+    'Auth.apps.AuthConfig',
     'aoki.apps.AokiConfig',
     'management.apps.ManagementConfig',
     'notifications.apps.NotificationsConfig',
