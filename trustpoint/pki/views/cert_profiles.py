@@ -12,7 +12,6 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic.base import TemplateView
 from django.views.generic.detail import DetailView
-from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 from pydantic import ValidationError
 from trustpoint.logger import LoggerMixin
@@ -71,7 +70,6 @@ class CertProfileConfigView(LoggerMixin, CertProfileContextMixin, DetailView[Cer
         context = super().get_context_data(**kwargs)
         cert_profile = self.get_object()
         context['profile'] = cert_profile
-        #pretty_json = json.dumps(cert_profile.profile_json, indent=2)
         context['profile_json'] = json.loads(cert_profile.profile_json)
 
         return context
@@ -93,7 +91,6 @@ class CertProfileConfigView(LoggerMixin, CertProfileContextMixin, DetailView[Cer
             if request.POST.get('unique_name'):
                 cert_profile.unique_name = request.POST.get('unique_name')
             json_dict = json.loads(request.POST.get('profile_json'))
-            #JSONProfileVerifier(json_dict)
             CertProfilePydanticModel.model_validate(json_dict)
             cert_profile.profile_json = json.dumps(json_dict)
             cert_profile.save()
@@ -109,7 +106,6 @@ class CertProfileAddView(CertProfileContextMixin, TemplateView):
     http_method_names = ('get', 'post')
 
     template_name = 'pki/cert_profiles/config.html'
-    #form_class = OwnerCredentialFileImportForm
     success_url = reverse_lazy('pki:cert_profiles')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -123,7 +119,6 @@ class CertProfileAddView(CertProfileContextMixin, TemplateView):
         """
         context = super().get_context_data(**kwargs)
         context['profile'] = {'unique_name': ''}
-        #pretty_json = json.dumps(cert_profile.profile_json, indent=2)
         context['profile_json'] = {
             'type': 'cert_profile',
             'subj': {},
@@ -146,7 +141,6 @@ class CertProfileAddView(CertProfileContextMixin, TemplateView):
         del args, kwargs  # Unused
         try:
             json_dict = json.loads(request.POST.get('profile_json'))
-            #JSONProfileVerifier(json_dict)
             CertProfilePydanticModel.model_validate(json_dict)
             cert_profile = CertificateProfileModel()
             if request.POST.get('unique_name'):

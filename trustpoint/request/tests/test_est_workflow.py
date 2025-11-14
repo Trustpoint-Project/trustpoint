@@ -7,7 +7,7 @@ from pki.util.cert_profile import JSONProfileVerifier
 from pki.util.cert_req_converter import JSONCertRequestConverter
 
 from request.authentication import EstAuthentication
-from request.authorization import CertificateTemplateAuthorization, EstAuthorization, EstOperationAuthorization
+from request.authorization import CertificateProfileAuthorization, EstAuthorization, EstOperationAuthorization
 from request.http_request_validator import EstHttpRequestValidator
 from request.operation_processor import CertificateIssueProcessor
 from request.pki_message_parser import EstMessageParser
@@ -64,14 +64,14 @@ class TestESTHelper(LoggerMixin):
                                       domain_str=domain_str,
                                       protocol=protocol_str,
                                       operation=operation_str,
-                                      certificate_template=certtemplate_str)
+                                      cert_profile_str=certtemplate_str)
 
         validator = EstHttpRequestValidator()
 
         parser = EstMessageParser()
         est_authenticator = EstAuthentication()
         est_authorizer = EstAuthorization()
-        est_authorizer.add(CertificateTemplateAuthorization(['tls-client']))
+        est_authorizer.add(CertificateProfileAuthorization(['tls-client']))
         est_authorizer.add(EstOperationAuthorization(['simpleenroll']))
 
         validator.validate(mock_context)
@@ -138,14 +138,14 @@ class TestESTHelper(LoggerMixin):
             domain_str=domain_str,
             protocol=protocol_str,
             operation=operation_str,
-            certificate_template=certtemplate_str,
+            cert_profile_str=certtemplate_str,
         )
 
         validator = EstHttpRequestValidator()
         parser = EstMessageParser()
         authenticator = EstAuthentication()
         authorizer = EstAuthorization()
-        authorizer.add(CertificateTemplateAuthorization([certtemplate_str]))
+        authorizer.add(CertificateProfileAuthorization([certtemplate_str]))
         authorizer.add(EstOperationAuthorization([operation_str]))
 
         # Run request validation

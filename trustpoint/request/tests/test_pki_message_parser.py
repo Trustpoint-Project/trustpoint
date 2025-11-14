@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from pki.models import DomainModel
 
 from request.pki_message_parser import (
-    CertTemplateParsing,
+    CertProfileParsing,
     CmpMessageParser,
     CmpPkiMessageParsing,
     CompositeParsing,
@@ -306,25 +306,25 @@ class TestDomainParsing:
                 parser._extract_requested_domain('duplicate.domain.com')
 
 
-class TestCertTemplateParsing:
-    """Test cases for CertTemplateParsing component."""
+class TestCertProfileParsing:
+    """Test cases for CertProfileParsing component."""
 
-    def test_parse_certificate_template_success(self):
-        """Test successful certificate template parsing."""
+    def test_parse_cert_profile_str_success(self):
+        """Test successful certificate profile string parsing."""
         mock_context = Mock(spec=RequestContext)
-        mock_context.certificate_template = 'test_template'
+        mock_context.cert_profile_str = 'test_template'
 
-        parser = CertTemplateParsing()
+        parser = CertProfileParsing()
         parser.parse(mock_context)
 
-        assert mock_context.certificate_template == 'test_template'
+        assert mock_context.cert_profile_str == 'test_template'
 
-    def test_parse_missing_certificate_template(self):
+    def test_parse_missing_cert_profile_str(self):
         """Test parsing with missing certificate template."""
         mock_context = Mock(spec=RequestContext)
-        mock_context.certificate_template = None
+        mock_context.cert_profile_str = None
 
-        parser = CertTemplateParsing()
+        parser = CertProfileParsing()
 
         try:
             parser.parse(mock_context)
@@ -502,7 +502,7 @@ class TestEstMessageParser:
         assert len(parser.components) == 4
         assert isinstance(parser.components[0], EstPkiMessageParsing)
         assert isinstance(parser.components[1], DomainParsing)
-        assert isinstance(parser.components[2], CertTemplateParsing)
+        assert isinstance(parser.components[2], CertProfileParsing)
         assert isinstance(parser.components[3], EstCsrSignatureVerification)
 
     def test_parse_delegation(self):

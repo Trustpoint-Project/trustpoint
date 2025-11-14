@@ -59,7 +59,7 @@ class TestCMPHelper(LoggerMixin):
                                       domain_str=domain_str,
                                       protocol=protocol_str,
                                       operation=operation_str_long,
-                                      certificate_template=certtemplate_str)
+                                      cert_profile_str=certtemplate_str)
 
         validator = CmpHttpRequestValidator()
         parser = CmpMessageParser()
@@ -137,7 +137,7 @@ class TestCMPHelper(LoggerMixin):
                                       domain_str=domain_str,
                                       protocol=protocol_str,
                                       operation=operation_str_long,
-                                      certificate_template=certtemplate_str)
+                                      cert_profile_str=certtemplate_str)
 
         validator = CmpHttpRequestValidator()
         parser = CmpMessageParser()
@@ -246,7 +246,7 @@ class TestCMPHelper(LoggerMixin):
                 domain_str=domain_str,
                 protocol='cmp',
                 operation='certification',
-                certificate_template=certtemplate_str,
+                cert_profile_str=certtemplate_str,
             )
 
             validator = CmpHttpRequestValidator()

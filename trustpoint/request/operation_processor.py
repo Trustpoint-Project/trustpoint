@@ -43,14 +43,18 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
     def _get_credential_type_for_template(context: RequestContext
             ) -> tuple[IssuedCredentialModel.IssuedCredentialType, IssuedCredentialModel.IssuedCredentialPurpose]:
         """Map certificate template to issued credential type."""
-        if context.certificate_template == 'domaincredential':
+        if context.cert_profile_str == 'domain_credential':
             return (IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
                     IssuedCredentialModel.IssuedCredentialPurpose.DOMAIN_CREDENTIAL)
 
-        if context.certificate_template == 'tls-client':
+        if context.cert_profile_str == 'tls_client':
             purpose = IssuedCredentialModel.IssuedCredentialPurpose.TLS_CLIENT
-        elif context.certificate_template == 'tls-server':
+        elif context.cert_profile_str == 'tls_server':
             purpose = IssuedCredentialModel.IssuedCredentialPurpose.TLS_SERVER
+        elif context.cert_profile_str == 'opc_ua_client':
+            purpose = IssuedCredentialModel.IssuedCredentialPurpose.OPCUA_CLIENT
+        elif context.cert_profile_str == 'opc_ua_server':
+            purpose = IssuedCredentialModel.IssuedCredentialPurpose.OPCUA_SERVER
         else:
             purpose = IssuedCredentialModel.IssuedCredentialPurpose.GENERIC
 

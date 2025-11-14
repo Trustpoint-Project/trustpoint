@@ -19,7 +19,7 @@ This diagram illustrates the `RequestContext` class, its attributes, and its met
         + parsed_message: CertificateSigningRequest | PKIMessage | None
         + operation: str | None
         + protocol: str | None
-        + certificate_template: str | None
+        + cert_profile_str: str | None
         + response_format: str | None
         + est_encoding: str | None
         + domain_str: str | None
@@ -203,7 +203,7 @@ Message Parser Module Diagram
         + parse(context: RequestContext)
     }
 
-    class CertTemplateParsing {
+    class CertProfileParsing {
         + parse(context: RequestContext)
     }
 
@@ -211,7 +211,7 @@ Message Parser Module Diagram
     class RequestContext {
         + raw_message: Request
         + domain_str: str
-        + certificate_template: str
+        + cert_profile_str: str
         + cert_requested: x509.CertificateSigningRequest
         + domain: DomainModel
         + parsed_message: PKIMessage
@@ -226,7 +226,7 @@ Message Parser Module Diagram
     ParsingComponent <|-- CmpPkiMessageParsing
     ParsingComponent <|-- EstCsrSignatureVerification
     ParsingComponent <|-- DomainParsing
-    ParsingComponent <|-- CertTemplateParsing
+    ParsingComponent <|-- CertProfileParsing
 
     ' Composite dependencies.
     CompositeParsing o--> ParsingComponent : "parses with"
@@ -237,7 +237,7 @@ Message Parser Module Diagram
     CmpPkiMessageParsing --> RequestContext : "handles CMP messages"
     EstCsrSignatureVerification --> RequestContext : "verifies CSR signature"
     DomainParsing --> RequestContext : "validates domain"
-    CertTemplateParsing --> RequestContext : "parses certificate template"
+    CertProfileParsing --> RequestContext : "parses certificate template"
 
     @enduml
 
@@ -352,7 +352,7 @@ Authorization Module Diagram
         + authorize(context: RequestContext)
     }
 
-    class CertificateTemplateAuthorization {
+    class CertificateProfileAuthorization {
         + allowed_templates: list[str]
         + authorize(context: RequestContext)
     }
@@ -369,7 +369,7 @@ Authorization Module Diagram
     class RequestContext {
         + protocol: str
         + operation: str
-        + certificate_template: str
+        + cert_profile_str: str
         + domain: DomainModel
         + device: DeviceModel
     }
@@ -377,7 +377,7 @@ Authorization Module Diagram
     ' Relationships between components.
     AuthorizationComponent <|-- ProtocolAuthorization
     AuthorizationComponent <|-- OperationAuthorization
-    AuthorizationComponent <|-- CertificateTemplateAuthorization
+    AuthorizationComponent <|-- CertificateProfileAuthorization
     AuthorizationComponent <|-- DomainScopeValidation
     AuthorizationComponent <|-- ManualAuthorization
     AuthorizationComponent <|-- CompositeAuthorization
@@ -389,7 +389,7 @@ Authorization Module Diagram
     EstAuthorization --> CompositeAuthorization : extends
     ProtocolAuthorization --> RequestContext : reads protocol
     OperationAuthorization --> RequestContext : reads operation
-    CertificateTemplateAuthorization --> RequestContext : checks template
+    CertificateProfileAuthorization --> RequestContext : checks template
     DomainScopeValidation --> RequestContext : validates domain
     ManualAuthorization --> RequestContext : overrides decisions
 

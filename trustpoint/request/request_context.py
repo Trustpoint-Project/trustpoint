@@ -18,7 +18,7 @@ class RequestContext:
     parsed_message: CertificateSigningRequest | PKIMessage | None = None
     operation: str | None = None
     protocol: str | None = None
-    certificate_template: str | None = None
+    cert_profile_str: str | None = None
     response_format: str | None = None
     est_encoding: str | None = None
 

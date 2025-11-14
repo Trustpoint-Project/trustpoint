@@ -1,8 +1,7 @@
 {
     "type": "cert_profile",
     "subj": {
-        "allow":"*",
-        "common_name": {"value":"Trustpoint Domain Credential","mutable": true}
+        "allow":"*"
     },
     "reject_mods": false,
     "ext": {
@@ -11,6 +10,6 @@
         }
     },
     "validity": {
-        "days": 30
+        "days": 10
     }
 }

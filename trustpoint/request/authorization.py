@@ -2,11 +2,11 @@
 from abc import ABC, abstractmethod
 from typing import Never
 
-from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
-
 from aoki.views import AokiServiceMixin
-from request.request_context import RequestContext
+from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 from trustpoint.logger import LoggerMixin
+
+from request.request_context import RequestContext
 
 
 class AuthorizationComponent(ABC):
@@ -141,16 +141,12 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
             raise ValueError(err_msg)
 
 
-class CertificateTemplateAuthorization(AuthorizationComponent, LoggerMixin):
-    """Ensures the device is allowed to use the requested certificate template."""
-
-    def __init__(self, allowed_templates: list[str]) -> None:
-        """Initialize the authorization component with a list of allowed certificate templates."""
-        self.allowed_templates = allowed_templates # TODO remove
+class CertificateProfileAuthorization(AuthorizationComponent, LoggerMixin):
+    """Ensures the device is allowed to use the requested certificate profile."""
 
     def authorize(self, context: RequestContext) -> None:
-        """Authorize the request based on the certificate template."""
-        requested_profile = context.certificate_template
+        """Authorize the request based on the certificate profile."""
+        requested_profile = context.cert_profile_str
 
         if not requested_profile:
             error_message = 'Certificate profile is missing in the context. Authorization denied.'
@@ -161,7 +157,7 @@ class CertificateTemplateAuthorization(AuthorizationComponent, LoggerMixin):
             error_message = 'Domain information is missing in the context. Authorization denied.'
             self.logger.warning('Certificate profile authorization failed: Domain information is missing')
             raise ValueError(error_message)
-        
+
         allowed_profiles = context.domain.certificate_profiles.all()
         allowed_profile_names = [profile.certificate_profile.unique_name for profile in allowed_profiles]
         allowed_profile_names.extend(profile.alias for profile in allowed_profiles if profile.alias)
@@ -183,21 +179,19 @@ class CertificateTemplateAuthorization(AuthorizationComponent, LoggerMixin):
 
         # try query from alias first
         profile_qs = context.domain.certificate_profiles.filter(alias=requested_profile)
-        if profile_qs.exists():
-            context.certificate_profile_model = profile_qs.first().certificate_profile
-        else:
+        if not profile_qs.exists():
             # fall back to unique_name
             profile_qs = context.domain.certificate_profiles.filter(
                 certificate_profile__unique_name=requested_profile
             )
-            if profile_qs.exists():
-                context.certificate_profile_model = profile_qs.first().certificate_profile
-            else:
-                err_msg = f'Authorized certificate profile "{requested_profile}" not found in domain.'
-                context.http_response_content = err_msg
-                context.http_response_status = 403
-                self.logger.warning(err_msg)
-                raise ValueError(err_msg)
+        if not profile_qs.exists():
+            err_msg = f'Authorized certificate profile "{requested_profile}" not found in domain.'
+            context.http_response_content = err_msg
+            context.http_response_status = 403
+            self.logger.warning(err_msg)
+            raise ValueError(err_msg)
+
+        context.certificate_profile_model = profile_qs.first().certificate_profile  # type: ignore[union-attr] (checked by exists())
 
         self.logger.debug(
             'Certificate profile authorization successful for profile: %s',
@@ -350,7 +344,7 @@ class EstAuthorization(CompositeAuthorization):
         if allowed_operations is None:
             allowed_operations = ['simpleenroll', 'simplereenroll']
 
-        self.add(CertificateTemplateAuthorization(allowed_templates))
+        self.add(CertificateProfileAuthorization(allowed_templates))
         self.add(DomainScopeValidation())
         self.add(ManualAuthorization())
         self.add(ProtocolAuthorization(['est']))
@@ -373,7 +367,7 @@ class CmpAuthorization(CompositeAuthorization):
         if allowed_operations is None:
             allowed_operations = ['certification', 'initialization']
 
-        self.add(CertificateTemplateAuthorization(allowed_templates))
+        self.add(CertificateProfileAuthorization(allowed_templates))
         self.add(DomainScopeValidation())
         self.add(DevOwnerIDAuthorization())
         self.add(ManualAuthorization())

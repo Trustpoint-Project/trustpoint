@@ -37,14 +37,16 @@ class CmpInitializationRequestView(View):
         """Handles the POST requests to the CMP IR endpoint."""
         del args
         domain_name = cast('str', kwargs.get('domain_name'))
-        # Default to 'domaincredential' if not provided
-        cert_profile = cast('str', kwargs.get('certificate_profile', 'domaincredential'))
+        # Default to 'domain_credential' if not provided
+        cert_profile = cast('str', kwargs.get('certificate_profile', 'domain_credential'))
 
-        ctx = RequestContext(raw_message=request,
-                                      domain_str=domain_name,
-                                      protocol='cmp',
-                                      operation='initialization',
-                                      certificate_template=cert_profile)
+        ctx = RequestContext(
+            raw_message=request,
+            domain_str=domain_name,
+            protocol='cmp',
+            operation='initialization',
+            cert_profile_str=cert_profile
+        )
 
         validator = CmpHttpRequestValidator()
         validator.validate(ctx)
@@ -56,7 +58,7 @@ class CmpInitializationRequestView(View):
         authenticator.authenticate(ctx)
 
         authorizer = CmpAuthorization(
-            ['tls-server', 'tls-client', 'opc-ua-server', 'opc-ua-client', 'domaincredential'],
+            ['tls-server', 'tls-client', 'opc-ua-server', 'opc-ua-client', 'domain_credential'],
             ['initialization', 'certification']
         )
         authorizer.authorize(ctx)
@@ -88,13 +90,15 @@ class CmpCertificationRequestView(View):
         del args
         domain_name = cast('str', kwargs.get('domain_name'))
         # Default to 'tls-client' if not provided (TBD)
-        cert_profile = cast('str', kwargs.get('certificate_profile', 'tls-client'))
+        cert_profile = cast('str', kwargs.get('certificate_profile', 'tls_client'))
 
-        ctx = RequestContext(raw_message=request,
-                                      domain_str=domain_name,
-                                      protocol='cmp',
-                                      operation='certification',
-                                      certificate_template=cert_profile)
+        ctx = RequestContext(
+            raw_message=request,
+            domain_str=domain_name,
+            protocol='cmp',
+            operation='certification',
+            cert_profile_str=cert_profile
+        )
 
         validator = CmpHttpRequestValidator()
         validator.validate(ctx)
@@ -106,7 +110,7 @@ class CmpCertificationRequestView(View):
         authenticator.authenticate(ctx)
 
         authorizer = CmpAuthorization(
-            ['tls-server', 'tls-client', 'opc-ua-server', 'opc-ua-client', 'domaincredential'],
+            ['tls-server', 'tls-client', 'opc-ua-server', 'opc-ua-client', 'domain_credential'],
             ['certification']
         )
         authorizer.authorize(ctx)

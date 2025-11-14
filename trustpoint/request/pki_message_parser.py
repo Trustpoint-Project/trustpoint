@@ -191,19 +191,18 @@ class DomainParsing(ParsingComponent, LoggerMixin):
             self.logger.debug("Domain lookup successful: Found domain '%s'", domain_name)
             return domain
 
-class CertTemplateParsing(ParsingComponent, LoggerMixin):
-    """Parses the certificate template from the request context object."""
+class CertProfileParsing(ParsingComponent, LoggerMixin):
+    """Parses the certificate profile from the request context object."""
 
     def parse(self, context: RequestContext) -> None:
-        """Extract and validate the certificate template, then add it to the context."""
-        certtemplate_str = context.certificate_template
-        if not certtemplate_str:
-            error_message = 'Certificate template is missing in the request context.'
-            self.logger.warning('Certificate template parsing failed: Template string is missing')
+        """Extract and validate the certificate profile, then add it to the context."""
+        certprofile_str = context.cert_profile_str
+        if not certprofile_str:
+            error_message = 'Certificate profile is missing in the request context.'
+            self.logger.warning('Certificate profile parsing failed: Profile string is missing')
             raise ValueError(error_message)
 
-        context.certificate_template = certtemplate_str
-        self.logger.info("Certificate template parsing successful: Template '%s'", certtemplate_str)
+        self.logger.info("Certificate profile parsing successful: Profile '%s'", certprofile_str)
 
 
 class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
@@ -790,7 +789,7 @@ class CmpMessageParser(CompositeParsing):
         self.add(CmpHeaderValidation())
         self.add(CmpBodyValidation())
         self.add(DomainParsing())
-        self.add(CertTemplateParsing())
+        self.add(CertProfileParsing())
 
 
 class EstMessageParser(CompositeParsing):
@@ -801,7 +800,5 @@ class EstMessageParser(CompositeParsing):
         super().__init__()
         self.add(EstPkiMessageParsing())
         self.add(DomainParsing())
-        self.add(CertTemplateParsing())
+        self.add(CertProfileParsing())
         self.add(EstCsrSignatureVerification())
-
-

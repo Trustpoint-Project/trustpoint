@@ -9,7 +9,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from pki.models.domain import DomainModel
 from request.authentication import EstAuthentication
-from request.authorization import CertificateTemplateAuthorization, EstAuthorization, EstOperationAuthorization
+from request.authorization import CertificateProfileAuthorization, EstAuthorization, EstOperationAuthorization
 from request.http_request_validator import EstHttpRequestValidator
 from request.message_responder import EstErrorMessageResponder, EstMessageResponder
 from request.operation_processor import CertificateIssueProcessor
@@ -89,14 +89,14 @@ class EstSimpleEnrollmentView(LoggerMixin, View):
         # it also needs to handle the case where one or both are omitted
         try:
             domain_name = cast('str', kwargs.get('domain'))
-            cert_template = cast('str', kwargs.get('certtemplate'))
+            cert_profile = cast('str', kwargs.get('certtemplate'))
 
             ctx = RequestContext(
                 raw_message=request,
                 protocol='est',
                 operation='simpleenroll',
                 domain_str=domain_name,
-                certificate_template=cert_template,
+                cert_profile_str=cert_profile,
             )
         except Exception:
             err_msg = 'Failed to set up request context.'
@@ -155,14 +155,14 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
         # it also needs to handle the case where one or both are omitted
         try:
             domain_name = cast('str', kwargs.get('domain'))
-            cert_template = cast('str', kwargs.get('certtemplate'))
+            cert_profile = cast('str', kwargs.get('certtemplate'))
 
             ctx = RequestContext(
                 raw_message=request,
                 protocol='est',
                 operation='simplereenroll',
                 domain_str=domain_name,
-                certificate_template=cert_template,
+                cert_profile_str=cert_profile,
             )
         except Exception:
             err_msg = 'Failed to set up request context.'
