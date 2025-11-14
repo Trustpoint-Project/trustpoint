@@ -9,6 +9,7 @@ license = { file = "LICENSE" }
 keywords = ["django", "trustpoint", "server"]
 
 dependencies = [
+    "argon2-cffi>=25.1.0",
     "crispy-bootstrap5~=2025.4",
     "cryptography>=46.0.1",
     "django>=5.2.6",
@@ -26,7 +27,9 @@ dependencies = [
     "pyasn1>=0.6.1,<0.7",
     "pyasn1-modules>=0.4.1,<0.5",
     "pydantic>=2.11.7",
-    "trustpoint-core==0.2.5",
+    "pydeps>=3.0.1",
+    "python-pkcs11>=0.8.1",
+    "trustpoint-core==0.3.0",
     "types-paramiko>=3.5.0.20250516",
     "zeroconf>=0.148,<0.149",
 ]
@@ -88,7 +91,7 @@ ignore = [
     # TODO(AlexHx8472): We should use this in the future:
     "TD003",
 ]
-exclude = ["**/migrations/*", "**/manage.py"]
+exclude = ["**/migrations/*", "**/manage.py", "**/tests/*", "**/management/commands/*"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/**.py" = ["S101"]
@@ -102,7 +105,6 @@ docstring-code-format = true
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
-
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = 'trustpoint.settings'

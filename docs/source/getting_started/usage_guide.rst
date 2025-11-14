@@ -15,7 +15,7 @@ Trustpoint works in two main stages:
     - Onboarding a device to Trustpoint by issuing an initial certificate (so called domain credential), which enables secure authentication to Trustpoint.
     - Onboarding is available in two ways:
         - **User-driven Onboarding**: This is the primary method currently available, offering several options for onboarding devices:
-            - **Using the Trustpoint Client**: The Trustpoint client, available at `Trustpoint Client GitHub <https://github.com/TrustPoint-Project/trustpoint-client>`_, provides a user-friendly interface to onboard devices.
+            - **Using the Trustpoint Client**: The Trustpoint client, available at `Trustpoint Client GitHub <https://github.com/Trustpoint-Project/trustpoint-client>`_, provides a user-friendly interface to onboard devices.
             - **Using the device CLI**: Users can request a domain credential via CMP or EST (WIP).
             - **Browser-Based Onboarding**: Trustpoint offers a web interface for convenient onboarding through a browser.
             - **Manual Download of a P12 File**: Users can download a PKCS#12 file containing the certificate and manually distribute it to the target machine.

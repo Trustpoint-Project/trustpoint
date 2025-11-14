@@ -2,12 +2,12 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, backup, help_support, logging, settings, tls
+from .views import IndexView, backup, help_support, key_storage, logging, settings, tls
 
 app_name = 'management'
 urlpatterns = [
     path('', IndexView.as_view(), name='index'),
-    # path('settings/', settings.settings, name='settings'),
+    # path('settings/', settings.settings, name='settings'),  # noqa: ERA001
     path('logging/files/', logging.LoggingFilesTableView.as_view(), name='logging-files'),
     re_path(
         r'^logging/files/details/(?P<filename>trustpoint\.log(?:\.\d{1,5})?)/?$',
@@ -62,4 +62,6 @@ urlpatterns = [
     ),
     path('backups/delete-multiple/', backup.BackupFilesDeleteMultipleView.as_view(), name='backup-delete-multiple'),
     path('help/', help_support.HelpView.as_view(), name='help'),
+    path('key_storage/', key_storage.KeyStorageConfigView.as_view(), name='key_storage'),
+
 ]

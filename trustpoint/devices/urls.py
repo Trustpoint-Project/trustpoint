@@ -2,7 +2,6 @@
 
 from django.urls import path, re_path
 from help_pages import devices_help_views
-
 from trustpoint.page_context import DEVICES_PAGE_DEVICES_SUBCATEGORY, DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 from . import views

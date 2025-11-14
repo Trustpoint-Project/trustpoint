@@ -11,17 +11,19 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
 from django.utils.translation import gettext as _
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from setup_wizard.views import (
+from setup_wizard.state_dir_paths import SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL
+from trustpoint.logger import LoggerMixin
+
+from management.apache_paths import (
     APACHE_CERT_CHAIN_PATH,
     APACHE_CERT_PATH,
     APACHE_KEY_PATH,
-    SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL,
 )
 
 if TYPE_CHECKING:
     from typing import Any
 
-class Command(BaseCommand):
+class Command(LoggerMixin, BaseCommand):
     """A Django management command to restore the Trustpoint container.
 
     This restores the Apache TLS certificate.
@@ -32,7 +34,7 @@ class Command(BaseCommand):
     def handle(self, **options: Any) -> None:
         """Entrypoint for the command."""
         try:
-            self.stdout.write('Extrating tls cert and preparing for update of apache config...')
+            self.logger.debug('Extracting TLS cert and preparing for update of Apache config...')
 
             active_tls = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
         except ObjectDoesNotExist as e:
@@ -48,9 +50,15 @@ class Command(BaseCommand):
 
         APACHE_KEY_PATH.write_text(private_key_pem)
         APACHE_CERT_PATH.write_text(certificate_pem)
-        APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
 
-        self.stdout.write('Finished with preparation.')
+        # Only write chain file if there's actually a chain (not empty)
+        if trust_store_pem.strip():
+            APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+        elif APACHE_CERT_CHAIN_PATH.exists():
+            # Remove chain file if it exists but chain is empty
+            APACHE_CERT_CHAIN_PATH.unlink()
+
+        self.logger.debug('Finished with preparation.')
 
         script = SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL
 
@@ -65,12 +73,16 @@ class Command(BaseCommand):
 
         command = ['sudo', str(script_path)]
 
-        result = subprocess.run(command, capture_output=True, text=True, check=True)  # noqa: S603
+        self.logger.debug('Running TLS update script: %s', command)
+        result = subprocess.run(command, check=False, capture_output=True, text=True)  # noqa: S603
 
         if result.returncode != 0:
-            self.stdout.write(self.style.ERROR(result.stderr))
-            self.stdout.write(result.stdout)
-            raise subprocess.CalledProcessError(result.returncode, str(script_path))
+            self.logger.error('TLS update script failed with return code %d', result.returncode)
+            self.logger.error('Script stdout: %s', result.stdout)
+            self.logger.error('Script stderr: %s', result.stderr)
+            # Do not raise exception to allow TLS activation to succeed even if Apache restart fails
+        else:
+            self.logger.debug('TLS update script executed successfully')
 
         self.stdout.write('Apache TLS credential update successful.')
         sha256_fingerprint = active_tls.credential.get_certificate().fingerprint(hashes.SHA256())

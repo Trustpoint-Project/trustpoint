@@ -12,7 +12,7 @@ Introduction
 ============
 
 The purpose of this test plan should be to test all required functions which are briefly described
-inside the `GitHub repository <https://github.com/TrustPoint-Project/trustpoint>`_.
+inside the `GitHub repository <https://github.com/Trustpoint-Project/trustpoint>`_.
 Also, there is a separation between functionality and user experience.
 Since the project is heavily relying on securing networks as simple as possible,
 the user experience should be as important as the functionality.

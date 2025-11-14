@@ -15,8 +15,9 @@ from django.db.utils import OperationalError, ProgrammingError
 from django.utils.translation import gettext as _
 from packaging.version import InvalidVersion, Version
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from setup_wizard.views import APACHE_CERT_CHAIN_PATH, APACHE_CERT_PATH, APACHE_KEY_PATH, SCRIPT_WIZARD_RESTORE
+from setup_wizard.state_dir_paths import SCRIPT_WIZARD_RESTORE
 
+from management.apache_paths import APACHE_CERT_CHAIN_PATH, APACHE_CERT_PATH, APACHE_KEY_PATH
 from management.models import AppVersion
 
 if TYPE_CHECKING:
@@ -121,13 +122,24 @@ class Command(BaseCommand):
             active_tls = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
             tls_server_credential_model = active_tls.credential
 
+            if not tls_server_credential_model:
+                error_msg = _('TLS credential not found')
+                self.stdout.write(self.style.ERROR(error_msg))
+                return
+
             private_key_pem = tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
             certificate_pem = tls_server_credential_model.get_certificate_serializer().as_pem().decode()
             trust_store_pem = tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
 
             APACHE_KEY_PATH.write_text(private_key_pem)
             APACHE_CERT_PATH.write_text(certificate_pem)
-            APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+
+            # Only write chain file if there's actually a chain (not empty)
+            if trust_store_pem.strip():
+                APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+            elif APACHE_CERT_CHAIN_PATH.exists():
+                # Remove chain file if it exists but chain is empty
+                APACHE_CERT_CHAIN_PATH.unlink()
 
             self.stdout.write('Finished with preparation.')
 
@@ -150,7 +162,7 @@ class Command(BaseCommand):
                 raise subprocess.CalledProcessError(result.returncode, str(script_path))
 
             self.stdout.write('Restoration successful.')
-            sha256_fingerprint = active_tls.credential.get_certificate().fingerprint(hashes.SHA256())
+            sha256_fingerprint = tls_server_credential_model.get_certificate().fingerprint(hashes.SHA256())
             formatted = ':'.join(f'{b:02X}' for b in sha256_fingerprint)
             self.stdout.write(f'TLS SHA256 fingerprint: {(formatted)}')
 

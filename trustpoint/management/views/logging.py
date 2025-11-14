@@ -146,6 +146,9 @@ class LoggingFilesDownloadView(PageContextMixin, LoggerMixin, TemplateView):
     def get(self, *_args: Any, **kwargs: Any) -> HttpResponse:
         """The HTTP GET method for the view."""
         filename = kwargs.get('filename')
+        if not filename:
+            msg = 'Filename not provided.'
+            raise Http404(msg)
         log_file_path = LOG_DIR_PATH / Path(filename)
 
         if not log_file_path.exists() or not log_file_path.is_file():
