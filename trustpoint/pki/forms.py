@@ -194,7 +194,7 @@ class TruststoreAddForm(forms.Form):
             if TruststoreModel.objects.filter(unique_name=unique_name).exists():
                 self._raise_validation_error('Truststore with the provided name already exists.')
 
-            trust_store_model = self._save_trust_store(
+            trust_store_model = self.save_trust_store(
                 unique_name=unique_name,
                 intended_usage=TruststoreModel.IntendedUsage(int(intended_usage)),
                 certificates=certs,
@@ -205,9 +205,10 @@ class TruststoreAddForm(forms.Form):
         self.cleaned_data['truststore'] = trust_store_model
 
     @staticmethod
-    def _save_trust_store(
+    def save_trust_store(
         unique_name: str, intended_usage: TruststoreModel.IntendedUsage, certificates: list[x509.Certificate]
     ) -> TruststoreModel:
+        """Save all certificates of a truststore."""
         saved_certs: list[CertificateModel] = []
 
         for certificate in certificates:
@@ -718,7 +719,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             credential_serializer = CredentialSerializer.from_serializers(
                 private_key_serializer=private_key_serializer,
                 certificate_serializer=ca_certificate_serializer,
-                certificate_collection_serializer=ca_certificate_chain_serializer
+                certificate_collection_serializer=ca_certificate_chain_serializer,
             )
 
             pk = credential_serializer.private_key
@@ -741,7 +742,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
                                                      location=PrivateKeyLocation.HSM_PROVIDED))
 
             if not unique_name:
-              unique_name = get_certificate_name(cert)
+                unique_name = get_certificate_name(cert)
 
             if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
                 error_message = 'Unique name is already taken. Choose another one.'
