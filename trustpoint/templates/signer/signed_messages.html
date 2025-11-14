@@ -1,0 +1,50 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header">
+        <h1>{% trans "Signed Messages for" %} {{ signer.unique_name }}</h1>
+    </div>
+
+    <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; max-height: 90%;">
+        <div class="table-responsive">
+            <table class="table table-borderless table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="fw-bold">{% trans "ID" %}</th>
+                        <th class="fw-bold">{% trans "Hash Value" %}</th>
+                        <th class="fw-bold">{% trans "Signature" %}</th>
+                        <th class="fw-bold">{% trans "Created At" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for message in signed_messages %}
+                    <tr>
+                        <td>{{ message.pk }}</td>
+                        <td style="max-width: 300px; word-break: break-all; font-family: monospace; font-size: 0.9em;">
+                            {{ message.hash_value }}
+                        </td>
+                        <td style="max-width: 300px; word-break: break-all; font-family: monospace; font-size: 0.9em;">
+                            {{ message.signature|truncatechars:50 }}
+                        </td>
+                        <td>{{ message.created_at|date:"Y-m-d H:i:s" }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center">{% trans "No signed messages found" %}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <a href="{% url 'signer:signer-config' signer.pk %}" class="btn btn-secondary">{% trans "← Back to Signer" %}</a>
+        </div>
+    </div>
+</div>
+{% endblock content %}

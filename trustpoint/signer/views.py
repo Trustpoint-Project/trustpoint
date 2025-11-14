@@ -1,192 +1,206 @@
 """Contains all the views of Signer App."""
 
 import json
-import urllib
-from collections.abc import Sequence
 from typing import Any
 
-from cryptography import x509
-from cryptography.exceptions import UnsupportedAlgorithm
-from cryptography.hazmat.primitives import hashes, serialization
+from Auth.models import UserToken
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.forms.models import BaseModelForm
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.core.exceptions import ValidationError
+from django.db.models import ProtectedError, QuerySet
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
+from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
+from django.views.generic import DetailView, ListView
+from django.views.generic.edit import FormView
+from signer.forms import (
+    SignerAddFileImportPkcs12Form,
+    SignerAddFileImportSeparateFilesForm,
+    SignerAddFileTypeSelectForm,
+    SignerAddMethodSelectForm,
+)
+from signer.models import SignedMessageModel, SignerModel
 
-from .forms import SignerForm
-from .models import SignedMessage, Signer
-from .util.keygen import load_private_key_object, generate_private_key
-from Auth.models import UserToken
+from trustpoint.logger import LoggerMixin
+from trustpoint.settings import UIConfig
+from trustpoint.views.base import BulkDeleteView, ContextDataMixin, SortableTableMixin
+
+from .util.keygen import load_private_key_object
 
 
-class SignerListView(LoginRequiredMixin, ListView[Signer]):
-    """Class View for List of Signers."""
+class SignerContextMixin(ContextDataMixin):
+    """Mixin which adds context_data for the Signer pages."""
 
-    model = Signer
-    paginate_by = 10
-    template_name = 'signer/signers.html'
+    context_page_category = 'signer'
+
+class SignerTableView(SignerContextMixin, SortableTableMixin, ListView[SignerModel]):
+    """Signer Table View."""
+
+    model = SignerModel
+    template_name = 'signer/signers.html'  # Template file
     context_object_name = 'signers'
-    page_name = 'signers'
-    page_category = 'signers'
+    paginate_by = UIConfig.paginate_by  # Number of items per page
+    default_sort_param = 'unique_name'
 
-    def get_ordering(self) -> str | Sequence[str] | None:
-        """Returns the sort parameters as a list.
+class SignerAddMethodSelectView(SignerContextMixin, FormView[SignerAddMethodSelectForm]):
+    """View to select the method to add a Signer."""
 
-        Returns:
-           The sort parameters, if any. Otherwise the default sort parameter.
-        """
-        return ['-created_on']
+    template_name = 'signer/add/method_select.html'
+    form_class = SignerAddMethodSelectForm
+
+    def form_valid(self, form: SignerAddMethodSelectForm) -> HttpResponseRedirect:
+        """Redirect to the next step based on the selected method."""
+        method_select = form.cleaned_data.get('method_select')
+        if not method_select:
+            return HttpResponseRedirect(reverse_lazy('signer:signer-add-method_select'))
+
+        if method_select and method_select == 'local_file_import':
+            return HttpResponseRedirect(reverse_lazy('signer:signer-add-file_import-file_type_select'))
+
+        return HttpResponseRedirect(reverse_lazy('signer:signer-add-method_select'))
 
 
-class SignerDeleteView(DeleteView[Signer, BaseModelForm[Signer]]):
-    """Class View for Deleting a Signer."""
+class SignerAddFileImportFileTypeSelectView(SignerContextMixin, FormView[SignerAddFileTypeSelectForm]):
+    """View to select the file type when importing a Signer."""
 
-    model = Signer
-    paginate_by = 10
-    success_url = reverse_lazy('signer:signerList')
+    template_name = 'signer/add/file_type_select.html'
+    form_class = SignerAddFileTypeSelectForm
+
+    def form_valid(self, form: SignerAddFileTypeSelectForm) -> HttpResponseRedirect:
+        """Redirect to the next step based on the selected file type."""
+        method_select = form.cleaned_data.get('method_select')
+        if not method_select:
+            return HttpResponseRedirect(reverse_lazy('signer:signer-add-file_import-file_type_select'))
+
+        if method_select == 'pkcs_12':
+            return HttpResponseRedirect(reverse_lazy('signer:signer-add-file_import-pkcs12'))
+        if method_select == 'other':
+            return HttpResponseRedirect(reverse_lazy('signer:signer-add-file_import-separate_files'))
+
+        return HttpResponseRedirect(reverse_lazy('signer:signer-add-file_import-file_type_select'))
 
 
-class SignerEditView(UpdateView[Signer, SignerForm]):
-    """Class View for Updating/Editing the Signer."""
+class SignerAddFileImportPkcs12View(SignerContextMixin, FormView[SignerAddFileImportPkcs12Form]):
+    """View to import an Issuing CA from a PKCS12 file."""
 
-    model = Signer
-    success_url = reverse_lazy('signer:signerList')
-    form_class = SignerForm
-    template_name = 'signer/addSigner.html'
+    template_name = 'signer/add/file_import.html'
+    form_class = SignerAddFileImportPkcs12Form
+    success_url = reverse_lazy('signer:signer_list')
+
+    def form_valid(self, form: SignerAddFileImportPkcs12Form) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        messages.success(
+            self.request,
+            _('Successfully added Signer {name}.').format(name=form.cleaned_data['unique_name']),
+        )
+        return super().form_valid(form)
+
+
+class SignerAddFileImportSeparateFilesView(SignerContextMixin, FormView[SignerAddFileImportSeparateFilesForm]):
+    """View to import a Signer from separate PEM files."""
+
+    template_name = 'signer/add/file_import.html'
+    form_class = SignerAddFileImportSeparateFilesForm
+    success_url = reverse_lazy('signer:signer_list')
+
+    def form_valid(self, form: SignerAddFileImportSeparateFilesForm) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        messages.success(
+            self.request,
+            _('Successfully added Signer {name}.').format(name=form.cleaned_data['unique_name']),
+        )
+        return super().form_valid(form)
+
+
+class SignerConfigView(LoggerMixin, SignerContextMixin, DetailView[SignerModel]):
+    """View to display the details of a Signer."""
+
+    http_method_names = ('get',)
+
+    model = SignerModel
+    success_url = reverse_lazy('signer:signer_list')
+    ignore_url = reverse_lazy('signer:signer_list')
+    template_name = 'signer/signer_config.html'
     context_object_name = 'signer'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds the title to the context.
+        """Adds the issued certificates to the context.
 
         Args:
-            **kwargs: All keyword arguments are passed to super().get_context_data.
+            **kwargs: Keyword arguments passed to super().get_context_data()
 
         Returns:
-            The context for the page.
+            The context to render the page.
+        """
+        return super().get_context_data(**kwargs)
+
+class SignedMessagesListView(SignerContextMixin, ListView[SignedMessageModel]):
+    """View to display all signed messages by a specific Signer."""
+
+    model = SignedMessageModel
+    template_name = 'signer/signed_messages.html'
+    context_object_name = 'signed_messages'
+
+    def get_queryset(self) -> QuerySet[SignedMessageModel, SignedMessageModel]:
+        """Gets the required and filtered QuerySet.
+
+        Returns:
+            The filtered QuerySet.
+        """
+        signer = get_object_or_404(SignerModel, pk=self.kwargs['pk'])
+
+        return SignedMessageModel.objects.filter(
+            signer_public_bytes=signer.credential.certificate.subject_public_bytes
+        )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the signer model object to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data()
+
+        Returns:
+            The context to render the page.
         """
         context = super().get_context_data(**kwargs)
-        context['form_title'] = _('Edit Signer')
-
+        context['signer'] = get_object_or_404(SignerModel, pk=self.kwargs['pk'])
         return context
 
 
-class SignerDetailView(DetailView[Signer]):
-    """View Class for Signer Details."""
+class SignerBulkDeleteConfirmView(SignerContextMixin, BulkDeleteView):
+    """View to confirm the deletion of multiple Signers."""
 
-    model = Signer
-    paginate_by = 10
-    template_name = 'signer/signer_detail.html'
+    model = SignerModel
+    success_url = reverse_lazy('signer:signer_list')
+    ignore_url = reverse_lazy('signer:signer_list')
+    template_name = 'signer/confirm_delete.html'
+    context_object_name = 'signers'
 
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds signed messages object and certificate object to the context.
-
-        Args:
-            **kwargs: All keyword arguments are passed to super().get_context_data.
-
-        Returns: Gives the context data containing the signed messages object and certificate object fields.
-
-        """
-        context = super().get_context_data(**kwargs)
-
-        context['signed_messages'] = self.object.signed_messages.all()
+    def form_valid(self, form: Any) -> HttpResponse:
+        """Delete the selected Signers on valid form."""
+        queryset = self.get_queryset()
+        deleted_count = queryset.count() if queryset else 0
 
         try:
-            cert_obj = x509.load_pem_x509_certificate(self.object.certificate.encode())
-            context['cert_details'] = {
-                'subject': cert_obj.subject.rfc4514_string(),
-                'issuer': cert_obj.issuer.rfc4514_string(),
-                'serial_number': cert_obj.serial_number,
-                'not_valid_before': cert_obj.not_valid_before,
-                'not_valid_after': cert_obj.not_valid_after,
-                'certificate': cert_obj.public_bytes(encoding=serialization.Encoding.PEM).decode('utf-8'),
-            }
-        except ValueError:
-            messages.add_message(self.request, messages.ERROR, 'Failed to parse certificate.')
-
-        return context
-
-
-    pass
-
-
-class SignerCreateView(CreateView[Signer, SignerForm]):
-    """For Signer Create View."""
-
-    model = Signer
-    form_class = SignerForm
-    template_name = 'signer/addSigner.html'
-    success_url = reverse_lazy('signer:signerList')
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds the title to the context.
-
-        Args:
-            **kwargs: All keyword arguments are passed to super().get_context_data.
-
-        Returns:
-            The context for the page.
-        """
-        context = super().get_context_data(**kwargs)
-        context['form_title'] = 'Add Signer'
-        return context
-
-    def form_valid(self, form: SignerForm) -> HttpResponse:
-        """Creates the keypair and certificate, and stores it in the db.
-
-        Args:
-            form: The SignerForm to create new signer.
-
-        Returns:
-            The HttpResponse corresponding to the success url.
-        """
-        signer = form.save(commit=False)
-
-        signer.private_key = generate_private_key(
-            algorithm_oid_str=signer.signing_algorithm,
-            curve_name=signer.curve,
-            key_size=signer.key_length,
-        )
-
-        private_key_obj = load_private_key_object(signer.private_key)
-        public_key = private_key_obj.public_key()
-
-        # Create self-signed certificate
-        builder = (
-            x509.CertificateBuilder()
-            .subject_name(
-                x509.Name(
-                    [
-                        x509.NameAttribute(x509.NameOID.COMMON_NAME, signer.unique_name),
-                    ]
-                )
+            response = super().form_valid(form)
+        except (ProtectedError, ValidationError):
+            messages.error(
+                self.request,
+                _('Cannot delete the selected Signer(s) because they are referenced by other objects.'),
             )
-            .issuer_name(
-                x509.Name(
-                    [
-                        x509.NameAttribute(x509.NameOID.COMMON_NAME, signer.unique_name),
-                    ]
-                )
-            )
-            .public_key(public_key)
-            .serial_number(x509.random_serial_number())
-            .not_valid_before(timezone.now())
-            .not_valid_after(signer.expires_by)
+            return HttpResponseRedirect(self.ignore_url)
+
+        messages.success(
+            self.request,
+            _('Successfully deleted {count} Signer(s).').format(count=deleted_count),
         )
-
-        certificate = builder.sign(private_key=private_key_obj, algorithm=hashes.SHA256())
-
-        signer.certificate = certificate.public_bytes(serialization.Encoding.PEM).decode()
-
-        signer.save()
-        return super().form_valid(form)
+        return response
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -220,7 +234,7 @@ class SignHashAPIView(View):
             if user_token.expires_at < timezone.now():
                 return JsonResponse({'error': 'Token expired'}, status=403)
 
-            signer = Signer.objects.get(pk=signer_id)
+            signer = SignerModel.objects.get(pk=signer_id)
             private_key = load_private_key_object(signer.private_key)
             hash_bytes = bytes.fromhex(hash_hex)
 
@@ -231,11 +245,11 @@ class SignHashAPIView(View):
             else:
                 return JsonResponse({'error': 'Unsupported algorithm'}, status=400)
 
-            SignedMessage.objects.create(
-                signer=signer,  cert_subject="API Token Auth",  hash_value=hash_hex, signature=signature.hex()
+            SignedMessageModel.objects.create(
+                signer=signer, cert_subject='API Token Auth', hash_value=hash_hex, signature=signature.hex()
             )
 
             return JsonResponse({'signature': signature.hex()}, status=200)
 
-        except Signer.DoesNotExist:
+        except SignerModel.DoesNotExist:
             return JsonResponse({'error': 'Signer not found'}, status=404)

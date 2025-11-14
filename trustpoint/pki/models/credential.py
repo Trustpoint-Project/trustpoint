@@ -144,6 +144,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         ISSUING_CA = 2, _('Issuing CA')
         ISSUED_CREDENTIAL = 3, _('Issued Credential')
         DEV_OWNER_ID = 4, _('DevOwnerID')
+        SIGNER = 5, _('Signer')
 
     credential_type = models.IntegerField(verbose_name=_('Credential Type'), choices=CredentialTypeChoice)
     private_key = EncryptedCharField(verbose_name=_('Private key (PEM)'), max_length=65536, default='', blank=True)

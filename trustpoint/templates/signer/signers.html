@@ -13,14 +13,12 @@
             <table class="table table-borderless table-hover align-middle mb-0">
                 <thead>
                     <tr>
-                        <th class="fw-bold">{% trans "ID" %}</th>
-                        <th class="fw-bold">{% trans "Unique Name" %}</th>
-                        <th class="fw-bold">{% trans "Algorithm" %}</th>
-                        <th class="fw-bold">{% trans "Key Length or Curve" %}</th>
-                        <th class="fw-bold">{% trans "Hash Function" %}</th>
-                        <th class="fw-bold">{% trans "Expires On" %}</th>
-                        <th class="fw-bold">{% trans "Created On" %}</th>
-                        <th class="fw-bold">{% trans "Edit" %}</th>
+                        <th class="fw-bold">{% trans "Signer Name" %}</th>
+                        <th class="fw-bold">{% trans "Signature Suite" %}</th>
+                        <th class="fw-bold">{% trans "Created at" %}</th>
+                        <th class="fw-bold">{% trans "Expires on" %}</th>
+                        <th class="fw-bold">{% trans "Configure" %}</th>
+                        <th class="fw-bold">{% trans "Signing Log" %}</th>
                         <th class="fw-bold">{% trans "Delete" %}</th>
                     </tr>
                 </thead>
@@ -28,52 +26,33 @@
                 {% for signer in page_obj %}
                     <tr>
                         <td>
-                            <a href="{% url 'signer:signerDetail' signer.pk %}" class="text-decoration-none">
-                                {{ signer.pk }}
+                            <a href="{% url 'signer:signer-config' signer.pk %}" class="text-decoration-none">
+                                {{ signer.unique_name }}
                             </a>
                         </td>
-                        <td>{{ signer.unique_name }}</td>
-                        <td>{{ signer.get_signing_algorithm_display }}</td>
+                        <td>{{ signer.credential.certificate.signature_suite }}</td>
+                        <td>{{ signer.created_at|date:"N j, Y, g:i a" }}</td>
+                        <td>{{ signer.credential.certificate.not_valid_after_utc|date:"N j, Y, g:i a" }}</td>
                         <td>
-                            {% if signer.key_length %}
-                                {{ signer.key_length }} bits
-                            {% elif signer.curve %}
-                                {{ signer.curve }}
-                            {% else %}
-                                —
-                            {% endif %}
+                            <a href="{% url 'signer:signer-config' signer.pk %}"
+                               class="btn btn-sm btn-primary">
+                               {% trans "Configure" %}
+                            </a>
                         </td>
                         <td>
-                            {% if signer.hash_function %}
-                                {{ signer.hash_function }}
-                            {% else %}
-                                —
-                            {% endif %}
+                            <a href="{% url 'signer:signer-signed_messages' signer.pk %}"
+                               class="btn btn-sm btn-info">
+                               {% trans "Signing Log" %}
+                            </a>
                         </td>
-                        <td>{{ signer.expires_by|date:"Y-m-d" }}</td>
-                        <td>{{ signer.created_on|date:"Y-m-d" }}</td>
                         <td>
-                            <div class="btn-group" role="group">
-                                <a href="{% url 'signer:editSigner' signer.pk %}"
-                                   class="btn btn-sm btn-primary">
-                                   {% trans "Edit" %}
-                                </a></div>
-                        </td>
-                        <td><div>
-                                <form method="post" action="{% url 'signer:deleteSigner' signer.pk %}"
-                                      style="display:inline;">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-danger"
-                                            onclick="return confirm('{% trans "Are you sure you want to delete this signer?" %}');">
-                                        {% trans "Delete" %}
-                                    </button>
-                                </form>
-                            </div>
+                            <input type="checkbox" name="selected_items" value="{{ signer.pk }}" 
+                                   class="form-check-input signer-checkbox">
                         </td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="8" class="text-center">{% trans "No signers found" %}</td>
+                        <td colspan="7" class="text-center">{% trans "No signers found" %}</td>
                     </tr>
                 {% endfor %}
                 </tbody>
@@ -87,12 +66,39 @@
 
     <div class="card-footer d-flex justify-content-between tp-sticky-footer">
         <div class="tp-card-btn-footer m-1">
-            <!-- Add any bulk action buttons here if needed -->
+            <button type="button" class="btn btn-danger" id="bulk-delete-btn" disabled>
+                {% trans "Delete Selected" %}
+            </button>
         </div>
         <div class="m-1">
-            <a href="{% url 'signer:addSigner' %}" class="btn btn-primary me-2">{% trans "Add New Signer" %}</a>
-            <a href="{% url 'auth:token_list' %}" class="btn btn-primary">{% trans "Manage Tokens" %}</a>
+            <a href="{% url 'signer:signer-add-method_select' %}" class="btn btn-primary me-2">{% trans "Add New Signer" %}</a>
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('.signer-checkbox');
+    const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+            bulkDeleteBtn.disabled = !anyChecked;
+        });
+    });
+    
+    bulkDeleteBtn.addEventListener('click', function() {
+        const selectedIds = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.value);
+        
+        if (selectedIds.length > 0) {
+            const pksPath = selectedIds.join('/') + '/';
+            const baseUrl = "{% url 'signer:signer_list' %}";
+            window.location.href = baseUrl + 'delete/' + pksPath;
+        }
+    });
+});
+</script>
 {% endblock content %}

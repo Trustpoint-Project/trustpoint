@@ -1,40 +1,34 @@
 """Contains Models For Signers App."""
 
-from typing import ClassVar
+
+from typing import TYPE_CHECKING
 
 from django.db import models
-from trustpoint_core.oid import AlgorithmIdentifier, NamedCurve
+from django.utils.translation import gettext_lazy as _
+from pki.models.credential import CredentialModel
+from trustpoint_core import oid
+from trustpoint_core.serializer import CredentialSerializer
+from util.db import CustomDeleteActionModel
+
+if TYPE_CHECKING:
+    from django.db.models.query import QuerySet
 
 
-class KeyLengths(models.IntegerChoices):
-    """Key Lengths Choices."""
-
-    B2048 = 2048, '2048 bits'
-    B3072 = 3072, '3072 bits'
-    B4096 = 4096, '4096 bits'
-    B8192 = 8192, '8192 bits'
-
-
-class Signer(models.Model):
+class SignerModel(CustomDeleteActionModel):
     """Contains fields for signer model."""
-
-    SIGNING_ALGORITHM_CHOICES: ClassVar[list[tuple[str, str]]] = [
-        (x.dotted_string, x.verbose_name) for x in AlgorithmIdentifier
-    ]
-    SIGNING_CURVE_CHOICES: ClassVar[list[tuple[str, str]]] = [
-        (x.ossl_curve_name, x.name) for x in NamedCurve if x.ossl_curve_name
-    ]
-
     unique_name = models.CharField(max_length=30, unique=True)
-    signing_algorithm = models.CharField(max_length=50, choices=SIGNING_ALGORITHM_CHOICES, editable=True)
-    key_length = models.IntegerField(null=True, blank=True, choices=KeyLengths.choices)
-    curve = models.CharField(max_length=50, choices=SIGNING_CURVE_CHOICES, null=True, blank=True)  # noqa:DJ001
-    hash_function = models.CharField(max_length=50)
-    private_key = models.CharField(max_length=4096)
-    certificate = models.CharField(max_length=4096)
-    expires_by = models.DateTimeField()
-    created_by = models.CharField(max_length=100)
-    created_on = models.DateTimeField(auto_now_add=True)
+
+    credential: CredentialModel = models.OneToOneField(
+        CredentialModel,
+        related_name='signer',
+        on_delete=models.PROTECT,
+    )
+    is_active = models.BooleanField(
+        _('Active'),
+        default=True,
+    )
+    created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
+    updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
 
     def __str__(self) -> str:
         """To represent the signer object with its unique name.
@@ -44,12 +38,45 @@ class Signer(models.Model):
         """
         return self.unique_name
 
+    @property
+    def common_name(self) -> str:
+        """Returns common name."""
+        return self.credential.certificate.common_name
 
-class SignedMessage(models.Model):
+    @property
+    def signature_suite(self) -> oid.SignatureSuite:
+        """The signature suite for the CA public key certificate."""
+        return oid.SignatureSuite.from_certificate(self.credential.get_certificate_serializer().as_crypto())
+
+    @property
+    def public_key_info(self) -> oid.PublicKeyInfo:
+        """The public key info for the CA certificate's public key."""
+        return self.signature_suite.public_key_info
+
+    @classmethod
+    def create_new_signer(
+        cls,
+        unique_name: str,
+        credential_serializer: CredentialSerializer,
+    ) -> 'SignerModel':
+        """Create a new SignerModel instance."""
+        credential_model = CredentialModel.save_credential_serializer(
+            credential_serializer=credential_serializer,
+            credential_type=CredentialModel.CredentialTypeChoice.SIGNER,
+        )
+
+        signer = cls(
+            unique_name=unique_name,
+            credential=credential_model,
+        )
+        signer.save()
+        return signer
+
+
+class SignedMessageModel(models.Model):
     """Model to store signed messages, its signature and certificate(with public key)."""
-
-    signer = models.ForeignKey(Signer, on_delete=models.CASCADE, related_name='signed_messages')
-    cert_subject = models.TextField()
+    signer = models.ForeignKey(SignerModel, on_delete=models.CASCADE, related_name='signed_messages')
+    signer_public_bytes = models.CharField(verbose_name=_('Signer Public Bytes'), max_length=2048, editable=False)
     hash_value = models.CharField(max_length=256)
     signature = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
