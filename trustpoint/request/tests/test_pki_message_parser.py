@@ -330,7 +330,7 @@ class TestCertProfileParsing:
             parser.parse(mock_context)
             assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert 'Certificate template is missing in the request context.' in str(e)
+            assert 'Certificate profile is missing in the request context.' in str(e)
 
 
 class TestCmpPkiMessageParsing:

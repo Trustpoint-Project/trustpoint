@@ -1,6 +1,5 @@
 """pytest configuration for the tests in the PKI app."""
 import base64
-import secrets
 from typing import Any
 
 import pytest
@@ -24,6 +23,7 @@ from django.http import HttpRequest
 from django.test.client import RequestFactory
 from management.models import KeyStorageConfig
 from pki.models import CertificateModel, CredentialModel
+from pki.models.cert_profile import CertificateProfileModel, DomainAllowedCertificateProfileModel
 from pki.models.domain import DomainModel
 from pki.models.issuing_ca import IssuingCaModel
 from pki.util.x509 import CertificateGenerator
@@ -76,7 +76,7 @@ def issuing_ca_instance() -> dict[str, Any]:
     """Fixture for a testing IssuingCaModel instance."""
     # Ensure crypto storage config exists for encrypted fields
     KeyStorageConfig.get_or_create_default()
-    
+
     cert, priv_key = CertificateGenerator.create_root_ca(cn=CA_COMMON_NAME)
     issuing_ca = CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=cert, private_key=priv_key, chain=[], unique_name=UNIQUE_NAME, ca_type=CA_TYPE
@@ -100,6 +100,40 @@ def domain_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
     domain = DomainModel.objects.create(unique_name=DOMAIN_UNIQUE_NAME, issuing_ca=issuing_ca, is_active=True)
     issuing_ca_instance.update({'domain': domain})
     return issuing_ca_instance
+
+
+@pytest.fixture
+def cert_profile_instance(domain_instance: dict[str, Any]) -> None:
+    """Fixture to create a domain_credential CertificateProfileModel instance linked to the domain fixture."""
+    domain: DomainModel = domain_instance['domain']
+
+    cert_profile = CertificateProfileModel.objects.create(
+        unique_name='domain_credential',
+        profile_json='{"type": "cert_profile", "subj": {"allow":"*"}, "ext": {}, "validity": {"days": 30}}',
+    )
+
+    DomainAllowedCertificateProfileModel.objects.create(
+        domain=domain,
+        certificate_profile=cert_profile,
+        alias='test_profile_alias'
+    )
+
+
+@pytest.fixture
+def cert_profile_instance_tls_server(domain_instance: dict[str, Any]) -> None:
+    """Fixture to create a tls_server CertificateProfileModel instance linked to the domain fixture."""
+    domain: DomainModel = domain_instance['domain']
+
+    cert_profile = CertificateProfileModel.objects.create(
+        unique_name='tls_server',
+        profile_json='{"type": "cert_profile", "subj": {"allow":"*"}, "ext": {}, "validity": {"days": 10}}',
+    )
+
+    DomainAllowedCertificateProfileModel.objects.create(
+        domain=domain,
+        certificate_profile=cert_profile,
+        alias='test_profile_alias_tls'
+    )
 
 
 @pytest.fixture
@@ -150,7 +184,8 @@ def device_instance_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any
 
 
 @pytest.fixture
-def est_device_without_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any]:
+def est_device_without_onboarding(domain_instance: dict[str, Any], cert_profile_instance_tls_server: None
+                                  ) -> dict[str, Any]:
     """Fixture to create a device using the EST protocol without onboarding."""
     domain: DomainModel = domain_instance['domain']
 
@@ -170,7 +205,9 @@ def est_device_without_onboarding(domain_instance: dict[str, Any]) -> dict[str, 
 
 
 @pytest.fixture
-def est_device_with_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any]:
+def est_device_with_onboarding(domain_instance: dict[str, Any],
+                               cert_profile_instance: None, cert_profile_instance_tls_server: None
+                               ) -> dict[str, Any]:
     """Fixture to create a device using the EST protocol with onboarding."""
     domain: DomainModel = domain_instance['domain']
     onboarding_pki_protocols = [
@@ -194,7 +231,8 @@ def est_device_with_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any
 
 
 @pytest.fixture
-def cmp_device_without_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any]:
+def cmp_device_without_onboarding(domain_instance: dict[str, Any], cert_profile_instance_tls_server: None
+                                  ) -> dict[str, Any]:
     """Fixture to create a device using the CMP protocol without onboarding."""
     domain: DomainModel = domain_instance['domain']
     no_onboarding_config = NoOnboardingConfigModel(cmp_shared_secret='test_cmp_secret')  # noqa: S106
@@ -213,7 +251,9 @@ def cmp_device_without_onboarding(domain_instance: dict[str, Any]) -> dict[str, 
 
 
 @pytest.fixture
-def cmp_device_with_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any]:
+def cmp_device_with_onboarding(domain_instance: dict[str, Any],
+                               cert_profile_instance: None, cert_profile_instance_tls_server: None
+                               ) -> dict[str, Any]:
     """Fixture to create a device using the CMP protocol with onboarding."""
     domain: DomainModel = domain_instance['domain']
     onboarding_pki_protocols = [

@@ -9,7 +9,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from pki.models.domain import DomainModel
 from request.authentication import EstAuthentication
-from request.authorization import CertificateProfileAuthorization, EstAuthorization, EstOperationAuthorization
+from request.authorization import EstAuthorization
 from request.http_request_validator import EstHttpRequestValidator
 from request.message_responder import EstErrorMessageResponder, EstMessageResponder
 from request.operation_processor import CertificateIssueProcessor
@@ -114,8 +114,6 @@ class EstSimpleEnrollmentView(LoggerMixin, View):
             est_authenticator.authenticate(ctx)
 
             est_authorizer = EstAuthorization(
-                # Allowed templates are TODO and might depend on authentication method
-                allowed_templates=['tls-client','tls-server', 'opc-ua-client', 'opc-ua-server', 'domaincredential'],
                 allowed_operations=['simpleenroll']
             )
             est_authorizer.authorize(ctx)
@@ -180,8 +178,6 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
             est_authenticator.authenticate(ctx)
 
             est_authorizer = EstAuthorization(
-                # Allowed templates are TODO and might depend on authentication method
-                allowed_templates=['tls-client','tls-server', 'opc-ua-client', 'opc-ua-server', 'domaincredential'],
                 allowed_operations=['simplereenroll']
             )
             est_authorizer.authorize(ctx)

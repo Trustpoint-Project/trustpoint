@@ -194,7 +194,7 @@ class TestRequestContext:
         expected_fields = [
             'raw_message', 'parsed_message', 'operation', 'protocol',
             'cert_profile_str', 'response_format', 'est_encoding',
-            'domain_str', 'domain', 'device', 'cert_requested',
+            'domain_str', 'domain', 'device', 'certificate_profile_model', 'cert_requested',
             'est_username', 'est_password', 'cmp_shared_secret',
             'client_certificate', 'client_intermediate_certificate',
             'cert_requested_profile_validated', 'issued_certificate',

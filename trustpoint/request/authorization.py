@@ -158,40 +158,17 @@ class CertificateProfileAuthorization(AuthorizationComponent, LoggerMixin):
             self.logger.warning('Certificate profile authorization failed: Domain information is missing')
             raise ValueError(error_message)
 
-        allowed_profiles = context.domain.certificate_profiles.all()
-        allowed_profile_names = [profile.certificate_profile.unique_name for profile in allowed_profiles]
-        allowed_profile_names.extend(profile.alias for profile in allowed_profiles if profile.alias)
-
-        if requested_profile not in allowed_profile_names:
+        try:
+            context.certificate_profile_model = context.domain.get_allowed_cert_profile(requested_profile)
+        except ValueError as e:
             context.http_response_content = f'Not authorized for requested certificate profile "{requested_profile}".'
             context.http_response_status = 403
             error_message = (
                 f"Unauthorized certificate profile: '{requested_profile}'. "
-                f"Allowed profiles: {', '.join(allowed_profile_names)}."
+                f"Allowed profiles: {', '.join(context.domain.get_allowed_cert_profile_names())}."
             )
-            self.logger.warning(
-                (
-                    'Certificate profile authorization failed: %s not in '
-                    'allowed profiles %s'
-                ),
-                requested_profile, self.allowed_templates)
-            raise ValueError(error_message)
-
-        # try query from alias first
-        profile_qs = context.domain.certificate_profiles.filter(alias=requested_profile)
-        if not profile_qs.exists():
-            # fall back to unique_name
-            profile_qs = context.domain.certificate_profiles.filter(
-                certificate_profile__unique_name=requested_profile
-            )
-        if not profile_qs.exists():
-            err_msg = f'Authorized certificate profile "{requested_profile}" not found in domain.'
-            context.http_response_content = err_msg
-            context.http_response_status = 403
-            self.logger.warning(err_msg)
-            raise ValueError(err_msg)
-
-        context.certificate_profile_model = profile_qs.first().certificate_profile  # type: ignore[union-attr] (checked by exists())
+            self.logger.warning(error_message)
+            raise ValueError(error_message) from e
 
         self.logger.debug(
             'Certificate profile authorization successful for profile: %s',
@@ -329,7 +306,7 @@ class CompositeAuthorization(AuthorizationComponent, LoggerMixin):
 
 class EstAuthorization(CompositeAuthorization):
     """Composite authorization handler for EST requests."""
-    def __init__(self, allowed_templates: list[str] | None = None, allowed_operations: list[str] | None = None) -> None:
+    def __init__(self, allowed_operations: list[str] | None = None) -> None:
         """Initialize the composite authorization handler with the default set of components.
 
         Args:
@@ -338,36 +315,29 @@ class EstAuthorization(CompositeAuthorization):
         """
         super().__init__()
 
-        if allowed_templates is None:
-            allowed_templates = ['tls-client']
-
         if allowed_operations is None:
             allowed_operations = ['simpleenroll', 'simplereenroll']
 
-        self.add(CertificateProfileAuthorization(allowed_templates))
         self.add(DomainScopeValidation())
+        self.add(CertificateProfileAuthorization())
         self.add(ManualAuthorization())
         self.add(ProtocolAuthorization(['est']))
         self.add(EstOperationAuthorization(allowed_operations))
 
 class CmpAuthorization(CompositeAuthorization):
     """Composite authorization handler for EST requests."""
-    def __init__(self, allowed_templates: list[str] | None = None, allowed_operations: list[str] | None = None) -> None:
+    def __init__(self, allowed_operations: list[str] | None = None) -> None:
         """Initialize the composite authorization handler with the default set of components.
 
         Args:
-            allowed_templates: List of allowed certificate templates. Defaults to ['tls-client'] if not provided.
             allowed_operations: List of allowed CMP operations. Defaults to ['cr', 'ir'] if not provided.
         """
         super().__init__()
 
-        if allowed_templates is None:
-            allowed_templates = ['tls-client']
-
         if allowed_operations is None:
             allowed_operations = ['certification', 'initialization']
 
-        self.add(CertificateProfileAuthorization(allowed_templates))
+        self.add(CertificateProfileAuthorization())
         self.add(DomainScopeValidation())
         self.add(DevOwnerIDAuthorization())
         self.add(ManualAuthorization())

@@ -353,7 +353,6 @@ Authorization Module Diagram
     }
 
     class CertificateProfileAuthorization {
-        + allowed_templates: list[str]
         + authorize(context: RequestContext)
     }
 

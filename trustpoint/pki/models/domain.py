@@ -13,6 +13,8 @@ from util.field import UniqueNameValidator
 if TYPE_CHECKING:
     from typing import Any
 
+    from cert_profile import CertificateProfileModel
+
 from . import IssuingCaModel
 
 __all__ = ['DomainModel']
@@ -93,3 +95,35 @@ class DomainModel(models.Model):
             err_msg = f'Domain {self.unique_name} does not have a corresponding Issuing CA configured.'
             raise ValueError(err_msg)
         return self.issuing_ca
+
+    def get_allowed_cert_profile_names(self) -> set[str]:
+        """Gets the set of allowed certificate profile names for this domain.
+
+        Returns:
+            Set of allowed certificate profile names.
+        """
+        allowed_profiles = self.certificate_profiles.all()
+        allowed_profile_names = {profile.certificate_profile.unique_name for profile in allowed_profiles}
+        allowed_profile_names.update(profile.alias for profile in allowed_profiles if profile.alias)
+        return allowed_profile_names
+
+    def get_allowed_cert_profile(self, cert_profile_str: str) -> CertificateProfileModel:
+        """Gets the requested certificate profile if it is allowed for this domain. Else, raises a ValueError.
+
+        Args:
+            cert_profile_str: The name of the certificate profile to check.
+
+        Returns:
+            The requested CertificateProfileModel (if allowed).
+        """
+        # try query from alias first
+        profile_qs = self.certificate_profiles.filter(alias=cert_profile_str)
+        if not profile_qs.exists():
+            # fall back to unique_name
+            profile_qs = self.certificate_profiles.filter(
+                certificate_profile__unique_name=cert_profile_str
+            )
+        if not profile_qs.exists():
+            err_msg = f'Certificate profile "{cert_profile_str}" does not exist or not allowed in domain.'
+            raise ValueError(err_msg)
+        return profile_qs.first().certificate_profile  # type: ignore[union-attr]
