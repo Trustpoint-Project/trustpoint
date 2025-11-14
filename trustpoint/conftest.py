@@ -9,17 +9,20 @@ from cryptography.hazmat._oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+from devices.issuer import LocalDomainCredentialIssuer, LocalTlsClientCredentialIssuer
+from devices.models import (
+    DeviceModel,
+    IssuedCredentialModel,
+    NoOnboardingConfigModel,
+    NoOnboardingPkiProtocol,
+    OnboardingConfigModel,
+    OnboardingPkiProtocol,
+    OnboardingProtocol,
+    RemoteDeviceCredentialDownloadModel,
+)
 from django.http import HttpRequest
 from django.test.client import RequestFactory
-
-from devices.issuer import LocalTlsClientCredentialIssuer, LocalDomainCredentialIssuer
-from devices.models import DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel
-from devices.issuer import LocalTlsClientCredentialIssuer
-from devices.models import (
-    DeviceModel, IssuedCredentialModel, RemoteDeviceCredentialDownloadModel,
-    NoOnboardingConfigModel, NoOnboardingPkiProtocol,
-    OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
-)
+from management.models import KeyStorageConfig
 from pki.models import CertificateModel, CredentialModel
 from pki.models.domain import DomainModel
 from pki.models.issuing_ca import IssuingCaModel
@@ -71,6 +74,9 @@ DOMAIN_UNIQUE_NAME = 'domain_test_instance'
 @pytest.fixture
 def issuing_ca_instance() -> dict[str, Any]:
     """Fixture for a testing IssuingCaModel instance."""
+    # Ensure crypto storage config exists for encrypted fields
+    KeyStorageConfig.get_or_create_default()
+    
     cert, priv_key = CertificateGenerator.create_root_ca(cn=CA_COMMON_NAME)
     issuing_ca = CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=cert, private_key=priv_key, chain=[], unique_name=UNIQUE_NAME, ca_type=CA_TYPE

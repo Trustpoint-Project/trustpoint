@@ -76,13 +76,13 @@
               <td><a href="{% url 'pki:certificate-detail' pk=tls_certificate.id %}" class="btn btn-primary tp-table-btn w-100">{% trans 'Details' %}</a></td>
               <td><a href="{% url 'pki:certificate-download' pk=tls_certificate.id %}" class="btn btn-primary tp-table-btn w-100">{% trans 'Download' %}</a></td>
                <td>
-                {% if tls_certificate.sha256_fingerprint != certificate.sha256_fingerprint %}
+                {% if certificate and tls_certificate.pk == certificate.pk %}
+                 ✔
+                {% else %}
                 <form method="POST" action="{% url 'management:activate-tls' pk=tls_certificate.id %}">
                   {% csrf_token %}
                   <button type="submit" class="btn btn-primary tp-table-btn w-100">{% trans 'Activate' %}</button>
                 </form>
-                {% else %}
-                 ✔
                 {% endif %}
               </td>
           </tr>

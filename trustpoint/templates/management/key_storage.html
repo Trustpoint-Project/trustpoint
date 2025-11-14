@@ -1,0 +1,147 @@
+{% extends 'trustpoint/base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block content %}
+    <div class="card">
+        <div class="card-header">
+            <h1>{% trans "Key Storage Configuration" %}</h1>
+        </div>
+        <div class="card-body pt-4 pb-4">
+            {% if not config %}
+                <div class="alert alert-warning">
+                    <svg class="bi me-2" width="20" height="20" fill="currentColor">
+                        <use href="{% static 'img/icons.svg' %}#icon-warning"></use>
+                    </svg>
+                    {% trans 'Key storage configuration not found.' %}
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <strong>{% trans 'Information:' %}</strong>
+                    {% trans 'Changing the storage type after initial configuration is not currently supported. The storage type is set during the initial setup wizard and cannot be modified afterwards.' %}
+                </div>                
+                <div class="row g-4 mb-4">
+                    <!-- Software Storage Option -->
+                    <div class="col-md-4">
+                        <div class="card h-100 {% if config.storage_type != 'software' %}opacity-50{% endif %}">
+                            <div class="card-body text-center">
+                                <svg class="bi mb-3" width="48" height="48" fill="currentColor">
+                                    <use href="{% static 'img/icons.svg' %}#icon-computer"></use>
+                                </svg>
+                                <h5 class="card-title">{% trans 'Software Storage' %}</h5>
+                                <p class="card-text">
+                                    {% trans 'Store cryptographic keys in software without encryption' %}
+                                </p>
+                                <span class="badge bg-warning mb-3">{% trans 'Not recommended for production!' %}</span>
+                                {% if config.storage_type == 'software' %}
+                                    <div class="alert alert-success mt-3">
+                                        <svg class="bi me-2" width="20" height="20" fill="currentColor">
+                                            <use href="{% static 'img/icons.svg' %}#icon-check"></use>
+                                        </svg>
+                                        <strong>{% trans 'Currently Active' %}</strong>
+                                    </div>
+                                {% else %}
+                                    <div class="alert alert-secondary mt-3">
+                                        {% trans 'Not Active' %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SoftHSM Option -->
+                    <div class="col-md-4">
+                        <div class="card h-100 {% if config.storage_type != 'softhsm' %}opacity-50{% endif %}">
+                            <div class="card-body text-center">
+                                <svg class="bi mb-3" width="48" height="48" fill="currentColor">
+                                    <use href="{% static 'img/icons.svg' %}#icon-shield"></use>
+                                </svg>
+                                <h5 class="card-title">{% trans 'SoftHSM Container' %}</h5>
+                                <p class="card-text">
+                                    {% trans 'Software-based HSM with encryption and secure key storage' %}
+                                </p>
+                                <span class="badge bg-warning mb-3">{% trans 'Not recommended for production!' %}</span>
+                                {% if config.storage_type == 'softhsm' %}
+                                    <div class="alert alert-success mt-3">
+                                        <svg class="bi me-2" width="20" height="20" fill="currentColor">
+                                            <use href="{% static 'img/icons.svg' %}#icon-check"></use>
+                                        </svg>
+                                        <strong>{% trans 'Currently Active' %}</strong>
+                                    </div>
+                                {% else %}
+                                    <div class="alert alert-secondary mt-3">
+                                        {% trans 'Not Active' %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Physical HSM Option -->
+                    <div class="col-md-4">
+                        <div class="card h-100 {% if config.storage_type != 'physical_hsm' %}opacity-50{% endif %}">
+                            <div class="card-body text-center">
+                                <svg class="bi mb-3" width="48" height="48" fill="currentColor">
+                                    <use href="{% static 'img/icons.svg' %}#icon-hardware"></use>
+                                </svg>
+                                <h5 class="card-title">{% trans 'Physical HSM' %}</h5>
+                                <p class="card-text">
+                                    {% trans 'Hardware-based secure cryptographic storage device' %}
+                                </p>
+                                <span class="badge bg-success mb-3">{% trans 'Recommended for production!' %}</span>
+                                {% if config.storage_type == 'physical_hsm' %}
+                                    <div class="alert alert-success mt-3">
+                                        <svg class="bi me-2" width="20" height="20" fill="currentColor">
+                                            <use href="{% static 'img/icons.svg' %}#icon-check"></use>
+                                        </svg>
+                                        <strong>{% trans 'Currently Active' %}</strong>
+                                    </div>
+                                {% else %}
+                                    <div class="alert alert-secondary mt-3">
+                                        {% trans 'Not Active' %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if config.storage_type == 'software' %}
+                    <!-- Software Storage - Additional Info -->
+                    <hr class="my-4">
+                    <div class="alert alert-warning">
+                        <svg class="bi me-2" width="20" height="20" fill="currentColor">
+                            <use href="{% static 'img/icons.svg' %}#icon-warning"></use>
+                        </svg>
+                        <strong>{% trans 'Warning:' %}</strong>
+                        {% trans 'Software storage does not encrypt private keys. This mode is not recommended for production environments. Cryptographic keys are stored directly in the database without hardware security module protection.' %}
+                    </div>
+                {% else %}
+                    <!-- HSM Configuration Display (Read-only) -->
+                    <hr class="my-4">
+                    <h4 class="mb-3">{% trans "HSM Configuration" %}</h4>
+                    {% if hsm_config %}
+                        <div class="row">
+                            <div class="col-md-6">
+                                <dl class="row">
+                                    <dt class="col-sm-4">{% trans "Token Label:" %}</dt>
+                                    <dd class="col-sm-8">{{ hsm_config.label }}</dd>
+                                    
+                                    <dt class="col-sm-4">{% trans "Slot Number:" %}</dt>
+                                    <dd class="col-sm-8">{{ hsm_config.slot }}</dd>
+                                    
+                                    <dt class="col-sm-4">{% trans "Module Path:" %}</dt>
+                                    <dd class="col-sm-8"><code>{{ hsm_config.module_path }}</code></dd>
+                                </dl>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            {% trans 'HSM configuration not found. Please configure the HSM token.' %}
+                        </div>
+                    {% endif %}
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+{% endblock content %}

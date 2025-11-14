@@ -1,0 +1,79 @@
+{% extends 'users/base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+{% block content %}
+
+    {% if messages %}
+        <div class="messages tp-messages text-center">
+            {% for message in messages %}
+                <div class="tp-message alert
+                    {% if message.tags %}
+                        {% if message.tags == "error" %}
+                            alert-danger
+                        {% else %}
+                            alert-{{ message.tags }}
+                        {% endif %}
+                    {% endif %} d-flex" role="alert">
+
+                    <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="{{ message.tags }}:">
+                        <use xlink:href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use></svg>
+                    <div>
+                        {{ message }}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="card tp-card-setup-wizard text-center">
+        <div class="card-header">
+            <h1>{% trans "Setup Mode" %}</h1>
+        </div>
+        <div class="card-body pt-3 pb-4">
+            
+            <div class="row g-4 mb-4 justify-content-center">
+                <!-- Setup from Scratch Option -->
+                <div class="col-md-5">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <svg class="bi mb-3" width="48" height="48" fill="currentColor">
+                                <use href="{% static 'img/icons.svg' %}#icon-plus-circle"></use>
+                            </svg>
+                            <h5 class="card-title">{% trans 'Setup Trustpoint from Scratch' %}</h5>
+                            <p class="card-text">
+                                {% trans 'Configure a new Trustpoint instance with fresh settings' %}
+                            </p>
+                        </div>
+                        <div class="card-footer">
+                            <a href="{% url 'setup_wizard:select_tls_server_credential' %}" class="btn btn-primary w-100">
+                                {% trans 'Start Fresh Setup' %}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Restore from Backup Option -->
+                <div class="col-md-5">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <svg class="bi mb-3" width="48" height="48" fill="currentColor">
+                                <use href="{% static 'img/icons.svg' %}#icon-arrow-clockwise"></use>
+                            </svg>
+                            <h5 class="card-title">{% trans 'Restore from Backup' %}</h5>
+                            <p class="card-text">
+                                {% trans 'Restore Trustpoint configuration from a previous backup' %}
+                            </p>
+                        </div>
+                        <div class="card-footer">
+                            <a href="{% url 'setup_wizard:restore_options' %}" class="btn btn-primary w-100">
+                                {% trans 'Restore Backup' %}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock content %}

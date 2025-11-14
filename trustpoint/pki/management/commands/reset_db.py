@@ -11,9 +11,13 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.management import BaseCommand, call_command
 
+from management.models import AppVersion, KeyStorageConfig
+
 if TYPE_CHECKING:
     from django.core.management.base import CommandParser
 
+ENGINE_SQLITE = 'django.db.backends.sqlite3'
+ENGINE_POSTGRESQL = 'django.db.backends.postgresql'
 
 class Command(BaseCommand):
     """Management command to reset the database and migrations."""
@@ -56,9 +60,9 @@ class Command(BaseCommand):
 
         # Reset database depending on engine
         engine = settings.DATABASES['default']['ENGINE']
-        if engine == 'django.db.backends.sqlite3':
+        if engine == ENGINE_SQLITE:
             self._reset_sqlite(base_path)
-        elif engine == 'django.db.backends.postgresql':
+        elif engine == ENGINE_POSTGRESQL:
             self._reset_postgresql()
         else:
             self.stderr.write(f'Database engine {engine} is not supported by this command.')
@@ -73,6 +77,13 @@ class Command(BaseCommand):
             call_command('makemigrations', name=migration_name)
         self.stdout.write('Running migrate...')
         call_command('migrate')
+
+        # Add default models for development server
+        if engine == ENGINE_SQLITE:
+            self.stdout.write('Adding default models for development server...')
+            AppVersion.objects.get_or_create(version=settings.APP_VERSION)
+            # Ensure crypto storage config exists for encrypted fields
+            KeyStorageConfig.get_or_create_default()
 
         # Create superuser if needed
         if not options.get('no_user'):

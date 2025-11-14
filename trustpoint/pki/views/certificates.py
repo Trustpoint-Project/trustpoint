@@ -292,10 +292,11 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
     context_object_name = 'certificate'
 
     def get(self, _request: HttpRequest, pk: str | None = None, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Download the active Trustpoint TLS server certificate"""
+        """Download the active Trustpoint TLS server certificate."""
         tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
         if not tls_cert:
-            raise Http404('No TLS server certificate available. Are you on the development server?')
+            msg = 'No TLS server certificate available. Are you on the development server?'
+            raise Http404(msg)
 
         tls_server_certificate = tls_cert.credential.certificate.get_certificate_serializer()
 

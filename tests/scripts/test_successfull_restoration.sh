@@ -45,11 +45,10 @@ docker exec "$CONTAINER" bash -lc '
     exit 1
   fi
 
-  # 2.3) Certificate files
+  # 2.3) Certificate files (chain file is optional)
   for f in \
     /etc/trustpoint/tls/apache-tls-server-key.key \
-    /etc/trustpoint/tls/apache-tls-server-cert.pem \
-    /etc/trustpoint/tls/apache-tls-server-cert-chain.pem
+    /etc/trustpoint/tls/apache-tls-server-cert.pem
   do
     if [[ -f "$f" ]]; then
       echo "  ✓ cert file $f found"
@@ -58,6 +57,13 @@ docker exec "$CONTAINER" bash -lc '
       exit 1
     fi
   done
+
+  # Chain file is optional
+  if [[ -f /etc/trustpoint/tls/apache-tls-server-cert-chain.pem ]]; then
+    echo "  ✓ optional chain file /etc/trustpoint/tls/apache-tls-server-cert-chain.pem found"
+  else
+    echo "  ℹ optional chain file /etc/trustpoint/tls/apache-tls-server-cert-chain.pem not present (OK)"
+  fi
 '
 
 # 3) Database check for devices_devicemodel rows
