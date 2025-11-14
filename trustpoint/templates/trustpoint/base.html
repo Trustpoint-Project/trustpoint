@@ -107,6 +107,12 @@
                         </svg>
                         {% trans "Help & Support" %}
                     </a>
+                    <a href="/swagger/"  class="tp-menu-head">
+                        <svg class="bi" fill="currentColor" width="16" height="16" role="img">
+                            <use href="{% static 'img/icons.svg' %}#icon-swagger"></use>
+                        </svg>
+                        {% trans "API Docs" %}
+                    </a>
                     <form method="POST" action="{% url 'users:logout' %}">
                         {% csrf_token %}
                         <button class="tp-menu-head" type="submit">
