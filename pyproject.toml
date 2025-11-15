@@ -56,7 +56,7 @@ dev = [
     "ruff>=0.13.1",
     "requests>=2.32.3",
     "behave==1.2.7.dev6",
-    "behave-django==1.7.0",
+    "behave-django==1.9.0",
     "behave-html-pretty-formatter>=1.14.1",
     "allure-behave>=2.14.3",
     "allure-pytest>=2.14.3",
