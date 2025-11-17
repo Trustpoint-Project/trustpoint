@@ -37,7 +37,7 @@ class Command(BaseCommand):
 
             _obj, created = CertificateProfileModel.objects.get_or_create(
                 unique_name=unique_name,
-                defaults={'profile_json': profile_json}
+                defaults={'profile_json': profile_json, 'is_default': True},
             )
 
             if created:

@@ -187,7 +187,7 @@ urlpatterns = [
     ),
     path(
         'cert-profiles/add/',
-        cert_profiles.CertProfileAddView.as_view(),
+        cert_profiles.CertProfileConfigView.as_view(),
         name='cert_profiles-add',
     ),
     re_path(

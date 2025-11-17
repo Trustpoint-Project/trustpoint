@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
 from django.db.models import ProtectedError, QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic.base import TemplateView
-from django.views.generic.detail import DetailView
+from django.views.generic.edit import UpdateView
 from django.views.generic.list import ListView
 from pydantic import ValidationError
 from trustpoint.logger import LoggerMixin
@@ -21,13 +23,15 @@ from trustpoint.views.base import (
     SortableTableMixin,
 )
 
-from pki.forms import OwnerCredentialFileImportForm
+from pki.forms import CertProfileConfigForm
 from pki.models import CertificateProfileModel
 from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
 from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:
     from django.forms import Form
+
+    from pki.forms import OwnerCredentialFileImportForm
 
 
 class CertProfileContextMixin(ContextDataMixin):
@@ -47,57 +51,79 @@ class CertProfileTableView(CertProfileContextMixin, SortableTableMixin, ListView
     default_sort_param = 'unique_name'
 
 
-class CertProfileConfigView(LoggerMixin, CertProfileContextMixin, DetailView[CertificateProfileModel]):
+class CertProfileConfigView(LoggerMixin, CertProfileContextMixin, UpdateView[CertificateProfileModel, CertProfileConfigForm]):
     """View to display the details of and edit a Certificate Profile."""
 
     http_method_names = ('get', 'post')
 
     model = CertificateProfileModel
     success_url = reverse_lazy('pki:cert_profiles')
-    ignore_url = reverse_lazy('pki:cert_profiles')
+    #ignore_url = reverse_lazy('pki:cert_profiles')
     template_name = 'pki/cert_profiles/config.html'
-    context_object_name = 'cert_profile'
+    context_object_name = 'profile'
+    form_class = CertProfileConfigForm
+
+    def get_object(self, queryset: QuerySet[Any, Any] | None = None) -> CertificateProfileModel | None:
+        """Retrieve the CertificateProfileModel object based on the primary key in the URL."""
+        pk = self.kwargs.get('pk')
+        if pk:
+            return get_object_or_404(CertificateProfileModel, pk=pk)
+        return None  # Add view case
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds the issued certificates to the context.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data()
-
-        Returns:
-            The context to render the page.
-        """
+        """Add additional context data."""
         context = super().get_context_data(**kwargs)
-        cert_profile = self.get_object()
-        context['profile'] = cert_profile
-        context['profile_json'] = json.loads(cert_profile.profile_json)
+        form = context['form']
 
+        raw_json = form['profile_json'].value()
+
+        if not form['unique_name'].value():
+            context['is_new'] = True
+
+        default_json = { # new profile default
+            'type': 'cert_profile',
+            'subj': {},
+            'ext': {},
+        }
+
+        context['json_valid'] = True
+
+        if not raw_json or raw_json == 'null':
+            context['profile_json'] = default_json
+            return context
+
+        cleaned_raw = raw_json.encode('utf-8').decode('unicode_escape')
+        if cleaned_raw.startswith('"') and cleaned_raw.endswith('"'):
+            cleaned_raw = cleaned_raw[1:-1]
+
+        with contextlib.suppress(json.JSONDecodeError):
+            context['profile_json'] = json.loads(cleaned_raw)
+            return context
+
+        with contextlib.suppress(json.JSONDecodeError):
+            context['profile_json'] = json.loads(raw_json)
+            return context
+
+        # Invalid JSON typed by the user - render as-is to revise
+        context['json_valid'] = False
+        context['profile_json'] = cleaned_raw
         return context
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handles POST requests to the view.
+    def get_initial(self) -> dict[str, Any]:
+        """Initialize the form with default values."""
+        initial = super().get_initial()
+        initial['unique_name'] = self.object.unique_name if self.object else ''
+        return initial
 
-        Args:
-            request: The HTTP request object.
-            *args: Additional positional arguments.
-            **kwargs: Additional keyword arguments.
+    def form_valid(self, form: CertProfileConfigForm) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        cert_profile = form.save()
+        messages.success(
+            self.request,
+            _('Successfully updated Certificate Profile {name}.').format(name=cert_profile.unique_name),
+        )
+        return super().form_valid(form)
 
-        Returns:
-            An HTTP response redirecting to the success URL.
-        """
-        del args, kwargs  # Unused
-        try:
-            cert_profile = self.get_object()
-            if request.POST.get('unique_name'):
-                cert_profile.unique_name = request.POST.get('unique_name')
-            json_dict = json.loads(request.POST.get('profile_json'))
-            CertProfilePydanticModel.model_validate(json_dict)
-            cert_profile.profile_json = json.dumps(json_dict)
-            cert_profile.save()
-            messages.success(request, _('Certificate Profile updated successfully.'))
-        except ValidationError as exc:
-            messages.error(request, _('Error updating Certificate Profile: ') + str(exc))
-        return HttpResponseRedirect(self.success_url)
 
 
 class CertProfileAddView(CertProfileContextMixin, TemplateView):

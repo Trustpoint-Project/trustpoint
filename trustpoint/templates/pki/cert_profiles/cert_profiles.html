@@ -30,6 +30,11 @@
                             {% trans 'Updated at' %}
                         </a>
                     </th>
+                    <th>
+                        <a href="?sort={% if current_sort == 'is_default' %}-{% endif %}is_default">
+                            {% trans 'Is default' %}
+                        </a>
+                    </th>
                     <th>{% trans 'Config' %}</th>
                 </tr>
             </thead>
@@ -44,11 +49,12 @@
                         <td></td>
                         <td>{{ profile.created_at }}</td>
                         <td>{{ profile.updated_at }}</td>
+                        <td>{% if profile.is_default == 1 %} ✔ {% else %} ✘ {% endif %}</td>
                         <td><a href="config/{{ profile.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Edit' %}</a></td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="6" class="middle">{% trans 'No Certificate Profile has been added yet.' %}</td>
+                        <td colspan="7" class="middle">{% trans 'No Certificate Profile has been added yet.' %}</td>
                     </tr>
                 {% endfor %}
             </tbody>

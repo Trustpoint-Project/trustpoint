@@ -16,6 +16,7 @@ class CertificateProfileModel(models.Model):
 
     created_at = models.DateTimeField(verbose_name=_('Created-At'), auto_now_add=True)
     updated_at = models.DateTimeField(verbose_name=_('Updated-At'), auto_now=True)
+    is_default = models.BooleanField(default=False)
 
     class Meta(TypedModelMeta):
         """Meta information."""

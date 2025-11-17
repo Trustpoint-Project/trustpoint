@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, ClassVar, NoReturn, cast
 
 from cryptography import x509
@@ -21,8 +22,11 @@ from trustpoint_core.serializer import (
 from util.field import UniqueNameValidator, get_certificate_name
 
 from pki.models import DevIdRegistration, IssuingCaModel, OwnerCredentialModel
+from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
+from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
+from pydantic import ValidationError as PydanticValidationError
 
 
 class DevIdAddMethodSelectForm(forms.Form):
@@ -970,3 +974,60 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
         except Exception as exception:
             err_msg = str(exception)
             raise ValidationError(err_msg) from exception
+
+
+class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel]):
+    """Form for creating or updating Certificate Profiles.
+
+    This form is based on the CertificateProfileModel and allows users to
+    create or update certificate profiles by specifying a unique name and
+    profile JSON configuration.
+
+    Attributes:
+        unique_name (CharField): A unique name for the certificate profile.
+        profile_json (JSONField): The JSON configuration for the certificate profile.
+    """
+
+    class Meta:
+        """Meta information for the CertProfileConfigForm."""
+
+        model = CertificateProfileModel
+        fields: ClassVar[list[str]] = ['unique_name', 'profile_json','is_default']
+
+    def clean_unique_name(self) -> str:
+        """Validates the unique name to ensure it is not already in use.
+
+        Raises:
+            ValidationError: If the unique name is already associated with an existing certificate profile.
+        """
+        unique_name = self.cleaned_data['unique_name']
+        qs = CertificateProfileModel.objects.filter(unique_name=unique_name)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            error_message = 'Unique name is already taken. Choose another one.'
+            raise ValidationError(error_message)
+        return cast('str', unique_name)
+
+    def clean_profile_json(self) -> str:
+        """Validates the profile JSON to ensure it is a valid certificate profile.
+
+        Raises:
+            ValidationError: If the profile JSON is not a valid certificate profile.
+        """
+        profile_json = self.cleaned_data['profile_json']
+        if type(profile_json) is dict:
+            json_dict = profile_json
+        else:
+            try:
+                json_dict = json.loads(str(profile_json))
+            except json.JSONDecodeError as e:
+                error_message = f'Invalid JSON format: {e!s}'
+                raise forms.ValidationError(error_message) from e
+        try:
+            CertProfilePydanticModel.model_validate(json_dict)
+        except PydanticValidationError as e:
+            error_message = f'This JSON is not a valid certificate profile: {e!s}'
+            print(error_message)
+            raise forms.ValidationError(error_message) from e
+        return json.dumps(json_dict)
