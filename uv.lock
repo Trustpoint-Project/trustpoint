@@ -214,7 +214,7 @@ wheels = [
 
 [[package]]
 name = "behave"
-version = "1.2.7.dev6"
+version = "1.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama" },
@@ -224,23 +224,23 @@ dependencies = [
     { name = "parse-type" },
     { name = "six" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fe/b7/be3a5fb5ed211c6a4833989197879c07845019faa59eba0106482e8e16ac/behave-1.2.7.dev6.tar.gz", hash = "sha256:6e8791901c518bdbd41a99df6574127f53d9cb651e451268d3c50741941de0bf", size = 827062, upload-time = "2024-09-24T04:38:57.411Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/62/51/f37442fe648b3e35ecf69bee803fa6db3f74c5b46d6c882d0bc5654185a2/behave-1.3.3.tar.gz", hash = "sha256:2b8f4b64ed2ea756a5a2a73e23defc1c4631e9e724c499e46661778453ebaf51", size = 892639, upload-time = "2025-09-04T12:12:02.531Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/79/89/93f6e97a3b2ba68de26b42a67ba03f9aa92f2691a7724d9c86137b1266f3/behave-1.2.7.dev6-py2.py3-none-any.whl", hash = "sha256:b4f1535249414f6cca544870f62ca7291002eedb66ddc154cff20b363bd77e09", size = 201938, upload-time = "2024-09-24T04:38:55.4Z" },
+    { url = "https://files.pythonhosted.org/packages/63/71/06f74ffed6d74525c5cd6677c97bd2df0b7649e47a249cf6a0c2038083b2/behave-1.3.3-py2.py3-none-any.whl", hash = "sha256:89bdb62af8fb9f147ce245736a5de69f025e5edfb66f1fbe16c5007493f842c0", size = 223594, upload-time = "2025-09-04T12:12:00.3Z" },
 ]
 
 [[package]]
 name = "behave-django"
-version = "1.7.0"
+version = "1.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "behave" },
     { name = "django" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/67/18/f048fa69fda88943f317455ab439ce9c32960c1ba771e05e0bd68f3a41d6/behave_django-1.7.0.tar.gz", hash = "sha256:e253a4abc748559a0f9ad019349244fb0e4287f9cc70790dd0d20f3daf23c19e", size = 16355, upload-time = "2025-07-18T00:37:15.874Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/59/94/4976841a5a956357b91e1f73e55d885139d62973874e08de3ac9293dcb72/behave_django-1.9.0.tar.gz", hash = "sha256:cbae403b9c9873d4d079f3560d6c8b390eaea9fb8e8caff63439a0b06ea60309", size = 16313, upload-time = "2025-11-15T14:04:21.478Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e9/c1/71406da03fa7ea3561cec5b879fd444fb158ac66120cb4d30df913d88506/behave_django-1.7.0-py3-none-any.whl", hash = "sha256:ab842fec0ed267cfc77d209a5fad574a152f247f798cec0eb18a9f9480995d1f", size = 12535, upload-time = "2025-07-18T00:37:14.837Z" },
+    { url = "https://files.pythonhosted.org/packages/75/8d/f9a54742833f136dbf396bbbdb9aa0f62ddaf3f1621d772abecf5eac8cf6/behave_django-1.9.0-py3-none-any.whl", hash = "sha256:41c6d95886cd59413493037cc79fbe3346a828c83594431bbd596859ad12399b", size = 12233, upload-time = "2025-11-15T14:04:20.607Z" },
 ]
 
 [[package]]
@@ -1636,8 +1636,8 @@ dev = [
     { name = "allure-behave", specifier = ">=2.14.3" },
     { name = "allure-pytest", specifier = ">=2.14.3" },
     { name = "beautifulsoup4", specifier = ">=4.13.4" },
-    { name = "behave", specifier = "==1.2.7.dev6" },
-    { name = "behave-django", specifier = "==1.7.0" },
+    { name = "behave", specifier = "==1.3.3" },
+    { name = "behave-django", specifier = "==1.9.0" },
     { name = "behave-html-pretty-formatter", specifier = ">=1.14.1" },
     { name = "devtools", specifier = ">=0.12.2,<0.13" },
     { name = "django-extensions", specifier = ">=4.1" },
