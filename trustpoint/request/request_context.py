@@ -26,6 +26,7 @@ class RequestContext:
     domain: DomainModel | None = None
     device: DeviceModel | None = None
 
+    # certificate request
     cert_requested: CertificateSigningRequest | CertificateBuilder | None = None
     cert_requested_profile_validated: CertificateBuilder | None = None
     issued_certificate: x509.Certificate | None = None
