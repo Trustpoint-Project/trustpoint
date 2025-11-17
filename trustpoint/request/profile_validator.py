@@ -21,7 +21,7 @@ class ProfileValidator(LoggerMixin):
         cert_request_json = JSONCertRequestConverter.to_json(context.cert_requested)
         cls.logger.info('Cert Request JSON: %s', cert_request_json)
 
-        # TODO: Get correct profile
+        # TODO: Get correct profile  # noqa: TD002
         # How this will work eventually:
         # First, we check the requested profile ("template") from the URL.
         # If it is allowed/defined in this domain, proceed to use this profile.

@@ -22,23 +22,23 @@ trap 'log ERROR "in ${FUNCNAME[0]:-main} at line $LINENO (exit=$?)"; exit 1' ERR
 
 # ————— Paths —————
 STATE_DIR="/etc/trustpoint/wizard/state"
-WIZARD_INITIAL="$STATE_DIR/WIZARD_INITIAL"
+WIZARD_SETUP_MODE="$STATE_DIR/WIZARD_SETUP_MODE"
 WIZARD_COMPLETED="$STATE_DIR/WIZARD_COMPLETED"
 APACHE_TLS_DIR="/etc/trustpoint/tls"
 
 log INFO "STARTING APACHE RESTORE"
 
 # 5) Check wizard state
-log INFO "Checking for state file $WIZARD_INITIAL"
-if [ ! -f "$WIZARD_INITIAL" ]; then
-  log ERROR "State file $WIZARD_INITIAL not found"
+log INFO "Checking for state file $WIZARD_SETUP_MODE"
+if [ ! -f "$WIZARD_SETUP_MODE" ]; then
+  log ERROR "State file $WIZARD_SETUP_MODE not found"
   exit 1
 fi
 
-# Removes the current WIZARD_INITIAL state file.
-if ! rm "$WIZARD_INITIAL"
+# Removes the current WIZARD_SETUP_MODE state file.
+if ! rm "$WIZARD_SETUP_MODE"
 then
-    log "ERROR: Failed to remove the WIZARD_INITIAL state file."
+    log "ERROR: Failed to remove the WIZARD_SETUP_MODE state file."
     exit 3
 fi
 

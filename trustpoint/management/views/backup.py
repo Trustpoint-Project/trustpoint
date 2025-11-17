@@ -1,7 +1,6 @@
 """Django backup view."""
 import datetime
 import io
-import logging
 import tarfile
 import zipfile
 from pathlib import Path
@@ -15,13 +14,12 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView, View
+from trustpoint.logger import LoggerMixin
+from trustpoint.views.base import SortableTableFromListMixin
 from util.sftp import SftpClient, SftpError
 
 from management.forms import BackupOptionsForm
 from management.models import BackupOptions
-from trustpoint.views.base import SortableTableFromListMixin
-
-logger = logging.getLogger(__name__)
 
 
 def get_backup_file_data(filename: str) -> dict[str, Any]:
@@ -77,7 +75,7 @@ def create_db_backup(path: Path) -> str:
     return filename
 
 
-class BackupManageView(SortableTableFromListMixin, ListView[Any]):
+class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView[Any]):
     """Display existing backups and handle backup-related actions.
 
     GET:
@@ -86,7 +84,8 @@ class BackupManageView(SortableTableFromListMixin, ListView[Any]):
 
     POST:
       Depending on which button was clicked, performs one of:
-        - create_backup: Creates a new database backup (and optionally uploads via SFTP).
+        - create_local_backup: Creates a new database backup locally.
+        - create_sftp_backup: Creates a new database backup and uploads via SFTP.
         - test_sftp_connection: Validates SFTP credentials without saving them.
         - save_backup_settings: Saves or updates BackupOptions.
         - reset_backup_settings: Deletes existing BackupOptions, reverting to defaults.
@@ -116,12 +115,21 @@ class BackupManageView(SortableTableFromListMixin, ListView[Any]):
         context = super().get_context_data(**kwargs)
         instance, _ = BackupOptions.objects.get_or_create(pk=1)
         context['backup_options_form'] = BackupOptionsForm(instance=instance)
+        # Check if settings have been saved (not default values)
+        context['has_saved_settings'] = (
+            instance.enable_sftp_storage and
+            bool(instance.host) and
+            bool(instance.user)
+        )
         return context
 
     def post(self, request: Any, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle form submissions for backup or SFTP settings."""
-        if 'create_backup' in request.POST:
-            return self._handle_create_backup(request)
+        if 'create_local_backup' in request.POST:
+            return self._handle_create_local_backup(request)
+
+        if 'create_sftp_backup' in request.POST:
+            return self._handle_create_sftp_backup(request)
 
         if 'test_sftp_connection' in request.POST:
             return self._handle_test_sftp(request)
@@ -134,25 +142,41 @@ class BackupManageView(SortableTableFromListMixin, ListView[Any]):
 
         return redirect(self.success_url)
 
-    def _handle_create_backup(self, request: Any) -> HttpResponse:
-        """Logic for creating a new backup and possibly uploading via SFTP."""
+    def _handle_create_local_backup(self, request: Any) -> HttpResponse:
+        """Create a new backup file locally only."""
         try:
             filename = create_db_backup(settings.BACKUP_FILE_PATH)
-            messages.success(request, f'Database backup created successfully: {filename}')
+            msg = f'Database backup created locally: {filename}'
+            self.logger.info(msg)
+            messages.success(request, msg)
         except (OSError, CommandError) as exc:
-            msg = f'Error creating database backup: {exc}'
-            messages.error(request, msg)
+            err_msg = f'Error creating database backup: {exc}'
+            self.logger.exception(err_msg)
+            messages.error(request, err_msg)
+        return redirect(self.success_url)
+
+    def _handle_create_sftp_backup(self, request: Any) -> HttpResponse:
+        """Create a new backup file and upload it via SFTP."""
+        try:
+            filename = create_db_backup(settings.BACKUP_FILE_PATH)
+            msg = f'Database backup created: {filename}'
+            self.logger.info(msg)
+            messages.success(request, msg)
+        except (OSError, CommandError) as exc:
+            err_msg = f'Error creating database backup: {exc}'
+            self.logger.exception(err_msg)
+            messages.error(request, err_msg)
             return redirect(self.success_url)
 
         try:
             opts = BackupOptions.objects.get(pk=1)
         except BackupOptions.DoesNotExist:
-            messages.warning(request, 'Backup created locally; no SFTP settings found.')
+            warn_msg = 'Backup created locally; no SFTP settings found.'
+            self.logger.warning(warn_msg)
+            messages.warning(request, warn_msg)
             return redirect(self.success_url)
 
         overrides = {
-            'local_storage': opts.local_storage,
-            'sftp_storage': opts.sftp_storage,
             'host': opts.host,
             'port': opts.port,
             'user': opts.user,
@@ -166,34 +190,29 @@ class BackupManageView(SortableTableFromListMixin, ListView[Any]):
         try:
             client = SftpClient(overrides=overrides)
         except SftpError as exc:
-            messages.warning(request, f'Backup created locally; SFTP cannot be used: {exc}')
+            err_msg = f'Failed to create SFTP client: {exc}'
+            self.logger.exception(err_msg)
+            messages.error(request, err_msg)
             return redirect(self.success_url)
 
         local_file = settings.BACKUP_FILE_PATH / filename
-        if client.auth_method:
-            rd = client.remote_directory or ''
-            if rd.endswith('/'):
-                remote_path = f'{rd}{filename}'
-            elif rd:
-                remote_path = f'{rd}/{filename}'
-            else:
-                remote_path = filename
+        rd = client.remote_directory or ''
+        if rd.endswith('/'):
+            remote_path = f'{rd}{filename}'
+        elif rd:
+            remote_path = f'{rd}/{filename}'
+        else:
+            remote_path = filename
 
-            try:
-                client.upload_file(local_file, remote_path)
-                messages.success(
-                    request, f'Uploaded {filename} via SFTP to {remote_path}.'
-                )
-            except SftpError as exc:
-                messages.error(
-                    request, f'Backup created locally; SFTP upload failed: {exc}'
-                )
-
-        if not client.store_locally:
-            try:
-                local_file.unlink()
-            except OSError:
-                messages.warning(request, f'Could not delete local file {filename}.')
+        try:
+            client.upload_file(local_file, remote_path)
+            msg = f'Uploaded {filename} via SFTP to {remote_path}.'
+            self.logger.info(msg)
+            messages.success(request, msg)
+        except SftpError as exc:
+            err_msg = f'Backup created locally; SFTP upload failed: {exc}'
+            self.logger.exception(err_msg)
+            messages.error(request, err_msg)
 
         return redirect(self.success_url)
 
@@ -211,15 +230,23 @@ class BackupManageView(SortableTableFromListMixin, ListView[Any]):
                 'password': cd.get('password', ''),
                 'private_key': cd.get('private_key', ''),
                 'key_passphrase': cd.get('key_passphrase', ''),
-                'local_storage': cd.get('local_storage', False),
                 'remote_directory': cd.get('remote_directory', ''),
             }
             try:
                 client = SftpClient(overrides=overrides)
                 client.test_connection()
-                messages.success(request, 'SFTP connection successful.')
+                msg = 'SFTP connection successful.'
+                self.logger.info(msg)
+                messages.success(request, msg)
             except SftpError as exc:
-                messages.error(request, f'SFTP connection failed: {exc}')
+                err_msg = f'SFTP connection failed: {exc}'
+                self.logger.exception(err_msg)
+                messages.error(request, err_msg)
+        else:
+            self.logger.warning('SFTP test form invalid.')
+            for field, errors in form.errors.items():
+                for error in errors:
+                    self.logger.warning('Form error: %s: %s', field, error)
 
         self.object_list = self.get_queryset()
         context = self.get_context_data()
@@ -232,17 +259,20 @@ class BackupManageView(SortableTableFromListMixin, ListView[Any]):
         form = BackupOptionsForm(request.POST, instance=instance)
         if form.is_valid():
             form.save()
-            messages.success(request, 'Backup settings saved successfully.')
+            msg = 'Backup settings saved successfully.'
+            self.logger.info(msg)
+            messages.success(request, msg)
             return redirect(self.success_url)
 
-        error_messages = []
+        error_messages: list[str] = []
         for field, errors in form.errors.items():
-            if field == "__all__":
-                error_messages.extend(errors)
+            if field == '__all__':
+                error_messages.extend(str(error) for error in errors)
             else:
-                error_messages.extend([f"{field.capitalize()}: {error}" for error in errors])
+                error_messages.extend([f'{field.capitalize()}: {error}' for error in errors])
 
         for err_msg in error_messages:
+            self.logger.warning('Backup settings form error: %s', err_msg)
             messages.error(request, err_msg)
 
         self.object_list = self.get_queryset()
@@ -253,11 +283,11 @@ class BackupManageView(SortableTableFromListMixin, ListView[Any]):
     def _handle_reset_settings(self, request: Any) -> HttpResponse:
         """Logic for resetting (deleting) backup/SFTP settings."""
         BackupOptions.objects.filter(pk=1).delete()
-        messages.warning(request, 'Backup settings have been reset.')
-        self.object_list = self.get_queryset()
-        context = self.get_context_data()
-        context['backup_options_form'] = BackupOptionsForm()
-        return self.render_to_response(context)
+        msg = 'Backup settings have been reset.'
+        self.logger.warning(msg)
+        messages.warning(request, msg)
+        # After reset, redirect to refresh the page with new default instance
+        return redirect(self.success_url)
 
 
 class BackupFileDownloadView(View):
@@ -339,7 +369,7 @@ class BackupFilesDownloadMultipleView(View):
         return response
 
 
-class BackupFilesDeleteMultipleView(View):
+class BackupFilesDeleteMultipleView(View, LoggerMixin):
     """Delete multiple selected backup files and notify the user."""
 
     def post(self, request: Any) -> HttpResponse:
@@ -353,7 +383,9 @@ class BackupFilesDeleteMultipleView(View):
         """
         filenames: list[str] = request.POST.getlist('selected')
         if not filenames:
-            messages.error(request, 'No files selected for deletion.')
+            msg = 'No files selected for deletion.'
+            self.logger.warning(msg)
+            messages.error(request, msg)
             return redirect('management:backups')
 
         backup_dir: Path = settings.BACKUP_FILE_PATH
@@ -363,12 +395,18 @@ class BackupFilesDeleteMultipleView(View):
         for fname in filenames:
             path = backup_dir / fname
             if not path.is_file():
+                warn_msg = f'File not found for deletion: {fname}'
+                self.logger.warning(warn_msg)
                 errors.append(fname)
                 continue
             try:
                 path.unlink()
+                info = f'Deleted backup file: {fname}'
+                self.logger.info(info)
                 deleted.append(fname)
-            except OSError:
+            except OSError as exc:
+                err_msg = f'Error deleting backup file {fname}: {exc}'
+                self.logger.exception(err_msg)
                 errors.append(fname)
 
         if deleted:

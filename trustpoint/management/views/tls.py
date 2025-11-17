@@ -2,23 +2,28 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from django.contrib import messages
-from django.core.exceptions import ObjectDoesNotExist
-from django.urls import reverse_lazy
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.shortcuts import redirect
+from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext as _
-from django.views.generic import FormView
+from django.views.generic import FormView, TemplateView, View
 from pki.models import GeneralNameIpAddress
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, CertificateModel, CredentialModel
+from setup_wizard.forms import StartupWizardTlsCertificateForm
+from setup_wizard.tls_credential import TlsServerCredentialGenerator
+from trustpoint.logger import LoggerMixin
 
-from management.forms import IPv4AddressForm
+from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
+from management.management.commands.update_tls import Command as UpdateTlsCommand
 from management.models import TlsSettings
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
 
-    from django.http import HttpResponse
+    from django.http import HttpRequest, HttpResponse
 
 
 class TlsSettingsContextMixin:
@@ -27,7 +32,7 @@ class TlsSettingsContextMixin:
     extra_context: ClassVar = {'page_category': 'management', 'page_name': 'tls'}
 
 
-class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
+class TlsView(LoggerMixin, TlsSettingsContextMixin, FormView[IPv4AddressForm]):
     """View to display certificate details, including Subject Alternative Name (SAN) and associated IP addresses."""
     template_name = 'management/tls.html'
     form_class = IPv4AddressForm
@@ -65,7 +70,7 @@ class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
 
         san_ips = []
         san_dns_names = []
-        issuer_details: dict[str, Optional[str]] = {
+        issuer_details: dict[str, str | None] = {
             'country': None,
             'organization': None,
             'common_name': None,
@@ -90,11 +95,20 @@ class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
                     field = issuer_mapping[attribute.oid]
                     issuer_details[field] = attribute.value
 
+        tls_certificates = CertificateModel.objects.filter(
+            credential__credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER)
+
+        self.logger.info('TLS certificates count: %s', tls_certificates.count())
+        for cert in tls_certificates:
+            self.logger.info('TLS cert: %s, pk: %s', cert.common_name, cert.pk)
+
         context.update({
             'certificate': certificate,
             'san_ips': san_ips,
             'san_dns_names': san_dns_names,
             'issuer_details': issuer_details,
+            'tls_certificates': tls_certificates,
+            'tls_form': StartupWizardTlsCertificateForm()
         })
 
         return context
@@ -147,11 +161,136 @@ class TlsView(TlsSettingsContextMixin, FormView[IPv4AddressForm]):
         except ObjectDoesNotExist:
             return []
 
+class TlsAddMethodSelectView(TemplateView):
+    """View to select the method to add a TLS Certificate."""
+
+    template_name = 'management/tls/method_select.html'
+    success_url = reverse_lazy('management:tls-add-method-select')
+
+class GenerateTlsCertificateView(LoggerMixin, FormView[StartupWizardTlsCertificateForm]):
+    """View for generating TLS Server Credentials in the setup wizard.
+
+    This view handles the generation of TLS Server Credentials. It provides a form for the
+    user to input necessary information such as IP addresses and domain names, and
+    processes the data to generate the required TLS certificates.
+
+    Attributes:
+        http_method_names (ClassVar[list[str]]): HTTP methods allowed for this view.
+        template_name (str): Path to the template used for rendering the form.
+        form_class (Form): The form class used to validate user input.
+        success_url (str): The URL to redirect to upon successful credential generation.
+    """
+
+    http_method_names = ('get', 'post')
+    template_name = 'management/tls/generate_tls.html'
+    form_class = StartupWizardTlsCertificateForm
+    success_url = reverse_lazy('management:tls')
 
 
+    def form_valid(self, form: StartupWizardTlsCertificateForm) -> HttpResponse:
+        """Handle a valid form submission for TLS Server Credential generation.
 
+        Args:
+            form: The validated form containing user input
+                  for generating the TLS Server Credential.
 
+        Returns:
+            HttpResponseRedirect: Redirect to the success URL upon successful
+                                  credential generation, or an error page if
+                                  an exception occurs.
 
+        Raises:
+            TrustpointTlsServerCredentialError: If no TLS server credential is found.
+            subprocess.CalledProcessError: If the associated shell script fails.
+        """
+        try:
+            # Generate the TLS Server Credential
+            cleaned_data = form.cleaned_data
+            generator = TlsServerCredentialGenerator(
+                ipv4_addresses=cleaned_data['ipv4_addresses'],
+                ipv6_addresses=cleaned_data['ipv6_addresses'],
+                domain_names=cleaned_data['domain_names'],
+            )
+            tls_server_credential = generator.generate_tls_server_credential()
 
+            trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
+                credential_serializer=tls_server_credential,
+                credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+            )
 
+            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+            active_tls.credential = trustpoint_tls_server_credential
+            active_tls.save()
 
+            messages.add_message(self.request, messages.SUCCESS, 'TLS-Server Credential generated successfully.')
+
+            return super().form_valid(form)
+        except Exception:
+            err_msg = 'Error generating TLS Server Credential.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('management:tls', permanent=False)
+
+class TlsAddFileImportPkcs12View(TlsSettingsContextMixin, FormView[TlsAddFileImportPkcs12Form], LoggerMixin):
+    """View to import an TLS-Server Credential from a PKCS12 file."""
+
+    template_name = 'management/tls/file_import.html'
+    form_class = TlsAddFileImportPkcs12Form
+    success_url = reverse_lazy('management:tls')
+
+    def form_valid(self, form: TlsAddFileImportPkcs12Form) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        self.logger.info('Successfully imported TLS-Server Credential from PKCS12 file')
+        messages.success(
+            self.request,
+            _('Successfully added TLS-Server Credential.'),
+        )
+        return super().form_valid(form)
+
+class TlsAddFileImportSeparateFilesView(
+    TlsSettingsContextMixin, FormView[TlsAddFileImportSeparateFilesForm], LoggerMixin
+):
+    """View to import an Issuing CA from separate PEM files."""
+
+    template_name = 'management/tls/file_import.html'
+    form_class = TlsAddFileImportSeparateFilesForm
+    success_url = reverse_lazy('management:tls')
+
+    def form_valid(self, form: TlsAddFileImportSeparateFilesForm) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        self.logger.info('Successfully imported TLS-Server Credential from separate PEM files')
+        messages.success(
+            self.request,
+            _('Successfully added TLS-Server Credential.'),
+        )
+        return super().form_valid(form)
+
+class ActivateTlsServerView(View, LoggerMixin):
+    """Activate a TLS server certificate."""
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: dict[str, Any]) -> HttpResponse:
+        """Handle a valid form submission for TLS Server Credential activation."""
+        del args
+        cert_id = kwargs['pk']
+        self.logger.info('Activating TLS certificate with ID: %s', cert_id)
+        try:
+            tls_certificate = CredentialModel.objects.get(
+                certificate__id=cert_id)
+            self.logger.info('Found TLS credential: %s', tls_certificate.id)
+
+            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+            active_tls.credential = tls_certificate
+            active_tls.save()
+            UpdateTlsCommand().handle()  # Apply new Apache TLS configuration
+            self.logger.info(
+                'Activated TLS credential: %s, certificate: %s',
+                tls_certificate.id, tls_certificate.certificate.id
+            )
+            messages.success(request, 'TLS Server certificate activated successfully')
+        except (CredentialModel.DoesNotExist, ValidationError):
+            self.logger.exception('Failed to activate TLS certificate')
+            messages.error(request, 'Failed to activate TLS certificate')
+        except Exception:
+            self.logger.exception('Unexpected error activating TLS certificate')
+            messages.error(request, 'An unexpected error occurred while activating TLS certificate')
+        return redirect(reverse('management:tls'))

@@ -1,10 +1,11 @@
 """This module contains all views concerning the devices application."""
+
 from __future__ import annotations
 
 import abc
 import datetime
 import io
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
@@ -22,6 +23,7 @@ from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
+from rest_framework import viewsets
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
@@ -67,6 +69,7 @@ from devices.models import (
     RemoteDeviceCredentialDownloadModel,
 )
 from devices.revocation import DeviceCredentialRevocation
+from devices.serializers import DeviceSerializer
 from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:
@@ -116,7 +119,6 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
 
-
     def apply_filters(self, qs: QuerySet[DeviceModel]) -> QuerySet[DeviceModel]:
         """Applies the `DeviceFilter` to the given queryset.
 
@@ -128,7 +130,6 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
         """
         self.filterset = DeviceFilter(self.request.GET, queryset=qs)
         return cast('QuerySet[DeviceModel]', self.filterset.qs)
-
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Adds the object model to the instance and forwards to super().get().
@@ -799,6 +800,8 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
                 'url': f'{self.page_category}:{self.page_name}_no_onboarding_select_certificate_profile',
             }
         )
+
+
 
         context['sections'] = sections
 
@@ -2154,3 +2157,28 @@ class OpcUaGdsBulkDeleteView(AbstractBulkDeleteView):
     """abc."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class DeviceViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing Device instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+
+    queryset = DeviceModel.objects.all()
+    serializer_class = DeviceSerializer
+    action_descriptions: ClassVar[dict[str, str]] = {
+        'list': 'Retrieve a list of all devices.',
+        'retrieve': 'Retrieve a single device by id.',
+        'create': 'Create a new device with name, serial number, and status.',
+        'update': 'Update an existing device.',
+        'partial_update': 'Partially update an existing device.',
+        'destroy': 'Delete a device.',
+    }
+
+    def get_view_description(self, *, html: bool = False) -> str:
+        """Return a description for the given action."""
+        if hasattr(self, 'action') and self.action in self.action_descriptions:
+            return self.action_descriptions[self.action]
+        return super().get_view_description(html)

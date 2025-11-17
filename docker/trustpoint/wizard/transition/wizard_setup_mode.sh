@@ -2,12 +2,12 @@
 # This script will transition the from the WIZARD_INITIAL state to the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state.
 
 STATE_FILE_DIR="/etc/trustpoint/wizard/state/"
-WIZARD_INITIAL="/etc/trustpoint/wizard/state/WIZARD_INITIAL"
+WIZARD_SETUP_MODE="/etc/trustpoint/wizard/state/WIZARD_SETUP_MODE"
 WIZARD_TLS_SERVER_CREDENTIAL_APPLY="/etc/trustpoint/wizard/state/WIZARD_TLS_SERVER_CREDENTIAL_APPLY"
 
 # Checks if the state file is present.
-if [ ! -f "$WIZARD_INITIAL" ]; then
-    echo "ERROR: Trustpoint is not in the WIZARD_INITIAL state. State file '$WIZARD_INITIAL' not found."
+if [ ! -f "$WIZARD_SETUP_MODE" ]; then
+    echo "ERROR: Trustpoint is not in the WIZARD_SETUP_MODE state. State file '$WIZARD_SETUP_MODE' not found."
     exit 1
 fi
 
@@ -19,10 +19,10 @@ if [[ 1 -ne STATE_COUNT ]]; then
     exit 2
 fi
 
-# Removes the current WIZARD_INITIAL state file.
-if ! rm "$WIZARD_INITIAL"
+# Removes the current WIZARD_SETUP_MODE state file.
+if ! rm "$WIZARD_SETUP_MODE"
 then
-    echo "ERROR: Failed to remove the WIZARD_INITIAL state file."
+    echo "ERROR: Failed to remove the WIZARD_SETUP_MODE state file."
     exit 3
 fi
 
