@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from workflows.models import WorkflowInstance
+from workflows.models import State, WorkflowInstance
 from workflows.services.executors.factory import AbstractStepExecutor
-from workflows.services.types import ExecStatus, ExecutorResult
+from workflows.services.types import ExecutorResult
 
 
 class ApprovalExecutor(AbstractStepExecutor):
@@ -18,19 +18,19 @@ class ApprovalExecutor(AbstractStepExecutor):
         # First visit (no signal) → WAITING
         if signal is None and instance.state is WorkflowInstance.STATE_RUNNING:
             return ExecutorResult(
-                status=ExecStatus.WAITING,
+                status=State.AWAITING,
                 context={
                     'type': 'Approval',
-                    'status': 'waiting',
+                    'status': 'AwaitingApproval',
                     'error': None,
-                    'outputs': {'awaiting': True},
+                    'outputs': {'AwaitingApproval': True},
                 },
             )
 
         # Rejected → terminal
-        if signal == 'Rejected':
+        if signal == 'reject':
             return ExecutorResult(
-                status=ExecStatus.REJECTED,
+                status=State.REJECTED,
                 context={
                     'type': 'Approval',
                     'status': 'rejected',
@@ -40,10 +40,10 @@ class ApprovalExecutor(AbstractStepExecutor):
             )
 
         # Approved
-        if signal == 'Approved':
+        if signal == 'approve':
             if instance.is_last_approval_step():
                 return ExecutorResult(
-                    status=ExecStatus.APPROVED,
+                    status=State.APPROVED,
                     context={
                         'type': 'Approval',
                         'status': 'approved',
@@ -52,7 +52,7 @@ class ApprovalExecutor(AbstractStepExecutor):
                     },
                 )
             return ExecutorResult(
-                status=ExecStatus.PASSED,
+                status=State.PASSED,
                 context={
                     'type': 'Approval',
                     'status': 'passed',
@@ -63,11 +63,11 @@ class ApprovalExecutor(AbstractStepExecutor):
 
         # Any other case → still waiting
         return ExecutorResult(
-            status=ExecStatus.WAITING,
+            status=State.AWAITING,
             context={
                 'type': 'Approval',
-                'status': 'waiting',
+                'status': 'AwaitingApproval',
                 'error': None,
-                'outputs': {'awaiting': True},
+                'outputs': {'AwaitingApproval': True},
             },
         )

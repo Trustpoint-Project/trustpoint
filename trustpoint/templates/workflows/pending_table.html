@@ -7,10 +7,10 @@
 
 <div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
   <div class="card-header">
-    <h1>{% trans 'Pending Approvals' %}</h1>
+    <h1>{% trans 'Waiting Approvals' %}</h1>
   </div>
 
-  {% include 'workflows/table_filter.html' with table_url='workflows:pending_table' %}
+  {% include 'workflows/instance_table_filter.html' with table_url='workflows:pending_table' %}
 
   {# Single outer form: used both for bulk actions and per-row actions #}
   <form method="post" action="{% url 'workflows:pending_bulk_signal' %}" style="flex-grow: 1; display: flex; flex-direction: column;">
@@ -125,7 +125,7 @@
 
               <td>
                 <a
-                  href="{% url 'workflows:pending_detail' inst.id %}"
+                  href="{% url 'workflows:instance_detail' inst.id %}"
                   class="btn-info ms-2"
                 >
                   {% trans 'Details' %}
@@ -137,7 +137,7 @@
                 <button
                   type="submit"
                   name="action"
-                  value="Approved"
+                  value="approve"
                   class="btn btn-sm btn-success me-1"
                   formaction="{% url 'workflows:signal' inst.id %}"
                   formmethod="post"
@@ -148,7 +148,7 @@
                 <button
                   type="submit"
                   name="action"
-                  value="Rejected"
+                  value="reject"
                   class="btn btn-sm btn-danger"
                   formaction="{% url 'workflows:signal' inst.id %}"
                   formmethod="post"

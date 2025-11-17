@@ -5,16 +5,63 @@ from __future__ import annotations
 import uuid
 from typing import Any, cast
 
+from devices.models import DeviceModel
 from django.db import models
 from django.db.models import JSONField
-
-from devices.models import DeviceModel
 from pki.models.domain import DomainModel
 from pki.models.issuing_ca import IssuingCaModel
 
 # -------------------------------
 # Workflow definitions + scoping
 # -------------------------------
+
+
+class State(models.TextChoices):
+    RUNNING = 'Running', 'Running'
+    AWAITING = 'AwaitingApproval', 'AwaitingApproval'
+    APPROVED = 'Approved', 'Approved'
+    PASSED = 'Passed', 'Passed'
+    FINALIZED = 'Finalized', 'Finalized'
+    REJECTED = 'Rejected', 'Rejected'
+    FAILED = 'Failed', 'Failed'
+    ABORTED = 'Aborted', 'Aborted'
+
+
+StatusBadge = tuple[str, str]
+"""Tuple of (label, bootstrap_badge_class)."""
+
+
+BADGE_MAP: dict[str, StatusBadge] = {
+    State.RUNNING: ('Running', 'bg-primary'),
+    State.AWAITING: ('Awaiting approval', 'bg-warning text-dark'),
+    State.APPROVED: ('Approved', 'bg-success'),
+    State.REJECTED: ('Rejected', 'bg-danger'),
+    State.FAILED: ('Failed', 'bg-danger'),
+    State.ABORTED: ('Aborted', 'bg-dark'),
+    State.PASSED: ('Passed', 'bg-success'),
+    State.FINALIZED: ('Finalized', 'bg-secondary'),
+}
+
+
+def get_status_badge(raw: str | State) -> StatusBadge:
+    """Return a badge (label, CSS class) for a workflow/enrollment state."""
+    if raw is None:
+        return 'Unknown', 'bg-light text-muted'
+
+    key = str(raw)
+
+    # Direct match (covers State enum members)
+    if key in BADGE_MAP:
+        return BADGE_MAP[key]
+
+    # Normalized string match (defensive)
+    norm = key.strip().lower()
+    for state_key, badge in BADGE_MAP.items():
+        if state_key.lower() == norm:
+            return badge
+
+    # Fallback: unknown but not None
+    return key, 'bg-secondary text-light'
 
 
 class WorkflowDefinition(models.Model):
@@ -74,24 +121,12 @@ class EnrollmentRequest(models.Model):
     - We keep request-level states distinct from instance-level strings to avoid confusion.
     """
 
-    # Request-level aggregate states
-    STATE_AWAITING = 'AwaitingApproval'  # at least one child is Starting/Running/AwaitingApproval OR no children yet
-    STATE_APPROVED = 'Approved'  # all children are Approved
-    STATE_PASSED = 'Passed'
-    STATE_REJECTED = 'Rejected'  # any child rejected
-    STATE_FAILED = 'Failed'  # any child failed (and none rejected)
-    STATE_FINALIZED = 'Finalized'  # certificate issued; request finalized
-    STATE_NOMATCH = 'NoMatch'
-
-    STATE_CHOICES = (
-        (STATE_AWAITING, 'AwaitingApproval'),
-        (STATE_APPROVED, 'Approved'),
-        (STATE_PASSED, 'Passed'),
-        (STATE_REJECTED, 'Rejected'),
-        (STATE_FAILED, 'Failed'),
-        (STATE_FINALIZED, 'Finalized'),
-        (STATE_NOMATCH, 'NoMatch'),
-    )
+    STATE_AWAITING = State.AWAITING
+    STATE_APPROVED = State.APPROVED
+    STATE_PASSED = State.PASSED
+    STATE_REJECTED = State.REJECTED
+    STATE_FAILED = State.FAILED
+    STATE_FINALIZED = State.FINALIZED
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
@@ -104,7 +139,7 @@ class EnrollmentRequest(models.Model):
     fingerprint = models.CharField(max_length=128)  # CSR fingerprint (sha256 hex)
     template = models.CharField(max_length=100, null=True, blank=True)
 
-    aggregated_state = models.CharField(max_length=32, choices=STATE_CHOICES, default=STATE_AWAITING)
+    aggregated_state = models.CharField(max_length=32, choices=State.choices, default=State.AWAITING)
     finalized = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -126,38 +161,38 @@ class EnrollmentRequest(models.Model):
             f'EnrollReq#{self.pk} {self.aggregated_state} {self.protocol}/{self.operation} fp={self.fingerprint[:8]}…'
         )
 
+    @property
+    def badge_label(self) -> str:
+        label, _ = get_status_badge(self.aggregated_state)
+        return label
+
+    @property
+    def badge_class(self) -> str:
+        _, css = get_status_badge(self.aggregated_state)
+        return css
+
     # ---- aggregation helpers ----
-
     def recompute_status(self) -> str:
-        """Compute aggregate status from child instances.
-
-        - any Rejected → Rejected
-        - else any Failed → Failed
-        - else any AwaitingApproval/Running/Starting OR no children → Pending
-        - else if all in {Approved, Completed} → Ready
-        """
-        children = list(self.instances.all())  # via WorkflowInstance.enrollment_request related_name
+        """Compute aggregate status from child instances."""
+        children = list(self.instances.all())
         if not children:
-            return self.STATE_AWAITING
+            return State.PASSED
 
         inst_states = {c.state for c in children}
-
-        from .models import WorkflowInstance as WI  # local import to avoid circular typing confusion
-
-        if WI.STATE_REJECTED in inst_states:
-            return self.STATE_REJECTED
-        if WI.STATE_FAILED in inst_states:
-            return self.STATE_FAILED
-        if WI.STATE_AWAITING in inst_states or WI.STATE_RUNNING in inst_states:
-            return self.STATE_AWAITING
-        if inst_states.issubset({WI.STATE_APPROVED, WI.STATE_FINALIZED}):
-            return self.STATE_APPROVED
-
-        return self.STATE_AWAITING
+        if State.REJECTED in inst_states:
+            return State.REJECTED
+        if State.FAILED in inst_states:
+            return State.FAILED
+        if State.ABORTED in inst_states:
+            return State.ABORTED
+        if State.AWAITING in inst_states or State.RUNNING in inst_states:
+            return State.AWAITING
+        if inst_states.issubset({State.APPROVED, State.FINALIZED}):
+            return State.APPROVED
+        return State.AWAITING
 
     def is_valid(self) -> bool:
-        return self.aggregated_state in {self.STATE_APPROVED, self.STATE_PASSED, self.STATE_NOMATCH}
-
+        return self.aggregated_state in {State.APPROVED, State.PASSED}
 
     def recompute_and_save(self) -> str:
         new_status = self.recompute_status()
@@ -166,7 +201,7 @@ class EnrollmentRequest(models.Model):
             self.save(update_fields=['aggregated_state', 'updated_at'])
         return self.aggregated_state
 
-    def finalize(self, final_status: str | None=None) -> None:
+    def finalize(self, final_status: str | None = None) -> None:
         """Finalize all non-finalized children."""
         self.finalized = True
         print('00000000000000')
@@ -190,24 +225,13 @@ class EnrollmentRequest(models.Model):
 class WorkflowInstance(models.Model):
     """An initialized workflows."""
 
-    # possible states
-    STATE_RUNNING = 'Running'
-    STATE_AWAITING = 'AwaitingApproval'
-    STATE_APPROVED = 'Approved'
-    STATE_PASSED = 'Passed'
-    STATE_FINALIZED = 'Finalized'
-    STATE_REJECTED = 'Rejected'
-    STATE_FAILED = 'Failed'
-
-    STATE_CHOICES = (
-        (STATE_RUNNING, 'Running'),
-        (STATE_AWAITING, 'AwaitingApproval'),
-        (STATE_APPROVED, 'Approved'),
-        (STATE_PASSED, 'Passed'),
-        (STATE_FINALIZED, 'Finalized'),
-        (STATE_FAILED, 'Failed'),
-        (STATE_REJECTED, 'Rejected'),
-    )
+    STATE_RUNNING = State.RUNNING
+    STATE_AWAITING = State.AWAITING
+    STATE_APPROVED = State.APPROVED
+    STATE_PASSED = State.PASSED
+    STATE_FINALIZED = State.FINALIZED
+    STATE_REJECTED = State.REJECTED
+    STATE_FAILED = State.FAILED
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     definition = models.ForeignKey(WorkflowDefinition, on_delete=models.CASCADE, related_name='instances')
@@ -223,7 +247,7 @@ class WorkflowInstance(models.Model):
     )
 
     current_step = models.CharField(max_length=100, help_text='The step-ID we are currently at (e.g. "step-1")')
-    state = models.CharField(max_length=32, choices=STATE_CHOICES, default=STATE_RUNNING)
+    state = models.CharField(max_length=32, choices=State.choices, default=State.RUNNING)
 
     payload = JSONField(help_text='Immutable inputs (eg. CSR fingerprint, CA/Domain/Device IDs)')
     step_contexts = JSONField(
@@ -246,6 +270,16 @@ class WorkflowInstance(models.Model):
 
     def __str__(self) -> str:  # DJ008
         return f'{self.definition.name}#{self.pk} ({self.state})'
+
+    @property
+    def badge_label(self) -> str:
+        label, _ = get_status_badge(self.state)
+        return label
+
+    @property
+    def badge_class(self) -> str:
+        _, css = get_status_badge(self.state)
+        return css
 
     def finalize(self, state: str | None = None) -> None:
         """Mark this instance as fully done. Optionally set a final state."""

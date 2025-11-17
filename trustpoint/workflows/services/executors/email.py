@@ -13,9 +13,10 @@ from util.email import (
     send_simple,
 )
 
+from workflows.models import State
 from workflows.services.context import build_context
 from workflows.services.executors.factory import AbstractStepExecutor
-from workflows.services.types import ExecStatus, ExecutorResult
+from workflows.services.types import ExecutorResult
 
 if TYPE_CHECKING:
     from workflows.models import WorkflowInstance
@@ -44,7 +45,7 @@ class EmailExecutor(AbstractStepExecutor):
 
         if not to:
             return ExecutorResult(
-                status=ExecStatus.FAIL,
+                status=State.FAILED,
                 context={
                     'type': 'Email',
                     'status': 'failed',
@@ -65,7 +66,7 @@ class EmailExecutor(AbstractStepExecutor):
             tpl = MailTemplates.get_by_key(template_key)
             if not tpl:
                 return ExecutorResult(
-                    status=ExecStatus.FAIL,
+                    status=State.FAILED,
                     context={
                         'type': 'Email',
                         'status': 'failed',
@@ -81,7 +82,7 @@ class EmailExecutor(AbstractStepExecutor):
                 subject = dj.from_string(subj_tpl_src).render(template_ctx).strip()
             except TemplateSyntaxError as exc:
                 return ExecutorResult(
-                    status=ExecStatus.FAIL,
+                    status=State.FAILED,
                     context={
                         'type': 'Email',
                         'status': 'failed',
@@ -91,7 +92,7 @@ class EmailExecutor(AbstractStepExecutor):
                 )
             except Exception as exc:  # noqa: BLE001
                 return ExecutorResult(
-                    status=ExecStatus.FAIL,
+                    status=State.FAILED,
                     context={
                         'type': 'Email',
                         'status': 'failed',
@@ -113,7 +114,7 @@ class EmailExecutor(AbstractStepExecutor):
                 send_email(payload)
             except Exception as exc:  # noqa: BLE001
                 return ExecutorResult(
-                    status=ExecStatus.FAIL,
+                    status=State.FAILED,
                     context={
                         'type': 'Email',
                         'status': 'failed',
@@ -129,10 +130,10 @@ class EmailExecutor(AbstractStepExecutor):
                 )
 
             return ExecutorResult(
-                status=ExecStatus.PASSED,
+                status=State.PASSED,
                 context={
                     'type': 'Email',
-                    'status': 'sent',
+                    'status': 'Sent',
                     'error': None,
                     'outputs': {
                         'mode': 'template',
@@ -141,7 +142,7 @@ class EmailExecutor(AbstractStepExecutor):
                         'to': list(to),
                         'cc': list(cc),
                         'bcc': list(bcc),
-                        'email': 'sent',
+                        'email': 'Sent',
                     },
                 },
             )
@@ -151,7 +152,7 @@ class EmailExecutor(AbstractStepExecutor):
         body_src = (params.get('body') or '').strip()
         if not subject_src or not body_src:
             return ExecutorResult(
-                status=ExecStatus.FAIL,
+                status=State.FAILED,
                 context={
                     'type': 'Email',
                     'status': 'failed',
@@ -169,7 +170,7 @@ class EmailExecutor(AbstractStepExecutor):
             body = dj.from_string(body_tpl_src).render(template_ctx)
         except TemplateSyntaxError as exc:
             return ExecutorResult(
-                status=ExecStatus.FAIL,
+                status=State.FAILED,
                 context={
                     'type': 'Email',
                     'status': 'failed',
@@ -179,7 +180,7 @@ class EmailExecutor(AbstractStepExecutor):
             )
         except Exception as exc:  # noqa: BLE001
             return ExecutorResult(
-                status=ExecStatus.FAIL,
+                status=State.FAILED,
                 context={
                     'type': 'Email',
                     'status': 'failed',
@@ -199,7 +200,7 @@ class EmailExecutor(AbstractStepExecutor):
             )
         except Exception as exc:  # noqa: BLE001
             return ExecutorResult(
-                status=ExecStatus.FAIL,
+                status=State.FAILED,
                 context={
                     'type': 'Email',
                     'status': 'failed',
@@ -209,10 +210,10 @@ class EmailExecutor(AbstractStepExecutor):
             )
 
         return ExecutorResult(
-            status=ExecStatus.PASSED,
+            status=State.PASSED,
             context={
                 'type': 'Email',
-                'status': 'sent',
+                'status': 'Sent',
                 'error': None,
                 'outputs': {
                     'mode': 'custom',
@@ -220,7 +221,7 @@ class EmailExecutor(AbstractStepExecutor):
                     'to': list(to),
                     'cc': list(cc),
                     'bcc': list(bcc),
-                    'email': 'sent',
+                    'email': 'Sent',
                 },
             },
         )

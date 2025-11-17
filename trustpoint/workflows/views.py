@@ -6,10 +6,12 @@ This module provides Django class-based views for:
 - Displaying pending approvals and workflow instance details.
 - Signaling workflow instances (approve/reject).
 """
+
 from __future__ import annotations
 
+import contextlib
 import json
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from cryptography import x509
@@ -18,15 +20,18 @@ from cryptography.x509.oid import NameOID
 from devices.models import DeviceModel
 from django.contrib import messages
 from django.db import IntegrityError
+from django.db.models import Count
+from django.db.models.query import QuerySet
 from django.http import (
     HttpRequest,
     HttpResponse,
-    HttpResponseBadRequest,
     HttpResponseRedirect,
     JsonResponse,
+    QueryDict,
 )
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.timezone import now as tz_now
+from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import ListView
 from pki.models import DomainModel, IssuingCaModel
@@ -34,12 +39,15 @@ from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_DEVICES_
 from trustpoint_core.oid import AlgorithmIdentifier
 from util.email import MailTemplates
 
-from workflows.filters import WorkflowFilter
+from workflows.events import Events
+from workflows.filters import EnrollmentRequestFilter, WorkflowFilter
 from workflows.models import (
     EnrollmentRequest,
+    State,
     WorkflowDefinition,
     WorkflowInstance,
     WorkflowScope,
+    get_status_badge,
 )
 from workflows.services.context import build_context
 from workflows.services.context_catalog import build_catalog
@@ -47,8 +55,6 @@ from workflows.services.engine import advance_instance
 from workflows.services.request_aggregator import recompute_request_state
 from workflows.services.validators import validate_wizard_payload
 from workflows.services.wizard import transform_to_definition_schema
-from workflows.events import Events
-import contextlib
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -89,11 +95,13 @@ class MailTemplateListView(View):
         """
         groups = []
         for group_key, tpl_tuple in MailTemplates.GROUPS.items():
-            groups.append({
-                'key': group_key,
-                'label': group_key.replace('_', ' ').title(),
-                'templates': [{'key': t.key, 'label': t.label} for t in tpl_tuple],
-            })
+            groups.append(
+                {
+                    'key': group_key,
+                    'label': group_key.replace('_', ' ').title(),
+                    'templates': [{'key': t.key, 'label': t.label} for t in tpl_tuple],
+                }
+            )
         return JsonResponse({'groups': groups})
 
 
@@ -113,9 +121,9 @@ class EventsListView(View):
         """
         data = {
             e.key: {
-                'protocol':  e.protocol,
+                'protocol': e.protocol,
                 'operation': e.operation,
-                'handler':   e.handler,
+                'handler': e.handler,
             }
             for e in Events.all()
         }
@@ -294,15 +302,14 @@ class WorkflowDefinitionImportView(View):
             for err in shown:
                 messages.error(request, err)
             if len(errors) > self.MAX_ERRORS_TO_SHOW:
-                messages.error(request, f'(+{len(errors)-self.MAX_ERRORS_TO_SHOW} more issues)')
+                messages.error(request, f'(+{len(errors) - self.MAX_ERRORS_TO_SHOW} more issues)')
             return redirect('workflows:definition_table')
 
         # Stage prefill and go to wizard
         request.session['wizard_prefill'] = prefill
         request.session.modified = True
         messages.success(
-            request,
-            'Workflow imported. The wizard has been prefilled—please review, set scopes, and save or publish.'
+            request, 'Workflow imported. The wizard has been prefilled—please review, set scopes, and save or publish.'
         )
         return redirect('workflows:definition_wizard')
 
@@ -348,9 +355,9 @@ class WorkflowDefinitionImportView(View):
             if not isinstance(t, dict):
                 errs.append(f'events[{i}] must be an object.')
                 continue
-            handler  = str(t.get('handler')  or '')
+            handler = str(t.get('handler') or '')
             protocol = str(t.get('protocol') or '')
-            operation= str(t.get('operation')or '')
+            operation = str(t.get('operation') or '')
             if not handler or not protocol or not operation:
                 errs.append(f'events[{i}] is missing "handler", "protocol", or "operation".')
             events_out.append({'handler': handler, 'protocol': protocol, 'operation': operation})
@@ -394,6 +401,7 @@ class WizardPrefillView(View):
         request.session.modified = True
         return JsonResponse(payload or {}, safe=True)
 
+
 class WorkflowDefinitionExportView(View):
     """Download a single workflow definition as a JSON file.
 
@@ -413,18 +421,18 @@ class WorkflowDefinitionExportView(View):
 
         # Serialize scopes (raw IDs only—names are environment-specific)
         scopes = [
-            {"ca_id": s.ca_id, "domain_id": s.domain_id, "device_id": s.device_id}
+            {'ca_id': s.ca_id, 'domain_id': s.domain_id, 'device_id': s.device_id}
             for s in wf.scopes.all().order_by('ca_id', 'domain_id', 'device_id')
         ]
 
         bundle = {
-            "schema": "trustpoint.workflow/1",
-            "name": wf.name,
-            "version": wf.version,
-            "published": wf.published,
-            "definition": wf.definition,
-            "scopes": scopes,
-            "exported_at": tz_now().isoformat(),
+            'schema': 'trustpoint.workflow/1',
+            'name': wf.name,
+            'version': wf.version,
+            'published': wf.published,
+            'definition': wf.definition,
+            'scopes': scopes,
+            'exported_at': tz_now().isoformat(),
         }
 
         body = json.dumps(bundle, ensure_ascii=False, indent=2)
@@ -525,7 +533,7 @@ class WorkflowWizardView(View):
         events_raw = list(data.get('events') or [])
         events_typed: list[dict[str, str]] = [
             {
-                'handler':  str((t or {}).get('handler', '')),
+                'handler': str((t or {}).get('handler', '')),
                 'protocol': str((t or {}).get('protocol', '')),
                 'operation': str((t or {}).get('operation', '')),
             }
@@ -534,8 +542,7 @@ class WorkflowWizardView(View):
 
         steps_raw = list(data.get('steps') or [])
         steps_typed: list[dict[str, Any]] = [
-            {'type': str((s or {}).get('type', '')), 'params': dict((s or {}).get('params') or {})}
-            for s in steps_raw
+            {'type': str((s or {}).get('type', '')), 'params': dict((s or {}).get('params') or {})} for s in steps_raw
         ]
 
         scopes_in = data.get('scopes', {})
@@ -561,7 +568,9 @@ class WorkflowWizardView(View):
         seen: set[tuple[int | None, int | None, int | None]] = set()
         unique: list[dict[str, Any]] = []
         for it in items:
-            ca = it.get('ca_id'); dom = it.get('domain_id'); dev = it.get('device_id')
+            ca = it.get('ca_id')
+            dom = it.get('domain_id')
+            dev = it.get('device_id')
             key = (
                 int(ca) if isinstance(ca, (int,)) or (isinstance(ca, str) and ca.isdigit()) else None,
                 int(dom) if isinstance(dom, (int,)) or (isinstance(dom, str) and dom.isdigit()) else None,
@@ -575,7 +584,7 @@ class WorkflowWizardView(View):
 
 
 class WorkflowDefinitionDeleteView(View):
-    """POST-only: deletes the WorkflowDefinition""" # if no non-finalized WorkflowInstance exists for it."""
+    """POST-only: deletes the WorkflowDefinition"""  # if no non-finalized WorkflowInstance exists for it."""
 
     def post(self, request: HttpRequest, pk: UUID, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
         """Delete a workflow definition by ID."""
@@ -592,7 +601,7 @@ class WorkflowDefinitionDeleteView(View):
 
 
 class PendingApprovalsView(ListView[WorkflowInstance]):
-    """Show all instances awaiting human approval."""
+    """Show workflow instances with a default state filter of AwaitingApproval."""
 
     model = WorkflowInstance
     template_name = 'workflows/pending_table.html'
@@ -602,22 +611,22 @@ class PendingApprovalsView(ListView[WorkflowInstance]):
     default_sort_param = '-created_at'  # newest first
 
     def get_queryset(self) -> QuerySet[WorkflowInstance]:
-        base_qs = (
-            WorkflowInstance.objects.filter(
-                finalized=False,
-            )
-            .select_related(
-                'definition',
-                'enrollment_request',
-                'enrollment_request__device',
-                'enrollment_request__domain',
-            )
+        """Return instances with default 'AwaitingApproval' filter applied when none given."""
+        base_qs = WorkflowInstance.objects.select_related(
+            'definition',
+            'enrollment_request',
+            'enrollment_request__device',
+            'enrollment_request__domain',
         )
 
-        self.filterset = self.filterset_class(self.request.GET or None, queryset=base_qs)
+        params = self.request.GET.copy()
+        if not params:
+            params = QueryDict(mutable=True)
+            params['state'] = WorkflowInstance.STATE_AWAITING  # default
+
+        self.filterset = self.filterset_class(params, queryset=base_qs)
         qs: QuerySet[WorkflowInstance] = self.filterset.qs
 
-        sort_param = self.request.GET.get('sort', self.default_sort_param)
         allowed_sorts = {
             'enrollment_request__device__common_name',
             '-enrollment_request__device__common_name',
@@ -632,20 +641,19 @@ class PendingApprovalsView(ListView[WorkflowInstance]):
             'state',
             '-state',
         }
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
         if sort_param not in allowed_sorts:
             sort_param = self.default_sort_param
-
         return qs.order_by(sort_param)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds page metadata, filter, and sorting information to the context."""
+        """Add page metadata, filter, and sorting information to the context."""
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'workflows'
-        context['page_name'] = 'pending'
+        context['page_name'] = 'waiting_approvals'
         context['clm_url'] = (
             f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management'
         )
-
         sort_param = self.request.GET.get('sort', self.default_sort_param)
         context['current_sort'] = sort_param
         context['filter'] = getattr(self, 'filterset', None)
@@ -659,7 +667,7 @@ class PendingApprovalsView(ListView[WorkflowInstance]):
 class WorkflowInstanceDetailView(PageContextMixin, View):
     """Show detailed info for a pending workflow instance, including step summary."""
 
-    template_name = 'workflows/pending_detail.html'
+    template_name = 'workflows/instance_detail.html'
 
     def get(self, request: HttpRequest, instance_id: UUID, *_args: Any, **_kwargs: Any) -> HttpResponse:
         inst = get_object_or_404(
@@ -698,46 +706,23 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
         steps: list[dict[str, Any]] = []
         current_step_label: str | None = None
 
-        def _normalize_status(raw_status: str | None, index0: int) -> tuple[str, str]:
-            """Return (display_status, bootstrap_badge_class)."""
-            if raw_status:
-                s = raw_status.lower()
-                if s in {'passed', 'approved', 'completed'}:
-                    return 'passed', 'bg-success'
-                if s in {'waiting', 'awaiting'}:
-                    return 'waiting', 'bg-secondary'
-                if s in {'running', 'in-progress'}:
-                    return 'In progress', 'bg-primary'
-                if s in {'rejected', 'failed'}:
-                    return s.capitalize(), 'bg-danger'
-
-            # fallback based on position vs current_idx
-            if current_idx is None:
-                return 'Unknown', 'bg-light text-muted'
-            if index0 < current_idx:
-                return 'Completed', 'bg-success'
-            if index0 == current_idx:
-                return 'In progress', 'bg-primary'
-            return 'Pending', 'bg-secondary'
-
         for idx0, step_def in enumerate(steps_raw):
             step_id = step_def.get('id') or f'step-{idx0 + 1}'
             step_type = step_def.get('type', 'Unknown')
             step_label = step_def.get('name') or step_def.get('label') or step_id
 
             ctx = step_contexts.get(step_id, {}) or {}
-            raw_status = ctx.get('status')
-            display_status, badge_class = _normalize_status(raw_status, idx0)
+            raw_status = ctx.get('status', '')
+            display_status, badge_class = get_status_badge(raw_status)
 
             if current_idx is not None and idx0 == current_idx:
                 current_step_label = step_label
 
-            # Error is highlighted separately; details are the "rest"
             error_value = ctx.get('error')
             details = {
                 k: v
                 for k, v in ctx.items()
-                if k not in {'status', 'ok'}  # keep 'error' and anything else
+                if k not in {'status', 'ok'}
             }
 
             steps.append(
@@ -780,6 +765,9 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
             except Exception as e:  # noqa: BLE001
                 csr_info = {'error': f'Failed to parse CSR: {e!s}'}
 
+        instance_badge = inst.badge_class
+        enrollment_badge = inst.enrollment_request.badge_class
+
         context = {
             'inst': inst,
             'payload': payload,
@@ -791,12 +779,20 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
             'csr_pem': csr_pem,
             'steps': steps,
             'current_step_label': current_step_label,
-            'can_signal': (inst.state == WorkflowInstance.STATE_AWAITING and not inst.finalized),
+            'can_signal': (
+                not inst.finalized
+                and inst.state == WorkflowInstance.STATE_AWAITING
+                and inst.enrollment_request is not None
+                and inst.enrollment_request.aggregated_state == EnrollmentRequest.STATE_AWAITING
+            ),
             'page_category': 'workflows',
             'page_name': 'pending',
             'clm_url': f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management',
+            'instance_badge': instance_badge,
+            'enrollment_badge': enrollment_badge,
         }
         return render(request, self.template_name, context)
+
 
 class SignalInstanceView(View):
     """Endpoint to signal (approve/reject) a workflow instance via POST."""
@@ -804,8 +800,21 @@ class SignalInstanceView(View):
     def post(self, request: HttpRequest, instance_id: UUID, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
         inst = get_object_or_404(WorkflowInstance, pk=instance_id)
         action = request.POST.get('action')
-        if action not in {'Approved', 'Rejected'}:
+        if action not in {'approve', 'reject'}:
             messages.error(request, f'Invalid action: {action!r}')
+            return redirect('workflows:pending_table')
+
+        if inst.finalized:
+            messages.error(request, f'Workflow {inst.id} was already completed.')
+            return redirect('workflows:pending_table')
+
+        if not inst.enrollment_request:
+            raise ValueError
+
+        if inst.enrollment_request.aggregated_state != EnrollmentRequest.STATE_AWAITING:
+            messages.error(request,
+                           _(f'You can not {action} a workflow where request is already in state \
+                            "{inst.enrollment_request.aggregated_state.lower()}"'))  # noqa: INT001
             return redirect('workflows:pending_table')
 
         advance_instance(inst, signal=action)
@@ -814,7 +823,7 @@ class SignalInstanceView(View):
             with contextlib.suppress(Exception):
                 recompute_request_state(inst.enrollment_request)
 
-        if action == 'Approved':
+        if action == 'approve':
             messages.success(request, f'Workflow {inst.id} approved and advanced.')
         else:
             messages.warning(request, f'Workflow {inst.id} was rejected.')
@@ -827,7 +836,7 @@ class BulkSignalInstancesView(View):
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
         action = request.POST.get('action')
-        if action not in {'Approved', 'Rejected'}:
+        if action not in {'approve', 'reject'}:
             messages.error(request, f'Invalid bulk action: {action!r}')
             return redirect('workflows:pending_table')
 
@@ -840,13 +849,33 @@ class BulkSignalInstancesView(View):
 
         instances_qs = WorkflowInstance.objects.filter(
             id__in=selected_ids,
-            finalized=False,
         ).select_related('enrollment_request')
 
-        if action == 'Approved':
-            rejected_instances = instances_qs.filter(
-                state=WorkflowInstance.STATE_FAILED
+        if any(s.finalized for s in instances_qs):
+            messages.error(request, 'You can not update completed workflows.')
+            return redirect('workflows:pending_table')
+
+        invalid_enrollment_qs = instances_qs.exclude(
+            enrollment_request__aggregated_state=EnrollmentRequest.STATE_AWAITING
+        ).first()
+
+        if invalid_enrollment_qs is not None:
+            # If there is no enrollment_request at all, treat as not allowed as well
+            if invalid_enrollment_qs.enrollment_request is None:
+                state_label = _('unknown')
+            else:
+                state_label = invalid_enrollment_qs.enrollment_request.aggregated_state.lower()
+
+            messages.error(
+                request,
+                _(
+                    'You can not approve/reject a workflow where request is already in state "%(state)s"'
+                ) % {'state': state_label},
             )
+            return redirect('workflows:pending_table')
+
+        if action == 'Approved':
+            rejected_instances = instances_qs.filter(state=WorkflowInstance.STATE_FAILED)
 
             if rejected_instances.exists():
                 messages.error(request, 'You cannot approve failed instances.')
@@ -882,3 +911,94 @@ class BulkSignalInstancesView(View):
             )
 
         return redirect('workflows:pending_table')
+
+
+class EnrollmentRequestListView(ListView[EnrollmentRequest]):
+    """List EnrollmentRequests (main pending requests page)."""
+
+    model = EnrollmentRequest
+    template_name = 'workflows/enrollment_request_table.html'
+    context_object_name = 'requests'
+    paginate_by = 25
+
+    def get_queryset(self) -> QuerySet[EnrollmentRequest]:
+        """Return EnrollmentRequests annotated with workflow instance counts, filtered."""
+        base_qs = (
+            EnrollmentRequest.objects.select_related('device', 'domain', 'ca')
+            .annotate(workflow_count=Count('instances'))
+            .order_by('-created_at')
+        )
+
+        params = self.request.GET.copy()
+        if not params:
+            params = QueryDict(mutable=True)
+            params['finalized'] = 'False'
+        self.filterset = EnrollmentRequestFilter(params or None, queryset=base_qs)
+        qs: QuerySet[EnrollmentRequest] = self.filterset.qs
+
+
+        return qs
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add page metadata and filter to context."""
+        context = super().get_context_data(**kwargs)
+        context['page_category'] = 'workflows'
+        context['page_name'] = 'pending_requests'
+        context['filter'] = getattr(self, 'filterset', None)
+        # preserve query string when changing sort/pagination if needed later
+        params = self.request.GET.copy()
+        context['preserve_qs'] = params.urlencode()
+        return context
+
+
+class EnrollmentRequestDetailView(ListView[WorkflowInstance]):
+    """Show WorkflowInstances that belong to a single EnrollmentRequest."""
+
+    model = WorkflowInstance
+    template_name = 'workflows/enrollment_request_detail.html'
+    context_object_name = 'instances'
+    paginate_by = 50
+
+    def get_queryset(self) -> QuerySet[WorkflowInstance]:
+        """Return WorkflowInstances for the requested EnrollmentRequest."""
+        er = get_object_or_404(EnrollmentRequest, pk=self.kwargs['pk'])
+        return (
+            WorkflowInstance.objects.filter(enrollment_request=er)
+            .select_related(
+                'definition',
+                'enrollment_request',
+                'enrollment_request__device',
+                'enrollment_request__domain',
+                'enrollment_request__ca',
+            )
+            .order_by('-created_at')
+        )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Expose the parent EnrollmentRequest and page metadata."""
+        context = super().get_context_data(**kwargs)
+        er = get_object_or_404(
+            EnrollmentRequest.objects.select_related('device', 'domain', 'ca'),
+            pk=self.kwargs['pk'],
+        )
+        context['er'] = er
+        context['page_category'] = 'workflows'
+        context['page_name'] = 'requests'
+        return context
+
+
+class BulkAbortEnrollmentRequestsView(View):
+    """POST endpoint to abort multiple EnrollmentRequests (placeholder).
+
+    This is a non-destructive stub. Replace logic when implementing aborts.
+    """
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        selected_ids: list[str] = request.POST.getlist('row_checkbox')
+        if not selected_ids:
+            messages.warning(request, 'Please select at least one request.')
+            return redirect('workflows:request_table')
+
+        # Placeholder: do not change database yet.
+        messages.info(request, f'Abort requested for {len(selected_ids)} enrollment request(s). (Not implemented yet.)')
+        return redirect('workflows:request_table')

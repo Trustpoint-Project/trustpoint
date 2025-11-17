@@ -7,12 +7,15 @@ and signaling workflow instances.
 from django.urls import path
 
 from workflows.views import (
+    BulkAbortEnrollmentRequestsView,
     BulkSignalInstancesView,
     CAListView,
     ContextCatalogView,
     DefinitionDetailView,
     DeviceListView,
     DomainListView,
+    EnrollmentRequestDetailView,
+    EnrollmentRequestListView,
     EventsListView,
     MailTemplateListView,
     PendingApprovalsView,
@@ -57,8 +60,11 @@ urlpatterns = [
     ),
 
     # approval console
-    path('pending/', PendingApprovalsView.as_view(), name='pending_table'),
-    path('pending/<uuid:instance_id>/', WorkflowInstanceDetailView.as_view(), name='pending_detail'),
+    path('waiting-approvals/', PendingApprovalsView.as_view(), name='pending_table'),
+    path('wf-detail/<uuid:instance_id>/', WorkflowInstanceDetailView.as_view(), name='instance_detail'),
     path('pending/bulk-signal/', BulkSignalInstancesView.as_view(), name='pending_bulk_signal'),
     path('instances/<uuid:instance_id>/signal/', SignalInstanceView.as_view(), name='signal'),
+    path('requests/', EnrollmentRequestListView.as_view(), name='request_table'),
+    path('requests/<uuid:pk>/', EnrollmentRequestDetailView.as_view(), name='request_detail'),
+    path('requests/bulk-abort/', BulkAbortEnrollmentRequestsView.as_view(), name='requests_bulk_abort'),
 ]

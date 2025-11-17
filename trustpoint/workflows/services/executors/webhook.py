@@ -7,10 +7,10 @@ from typing import Any
 import requests
 from django.template import Context, Template
 
-from workflows.models import WorkflowInstance
+from workflows.models import State, WorkflowInstance
 from workflows.services.context import build_context, set_in
 from workflows.services.executors.factory import AbstractStepExecutor
-from workflows.services.types import ExecStatus, ExecutorResult
+from workflows.services.types import ExecutorResult
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class WebhookExecutor(AbstractStepExecutor):
         except Exception as exc:
             logger.exception('Webhook: URL template render failed')
             return ExecutorResult(
-                status=ExecStatus.FAIL,
+                status=State.FAILED,
                 context={'type': 'Webhook', 'status': 'failed', 'error': f'URL template error: {exc!s}', 'outputs': {}},
             )
 
@@ -86,7 +86,7 @@ class WebhookExecutor(AbstractStepExecutor):
             except Exception as exc:
                 logger.exception('Webhook: body template render failed')
                 return ExecutorResult(
-                    status=ExecStatus.FAIL,
+                    status=State.FAILED,
                     context={'type': 'Webhook', 'status': 'failed', 'error': f'Body template error: {exc!s}', 'outputs': {}},
                 )
             try:
@@ -102,7 +102,7 @@ class WebhookExecutor(AbstractStepExecutor):
         except Exception as exc:
             logger.exception('Webhook: request failed')
             return ExecutorResult(
-                status=ExecStatus.FAIL,
+                status=State.FAILED,
                 context={'type': 'Webhook', 'status': 'failed', 'error': f'HTTP request failed: {exc!s}', 'outputs': {}},
             )
 
@@ -160,7 +160,11 @@ class WebhookExecutor(AbstractStepExecutor):
                 except Exception:
                     pass
 
-        return ExecutorResult(status=ExecStatus.PASSED, context=step_ctx, vars=(flat_vars or None))
+        return ExecutorResult(
+            status=State.PASSED,
+            context=step_ctx,
+            vars=(flat_vars or None),
+        )
 
 
 # ---------------------------- helpers ----------------------------

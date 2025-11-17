@@ -6,10 +6,10 @@ from typing import Any, cast
 
 from django.db import transaction
 
-from workflows.models import EnrollmentRequest, WorkflowInstance
+from workflows.models import EnrollmentRequest, State, WorkflowInstance
 from workflows.services.context import VARS_MAX_BYTES, compact_context_blob
 from workflows.services.executors.factory import StepExecutorFactory
-from workflows.services.types import ExecStatus, ExecutorResult
+from workflows.services.types import ExecutorResult
 
 
 def _current_step(inst: WorkflowInstance) -> dict[str, Any]:
@@ -55,24 +55,21 @@ def _deep_merge_no_overwrite(dst: dict[str, Any], src: dict[str, Any]) -> None:
 
 
 def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
-    """Advance an instance until WAITING or a terminal outcome is reached.
+    """Advance an instance until AWAITING or a terminal outcome is reached.
 
     Rules:
       - Executors return ExecutorResult(status, context?, vars?).
       - Engine stores compacted per-step context.
       - Engine merges ExecutorResult.vars into global $vars (no overwrite of different values).
       - Size guard on $vars (VARS_MAX_BYTES).
-      - APPROVED acts like PASSED if there is a next step; becomes terminal only at the end.
+      - State.APPROVED acts like PASSED if there is a next step; becomes terminal only at the end.
     """
     with transaction.atomic():
         inst = WorkflowInstance.objects.select_for_update().get(pk=inst.pk)
 
         if inst.finalized:
             return
-        if inst.state == WorkflowInstance.STATE_FAILED and signal == 'Rejected':
-            cast('EnrollmentRequest', inst.enrollment_request).finalize()
 
-        # allow last step to return FINALIZED
         budget = _max_pass_hops(inst) + 1
         for _ in range(budget):
             step_meta = _current_step(inst)
@@ -103,44 +100,42 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
 
             status = result.status
 
-            if status == ExecStatus.PASSED:
+            # === PASS / APPROVED with continuation semantics ==================
+            if status == State.PASSED:
                 if _advance_pointer(inst):
-                    signal = None  # consume one-shot signal
+                    signal = None
                     continue
                 inst.state = WorkflowInstance.STATE_PASSED
                 inst.save(update_fields=['state'])
                 break
 
-            if status == ExecStatus.APPROVED:
-                # If there is another step, treat like a pass and continue.
+            if status == State.APPROVED:
                 if _advance_pointer(inst):
                     signal = None
                     continue
-                # Otherwise it's terminal Approved.
                 inst.state = WorkflowInstance.STATE_APPROVED
                 inst.save(update_fields=['state'])
                 break
 
-            if status == ExecStatus.WAITING:
-                inst.state = (
-                    WorkflowInstance.STATE_AWAITING if step_type == 'Approval'
-                    else WorkflowInstance.STATE_RUNNING
-                )
+            # === AWAITING (pause until next signal) ===========================
+            if status == State.AWAITING:
+                inst.state = WorkflowInstance.STATE_AWAITING
                 inst.save(update_fields=['state'])
                 break
 
-            if status == ExecStatus.REJECTED:
+            # === Terminal outcomes ============================================
+            if status == State.REJECTED:
                 inst.state = WorkflowInstance.STATE_REJECTED
                 inst.save(update_fields=['state'])
                 break
 
-            if status == ExecStatus.COMPLETED:
+            if status == State.FINALIZED:
                 inst.state = WorkflowInstance.STATE_FINALIZED
                 inst.finalize()
                 inst.save(update_fields=['state'])
                 break
 
-            if status == ExecStatus.FAIL:
+            if status == State.FAILED:
                 inst.state = WorkflowInstance.STATE_FAILED
                 inst.save(update_fields=['state'])
                 break

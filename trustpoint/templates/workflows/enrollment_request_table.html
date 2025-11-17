@@ -1,0 +1,97 @@
+{# templates/workflows/enrollment_request_table.html #}
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+  <div class="card-header">
+    <h1>{% trans 'Pending Requests' %}</h1>
+  </div>
+
+  {# Filters for Enrollment Requests #}
+  {% include 'workflows/enrollment_request_table_filter.html' %}
+
+  {# Outer form for bulk actions #}
+  <form method="post" action="{% url 'workflows:requests_bulk_abort' %}" style="flex-grow: 1; display: flex; flex-direction: column;">
+    {% csrf_token %}
+
+    <div class="card-body text-start pt-0" style="overflow: auto; flex-grow: 1; max-height: 90%;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th id="checkbox-column"><input type="checkbox" onclick="document.querySelectorAll('input[name=&quot;row_checkbox&quot;]').forEach(cb=>cb.checked=this.checked);" /></th>
+
+            {# Column order: Device (first), Domain (clickable), Protocol, Template, Created (third from behind), Workflows, State, Action #}
+            <th class="text-nowrap">{% trans 'Device' %}</th>
+            <th class="text-nowrap">{% trans 'Domain' %}</th>
+            <th class="text-nowrap">{% trans 'Protocol' %}</th>
+            <th class="text-nowrap">{% trans 'Template' %}</th>
+            <th class="text-nowrap">{% trans 'Workflows' %}</th>
+            <th class="text-nowrap">{% trans 'Created' %}</th>
+            <th class="text-nowrap">{% trans 'State' %}</th>
+            <th class="text-nowrap text-end">{% trans 'Action' %}</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for er in requests %}
+            <tr>
+              <td class="row_checkbox">
+                <input type="checkbox" name="row_checkbox" value="{{ er.id }}" />
+              </td>
+
+              <td>
+                {% if er.device %}
+                  <a href="{% url 'devices:devices_certificate_lifecycle_management' pk=er.device.pk %}">
+                    {{ er.device.common_name }} ({{ er.device.serial_number }})
+                  </a>
+                {% else %}&mdash;{% endif %}
+              </td>
+
+             <td>
+                {% if er.domain %}
+                    <a href="{% url 'pki:domains-detail' pk=er.domain.pk %}">
+                    {{ er.domain.unique_name }}
+                    </a>
+                {% else %}&mdash;{% endif %}
+            </td>
+
+              <td>{{ er.protocol }}/{{ er.operation }}</td>
+              <td>{{ er.template|default:'—' }}</td>
+              <td>{{ er.workflow_count }}</td>
+              <td>{{ er.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+
+              <td>
+                <span class="badge {{ er.badge_class }}">{{ er.badge_label }}</span>
+              </td>
+
+              <td class="text-end">
+                <a href="{% url 'workflows:request_detail' er.id %}" class="btn btn-sm btn-primary">
+                  {% trans 'Open' %}
+                </a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="9" class="middle">
+                {% trans 'No enrollment requests.' %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+      <div class="tp-card-btn-footer m-1">
+        <button type="submit" class="btn btn-outline-danger">
+          {% trans 'Abort selected' %}
+        </button>
+      </div>
+      <div class="m-1">
+        {# Reserved for future help text / links #}
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

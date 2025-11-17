@@ -14,7 +14,6 @@ def recompute_request_state(req: EnrollmentRequest) -> None:
       - Rejected  if any instance is Rejected
       - Pending   if any instance is Starting/Running/AwaitingApproval
       - Ready     if all instances are Approved/Completed and there is at least one instance
-      - NoMatch   if there are no instances
     Note: We do NOT set Completed here; EST issuance will set Completed.
     """
     with transaction.atomic():
@@ -23,7 +22,12 @@ def recompute_request_state(req: EnrollmentRequest) -> None:
         states = list(qs.values_list('state', flat=True))
 
         if not states:
-            req.aggregated_state = EnrollmentRequest.STATE_NOMATCH
+            req.aggregated_state = EnrollmentRequest.STATE_PASSED
+            req.save(update_fields=['aggregated_state'])
+            return
+
+        if any(s == WorkflowInstance.STATE_FAILED for s in states):
+            req.aggregated_state = EnrollmentRequest.STATE_FAILED
             req.save(update_fields=['aggregated_state'])
             return
 

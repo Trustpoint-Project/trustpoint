@@ -49,7 +49,7 @@ class EstMessageResponder(AbstractMessageResponder):
         if workflow_state == EnrollmentRequest.STATE_FAILED:
             context.http_response_status = 500
             context.http_response_content_type = 'text/plain'
-            context.http_response_content = 'Workflow failed. Need of human interaction.'
+            context.http_response_content = f'Workflow failed. Check here: -> /workflows/requests/{context.enrollment_request.id}'
             return None
         if context.enrollment_request.is_valid() and context.operation in ['simpleenroll', 'simplereenroll']:
             responder = EstCertificateMessageResponder()
