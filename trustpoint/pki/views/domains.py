@@ -148,50 +148,27 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         del args
         del kwargs
 
-        # Handle assignments of  allowed certificate profiles in domain
         domain = self.get_object()
-        existing_aliases = set()
 
-        with transaction.atomic():
-            for profile in CertificateProfileModel.objects.all():
-                allowed_field_name = f'cert_p_allowed_{profile.id}'
-                alias_field_name = f'cert_p_alias_{profile.id}'
+        # Handle assignments of  allowed certificate profiles in domain
+        # get fields from request POST
+        allowed_profile_data = {}
+        for key in request.POST:
+            if key.startswith('cert_p_allowed_'):
+                profile_id = key.removeprefix('cert_p_allowed_')
+                alias = request.POST.get(f'cert_p_alias_{profile_id}', '').strip()
+                allowed_profile_data[profile_id] = alias
 
-                is_allowed = allowed_field_name in request.POST
-                alias_value = request.POST.get(alias_field_name, '').strip()
-
-                if is_allowed and alias_value: # defer to end?
-                    if alias_value in existing_aliases:
-                        messages.warning(
-                            request,
-                            _('Alias "{alias}" not applied for profile {profile} as it is already in use. '
-                            'Please use an unique domain alias for each Certificate Profile.').format(
-                                alias=alias_value,
-                                profile=profile.unique_name
-                            )
-                        )
-                        alias_value = ''
-                    else:
-                        existing_aliases.add(alias_value)
-
-                existing_relation = domain.certificate_profiles.filter(
-                    certificate_profile=profile).first()
-
-                if is_allowed:
-                    if not existing_relation:
-                        # Create new relation
-                        new_relation = DomainAllowedCertificateProfileModel(
-                            domain=domain,
-                            certificate_profile=profile,
-                            alias=alias_value
-                        )
-                        new_relation.save()
-                    elif existing_relation.alias != alias_value:
-                            existing_relation.alias = alias_value
-                            existing_relation.save()
-                elif existing_relation:
-                    # Remove existing relation
-                    existing_relation.delete()
+        rejected_aliases = domain.set_allowed_cert_profiles(allowed_profile_data)
+        for alias_value, profile in rejected_aliases:
+            messages.warning(
+                request,
+                _('Alias "{alias}" not applied for profile {profile} as it is already in use. '
+                'Please use an unique domain alias for each Certificate Profile.').format(
+                    alias=alias_value,
+                    profile=profile
+                )
+            )
 
         domain.save()
 

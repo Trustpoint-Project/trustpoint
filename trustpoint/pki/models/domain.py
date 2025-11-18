@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
@@ -132,6 +132,42 @@ class DomainModel(models.Model):
             err_msg = f'Certificate profile "{cert_profile_str}" does not exist or not allowed in domain.'
             raise ValueError(err_msg)
         return profile_qs.first().certificate_profile  # type: ignore[union-attr]
+
+    def set_allowed_cert_profiles(self, allowed_profile_data: dict[str, str]) -> set[tuple[str, str]]:
+        """Sets the allowed certificate profiles for the domain from a dict (key is profile ID, value is alias).
+
+        Args:
+            allowed_profile_data: Dict where key is allowed certificate profile ID (str) and value is alias
+
+        Returns:
+            Set of rejected aliases due to duplication in the form of (alias, profile unique name)
+        """
+        existing_aliases = set()
+        rejected_aliases = set()
+        with transaction.atomic():
+            self.certificate_profiles.all().delete()
+            for profile in CertificateProfileModel.objects.all():
+                id_str = str(profile.id)
+                is_allowed = id_str in allowed_profile_data
+                alias_value = allowed_profile_data.get(id_str, '')
+                if not is_allowed:
+                    continue
+
+                if alias_value:
+                    if alias_value in existing_aliases:
+                        rejected_aliases.add((alias_value, profile.unique_name))
+                        alias_value = ''
+                    else:
+                        existing_aliases.add(alias_value)
+
+                # Create new relation
+                DomainAllowedCertificateProfileModel.objects.create(
+                    domain=self,
+                    certificate_profile=profile,
+                    alias=alias_value
+                )
+
+        return rejected_aliases
 
 
     def _add_default_profiles(self) -> None:
