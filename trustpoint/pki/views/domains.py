@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import ProtectedError
 from django.forms import BaseModelForm
 from django.http import Http404, HttpResponse, HttpResponseRedirect
@@ -14,8 +15,9 @@ from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import DeleteView
 from django.views.generic.detail import DetailView
-from django.views.generic.edit import CreateView, FormView, UpdateView
+from django.views.generic.edit import CreateView, FormView
 from django.views.generic.list import ListView
+from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
     ContextDataMixin,
@@ -28,12 +30,11 @@ from pki.models import (
     CertificateModel,
     CertificateProfileModel,
     DevIdRegistration,
+    DomainAllowedCertificateProfileModel,
     DomainModel,
     IssuingCaModel,
-    DomainAllowedCertificateProfileModel
 )
 from pki.models.truststore import TruststoreModel
-from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -86,19 +87,6 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
             _('Successfully created domain {name}.').format(name=domain.unique_name),
         )
         return super().form_valid(form)
-
-
-class DomainUpdateView(DomainContextMixin, UpdateView[DomainModel]):
-    """View to edit a domain."""
-
-    # TODO(Air): This view is currently UNUSED. # noqa: FIX002
-    # If used, a mixin implementing the get_form method from the DomainCreateView should be added.
-
-    model = DomainModel
-    fields = '__all__'
-    template_name = 'pki/domains/add.html'
-    success_url = reverse_lazy('pki:domains')
-    ignore_url = reverse_lazy('pki:domains')
 
 
 class DomainDevIdRegistrationTableMixin(SortableTableMixin, ListInDetailView):
@@ -160,33 +148,50 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         del args
         del kwargs
 
+        # Handle assignments of  allowed certificate profiles in domain
         domain = self.get_object()
+        existing_aliases = set()
 
-        for profile in CertificateProfileModel.objects.all():
-            allowed_field = f'cert_p_allowed_{profile.id}'
-            alias_field = f'cert_p_alias_{profile.id}'
+        with transaction.atomic():
+            for profile in CertificateProfileModel.objects.all():
+                allowed_field_name = f'cert_p_allowed_{profile.id}'
+                alias_field_name = f'cert_p_alias_{profile.id}'
 
-            is_allowed = allowed_field in request.POST
-            alias_value = request.POST.get(alias_field, '').strip()
+                is_allowed = allowed_field_name in request.POST
+                alias_value = request.POST.get(alias_field_name, '').strip()
 
-            existing_relation = domain.certificate_profiles.filter(
-                certificate_profile=profile).first()
+                if is_allowed and alias_value: # defer to end?
+                    if alias_value in existing_aliases:
+                        messages.warning(
+                            request,
+                            _('Alias "{alias}" not applied for profile {profile} as it is already in use. '
+                            'Please use an unique domain alias for each Certificate Profile.').format(
+                                alias=alias_value,
+                                profile=profile.unique_name
+                            )
+                        )
+                        alias_value = ''
+                    else:
+                        existing_aliases.add(alias_value)
 
-            if is_allowed:
-                if not existing_relation:
-                    # Create new relation
-                    new_relation = DomainAllowedCertificateProfileModel(
-                        domain=domain,
-                        certificate_profile=profile,
-                        alias=alias_value
-                    )
-                    new_relation.save()
-                elif existing_relation.alias != alias_value:
-                        existing_relation.alias = alias_value
-                        existing_relation.save()
-            elif existing_relation:
-                # Remove existing relation
-                existing_relation.delete()
+                existing_relation = domain.certificate_profiles.filter(
+                    certificate_profile=profile).first()
+
+                if is_allowed:
+                    if not existing_relation:
+                        # Create new relation
+                        new_relation = DomainAllowedCertificateProfileModel(
+                            domain=domain,
+                            certificate_profile=profile,
+                            alias=alias_value
+                        )
+                        new_relation.save()
+                    elif existing_relation.alias != alias_value:
+                            existing_relation.alias = alias_value
+                            existing_relation.save()
+                elif existing_relation:
+                    # Remove existing relation
+                    existing_relation.delete()
 
         domain.save()
 

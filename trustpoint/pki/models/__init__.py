@@ -24,9 +24,9 @@ from .credential import (CredentialAlreadyExistsError,
                          CertificateChainOrderModel,
                          OwnerCredentialModel,
                          PKCS11Key)
-from .domain import DomainModel
+from .domain import DomainModel, DomainAllowedCertificateProfileModel
 from .devid_registration import DevIdRegistration
-from .cert_profile import CertificateProfileModel, DomainAllowedCertificateProfileModel
+from .cert_profile import CertificateProfileModel
 from .truststore import TruststoreModel, TruststoreOrderModel
 
 __all__ = [

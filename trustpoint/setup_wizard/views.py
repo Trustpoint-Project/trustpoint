@@ -2035,10 +2035,12 @@ class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
         """Handle form submission for demo data setup."""
         try:
             if 'without-demo-data' in self.request.POST:
+                call_command('create_default_cert_profiles') # default cert profiles are always added
                 self._execute_notifications()
                 execute_shell_script(SCRIPT_WIZARD_DEMO_DATA)
                 messages.add_message(self.request, messages.SUCCESS, 'Setup Trustpoint with no demo data')
             elif 'with-demo-data' in self.request.POST:
+                call_command('create_default_cert_profiles')
                 self._add_demo_data()
                 self._execute_notifications()
                 execute_shell_script(SCRIPT_WIZARD_DEMO_DATA)

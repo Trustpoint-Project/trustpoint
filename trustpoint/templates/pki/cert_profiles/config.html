@@ -26,10 +26,12 @@
                 <div class="tp-kvp-list">
                     <div>
                         <div>{% trans 'Unique Name' %}</div>
-                        <div><input type="text" class="form-control {% if form.unique_name.errors %}is-invalid{% endif %}" name="unique_name" value="{{ form.unique_name.value }}" id="unique_name" aria-describedby="unique_nameFeedback" /></div>
+                        <div><input type="text" class="form-control {% if form.unique_name.errors %}is-invalid{% endif %}" 
+                            name="unique_name" value="{{ form.unique_name.value }}" id="unique_name" aria-describedby="unique_name_error" />
                         {% for error in form.unique_name.errors %}
-                            <div class="invalid-feedback" id="unique_nameFeedback">{{ error }}</div>
+                            <div class="invalid-feedback" id="unique_name_error">{{ error }}</div>
                         {% endfor %}
+                        </div>
                     </div>
                     <div>
                         <div>{% trans 'Is (enabled in new domains by) default' %}</div>
@@ -40,9 +42,10 @@
                 </div>
                 <h2>{% trans 'Profile Details' %}</h2>
                 <hr class="hr-m">
-                <textarea class="form-control" id="json-editor" name="profile_json" rows="10">{{ profile_json }}</textarea>
+                <textarea class="form-control {% if form.profile_json.errors %}is-invalid{% endif %}"
+                    id="json-editor" name="profile_json" rows="10" aria-describedby="profile_json_error">{{ profile_json }}</textarea>
                 {% for error in form.profile_json.errors %}
-                    <div class="error">{{ error }}</div>
+                    <div class="invalid-feedback" id="profile_json_error">{{ error }}</div>
                 {% endfor %}
             </div>
         </div>

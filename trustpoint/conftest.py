@@ -23,8 +23,8 @@ from django.http import HttpRequest
 from django.test.client import RequestFactory
 from management.models import KeyStorageConfig
 from pki.models import CertificateModel, CredentialModel
-from pki.models.cert_profile import CertificateProfileModel, DomainAllowedCertificateProfileModel
-from pki.models.domain import DomainModel
+from pki.models.cert_profile import CertificateProfileModel
+from pki.models.domain import DomainAllowedCertificateProfileModel, DomainModel
 from pki.models.issuing_ca import IssuingCaModel
 from pki.util.x509 import CertificateGenerator
 from trustpoint_core.serializer import CredentialSerializer
