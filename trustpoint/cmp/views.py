@@ -126,5 +126,153 @@ class CmpCertificationRequestView(View):
         return LoggedHttpResponse(
             content=ctx.http_response_content,
             status=ctx.http_response_status,
-            content_type=ctx.http_response_content_type,
+            content_type=ctx.http_response_content_type
         )
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CmpRevocationRequestView(View):
+    """Handles CMP Initialization Request Messages."""
+
+    http_method_names = ('post',)
+
+    def post(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        """Handles the POST requests to the CMP IR endpoint."""
+        del args
+        domain_name = cast('str', kwargs.get('domain_name'))
+
+        ctx = RequestContext(
+            raw_message=request,
+            domain_str=domain_name,
+            protocol='cmp',
+            operation='revocation',
+        )
+
+        validator = CmpHttpRequestValidator()
+        validator.validate(ctx)
+
+        parser = CmpMessageParser()
+        parser.parse(ctx)
+
+        authenticator = CmpAuthentication()
+        authenticator.authenticate(ctx)
+
+        authorizer = CmpAuthorization(
+            ['tls-server', 'tls-client', 'opc-ua-server', 'opc-ua-client', 'domaincredential'],
+            ['initialization', 'certification']
+        )
+        authorizer.authorize(ctx)
+
+        ProfileValidator.validate(ctx)
+
+        CertificateIssueProcessor().process_operation(ctx)
+
+        CmpMessageResponder.build_response(ctx)
+
+        return LoggedHttpResponse(content=ctx.http_response_content,
+                                  status=ctx.http_response_status,
+                                  content_type=ctx.http_response_content_type)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CmpGetCaCertsRequestView(View):
+    """Handles CMP Initialization Request Messages."""
+
+    http_method_names = ('post',)
+
+    def post(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        """Handles the POST requests to the CMP IR endpoint."""
+        del args
+        domain_name = cast('str', kwargs.get('domain_name'))
+
+        ctx = RequestContext(
+            raw_message=request,
+            domain_str=domain_name,
+            protocol='cmp',
+            operation='revocation',
+        )
+
+        validator = CmpHttpRequestValidator()
+        validator.validate(ctx)
+
+        parser = CmpMessageParser()
+        parser.parse(ctx)
+
+        authenticator = CmpAuthentication()
+        authenticator.authenticate(ctx)
+
+        authorizer = CmpAuthorization(
+            ['tls-server', 'tls-client', 'opc-ua-server', 'opc-ua-client', 'domaincredential'],
+            ['initialization', 'certification']
+        )
+        authorizer.authorize(ctx)
+
+        ProfileValidator.validate(ctx)
+
+        CertificateIssueProcessor().process_operation(ctx)
+
+        CmpMessageResponder.build_response(ctx)
+
+        return LoggedHttpResponse(content=ctx.http_response_content,
+                                  status=ctx.http_response_status,
+                                  content_type=ctx.http_response_content_type)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CmpGetCrlsRequestView(View):
+    """Handles CMP Initialization Request Messages."""
+
+    http_method_names = ('post',)
+
+    def post(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        """Handles the POST requests to the CMP IR endpoint."""
+        del args
+        domain_name = cast('str', kwargs.get('domain_name'))
+
+        ctx = RequestContext(
+            raw_message=request,
+            domain_str=domain_name,
+            protocol='cmp',
+            operation='revocation',
+        )
+
+        validator = CmpHttpRequestValidator()
+        validator.validate(ctx)
+
+        parser = CmpMessageParser()
+        parser.parse(ctx)
+
+        authenticator = CmpAuthentication()
+        authenticator.authenticate(ctx)
+
+        authorizer = CmpAuthorization(
+            ['tls-server', 'tls-client', 'opc-ua-server', 'opc-ua-client', 'domaincredential'],
+            ['initialization', 'certification']
+        )
+        authorizer.authorize(ctx)
+
+        ProfileValidator.validate(ctx)
+
+        CertificateIssueProcessor().process_operation(ctx)
+
+        CmpMessageResponder.build_response(ctx)
+
+        return LoggedHttpResponse(content=ctx.http_response_content,
+                                  status=ctx.http_response_status,
+                                  content_type=ctx.http_response_content_type)
+

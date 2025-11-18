@@ -13,7 +13,6 @@ from cryptography.hazmat.primitives.asymmetric.types import CertificatePublicKey
 from cryptography.hazmat.primitives.serialization import load_der_public_key
 from cryptography.x509.oid import ExtensionOID
 from pki.models import DomainModel
-from pyasn1.codec.ber import decoder as ber_decoder  # type: ignore[import-untyped]
 from pyasn1.codec.der import decoder as der_decoder  # type: ignore[import-untyped]
 from pyasn1.codec.der import encoder as der_encoder
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
@@ -223,7 +222,7 @@ class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
 
         try:
             body_size = len(context.raw_message.body)
-            serialized_message, _ = ber_decoder.decode(context.raw_message.body, asn1Spec=rfc4210.PKIMessage())
+            serialized_message, _ = der_decoder.decode(context.raw_message.body, asn1Spec=rfc4210.PKIMessage())
             context.parsed_message = serialized_message
 
             self._extract_signer_certificate(context)
@@ -330,18 +329,23 @@ class CmpHeaderValidation(ParsingComponent, LoggerMixin):
             err_msg = 'senderNonce fail'
             raise ValueError(err_msg)
 
-        implicit_confirm_entry = None
-        for entry in serialized_pyasn1_message['header']['generalInfo']:
-            if entry['infoType'].prettyPrint() == self.implicit_confirm_oid:
-                implicit_confirm_entry = entry
-                break
-        if implicit_confirm_entry is None:
-            err_msg = 'implicit confirm missing'
-            raise ValueError(err_msg)
+        pki_body = serialized_pyasn1_message['body']
 
-        if implicit_confirm_entry['infoValue'].prettyPrint() != self.implicit_confirm_str_value:
-            err_msg = 'implicit confirm entry fail'
-            raise ValueError(err_msg)
+        body_type = pki_body.getName()
+
+        if body_type in ('ir', 'cr'):
+            implicit_confirm_entry = None
+            for entry in serialized_pyasn1_message['header']['generalInfo']:
+                if entry['infoType'].prettyPrint() == self.implicit_confirm_oid:
+                    implicit_confirm_entry = entry
+                    break
+            if implicit_confirm_entry is None:
+                err_msg = 'implicit confirm missing'
+                raise ValueError(err_msg)
+
+            if implicit_confirm_entry['infoValue'].prettyPrint() != self.implicit_confirm_str_value:
+                err_msg = 'implicit confirm entry fail'
+                raise ValueError(err_msg)
 
 
 class CmpBodyValidation(ParsingComponent, LoggerMixin):
@@ -378,7 +382,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
 
             body_type = pki_body.getName()
 
-            if body_type not in ('ir', 'cr'):
+            if body_type not in ('ir', 'cr', 'rr', 'crts', 'crls'):
                 err_msg = f'Unsupported CMP body type: {body_type}'
                 self._raise_value_error(err_msg)
 
@@ -386,14 +390,21 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             self._validate_operation_body_match(context.operation, body_type)
 
             # Extract and validate certificate request messages
-            cert_req_messages = pki_body[body_type]
-            self._validate_cert_req_messages(cert_req_messages)
+            if body_type in ('ir', 'cr'):
+                cert_req_messages = pki_body[body_type]
+                self._validate_cert_req_messages(cert_req_messages)
 
-            # Validate certificate request details
-            cert_req_msg = cert_req_messages[0]['certReq']
-            request_builder = self._validate_cert_request(cert_req_msg)
+                # Validate certificate request details
+                cert_req_msg = cert_req_messages[0]['certReq']
+                request_builder = self._validate_cert_request(cert_req_msg)
 
-            context.cert_requested = request_builder
+                context.cert_requested = request_builder
+
+            if body_type == 'rr':
+                self.logger.error(pki_body)
+                serial = int(pki_body[0]['certDetails']['serialNumber'])
+                self.logger.error(serial)
+
 
             self.logger.info('CMP body type validation successful: %s body extracted', body_type.upper())
 
@@ -407,6 +418,15 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             err_msg = f'Expected CMP IR body for initialization operation, but got CMP {body_type.upper()} body.'
             raise ValueError(err_msg)
         if operation == 'certification' and body_type != 'cr':
+            err_msg = f'Expected CMP CR body for certification operation, but got CMP {body_type.upper()} body.'
+            raise ValueError(err_msg)
+        if operation == 'revocation' and body_type != 'rr':
+            err_msg = f'Expected CMP CR body for certification operation, but got CMP {body_type.upper()} body.'
+            raise ValueError(err_msg)
+        if operation == 'getcacerts' and body_type != 'crts':
+            err_msg = f'Expected CMP CR body for certification operation, but got CMP {body_type.upper()} body.'
+            raise ValueError(err_msg)
+        if operation == 'getcrls' and body_type != 'crls':
             err_msg = f'Expected CMP CR body for certification operation, but got CMP {body_type.upper()} body.'
             raise ValueError(err_msg)
 
@@ -590,7 +610,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
     def _parse_certificate_policies(self, value: bytes, *, critical: bool) -> x509.Extension[x509.CertificatePolicies]:
         """Parse Certificate Policies extension manually."""
         try:
-            cert_policies, _ = ber_decoder.decode(value, asn1Spec=rfc2459.CertificatePolicies())
+            cert_policies, _ = der_decoder.decode(value, asn1Spec=rfc2459.CertificatePolicies())
 
             policy_information_list = []
 

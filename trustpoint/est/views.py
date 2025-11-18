@@ -40,7 +40,6 @@ class LoggedHttpResponse(HttpResponse, LoggerMixin):
         """
         if content is None:
             content = b''
-
         if status and status >= THRESHOLD_LOGGER:
             if isinstance(content, bytes):
                 content = content.decode('utf-8')
