@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from workflows.models import State
+if TYPE_CHECKING:
+    from workflows.models import State
 
 
 @dataclass(frozen=True)

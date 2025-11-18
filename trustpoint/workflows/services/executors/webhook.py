@@ -1,5 +1,8 @@
+"""Webhook step executor."""
+
 from __future__ import annotations
 
+import contextlib
 import json as _json
 import logging
 from typing import Any
@@ -29,6 +32,15 @@ class WebhookExecutor(AbstractStepExecutor):
     """
 
     def do_execute(self, instance: WorkflowInstance, _signal: str | None) -> ExecutorResult:
+        """Execute the webhook step.
+
+        Args:
+            instance: Workflow instance being executed.
+            _signal: Optional signal (unused for webhook steps).
+
+        Returns:
+            ExecutorResult describing step outcome and exported vars.
+        """
         step = next(n for n in instance.get_steps() if n['id'] == instance.current_step)
         params = dict(step.get('params') or {})
 
@@ -38,7 +50,7 @@ class WebhookExecutor(AbstractStepExecutor):
         body_raw = params.get('body')
         timeout_secs = _safe_int(params.get('timeoutSecs'), default=15)
 
-        # auth: {"type":"basic","username":"","password":""} | {"type":"bearer","token":""}
+        # Authentication config: either basic (username/password) or bearer token.
         auth_cfg = params.get('auth')
         auth = None
         bearer_token: str | None = None
@@ -70,10 +82,8 @@ class WebhookExecutor(AbstractStepExecutor):
         headers: dict[str, str] = {}
         for k, v in headers_raw.items():
             sval = str(v)
-            try:
+            with contextlib.suppress(Exception):
                 sval = Template(sval).render(dj_ctx)
-            except Exception:
-                pass
             headers[str(k)] = sval
 
         if bearer_token:
@@ -87,11 +97,16 @@ class WebhookExecutor(AbstractStepExecutor):
                 logger.exception('Webhook: body template render failed')
                 return ExecutorResult(
                     status=State.FAILED,
-                    context={'type': 'Webhook', 'status': 'failed', 'error': f'Body template error: {exc!s}', 'outputs': {}},
+                    context={
+                        'type': 'Webhook',
+                        'status': 'failed',
+                        'error': f'Body template error: {exc!s}',
+                        'outputs': {},
+                    },
                 )
             try:
                 data_kwargs['json'] = _json.loads(rendered)
-            except Exception:
+            except _json.JSONDecodeError:
                 data_kwargs['data'] = rendered.encode('utf-8')
         elif isinstance(body_raw, (dict, list)):
             data_kwargs['json'] = body_raw
@@ -103,14 +118,19 @@ class WebhookExecutor(AbstractStepExecutor):
             logger.exception('Webhook: request failed')
             return ExecutorResult(
                 status=State.FAILED,
-                context={'type': 'Webhook', 'status': 'failed', 'error': f'HTTP request failed: {exc!s}', 'outputs': {}},
+                context={
+                    'type': 'Webhook',
+                    'status': 'failed',
+                    'error': f'HTTP request failed: {exc!s}',
+                    'outputs': {},
+                },
             )
 
         # Try decode JSON; keep text also
         resp_json: Any | None
         try:
             resp_json = resp.json()
-        except Exception:
+        except ValueError:
             resp_json = None
 
         # Per-step context summary
@@ -135,13 +155,11 @@ class WebhookExecutor(AbstractStepExecutor):
 
         # Whole-result capture
         if result_to_raw:
-            dest = result_to_raw[5:] if result_to_raw.startswith('vars.') else result_to_raw
+            dest = result_to_raw.removeprefix('vars.')
             if dest:  # dot path validation is handled server-side; here we best-effort set
                 val = _select_source_value(resp, resp_json, result_source)
-                try:
+                with contextlib.suppress(Exception):
                     set_in(flat_vars, dest, val, forbid_overwrite=True)
-                except Exception:
-                    pass  # invalid path or collision → ignore; validator should guard
 
         # Fine-grained exports
         if isinstance(exports, list):
@@ -153,12 +171,10 @@ class WebhookExecutor(AbstractStepExecutor):
                 to_path_raw = str(exp.get('to_path') or '').strip()
                 if not from_path or not to_path_raw:
                     continue
-                dest = to_path_raw[5:] if to_path_raw.startswith('vars.') else to_path_raw
-                try:
+                dest = to_path_raw.removeprefix('vars.')
+                with contextlib.suppress(Exception):
                     val = _extract_from_path(resp, resp_json, norm_headers, from_path)
                     set_in(flat_vars, dest, val, forbid_overwrite=True)
-                except Exception:
-                    pass
 
         return ExecutorResult(
             status=State.PASSED,
@@ -169,11 +185,13 @@ class WebhookExecutor(AbstractStepExecutor):
 
 # ---------------------------- helpers ----------------------------
 
+
 def _safe_int(v: Any, *, default: int) -> int:
     try:
         return int(v)
     except Exception:  # noqa: BLE001
         return default
+
 
 def _select_source_value(resp: requests.Response, resp_json: Any | None, source: str) -> Any:
     if source == 'status':
@@ -189,11 +207,9 @@ def _select_source_value(resp: requests.Response, resp_json: Any | None, source:
 
 def _normalize_headers_for_lookup(headers: Any) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    try:
+    with contextlib.suppress(Exception):
         for k, v in dict(headers).items():
             out[str(k).lower().replace('-', '_')] = v
-    except Exception:  # noqa: BLE001
-        pass
     return out
 
 

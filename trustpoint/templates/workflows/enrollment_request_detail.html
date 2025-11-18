@@ -4,15 +4,26 @@
 
 {% block content %}
 <div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
-  <div class="card-header">
-    <h1>{% trans 'Enrollment Request' %}: {{ er.id }}</h1>
-    <div class="small text-muted">
-      {% if er.device %}{{ er.device.common_name }} ({{ er.device.serial_number }}) • {% endif %}
-      {% if er.domain %}{{ er.domain.unique_name }} • {% endif %}
-      {{ er.protocol }}/{{ er.operation }} • {{ er.created_at|date:"SHORT_DATETIME_FORMAT" }}
-      
-      <span class="badge {{ er.badge_class }}">{{ er.badge_label }}</span>
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <div>
+      <h1 class="mb-0">{% trans 'Enrollment Request' %}: {{ er.id }}</h1>
+      <div class="small text-muted">
+        {% if er.device %}{{ er.device.common_name }} ({{ er.device.serial_number }}) • {% endif %}
+        {% if er.domain %}{{ er.domain.unique_name }} • {% endif %}
+        {{ er.protocol }}/{{ er.operation }} • {{ er.created_at|date:"SHORT_DATETIME_FORMAT" }}
+        <span class="badge {{ er.badge_class }}">{{ er.badge_label }}</span>
+      </div>
     </div>
+
+    {% if not er.finalized %}
+      <form method="post" action="{% url 'workflows:requests_bulk_abort' %}" class="ms-2">
+        {% csrf_token %}
+        <input type="hidden" name="row_checkbox" value="{{ er.id }}">
+        <button type="submit" class="btn btn-sm btn-outline-danger">
+          {% trans 'Abort request' %}
+        </button>
+      </form>
+    {% endif %}
   </div>
 
   <div class="card-body text-start pt-0" style="overflow: auto; flex-grow: 1; max-height: 90%;">

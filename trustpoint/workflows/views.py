@@ -19,7 +19,7 @@ from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
 from devices.models import DeviceModel
 from django.contrib import messages
-from django.db import IntegrityError
+from django.db import IntegrityError, models
 from django.db.models import Count
 from django.db.models.query import QuerySet
 from django.http import (
@@ -43,7 +43,6 @@ from workflows.events import Events
 from workflows.filters import EnrollmentRequestFilter, WorkflowFilter
 from workflows.models import (
     EnrollmentRequest,
-    State,
     WorkflowDefinition,
     WorkflowInstance,
     WorkflowScope,
@@ -276,6 +275,14 @@ class WorkflowDefinitionImportView(View):
     MAX_ERRORS_TO_SHOW = 6  # avoid spamming too many details
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle upload of a workflow export and stage wizard prefill.
+
+        Args:
+            request: The HTTP request containing the uploaded JSON file.
+
+        Returns:
+            HttpResponse redirecting back to the definition table or wizard.
+        """
         f = request.FILES.get('file')
         if not f:
             messages.error(request, 'Please choose a JSON file to import.')
@@ -283,7 +290,7 @@ class WorkflowDefinitionImportView(View):
 
         try:
             raw = f.read().decode('utf-8', errors='strict')
-        except Exception:
+        except UnicodeDecodeError:
             messages.error(request, 'The uploaded file is not valid UTF-8 text.')
             return redirect('workflows:definition_table')
 
@@ -397,6 +404,7 @@ class WizardPrefillView(View):
     """Returns and CLEARS a one-time wizard prefill from the session."""
 
     def get(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
+        """Return and clear any staged wizard prefill from the session."""
         payload = request.session.pop('wizard_prefill', None)
         request.session.modified = True
         return JsonResponse(payload or {}, safe=True)
@@ -417,6 +425,7 @@ class WorkflowDefinitionExportView(View):
     """
 
     def get(self, _request: HttpRequest, pk: UUID, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Return a JSON file export for the given workflow definition."""
         wf = get_object_or_404(WorkflowDefinition, pk=pk)
 
         # Serialize scopes (raw IDs only—names are environment-specific)
@@ -447,6 +456,7 @@ class WorkflowDefinitionPublishView(View):
     """Toggle published flag via POST (publish/unpublish)."""
 
     def post(self, request: HttpRequest, pk: UUID, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        """Publish or pause a workflow definition based on the submitted action."""
         wf = get_object_or_404(WorkflowDefinition, pk=pk)
         action = (request.POST.get('action') or '').lower()
         if action == 'publish':
@@ -468,6 +478,7 @@ class WorkflowWizardView(View):
     template_name = 'workflows/definition_wizard.html'
 
     def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the workflow definition wizard page."""
         return render(
             request,
             self.template_name,
@@ -475,6 +486,7 @@ class WorkflowWizardView(View):
         )
 
     def post(self, request: HttpRequest) -> JsonResponse:
+        """Validate and save a workflow definition submitted from the wizard."""
         try:
             data = json.loads(request.body)
         except json.JSONDecodeError:
@@ -584,7 +596,7 @@ class WorkflowWizardView(View):
 
 
 class WorkflowDefinitionDeleteView(View):
-    """POST-only: deletes the WorkflowDefinition"""  # if no non-finalized WorkflowInstance exists for it."""
+    """POST-only: deletes the WorkflowDefinition."""
 
     def post(self, request: HttpRequest, pk: UUID, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
         """Delete a workflow definition by ID."""
@@ -670,6 +682,7 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
     template_name = 'workflows/instance_detail.html'
 
     def get(self, request: HttpRequest, instance_id: UUID, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Render the detail view for a single workflow instance."""
         inst = get_object_or_404(
             WorkflowInstance.objects.select_related(
                 'definition',
@@ -684,7 +697,8 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
         payload = inst.payload or {}
 
         # ---- Resolve CA / Domain / Device -------------------------------------
-        def _resolve(model_cls, payload_id, fallback):
+        def _resolve(model_cls: type[models.Model], payload_id: Any, fallback: Any) -> Any:
+            """Resolve a model instance from payload or fall back to the given value."""
             if payload_id:
                 return get_object_or_404(model_cls, pk=payload_id)
             return fallback
@@ -798,6 +812,7 @@ class SignalInstanceView(View):
     """Endpoint to signal (approve/reject) a workflow instance via POST."""
 
     def post(self, request: HttpRequest, instance_id: UUID, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        """Handle approval or rejection of a single workflow instance."""
         inst = get_object_or_404(WorkflowInstance, pk=instance_id)
         action = request.POST.get('action')
         if action not in {'approve', 'reject'}:
@@ -835,6 +850,16 @@ class BulkSignalInstancesView(View):
     """Endpoint to signal (approve/reject) multiple workflow instances via POST."""
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        """Handles the POST request for bulk approval/rejection.
+
+        Args:
+            request: The django request object.
+            _args: Positional arguments are discarded.
+            kwargs: Keyword arguments are passed to get_context_data.
+
+        Returns:
+            The HttpResponseRedirect.
+        """
         action = request.POST.get('action')
         if action not in {'approve', 'reject'}:
             messages.error(request, f'Invalid bulk action: {action!r}')
@@ -888,8 +913,6 @@ class BulkSignalInstancesView(View):
         updated_count = 0
 
         for inst in instances_qs:
-            print('inst: ')
-            print(inst)
             advance_instance(inst, signal=action)
             inst.refresh_from_db()
             if inst.enrollment_request:
@@ -988,17 +1011,39 @@ class EnrollmentRequestDetailView(ListView[WorkflowInstance]):
 
 
 class BulkAbortEnrollmentRequestsView(View):
-    """POST endpoint to abort multiple EnrollmentRequests (placeholder).
-
-    This is a non-destructive stub. Replace logic when implementing aborts.
-    """
+    """POST endpoint to abort multiple EnrollmentRequests."""
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        """Handles the POST request for bulk abortion of enrollment requests.
+
+        Args:
+            request: The django request object.
+            _args: Positional arguments are discarded.
+            kwargs: Keyword arguments are passed to get_context_data.
+
+        Returns:
+            The HttpResponseRedirect.
+        """
         selected_ids: list[str] = request.POST.getlist('row_checkbox')
         if not selected_ids:
             messages.warning(request, 'Please select at least one request.')
             return redirect('workflows:request_table')
 
-        # Placeholder: do not change database yet.
-        messages.info(request, f'Abort requested for {len(selected_ids)} enrollment request(s). (Not implemented yet.)')
+        # Only abort non-finalized requests
+        qs = EnrollmentRequest.objects.filter(id__in=selected_ids, finalized=False)
+
+        if not qs.exists():
+            messages.warning(request, 'No abortable enrollment requests were found.')
+            return redirect('workflows:request_table')
+
+        aborted_count = 0
+        for er in qs:
+            er.abort()
+            aborted_count += 1
+
+        if aborted_count == 0:
+            messages.warning(request, 'No enrollment requests were aborted.')
+        else:
+            messages.success(request, f'Aborted {aborted_count} enrollment request(s).')
+
         return redirect('workflows:request_table')

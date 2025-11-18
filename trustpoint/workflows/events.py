@@ -32,61 +32,61 @@ class Events:
         handler='certificate_request',
     )
 
-    # est_simplereenroll = Event(
-    #     key='est_simplereenroll',
-    #     protocol='EST',
-    #     operation='simplereenroll',
-    #     handler='certificate_request',
-    # )
+    """est_simplereenroll = Event(
+        key='est_simplereenroll',
+        protocol='EST',
+        operation='simplereenroll',
+        handler='certificate_request',
+    )
 
-    # est_cacerts = Event(
-    #     key='est_cacerts',
-    #     protocol='EST',
-    #     operation='',
-    #     handler='certificate_issued',
-    # )
+    est_cacerts = Event(
+        key='est_cacerts',
+        protocol='EST',
+        operation='',
+        handler='certificate_issued',
+    )
 
-    # est_csrattrs = Event(
-    #     key='est_csrattrs',
-    #     protocol='EST',
-    #     operation='csrattrs',
-    #     handler='certificate_request',
-    # )
+    est_csrattrs = Event(
+        key='est_csrattrs',
+        protocol='EST',
+        operation='csrattrs',
+        handler='certificate_request',
+    )
 
-    # cmp_certrequest = Event(
-    #     key='cmp_certrequest',
-    #     protocol='CMP',
-    #     operation='certRequest',
-    #     handler='certificate_request',
-    # )
+    cmp_certrequest = Event(
+        key='cmp_certrequest',
+        protocol='CMP',
+        operation='certRequest',
+        handler='certificate_request',
+    )
 
-    # cmp_revocationrequest = Event(
-    #     key='cmp_revocationrequest',
-    #     protocol='CMP',
-    #     operation='revocationRequest',
-    #     handler='certificate_request',
-    # )
+    cmp_revocationrequest = Event(
+        key='cmp_revocationrequest',
+        protocol='CMP',
+        operation='revocationRequest',
+        handler='certificate_request',
+    )
 
-    # scep_pkioperation = Event(
-    #     key='scep_pkioperation',
-    #     protocol='SCEP',
-    #     operation='PKIOperation',
-    #     handler='certificate_request',
-    # )
+    scep_pkioperation = Event(
+        key='scep_pkioperation',
+        protocol='SCEP',
+        operation='PKIOperation',
+        handler='certificate_request',
+    )
 
-    # device_created = Event(
-    #     key='device_created',
-    #     protocol='',
-    #     operation='',
-    #     handler='device_created',
-    # )
+    device_created = Event(
+        key='device_created',
+        protocol='',
+        operation='',
+        handler='device_created',
+    )
 
-    # device_deleted = Event(
-    #     key='device_deleted',
-    #     protocol='',
-    #     operation='',
-    #     handler='device_deleted',
-    # )
+    device_deleted = Event(
+        key='device_deleted',
+        protocol='',
+        operation='',
+        handler='device_deleted',
+    )"""
 
     @classmethod
     def all(cls) -> list[Event]:

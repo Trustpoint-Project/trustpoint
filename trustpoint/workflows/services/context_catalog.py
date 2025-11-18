@@ -1,6 +1,9 @@
-# workflows/services/context_catalog.py
+
+"""Helpers to build a flattened catalog of context keys for the UI."""
+
 from __future__ import annotations
-from typing import Any, Iterable
+
+from typing import Any
 
 MAX_SAMPLE_LEN = 160
 MAX_ITEMS      = 500      # guardrail
@@ -32,8 +35,8 @@ def _flatten(obj: Any, prefix: str = '') -> list[tuple[str, Any]]:
                     continue
                 stack.append((path, v, k))
         elif isinstance(cur, list):
-            # expose length and first item’s fields (if dict) for discoverability
-            out.append((f'{path}[]', f'[{len(cur)}]',))
+            # expose length and first items fields (if dict) for discoverability
+            out.append((f'{path}[]', f'[{len(cur)}]'))
             if cur and isinstance(cur[0], dict):
                 stack.append((f'{path}.0', cur[0], ''))  # show example shape
         else:
@@ -41,6 +44,7 @@ def _flatten(obj: Any, prefix: str = '') -> list[tuple[str, Any]]:
     return out
 
 def build_catalog(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Build catalog rows (key/label/sample) for use in the UI."""
     rows = []
     for p, v in _flatten(ctx):
         if not p:

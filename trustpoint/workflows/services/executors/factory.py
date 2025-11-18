@@ -84,4 +84,5 @@ class StepExecutorFactory:
 
     @classmethod
     def registered_types(cls) -> set[str]:
+        """Return the set of registered step type identifiers."""
         return set(cls._registry.keys())

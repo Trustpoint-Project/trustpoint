@@ -17,6 +17,7 @@ from pki.models.issuing_ca import IssuingCaModel
 
 
 class State(models.TextChoices):
+    """Workflow and enrollment states."""
     RUNNING = 'Running', 'Running'
     AWAITING = 'AwaitingApproval', 'AwaitingApproval'
     APPROVED = 'Approved', 'Approved'
@@ -76,10 +77,12 @@ class WorkflowDefinition(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        """Database configuration for workflow definitions."""
         db_table = 'workflow_definitions'
         ordering = ('-created_at',)
 
-    def __str__(self) -> str:  # DJ008
+    def __str__(self) -> str:
+        """Return human-readable representation with version."""
         return f'{self.name} v{self.version}'
 
 
@@ -93,10 +96,12 @@ class WorkflowScope(models.Model):
     device_id = models.IntegerField(null=True, blank=True)
 
     class Meta:
+        """Database configuration for Workflow Scope."""
         db_table = 'workflow_scopes'
         unique_together = (('workflow', 'ca_id', 'domain_id', 'device_id'),)
 
-    def __str__(self) -> str:  # DJ008
+    def __str__(self) -> str:
+        """Return human-readable representation."""
         parts: list[str] = []
         if self.ca_id is not None:
             parts.append(f'CA={self.ca_id}')
@@ -127,6 +132,7 @@ class EnrollmentRequest(models.Model):
     STATE_REJECTED = State.REJECTED
     STATE_FAILED = State.FAILED
     STATE_FINALIZED = State.FINALIZED
+    STATE_ABORTED = State.ABORTED
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
@@ -137,7 +143,7 @@ class EnrollmentRequest(models.Model):
     domain = models.ForeignKey(DomainModel, on_delete=models.CASCADE, related_name='domain', null=True, blank=True)
     ca = models.ForeignKey(IssuingCaModel, on_delete=models.CASCADE, related_name='ca', null=True, blank=True)
     fingerprint = models.CharField(max_length=128)  # CSR fingerprint (sha256 hex)
-    template = models.CharField(max_length=100, null=True, blank=True)
+    template = models.CharField(max_length=100, blank=True, default='')
 
     aggregated_state = models.CharField(max_length=32, choices=State.choices, default=State.AWAITING)
     finalized = models.BooleanField(default=False)
@@ -146,6 +152,7 @@ class EnrollmentRequest(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        """Database configuration for enrollment request."""
         db_table = 'enrollment_requests'
         indexes = (
             # Fast lookup by identity tuple when reusing the "open" request
@@ -156,18 +163,21 @@ class EnrollmentRequest(models.Model):
             models.Index(fields=['finalized']),
         )
 
-    def __str__(self) -> str:  # DJ008
+    def __str__(self) -> str:
+        """Return human-readable representation."""
         return (
             f'EnrollReq#{self.pk} {self.aggregated_state} {self.protocol}/{self.operation} fp={self.fingerprint[:8]}…'
         )
 
     @property
     def badge_label(self) -> str:
+        """Return the human-readable badge label for the aggregated state."""
         label, _ = get_status_badge(self.aggregated_state)
         return label
 
     @property
     def badge_class(self) -> str:
+        """Return the CSS class for the aggregated state badge."""
         _, css = get_status_badge(self.aggregated_state)
         return css
 
@@ -179,22 +189,28 @@ class EnrollmentRequest(models.Model):
             return State.PASSED
 
         inst_states = {c.state for c in children}
+
         if State.REJECTED in inst_states:
-            return State.REJECTED
-        if State.FAILED in inst_states:
-            return State.FAILED
-        if State.ABORTED in inst_states:
-            return State.ABORTED
-        if State.AWAITING in inst_states or State.RUNNING in inst_states:
-            return State.AWAITING
-        if inst_states.issubset({State.APPROVED, State.FINALIZED}):
-            return State.APPROVED
-        return State.AWAITING
+            result = State.REJECTED
+        elif State.FAILED in inst_states:
+            result = State.FAILED
+        elif State.ABORTED in inst_states:
+            result = State.ABORTED
+        elif State.AWAITING in inst_states or State.RUNNING in inst_states:
+            result = State.AWAITING
+        elif inst_states.issubset({State.APPROVED, State.FINALIZED}):
+            result = State.APPROVED
+        else:
+            result = State.AWAITING
+
+        return result
 
     def is_valid(self) -> bool:
+        """Return True if the enrollment request is in a successful terminal state."""
         return self.aggregated_state in {State.APPROVED, State.PASSED}
 
     def recompute_and_save(self) -> str:
+        """Recalculate the aggregated state and persist changes if it changed."""
         new_status = self.recompute_status()
         if new_status != self.aggregated_state:
             self.aggregated_state = new_status
@@ -204,10 +220,8 @@ class EnrollmentRequest(models.Model):
     def finalize(self, final_status: str | None = None) -> None:
         """Finalize all non-finalized children."""
         self.finalized = True
-        print('00000000000000')
         if not final_status:
             self.save(update_fields=['finalized'])
-            print('AAAAAAAAAA')
         else:
             self.aggregated_state = final_status
             self.save(update_fields=['aggregated_state', 'finalized'])
@@ -215,6 +229,19 @@ class EnrollmentRequest(models.Model):
         for inst in self.instances.filter(finalized=False):
             inst.finalize()
             inst.save(update_fields=['finalized'])
+
+    def abort(self) -> None:
+        """Abort this request and all non-finalized child workflow instances."""
+        if self.finalized:
+            return
+
+        self.aggregated_state = State.ABORTED
+        self.finalized = True
+        self.save(update_fields=['aggregated_state', 'finalized', 'updated_at'])
+
+        for inst in self.instances.filter(finalized=False):
+            # Mark instance as aborted and finalized
+            inst.finalize(State.ABORTED)
 
 
 # -------------------------------
@@ -232,6 +259,7 @@ class WorkflowInstance(models.Model):
     STATE_FINALIZED = State.FINALIZED
     STATE_REJECTED = State.REJECTED
     STATE_FAILED = State.FAILED
+    STATE_ABORTED = State.ABORTED
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     definition = models.ForeignKey(WorkflowDefinition, on_delete=models.CASCADE, related_name='instances')
@@ -262,22 +290,26 @@ class WorkflowInstance(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        """Database configuration and indexes for workflow instances."""
         db_table = 'workflow_instances'
         indexes = (
             models.Index(fields=['state']),
             models.Index(fields=['finalized']),
         )
 
-    def __str__(self) -> str:  # DJ008
+    def __str__(self) -> str:
+        """Return a short identifier containing definition name, PK, and state."""
         return f'{self.definition.name}#{self.pk} ({self.state})'
 
     @property
     def badge_label(self) -> str:
+        """Return the human-readable badge label for this instance's state."""
         label, _ = get_status_badge(self.state)
         return label
 
     @property
     def badge_class(self) -> str:
+        """Return the CSS class for this instance's state badge."""
         _, css = get_status_badge(self.state)
         return css
 
@@ -301,7 +333,8 @@ class WorkflowInstance(models.Model):
         for idx, step in enumerate(self.get_steps()):
             if step['id'] == self.current_step:
                 return idx
-        raise ValueError(f'Unknown current_step {self.current_step!r}')
+        msg = f'Unknown current_step {self.current_step!r}'
+        raise ValueError(msg)
 
     def get_next_step(self) -> str | None:
         """Return the step-ID of the next step, or None if at the end."""

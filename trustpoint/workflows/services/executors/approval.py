@@ -1,3 +1,4 @@
+"""Approval step executor."""
 from __future__ import annotations
 
 from workflows.models import State, WorkflowInstance
@@ -15,6 +16,15 @@ class ApprovalExecutor(AbstractStepExecutor):
     """
 
     def do_execute(self, instance: WorkflowInstance, signal: str | None) -> ExecutorResult:
+        """Execute the approval step and return the resulting state.
+
+        Args:
+            instance: Workflow instance being processed.
+            signal: External decision signal such as ``approve`` or ``reject``.
+
+        Returns:
+            ExecutorResult describing the new workflow state and step context.
+        """
         # First visit (no signal) → WAITING
         if signal is None and instance.state is WorkflowInstance.STATE_RUNNING:
             return ExecutorResult(

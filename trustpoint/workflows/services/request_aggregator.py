@@ -1,3 +1,4 @@
+"""Aggregation helpers for enrollment requests."""
 from __future__ import annotations
 
 from django.db import transaction

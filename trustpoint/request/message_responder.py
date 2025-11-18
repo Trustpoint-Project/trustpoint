@@ -4,9 +4,9 @@ from abc import ABC, abstractmethod
 
 from cryptography.hazmat.primitives._serialization import Encoding
 from devices.models import OnboardingStatus
+from workflows.models import EnrollmentRequest
 
 from request.request_context import RequestContext
-from workflows.models import EnrollmentRequest
 
 
 class AbstractMessageResponder(ABC):
@@ -29,12 +29,6 @@ class EstMessageResponder(AbstractMessageResponder):
             raise ValueError(exc_msg)
 
         workflow_state = context.enrollment_request.aggregated_state
-
-        print('Workfow_state:')
-        print(workflow_state)
-
-        print(context.enrollment_request)
-
         if workflow_state == EnrollmentRequest.STATE_AWAITING:
             context.http_response_status = 202
             context.http_response_content_type = 'text/plain'
@@ -49,7 +43,8 @@ class EstMessageResponder(AbstractMessageResponder):
         if workflow_state == EnrollmentRequest.STATE_FAILED:
             context.http_response_status = 500
             context.http_response_content_type = 'text/plain'
-            context.http_response_content = f'Workflow failed. Check here: -> /workflows/requests/{context.enrollment_request.id}'
+            context.http_response_content = \
+                f'Workflow failed. Check here: -> /workflows/requests/{context.enrollment_request.id}'
             return None
         if context.enrollment_request.is_valid() and context.operation in ['simpleenroll', 'simplereenroll']:
             responder = EstCertificateMessageResponder()
@@ -67,9 +62,6 @@ class EstCertificateMessageResponder(EstMessageResponder):
     @staticmethod
     def build_response(context: RequestContext) -> None:
         """Respond to an EST enrollment message with the issued certificate."""
-
-        
-
         if context.issued_certificate is None:
             exc_msg = 'Issued certificate is not set in the context.'
             raise ValueError(exc_msg)

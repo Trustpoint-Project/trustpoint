@@ -8,11 +8,9 @@ from cryptography.x509.base import CertificateBuilder
 from devices.models import DeviceModel
 from django.http import HttpRequest
 from pki.models import CredentialModel, DomainModel
-from pyasn1_modules.rfc4210 import PKIMessage
-
+from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 from workflows.events import Event
 from workflows.models import EnrollmentRequest
-from workflows.services.types import ExecutorResult  # type: ignore[import-untyped]
 
 
 @dataclass

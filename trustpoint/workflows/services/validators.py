@@ -8,8 +8,8 @@ from typing import Any
 from django.utils.translation import gettext as _
 from util.email import normalize_addresses
 
-from workflows.services.executors.factory import StepExecutorFactory
 from workflows.events import Events
+from workflows.services.executors.factory import StepExecutorFactory
 
 # ----------------------------- helpers -----------------------------
 
@@ -67,6 +67,7 @@ def _positive_int(value: Any) -> bool:
 # --------------------------- field checks ---------------------------
 
 _ALLOWED_METHODS = {'GET', 'POST', 'PUT', 'PATCH', 'DELETE'}
+_WEBHOOK_MAX_TIMEOUT_SECS = 120
 
 
 def _validate_headers_dict(val: Any) -> bool:
@@ -104,7 +105,7 @@ def _is_valid_from_path(s: str) -> bool:
         return False
     if s in {'status', 'text', 'json', 'headers'}:
         return True
-    if s.startswith('json.') or s.startswith('headers.'):
+    if s.startswith(('json.', 'headers.')):
         # After the prefix, enforce dotpath (letters/digits/_/.)
         return _is_dotpath(s)
     return False
@@ -167,7 +168,8 @@ def _validate_webhook_step(idx: int, params: dict[str, Any], errors: list[str]) 
     # headers
     headers = params.get('headers')
     if headers is not None and not _validate_headers_dict(headers):
-        _error(errors, _('Step #%s (Webhook): headers must be an object of string keys and string/number values.') % idx)
+        _error(errors, _(
+            'Step #%s (Webhook): headers must be an object of string keys and string/number values.') % idx)
 
     # body
     body = params.get('body')
@@ -189,8 +191,11 @@ def _validate_webhook_step(idx: int, params: dict[str, Any], errors: list[str]) 
         except Exception:  # noqa: BLE001
             _error(errors, _('Step #%s (Webhook): timeoutSecs must be an integer (seconds).') % idx)
         else:
-            if not (1 <= tmo_i <= 120):
-                _error(errors, _('Step #%s (Webhook): timeoutSecs must be between 1 and 120.') % idx)
+            if not (1 <= tmo_i <= _WEBHOOK_MAX_TIMEOUT_SECS):
+                _error(
+                    errors,
+                    _('Step #%s (Webhook): timeoutSecs must be between 1 and 120.') % idx,
+                )
 
     # result_to/result_source (optional but must be valid if present)
     result_to = (params.get('result_to') or '').strip()

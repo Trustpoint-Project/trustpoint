@@ -100,17 +100,17 @@ def _parse_csr_info(csr_pem: Any) -> dict[str, Any] | None:
         return None
     try:
         csr_obj = x509.load_pem_x509_csr(csr_pem.encode('utf-8'))
-    except Exception:
+    except ValueError:
         return None
 
     # Common Name
     try:
         cn_attrs = csr_obj.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
         common_name = cn_attrs[0].value if cn_attrs else None
-    except Exception:
+    except ValueError:
         common_name = None
 
-    # SANs (DNS and IP)
+    # SANs (DNS and IP)  # noqa: ERA001
     try:
         san_ext = csr_obj.extensions.get_extension_for_class(x509.SubjectAlternativeName)
         dns_sans = san_ext.value.get_values_for_type(x509.DNSName)
@@ -134,10 +134,12 @@ def _split_path(path: str) -> list[str]:
     """Split and validate a dot path like 'a.b.c'. Raise ValueError on invalid."""
     segs = [s for s in (path or '').split('.') if s]
     if not segs:
-        raise ValueError('empty path')
+        msg = 'empty path'
+        raise ValueError(msg)
     for s in segs:
         if not _SEGMENT_RE.match(s):
-            raise ValueError(f'illegal segment: {s!r}')
+            msg = f'illegal segment: {s!r}'
+            raise ValueError(msg)
     return segs
 
 
@@ -163,7 +165,8 @@ def set_in(root: dict[str, Any], path: str, value: Any, *, forbid_overwrite: boo
         cur = nxt
     leaf = segs[-1]
     if forbid_overwrite and leaf in cur and cur[leaf] != value:
-        raise ValueError(f'context collision at {path!r}')
+        msg = f'context collision at {path!r}'
+        raise ValueError(msg)
     cur[leaf] = value
 
 
@@ -246,7 +249,7 @@ def compact_context_blob(blob: dict[str, Any]) -> dict[str, Any]:
         # skip values that cannot be serialized
         try:
             _ = _json_size(value)
-        except Exception:
+        except ValueError:
             continue
 
         if isinstance(value, str):
@@ -255,11 +258,11 @@ def compact_context_blob(blob: dict[str, Any]) -> dict[str, Any]:
             # Keep first ~20 keys, redact very large leaf values
             small: dict[str, Any] = {}
             for i, (k, v) in enumerate(value.items()):
-                if i >= 20:
+                if i >= 20:  # noqa: PLR2004
                     break
                 try:
-                    small[k] = '<omitted>' if _json_size(v) > 2048 else v
-                except Exception:
+                    small[k] = '<omitted>' if _json_size(v) > 2048 else v  # noqa: PLR2004
+                except ValueError:
                     # Non-serializable leaves are omitted
                     continue
             summary[key] = small

@@ -114,13 +114,7 @@
               <td>{{ inst.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
               
               <td>
-                {% if inst.state == 'Approved' %}
-                  <span class="badge bg-success">{{ inst.state }}</span>                
-                {% elif inst.state == 'AwaitingApproval' %}
-                  <span class="badge bg-secondary">{{ inst.state }}</span>
-                {% else %}                
-                  <span class="badge bg-danger">{{ inst.state }}</span>
-                {% endif %}
+                <span class="badge {{ inst.badge_class }}">{{ inst.badge_label }}</span>
               </td>
 
               <td>

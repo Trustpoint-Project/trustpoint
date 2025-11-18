@@ -1,20 +1,24 @@
+"""Filter classes for workflow instances and enrollment requests."""
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import django_filters
 from django import forms
-from django.db.models import QuerySet
 from django.utils.translation import gettext_lazy as _
 from pki.models import DomainModel
 
 from workflows.models import EnrollmentRequest, State, WorkflowDefinition, WorkflowInstance
+
+if TYPE_CHECKING:
+    from django.db.models import QuerySet
 
 STATE_FILTER_CHOICES = (
     (WorkflowInstance.STATE_AWAITING, 'AwaitingApproval'),
     (WorkflowInstance.STATE_APPROVED, 'Approved'),
     (WorkflowInstance.STATE_REJECTED, 'Rejected'),
     (WorkflowInstance.STATE_FAILED, 'Failed'),
+    (WorkflowInstance.STATE_ABORTED, 'Aborted'),
 )
 
 
@@ -58,7 +62,7 @@ class WorkflowFilter(django_filters.FilterSet):
 
     # Works without method because it maps to a real boolean field
     include_finalized = django_filters.BooleanFilter(
-        label=_('Include completed workflows'),
+        label=_('Include completed/aborted workflows'),
         method='filter_include_finalized',
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
     )
@@ -85,6 +89,7 @@ class WorkflowFilter(django_filters.FilterSet):
     )
 
     class Meta:
+        """Configuration for WorkflowFilter."""
         model = WorkflowInstance
         fields: tuple[str, ...] = ()
 
@@ -130,7 +135,7 @@ class EnrollmentRequestFilter(django_filters.FilterSet):
     )
 
     include_finalized = django_filters.BooleanFilter(
-        label=_('Include completed requests'),
+        label=_('Include completed/aborted requests'),
         method='filter_include_finalized',
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
     )
@@ -185,6 +190,7 @@ class EnrollmentRequestFilter(django_filters.FilterSet):
     )
 
     class Meta:
+        """Configuration for EnrollmentRequestFilter."""
         model = EnrollmentRequest
         fields: tuple[str, ...] = ()
 

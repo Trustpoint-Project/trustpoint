@@ -2,21 +2,24 @@
 from __future__ import annotations
 
 import json
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 
-from workflows.models import EnrollmentRequest, State, WorkflowInstance
+from workflows.models import State, WorkflowInstance
 from workflows.services.context import VARS_MAX_BYTES, compact_context_blob
 from workflows.services.executors.factory import StepExecutorFactory
-from workflows.services.types import ExecutorResult
+
+if TYPE_CHECKING:
+    from workflows.services.types import ExecutorResult
 
 
 def _current_step(inst: WorkflowInstance) -> dict[str, Any]:
     for step in inst.get_steps():
         if step['id'] == inst.current_step:
             return step
-    raise ValueError(f'Unknown current_step {inst.current_step!r}')
+    msg = f'Unknown current_step {inst.current_step!r}'
+    raise ValueError(msg)
 
 
 def _advance_pointer(inst: WorkflowInstance) -> bool:
@@ -51,19 +54,12 @@ def _deep_merge_no_overwrite(dst: dict[str, Any], src: dict[str, Any]) -> None:
             _deep_merge_no_overwrite(dv, v)
             continue
         if dv != v:
-            raise ValueError(f'ctx.vars collision at key "{k}": {dv!r} vs {v!r}')
+            msg = f'ctx.vars collision at key "{k}": {dv!r} vs {v!r}'
+            raise ValueError(msg)
 
 
 def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
-    """Advance an instance until AWAITING or a terminal outcome is reached.
-
-    Rules:
-      - Executors return ExecutorResult(status, context?, vars?).
-      - Engine stores compacted per-step context.
-      - Engine merges ExecutorResult.vars into global $vars (no overwrite of different values).
-      - Size guard on $vars (VARS_MAX_BYTES).
-      - State.APPROVED acts like PASSED if there is a next step; becomes terminal only at the end.
-    """
+    """Advance an instance until WAITING or a terminal outcome is reached."""
     with transaction.atomic():
         inst = WorkflowInstance.objects.select_for_update().get(pk=inst.pk)
 
