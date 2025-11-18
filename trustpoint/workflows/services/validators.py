@@ -83,20 +83,30 @@ def _validate_headers_dict(val: Any) -> bool:
 
 
 def _validate_webhook_auth(val: Any) -> tuple[bool, str | None]:
+    """Validate webhook auth object."""
+    ok = True
+    msg: str | None = None
+
     if val is None:
-        return True, None
+        return ok, msg
+
     if not isinstance(val, Mapping):
         return False, _('auth must be an object.')
+
     t = (val.get('type') or '').strip().lower()
     if t == 'basic':
         if not isinstance(val.get('username'), str) or not isinstance(val.get('password'), str):
-            return False, _('auth.basic requires username and password (strings).')
-        return True, None
-    if t == 'bearer':
+            ok = False
+            msg = _('auth.basic requires username and password (strings).')
+    elif t == 'bearer':
         if not isinstance(val.get('token'), str) or not val.get('token'):
-            return False, _('auth.bearer requires a non-empty token (string).')
-        return True, None
-    return False, _('auth.type must be "basic" or "bearer".')
+            ok = False
+            msg = _('auth.bearer requires a non-empty token (string).')
+    else:
+        ok = False
+        msg = _('auth.type must be "basic" or "bearer".')
+
+    return ok, msg
 
 
 def _is_valid_from_path(s: str) -> bool:
@@ -154,7 +164,12 @@ def _validate_condition_step(idx: int, params: dict[str, Any], errors: list[str]
         _error(errors, _('Step #%s (Condition): expression is required (string).') % idx)
 
 
-def _validate_webhook_step(idx: int, params: dict[str, Any], errors: list[str]) -> None:
+def _validate_webhook_basic_fields(
+    idx: int,
+    params: dict[str, Any],
+    errors: list[str],
+) -> None:
+    """URL, method, headers, body for webhook step."""
     # url
     url = (params.get('url') or '').strip()
     if not _is_http_url(url):
@@ -163,13 +178,21 @@ def _validate_webhook_step(idx: int, params: dict[str, Any], errors: list[str]) 
     # method
     method = (params.get('method') or 'POST').upper()
     if method not in _ALLOWED_METHODS:
-        _error(errors, _('Step #%s (Webhook): method must be one of %s.') % (idx, ', '.join(sorted(_ALLOWED_METHODS))))
+        _error(
+            errors,
+            _('Step #%s (Webhook): method must be one of %s.') % (idx, ', '.join(sorted(_ALLOWED_METHODS))),
+        )
 
     # headers
     headers = params.get('headers')
     if headers is not None and not _validate_headers_dict(headers):
-        _error(errors, _(
-            'Step #%s (Webhook): headers must be an object of string keys and string/number values.') % idx)
+        _error(
+            errors,
+            _(
+                'Step #%s (Webhook): headers must be an object of string keys and string/number values.'
+            )
+            % idx,
+        )
 
     # body
     body = params.get('body')
@@ -178,37 +201,58 @@ def _validate_webhook_step(idx: int, params: dict[str, Any], errors: list[str]) 
     elif body is not None and not isinstance(body, (str, Mapping, list)):
         _error(errors, _('Step #%s (Webhook): body must be a string, object, or array if provided.') % idx)
 
-    # auth
+
+def _validate_webhook_auth_and_timeout(
+    idx: int,
+    params: dict[str, Any],
+    errors: list[str],
+) -> None:
+    """Auth and timeout for webhook step."""
     ok, msg = _validate_webhook_auth(params.get('auth'))
     if not ok:
         _error(errors, _('Step #%s (Webhook): %s') % (idx, msg or _('invalid auth')))
 
     # timeout
     tmo = params.get('timeoutSecs')
-    if tmo is not None:
-        try:
-            tmo_i = int(tmo)
-        except Exception:  # noqa: BLE001
-            _error(errors, _('Step #%s (Webhook): timeoutSecs must be an integer (seconds).') % idx)
-        else:
-            if not (1 <= tmo_i <= _WEBHOOK_MAX_TIMEOUT_SECS):
-                _error(
-                    errors,
-                    _('Step #%s (Webhook): timeoutSecs must be between 1 and 120.') % idx,
-                )
+    if tmo is None:
+        return
 
+    try:
+        tmo_i = int(tmo)
+    except Exception:  # noqa: BLE001
+        _error(errors, _('Step #%s (Webhook): timeoutSecs must be an integer (seconds).') % idx)
+        return
+
+    if not (1 <= tmo_i <= _WEBHOOK_MAX_TIMEOUT_SECS):
+        _error(
+            errors,
+            _('Step #%s (Webhook): timeoutSecs must be between 1 and 120.') % idx,
+        )
+
+
+def _validate_webhook_result_mapping(
+    idx: int,
+    params: dict[str, Any],
+    errors: list[str],
+) -> None:
+    """result_to/result_source/exports for webhook step."""
     # result_to/result_source (optional but must be valid if present)
     result_to = (params.get('result_to') or '').strip()
     if result_to and not _is_bare_var_path(result_to):
         _error(
             errors,
-            _('Step #%s (Webhook): result_to must be a variable path like "serial_number" or "http.status".')
+            _(
+                'Step #%s (Webhook): result_to must be a variable path like "serial_number" or "http.status".'
+            )
             % idx,
         )
 
     result_source = (params.get('result_source') or 'auto').strip().lower()
     if result_source and result_source not in {'auto', 'json', 'text', 'status', 'headers'}:
-        _error(errors, _('Step #%s (Webhook): result_source must be one of auto/json/text/status/headers.') % idx)
+        _error(
+            errors,
+            _('Step #%s (Webhook): result_source must be one of auto/json/text/status/headers.') % idx,
+        )
 
     # exports (fine-grained mappings)
     if 'export' in params and 'exports' not in params:
@@ -260,6 +304,12 @@ def _validate_webhook_step(idx: int, params: dict[str, Any], errors: list[str]) 
             seen_to.add(tp)
 
 
+def _validate_webhook_step(idx: int, params: dict[str, Any], errors: list[str]) -> None:
+    _validate_webhook_basic_fields(idx, params, errors)
+    _validate_webhook_auth_and_timeout(idx, params, errors)
+    _validate_webhook_result_mapping(idx, params, errors)
+
+
 # ---------------------------- top-level -----------------------------
 
 
@@ -301,6 +351,40 @@ def _validate_events(payload: dict[str, Any], errors: list[str]) -> None:
             _error(errors, _('Event #%s: unknown handler/protocol/operation combination.') % i)
 
 
+def _validate_single_step(
+    idx: int,
+    step: Any,
+    registered: set[str],
+    errors: list[str],
+) -> None:
+    """Validate a single step object."""
+    if not isinstance(step, dict):
+        _error(errors, _('Step #%s is not an object.') % idx)
+        return
+
+    stype = step.get('type')
+    if stype not in registered:
+        _error(errors, _('Step #%s: unknown type "%s".') % (idx, stype))
+        return
+
+    params = step.get('params') or {}
+    if not isinstance(params, dict):
+        _error(errors, _('Step #%s: params must be an object.') % idx)
+        return
+
+    if stype == 'Email':
+        _validate_email_step(idx, params, errors)
+    elif stype == 'Webhook':
+        _validate_webhook_step(idx, params, errors)
+    elif stype == 'Timer':
+        _validate_timer_step(idx, params, errors)
+    elif stype == 'Approval':
+        _validate_approval_step(idx, params, errors)
+    elif stype == 'Condition':
+        _validate_condition_step(idx, params, errors)
+    # other step types currently have no extra server-side rules
+
+
 def _validate_steps(payload: dict[str, Any], errors: list[str]) -> None:
     steps = payload.get('steps')
     if not isinstance(steps, list) or not steps:
@@ -308,32 +392,8 @@ def _validate_steps(payload: dict[str, Any], errors: list[str]) -> None:
         return
 
     registered = _registered_step_types()
-    for i, s in enumerate(steps, start=1):
-        if not isinstance(s, dict):
-            _error(errors, _('Step #%s is not an object.') % i)
-            continue
-
-        stype = s.get('type')
-        if stype not in registered:
-            _error(errors, _('Step #%s: unknown type "%s".') % (i, stype))
-            continue
-
-        params = s.get('params') or {}
-        if not isinstance(params, dict):
-            _error(errors, _('Step #%s: params must be an object.') % i)
-            continue
-
-        if stype == 'Email':
-            _validate_email_step(i, params, errors)
-        elif stype == 'Webhook':
-            _validate_webhook_step(i, params, errors)
-        elif stype == 'Timer':
-            _validate_timer_step(i, params, errors)
-        elif stype == 'Approval':
-            _validate_approval_step(i, params, errors)
-        elif stype == 'Condition':
-            _validate_condition_step(i, params, errors)
-        # other step types currently have no extra server-side rules
+    for i, step in enumerate(steps, start=1):
+        _validate_single_step(i, step, registered, errors)
 
 
 def _validate_scopes(payload: dict[str, Any], errors: list[str]) -> None:

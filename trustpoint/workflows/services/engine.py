@@ -58,6 +58,87 @@ def _deep_merge_no_overwrite(dst: dict[str, Any], src: dict[str, Any]) -> None:
             raise ValueError(msg)
 
 
+def _persist_step_context(inst: WorkflowInstance, result: ExecutorResult) -> None:
+    """Persist per-step compacted context if present."""
+    if result.context is None:
+        return
+
+    step_contexts = dict(inst.step_contexts or {})
+    step_contexts[str(inst.current_step)] = compact_context_blob(dict(result.context))
+    inst.step_contexts = step_contexts
+    inst.save(update_fields=['step_contexts'])
+
+
+def _merge_global_vars(inst: WorkflowInstance, result: ExecutorResult) -> bool:
+    """Merge vars into global $vars.
+
+    Returns:
+        True if processing can continue.
+        False if the vars size exceeded VARS_MAX_BYTES (instance is marked FAILED).
+    """
+    if not (result.vars and isinstance(result.vars, dict)):
+        return True
+
+    step_contexts = dict(inst.step_contexts or {})
+    vars_map = dict(step_contexts.get('$vars') or {})
+
+    _deep_merge_no_overwrite(vars_map, dict(result.vars))
+
+    if _size_bytes(vars_map) > VARS_MAX_BYTES:
+        inst.state = WorkflowInstance.STATE_FAILED
+        inst.save(update_fields=['state'])
+        return False
+
+    step_contexts['$vars'] = vars_map
+    inst.step_contexts = step_contexts
+    inst.save(update_fields=['step_contexts'])
+    return True
+
+
+def _handle_status(
+    inst: WorkflowInstance,
+    status: State,
+    signal: str | None,
+) -> tuple[bool, str | None]:
+    """Apply status to the instance and decide whether to continue.
+
+    Returns:
+        (should_continue, new_signal)
+    """
+    # default: stop after handling this status; preserve signal
+    should_continue = False
+    new_signal = signal
+
+    if status in (State.PASSED, State.APPROVED):
+        if _advance_pointer(inst):
+            # continuation semantics: moved to next step, reset signal
+            return True, None
+        if status == State.PASSED:
+            inst.state = WorkflowInstance.STATE_PASSED
+        else:
+            inst.state = WorkflowInstance.STATE_APPROVED
+
+    elif status == State.AWAITING:
+        inst.state = WorkflowInstance.STATE_AWAITING
+
+    elif status == State.REJECTED:
+        inst.state = WorkflowInstance.STATE_REJECTED
+
+    elif status == State.FINALIZED:
+        inst.state = WorkflowInstance.STATE_FINALIZED
+        inst.finalize()
+
+    elif status == State.FAILED:
+        inst.state = WorkflowInstance.STATE_FAILED
+
+    else:
+        # Defensive fallback
+        inst.state = WorkflowInstance.STATE_FAILED
+
+    inst.save(update_fields=['state'])
+    return should_continue, new_signal
+
+
 def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
     """Advance an instance until WAITING or a terminal outcome is reached."""
     with transaction.atomic():
@@ -67,6 +148,7 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
             return
 
         budget = _max_pass_hops(inst) + 1
+
         for _ in range(budget):
             step_meta = _current_step(inst)
             step_type = str(step_meta.get('type') or '')
@@ -74,69 +156,11 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
             executor = StepExecutorFactory.create(step_type)
             result: ExecutorResult = executor.execute(inst, signal)
 
-            # Persist step context (compacted)
-            if result.context is not None:
-                sc = dict(inst.step_contexts or {})
-                sc[str(inst.current_step)] = compact_context_blob(dict(result.context))
-                inst.step_contexts = sc
-                inst.save(update_fields=['step_contexts'])
+            _persist_step_context(inst, result)
 
-            # Merge vars into global $vars
-            if result.vars and isinstance(result.vars, dict):
-                sc = dict(inst.step_contexts or {})
-                vars_map = dict(sc.get('$vars') or {})
-                _deep_merge_no_overwrite(vars_map, dict(result.vars))
-                if _size_bytes(vars_map) > VARS_MAX_BYTES:
-                    inst.state = WorkflowInstance.STATE_FAILED
-                    inst.save(update_fields=['state'])
-                    break
-                sc['$vars'] = vars_map
-                inst.step_contexts = sc
-                inst.save(update_fields=['step_contexts'])
-
-            status = result.status
-
-            # === PASS / APPROVED with continuation semantics ==================
-            if status == State.PASSED:
-                if _advance_pointer(inst):
-                    signal = None
-                    continue
-                inst.state = WorkflowInstance.STATE_PASSED
-                inst.save(update_fields=['state'])
+            if not _merge_global_vars(inst, result):
                 break
 
-            if status == State.APPROVED:
-                if _advance_pointer(inst):
-                    signal = None
-                    continue
-                inst.state = WorkflowInstance.STATE_APPROVED
-                inst.save(update_fields=['state'])
+            should_continue, signal = _handle_status(inst, result.status, signal)
+            if not should_continue:
                 break
-
-            # === AWAITING (pause until next signal) ===========================
-            if status == State.AWAITING:
-                inst.state = WorkflowInstance.STATE_AWAITING
-                inst.save(update_fields=['state'])
-                break
-
-            # === Terminal outcomes ============================================
-            if status == State.REJECTED:
-                inst.state = WorkflowInstance.STATE_REJECTED
-                inst.save(update_fields=['state'])
-                break
-
-            if status == State.FINALIZED:
-                inst.state = WorkflowInstance.STATE_FINALIZED
-                inst.finalize()
-                inst.save(update_fields=['state'])
-                break
-
-            if status == State.FAILED:
-                inst.state = WorkflowInstance.STATE_FAILED
-                inst.save(update_fields=['state'])
-                break
-
-            # Defensive fallback
-            inst.state = WorkflowInstance.STATE_FAILED
-            inst.save(update_fields=['state'])
-            break

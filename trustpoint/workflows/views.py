@@ -330,59 +330,23 @@ class WorkflowDefinitionImportView(View):
         errs: list[str] = []
 
         # 1) schema
-        schema = data.get('schema')
-        if schema != 'trustpoint.workflow/1':
-            errs.append('Unsupported or missing "schema". Expected "trustpoint.workflow/1".')
+        self._validate_export_schema(data.get('schema'), errs)
 
         # 2) name
-        name = str(data.get('name') or '').strip()
-        if not name:
-            name = 'Imported Workflow'  # fallback; not fatal
+        name = self._extract_export_name(data)
 
-        # 3) definition
+        # 3) definition object
         definition = data.get('definition')
         if not isinstance(definition, dict):
             errs.append('"definition" must be an object with "events" and "steps".')
             return errs, None
 
-        events_in = definition.get('events')
-        steps_in = definition.get('steps')
+        # 4) events / steps raw lists
+        events_in, steps_in = self._extract_export_events_and_steps(definition, errs)
 
-        if not isinstance(events_in, list):
-            errs.append('"definition.events" must be a list.')
-            events_in = []
-
-        if not isinstance(steps_in, list):
-            errs.append('"definition.steps" must be a list.')
-            steps_in = []
-
-        # 4) validate events (soft, but informative)
-        events_out: list[dict[str, str]] = []
-        for i, t in enumerate(events_in):
-            if not isinstance(t, dict):
-                errs.append(f'events[{i}] must be an object.')
-                continue
-            handler = str(t.get('handler') or '')
-            protocol = str(t.get('protocol') or '')
-            operation = str(t.get('operation') or '')
-            if not handler or not protocol or not operation:
-                errs.append(f'events[{i}] is missing "handler", "protocol", or "operation".')
-            events_out.append({'handler': handler, 'protocol': protocol, 'operation': operation})
-
-        # 5) validate steps
-        steps_out: list[dict[str, Any]] = []
-        for i, n in enumerate(steps_in):
-            if not isinstance(n, dict):
-                errs.append(f'steps[{i}] must be an object with "type" and "params".')
-                continue
-            typ = str(n.get('type') or '')
-            par = n.get('params') or {}
-            if not typ:
-                errs.append(f'steps[{i}] is missing non-empty "type".')
-            if not isinstance(par, dict):
-                errs.append(f'steps[{i}].params must be an object.')
-                par = {}
-            steps_out.append({'type': typ, 'params': par})
+        # 5) validate/normalize events and steps
+        events_out = self._normalize_export_events(events_in, errs)
+        steps_out = self._normalize_export_steps(steps_in, errs)
 
         # 6) At least something meaningful?
         if not steps_out:
@@ -399,6 +363,79 @@ class WorkflowDefinitionImportView(View):
         }
         return [], prefill
 
+    @staticmethod
+    def _validate_export_schema(schema: Any, errs: list[str]) -> None:
+        if schema != 'trustpoint.workflow/1':
+            errs.append('Unsupported or missing "schema". Expected "trustpoint.workflow/1".')
+
+    @staticmethod
+    def _extract_export_name(data: dict[str, Any]) -> str:
+        name = str(data.get('name') or '').strip()
+        if not name:
+            name = 'Imported Workflow'  # fallback; not fatal
+        return name
+
+    @staticmethod
+    def _extract_export_events_and_steps(
+        definition: dict[str, Any],
+        errs: list[str],
+    ) -> tuple[list[Any], list[Any]]:
+        events_in = definition.get('events')
+        steps_in = definition.get('steps')
+
+        if not isinstance(events_in, list):
+            errs.append('"definition.events" must be a list.')
+            events_in = []
+
+        if not isinstance(steps_in, list):
+            errs.append('"definition.steps" must be a list.')
+            steps_in = []
+
+        return events_in, steps_in
+
+    @staticmethod
+    def _normalize_export_events(events_in: list[Any], errs: list[str]) -> list[dict[str, str]]:
+        events_out: list[dict[str, str]] = []
+        for i, t in enumerate(events_in):
+            if not isinstance(t, dict):
+                errs.append(f'events[{i}] must be an object.')
+                continue
+
+            handler = str(t.get('handler') or '')
+            protocol = str(t.get('protocol') or '')
+            operation = str(t.get('operation') or '')
+
+            if not handler or not protocol or not operation:
+                errs.append(f'events[{i}] is missing "handler", "protocol", or "operation".')
+
+            events_out.append(
+                {
+                    'handler': handler,
+                    'protocol': protocol,
+                    'operation': operation,
+                }
+            )
+        return events_out
+
+    @staticmethod
+    def _normalize_export_steps(steps_in: list[Any], errs: list[str]) -> list[dict[str, Any]]:
+        steps_out: list[dict[str, Any]] = []
+        for i, n in enumerate(steps_in):
+            if not isinstance(n, dict):
+                errs.append(f'steps[{i}] must be an object with "type" and "params".')
+                continue
+
+            typ = str(n.get('type') or '')
+            par = n.get('params') or {}
+
+            if not typ:
+                errs.append(f'steps[{i}] is missing non-empty "type".')
+            if not isinstance(par, dict):
+                errs.append(f'steps[{i}].params must be an object.')
+                par = {}
+
+            steps_out.append({'type': typ, 'params': par})
+        return steps_out
 
 class WizardPrefillView(View):
     """Returns and CLEARS a one-time wizard prefill from the session."""
@@ -779,9 +816,6 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
             except Exception as e:  # noqa: BLE001
                 csr_info = {'error': f'Failed to parse CSR: {e!s}'}
 
-        instance_badge = inst.badge_class
-        enrollment_badge = inst.enrollment_request.badge_class
-
         context = {
             'inst': inst,
             'payload': payload,
@@ -802,8 +836,6 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
             'page_category': 'workflows',
             'page_name': 'pending',
             'clm_url': f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management',
-            'instance_badge': instance_badge,
-            'enrollment_badge': enrollment_badge,
         }
         return render(request, self.template_name, context)
 
@@ -865,9 +897,7 @@ class BulkSignalInstancesView(View):
             messages.error(request, f'Invalid bulk action: {action!r}')
             return redirect('workflows:pending_table')
 
-        # Checkboxes use name="row_checkbox"
         selected_ids: list[str] = request.POST.getlist('row_checkbox')
-
         if not selected_ids:
             messages.warning(request, 'Please select at least one workflow instance.')
             return redirect('workflows:pending_table')
@@ -876,6 +906,40 @@ class BulkSignalInstancesView(View):
             id__in=selected_ids,
         ).select_related('enrollment_request')
 
+        # Centralized validation of instances and enrollment states
+        early_response = self._validate_bulk_instances(action, instances_qs, request)
+        if early_response is not None:
+            return early_response
+
+        if not instances_qs.exists():
+            messages.warning(request, 'No pending workflow instances matched your selection.')
+            return redirect('workflows:pending_table')
+
+        updated_count = self._perform_bulk_signal(action, instances_qs)
+
+        if updated_count == 0:
+            messages.warning(request, 'No workflow instances were updated.')
+        elif action == 'Approved':
+            # Note: action value preserved as in original implementation (case-sensitive check).
+            messages.success(
+                request,
+                f'{updated_count} workflow instance(s) approved and advanced.',
+            )
+        else:
+            messages.warning(
+                request,
+                f'{updated_count} workflow instance(s) rejected.',
+            )
+
+        return redirect('workflows:pending_table')
+
+    def _validate_bulk_instances(
+        self,
+        action: str,
+        instances_qs: QuerySet[WorkflowInstance],
+        request: HttpRequest,
+    ) -> HttpResponseRedirect | None:
+        """Validate whether the selected instances can be bulk signalled."""
         if any(s.finalized for s in instances_qs):
             messages.error(request, 'You can not update completed workflows.')
             return redirect('workflows:pending_table')
@@ -887,7 +951,7 @@ class BulkSignalInstancesView(View):
         if invalid_enrollment_qs is not None:
             # If there is no enrollment_request at all, treat as not allowed as well
             if invalid_enrollment_qs.enrollment_request is None:
-                state_label = _('unknown')
+                state_label: str = str(_('unknown'))
             else:
                 state_label = invalid_enrollment_qs.enrollment_request.aggregated_state.lower()
 
@@ -901,17 +965,19 @@ class BulkSignalInstancesView(View):
 
         if action == 'Approved':
             rejected_instances = instances_qs.filter(state=WorkflowInstance.STATE_FAILED)
-
             if rejected_instances.exists():
                 messages.error(request, 'You cannot approve failed instances.')
                 return redirect('workflows:pending_table')
 
-        if not instances_qs.exists():
-            messages.warning(request, 'No pending workflow instances matched your selection.')
-            return redirect('workflows:pending_table')
+        return None
 
+    def _perform_bulk_signal(
+        self,
+        action: str,
+        instances_qs: QuerySet[WorkflowInstance],
+    ) -> int:
+        """Advance each eligible instance and recompute its enrollment request state."""
         updated_count = 0
-
         for inst in instances_qs:
             advance_instance(inst, signal=action)
             inst.refresh_from_db()
@@ -919,21 +985,7 @@ class BulkSignalInstancesView(View):
                 with contextlib.suppress(Exception):
                     recompute_request_state(inst.enrollment_request)
             updated_count += 1
-
-        if updated_count == 0:
-            messages.warning(request, 'No workflow instances were updated.')
-        elif action == 'Approved':
-            messages.success(
-                request,
-                f'{updated_count} workflow instance(s) approved and advanced.',
-            )
-        else:
-            messages.warning(
-                request,
-                f'{updated_count} workflow instance(s) rejected.',
-            )
-
-        return redirect('workflows:pending_table')
+        return updated_count
 
 
 class EnrollmentRequestListView(ListView[EnrollmentRequest]):

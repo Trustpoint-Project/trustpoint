@@ -21,7 +21,7 @@
 
       <dt class="col-sm-3">{% trans 'Enrollment request state' %}:</dt>
       <dd class="col-sm-9">
-        <span class="badge {{ enrollment_badge }}">{{ inst.enrollment_request.aggregated_state }}</span>
+        <span class="badge {{ inst.enrollment_request.badge_class }}">{{ inst.enrollment_request.aggregated_state }}</span>
       </dd>
 
       <hr>
@@ -38,7 +38,7 @@
 
       <dt class="col-sm-3">{% trans 'State' %}</dt>
       <dd class="col-sm-9">
-        <span class="badge {{ instance_badge }}">{{ inst.state }}</span>
+        <span class="badge {{ inst.badge_class }}">{{ inst.state }}</span>
       </dd>
 
       <dt class="col-sm-3">{% trans 'Current step' %}</dt>

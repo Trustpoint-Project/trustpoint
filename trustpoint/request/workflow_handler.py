@@ -88,7 +88,6 @@ class CertificateRequestHandler(WorkflowHandler):
         domain_id = _norm(context.domain.pk)
         device_id = _norm(context.device.pk)
 
-
         fingerprint = hashlib.sha256(csr.tbs_certrequest_bytes).hexdigest()
         template = context.certificate_template
 
@@ -107,9 +106,6 @@ class CertificateRequestHandler(WorkflowHandler):
             .order_by('-created_at')
             .first()
         )
-
-        print('REQ: ')
-        print(req)
 
         if req is None:
             req = EnrollmentRequest.objects.create(
