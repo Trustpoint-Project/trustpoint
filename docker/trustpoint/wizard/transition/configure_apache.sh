@@ -11,7 +11,7 @@ set -eE -o pipefail
 log() {
   local level=$1; shift
   local message
-  message="$(printf '%s - wizard_restore.sh - %s - %s\n' \
+  message="$(printf '%s - configure_apache.sh - %s - %s\n' \
     "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$*")"
   echo "$message" | tee -a "$LOGFILE" # >> "$LOGFILE" # 
 }

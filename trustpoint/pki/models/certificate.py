@@ -14,6 +14,7 @@ from django.contrib import admin
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
+from trustpoint.logger import LoggerMixin
 from trustpoint_core.oid import (
     AlgorithmIdentifier,
     CertificateExtensionOid,
@@ -45,7 +46,6 @@ from pki.models.extension import (
     SubjectInformationAccessExtension,
     SubjectKeyIdentifierExtension,
 )
-from trustpoint.logger import LoggerMixin
 
 __all__ = ['CertificateModel', 'RevokedCertificateModel']
 
@@ -431,6 +431,13 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
             return self.CertificateStatus.EXPIRED
         return self.CertificateStatus.OK
 
+    @property
+    def days_left(self) -> int:
+        """Returns number of days from now until not_valid_after. If expired, returns 0."""
+        now = datetime.datetime.now(datetime.UTC)
+        if self.not_valid_after > now:
+            return (self.not_valid_after - now).days
+        return 0
     @property
     def is_ca(self) -> bool:
         """Check if the certificate is a CA certificate."""

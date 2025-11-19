@@ -5,13 +5,16 @@ from __future__ import annotations
 import datetime
 import itertools
 import logging
+from datetime import UTC
 from typing import TYPE_CHECKING, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509.oid import NameOID
-from trustpoint_core.serializer import CredentialSerializer
+from cryptography.x509.verification import PolicyBuilder, Store
+from management.models import KeyStorageConfig
+from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
 from pki.models import IssuingCaModel
 from pki.util.keys import CryptographyUtils
@@ -155,7 +158,7 @@ class CertificateGenerator:
             algorithm=hash_algorithm,
         )
         return certificate, private_key
-    
+
     @staticmethod
     def create_test_pki(chain_depth: int = 0) -> tuple[list[x509.Certificate], list[PrivateKey]]:
         """Get a test PKI chain with a specified depth (excluding root CA). depth=0 is a self-signed EE."""
@@ -218,13 +221,76 @@ class CertificateGenerator:
             additional_certificates=chain
         )
 
+        # Determine private key location based on CA type and storage configuration
+        if ca_type == IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED:
+            # Unprotected local CAs always use software storage
+            private_key_location = PrivateKeyLocation.SOFTWARE
+        elif ca_type in [
+            IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT,
+            IssuingCaModel.IssuingCaTypeChoice.AUTOGEN,
+        ]:
+            # Auto-generated CAs use the configured storage type
+            try:
+                config = KeyStorageConfig.get_config()
+            except KeyStorageConfig.DoesNotExist as e:
+                error_msg = (
+                    f'Cannot create auto-generated CA "{unique_name}": KeyStorageConfig not found. '
+                    'Please configure key storage first.'
+                )
+                logger.exception(error_msg)
+                raise ValueError(error_msg) from e
+
+            if config.storage_type in [
+                KeyStorageConfig.StorageType.SOFTHSM,
+                KeyStorageConfig.StorageType.PHYSICAL_HSM
+            ]:
+                private_key_location = PrivateKeyLocation.HSM_PROVIDED
+            else:
+                # Software storage
+                private_key_location = PrivateKeyLocation.SOFTWARE
+        else:
+            # For protected CAs (LOCAL_PKCS11), HSM storage is required
+            try:
+                config = KeyStorageConfig.get_config()
+            except KeyStorageConfig.DoesNotExist as e:
+                error_msg = (
+                    f'Cannot create protected CA "{unique_name}": KeyStorageConfig not found. '
+                    'Protected CAs require HSM storage configuration.'
+                )
+                logger.exception(error_msg)
+                raise ValueError(error_msg) from e
+
+            if config.storage_type in [
+                KeyStorageConfig.StorageType.SOFTHSM,
+                KeyStorageConfig.StorageType.PHYSICAL_HSM
+            ]:
+                private_key_location = PrivateKeyLocation.HSM_PROVIDED
+            else:
+                error_msg = (
+                    f'Cannot create protected CA "{unique_name}" with storage type "{config.storage_type}". '
+                    f'Protected CAs require HSM storage (SoftHSM or Physical HSM), but current storage type is: '
+                    f'{config.storage_type}'
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
+        issuing_ca_credential_serializer.private_key_reference = (
+            PrivateKeyReference.from_private_key(
+                private_key=issuing_ca_credential_serializer.private_key,
+                key_label=unique_name,
+                location=private_key_location
+            )
+        )
+
         issuing_ca = IssuingCaModel.create_new_issuing_ca(
-            unique_name=unique_name, credential_serializer=issuing_ca_credential_serializer, issuing_ca_type=ca_type
+            unique_name=unique_name,
+            credential_serializer=issuing_ca_credential_serializer,
+            issuing_ca_type=ca_type
         )
 
         logger.info("Issuing CA '%s' saved successfully.", unique_name)
 
-        return cast(IssuingCaModel, issuing_ca)
+        return cast('IssuingCaModel', issuing_ca)
 
 
 class ClientCertificateAuthenticationError(Exception):
@@ -273,3 +339,47 @@ class ApacheTLSClientCertExtractor:
             intermediate_cas.append(ca_cert)
 
         return (client_cert, intermediate_cas)
+
+class CertificateVerifier:
+    """Methods for verifying client and server certificates."""
+
+    @staticmethod
+    def verify_server_cert(
+        cert: x509.Certificate,
+        subject: str,
+        untrusted_intermediates: list[x509.Certificate] | None = None,
+        verification_time: datetime.datetime | None = None
+    ) -> list[x509.Certificate]:
+        """Verifies a server's TLS certificate against a trusted certificate store.
+
+        Args:
+            cert (x509.Certificate): The DER- or PEM-encoded leaf server certificate to verify.
+            subject (str): The expected DNS name or hostname to match against the certificate's
+                Subject Alternative Name (SAN).
+            untrusted_intermediates (list[x509.Certificate]): DER- or PEM-encoded intermediate certificates that are
+                not trusted by default but provided to assist chain building.
+            verification_time (datetime): Certificate verification time
+
+        Returns:
+            list[x509.Certificate]: A validated certificate chain from the leaf certificate up to a trusted root.
+
+        Raises:
+            VerificationError: If a valid chain cannot be constructed.
+            UnsupportedGeneralNameType: If a valid chain exists, but contains an unsupported general name type.
+        """
+        trust_store = Store([cert])
+
+        if verification_time is None:
+            verification_time =  datetime.datetime.now(UTC)
+        verifier = (
+            PolicyBuilder()
+            .store(trust_store)
+            .time(verification_time)
+            .build_server_verifier(x509.DNSName(subject))
+        )
+
+        if untrusted_intermediates is None:
+            untrusted_intermediates = []
+
+        return verifier.verify(cert, [])
+

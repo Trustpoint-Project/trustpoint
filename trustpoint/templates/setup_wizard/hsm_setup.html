@@ -1,0 +1,131 @@
+{% extends 'users/base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+
+    {% if messages %}
+        <div class="messages tp-messages text-center">
+            {% for message in messages %}
+                <div class="tp-message alert
+                    {% if message.tags %}
+                        {% if message.tags == "error" %}
+                            alert-danger
+                        {% else %}
+                            alert-{{ message.tags }}
+                        {% endif %}
+                    {% endif %} d-flex" role="alert">
+                    <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="{{ message.tags }}:">
+                        <use href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use>
+                    </svg>
+                    <div>
+                        {{ message }}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="card tp-card-setup-wizard text-center">
+        <div class="card-header">
+            <h1>{% trans 'HSM Configuration' %} - {{ hsm_type_display }}</h1>
+        </div>
+        <div class="card-body pt-3 pb-4">
+            
+            {% if hsm_type == 'softhsm' %}
+                <div class="alert alert-info mb-4">
+                    <h5>{% trans 'SoftHSM Configuration' %}</h5>
+                    <p class="mb-0">{% trans 'SoftHSM settings are automatically configured with secure default values.' %}</p>
+                </div>
+            {% elif hsm_type == 'physical' %}
+                <div class="alert alert-warning mb-4">
+                    <h5>{% trans 'Physical HSM Configuration' %}</h5>
+                    <p class="mb-0">{% trans 'Please configure the PKCS#11 module path and token settings for your physical HSM device.' %}</p>
+                </div>
+            {% endif %}
+
+            <form method="post" id="hsm_configuration" class="text-start">
+                {% csrf_token %}
+                
+                <div class="row justify-content-center">
+                    <div class="col-md-8">
+                        <div class="mb-3">
+                            <label for="{{ form.module_path.id_for_label }}" class="form-label">
+                                {{ form.module_path.label }}
+                            </label>
+                            {{ form.module_path }}
+                            {% if form.module_path.help_text %}
+                                <div class="form-text light-only">{{ form.module_path.help_text }}</div>
+                                <div class="form-text dark-only text-light">{{ form.module_path.help_text }}</div>
+                            {% endif %}
+                            {% if form.module_path.errors %}
+                                <div class="invalid-feedback d-block light-only">
+                                    {{ form.module_path.errors }}
+                                </div>
+                                <div class="invalid-feedback d-block dark-only text-light">
+                                    {{ form.module_path.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.slot.id_for_label }}" class="form-label">
+                                {{ form.slot.label }}
+                            </label>
+                            {{ form.slot }}
+                            {% if form.slot.help_text %}
+                                <div class="form-text light-only">{{ form.slot.help_text }}</div>
+                                <div class="form-text dark-only text-light">{{ form.slot.help_text }}</div>
+                            {% endif %}
+                            {% if form.slot.errors %}
+                                <div class="invalid-feedback d-block light-only">
+                                    {{ form.slot.errors }}
+                                </div>
+                                <div class="invalid-feedback d-block dark-only text-light">
+                                    {{ form.slot.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.label.id_for_label }}" class="form-label">
+                                {{ form.label.label }}
+                            </label>
+                            {{ form.label }}
+                            {% if form.label.help_text %}
+                                <div class="form-text light-only">{{ form.label.help_text }}</div>
+                                <div class="form-text dark-only text-light">{{ form.label.help_text }}</div>
+                            {% endif %}
+                            {% if form.label.errors %}
+                                <div class="invalid-feedback d-block light-only">
+                                    {{ form.label.errors }}
+                                </div>
+                                <div class="invalid-feedback d-block dark-only text-light">
+                                    {{ form.label.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        {{ form.hsm_type }}
+
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {{ form.non_field_errors }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </form>
+        </div>
+        
+        <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+            <div class="tp-card-btn-footer m-1">
+                <button class="btn btn-primary w-100 mt-1" type="submit" form="hsm_configuration">
+                    {% trans 'Configure' %} {{ hsm_type_display }}
+                </button>
+            </div>
+        </div>
+    </div>
+
+{% endblock content %}

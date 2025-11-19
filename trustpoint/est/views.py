@@ -123,7 +123,7 @@ class EstSimpleEnrollmentView(LoggerMixin, View):
 
             est_authorizer = EstAuthorization(
                 # Allowed templates are TODO and might depend on authentication method
-                allowed_templates=['tls-client','tls-server','domaincredential'],
+                allowed_templates=['tls-client','tls-server', 'opc-ua-client', 'opc-ua-server', 'domaincredential'],
                 allowed_operations=['simpleenroll']
             )
             est_authorizer.authorize(ctx)
@@ -191,7 +191,7 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
 
             est_authorizer = EstAuthorization(
                 # Allowed templates are TODO and might depend on authentication method
-                allowed_templates=['tls-client','tls-server','domaincredential'],
+                allowed_templates=['tls-client','tls-server', 'opc-ua-client', 'opc-ua-server', 'domaincredential'],
                 allowed_operations=['simplereenroll']
             )
             est_authorizer.authorize(ctx)
