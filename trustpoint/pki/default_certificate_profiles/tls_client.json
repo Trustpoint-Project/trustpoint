@@ -1,5 +1,6 @@
 {
     "type": "cert_profile",
+    "display_name": "TLS Client",
     "subj": {
         "allow":"*"
     },

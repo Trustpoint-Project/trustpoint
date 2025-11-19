@@ -18,6 +18,11 @@
                         </a>
                     </th>
                     <th>
+                        <a href="?sort={% if current_sort == 'display_name' %}-{% endif %}display_name">
+                            {% trans 'Display Name' %}
+                        </a>
+                    </th>
+                    <th>
                         {% trans 'Active in Domains' %}
                     </th>
                     <th>
@@ -46,6 +51,7 @@
                             <input type="checkbox" name="row_checkbox" value="{{ profile.id }}"/>
                         </td>
                         <td>{{ profile.unique_name }}</td>
+                        <td>{{ profile.display_name }}</td>
                         <td></td>
                         <td>{{ profile.created_at }}</td>
                         <td>{{ profile.updated_at }}</td>
@@ -54,7 +60,7 @@
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="7" class="middle">{% trans 'No Certificate Profile has been added yet.' %}</td>
+                        <td colspan="8" class="middle">{% trans 'No Certificate Profile has been added yet.' %}</td>
                     </tr>
                 {% endfor %}
             </tbody>

@@ -234,6 +234,7 @@ class ProfileExtensionsModel(ExtensionsModel, CertProfileBaseModel):
 class CertProfileModel(CertProfileBaseModel):
     """Model for a certificate profile."""
     type: Literal['cert_profile']
+    display_name: str | None = None
     subject: ProfileSubjectModel = Field(alias='subj', default=ProfileSubjectModel())
     extensions: ProfileExtensionsModel = Field(alias='ext', default=ProfileExtensionsModel())
     validity: ValidityModel = Field(default=ValidityModel(days=10))

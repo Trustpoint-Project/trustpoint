@@ -134,10 +134,10 @@ class DomainModel(models.Model):
         return profile_qs.first().certificate_profile  # type: ignore[union-attr]
 
     def set_allowed_cert_profiles(self, allowed_profile_data: dict[str, str]) -> set[tuple[str, str]]:
-        """Sets the allowed certificate profiles for the domain from a dict (key is profile ID, value is alias).
+        """Sets the certificate profiles allowed in the domain.
 
         Args:
-            allowed_profile_data: Dict where key is allowed certificate profile ID (str) and value is alias
+            allowed_profile_data: Dict where key is allowed certificate profile ID (str) and value is optional alias
 
         Returns:
             Set of rejected aliases due to duplication in the form of (alias, profile unique name)

@@ -9,7 +9,7 @@ class CertificateProfileModel(models.Model):
     """Model representing a certificate profile."""
 
     unique_name = models.CharField(max_length=255, unique=True)
-    verbose_name = models.CharField(max_length=255, blank=True, default='')
+    display_name = models.CharField(max_length=255, blank=True, default='')
     profile_json = models.JSONField()
 
     created_at = models.DateTimeField(verbose_name=_('Created-At'), auto_now_add=True)

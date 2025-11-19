@@ -1028,6 +1028,7 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
             CertProfilePydanticModel.model_validate(json_dict)
         except PydanticValidationError as e:
             error_message = f'This JSON is not a valid certificate profile: {e!s}'
-            print(error_message)
             raise forms.ValidationError(error_message) from e
+        self.instance.display_name = json_dict.get('display_name', '')
         return json.dumps(json_dict)
+
