@@ -106,6 +106,7 @@ class EstSimpleEnrollmentView(LoggerMixin, View):
                 certificate_template=cert_template,
                 event=self.EVENT
             )
+
         except Exception:
             err_msg = 'Failed to set up request context.'
             self.logger.exception(err_msg)
@@ -156,6 +157,8 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
     based on the certificate template specified in the request.
     """
 
+    EVENT = Events.est_simplereenroll
+
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
         """Handle POST requests for simple reenrollment."""
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
@@ -173,7 +176,9 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
                 operation='simplereenroll',
                 domain_str=domain_name,
                 certificate_template=cert_template,
+                event=self.EVENT
             )
+
         except Exception:
             err_msg = 'Failed to set up request context.'
             self.logger.exception(err_msg)
@@ -197,6 +202,8 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
             est_authorizer.authorize(ctx)
 
             ProfileValidator.validate(ctx)
+
+            WorkflowHandler().handle(ctx)
 
             CertificateIssueProcessor().process_operation(ctx)
 

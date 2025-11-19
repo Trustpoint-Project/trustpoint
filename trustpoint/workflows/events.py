@@ -32,12 +32,13 @@ class Events:
         handler='certificate_request',
     )
 
-    """est_simplereenroll = Event(
+    est_simplereenroll = Event(
         key='est_simplereenroll',
         protocol='EST',
         operation='simplereenroll',
         handler='certificate_request',
     )
+    """
 
     est_cacerts = Event(
         key='est_cacerts',
