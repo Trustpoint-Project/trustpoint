@@ -44,7 +44,7 @@ BADGE_MAP: dict[str, StatusBadge] = {
 }
 
 
-def get_status_badge(raw: str | State) -> StatusBadge:
+def get_status_badge(raw: str | State | None) -> StatusBadge:
     """Return a badge (label, CSS class) for a workflow/enrollment state."""
     if raw is None:
         return 'Unknown', 'bg-light text-muted'
@@ -125,15 +125,6 @@ class EnrollmentRequest(models.Model):
     - Identity tuple groups repeated polls for the same CSR until a terminal outcome.
     - We keep request-level states distinct from instance-level strings to avoid confusion.
     """
-
-    STATE_AWAITING = State.AWAITING
-    STATE_APPROVED = State.APPROVED
-    STATE_PASSED = State.PASSED
-    STATE_REJECTED = State.REJECTED
-    STATE_FAILED = State.FAILED
-    STATE_FINALIZED = State.FINALIZED
-    STATE_ABORTED = State.ABORTED
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     # Identity tuple (NOT unique → allow a new attempt after terminal)
@@ -182,23 +173,27 @@ class EnrollmentRequest(models.Model):
         return css
 
     # ---- aggregation helpers ----
-    def recompute_status(self) -> str:
-        """Compute aggregate status from child instances."""
-        children = list(self.instances.all())
-        if not children:
+    def recompute_status(self) -> State:
+        """Compute aggregate status from child instances.
+
+        Returns:
+            The new aggregated state derived from child instance states.
+        """
+        children_qs = self.instances.all()
+        if not children_qs.exists():
             return State.PASSED
 
-        inst_states = {c.state for c in children}
+        inst_states = set(children_qs.values_list('state', flat=True))
 
         if State.REJECTED in inst_states:
-            result = State.REJECTED
+            result: State = State.REJECTED
         elif State.FAILED in inst_states:
             result = State.FAILED
         elif State.ABORTED in inst_states:
             result = State.ABORTED
         elif State.AWAITING in inst_states or State.RUNNING in inst_states:
             result = State.AWAITING
-        elif inst_states.issubset({State.APPROVED, State.FINALIZED}):
+        elif inst_states.issubset({State.APPROVED, State.PASSED}):
             result = State.APPROVED
         else:
             result = State.AWAITING
@@ -209,26 +204,33 @@ class EnrollmentRequest(models.Model):
         """Return True if the enrollment request is in a successful terminal state."""
         return self.aggregated_state in {State.APPROVED, State.PASSED}
 
-    def recompute_and_save(self) -> str:
-        """Recalculate the aggregated state and persist changes if it changed."""
+    def recompute_and_save(self) -> State:
+        """Recalculate the aggregated state and persist changes if it changed.
+
+        Returns:
+            The (possibly unchanged) aggregated state.
+        """
         new_status = self.recompute_status()
         if new_status != self.aggregated_state:
             self.aggregated_state = new_status
             self.save(update_fields=['aggregated_state', 'updated_at'])
-        return self.aggregated_state
+        return State(self.aggregated_state)
 
-    def finalize(self, final_status: str | None = None) -> None:
-        """Finalize all non-finalized children."""
+    def finalize(self, final_status: str | State | None = None) -> None:
+        """Finalize this request and all non-finalized child workflow instances.
+
+        Args:
+            final_status: Optional final aggregated state to set for the request.
+        """
         self.finalized = True
-        if not final_status:
-            self.save(update_fields=['finalized'])
+        if final_status is None:
+            self.save(update_fields=['finalized', 'updated_at'])
         else:
-            self.aggregated_state = final_status
-            self.save(update_fields=['aggregated_state', 'finalized'])
+            self.aggregated_state = str(final_status)
+            self.save(update_fields=['aggregated_state', 'finalized', 'updated_at'])
 
         for inst in self.instances.filter(finalized=False):
             inst.finalize()
-            inst.save(update_fields=['finalized'])
 
     def abort(self) -> None:
         """Abort this request and all non-finalized child workflow instances."""
@@ -240,7 +242,6 @@ class EnrollmentRequest(models.Model):
         self.save(update_fields=['aggregated_state', 'finalized', 'updated_at'])
 
         for inst in self.instances.filter(finalized=False):
-            # Mark instance as aborted and finalized
             inst.finalize(State.ABORTED)
 
 
@@ -251,16 +252,6 @@ class EnrollmentRequest(models.Model):
 
 class WorkflowInstance(models.Model):
     """An initialized workflows."""
-
-    STATE_RUNNING = State.RUNNING
-    STATE_AWAITING = State.AWAITING
-    STATE_APPROVED = State.APPROVED
-    STATE_PASSED = State.PASSED
-    STATE_FINALIZED = State.FINALIZED
-    STATE_REJECTED = State.REJECTED
-    STATE_FAILED = State.FAILED
-    STATE_ABORTED = State.ABORTED
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     definition = models.ForeignKey(WorkflowDefinition, on_delete=models.CASCADE, related_name='instances')
 
@@ -313,19 +304,28 @@ class WorkflowInstance(models.Model):
         _, css = get_status_badge(self.state)
         return css
 
-    def finalize(self, state: str | None = None) -> None:
-        """Mark this instance as fully done. Optionally set a final state."""
+    def finalize(self, state: str | State | None = None) -> None:
+        """Mark this instance as fully done and optionally set a final state.
+
+        Args:
+            state: Optional final state to set before marking as finalized.
+        """
         if self.finalized:
             return
+
         self.finalized = True
-        if state:
-            self.state = state
-            self.save(update_fields=['state', 'finalized'])
+        if state is not None:
+            self.state = str(state)
+            self.save(update_fields=['state', 'finalized', 'updated_at'])
         else:
-            self.save(update_fields=['finalized'])
+            self.save(update_fields=['finalized', 'updated_at'])
 
     def get_steps(self) -> list[dict[str, Any]]:
-        """Return the ordered list of steps from the workflow definition."""
+        """Return the ordered list of steps from the workflow definition.
+
+        Returns:
+            List of step dictionaries from the workflow definition JSON.
+        """
         return cast('list[dict[str, Any]]', self.definition.definition.get('steps', []))
 
     def get_current_step_index(self) -> int:
@@ -337,11 +337,15 @@ class WorkflowInstance(models.Model):
         raise ValueError(msg)
 
     def get_next_step(self) -> str | None:
-        """Return the step-ID of the next step, or None if at the end."""
+        """Return the step-ID of the next step, or None if at the end.
+
+        Returns:
+            Step ID string of the next step, or None if there is no next step.
+        """
         idx = self.get_current_step_index()
         steps = self.get_steps()
         if idx + 1 < len(steps):
-            return cast('str', steps[idx + 1]['id'])
+            return str(steps[idx + 1]['id'])
         return None
 
     def is_last_approval_step(self) -> bool:

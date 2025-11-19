@@ -13,19 +13,18 @@ def transform_to_definition_schema(
     events: list[dict[str, str]],
     steps: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Build the full workflow-definition JSON from wizard input.
+    """Convert wizard input into an internal workflow-definition schema.
 
     Args:
-        events: List of items like ``{"protocol": str, "operation": str}``.
-        steps: Ordered list of items like ``{"type": str, "params": dict[str, Any]}``.
+        events: List of event descriptors, each containing protocol and operation.
+        steps: Ordered list of step descriptors, each with type and parameters.
 
     Returns:
-        A dict with keys:
-            - ``events``: the input events as-is.
-            - ``steps``: list of steps with auto-generated IDs ``step-1``, ``step-2``, ...
-            - ``transitions``: linear transitions wiring each step to the next on signal ``"next"``.
+        dict[str, Any]: Workflow definition containing:
+            - "events": the input events.
+            - "steps": steps with generated IDs ("step-1", "step-2", ...).
+            - "transitions": linear transitions linking steps on the "next" signal.
     """
-    # 1) Steps with auto IDs step-1, step-2, ...
     steps_list: list[dict[str, Any]] = [
         {
             'id': f'step-{idx}',
@@ -35,7 +34,6 @@ def transform_to_definition_schema(
         for idx, step in enumerate(steps, start=1)
     ]
 
-    # 2) Linear transitions (perf-friendly list comprehension)
     transitions: list[dict[str, str]] = [
         {
             'from': steps_list[i]['id'],

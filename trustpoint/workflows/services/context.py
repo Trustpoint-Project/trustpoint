@@ -1,27 +1,34 @@
 """Context assembly utilities for workflow templates and executors.
 
-This module builds the per-instance template context (`ctx`) used by UI and
+This module builds the per-instance template context (``ctx``) used by UI and
 template rendering (Email/Webhook/etc.). It also exposes helpers for working
 with nested dot paths and for compacting large step-context blobs.
 
 Schema (top-level keys produced by :func:`build_context`):
 
-- meta.schema:     integer schema version
-- workflow:        {"id": str, "name": str}
-- instance:        {"id": str, "state": str, "current_step": str}
-- payload:         dict (original event payload)
-- csr:             dict | None  (best-effort CSR parse: subject/common_name/sans/public_key_type)
-- steps_by_id:     dict[str, Any]   raw step ids (e.g. "step-2")
-- steps_safe:      dict[str, Any]   safe keys usable with dot lookup (e.g. "step_2")
-- steps:           dict[str, Any]   alias -> steps_safe (recommended for templates)
-- step_names:      dict[str, str]   raw id -> safe key mapping
-- vars:            dict[str, Any]   merged global variables bucket
+- meta:            {"schema": int}
+- workflow:        {"id": str, "name": str, "instance_id": Any, "instance_state": str}
+- device:          {
+                       "common_name": str,
+                       "serial_number": str,
+                       "device_id": Any,
+                       "domain": Any,
+                       "device_type": Any,
+                       "created_at": Any,
+                   }
+- request:         {
+                       "protocol": str | None,
+                       "operation": str | None,
+                       "enrollment_request_id": str | None,
+                       "csr_pem": str | None,
+                       ...CSR-derived fields from _parse_csr_info...
+                   }
+- steps:           dict[str, Any]   safe keys usable with dot lookup (e.g. "step_2")
+- vars:            dict[str, Any]   merged global variables bucket ($vars)
 
 Notes:
 -----
 * Use ``{{ ctx.steps.step_1 }}`` in templates (recommended).
-* To reference raw ids with dashes, use bracket notation:
-  ``{{ ctx.steps_by_id."step-1".outputs.subject }}``.
 """
 
 from __future__ import annotations
@@ -144,7 +151,19 @@ def _split_path(path: str) -> list[str]:
 
 
 def get_in(root: dict[str, Any], path: str) -> Any:
-    """Return value at dot path from a nested dict or raise KeyError."""
+    """Return value at dot path from a nested dict or raise KeyError.
+
+    Args:
+        root: Root dictionary to traverse.
+        path: Dot-separated path (e.g. ``"a.b.c"``).
+
+    Returns:
+        Any: The value found at the given path.
+
+    Raises:
+        KeyError: If the full path does not exist in the nested dictionaries.
+        ValueError: If the path is empty or contains illegal segments.
+    """
     cur: Any = root
     for seg in _split_path(path):
         if not isinstance(cur, dict) or seg not in cur:
@@ -155,15 +174,15 @@ def get_in(root: dict[str, Any], path: str) -> Any:
 
 def set_in(root: dict[str, Any], path: str, value: Any, *, forbid_overwrite: bool = True) -> None:
     """Set value at dot path. If forbid_overwrite=True, raise on value change collisions."""
-    segs = _split_path(path)
+    segments = _split_path(path)
     cur: dict[str, Any] = root
-    for s in segs[:-1]:
+    for s in segments[:-1]:
         nxt = cur.get(s)
         if not isinstance(nxt, dict):
             nxt = {}
             cur[s] = nxt
         cur = nxt
-    leaf = segs[-1]
+    leaf = segments[-1]
     if forbid_overwrite and leaf in cur and cur[leaf] != value:
         msg = f'context collision at {path!r}'
         raise ValueError(msg)
@@ -174,7 +193,10 @@ def set_in(root: dict[str, Any], path: str, value: Any, *, forbid_overwrite: boo
 
 
 def build_context(instance: WorkflowInstance) -> dict[str, Any]:
-    """Compose the template context `ctx` for a workflow instance.
+    """Compose the template context ``ctx`` for a workflow instance.
+
+    Args:
+        instance: Workflow instance for which to build the context.
 
     Returns:
         dict[str, Any]: A plain dict suitable for Django templates.
@@ -186,30 +208,29 @@ def build_context(instance: WorkflowInstance) -> dict[str, Any]:
     csr_info = _parse_csr_info(payload.get('csr_pem')) or {}
 
     # Per-step outputs (exclude reserved keys like "$vars")
-    steps_by_id: dict[str, Any] = {}
-    for key, value in step_contexts.items():
-        if not isinstance(key, str):
-            continue
-        if key.startswith(_RESERVED_PREFIX):
-            continue
-        steps_by_id[key] = value
+    steps_by_id: dict[str, Any] = {
+        key: value
+        for key, value in step_contexts.items()
+        if isinstance(key, str) and not key.startswith(_RESERVED_PREFIX)
+    }
 
     # Safe names for convenient template access
     step_names: dict[str, str] = {raw: _safe_step_key(raw) for raw in steps_by_id}
     steps_safe: dict[str, Any] = {step_names[raw]: value for raw, value in steps_by_id.items()}
 
-    # Get devuice
+    # Device (required for current usage; will raise if missing)
     device = DeviceModel.objects.get(pk=payload.get('device_id', ''))
 
     # Global variables bucket ($vars in engine)
     vars_map: dict[str, Any] = dict(step_contexts.get('$vars') or {})
 
-    request = dict({
-            'protocol': payload.get('protocol'),
-            'operation': payload.get('operation'),
-            'enrollment_request_id': payload.get('fingerprint'),
-            'csr_pem': payload.get('csr_pem'),
-        }, **csr_info)
+    request = {
+        'protocol': payload.get('protocol'),
+        'operation': payload.get('operation'),
+        'enrollment_request_id': payload.get('fingerprint'),
+        'csr_pem': payload.get('csr_pem'),
+        **csr_info,
+    }
 
     ctx: dict[str, Any] = {
         'meta': {'schema': CTX_SCHEMA_VERSION},
@@ -217,7 +238,7 @@ def build_context(instance: WorkflowInstance) -> dict[str, Any]:
             'id': str(instance.definition.pk),
             'name': instance.definition.name,
             'instance_id': instance.id,
-            'instance_state': instance.state
+            'instance_state': instance.state,
         },
         'device': {
             'common_name': device.common_name,
@@ -238,7 +259,14 @@ def compact_context_blob(blob: dict[str, Any]) -> dict[str, Any]:
     """Compact a step-context blob to fit STEP_CTX_MAX_BYTES.
 
     The compaction is lossy: long strings are truncated, large nested dicts
-    are summarized. A '_meta' key indicates truncation and original size.
+    are summarized. A ``"_meta"`` key indicates truncation and original size.
+
+    Args:
+        blob: Original step-context dictionary.
+
+    Returns:
+        dict[str, Any]: Either the original blob, or a compacted summary
+        that fits within STEP_CTX_MAX_BYTES.
     """
     size = _json_size(blob)
     if size <= STEP_CTX_MAX_BYTES:

@@ -9,9 +9,8 @@ This module provides Django class-based views for:
 
 from __future__ import annotations
 
-import contextlib
 import json
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID
 
 from cryptography import x509
@@ -43,6 +42,7 @@ from workflows.events import Events
 from workflows.filters import EnrollmentRequestFilter, WorkflowFilter
 from workflows.models import (
     EnrollmentRequest,
+    State,
     WorkflowDefinition,
     WorkflowInstance,
     WorkflowScope,
@@ -51,12 +51,8 @@ from workflows.models import (
 from workflows.services.context import build_context
 from workflows.services.context_catalog import build_catalog
 from workflows.services.engine import advance_instance
-from workflows.services.request_aggregator import recompute_request_state
 from workflows.services.validators import validate_wizard_payload
 from workflows.services.wizard import transform_to_definition_schema
-
-if TYPE_CHECKING:
-    from django.db.models import QuerySet
 
 
 class ContextCatalogView(View):
@@ -671,7 +667,7 @@ class PendingApprovalsView(ListView[WorkflowInstance]):
         params = self.request.GET.copy()
         if not params:
             params = QueryDict(mutable=True)
-            params['state'] = WorkflowInstance.STATE_AWAITING  # default
+            params['state'] = State.AWAITING  # default
 
         self.filterset = self.filterset_class(params, queryset=base_qs)
         qs: QuerySet[WorkflowInstance] = self.filterset.qs
@@ -829,9 +825,9 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
             'current_step_label': current_step_label,
             'can_signal': (
                 not inst.finalized
-                and inst.state == WorkflowInstance.STATE_AWAITING
+                and inst.state == State.AWAITING
                 and inst.enrollment_request is not None
-                and inst.enrollment_request.aggregated_state == EnrollmentRequest.STATE_AWAITING
+                and inst.enrollment_request.aggregated_state == State.AWAITING
             ),
             'page_category': 'workflows',
             'page_name': 'pending',
@@ -858,17 +854,15 @@ class SignalInstanceView(View):
         if not inst.enrollment_request:
             raise ValueError
 
-        if inst.enrollment_request.aggregated_state != EnrollmentRequest.STATE_AWAITING:
+        if inst.enrollment_request.aggregated_state != State.AWAITING:
             messages.error(request,
                            _(f'You can not {action} a workflow where request is already in state \
                             "{inst.enrollment_request.aggregated_state.lower()}"'))  # noqa: INT001
             return redirect('workflows:pending_table')
 
         advance_instance(inst, signal=action)
+        inst.enrollment_request.recompute_and_save()
         inst.refresh_from_db()
-        if inst.enrollment_request:
-            with contextlib.suppress(Exception):
-                recompute_request_state(inst.enrollment_request)
 
         if action == 'approve':
             messages.success(request, f'Workflow {inst.id} approved and advanced.')
@@ -882,15 +876,15 @@ class BulkSignalInstancesView(View):
     """Endpoint to signal (approve/reject) multiple workflow instances via POST."""
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
-        """Handles the POST request for bulk approval/rejection.
+        """Handle bulk approval or rejection of workflow instances.
 
         Args:
-            request: The django request object.
-            _args: Positional arguments are discarded.
-            kwargs: Keyword arguments are passed to get_context_data.
+            request: The Django HTTP request object.
+            *_args: Unused positional arguments.
+            **_kwargs: Unused keyword arguments.
 
         Returns:
-            The HttpResponseRedirect.
+            HttpResponseRedirect: Redirect back to the pending table after processing.
         """
         action = request.POST.get('action')
         if action not in {'approve', 'reject'}:
@@ -919,8 +913,7 @@ class BulkSignalInstancesView(View):
 
         if updated_count == 0:
             messages.warning(request, 'No workflow instances were updated.')
-        elif action == 'Approved':
-            # Note: action value preserved as in original implementation (case-sensitive check).
+        elif action == 'approve':
             messages.success(
                 request,
                 f'{updated_count} workflow instance(s) approved and advanced.',
@@ -939,17 +932,27 @@ class BulkSignalInstancesView(View):
         instances_qs: QuerySet[WorkflowInstance],
         request: HttpRequest,
     ) -> HttpResponseRedirect | None:
-        """Validate whether the selected instances can be bulk signalled."""
+        """Validate whether the selected instances can be bulk signalled.
+
+        Args:
+            action: Bulk action to perform, expected to be ``"approve"`` or ``"reject"``.
+            instances_qs: Queryset of selected workflow instances.
+            request: Current HTTP request, used for messaging.
+
+        Returns:
+            HttpResponseRedirect | None: A redirect response if validation fails,
+            otherwise ``None`` to indicate that processing can continue.
+        """
         if any(s.finalized for s in instances_qs):
             messages.error(request, 'You can not update completed workflows.')
             return redirect('workflows:pending_table')
 
         invalid_enrollment_qs = instances_qs.exclude(
-            enrollment_request__aggregated_state=EnrollmentRequest.STATE_AWAITING
+            enrollment_request__aggregated_state=State.AWAITING
         ).first()
 
         if invalid_enrollment_qs is not None:
-            # If there is no enrollment_request at all, treat as not allowed as well
+            # If there is no enrollment_request at all, treat as not allowed as well.
             if invalid_enrollment_qs.enrollment_request is None:
                 state_label: str = str(_('unknown'))
             else:
@@ -963,8 +966,8 @@ class BulkSignalInstancesView(View):
             )
             return redirect('workflows:pending_table')
 
-        if action == 'Approved':
-            rejected_instances = instances_qs.filter(state=WorkflowInstance.STATE_FAILED)
+        if action == 'approve':
+            rejected_instances = instances_qs.filter(state=State.FAILED)
             if rejected_instances.exists():
                 messages.error(request, 'You cannot approve failed instances.')
                 return redirect('workflows:pending_table')
@@ -976,14 +979,21 @@ class BulkSignalInstancesView(View):
         action: str,
         instances_qs: QuerySet[WorkflowInstance],
     ) -> int:
-        """Advance each eligible instance and recompute its enrollment request state."""
+        """Advance each eligible instance and recompute its enrollment request state.
+
+        Args:
+            action: Signal to send to each instance (``"approve"`` or ``"reject"``).
+            instances_qs: Queryset of workflow instances to update.
+
+        Returns:
+            int: Number of instances successfully updated.
+        """
         updated_count = 0
         for inst in instances_qs:
             advance_instance(inst, signal=action)
+            if inst.enrollment_request is not None:
+                inst.enrollment_request.recompute_and_save()
             inst.refresh_from_db()
-            if inst.enrollment_request:
-                with contextlib.suppress(Exception):
-                    recompute_request_state(inst.enrollment_request)
             updated_count += 1
         return updated_count
 

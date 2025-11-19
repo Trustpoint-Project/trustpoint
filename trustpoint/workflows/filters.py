@@ -14,11 +14,11 @@ if TYPE_CHECKING:
     from django.db.models import QuerySet
 
 STATE_FILTER_CHOICES = (
-    (WorkflowInstance.STATE_AWAITING, 'AwaitingApproval'),
-    (WorkflowInstance.STATE_APPROVED, 'Approved'),
-    (WorkflowInstance.STATE_REJECTED, 'Rejected'),
-    (WorkflowInstance.STATE_FAILED, 'Failed'),
-    (WorkflowInstance.STATE_ABORTED, 'Aborted'),
+    (State.AWAITING, 'AwaitingApproval'),
+    (State.APPROVED, 'Approved'),
+    (State.REJECTED, 'Rejected'),
+    (State.FAILED, 'Failed'),
+    (State.ABORTED, 'Aborted'),
 )
 
 
@@ -60,7 +60,6 @@ class WorkflowFilter(django_filters.FilterSet):
         widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
     )
 
-    # Works without method because it maps to a real boolean field
     include_finalized = django_filters.BooleanFilter(
         label=_('Include completed/aborted workflows'),
         method='filter_include_finalized',
@@ -99,7 +98,19 @@ class WorkflowFilter(django_filters.FilterSet):
         _name: str,
         value: Any,
     ) -> QuerySet[WorkflowInstance]:
-        """When unchecked (default), exclude parents in {Rejected, Failed}. When checked, include them."""
+        """Filter by enrollment request parent state.
+
+        When unchecked (value is False/None), exclude parents in {Rejected, Failed}.
+        When checked (value is True), include them.
+
+        Args:
+            queryset: Base queryset of workflow instances.
+            _name: Name of the filter (unused).
+            value: Boolean-like value from the filter widget.
+
+        Returns:
+            QuerySet[WorkflowInstance]: Filtered queryset.
+        """
         if value:
             return queryset
         return queryset.exclude(
@@ -112,10 +123,18 @@ class WorkflowFilter(django_filters.FilterSet):
         _name: str,
         value: Any,
     ) -> QuerySet[WorkflowInstance]:
-        """Semantics.
+        """Filter finalized workflow instances.
 
-        - Checkbox unchecked (value is False/None): show only non-finalized.
-        - Checkbox checked (value is True): include finalized as well.
+        - Unchecked (value is False/None): show only non-finalized instances.
+        - Checked (value is True): include finalized as well.
+
+        Args:
+            queryset: Base queryset of workflow instances.
+            _name: Name of the filter (unused).
+            value: Boolean-like value from the filter widget.
+
+        Returns:
+            QuerySet[WorkflowInstance]: Filtered queryset.
         """
         if value:
             # Include both finalized and non-finalized
@@ -200,10 +219,18 @@ class EnrollmentRequestFilter(django_filters.FilterSet):
         _name: str,
         value: Any,
     ) -> QuerySet[EnrollmentRequest]:
-        """Semantics.
+        """Filter finalized enrollment requests.
 
-        - Unchecked: only non-finalized requests.
-        - Checked: include finalized as well.
+        - Unchecked (value is False/None): only non-finalized requests.
+        - Checked (value is True): include finalized as well.
+
+        Args:
+            queryset: Base queryset of enrollment requests.
+            _name: Name of the filter (unused).
+            value: Boolean-like value from the filter widget.
+
+        Returns:
+            QuerySet[EnrollmentRequest]: Filtered queryset.
         """
         if value:
             return queryset

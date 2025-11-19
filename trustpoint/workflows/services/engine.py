@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django.db import transaction
 
-from workflows.models import State, WorkflowInstance
+from workflows.models import EnrollmentRequest, State, WorkflowInstance
 from workflows.services.context import VARS_MAX_BYTES, compact_context_blob
 from workflows.services.executors.factory import StepExecutorFactory
 
@@ -26,7 +26,7 @@ def _advance_pointer(inst: WorkflowInstance) -> bool:
     nxt = inst.get_next_step()
     if nxt:
         inst.current_step = nxt
-        inst.state = WorkflowInstance.STATE_RUNNING
+        inst.state = State.RUNNING
         inst.save(update_fields=['current_step', 'state'])
         return True
     return False
@@ -64,7 +64,8 @@ def _persist_step_context(inst: WorkflowInstance, result: ExecutorResult) -> Non
         return
 
     step_contexts = dict(inst.step_contexts or {})
-    step_contexts[str(inst.current_step)] = compact_context_blob(dict(result.context))
+    context = dict(result.context)
+    step_contexts[str(inst.current_step)] = compact_context_blob(context)
     inst.step_contexts = step_contexts
     inst.save(update_fields=['step_contexts'])
 
@@ -85,7 +86,7 @@ def _merge_global_vars(inst: WorkflowInstance, result: ExecutorResult) -> bool:
     _deep_merge_no_overwrite(vars_map, dict(result.vars))
 
     if _size_bytes(vars_map) > VARS_MAX_BYTES:
-        inst.state = WorkflowInstance.STATE_FAILED
+        inst.state = State.FAILED
         inst.save(update_fields=['state'])
         return False
 
@@ -114,33 +115,33 @@ def _handle_status(
             # continuation semantics: moved to next step, reset signal
             return True, None
         if status == State.PASSED:
-            inst.state = WorkflowInstance.STATE_PASSED
+            inst.state = State.PASSED
         else:
-            inst.state = WorkflowInstance.STATE_APPROVED
+            inst.state = State.APPROVED
 
     elif status == State.AWAITING:
-        inst.state = WorkflowInstance.STATE_AWAITING
+        inst.state = State.AWAITING
 
     elif status == State.REJECTED:
-        inst.state = WorkflowInstance.STATE_REJECTED
+        inst.state = State.REJECTED
 
     elif status == State.FINALIZED:
-        inst.state = WorkflowInstance.STATE_FINALIZED
+        inst.state = State.FINALIZED
         inst.finalize()
 
     elif status == State.FAILED:
-        inst.state = WorkflowInstance.STATE_FAILED
+        inst.state = State.FAILED
 
     else:
         # Defensive fallback
-        inst.state = WorkflowInstance.STATE_FAILED
+        inst.state = State.FAILED
 
     inst.save(update_fields=['state'])
     return should_continue, new_signal
 
 
 def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
-    """Advance an instance until WAITING or a terminal outcome is reached."""
+    """Advance an instance until AWAITING or a terminal outcome is reached."""
     with transaction.atomic():
         inst = WorkflowInstance.objects.select_for_update().get(pk=inst.pk)
 
@@ -155,8 +156,8 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
 
             executor = StepExecutorFactory.create(step_type)
             result: ExecutorResult = executor.execute(inst, signal)
-
             _persist_step_context(inst, result)
+            cast('EnrollmentRequest', inst.enrollment_request).recompute_and_save()
 
             if not _merge_global_vars(inst, result):
                 break

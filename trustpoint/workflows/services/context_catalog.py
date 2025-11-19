@@ -44,13 +44,19 @@ def _flatten(obj: Any, prefix: str = '') -> list[tuple[str, Any]]:
     return out
 
 def build_catalog(ctx: dict[str, Any]) -> dict[str, Any]:
-    """Build catalog rows (key/label/sample) for use in the UI."""
-    rows = []
+    """Build catalog rows (key/label/sample) for use in the UI.
+
+    Args:
+        ctx: The workflow context dictionary (``ctx``) as produced by ``build_context``.
+
+    Returns:
+        dict[str, Any]: A structure containing usage information and a list of
+        variable descriptors under the ``"vars"`` key. Each descriptor has
+        ``"key"``, ``"label"``, and ``"sample"`` fields.
+    """
+    rows: list[dict[str, Any]] = []
     for p, v in _flatten(ctx):
         if not p:
-            continue
-        # Skip very deep technical trees that add noise
-        if p.startswith('steps_by_id'):
             continue
         rows.append({
             'key': p,

@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 
 from cryptography.hazmat.primitives._serialization import Encoding
 from devices.models import OnboardingStatus
-from workflows.models import EnrollmentRequest
+from workflows.models import EnrollmentRequest, State
 
 from request.request_context import RequestContext
 
@@ -29,18 +29,18 @@ class EstMessageResponder(AbstractMessageResponder):
             raise ValueError(exc_msg)
 
         workflow_state = context.enrollment_request.aggregated_state
-        if workflow_state == EnrollmentRequest.STATE_AWAITING:
+        if workflow_state == State.AWAITING:
             context.http_response_status = 202
             context.http_response_content_type = 'text/plain'
             context.http_response_content = 'Enrollment request pending manual approval.'
             return None
-        if workflow_state == EnrollmentRequest.STATE_REJECTED:
-            context.enrollment_request.finalize(EnrollmentRequest.STATE_REJECTED)
+        if workflow_state == State.REJECTED:
+            context.enrollment_request.finalize(State.REJECTED)
             context.http_response_status = 403
             context.http_response_content_type = 'text/plain'
             context.http_response_content = 'Enrollment request Rejected.'
             return None
-        if workflow_state == EnrollmentRequest.STATE_FAILED:
+        if workflow_state == State.FAILED:
             context.http_response_status = 500
             context.http_response_content_type = 'text/plain'
             context.http_response_content = \
@@ -48,7 +48,7 @@ class EstMessageResponder(AbstractMessageResponder):
             return None
         if context.enrollment_request.is_valid() and context.operation in ['simpleenroll', 'simplereenroll']:
             responder = EstCertificateMessageResponder()
-            context.enrollment_request.finalize(EnrollmentRequest.STATE_FINALIZED)
+            context.enrollment_request.finalize(State.FINALIZED)
             return responder.build_response(context)
         exc_msg = 'No suitable responder found for this EST message.'
         context.http_response_status = 500

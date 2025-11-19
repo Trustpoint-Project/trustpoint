@@ -1,9 +1,4 @@
-"""Factory and base types for workflow step executors.
-
-Provides:
-    - AbstractStepExecutor: common interface for step executors.
-    - StepExecutorFactory: registry-based factory to instantiate executors by step type.
-"""
+"""Factory and base types for workflow step executors."""
 
 from __future__ import annotations
 
@@ -29,9 +24,7 @@ class AbstractStepExecutor:
         """
         return self.do_execute(instance, signal)
 
-    def do_execute(  # pragma: no cover
-        self, instance: WorkflowInstance, signal: str | None
-    ) -> ExecutorResult:
+    def do_execute(self, instance: WorkflowInstance, signal: str | None) -> ExecutorResult:
         """Actual execution hook implemented by concrete executors.
 
         Args:

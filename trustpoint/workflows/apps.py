@@ -1,8 +1,4 @@
-"""Django application configuration for the ``workflows`` app.
-
-This module defines the AppConfig used by Django to initialize the app and
-register components at startup.
-"""
+"""Django application configuration for the ``workflows`` app."""
 
 from importlib import import_module
 

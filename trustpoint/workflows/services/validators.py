@@ -54,7 +54,12 @@ def _known_event_triples() -> set[tuple[str, str, str]]:
 
 
 def _registered_step_types() -> set[str]:
-    return {str(x) for x in StepExecutorFactory.registered_types()}
+    """Return the set of registered step type identifiers.
+
+    Returns:
+        set[str]: Step type names as registered with the executor factory.
+    """
+    return StepExecutorFactory.registered_types()
 
 
 def _positive_int(value: Any) -> bool:
@@ -413,7 +418,15 @@ def _validate_scopes(payload: dict[str, Any], errors: list[str]) -> None:
 
 
 def validate_wizard_payload(payload: dict[str, Any]) -> list[str]:
-    """Validate the wizard JSON (pre-transform)."""
+    """Validate the wizard JSON (pre-transform).
+
+    Args:
+        payload: Raw wizard configuration payload as a dictionary.
+
+    Returns:
+        list[str]: A list of human-readable error messages. The list is empty
+        if the payload passes all validation checks.
+    """
     errors: list[str] = []
     _validate_name(payload, errors)
     _validate_events(payload, errors)

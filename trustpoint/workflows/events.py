@@ -90,18 +90,30 @@ class Events:
 
     @classmethod
     def all(cls) -> list[Event]:
-        """Return every Event defined on this class."""
-        return [
-            v for v in vars(cls).values()
-            if isinstance(v, Event)
-        ]
+        """Return every Event defined on this class.
+
+        Returns:
+            list[Event]: All Event instances defined as class attributes.
+        """
+        return [v for v in vars(cls).values() if isinstance(v, Event)]
 
     @classmethod
     def protocols(cls) -> list[str]:
-        """Unique list of non-empty protocol names."""
+        """Return the unique list of non-empty protocol names.
+
+        Returns:
+            list[str]: Sorted list of protocol identifiers used by defined events.
+        """
         return sorted({e.protocol for e in cls.all() if e.protocol})
 
     @classmethod
     def operations_for(cls, protocol: str) -> list[str]:
-        """All operations available for a given protocol."""
+        """Return all operations available for a given protocol.
+
+        Args:
+            protocol: Protocol identifier (e.g. ``"est"``).
+
+        Returns:
+            list[str]: Operations associated with the given protocol.
+        """
         return [e.operation for e in cls.all() if e.protocol == protocol]

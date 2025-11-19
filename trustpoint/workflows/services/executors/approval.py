@@ -7,12 +7,14 @@ from workflows.services.types import ExecutorResult
 
 
 class ApprovalExecutor(AbstractStepExecutor):
-    """First encounter (no signal) → WAITING (engine maps to AwaitingApproval).
+    """Approval step executor.
 
-    - On "Rejected" → REJECTED (terminal).
-    - On "Approved":
-        • If this is the last Approval step → APPROVED (engine will continue if more steps exist).
-        • Otherwise → PASSED (engine continues).
+    First encounter (no signal) → AWAITING (AwaitingApproval).
+
+    - On "reject" → REJECTED (terminal).
+    - On "approve":
+        • If this is the last Approval step → APPROVED.
+        • Otherwise → PASSED.
     """
 
     def do_execute(self, instance: WorkflowInstance, signal: str | None) -> ExecutorResult:
@@ -25,8 +27,8 @@ class ApprovalExecutor(AbstractStepExecutor):
         Returns:
             ExecutorResult describing the new workflow state and step context.
         """
-        # First visit (no signal) → WAITING
-        if signal is None and instance.state is WorkflowInstance.STATE_RUNNING:
+        # First visit (no signal) → AWAITING
+        if signal is None and instance.state == State.RUNNING:
             return ExecutorResult(
                 status=State.AWAITING,
                 context={

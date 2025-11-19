@@ -103,7 +103,11 @@ class WebhookExecutor(AbstractStepExecutor):
 
 
 def _get_step_params(instance: WorkflowInstance) -> dict[str, Any]:
-    step = next(n for n in instance.get_steps() if n['id'] == instance.current_step)
+    """Return the params dict for the current step, or raise if not found."""
+    step = next((s for s in instance.get_steps() if s.get('id') == instance.current_step), None)
+    if step is None:
+        msg = f'Unknown current step id {instance.current_step!r}'
+        raise ValueError(msg)
     return dict(step.get('params') or {})
 
 

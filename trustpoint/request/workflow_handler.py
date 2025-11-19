@@ -10,9 +10,8 @@ from cryptography.x509 import CertificateSigningRequest
 from django.db import transaction
 from django.db.models import Q
 from trustpoint.logger import LoggerMixin
-from workflows.models import EnrollmentRequest, WorkflowDefinition, WorkflowInstance
+from workflows.models import EnrollmentRequest, State, WorkflowDefinition, WorkflowInstance
 from workflows.services.engine import advance_instance
-from workflows.services.request_aggregator import recompute_request_state
 
 if TYPE_CHECKING:
     from request.request_context import RequestContext
@@ -116,7 +115,7 @@ class CertificateRequestHandler(WorkflowHandler):
                 device=context.device,
                 fingerprint=fingerprint,
                 template=template,
-                aggregated_state=EnrollmentRequest.STATE_AWAITING,
+                aggregated_state=State.AWAITING,
                 finalized=False,
             )
 
@@ -171,13 +170,13 @@ class CertificateRequestHandler(WorkflowHandler):
                         definition=wf,
                         enrollment_request=req,
                         current_step=first_step,
-                        state=WorkflowInstance.STATE_RUNNING,
+                        state=State.RUNNING,
                         payload=full_payload,
                     )
                 created = True
 
             # Advance fresh/active instances
-            if inst.state is WorkflowInstance.STATE_RUNNING:
+            if inst.state is State.RUNNING:
                 advance_instance(inst)
                 inst.refresh_from_db()
 
@@ -192,7 +191,7 @@ class CertificateRequestHandler(WorkflowHandler):
             )
 
         # Recompute aggregate after all children were ensured/advanced
-        recompute_request_state(req)
+        req.recompute_and_save()
         req.refresh_from_db()
 
         # If truly no matching definitions, reflect NoMatch

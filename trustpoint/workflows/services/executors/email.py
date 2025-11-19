@@ -49,7 +49,11 @@ class EmailExecutor(AbstractStepExecutor):
         Returns:
             ExecutorResult describing the outcome of sending the email.
         """
-        step = next(n for n in instance.get_steps() if n['id'] == instance.current_step)
+        step = next((s for s in instance.get_steps() if s.get('id') == instance.current_step), None)
+        if step is None:
+            msg = f'Unknown current step id {instance.current_step!r}'
+            raise ValueError(msg)
+
         params: dict[str, Any] = dict(step.get('params') or {})
 
         parts = self._prepare_recipients_and_context(params, instance)
@@ -88,7 +92,15 @@ class EmailExecutor(AbstractStepExecutor):
 
     @staticmethod
     def _error_result(message: str, *, outputs: dict[str, Any] | None = None) -> ExecutorResult:
-        """Return a standardized FAILED result."""
+        """Return a standardized FAILED result for this email step.
+
+        Args:
+            message: Human-readable error description.
+            outputs: Optional additional output fields to include in the context.
+
+        Returns:
+            ExecutorResult with FAILED state and error details.
+        """
         return ExecutorResult(
             status=State.FAILED,
             context={
