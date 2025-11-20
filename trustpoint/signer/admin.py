@@ -1,6 +1,7 @@
 """Admin configuration for Signer app."""
 
 from django.contrib import admin
+
 from signer.models import SignedMessageModel, SignerModel
 
 

@@ -41,42 +41,21 @@
                             </a>
                         </div>
                     </div>
-                    {% for certificate_chain_order in signer.credential.ordered_certificate_chain_queryset %}
-                        {% if forloop.last %}
-                            <div>
-                                <div>{% trans 'Root CA Certificate' %}</div>
-                                <div>
-                                    <a href="{% url 'pki:certificate-detail' pk=certificate_chain_order.certificate.id %}">
-                                        {% if certificate_chain_order.certificate.common_name %}
-                                            CN: {{ certificate_chain_order.certificate.common_name }}
-                                        {% else %}
-                                            {% trans 'Root CA Certificate' %}
-                                        {% endif %}
-                                    </a>
-                                </div>
-                            </div>
-                        {% else %}
-                            <div>
-                                <div>{% trans 'Intermediate CA' %} {{ forloop.counter }} {% trans 'Certificate' %}</div>
-                                <div>
-                                    <a href="{% url 'pki:certificate-detail' pk=certificate_chain_order.certificate.id %}">
-                                        {% if certificate_chain_order.certificate.common_name %}
-                                            CN: {{ certificate_chain_order.certificate.common_name }}
-                                        {% else %}
-                                            {% trans 'Intermediate CA Certificate' %}
-                                        {% endif %}
-                                    </a>
-                                </div>
-                            </div>
-                        {% endif %}
-                    {% endfor %}
                     <div>
-                        <div>{% trans 'Subject' %}</div>
-                        <div>{{ signer.credential.certificate.subject }}</div>
-                    </div>
-                    <div>
-                        <div>{% trans 'Issuer' %}</div>
-                        <div>{{ signer.credential.certificate.issuer }}</div>
+                        <div>{% trans 'Issuing CA Certificate' %}</div>
+                        <div>
+                            {% if signer.credential.certificate.issuer_certificate %}
+                                <a href="{% url 'pki:certificate-detail' pk=signer.credential.certificate.issuer_certificate.id %}">
+                                    {% if signer.credential.certificate.issuer_certificate.common_name %}
+                                        CN: {{ signer.credential.certificate.issuer_certificate.common_name }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </a>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
                     </div>
                     <div>
                         <div>{% trans 'Serial Number' %}</div>

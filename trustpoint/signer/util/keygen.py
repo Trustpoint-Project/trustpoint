@@ -1,6 +1,6 @@
 """This File contains functions to create Public and Private Keys."""
 
-from typing import TYPE_CHECKING, get_args
+from typing import TYPE_CHECKING, cast, get_args
 
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
@@ -69,7 +69,7 @@ def load_private_key_object(pem_str: str) -> PrivateKey:
     """This function loads a private key from PEM format."""
     private_keyabc = load_pem_private_key(pem_str.encode('utf-8'), password=None)
     if isinstance(private_keyabc, get_args(PrivateKey)):
-        return private_keyabc
+        return cast('PrivateKey', private_keyabc)
 
     err_msg = 'Private key must be of type PrivateKey.'
     raise TypeError(err_msg)

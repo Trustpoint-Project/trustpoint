@@ -14,7 +14,7 @@ class SignerModel(CustomDeleteActionModel):
     """Contains fields for signer model."""
     unique_name = models.CharField(max_length=30, unique=True)
 
-    credential: CredentialModel = models.OneToOneField(
+    credential = models.OneToOneField(
         CredentialModel,
         related_name='signer',
         on_delete=models.PROTECT,
@@ -52,6 +52,8 @@ class SignerModel(CustomDeleteActionModel):
     @property
     def hash_algorithm(self) -> str:
         """Returns the hash algorithm name used by this signer's certificate."""
+        if self.credential.hash_algorithm is None:
+            return 'unknown'
         return self.credential.hash_algorithm.name
 
     @classmethod

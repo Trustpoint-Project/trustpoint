@@ -15,6 +15,9 @@ from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic import DetailView, ListView
 from django.views.generic.edit import FormView
+from trustpoint.logger import LoggerMixin
+from trustpoint.views.base import BulkDeleteView, ContextDataMixin, SortableTableMixin
+
 from signer.forms import (
     SignerAddFileImportPkcs12Form,
     SignerAddFileImportSeparateFilesForm,
@@ -23,10 +26,7 @@ from signer.forms import (
     SignHashForm,
 )
 from signer.models import SignedMessageModel, SignerModel
-
-from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import BulkDeleteView, ContextDataMixin, SortableTableMixin
 
 
 class SignerContextMixin(ContextDataMixin):
@@ -34,7 +34,7 @@ class SignerContextMixin(ContextDataMixin):
 
     context_page_category = 'signer'
 
-class SignerTableView(SignerContextMixin, SortableTableMixin, ListView[SignerModel]):
+class SignerTableView(SignerContextMixin, SortableTableMixin[SignerModel], ListView[SignerModel]):
     """Signer Table View."""
 
     model = SignerModel
@@ -142,7 +142,7 @@ class SignedMessagesListView(SignerContextMixin, ListView[SignedMessageModel]):
     template_name = 'signer/signed_messages.html'
     context_object_name = 'signed_messages'
 
-    def get_queryset(self) -> QuerySet[SignedMessageModel, SignedMessageModel]:
+    def get_queryset(self) -> QuerySet[SignedMessageModel]:
         """Gets the required and filtered QuerySet.
 
         Returns:
@@ -166,11 +166,11 @@ class SignedMessagesListView(SignerContextMixin, ListView[SignedMessageModel]):
         return context
 
 
-class SignerBulkDeleteConfirmView(SignerContextMixin, BulkDeleteView):
+class SignerBulkDeleteConfirmView(SignerContextMixin, BulkDeleteView):  # type: ignore[misc]
     """View to confirm the deletion of multiple Signers."""
 
     model = SignerModel
-    success_url = reverse_lazy('signer:signer_list')
+    success_url = reverse_lazy('signer:signer_list')  # type: ignore[assignment]
     ignore_url = reverse_lazy('signer:signer_list')
     template_name = 'signer/confirm_delete.html'
     context_object_name = 'signers'

@@ -9,18 +9,17 @@
     </div>
 
     <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; max-height: 90%;">
-        <div class="table-responsive">
-            <table class="table table-borderless table-hover align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th id="checkbox-column"><input type="checkbox"/></th>
-                        <th class="fw-bold">{% trans "Signer Name" %}</th>
-                        <th class="fw-bold">{% trans "Signature Suite" %}</th>
-                        <th class="fw-bold">{% trans "Created at" %}</th>
-                        <th class="fw-bold">{% trans "Expires on" %}</th>
-                        <th class="fw-bold">{% trans "Signing Log" %}</th>
-                    </tr>
-                </thead>
+        <table class="table">
+            <thead>
+            <tr>
+                <th id="checkbox-column"><input type="checkbox"/></th>
+                <th>{% trans "Signer Name" %}</th>
+                <th>{% trans "Signature Suite" %}</th>
+                <th>{% trans "Created at" %}</th>
+                <th>{% trans "Expires on" %}</th>
+                <th>{% trans "Signing Log" %}</th>
+            </tr>
+            </thead>
                 <tbody>
                 {% for signer in page_obj %}
                     <tr>
@@ -46,14 +45,11 @@
                     <tr>
                         <td colspan="6" class="text-center">{% trans "No signers found" %}</td>
                     </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
+            {% endfor %}
+            </tbody>
+        </table>
 
-        {% if page_obj.has_other_pages %}
-            {% include 'trustpoint/pagination.html' %}
-        {% endif %}
+        {% include 'trustpoint/pagination.html' %}
     </div>
 
     <div class="card-footer d-flex justify-content-between tp-sticky-footer">

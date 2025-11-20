@@ -1,6 +1,6 @@
 """Contains Logic for Form on Add/Edit Signer Page."""
 
-from typing import NoReturn, cast
+from typing import Any, NoReturn, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 from management.models import KeyStorageConfig
 from pki.models.certificate import CertificateModel
-from signer.models import SignerModel
+from trustpoint.logger import LoggerMixin
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -20,7 +20,7 @@ from trustpoint_core.serializer import (
 )
 from util.field import UniqueNameValidator, get_certificate_name
 
-from trustpoint.logger import LoggerMixin
+from signer.models import SignerModel
 
 
 def get_private_key_location_from_config() -> PrivateKeyLocation:
@@ -97,11 +97,18 @@ class SignerAddFileImportPkcs12Form(LoggerMixin, forms.Form):
     def clean(self) -> None:
         """Cleans and validates the entire form."""
         cleaned_data = super().clean()
-        if not cleaned_data:  # only for typing, cleaned_data should always be a dict, but not entirely sure
-            exc_msg = 'No data was provided.'
-            raise ValidationError(exc_msg)
-        unique_name = cleaned_data.get('unique_name')
+        if not cleaned_data:
+            self._raise_validation_error('No data was provided.')
 
+        pkcs12_raw, pkcs12_password = self._validate_pkcs12_file(cleaned_data)
+        credential_serializer = self._process_pkcs12_file(pkcs12_raw, pkcs12_password, cleaned_data.get('unique_name'))
+        if credential_serializer.certificate is None:
+            self._raise_validation_error('No certificate found in PKCS#12 file.')
+        self._validate_certificate(credential_serializer.certificate)
+        self._save_signer(cleaned_data, credential_serializer)
+
+    def _validate_pkcs12_file(self, cleaned_data: dict[str, Any]) -> tuple[bytes, bytes | None]:
+        """Validates and reads the PKCS#12 file."""
         pkcs12_file = cleaned_data.get('pkcs12_file')
         if pkcs12_file is None:
             self._raise_validation_error('PKCS#12 file is required.')
@@ -109,42 +116,38 @@ class SignerAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         try:
             pkcs12_raw = pkcs12_file.read()
             pkcs12_password = cleaned_data.get('pkcs12_password')
-        except (OSError, AttributeError) as original_exception:
-            # These exceptions are likely to occur if the file cannot be read or is missing attributes.
-            error_message = _(
-                'Unexpected error occurred while trying to get file contents. Please see logs for further details.'
-            )
-            raise ValidationError(error_message, code='unexpected-error') from original_exception
-
-        if pkcs12_password:
-            try:
+            if pkcs12_password:
                 pkcs12_password = pkcs12_password.encode()
-            except Exception as original_exception:
-                error_message = _('The PKCS#12 password contains invalid data, that cannot be encoded in UTF-8.')
-                raise ValidationError(error_message) from original_exception
-        else:
-            pkcs12_password = None
+        except (OSError, AttributeError, UnicodeEncodeError) as e:
+            raise ValidationError(_('Error reading PKCS#12 file or password.')) from e
 
+        return pkcs12_raw, pkcs12_password
+
+    def _process_pkcs12_file(
+        self,
+        pkcs12_raw: bytes,
+        pkcs12_password: bytes | None,
+        unique_name: str | None
+    ) -> CredentialSerializer:
+        """Processes the PKCS#12 file and returns a credential serializer."""
         try:
             credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
             if credential_serializer.private_key is None:
                 self._raise_validation_error('Private key is missing from credential serializer.')
 
-            # Determine the appropriate private key location based on system configuration
             private_key_location = get_private_key_location_from_config()
-
-            credential_serializer.private_key_reference = (
-                PrivateKeyReference.from_private_key(
-                    private_key=credential_serializer.private_key,
-                    key_label=unique_name,
-                    location=private_key_location
-                )
+            credential_serializer.private_key_reference = PrivateKeyReference.from_private_key(
+                private_key=credential_serializer.private_key,
+                key_label=unique_name,
+                location=private_key_location,
             )
-        except Exception as exception:
-            err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
-            raise ValidationError(err_msg) from exception
+        except Exception as e:
+            raise ValidationError(_('Failed to parse PKCS#12 file.')) from e
 
-        cert_crypto = credential_serializer.certificate
+        return credential_serializer
+
+    def _validate_certificate(self, cert_crypto: x509.Certificate) -> None:
+        """Validates the certificate for required extensions."""
         if cert_crypto is None:
             self._raise_validation_error('Certificate is missing from credential serializer.')
 
@@ -159,19 +162,20 @@ class SignerAddFileImportPkcs12Form(LoggerMixin, forms.Form):
                 'The provided certificate does not have a KeyUsage extension and cannot be used for signing.'
             )
 
+    def _save_signer(self, cleaned_data: dict[str, Any], credential_serializer: CredentialSerializer) -> None:
+        """Saves the signer to the database."""
+        if credential_serializer.certificate is None:
+            self._raise_validation_error('Certificate is missing from credential serializer.')
+        unique_name = cleaned_data.get('unique_name') or get_certificate_name(credential_serializer.certificate)
+
+        if SignerModel.objects.filter(unique_name=unique_name).exists():
+            self._raise_validation_error('Unique name is already taken. Choose another one.')
+
         try:
-            if not unique_name:
-                unique_name = get_certificate_name(cert_crypto)
-
-            if SignerModel.objects.filter(unique_name=unique_name).exists():
-                self._raise_validation_error('Unique name is already taken. Choose another one.')
-
             SignerModel.create_new_signer(
                 unique_name=unique_name,
                 credential_serializer=credential_serializer,
             )
-        except ValidationError:
-            raise
         except Exception:  # noqa: BLE001
             self._raise_validation_error('Failed to process the Signer. Please see logs for further details.')
 
@@ -303,62 +307,66 @@ class SignerAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             cleaned_data = super().clean()
             if not cleaned_data:
                 return
-            unique_name = cleaned_data.get('unique_name')
-            private_key_serializer = cleaned_data.get('private_key_file')
-            signer_certificate_serializer = cleaned_data.get('signer_certificate')
-            signer_certificate_chain_serializer = (
-                cleaned_data.get('signer_certificate_chain') if cleaned_data.get('signer_certificate_chain') else None
-            )
 
-            if not private_key_serializer or not signer_certificate_serializer:
-                return
-
-            credential_serializer = CredentialSerializer.from_serializers(
-                private_key_serializer=private_key_serializer,
-                certificate_serializer=signer_certificate_serializer,
-                certificate_collection_serializer=signer_certificate_chain_serializer,
-            )
-
-            pk = credential_serializer.private_key
-            cert = credential_serializer.certificate
-            if cert is None:
-                self._raise_validation_error('Certificate is missing from credential serializer.')
-                return
-            if pk is None:
-                self._raise_validation_error('Private key is missing from credential serializer.')
-                return
-            if pk.public_key() != cert.public_key():
-                self._raise_validation_error('The provided private key does not match the Signer certificate.')
-
-            if credential_serializer and credential_serializer.private_key is None:
-                self._raise_validation_error('Private key is missing from credential serializer.')
-
-            private_key_location = get_private_key_location_from_config()
-
-            credential_serializer.private_key_reference = (
-                PrivateKeyReference.from_private_key(
-                    private_key=pk,
-                    key_label=unique_name,
-                    location=private_key_location
-                )
-            )
-
-            if not unique_name:
-                unique_name = get_certificate_name(cert)
-
-            if SignerModel.objects.filter(unique_name=unique_name).exists():
-                error_message = 'Unique name is already taken. Choose another one.'
-                self._raise_validation_error(error_message)
-
-            SignerModel.create_new_signer(
-                unique_name=unique_name,
-                credential_serializer=credential_serializer,
-            )
+            self._validate_required_fields(cleaned_data)
+            credential_serializer = self._create_credential_serializer(cleaned_data)
+            self._validate_credential_serializer(credential_serializer)
+            self._save_signer(cleaned_data, credential_serializer)
         except ValidationError:
             raise
         except Exception as exception:
             err_msg = str(exception)
             raise ValidationError(err_msg) from exception
+
+    def _validate_required_fields(self, cleaned_data: dict[str, Any]) -> None:
+        """Validates required fields."""
+        if not cleaned_data.get('private_key_file') or not cleaned_data.get('signer_certificate'):
+            return
+
+    def _create_credential_serializer(self, cleaned_data: dict[str, Any]) -> CredentialSerializer:
+        """Creates a credential serializer from the cleaned data."""
+        private_key_serializer = cleaned_data.get('private_key_file')
+        signer_certificate_serializer = cleaned_data.get('signer_certificate')
+        signer_certificate_chain_serializer = cleaned_data.get('signer_certificate_chain')
+
+        return CredentialSerializer.from_serializers(
+            private_key_serializer=private_key_serializer,
+            certificate_serializer=signer_certificate_serializer,
+            certificate_collection_serializer=signer_certificate_chain_serializer,
+        )
+
+    def _validate_credential_serializer(self, credential_serializer: CredentialSerializer) -> None:
+        """Validates the credential serializer."""
+        pk = credential_serializer.private_key
+        cert = credential_serializer.certificate
+
+        if cert is None:
+            self._raise_validation_error('Certificate is missing from credential serializer.')
+        if pk is None:
+            self._raise_validation_error('Private key is missing from credential serializer.')
+        if pk.public_key() != cert.public_key():  # type: ignore[union-attr]
+            self._raise_validation_error('The provided private key does not match the Signer certificate.')
+
+        private_key_location = get_private_key_location_from_config()
+        credential_serializer.private_key_reference = PrivateKeyReference.from_private_key(
+            private_key=pk,  # type: ignore[arg-type]
+            key_label=None,
+            location=private_key_location,
+        )
+
+    def _save_signer(self, cleaned_data: dict[str, Any], credential_serializer: CredentialSerializer) -> None:
+        """Saves the signer to the database."""
+        if credential_serializer.certificate is None:
+            self._raise_validation_error('Certificate is missing from credential serializer.')
+        unique_name = cleaned_data.get('unique_name') or get_certificate_name(credential_serializer.certificate)  # type: ignore[arg-type]
+
+        if SignerModel.objects.filter(unique_name=unique_name).exists():
+            self._raise_validation_error('Unique name is already taken. Choose another one.')
+
+        SignerModel.create_new_signer(
+            unique_name=unique_name,
+            credential_serializer=credential_serializer,
+        )
 
 
 class SignHashForm(LoggerMixin, forms.Form):
@@ -379,9 +387,9 @@ class SignHashForm(LoggerMixin, forms.Form):
         help_text=_('Paste the hash value (hexadecimal format, e.g., a1b2c3d4...)'),
     )
 
-    def clean(self) -> dict[str, any]:
+    def clean(self) -> dict[str, Any]:
         """Validate the hash value format based on the selected signer's hash algorithm."""
-        cleaned_data = super().clean()
+        cleaned_data = cast('dict[str, Any]', super().clean())
         signer = cleaned_data.get('signer')
         hash_value = cleaned_data.get('hash_value', '').strip()
 
