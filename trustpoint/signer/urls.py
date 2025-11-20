@@ -41,6 +41,10 @@ urlpatterns = [
         name='signer-delete_confirm',
     ),
 
+    # Sign hash view
+    path('sign-hash/', views.SignHashView.as_view(), name='sign_hash'),
+    path('sign-hash/success/', views.SignHashSuccessView.as_view(), name='sign_hash_success'),
+
     # API endpoint for signing
     path('api/sign/', views.SignHashAPIView.as_view(), name='sign_hash_api'),
 ]

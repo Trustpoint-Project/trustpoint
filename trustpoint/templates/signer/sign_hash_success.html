@@ -1,0 +1,70 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block head %}
+    <script src="{% static 'js/copy_clipboard.js' %}"></script>
+{% endblock head %}
+
+{% block content %}
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h1>{% trans 'Signature Result' %}</h1>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-success" role="alert">
+                <strong>{% trans 'Success!' %}</strong>
+                {% trans 'The hash has been successfully signed.' %}
+            </div>
+
+            <h3>{% trans 'Signature Details' %}</h3>
+            <hr class="hr-m">
+
+            <div class="tp-kvp-list">
+                <div>
+                    <div><strong>{% trans 'Signer' %}</strong></div>
+                    <div>{{ signer_name }}</div>
+                </div>
+                <div>
+                    <div><strong>{% trans 'Hash Algorithm' %}</strong></div>
+                    <div>{{ hash_algorithm }}</div>
+                </div>
+                <div>
+                    <div><strong>{% trans 'Hash Value' %}</strong></div>
+                    <div class="font-monospace text-break">{{ hash_value }}</div>
+                </div>
+            </div>
+
+            <h3 class="mt-4">{% trans 'Signature' %}</h3>
+            <hr class="hr-m">
+
+            <ul class="tp-kvp-list">
+                <li>
+                    <div class="row-key-container">{% trans 'Signature (Hexadecimal)' %}</div>
+                    <div class="copy-container" style="position: relative;">
+                        <code class="command-text language-bash" style="padding: 0;">
+                            {{ signature }}
+                        </code>
+                        <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
+                            aria-label="Copy to clipboard">
+                            <svg class="icon icon-copy" width="40" height="40" fill="currentColor">
+                                <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
+                            </svg>
+                        </button>
+                    </div>
+                </li>
+            </ul>
+        </div>
+        <div class="card-footer d-flex">
+            <div class="tp-card-btn-footer m-1">
+                <a href="{% url 'signer:signer_list' %}" class="btn btn-secondary">{% trans 'Back to Signers' %}</a>
+            </div>
+            <div class="tp-card-btn-footer m-1">
+                <a href="{% url 'signer:sign_hash' %}" class="btn btn-primary">{% trans 'Sign Another Hash' %}</a>
+            </div>
+        </div>
+    </div>
+
+{% endblock content %}

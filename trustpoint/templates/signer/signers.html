@@ -13,18 +13,20 @@
             <table class="table table-borderless table-hover align-middle mb-0">
                 <thead>
                     <tr>
+                        <th id="checkbox-column"><input type="checkbox"/></th>
                         <th class="fw-bold">{% trans "Signer Name" %}</th>
                         <th class="fw-bold">{% trans "Signature Suite" %}</th>
                         <th class="fw-bold">{% trans "Created at" %}</th>
                         <th class="fw-bold">{% trans "Expires on" %}</th>
-                        <th class="fw-bold">{% trans "Configure" %}</th>
                         <th class="fw-bold">{% trans "Signing Log" %}</th>
-                        <th class="fw-bold">{% trans "Delete" %}</th>
                     </tr>
                 </thead>
                 <tbody>
                 {% for signer in page_obj %}
                     <tr>
+                        <td class="row_checkbox">
+                            <input type="checkbox" name="row_checkbox" value="{{ signer.pk }}" class="signer-checkbox"/>
+                        </td>
                         <td>
                             <a href="{% url 'signer:signer-config' signer.pk %}" class="text-decoration-none">
                                 {{ signer.unique_name }}
@@ -32,27 +34,17 @@
                         </td>
                         <td>{{ signer.credential.certificate.signature_suite }}</td>
                         <td>{{ signer.created_at|date:"N j, Y, g:i a" }}</td>
-                        <td>{{ signer.credential.certificate.not_valid_after_utc|date:"N j, Y, g:i a" }}</td>
-                        <td>
-                            <a href="{% url 'signer:signer-config' signer.pk %}"
-                               class="btn btn-sm btn-primary">
-                               {% trans "Configure" %}
-                            </a>
-                        </td>
+                        <td>{{ signer.credential.certificate.not_valid_after|date:"N j, Y, g:i a" }}</td>
                         <td>
                             <a href="{% url 'signer:signer-signed_messages' signer.pk %}"
-                               class="btn btn-sm btn-info">
+                               class="btn btn-sm btn-primary">
                                {% trans "Signing Log" %}
                             </a>
-                        </td>
-                        <td>
-                            <input type="checkbox" name="selected_items" value="{{ signer.pk }}" 
-                                   class="form-check-input signer-checkbox">
                         </td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="7" class="text-center">{% trans "No signers found" %}</td>
+                        <td colspan="6" class="text-center">{% trans "No signers found" %}</td>
                     </tr>
                 {% endfor %}
                 </tbody>
@@ -71,7 +63,8 @@
             </button>
         </div>
         <div class="m-1">
-            <a href="{% url 'signer:signer-add-method_select' %}" class="btn btn-primary me-2">{% trans "Add New Signer" %}</a>
+            <a href="{% url 'signer:sign_hash' %}" class="btn btn-primary">{% trans "Sign Hash" %}</a>
+            <a href="{% url 'signer:signer-add-method_select' %}" class="btn btn-primary">{% trans "Add New Signer" %}</a>
         </div>
     </div>
 </div>

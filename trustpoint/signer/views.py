@@ -6,11 +6,12 @@ from typing import Any
 from Auth.models import UserToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError, QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -24,6 +25,7 @@ from signer.forms import (
     SignerAddFileImportSeparateFilesForm,
     SignerAddFileTypeSelectForm,
     SignerAddMethodSelectForm,
+    SignHashForm,
 )
 from signer.models import SignedMessageModel, SignerModel
 
@@ -43,9 +45,9 @@ class SignerTableView(SignerContextMixin, SortableTableMixin, ListView[SignerMod
     """Signer Table View."""
 
     model = SignerModel
-    template_name = 'signer/signers.html'  # Template file
+    template_name = 'signer/signers.html'
     context_object_name = 'signers'
-    paginate_by = UIConfig.paginate_by  # Number of items per page
+    paginate_by = UIConfig.paginate_by
     default_sort_param = 'unique_name'
 
 class SignerAddMethodSelectView(SignerContextMixin, FormView[SignerAddMethodSelectForm]):
@@ -155,9 +157,7 @@ class SignedMessagesListView(SignerContextMixin, ListView[SignedMessageModel]):
         """
         signer = get_object_or_404(SignerModel, pk=self.kwargs['pk'])
 
-        return SignedMessageModel.objects.filter(
-            signer_public_bytes=signer.credential.certificate.subject_public_bytes
-        )
+        return SignedMessageModel.objects.filter(signer=signer).order_by('-created_at')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the signer model object to the context.
@@ -201,6 +201,107 @@ class SignerBulkDeleteConfirmView(SignerContextMixin, BulkDeleteView):
             _('Successfully deleted {count} Signer(s).').format(count=deleted_count),
         )
         return response
+
+
+class SignHashView(LoggerMixin, SignerContextMixin, FormView[SignHashForm]):
+    """View for signing a hash value with a selected signer."""
+
+    template_name = 'signer/sign_hash.html'
+    form_class = SignHashForm
+    success_url = reverse_lazy('signer:signer_list')
+
+    def form_valid(self, form: SignHashForm) -> HttpResponse:
+        """Sign the hash and display the signature."""
+        try:
+            signer = form.cleaned_data['signer']
+            hash_value = form.cleaned_data['hash_value']
+
+            # Get hash algorithm from the signer's certificate
+            hash_algorithm_name = signer.hash_algorithm
+
+            # Convert hex string to bytes
+            hash_bytes = bytes.fromhex(hash_value)
+
+            # Get the private key (works for both software and HSM keys)
+            private_key = signer.credential.get_private_key()
+
+            # Get the hash algorithm object from cryptography
+            # Convert to uppercase as hashes module uses uppercase class names (SHA256, not sha256)
+            hash_algo = getattr(hashes, hash_algorithm_name.upper())()
+
+            # Use Prehashed to indicate the data is already hashed
+            prehashed_algo = Prehashed(hash_algo)
+
+            # Sign the hash based on key type
+            if isinstance(private_key, rsa.RSAPrivateKey):
+                signature = private_key.sign(hash_bytes, padding.PKCS1v15(), prehashed_algo)
+            elif isinstance(private_key, ec.EllipticCurvePrivateKey):
+                signature = private_key.sign(hash_bytes, ec.ECDSA(prehashed_algo))
+            else:
+                messages.error(self.request, _('Unsupported key algorithm.'))
+                return self.form_invalid(form)
+
+            signature_hex = signature.hex()
+
+            SignedMessageModel.objects.create(
+                signer=signer,
+                signer_public_bytes=signer.credential.certificate.get_certificate_serializer().as_pem().decode(),
+                hash_value=hash_value,
+                signature=signature_hex
+            )
+
+            messages.success(
+                self.request,
+                _('Hash successfully signed with signer "{signer_name}".').format(signer_name=signer.unique_name)
+            )
+
+            self.request.session['last_signature'] = {
+                'signer_name': signer.unique_name,
+                'hash_algorithm': hash_algorithm_name,
+                'hash_value': hash_value,
+                'signature': signature_hex,
+            }
+
+            return HttpResponseRedirect(reverse_lazy('signer:sign_hash_success'))
+
+        except Exception as e:
+            self.logger.exception('Failed to sign hash')
+            messages.error(
+                self.request,
+                _('Failed to sign hash: {error}').format(error=str(e))
+            )
+            return self.form_invalid(form)
+
+
+class SignHashSuccessView(SignerContextMixin, View):
+    """View to display the signature result."""
+
+    template_name = 'signer/sign_hash_success.html'
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Display the signature result.
+
+        Args:
+            request: The HTTP request.
+
+        Returns:
+            HttpResponse with the signature result.
+        """
+        signature_data = request.session.pop('last_signature', None)
+
+        if not signature_data:
+            messages.warning(request, _('No signature data available.'))
+            return HttpResponseRedirect(reverse_lazy('signer:sign_hash'))
+
+        context = self.get_context_data()
+        context.update(signature_data)
+        return render(request, self.template_name, context)
+
+    def get_context_data(self) -> dict[str, Any]:
+        """Get context data for the view."""
+        context = super().get_context_data() if hasattr(super(), 'get_context_data') else {}  # type: ignore[misc]
+        context['context_page_category'] = 'signer'
+        return context
 
 
 @method_decorator(csrf_exempt, name='dispatch')

@@ -9,9 +9,9 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
-from management.models import PKCS11Token
+from management.models import KeyStorageConfig, PKCS11Token
 from management.pkcs11_util import Pkcs11AESKey, Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
-from trustpoint.logger import LoggerMixin
+from pki.models import CertificateModel
 from trustpoint_core import oid
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
@@ -24,7 +24,7 @@ from util.db import CustomDeleteActionModel
 from util.encrypted_fields import EncryptedCharField
 from util.field import UniqueNameValidator
 
-from pki.models import CertificateModel
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -483,6 +483,16 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     @classmethod
     def _handle_hsm_key(cls, normalized_credential_serializer: CredentialSerializer) -> PKCS11Key:
         """Handles the creation or import of a private key in an HSM (Hardware Security Module)."""
+        try:
+            storage_config = KeyStorageConfig.get_config()
+            if storage_config.storage_type == KeyStorageConfig.StorageType.SOFTWARE:
+                msg = (
+                    'HSM private key location specified but KeyStorageConfig is set to SOFTWARE. '
+                )
+                raise ValueError(msg)
+        except KeyStorageConfig.DoesNotExist:
+            cls.logger.warning('KeyStorageConfig does not exist, proceeding with HSM operation')
+        
         token_config = PKCS11Token.objects.first()
         if not token_config:
             msg = 'No PKCS#11 token config stored'

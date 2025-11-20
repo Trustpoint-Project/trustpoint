@@ -53,6 +53,11 @@ class SignerModel(CustomDeleteActionModel):
         """The public key info for the CA certificate's public key."""
         return self.signature_suite.public_key_info
 
+    @property
+    def hash_algorithm(self) -> str:
+        """Returns the hash algorithm name used by this signer's certificate."""
+        return self.credential.hash_algorithm.name
+
     @classmethod
     def create_new_signer(
         cls,

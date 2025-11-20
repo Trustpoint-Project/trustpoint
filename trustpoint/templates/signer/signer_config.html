@@ -84,23 +84,23 @@
                     </div>
                     <div>
                         <div>{% trans 'Public Key Algorithm' %}</div>
-                        <div>{{ signer.credential.certificate.public_key_algorithm }}</div>
+                        <div>{{ signer.credential.certificate.spki_algorithm }}</div>
                     </div>
                     <div>
                         <div>{% trans 'Public Key Size' %}</div>
-                        <div>{{ signer.credential.certificate.public_key_size }} bits</div>
+                        <div>{{ signer.credential.certificate.spki_key_size }} bits</div>
                     </div>
                     <div>
-                        <div>{% trans 'Signature Hash Algorithm' %}</div>
-                        <div>{{ signer.credential.certificate.signature_hash_algorithm }}</div>
+                        <div>{% trans 'Signature Algorithm' %}</div>
+                        <div>{{ signer.credential.certificate.signature_algorithm }}</div>
                     </div>
                     <div>
                         <div>{% trans 'Valid From' %}</div>
-                        <div>{{ signer.credential.certificate.not_valid_before_utc }}</div>
+                        <div>{{ signer.credential.certificate.not_valid_before }}</div>
                     </div>
                     <div>
                         <div>{% trans 'Valid Until' %}</div>
-                        <div>{{ signer.credential.certificate.not_valid_after_utc }}</div>
+                        <div>{{ signer.credential.certificate.not_valid_after }}</div>
                     </div>
                 </div>
 
@@ -120,12 +120,11 @@
 
         <div class="card-footer d-flex justify-content-between align-items-center">
             <div class="tp-card-btn-footer m-1">
-                <a href="{% url 'signer:signer_list' %}" class="btn btn-secondary">{% trans '← Back to Signer List' %}</a>
+                <a href="{% url 'signer:signer_list' %}" class="btn btn-secondary">{% trans 'Back to Signer List' %}</a>
             </div>
             <div class="tp-card-btn-footer m-1">
                 <a href="{% url 'signer:signer-delete_confirm' pks=signer.id|stringformat:'s/' %}"
-                   class="btn btn-danger"
-                   onclick="return confirm('{% trans 'Are you sure you want to delete this signer?' %}');">
+                   class="btn btn-danger">
                     {% trans 'Delete Signer' %}
                 </a>
             </div>
