@@ -209,23 +209,16 @@ class SignHashView(LoggerMixin, SignerContextMixin, FormView[SignHashForm]):
             signer = form.cleaned_data['signer']
             hash_value = form.cleaned_data['hash_value']
 
-            # Get hash algorithm from the signer's certificate
             hash_algorithm_name = signer.hash_algorithm
 
-            # Convert hex string to bytes
             hash_bytes = bytes.fromhex(hash_value)
 
-            # Get the private key (works for both software and HSM keys)
             private_key = signer.credential.get_private_key()
 
-            # Get the hash algorithm object from cryptography
-            # Convert to uppercase as hashes module uses uppercase class names (SHA256, not sha256)
             hash_algo = getattr(hashes, hash_algorithm_name.upper())()
 
-            # Use Prehashed to indicate the data is already hashed
             prehashed_algo = Prehashed(hash_algo)
 
-            # Sign the hash based on key type
             if isinstance(private_key, rsa.RSAPrivateKey):
                 signature = private_key.sign(hash_bytes, padding.PKCS1v15(), prehashed_algo)
             elif isinstance(private_key, ec.EllipticCurvePrivateKey):
