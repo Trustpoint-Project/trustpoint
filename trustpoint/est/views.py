@@ -71,26 +71,28 @@ class EstRequestedDomainExtractorMixin:
             return requested_domain, None
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class EstSimpleEnrollmentView(LoggerMixin, View):
-    """Handles simple EST (Enrollment over Secure Transport) enrollment requests.
+class EstSimpleEnrollmentMixin(LoggerMixin):
+    """Mixin providing common logic for EST simple enrollment operations."""
 
-    This view processes certificate signing requests (CSRs), authenticates the client using
-    either Mutual TLS or username/password, validates the device, and issues the requested certificate
-    based on the certificate template specified in the request.
-    """
+    def process_enrollment(
+        self,
+        request: HttpRequest,
+        domain_name: str | None,
+        cert_profile: str | None,
+    ) -> LoggedHttpResponse:
+        """Process an EST simple enrollment request.
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
-        """Handle POST requests for simple enrollment."""
+        Args:
+            request: The HTTP request object.
+            domain_name: The domain name (can be None for default).
+            cert_profile: The certificate profile name (can be None for default).
+
+        Returns:
+            LoggedHttpResponse with the enrollment result.
+        """
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
-        del args
 
-        # TODO: This should really be done by the message parser,
-        # it also needs to handle the case where one or both are omitted
         try:
-            domain_name = cast('str', kwargs.get('domain'))
-            cert_profile = cast('str', kwargs.get('certtemplate'))
-
             ctx = RequestContext(
                 raw_message=request,
                 protocol='est',
@@ -133,6 +135,35 @@ class EstSimpleEnrollmentView(LoggerMixin, View):
             status=ctx.http_response_status,
             content_type=ctx.http_response_content_type
         )
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class EstSimpleEnrollmentView(EstSimpleEnrollmentMixin, View):
+    """Handles simple EST (Enrollment over Secure Transport) enrollment requests."""
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
+        """Handle POST requests for simple enrollment with domain and cert profile in URL."""
+        del args
+
+        domain_name = cast('str', kwargs.get('domain'))
+        cert_profile = cast('str', kwargs.get('certtemplate'))
+
+        return self.process_enrollment(request, domain_name, cert_profile)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class EstSimpleEnrollmentDefaultView(EstSimpleEnrollmentMixin, View):
+    """Handles simple EST enrollment requests without requiring domain or cert profile in URL."""
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
+        """Handle POST requests for simple enrollment with optional domain/cert profile."""
+        del args
+        del kwargs
+
+        domain_name = 'arburg'
+        cert_profile = 'tls_client'
+
+        return self.process_enrollment(request, domain_name, cert_profile)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
