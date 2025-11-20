@@ -61,7 +61,6 @@ schema_view = get_schema_view(
 urlpatterns += [
     path('users/', include('users.urls')),
     path('signer/', include('signer.urls')),
-path('Auth/', include('Auth.urls')),
     path('setup-wizard/', include('setup_wizard.urls')),
     path('pki/', include('pki.urls')),
     # TODO(Air): Move CRL to REST API endpoint

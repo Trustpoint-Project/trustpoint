@@ -80,7 +80,6 @@ PUBLIC_PATHS = [
     '/.well-known/est',
     '/aoki',
     '/crl',
-    '/signer/api/sign',
 ]
 
 # ------------- Functions --------------
