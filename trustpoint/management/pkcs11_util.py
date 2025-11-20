@@ -793,12 +793,13 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
             _raise_unsupported_padding()
 
         if isinstance(algorithm, Prehashed):
-            msg = 'Prehashed digests not supported.'
-            raise TypeError(msg)
-
-        digest = hashes.Hash(algorithm)
-        digest.update(data)
-        digest_bytes = digest.finalize()
+            # Data is already hashed, sign directly
+            digest_bytes = bytes(data)
+        else:
+            # Hash the data first
+            digest = hashes.Hash(algorithm)
+            digest.update(data)
+            digest_bytes = digest.finalize()
 
         return self._key.sign(digest_bytes, mechanism=Mechanism.RSA_PKCS)
 
@@ -1094,12 +1095,13 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             raise NotImplementedError(msg)
 
         if isinstance(signature_algorithm.algorithm, Prehashed):
-            msg = 'Prehashed not supported.'
-            self._raise_value_error(msg)
-
-        digest = hashes.Hash(signature_algorithm.algorithm)
-        digest.update(data)
-        hashed = digest.finalize()
+            # Data is already hashed, sign directly
+            hashed = bytes(data)
+        else:
+            # Hash the data first
+            digest = hashes.Hash(signature_algorithm.algorithm)
+            digest.update(data)
+            hashed = digest.finalize()
 
         if self._key is None:
             msg = 'EC private key is not loaded.'

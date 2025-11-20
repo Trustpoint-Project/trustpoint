@@ -80,7 +80,7 @@ class SortableTableMixin[T: models.Model]:
 
     default_sort_param: str
     request: HttpRequest
-    model: T
+    model: type[T]
 
     def get_queryset(self) -> models.QuerySet[Any]:
         if hasattr(self, 'queryset') and self.queryset is not None:
