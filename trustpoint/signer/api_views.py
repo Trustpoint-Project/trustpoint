@@ -87,7 +87,6 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
 
             signed_message = SignedMessageModel.objects.create(
                 signer=signer,
-                signer_public_bytes=signer.credential.certificate.get_certificate_serializer().as_pem().decode(),
                 hash_value=hash_value,
                 signature=signature_hex
             )

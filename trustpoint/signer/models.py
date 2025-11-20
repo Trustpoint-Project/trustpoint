@@ -79,7 +79,6 @@ class SignerModel(CustomDeleteActionModel):
 class SignedMessageModel(models.Model):
     """Model to store signed messages, its signature and certificate(with public key)."""
     signer = models.ForeignKey(SignerModel, on_delete=models.CASCADE, related_name='signed_messages')
-    signer_public_bytes = models.CharField(verbose_name=_('Signer Public Bytes'), max_length=2048, editable=False)
     hash_value = models.CharField(max_length=256)
     signature = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
