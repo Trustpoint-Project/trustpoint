@@ -66,14 +66,7 @@ def generate_private_key(algorithm_oid_str: str, curve_name: str | None, key_siz
 
 
 def load_private_key_object(pem_str: str) -> PrivateKey:
-    """This function loads a private key from PEM format.
-
-    Args:
-        pem_str: Private key in pem format.
-
-    Returns: Returns a PrivateKey object.
-
-    """
+    """This function loads a private key from PEM format."""
     private_keyabc = load_pem_private_key(pem_str.encode('utf-8'), password=None)
     if isinstance(private_keyabc, get_args(PrivateKey)):
         return private_keyabc

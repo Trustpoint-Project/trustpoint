@@ -1,8 +1,7 @@
 """Contains Routes of URls for Signer App at App level."""
 
 from django.urls import path, re_path
-
-from . import views
+from signer import views
 
 app_name = 'signer'
 
@@ -46,5 +45,5 @@ urlpatterns = [
     path('sign-hash/success/', views.SignHashSuccessView.as_view(), name='sign_hash_success'),
 
     # API endpoint for signing
-    path('api/sign/', views.SignHashAPIView.as_view(), name='sign_hash_api'),
+    # path('api/sign/', views.SignHashAPIView.as_view(), name='sign_hash_api'),  # noqa: ERA001
 ]

@@ -1,7 +1,6 @@
 """Contains Models For Signers App."""
 
 
-from typing import TYPE_CHECKING
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -9,9 +8,6 @@ from pki.models.credential import CredentialModel
 from trustpoint_core import oid
 from trustpoint_core.serializer import CredentialSerializer
 from util.db import CustomDeleteActionModel
-
-if TYPE_CHECKING:
-    from django.db.models.query import QuerySet
 
 
 class SignerModel(CustomDeleteActionModel):

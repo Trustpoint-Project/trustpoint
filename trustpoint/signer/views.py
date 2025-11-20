@@ -1,23 +1,18 @@
 """Contains all the views of Signer App."""
 
-import json
 from typing import Any
 
-from Auth.models import UserToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError, QuerySet
-from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse_lazy
-from django.utils import timezone
-from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.views import View
-from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import DetailView, ListView
 from django.views.generic.edit import FormView
 from signer.forms import (
@@ -32,8 +27,6 @@ from signer.models import SignedMessageModel, SignerModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import BulkDeleteView, ContextDataMixin, SortableTableMixin
-
-from .util.keygen import load_private_key_object
 
 
 class SignerContextMixin(ContextDataMixin):
@@ -297,60 +290,10 @@ class SignHashSuccessView(SignerContextMixin, View):
         context.update(signature_data)
         return render(request, self.template_name, context)
 
-    def get_context_data(self) -> dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[Any, Any]:
         """Get context data for the view."""
-        context = super().get_context_data() if hasattr(super(), 'get_context_data') else {}  # type: ignore[misc]
+        del kwargs
+        context = super().get_context_data() if hasattr(super(), 'get_context_data') else {}
         context['context_page_category'] = 'signer'
         return context
 
-
-@method_decorator(csrf_exempt, name='dispatch')
-class SignHashAPIView(View):
-    """API view for sending POST request to get Signature."""
-
-    def post(self, request: HttpRequest) -> HttpResponse:
-        """Send POST request when API is called.
-
-        Args:
-            request:POST
-
-        Returns:
-            HTTPResponse containing the signature object.
-
-        """
-        try:
-            data = json.loads(request.body)
-            signer_id = data.get('signer_id')
-            hash_hex = data.get('hash')
-            token_key = data.get('token')
-
-            if not signer_id or not hash_hex:
-                return JsonResponse({'error': 'Missing signer_id, token key or hash'}, status=400)
-
-            try:
-                user_token = UserToken.objects.get(key=token_key)
-
-            except UserToken.DoesNotExist:
-                return JsonResponse({'error': 'Invalid token'}, status=401)
-            if user_token.expires_at < timezone.now():
-                return JsonResponse({'error': 'Token expired'}, status=403)
-
-            signer = SignerModel.objects.get(pk=signer_id)
-            private_key = load_private_key_object(signer.private_key)
-            hash_bytes = bytes.fromhex(hash_hex)
-
-            if isinstance(private_key, rsa.RSAPrivateKey):  # RSA
-                signature = private_key.sign(hash_bytes, padding.PKCS1v15(), getattr(hashes, signer.hash_function)())
-            elif isinstance(private_key, ec.EllipticCurvePrivateKey):  # ECC
-                signature = private_key.sign(hash_bytes, ec.ECDSA(getattr(hashes, signer.hash_function)()))
-            else:
-                return JsonResponse({'error': 'Unsupported algorithm'}, status=400)
-
-            SignedMessageModel.objects.create(
-                signer=signer, cert_subject='API Token Auth', hash_value=hash_hex, signature=signature.hex()
-            )
-
-            return JsonResponse({'signature': signature.hex()}, status=200)
-
-        except SignerModel.DoesNotExist:
-            return JsonResponse({'error': 'Signer not found'}, status=404)

@@ -1,3 +1,2 @@
-from django.test import TestCase
-
+"""Test cases for the Signer app."""
 # Create your tests here.
