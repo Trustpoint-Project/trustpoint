@@ -27,8 +27,8 @@ def test_issue_domain_credential(device_instance_onboarding: dict[str, Any]) -> 
         'The issued_credential_type should match DOMAIN_CREDENTIAL'
     )
     assert (
-        issued_credential.issued_credential_purpose == IssuedCredentialModel.IssuedCredentialPurpose.DOMAIN_CREDENTIAL
-    ), 'The issued_credential_purpose should match DOMAIN_CREDENTIAL'
+        issued_credential.issued_using_cert_profile== 'Trustpoint Domain Credential'
+    ), 'issued_using_cert_profile should match Trustpoint Domain Credential'
 
     device.refresh_from_db()
     assert device.onboarding_config.onboarding_status == OnboardingStatus.ONBOARDED, (

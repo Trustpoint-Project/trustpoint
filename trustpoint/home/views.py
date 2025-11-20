@@ -21,8 +21,7 @@ from django.views.generic.base import RedirectView, TemplateView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
 from notifications.models import NotificationModel, NotificationStatus
-from pki.models import CertificateModel, IssuingCaModel
-
+from pki.models import CertificateModel, CertificateProfileModel, IssuingCaModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import SortableTableMixin
@@ -172,8 +171,8 @@ class NotificationDetailsView(DetailView[NotificationModel]):
         context = super().get_context_data(**kwargs)
 
         # TODO(AlexHx8472): This should be generated automatically by utilizing a migration # noqa: FIX002
-        new_status, created = NotificationStatus.objects.get_or_create(status='NEW')
-        solved_status, created = NotificationStatus.objects.get_or_create(status='SOLVED')
+        new_status, _created = NotificationStatus.objects.get_or_create(status='NEW')
+        solved_status, _created = NotificationStatus.objects.get_or_create(status='SOLVED')
 
         if new_status and new_status in self.object.statuses.all():
             self.object.statuses.remove(new_status)
@@ -640,25 +639,25 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         return cert_counts_by_domain
 
     def get_cert_counts_by_template(self, start_date: datetime) -> dict[str, Any]:
-        """Fetch certificate count grouped by template from database.
+        """Fetch certificate count grouped by profile from database.
 
         Args:
             start_date: The start date for fetching data.
 
         Returns:
-            It returns certificate count grouped by template.
+            Dict of certificate count for each certificate profile.
         """
         cert_counts_by_template = {
-            str(status): 0 for _, status in IssuedCredentialModel.IssuedCredentialPurpose.choices
+            str(status): 0 for status in CertificateProfileModel.objects.all().values_list('display_name', flat=True)
         }
         try:
             cert_template_qr = (
                 IssuedCredentialModel.objects.filter(credential__certificates__created_at__gt=start_date)
-                .values(cert_type=F('issued_credential_purpose'))
+                .values(cert_type=F('issued_using_cert_profile'))
                 .annotate(count=Count('credential__certificates'))
             )
 
-            template_mapping = {key: str(value) for key, value in IssuedCredentialModel.IssuedCredentialPurpose.choices}
+            template_mapping = {key: str(value) for key, value in cert_counts_by_template.items()}
             cert_counts_by_template = {template_mapping[item['cert_type']]: item['count'] for item in cert_template_qr}
         except Exception as exception:
             err_msg = f'Error occurred in certificate count by template query: {exception}'

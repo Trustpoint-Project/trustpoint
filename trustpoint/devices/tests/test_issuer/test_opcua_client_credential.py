@@ -36,8 +36,8 @@ def test_issue_opc_ua_client_credential(device_instance: dict[str, Any]) -> None
     assert (
         issued_credential.issued_credential_type == IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
     ), 'The issued_credential_type should be APPLICATION_CREDENTIAL'
-    assert issued_credential.issued_credential_purpose == IssuedCredentialModel.IssuedCredentialPurpose.OPCUA_CLIENT, (
-        'The issued_credential_purpose should be OPCUA_CLIENT'
+    assert issued_credential.issued_using_cert_profile == 'OPC UA Client', (
+        'The issued_using_cert_profile should be OPC UA Client'
     )
 
     db_credential = IssuedCredentialModel.objects.get(pk=issued_credential.pk)

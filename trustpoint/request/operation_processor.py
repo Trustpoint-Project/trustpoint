@@ -41,24 +41,15 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
 
     @staticmethod
     def _get_credential_type_for_template(context: RequestContext
-            ) -> tuple[IssuedCredentialModel.IssuedCredentialType, IssuedCredentialModel.IssuedCredentialPurpose]:
+            ) -> tuple[IssuedCredentialModel.IssuedCredentialType, str]:
         """Map certificate template to issued credential type."""
-        if context.cert_profile_str == 'domain_credential':
-            return (IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
-                    IssuedCredentialModel.IssuedCredentialPurpose.DOMAIN_CREDENTIAL)
+        profile_display_name = (context.certificate_profile_model.display_name
+                                or context.certificate_profile_model.unique_name)
 
-        if context.cert_profile_str == 'tls_client':
-            purpose = IssuedCredentialModel.IssuedCredentialPurpose.TLS_CLIENT
-        elif context.cert_profile_str == 'tls_server':
-            purpose = IssuedCredentialModel.IssuedCredentialPurpose.TLS_SERVER
-        elif context.cert_profile_str == 'opc_ua_client':
-            purpose = IssuedCredentialModel.IssuedCredentialPurpose.OPCUA_CLIENT
-        elif context.cert_profile_str == 'opc_ua_server':
-            purpose = IssuedCredentialModel.IssuedCredentialPurpose.OPCUA_SERVER
-        else:
-            purpose = IssuedCredentialModel.IssuedCredentialPurpose.GENERIC
+        if context.certificate_profile_model.unique_name == 'domain_credential':
+            return (IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL, profile_display_name)
 
-        return (IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL, purpose)
+        return (IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL, profile_display_name)
 
 class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
     """Operation processor for issuing certificates via a local CA."""
@@ -172,7 +163,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
         common_names = signed_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
         cn = common_names[0].value if common_names else '(no CN set)'
         common_name = cn.decode() if isinstance(cn, bytes) else cn
-        credential_type, credential_purpose = self._get_credential_type_for_template(context)
+        credential_type, cert_profile_disp_name = self._get_credential_type_for_template(context)
         saver = CredentialSaver(device=context.device, domain=context.domain)
         saver.save_keyless_credential(
             signed_cert,
@@ -182,7 +173,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
             ],
             common_name,
             credential_type,
-            credential_purpose,
+            cert_profile_disp_name,
         )
         context.issued_certificate = signed_cert
 

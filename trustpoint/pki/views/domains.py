@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.db import transaction
 from django.db.models import ProtectedError
 from django.forms import BaseModelForm
 from django.http import Http404, HttpResponse, HttpResponseRedirect
@@ -30,7 +29,6 @@ from pki.models import (
     CertificateModel,
     CertificateProfileModel,
     DevIdRegistration,
-    DomainAllowedCertificateProfileModel,
     DomainModel,
     IssuingCaModel,
 )
@@ -284,7 +282,7 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
         return cast('str', reverse_lazy('pki:domains-config', kwargs={'pk': domain.id}))
 
 
-class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView):
+class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView[DevIdRegistration, Any]):
     """View to delete a DevID Registration."""
 
     model = DevIdRegistration
@@ -298,7 +296,7 @@ class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView):
         return response
 
 
-class DevIdMethodSelectView(DomainContextMixin, FormView):
+class DevIdMethodSelectView(DomainContextMixin, FormView[DevIdAddMethodSelectForm]):
     """View to select the method to add a DevID Registration pattern."""
 
     template_name = 'pki/devid_registration/method_select.html'
