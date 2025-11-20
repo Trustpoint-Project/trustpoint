@@ -250,7 +250,6 @@ INSTALLED_APPS = [
     'cmp.apps.CmpConfig',
     'est.apps.EstConfig',
     'signer.apps.SignerConfig',
-    'Auth.apps.AuthConfig',
     'aoki.apps.AokiConfig',
     'management.apps.ManagementConfig',
     'notifications.apps.NotificationsConfig',
