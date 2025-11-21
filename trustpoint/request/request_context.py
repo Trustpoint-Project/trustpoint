@@ -48,6 +48,7 @@ class RequestContext:
     http_response_content: bytes | str | None = None
     http_response_content_type: str | None = None
 
+    # TODO: These two should be refactored into the overall Request Context
     enrollment_request: EnrollmentRequest | None = None
     event: Event | None = None
 

@@ -200,7 +200,8 @@ class TestRequestContext:
             'cert_requested_profile_validated', 'issued_certificate',
             'owner_credential', 'issuer_credential',
             'http_response_status', 'http_response_content',
-            'http_response_content_type'
+            'http_response_content_type',
+            'enrollment_request', 'event' # These two should be refactored into the overall Req Context
         ]
 
         assert len(field_names) == len(expected_fields)
