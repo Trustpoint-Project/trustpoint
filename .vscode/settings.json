@@ -2,6 +2,9 @@
     // Add user-specific settings here
 
     "behave-vsc.featuresPath": "trustpoint/features",
+    "python.analysis.extraPaths": [
+        "./trustpoint"
+    ],
 
     // Interpreter configuration for Windows
     //"python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",

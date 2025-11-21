@@ -9,6 +9,8 @@ from devices.models import DeviceModel
 from django.http import HttpRequest
 from pki.models import CertificateProfileModel, CredentialModel, DomainModel
 from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
+from workflows.events import Event
+from workflows.models import EnrollmentRequest
 
 
 @dataclass
@@ -45,6 +47,10 @@ class RequestContext:
     # consider adding http_response_headers: dict[str, str] | None = None
     http_response_content: bytes | str | None = None
     http_response_content_type: str | None = None
+
+    # TODO: These two should be refactored into the overall Request Context
+    enrollment_request: EnrollmentRequest | None = None
+    event: Event | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the context to a dictionary."""

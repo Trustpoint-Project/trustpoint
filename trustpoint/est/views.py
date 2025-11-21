@@ -3,10 +3,12 @@
 import base64
 from typing import Any, cast
 
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
+from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
 from request.authentication import EstAuthentication
 from request.authorization import EstAuthorization
@@ -16,11 +18,14 @@ from request.operation_processor import CertificateIssueProcessor
 from request.pki_message_parser import EstMessageParser
 from request.profile_validator import ProfileValidator
 from request.request_context import RequestContext
+from request.workflow_handler import WorkflowHandler
 from trustpoint.logger import LoggerMixin
+from workflows.events import Events
 
 
 class UsernamePasswordAuthenticationError(Exception):
     """Exception raised for username and password authentication failures."""
+
 
 THRESHOLD_LOGGER: int = 400
 
@@ -58,7 +63,7 @@ class EstRequestedDomainExtractorMixin:
 
     requested_domain: DomainModel | None
 
-    def extract_requested_domain(self, domain_name: str)  -> tuple[DomainModel | None, LoggedHttpResponse | None]:
+    def extract_requested_domain(self, domain_name: str) -> tuple[DomainModel | None, LoggedHttpResponse | None]:
         """Extracts the requested domain and sets the relevant certificate and signature suite.
 
         :return: The response from the parent class's dispatch method.
@@ -73,6 +78,8 @@ class EstRequestedDomainExtractorMixin:
 
 class EstSimpleEnrollmentMixin(LoggerMixin):
     """Mixin providing common logic for EST simple enrollment operations."""
+
+    EVENT = Events.est_simpleenroll
 
     def process_enrollment(
         self,
@@ -99,7 +106,9 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
                 operation='simpleenroll',
                 domain_str=domain_name,
                 cert_profile_str=cert_profile,
+                event=self.EVENT
             )
+
         except Exception:
             err_msg = 'Failed to set up request context.'
             self.logger.exception(err_msg)
@@ -121,6 +130,8 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
             est_authorizer.authorize(ctx)
 
             ProfileValidator.validate(ctx)
+
+            WorkflowHandler().handle(ctx)
 
             CertificateIssueProcessor().process_operation(ctx)
 
@@ -183,6 +194,8 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
     based on the certificate template specified in the request.
     """
 
+    EVENT = Events.est_simplereenroll
+
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
         """Handle POST requests for simple reenrollment."""
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
@@ -200,7 +213,9 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
                 operation='simplereenroll',
                 domain_str=domain_name,
                 cert_profile_str=cert_profile,
+                event=self.EVENT
             )
+
         except Exception:
             err_msg = 'Failed to set up request context.'
             self.logger.exception(err_msg)
@@ -222,6 +237,8 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
             est_authorizer.authorize(ctx)
 
             ProfileValidator.validate(ctx)
+
+            WorkflowHandler().handle(ctx)
 
             CertificateIssueProcessor().process_operation(ctx)
 
@@ -270,13 +287,13 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
                 pkcs7_certs = ca_credential_serializer.get_full_chain_as_serializer().as_pkcs7_der()
                 b64_pkcs7 = base64.b64encode(pkcs7_certs).decode()
 
-                formatted_b64_pkcs7 = '\n'.join([b64_pkcs7[i:i + 64] for i in range(0, len(b64_pkcs7), 64)])
+                formatted_b64_pkcs7 = '\n'.join([b64_pkcs7[i : i + 64] for i in range(0, len(b64_pkcs7), 64)])
 
                 http_response = LoggedHttpResponse(
                     formatted_b64_pkcs7.encode(),
                     status=200,
                     content_type='application/pkcs7-mime',
-                    headers={'Content-Transfer-Encoding': 'base64'}
+                    headers={'Content-Transfer-Encoding': 'base64'},
                 )
 
                 if 'Vary' in http_response:
@@ -288,9 +305,7 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
                 http_response = LoggedHttpResponse('Something went wrong during EST getcacerts.', status=500)
 
         except Exception as e:  # noqa:BLE001
-            return LoggedHttpResponse(
-                f'Error retrieving CA certificates: {e!s}', status=500
-            )
+            return LoggedHttpResponse(f'Error retrieving CA certificates: {e!s}', status=500)
         else:
             return http_response
 
@@ -307,6 +322,4 @@ class EstCsrAttrsView(View, LoggerMixin):
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
         del request, args, kwargs
 
-        return LoggedHttpResponse(
-            'csrattrs/ is not supported', status=404
-        )
+        return LoggedHttpResponse('csrattrs/ is not supported', status=404)

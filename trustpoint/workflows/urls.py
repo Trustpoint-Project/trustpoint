@@ -1,0 +1,70 @@
+"""URL configuration for the workflows app.
+
+Defines API endpoints and UI views for managing workflows,
+including scope pickers, workflow definitions, approvals,
+and signaling workflow instances.
+"""
+from django.urls import path
+
+from workflows.views import (
+    BulkAbortEnrollmentRequestsView,
+    BulkSignalInstancesView,
+    CAListView,
+    ContextCatalogView,
+    DefinitionDetailView,
+    DeviceListView,
+    DomainListView,
+    EnrollmentRequestDetailView,
+    EnrollmentRequestListView,
+    EventsListView,
+    MailTemplateListView,
+    PendingApprovalsView,
+    SignalInstanceView,
+    WizardPrefillView,
+    WorkflowDefinitionDeleteView,
+    WorkflowDefinitionExportView,
+    WorkflowDefinitionImportView,
+    WorkflowDefinitionListView,
+    WorkflowDefinitionPublishView,
+    WorkflowInstanceDetailView,
+    WorkflowWizardView,
+)
+
+app_name = 'workflows'
+
+urlpatterns = [
+    # scope pickers
+    path('api/cas/', CAListView.as_view(), name='api_cas'),
+    path('api/domains/', DomainListView.as_view(), name='api_domains'),
+    path('api/devices/', DeviceListView.as_view(), name='api_devices'),
+    path('api/events/', EventsListView.as_view(), name='api_events'),
+    path('api/mail-templates/', MailTemplateListView.as_view(), name='api_mail_templates'),
+    path('api/wizard-prefill/', WizardPrefillView.as_view(), name='api_wizard_prefill'),
+
+    # load one definition for “edit” in the wizard
+    path('api/definitions/<uuid:pk>/', DefinitionDetailView.as_view(), name='definition_detail'),
+    path('api/context-catalog/<uuid:instance_id>/', ContextCatalogView.as_view(), name='context_catalog'),
+
+    # main UI
+    path('', WorkflowDefinitionListView.as_view(), name='definition_table'),
+    path('wizard/', WorkflowWizardView.as_view(), name='definition_wizard'),
+    path('definitions/<uuid:pk>/publish/', WorkflowDefinitionPublishView.as_view(), name='definition_publish'),
+    path('definitions/<uuid:pk>/export/', WorkflowDefinitionExportView.as_view(), name='definition_export'),
+    path('definitions/import/', WorkflowDefinitionImportView.as_view(), name='definition_import'),
+
+    # delete workflow definition
+    path(
+        'definitions/<uuid:pk>/delete/',
+        WorkflowDefinitionDeleteView.as_view(),
+        name='definition_delete'
+    ),
+
+    # approval console
+    path('waiting-approvals/', PendingApprovalsView.as_view(), name='pending_table'),
+    path('wf-detail/<uuid:instance_id>/', WorkflowInstanceDetailView.as_view(), name='instance_detail'),
+    path('pending/bulk-signal/', BulkSignalInstancesView.as_view(), name='pending_bulk_signal'),
+    path('instances/<uuid:instance_id>/signal/', SignalInstanceView.as_view(), name='signal'),
+    path('requests/', EnrollmentRequestListView.as_view(), name='request_table'),
+    path('requests/<uuid:pk>/', EnrollmentRequestDetailView.as_view(), name='request_detail'),
+    path('requests/bulk-abort/', BulkAbortEnrollmentRequestsView.as_view(), name='requests_bulk_abort'),
+]

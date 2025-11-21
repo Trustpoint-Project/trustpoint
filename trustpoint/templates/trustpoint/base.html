@@ -104,6 +104,41 @@
                     <a href="{% url 'management:key_storage' %}" class="tp-menu-item {% if page_name == 'key_storage' %}tp-menu-active{% endif %}">{% trans "Key Storage" %}</a>
                 </div>
             </div>
+
+            <div class="tp-menu-group">
+                <a href="{% url 'workflows:definition_table' %}"
+                    class="tp-menu-head {% if page_category == 'workflows' %}tp-menu-active{% endif %}">
+                    <svg class="bi" fill="currentColor" role="img">
+                    <use href="{% static 'img/icons.svg' %}#icon-card-checklist"></use>
+                    </svg>
+                    {% translate "Workflows" %}
+                    <div class="btn-collapse" data-category="workflows"
+                        aria-expanded="{% if page_category == 'workflows' %}true{% else %}false{% endif %}">
+                    </div>
+                </a>
+
+                <div class="tp-menu-collapse {% if page_category == 'workflows' %}show{% endif %}">
+                    <a href="{% url 'workflows:definition_table' %}"
+                    class="tp-menu-item {% if page_name == 'definitions' %}tp-menu-active{% endif %}">
+                    {% trans "Workflows" %}
+                    </a>
+
+                    <a href="{% url 'workflows:definition_wizard' %}"
+                    class="tp-menu-item {% if page_name == 'wizard' %}tp-menu-active{% endif %}">
+                    {% trans "Create new workflow" %}
+                    </a>
+
+                    <a href="{% url 'workflows:request_table' %}"
+                    class="tp-menu-item {% if page_name == 'pending_requests' %}tp-menu-active{% endif %}">
+                    {% trans "Pending Requests" %}
+                    </a>
+
+                    <a href="{% url 'workflows:pending_table' %}"
+                    class="tp-menu-item {% if page_name == 'waiting_approvals' %}tp-menu-active{% endif %}">
+                    {% trans "Waiting Approvals" %}
+                    </a>
+                </div>
+                </div>
             <div class="tp-menu-footer">
                 <div class="tp-menu-group">
                     <button class="tp-menu-head theme-toggle" type="button">
