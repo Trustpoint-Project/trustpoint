@@ -88,7 +88,7 @@ class CmpCertificationRequestView(View):
         """Handles the POST requests to the CMP CR endpoint."""
         del args
         domain_name = cast('str', kwargs.get('domain_name'))
-        # Default to 'tls-client' if not provided (TBD)
+        # Default to 'tls_client' if not provided (TBD)
         cert_profile = cast('str', kwargs.get('certificate_profile', 'tls_client'))
 
         ctx = RequestContext(

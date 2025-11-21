@@ -94,7 +94,7 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
-# This must be removed in the future makeing use of the profile engine
+# TODO(Air): This must be removed in the future makeing use of the profile engine  # noqa: FIX002
 ALLOWED_APP_CRED_PROFILES = [
     {'profile': 'tls-server', 'label': 'TLS-Server Certficate'},
     {'profile': 'tls-client', 'label': 'TLS-Client Certificate'},

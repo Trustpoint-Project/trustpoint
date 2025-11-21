@@ -465,8 +465,8 @@ def tls_client_request_with_client_cert_header(
     domain_credential_instance: CertificateModel,
     rsa_private_key: rsa.RSAPrivateKey
 ) -> tuple[HttpRequest, str, str, str]:
-    """
-    Fixture to create an HttpRequest for a tls-client certificate request.
+    """Fixture to create an HttpRequest for a tls_client certificate request.
+
     Includes the client certificate in the 'SSL_CLIENT_CERT' header for authentication.
     """
     domain = domain_credential_instance.credential.domain
@@ -484,7 +484,7 @@ def tls_client_request_with_client_cert_header(
     domain_str = domain.unique_name
     operation_str = 'simpleenroll'
     protocol_str = 'est'
-    certtemplate_str = 'tls-client'
+    certtemplate_str = 'tls_client'
 
     domaincredential_pem = domain_credential_instance.credential.certificate.cert_pem
 

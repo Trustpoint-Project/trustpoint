@@ -310,7 +310,6 @@ class EstAuthorization(CompositeAuthorization):
         """Initialize the composite authorization handler with the default set of components.
 
         Args:
-            allowed_templates: List of allowed certificate templates. Defaults to ['tls-client'] if not provided.
             allowed_operations: List of allowed CMP operations. Defaults to ['cr', 'ir'] if not provided.
         """
         super().__init__()
