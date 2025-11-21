@@ -88,7 +88,7 @@ class CertificateRequestHandler(WorkflowHandler):
         device_id = _norm(context.device.pk)
 
         fingerprint = hashlib.sha256(csr.tbs_certrequest_bytes).hexdigest()
-        template = context.certificate_template
+        template = context.cert_profile_str  # TODO: rename to profile throughout EnrollmentRequest
 
         # Find or create an open EnrollmentRequest
         req = (

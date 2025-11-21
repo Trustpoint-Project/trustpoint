@@ -97,7 +97,7 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
                     'protocols': [
                         {
                             'protocol': 'EST',
-                            'url': f'/.well-known/est/{domain.unique_name}/domaincredential/'
+                            'url': f'/.well-known/est/{domain.unique_name}/domain_credential/'
                         }
                     ]
                 },

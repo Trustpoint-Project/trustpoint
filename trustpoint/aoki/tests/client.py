@@ -246,7 +246,7 @@ class AokiClient:
         #       "protocols": [
         #         {
         #           "protocol":"EST",
-        #           "url":"https://localhost/.well-known/est/domain/domaincredential/"
+        #           "url":"https://localhost/.well-known/est/domain/domain_credential/"
         #         }
         #       ]
         #     }

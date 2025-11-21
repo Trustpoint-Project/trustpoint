@@ -481,7 +481,7 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
         enroll_cmd = EstUsernamePasswordCommandBuilder.get_curl_enroll_domain_credential_command(
             est_username=device.common_name,
             est_password=est_password,
-            host=f'{base}/domaincredential/simpleenroll/',
+            host=f'{base}/domain_credential/simpleenroll/',
         )
 
         enroll_cmd_row = HelpRow(

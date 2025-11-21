@@ -218,7 +218,7 @@ if __name__ == '__main__':
         est_url='https://localhost:443/.well-known/est',
         auth_type='mutual_tls',#'both',
         domain='arburg',
-        cert_template='domaincredential',
+        cert_template='domain_credential',
         username=None,#'admin',
         password=None,#'testing321',
         cert_path='idevid.pem',
