@@ -1,0 +1,112 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+{% block content %}
+    <div class="card tp-card-centered">
+        <div class="card-header">
+            <h2>{{ signer.unique_name }} {% trans 'Configuration' %}</h2>
+        </div>
+
+        <div class="card tp-card-centered">
+            <div class="card-body">
+                <h3>{% trans 'General' %}</h3>
+                <hr class="hr-m">
+                <div class="tp-kvp-list">
+                    <div>
+                        <div>{% trans 'Unique Name' %}</div>
+                        <div>{{ signer.unique_name }}</div>
+                    </div>
+                    <div>
+                        <div>{% trans 'Updated' %}</div>
+                        <div>{{ signer.updated_at }}</div>
+                    </div>
+                    <div>
+                        <div>{% trans 'Created' %}</div>
+                        <div>{{ signer.created_at }}</div>
+                    </div>
+                </div>
+
+                <h3>{% trans 'Signer Certificate' %}</h3>
+                <hr class="hr-m">
+                <div class="tp-kvp-list">
+                    <div>
+                        <div>{% trans 'Certificate' %}</div>
+                        <div>
+                            <a href="{% url 'pki:certificate-detail' pk=signer.credential.certificate.id %}">
+                                {% if signer.credential.certificate.common_name %}
+                                    CN: {{ signer.credential.certificate.common_name }}
+                                {% else %}
+                                    {% trans 'Signer Certificate' %}
+                                {% endif %}
+                            </a>
+                        </div>
+                    </div>
+                    <div>
+                        <div>{% trans 'Issuing CA Certificate' %}</div>
+                        <div>
+                            {% if signer.credential.certificate.issuer_certificate %}
+                                <a href="{% url 'pki:certificate-detail' pk=signer.credential.certificate.issuer_certificate.id %}">
+                                    {% if signer.credential.certificate.issuer_certificate.common_name %}
+                                        CN: {{ signer.credential.certificate.issuer_certificate.common_name }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </a>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        <div>{% trans 'Serial Number' %}</div>
+                        <div>{{ signer.credential.certificate.serial_number }}</div>
+                    </div>
+                    <div>
+                        <div>{% trans 'Public Key Algorithm' %}</div>
+                        <div>{{ signer.credential.certificate.spki_algorithm }}</div>
+                    </div>
+                    <div>
+                        <div>{% trans 'Public Key Size' %}</div>
+                        <div>{{ signer.credential.certificate.spki_key_size }} bits</div>
+                    </div>
+                    <div>
+                        <div>{% trans 'Signature Algorithm' %}</div>
+                        <div>{{ signer.credential.certificate.signature_algorithm }}</div>
+                    </div>
+                    <div>
+                        <div>{% trans 'Valid From' %}</div>
+                        <div>{{ signer.credential.certificate.not_valid_before }}</div>
+                    </div>
+                    <div>
+                        <div>{% trans 'Valid Until' %}</div>
+                        <div>{{ signer.credential.certificate.not_valid_after }}</div>
+                    </div>
+                </div>
+
+                <h3>{% trans 'Signed Messages' %}</h3>
+                <hr class="hr-m">
+                <div class="tp-kvp-list">
+                    <div>
+                        <div>{% trans 'Total Signed Messages' %}</div>
+                        <div>
+                            <a href="{% url 'signer:signer-signed_messages' pk=signer.id %}"
+                                class="btn btn-sm btn-primary">{% trans 'View Signed Messages' %}</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <div class="tp-card-btn-footer m-1">
+                <a href="{% url 'signer:signer_list' %}" class="btn btn-secondary">{% trans 'Back to Signer List' %}</a>
+            </div>
+            <div class="tp-card-btn-footer m-1">
+                <a href="{% url 'signer:signer-delete_confirm' pks=signer.id|stringformat:'s/' %}"
+                   class="btn btn-danger">
+                    {% trans 'Delete Signer' %}
+                </a>
+            </div>
+        </div>
+    </div>
+{% endblock content %}

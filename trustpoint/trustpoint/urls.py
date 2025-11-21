@@ -60,6 +60,7 @@ schema_view = get_schema_view(
 
 urlpatterns += [
     path('users/', include('users.urls')),
+    path('signer/', include('signer.urls')),
     path('setup-wizard/', include('setup_wizard.urls')),
     path('pki/', include('pki.urls')),
     path('crl/<int:pk>/', CrlDownloadView.as_view(), name='crl-download'),
@@ -81,6 +82,7 @@ urlpatterns += [
     # API URLs
     path('api/', include('devices.api_urls')),
     path('api/', include('pki.api_urls')),
+    path('api/', include('signer.api_urls')),
 
     # JWT endpoints
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),

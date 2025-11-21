@@ -1,0 +1,59 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load static %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+    <form method="POST" autocomplete="off">
+        {% csrf_token %}
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h1>{% trans 'Confirm Signer Deletion' %}</h1>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="tp-card-centered-content">
+                    {% for signer in signers %}
+                        <h2>({{ forloop.counter }}) {% trans 'Signer' %}: {{ signer.unique_name }}</h2>
+                        <hr class="hr-m">
+                        <div class="tp-kvp-list">
+                            <div>
+                                <div>{% trans 'Unique Name' %}</div>
+                                <div>{{ signer.unique_name }}</div>
+                            </div>
+                            <div>
+                                <div>{% trans 'Signer Certificate' %}</div>
+                                <div>
+                                    <a href="{% url 'pki:certificate-detail' pk=signer.credential.certificate.id %}">
+                                        {% if signer.credential.certificate.common_name %}
+                                            CN: {{ signer.credential.certificate.common_name }}
+                                        {% else %}
+                                            {% trans 'Signer Certificate' %}
+                                        {% endif %}
+                                    </a>
+                                </div>
+                            </div>
+                            <div>
+                                <div>{% trans 'Serial Number' %}</div>
+                                <div>{{ signer.credential.certificate.serial_number }}</div>
+                            </div>
+                            <div>
+                                <div>Fingerprint (SHA256)</div>
+                                <div>{{ signer.credential.certificate.sha256_fingerprint }}</div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="card-footer d-flex">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'signer:signer_list' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                    <button type="submit" class="btn btn-danger">{% trans 'Delete selected Signers' %}</button>
+                </div>
+            </div>
+        </div>
+    </form>
+{% endblock content %}

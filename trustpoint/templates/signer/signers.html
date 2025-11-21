@@ -1,0 +1,93 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header">
+        <h1>{% trans "Signers List" %}</h1>
+    </div>
+
+    <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; max-height: 90%;">
+        <table class="table">
+            <thead>
+            <tr>
+                <th id="checkbox-column"><input type="checkbox"/></th>
+                <th>{% trans "Signer Name" %}</th>
+                <th>{% trans "Signature Suite" %}</th>
+                <th>{% trans "Created at" %}</th>
+                <th>{% trans "Expires on" %}</th>
+                <th>{% trans "Signing Log" %}</th>
+            </tr>
+            </thead>
+                <tbody>
+                {% for signer in page_obj %}
+                    <tr>
+                        <td class="row_checkbox">
+                            <input type="checkbox" name="row_checkbox" value="{{ signer.pk }}" class="signer-checkbox"/>
+                        </td>
+                        <td>
+                            <a href="{% url 'signer:signer-config' signer.pk %}" class="text-decoration-none">
+                                {{ signer.unique_name }}
+                            </a>
+                        </td>
+                        <td>{{ signer.credential.certificate.signature_suite }}</td>
+                        <td>{{ signer.created_at|date:"N j, Y, g:i a" }}</td>
+                        <td>{{ signer.credential.certificate.not_valid_after|date:"N j, Y, g:i a" }}</td>
+                        <td>
+                            <a href="{% url 'signer:signer-signed_messages' signer.pk %}"
+                               class="btn btn-sm btn-primary">
+                               {% trans "Signing Log" %}
+                            </a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center">{% trans "No signers found" %}</td>
+                    </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        {% include 'trustpoint/pagination.html' %}
+    </div>
+
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <button type="button" class="btn btn-danger" id="bulk-delete-btn" disabled>
+                {% trans "Delete Selected" %}
+            </button>
+        </div>
+        <div class="m-1">
+            <a href="{% url 'signer:sign_hash' %}" class="btn btn-primary">{% trans "Sign Hash" %}</a>
+            <a href="{% url 'signer:signer-add-method_select' %}" class="btn btn-primary">{% trans "Add New Signer" %}</a>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('.signer-checkbox');
+    const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+            bulkDeleteBtn.disabled = !anyChecked;
+        });
+    });
+    
+    bulkDeleteBtn.addEventListener('click', function() {
+        const selectedIds = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.value);
+        
+        if (selectedIds.length > 0) {
+            const pksPath = selectedIds.join('/') + '/';
+            const baseUrl = "{% url 'signer:signer_list' %}";
+            window.location.href = baseUrl + 'delete/' + pksPath;
+        }
+    });
+});
+</script>
+{% endblock content %}
