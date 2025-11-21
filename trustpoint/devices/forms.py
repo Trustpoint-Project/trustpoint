@@ -647,22 +647,3 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
         self.instance.no_onboarding_config.save()
         self.instance.full_clean()
         self.instance.save()
-
-
-APP_CERT_PROFILES = [
-    ('tls-client', 'TLS-Client Certificate'),
-    ('tls-server', 'TLS-Server Certificate'),
-    ('opc-ua-client', 'OPC-UA Client Certificate'),
-    ('opc-ua-server', 'OPC-UA Server Certificates'),
-]
-
-
-class ApplicationCertProfileSelectForm(forms.Form):
-    """Allows to select the certificate profile."""
-
-    app_cert_profiles = forms.ChoiceField(
-        choices=APP_CERT_PROFILES,
-        required=True,
-        label='Application Certificate Profile',
-        widget=forms.Select(attrs={'class': 'form-control'}),
-    )
