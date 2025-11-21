@@ -10,6 +10,8 @@ from cryptography.hazmat.primitives import hashes
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+from management.models import KeyStorageConfig
+from pydantic import ValidationError as PydanticValidationError
 from trustpoint.logger import LoggerMixin
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
@@ -26,7 +28,21 @@ from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
 from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
-from pydantic import ValidationError as PydanticValidationError
+
+
+def get_private_key_location_from_config() -> PrivateKeyLocation:
+    """Determine the appropriate PrivateKeyLocation based on KeyStorageConfig."""
+    try:
+        storage_config = KeyStorageConfig.get_config()
+        if storage_config.storage_type in [
+            KeyStorageConfig.StorageType.SOFTHSM,
+            KeyStorageConfig.StorageType.PHYSICAL_HSM
+        ]:
+            return PrivateKeyLocation.HSM_PROVIDED
+    except KeyStorageConfig.DoesNotExist:
+        pass
+
+    return PrivateKeyLocation.SOFTWARE
 
 
 class DevIdAddMethodSelectForm(forms.Form):
@@ -491,10 +507,11 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
             if credential_serializer.private_key is None:
                 self._raise_validation_error('Private key is missing from credential serializer.')
+            private_key_location = get_private_key_location_from_config()
             credential_serializer.private_key_reference = (
                 PrivateKeyReference.from_private_key(private_key=credential_serializer.private_key,
                                                      key_label=unique_name,
-                                                     location=PrivateKeyLocation.HSM_PROVIDED))
+                                                     location=private_key_location))
         except Exception as exception:
             err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
             raise ValidationError(err_msg) from exception
@@ -739,11 +756,12 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
 
             if credential_serializer and credential_serializer.private_key is None:
                 self._raise_validation_error('Private key is missing from credential serializer.')
+            private_key_location = get_private_key_location_from_config()
 
             credential_serializer.private_key_reference = (
                 PrivateKeyReference.from_private_key(private_key=pk,
                                                      key_label=unique_name,
-                                                     location=PrivateKeyLocation.HSM_PROVIDED))
+                                                     location=private_key_location))
 
             if not unique_name:
                 unique_name = get_certificate_name(cert)
