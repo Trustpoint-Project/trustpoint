@@ -46,9 +46,10 @@
                 <div class="tp-kvp">
                     <div class="tp-key">{% trans 'IP Addresses (SAN)' %}</div>
                     <div class="tp-value">
-                        {% for entry in cert.subject_alternative_name_extension.subject_alt_name.ip_addresses.all %}
-                            {{ entry }}<br>
-                        {% endfor %}
+                      {% for ip in ip_addresses %}
+                        {{ ip }}<br>
+                      {% endfor %}
+
                     </div>
                 </div>
             {% endif %}
