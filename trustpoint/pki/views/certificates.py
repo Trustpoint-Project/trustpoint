@@ -92,6 +92,15 @@ class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateMode
                 'id': entry.id,
             })
         context['issuer_entries'] = issuer_entries
+        ip_addresses=[]
+        san_ext = getattr(cert, "subject_alternative_name_extension", None)
+        if san_ext and getattr(san_ext, "subject_alt_name", None):
+            ip_addresses = [
+                str(entry).split(':', 1)[-1].strip()
+                for entry in san_ext.subject_alt_name.ip_addresses.all()
+            ]
+        context['ip_addresses'] = ip_addresses
+
         return context
 
 class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, DetailView[CertificateModel]):
