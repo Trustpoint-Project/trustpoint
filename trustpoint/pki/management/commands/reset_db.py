@@ -84,6 +84,8 @@ class Command(BaseCommand):
             AppVersion.objects.get_or_create(version=settings.APP_VERSION)
             # Ensure crypto storage config exists for encrypted fields
             KeyStorageConfig.get_or_create_default()
+            # Add default certificate profiles
+            call_command('create_default_cert_profiles')
 
         # Create superuser if needed
         if not options.get('no_user'):

@@ -38,7 +38,7 @@ def test_issue_tls_server_credential(device_instance: dict[str, Any]) -> None:
     assert issued_credential.device == device, 'The issued credential should belong to the correct device'
     assert issued_credential.domain == device.domain, 'The issued credential should belong to the correct domain'
     assert issued_credential.issued_credential_type == IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
-    assert issued_credential.issued_credential_purpose == IssuedCredentialModel.IssuedCredentialPurpose.TLS_SERVER
+    assert issued_credential.issued_using_cert_profile == 'TLS Server'
 
     db_credential = IssuedCredentialModel.objects.get(pk=issued_credential.pk)
     assert db_credential == issued_credential, 'The credential should be saved correctly in the database'

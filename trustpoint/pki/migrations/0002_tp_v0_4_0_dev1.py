@@ -12,6 +12,18 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.CreateModel(
+            name='CertificateProfileModel',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('unique_name', models.CharField(max_length=255, unique=True)),
+                ('display_name', models.CharField(blank=True, default='', max_length=255)),
+                ('profile_json', models.JSONField()),
+                ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created-At')),
+                ('updated_at', models.DateTimeField(auto_now=True, verbose_name='Updated-At')),
+                ('is_default', models.BooleanField(default=False)),
+            ],
+        ),
         migrations.AlterField(
             model_name='credentialmodel',
             name='credential_type',
@@ -41,5 +53,17 @@ class Migration(migrations.Migration):
             model_name='credentialmodel',
             name='pkcs11_private_key',
             field=models.ForeignKey(blank=True, help_text='Reference to HSM-stored private key', null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.pkcs11key', verbose_name='PKCS#11 Private Key'),
+        ),
+        migrations.CreateModel(
+            name='DomainAllowedCertificateProfileModel',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('alias', models.CharField(default='', max_length=255)),
+                ('certificate_profile', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='domains', to='pki.certificateprofilemodel')),
+                ('domain', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='certificate_profiles', to='pki.domainmodel')),
+            ],
+            options={
+                'constraints': [models.UniqueConstraint(condition=models.Q(('alias', ''), _negated=True), fields=('domain', 'alias'), name='unique_domain_alias_when_not_empty'), models.UniqueConstraint(fields=('domain', 'certificate_profile'), name='unique_domain_certificate_profile')],
+            },
         ),
     ]

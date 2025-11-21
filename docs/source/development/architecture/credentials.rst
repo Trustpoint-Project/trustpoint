@@ -15,8 +15,9 @@ General Message Flow
    :Request Authentication - Authenticator -> DeviceModel object;
    :Request Authorization - Authorizer;
    :Message normalization, if required - CsrAdapter;
-   :Certificate profile handling - JsonProfileValidator
-   :Message processing - OperationProcessor;
+   :Certificate profile handling - JsonProfileValidator;
+   :Message processing - OperationProcessor -> PKI result (e.g., issued certificate);
+   :Response generation - MessageResponder -> HttpResponse;
 
 
 HttpRequestValidator

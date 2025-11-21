@@ -492,7 +492,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 raise ValueError(msg)
         except KeyStorageConfig.DoesNotExist:
             cls.logger.warning('KeyStorageConfig does not exist, proceeding with HSM operation')
-        
+
         token_config = PKCS11Token.objects.first()
         if not token_config:
             msg = 'No PKCS#11 token config stored'

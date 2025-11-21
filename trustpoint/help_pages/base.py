@@ -40,10 +40,10 @@ class ApplicationCertificateProfileData:
 class ApplicationCertificateProfile(enum.Enum):
     """Allowed application credential profiles."""
 
-    TLS_CLIENT = ApplicationCertificateProfileData('tls-client', 'TLS-Client Certificate')
-    TLS_SERVER = ApplicationCertificateProfileData('tls-server', 'TLS-Server Certificate')
-    OPC_UA_CLIENT = ApplicationCertificateProfileData('opc-ua-client', 'OPC-UA-Client Certificate')
-    OPC_UA_SERVER = ApplicationCertificateProfileData('opc-ua-server', 'OPC-UA-Server Certificate')
+    TLS_CLIENT = ApplicationCertificateProfileData('tls_client', 'TLS-Client Certificate')
+    TLS_SERVER = ApplicationCertificateProfileData('tls_server', 'TLS-Server Certificate')
+    OPC_UA_CLIENT = ApplicationCertificateProfileData('opc_ua_client', 'OPC-UA-Client Certificate')
+    OPC_UA_SERVER = ApplicationCertificateProfileData('opc_ua_server', 'OPC-UA-Server Certificate')
 
     @property
     def profile_name(self) -> str:

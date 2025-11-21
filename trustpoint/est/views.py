@@ -9,7 +9,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from pki.models.domain import DomainModel
 from request.authentication import EstAuthentication
-from request.authorization import CertificateTemplateAuthorization, EstAuthorization, EstOperationAuthorization
+from request.authorization import EstAuthorization
 from request.http_request_validator import EstHttpRequestValidator
 from request.message_responder import EstErrorMessageResponder, EstMessageResponder
 from request.operation_processor import CertificateIssueProcessor
@@ -71,32 +71,34 @@ class EstRequestedDomainExtractorMixin:
             return requested_domain, None
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class EstSimpleEnrollmentView(LoggerMixin, View):
-    """Handles simple EST (Enrollment over Secure Transport) enrollment requests.
+class EstSimpleEnrollmentMixin(LoggerMixin):
+    """Mixin providing common logic for EST simple enrollment operations."""
 
-    This view processes certificate signing requests (CSRs), authenticates the client using
-    either Mutual TLS or username/password, validates the device, and issues the requested certificate
-    based on the certificate template specified in the request.
-    """
+    def process_enrollment(
+        self,
+        request: HttpRequest,
+        domain_name: str | None,
+        cert_profile: str | None,
+    ) -> LoggedHttpResponse:
+        """Process an EST simple enrollment request.
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
-        """Handle POST requests for simple enrollment."""
+        Args:
+            request: The HTTP request object.
+            domain_name: The domain name (can be None for default).
+            cert_profile: The certificate profile name (can be None for default).
+
+        Returns:
+            LoggedHttpResponse with the enrollment result.
+        """
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
-        del args
 
-        # TODO: This should really be done by the message parser,
-        # it also needs to handle the case where one or both are omitted
         try:
-            domain_name = cast('str', kwargs.get('domain'))
-            cert_template = cast('str', kwargs.get('certtemplate'))
-
             ctx = RequestContext(
                 raw_message=request,
                 protocol='est',
                 operation='simpleenroll',
                 domain_str=domain_name,
-                certificate_template=cert_template,
+                cert_profile_str=cert_profile,
             )
         except Exception:
             err_msg = 'Failed to set up request context.'
@@ -114,8 +116,6 @@ class EstSimpleEnrollmentView(LoggerMixin, View):
             est_authenticator.authenticate(ctx)
 
             est_authorizer = EstAuthorization(
-                # Allowed templates are TODO and might depend on authentication method
-                allowed_templates=['tls-client','tls-server', 'opc-ua-client', 'opc-ua-server', 'domaincredential'],
                 allowed_operations=['simpleenroll']
             )
             est_authorizer.authorize(ctx)
@@ -138,6 +138,43 @@ class EstSimpleEnrollmentView(LoggerMixin, View):
 
 
 @method_decorator(csrf_exempt, name='dispatch')
+class EstSimpleEnrollmentView(EstSimpleEnrollmentMixin, View):
+    """Handles simple EST (Enrollment over Secure Transport) enrollment requests."""
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
+        """Handle POST requests for simple enrollment with domain and cert profile in URL."""
+        del args
+
+        domain_name = cast('str', kwargs.get('domain'))
+        cert_profile = cast('str', kwargs.get('certtemplate'))
+
+        return self.process_enrollment(request, domain_name, cert_profile)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class EstSimpleEnrollmentDefaultView(EstSimpleEnrollmentMixin, View):
+    """Handles simple EST enrollment requests without requiring domain or cert profile in URL."""
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
+        """Handle POST requests for simple enrollment with optional domain/cert profile."""
+        del args
+        del kwargs
+
+        domain_name = 'arburg'
+        cert_profile = 'tls_client'
+
+        try:
+             DomainModel.objects.get(unique_name=domain_name)
+        except DomainModel.DoesNotExist:
+            return LoggedHttpResponse(
+                f'Default domain "{domain_name}" does not exist. Please configure it first.',
+                status=404
+            )
+
+        return self.process_enrollment(request, domain_name, cert_profile)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
 class EstSimpleReEnrollmentView(LoggerMixin, View):
     """Handles simple EST (Enrollment over Secure Transport) reenrollment requests.
 
@@ -155,14 +192,14 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
         # it also needs to handle the case where one or both are omitted
         try:
             domain_name = cast('str', kwargs.get('domain'))
-            cert_template = cast('str', kwargs.get('certtemplate'))
+            cert_profile = cast('str', kwargs.get('certtemplate'))
 
             ctx = RequestContext(
                 raw_message=request,
                 protocol='est',
                 operation='simplereenroll',
                 domain_str=domain_name,
-                certificate_template=cert_template,
+                cert_profile_str=cert_profile,
             )
         except Exception:
             err_msg = 'Failed to set up request context.'
@@ -180,8 +217,6 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
             est_authenticator.authenticate(ctx)
 
             est_authorizer = EstAuthorization(
-                # Allowed templates are TODO and might depend on authentication method
-                allowed_templates=['tls-client','tls-server', 'opc-ua-client', 'opc-ua-server', 'domaincredential'],
                 allowed_operations=['simplereenroll']
             )
             est_authorizer.authorize(ctx)

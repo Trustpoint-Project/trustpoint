@@ -426,22 +426,12 @@ class IssuedCredentialModel(CustomDeleteActionModel):
         DOMAIN_CREDENTIAL = 0, _('Domain Credential')
         APPLICATION_CREDENTIAL = 1, _('Application Credential')
 
-    class IssuedCredentialPurpose(models.IntegerChoices):
-        """The purpose of the issued credential."""
-
-        DOMAIN_CREDENTIAL = 0, _('Domain Credential')
-        GENERIC = 1, _('Generic')
-        TLS_CLIENT = 2, _('TLS-Client')
-        TLS_SERVER = 3, _('TLS-Server')
-        OPCUA_CLIENT = 4, _('OpcUa-Client')
-        OPCUA_SERVER = 5, _('OpcUa-Server')
-
     id = models.AutoField(primary_key=True)
 
     common_name = models.CharField(verbose_name=_('Common Name'), max_length=255)
     issued_credential_type = models.IntegerField(choices=IssuedCredentialType, verbose_name=_('Credential Type'))
-    issued_credential_purpose = models.IntegerField(
-        choices=IssuedCredentialPurpose, verbose_name=_('Credential Purpose')
+    issued_using_cert_profile = models.CharField(
+        max_length=255, verbose_name=_('Issued using Certificate Profile'), default=''
     )
     credential = models.OneToOneField(
         CredentialModel,
