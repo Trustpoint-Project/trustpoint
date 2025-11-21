@@ -163,6 +163,14 @@ class EstSimpleEnrollmentDefaultView(EstSimpleEnrollmentMixin, View):
         domain_name = 'arburg'
         cert_profile = 'tls_client'
 
+        try:
+             DomainModel.objects.get(unique_name=domain_name)
+        except DomainModel.DoesNotExist:
+            return LoggedHttpResponse(
+                f'Default domain "{domain_name}" does not exist. Please configure it first.',
+                status=404
+            )
+
         return self.process_enrollment(request, domain_name, cert_profile)
 
 
