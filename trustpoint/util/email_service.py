@@ -5,8 +5,10 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 
+from trustpoint.logger import LoggerMixin
 
-class EmailService:
+
+class EmailService(LoggerMixin):
     """Render and send multipart (text+HTML) emails."""
 
     @staticmethod
@@ -54,4 +56,4 @@ class EmailService:
 
         # synchronous send
         message.send(fail_silently=False)
-        print('SEND EMAIL2')
+        EmailService.logger.info('Sent email "%s" to %s', subject, ', '.join(to))
