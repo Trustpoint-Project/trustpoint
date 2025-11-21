@@ -1,11 +1,18 @@
 {% extends 'trustpoint/base.html' %}
 {% load static %}
 {% block content %}
-{% include 'home/counts-panel.html' %}
+{% include 'home/dashboard_header.html' %}
+{% include 'home/counts-panel-certs.html' %}
+{% include 'home/charts-panel-certs.html' %}
+{% include 'home/counts-panel-device.html' %}
+{% include 'home/charts-panel-device.html' %}
+{% include 'home/counts-panel-ica.html' %}
+{% include 'home/charts-panel-ica.html' %}
 {% include 'home/notifications-tab.html' %}
-{% include 'home/charts-tab.html' %}
 
 <script src="{% url 'javascript-catalog' %}"></script>
 <script src="{% static 'js/dashboard/dashboard.js' %}"></script>
+<script src="{% static 'js/chart.js' %}"></script>
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 
 {% endblock content %}

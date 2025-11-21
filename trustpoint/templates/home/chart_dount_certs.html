@@ -1,0 +1,31 @@
+{% load static %}
+<div class="card rounded-5 position-relative dount-chart-card-container">
+  <div class="card-body">
+    <h6 class="mb-3 fs-5">Certificates by Status</h6>
+
+    <div class="position-relative dount-chart-container">
+      <canvas id="chart_dount_certs"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("dashboardData", (event) =>{
+    const today = event.detail.today || {};
+
+    const data = {
+      active: today.cert_counts.active,
+      expiring: today.cert_counts.expiring_in_1_day + today.cert_counts.expiring_in_7_days,
+      expired: today.cert_counts.expired,
+      total: today.cert_counts.total
+    }
+
+    createDonutChart(
+      data,
+      'chart_dount_certs',
+      'certsByCounts',
+      {centerText:'Certificates', labels:['Active Certificats', 'Expiring Certificates', 'Expired Certificats']}
+    );
+
+  });
+</script>

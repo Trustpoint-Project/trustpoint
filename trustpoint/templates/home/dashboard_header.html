@@ -1,0 +1,46 @@
+{% load static %}
+
+<div class="bg-body">
+  <div class="container-fluid px-0">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h1 class="h3 fw-bold mb-0">Dashboard</h1>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn rounded-pill px-4 device_btn" onclick="link_to_device()">+ Device</button>
+        <button type="button" class="btn rounded-pill px-4 domain_btn" onclick="link_to_domain()">+ Domain</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .device_btn{
+    background-color: var(--trustpoint-ci);
+    color: #ffff;
+  }
+
+  .device_btn:hover{
+    border-color: var(--trustpoint-ci);
+    color: var(--trustpoint-ci);
+  }
+
+  .domain_btn{
+    color: var(--trustpoint-ci);
+    border-color: var(--trustpoint-ci);
+  }
+
+  .domain_btn:hover{
+    background-color: var(--trustpoint-ci);
+    color: #ffff;
+    border-color: var(--trustpoint-ci);
+  }
+</style>
+
+<script>
+  function link_to_device(){
+    window.location.href = "{% url 'devices:devices_create' %}"
+  }
+
+  function link_to_domain(){
+    window.location.href = "{% url 'pki:domains-add' %}"
+  }
+</script>

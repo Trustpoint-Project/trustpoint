@@ -1,23 +1,3 @@
-let devicesByOSLineChart, devicesByDomainDonutChart, devicesByOPBarChart;
-let certsByStatusLineChart, certsByDomainPieChart, certsByTemplateBarChart;
-let certsByDateStackChart, certsByIssuingCADonutChart, issuingCAsByTypePieChart;
-
-function updateCharts(dashboardChartData) {
-  //updateDeviceDateChart(dashboardData.device_counts_by_date_and_os);
-  updateDeviceByOSBarChart(dashboardChartData.device_counts_by_os);
-  updateDeviceByOPBarChart(dashboardChartData.device_counts_by_op);
-  updateDevicesByDomainDonutChart(dashboardChartData.device_counts_by_domain);
-
-  updateCertsByDateStackChart(dashboardChartData.cert_counts_by_issuing_ca_and_date);
-  updateCertsByDomainPieChart(dashboardChartData.cert_counts_by_domain);
-  updateCertsByTemplateBarChart(dashboardChartData.cert_counts_by_template);
-
-  //updateCertsByStatusLineChart(dashboardChartData.cert_counts_by_status);
-  updateCertsByStatusBarChart(dashboardChartData.cert_counts_by_status);
-  updateCertsByIssuingCAChart(dashboardChartData.cert_counts_by_issuing_ca);
-  updateIssuingCAsByTypePieChart(dashboardChartData.ca_counts_by_type);
-}
-
 // Helper function to format a date as YYYY-MM-DD
 function formatDate(date) {
   const year = date.getFullYear();
@@ -59,110 +39,430 @@ async function fetchDashboardData(period) {
   }
 }
 
-// Funktion zum Aktualisieren der Dashboard-Daten
-async function fetchAndUpdateDashboardData(period) {
-  const dashboardData = await fetchDashboardData(period);
-  console.log("dashboard data", dashboardData);
-  if (dashboardData) {
-    if ("device_counts" in dashboardData) {
-      updateDeviceCounts(dashboardData.device_counts);
-    }
-    if ("cert_counts" in dashboardData) {
-      updateCertCounts(dashboardData.cert_counts);
-    }
-    if ("issuing_ca_counts" in dashboardData) {
-      updateIssuingCACounts(dashboardData.issuing_ca_counts);
-    }
-    updateCharts(dashboardData);
+async function printTest(){
+  const todayData = await fetchDashboardData('today');
+  const weekData = await fetchDashboardData('last_week');
+
+  console.log("todayData", todayData);
+  console.log("weekData", weekData);
+
+}
+
+function updateDeltaIcon(id, value) {
+  const valueEl = document.getElementById(id);
+  if (!valueEl) return;
+
+  const iconEl = valueEl.nextElementSibling;
+  if (!iconEl) return;
+
+  const num = parseFloat(value);
+
+  if (num > 0) {
+    iconEl.classList.remove("bi-caret-down-fill", "bi-dash-lg");
+    iconEl.classList.add("bi-caret-up-fill");
+  } else if (num < 0) {
+    iconEl.classList.remove("bi-caret-up-fill", "bi-dash-lg");
+    iconEl.classList.add("bi-caret-down-fill");
+  } else {
+    iconEl.classList.remove("bi-caret-up-fill", "bi-caret-down-fill");
+    iconEl.classList.add("bi-dash-lg");
   }
 }
 
-function toggleChartButtons() {
-  const buttons = document.querySelectorAll(".chart-period");
-  //console.log("buttons", buttons)
-  buttons.forEach((button) => {
-    button.addEventListener("click", () => {
-      // Remove active class from all buttons
-      buttons.forEach((btn) => btn.classList.remove("active"));
-      // Add active class to the clicked button
-      button.classList.add("active");
+async function loadDashboardData(){
+  try{
+    const [todayData, weekData] = await Promise.all([
+      fetchDashboardData('today'),
+      fetchDashboardData('last_week')
+    ]);
+
+    const event = new CustomEvent('dashboardData', {
+      detail:{
+        today: todayData,
+        week: weekData
+      }
     });
-  });
-}
 
-async function fetchAndUpdateDashboardChartData(period) {
-  const dashboardData = await fetchDashboardData(period);
-  console.log("dashboard data", dashboardData);
-  if (dashboardData) {
-    updateCharts(dashboardData);
+    document.dispatchEvent(event);
+  }catch(error){
+    console.log("Error loadDashboardEvent", error)
   }
 }
 
-// Funktion zum Abrufen und Anzeigen der Dashboard-Daten aufrufen
-fetchAndUpdateDashboardData("today");
-toggleChartButtons();
-// every 20 seconds
-//setInterval(fetchAndUpdateDashboardData, 1000*20);
+function createHorizontalBarChart(
+  labels,
+  values,
+  canvasId,
+  legendId,
+  chartInstanceName
+) {
+  // Validierung der Eingabeparameter
+  if (!Array.isArray(labels) || !Array.isArray(values)) {
+    console.error('Ungültige Daten: labels und values müssen Arrays sein');
+    return;
+  }
 
-document.addEventListener("DOMContentLoaded", function () {
-  //device charts data from context
-  // var stackChartConfig = JSON.parse("{{ line_chart_device_config|escapejs }}");
-  // var donutChartDeviceConfig = JSON.parse("{{ donut_chart_device_config|escapejs }}");
-  // var barChartDeviceConfig = JSON.parse("{{ bar_chart_device_config|escapejs }}");
+  if (labels.length !== values.length) {
+    console.error('Ungültige Daten: labels und values müssen Arrays gleicher Länge sein');
+    return;
+  }
 
-  //cert charts data from context
-  //var lineChartCertConfig = JSON.parse("{{ line_chart_cert_config|escapejs }}");
-  // var donutChartCertConfig = JSON.parse("{{ donut_chart_cert_config|escapejs }}");
-  // var barChartCertConfig = JSON.parse("{{ bar_chart_cert_config|escapejs }}");
+  if (!canvasId || !legendId) {
+    console.error('Canvas ID und Legend ID sind erforderlich');
+    return;
+  }
 
-  // //CA charts data from context
-  // var barChartCAConfig = JSON.parse("{{ bar_chart_ca_config|escapejs }}");
-  // var lineChartConfig = JSON.parse("{{ line_chart_config|escapejs }}");
-  // var donutChartCAConfig = JSON.parse("{{ donut_chart_ca_config|escapejs }}");
+  const canvasEl = document.getElementById(canvasId);
+  const legendEl = document.getElementById(legendId);
 
-  var chartTabEl = document.getElementById("chartTabs");
-  var chartTab = new bootstrap.Tab(chartTabEl);
-  // Initial update for the active chart tab
-  var activeChartTabId = document
-    .querySelector("#chartTabs .nav-link.active")
-    .getAttribute("href")
-    .substring(1);
-  updateChartContent(activeChartTabId);
+  if (!canvasEl) {
+    console.error(`Canvas Element mit ID '${canvasId}' nicht gefunden`);
+    return;
+  }
 
-  // Add event listener to the charts tab for the 'shown.bs.tab' event
-  chartTabEl.addEventListener("shown.bs.tab", function (event) {
-    var targetId = event.target.getAttribute("href").substring(1);
-    updateChartContent(targetId);
-  });
+  const allItems = labels
+    .map((label, index) => ({
+      label,
+      value: Number(values[index]) || 0
+    }))
+    .filter(item => item.value > 0)
+    .sort((a, b) => b.value - a.value);
 
-  // function to update charts content based on chart tab id
-  function updateChartContent(chartTabId) {
-    if (chartTabId == "deviceChartTab") {
-      //var lineChartDeviceEle = document.getElementById("devicesByOSLineChart").getContext("2d");
-      //((if (!devicesByOSLineChart) devicesByOSLineChart = new Chart(lineChartDeviceEle, stackChartConfig);
-      //var donutChartDeviceEle = document.getElementById("devicesByDomainDonutChart").getContext("2d");
-      //if (!devicesByDomainDonutChart)
-      //  devicesByDomainDonutChart = new Chart(donutChartDeviceEle, donutChartDeviceConfig);
-      //var barChartDeviceEle = document.getElementById("devicesByOPBarChart").getContext("2d");
-      //if (!devicesByOPBarChart) devicesByOPBarChart = new Chart(barChartDeviceEle, barChartDeviceConfig);
-    } else if (chartTabId == "certChartTab") {
-      // var certsByStatusLineChartEle = document
-      //   .getElementById("certsByStatusLineChart")
-      //   .getContext("2d");
-      // if (!certsByStatusLineChart)
-      //   certsByStatusLineChart = new Chart(certsByStatusLineChartEle, lineChartCertConfig);
-      //var donutChartCertEle = document.getElementById("certsByDomainPieChart").getContext("2d");
-      //if (!certsByDomainPieChart) certsByDomainPieChart = new Chart(donutChartCertEle, donutChartCertConfig);
-      //var barChartCertEle = document.getElementById("barChartCert").getContext("2d");
-      //if (!barChartCert) barChartCert = new Chart(barChartCertEle, barChartCertConfig);
-    } else if (chartTabId == "caChartTab") {
-      // var lineChartEle = document.getElementById("lineChart").getContext("2d");
-      // if(!lineChart)
-      //   lineChart = new Chart(lineChartEle, lineChartConfig);
-      //var barChartCAEle = document.getElementById("barChartCA").getContext("2d");
-      //if (!barChartCA) barChartCA = new Chart(barChartCAEle, barChartCAConfig);
-      //var donutChartCAEle = document.getElementById("donutChartCA").getContext("2d");
-      //if (!donutChartCA) donutChartCA = new Chart(donutChartCAEle, donutChartCAConfig);
+  // Wichtig: Chart wird auch dann erstellt, wenn allItems leer ist.
+  // Das Plugin übernimmt dann die "Keine Daten"-Darstellung.
+  const chartDisplayItems = allItems.slice(0, 5);
+
+  const palette = [
+    '#0B5ED7', '#86B7FE', '#A6C8FF',
+    '#CFE2FF', '#6C757D', '#ADB5BD', '#E9ECEF'
+  ];
+  const colorForIndex = (i) => palette[i % palette.length];
+
+  // Value Labels Plugin
+  const valueLabels = {
+    id: `valueLabels${chartInstanceName}`,
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
+      const ds = chart.data.datasets[0];
+      const meta = chart.getDatasetMeta(0);
+
+      meta.data.forEach((bar, i) => {
+        const val = ds.data[i];
+        if (val == null) return;
+
+        ctx.save();
+        ctx.font = '600 12px system-ui,-apple-system,Segoe UI,Roboto,Arial';
+        ctx.fillStyle =
+          getComputedStyle(document.documentElement)
+            .getPropertyValue('--bs-body-color') || '#000';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(val), bar.x + 6, bar.y);
+        ctx.restore();
+      });
     }
+  };
+
+  // HTML Legend Plugin
+  const htmlLegend = {
+    id: `htmlLegend${chartInstanceName}`,
+    afterUpdate(chart) {
+      const container = legendEl;
+      if (!container) return;
+
+      container.innerHTML = '';
+      const ul = document.createElement('ul');
+      ul.className = 'list-unstyled small mb-0';
+
+      allItems.forEach((item, idx) => {
+        const li = document.createElement('li');
+        li.className = 'd-flex align-items-center mb-1';
+
+        const dot = document.createElement('span');
+        dot.className = 'rounded-circle d-inline-block me-2 flex-shrink-0';
+        dot.style.width = '10px';
+        dot.style.height = '10px';
+        dot.style.background = colorForIndex(idx);
+
+        const text = document.createElement('span');
+        text.textContent = `${item.label} (${item.value})`;
+
+        li.append(dot, text);
+        ul.appendChild(li);
+      });
+
+      container.appendChild(ul);
+    }
+  };
+
+  // Alten Chart zerstören falls vorhanden
+  const chartInstanceKey = `_${chartInstanceName}Chart`;
+  if (window[chartInstanceKey]) {
+    window[chartInstanceKey].destroy();
   }
-});
+
+  // Neuen Chart erstellen
+  window[chartInstanceKey] = new Chart(canvasEl, {
+    type: 'bar',
+    data: {
+      labels: chartDisplayItems.map(i => i.label),
+      datasets: [{
+        data: chartDisplayItems.map(i => i.value),
+        backgroundColor: chartDisplayItems.map((_, i) => colorForIndex(i)),
+        borderColor: 'transparent',
+        borderRadius: 12,
+        barPercentage: 0.6,
+        categoryPercentage: 0.7
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      scales: {
+        x: {
+          beginAtZero: true,
+          grid: { color: 'rgba(0,0,0,0.06)' },
+          ticks: { precision: 0 }
+        },
+        y: {
+          grid: { display: false }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+
+        // 👇 Hier konfigurierst du das No-Data-Plugin
+        noDataImagePlugin: {
+          imageSrc: 'trustpoint/static/img/tp-logo-128.png',
+          text: 'No Data'
+        }
+      }
+    },
+    plugins: [valueLabels, htmlLegend, noDataImagePlugin]
+  });
+
+  return window[chartInstanceKey];
+}
+
+const noDataImagePlugin = {
+  id: 'noDataImagePlugin',
+  afterDraw(chart, args, pluginOptions) {
+    const opts = pluginOptions || {};
+    const imageSrc = opts.imageSrc;
+    const text = opts.text || 'No Data';
+
+    // Prüfen, ob es überhaupt sinnvolle Daten gibt
+    const hasData =
+      chart.data &&
+      chart.data.datasets &&
+      chart.data.datasets.length > 0 &&
+      chart.data.datasets.some(ds =>
+        Array.isArray(ds.data) && ds.data.some(v => v != null && v !== 0)
+      );
+
+    if (hasData) return;
+
+    const { ctx, chartArea } = chart;
+    if (!chartArea) return;
+
+    const { left, top, right, bottom } = chartArea;
+    const width = right - left;
+    const height = bottom - top;
+
+    ctx.save();
+    // Zeichenbereich leeren, damit keine Achsen o.ä. stören
+    ctx.clearRect(left, top, width, height);
+
+    const drawTextOnly = () => {
+      ctx.save();
+      ctx.font = '500 14px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.fillStyle = '#6c757d';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, left + width / 2, top + height / 2);
+      ctx.restore();
+    };
+
+    if (!imageSrc) {
+      drawTextOnly();
+      ctx.restore();
+      return;
+    }
+
+    // Bild-Caching im Plugin-Optionsobjekt
+    if (!opts._img) {
+      const img = new Image();
+      img.src = imageSrc;
+      opts._img = img;
+      opts._imgLoaded = false;
+
+      img.onload = () => {
+        opts._imgLoaded = true;
+        chart.draw(); // Nachladen → Canvas neu zeichnen
+      };
+      img.onerror = () => {
+        opts._imgLoaded = false;
+      };
+    }
+
+    if (opts._img && opts._imgLoaded) {
+      const img = opts._img;
+
+      const maxImgWidth = width * 0.6;
+      const imgWidth = Math.min(img.width, maxImgWidth);
+      const imgHeight = (imgWidth / img.width) * img.height;
+
+      const x = left + (width - imgWidth) / 2;
+      const y = top + (height - imgHeight) / 2 - 10;
+
+      ctx.drawImage(img, x, y, imgWidth, imgHeight);
+
+      // Optionaler Text darunter
+      ctx.save();
+      ctx.font = '500 14px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.fillStyle = '#6c757d';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(text, left + width / 2, y + imgHeight + 8);
+      ctx.restore();
+    } else {
+      // Solange das Bild noch nicht geladen ist → Text anzeigen
+      drawTextOnly();
+    }
+
+    ctx.restore();
+  }
+}
+
+function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
+  const colors = ['#0B5ED7', '#86B7FE', '#E9ECEF'];
+  const showLegend = true;
+  const {
+    centerText = 'Certificates',
+    labels = ['Active Certificates', 'Expiring Certificates', 'Expired Certificates']
+  } = options;
+
+
+  const { active, expiring, expired, total } = data;
+  
+  const centerTextPlugin = {
+    id: `centerText${chartInstanceName}`,
+    afterDraw(chart) {
+      const meta = chart.getDatasetMeta(0);
+      if (!meta?.data?.length) return;
+      const { ctx } = chart;
+      const { x, y } = meta.data[0];
+
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Zahl
+      ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-color') || '#000';
+      ctx.fillText(total, x, y - 8);
+
+      // Untertitel
+      ctx.font = '500 12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.globalAlpha = 0.85;
+      ctx.fillText(centerText, x, y + 16);
+      ctx.restore();
+    }
+  };
+
+  const noDataPlugin = {
+    id:'noDataPlugin',
+    afterDraw: (chart) => {
+      if (chart.data.datasets.length === 0){
+        const ctx = chart.ctx;
+        const width = chart.width;
+        const height = chart.height;
+
+        chart.clear()
+
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-color') || '#000';
+        ctx.fillText('Keine Daten verfügbar', width / 2, height / 2 - 30);
+
+        const img = new Image();
+        img.onload = function(){
+          const imgSize = 80;
+          const x = width/2-imgSize/2;
+          const y = height/2+10;
+          ctx.drawImage(img, x, y, imgSize, imgSize);
+        };
+        img.src = '../../static/img/tp-logo-128.png';
+        ctx.restore();
+      }
+    }
+  };
+
+  // Alten Chart zerstören
+  const chartInstanceKey = `_${chartInstanceName}Chart`;
+  if (window[chartInstanceKey]) {
+    window[chartInstanceKey].destroy();
+  }
+
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) {
+    console.error(`Canvas element with ID '${canvasId}' not found`);
+    return;
+  }
+
+  window[chartInstanceKey] = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: [active, expiring, expired],
+        backgroundColor: colors,
+        borderColor: 'transparent',
+        borderRadius: 5,
+        spacing: 3
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '72%',
+      plugins: {
+        legend: {
+          display: showLegend,
+          position: 'bottom',
+          align: 'start',
+          labels: {
+            usePointStyle: true,
+            pointStyle: 'circle',
+            boxWidth: 10,
+            boxHeight: 10,
+            padding: 14,
+            color: '#6c757d',
+            font: { size: 12 }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: (context) => {
+              const value = context.parsed || 0;
+              const percentage = total ? Math.round((value / total) * 100) : 0;
+              return `${context.label}: ${value} (${percentage}%)`;
+            }
+          }
+        }
+      }
+    },
+    plugins: [centerTextPlugin, noDataPlugin]
+  });
+
+  return window[chartInstanceKey];
+}
+
+document.addEventListener("DOMContentLoaded", function (){
+  printTest()
+  loadDashboardData()
+
+})

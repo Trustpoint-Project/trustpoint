@@ -1,0 +1,26 @@
+{% load static %}
+{% load i18n %}
+
+<div class="row px-0 pt-2 pb-3 ps-1">
+  <div class="col">
+    <h1>Certificates</h1>
+  </div>
+</div>
+
+<!-- Number panels row -->
+<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3">
+  <!-- number of Certificates-->
+  <div class="col">
+    {% include 'home/card_active_certs.html' %}
+  </div>
+
+  <!-- number of Expiring Certificates -->
+  <div class="col">
+    {% include 'home/card_expiring_certs.html' %}
+  </div>
+
+  <!-- Onboarded Devices / expired certs -->
+  <div class="col">
+    {% include 'home/card_expired_certs.html' %}
+  </div>
+</div>

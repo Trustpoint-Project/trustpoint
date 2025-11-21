@@ -1,0 +1,39 @@
+<div class="card rounded-5 position-relative bar-chart-card-container">
+  <div class="card-body">
+    <h6 class="mb-3 fs-5">Certificates by Template</h6>
+
+    <div class="position-relative bar-chart-container">
+      <canvas id="chart_certs_by_template" class="bar-chart-canvas"></canvas>
+    </div>
+
+    <div id="chart_certs_by_template_legend" class="mt-3 bar-chart-legend"></div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('dashboardData', (event) => {
+  const today = event.detail.today || {};
+  const raw = today.cert_counts_by_template || {};
+
+  if (Object.keys(raw).length === 0) return;
+
+  const allItems = Object.entries(raw)
+    .map(([key, value]) => ({
+      label: key,
+      value: value || 0
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  const labels = allItems.map(i => i.label);
+  const values = allItems.map(i => i.value);
+
+  if (allItems.length) {
+    createHorizontalBarChart(
+      labels,
+      values,
+      'chart_certs_by_template',
+      'chart_certs_by_template_legend',
+      'certsByTemplate'
+  )};
+});
+</script>

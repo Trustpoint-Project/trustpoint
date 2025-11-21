@@ -1,0 +1,44 @@
+<div class="card rounded-5 position-relative bar-chart-card-container">
+  <div class="card-body">
+    <h6 class="mb-3 fs-5">Device by Onboarding Protocoll</h6>
+
+    <div class="position-relative bar-chart-container">
+      <canvas id="chart_device_by_op" class="bar-chart-canvas"></canvas>
+    </div>
+
+    <div id="chart_device_by_op_legend" class="mt-3 bar-chart-legend"></div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('dashboardData', (event) => {
+  const today = event.detail.today || {};
+
+  // device_counts_by_op ist ein Objekt:
+  const raw = today.device_counts_by_op || {};
+
+  const allItems = Object.entries(raw)
+    .map(([label, value]) => ({
+      label,
+      value: Number(value) || 0
+    }))
+    .filter(item => item.value > 0)
+    .sort((a, b) => b.value - a.value);
+
+  if (!allItems.length) return;
+
+  const labels = allItems.map(i => i.label);
+  const values = allItems.map(i => i.value);
+
+  if (allItems.length) {
+    createHorizontalBarChart(
+      labels,
+      values,
+      'chart_device_by_op',
+      'chart_device_by_op_legend',
+      'deviceByOp'
+  )};
+
+});
+</script>
+

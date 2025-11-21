@@ -1,0 +1,20 @@
+{% load static %}
+{% load i18n %}
+
+<div class="row px-0 pt-5 pb-3 ps-1">
+  <div class="col">
+    <h1>Devices</h1>
+  </div>
+</div>
+
+<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3">
+  <div class="col">
+    {% include 'home/card_active_device.html' %}
+  </div>
+  <div class="col">
+    {% include 'home/card_expiring_device.html' %}
+  </div>
+  <div class="col">
+    {% include 'home/card_expired_device.html' %}
+  </div>
+</div>
