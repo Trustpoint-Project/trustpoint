@@ -64,6 +64,9 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
         if not context.domain:
             exc_msg = 'Domain must be set in the context to issue a certificate.'
             raise ValueError(exc_msg)
+        if not context.domain.is_active:
+            exc_msg = f'Cannot issue certificate: Domain "{context.domain.unique_name}" is currently disabled.'
+            raise ValueError(exc_msg)
         if not context.cert_requested:
             exc_msg = 'Certificate request must be set in the context to issue a certificate.'
             raise ValueError(exc_msg)

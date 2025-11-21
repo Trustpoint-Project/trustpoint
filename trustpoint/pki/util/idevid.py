@@ -15,10 +15,10 @@ from devices.models import (
     OnboardingProtocol,
     OnboardingStatus,
 )
+from trustpoint.logger import LoggerMixin
 
 from pki.models import DevIdRegistration, DomainModel, TruststoreModel
 from pki.util.x509 import ApacheTLSClientCertExtractor
-from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from django.http import HttpRequest

@@ -3,6 +3,7 @@
 import enum
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True)
 class CertificateExtensionOidData:
     """The Certificate Extension OID Data class holding all of the information."""

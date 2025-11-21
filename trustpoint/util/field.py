@@ -57,7 +57,7 @@ def get_certificate_name(cert: x509.Certificate) -> str :
     try:
         cn = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
         if cn:
-            return cn
+            return cn if isinstance(cn, str) else cn.decode('utf-8')
     except IndexError:
         pass
 

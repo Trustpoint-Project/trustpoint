@@ -49,7 +49,7 @@ class Command(BaseCommand):
 
         # Check if the GitHub and homepage links notification has already been created
         if not NotificationModel.objects.filter(event='TRUSTPOINT_PROJECT_INFO').exists():
-            url_github = 'https://github.com/TrustPoint-Project'
+            url_github = 'https://github.com/Trustpoint-Project'
             url_homepage = 'https://industrial-security.io'
 
             notification = NotificationModel.objects.create(

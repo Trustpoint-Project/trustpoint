@@ -5,15 +5,15 @@
 **The open source trust anchor software for machines and factories to manage digital identities.**
 
 [![Landing Page](https://img.shields.io/badge/Landing_Page-014BAD)](https://trustpoint.campus-schwarzwald.de/en/)
-[![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-014BAD)](https://github.com/orgs/TrustPoint-Project/discussions)
+[![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-014BAD)](https://github.com/orgs/Trustpoint-Project/discussions)
 [![Read the Docs](https://img.shields.io/readthedocs/trustpoint)](https://trustpoint.readthedocs.io)
 [![Docker Automated](https://img.shields.io/docker/automated/trustpointproject/trustpoint)](https://hub.docker.com/r/trustpointproject/trustpoint)
 ![Status](https://img.shields.io/badge/Status-Beta-red)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Pytest Status](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/pytest.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/pytest.yml)
+[![Pytest Status](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml)
 [![codecov](https://codecov.io/gh/Trustpoint-Project/trustpoint/graph/badge.svg?token=0N31L1QWPE)](https://codecov.io/gh/Trustpoint-Project/trustpoint)
 [![MyPy](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/mypy.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/mypy.yml)
-[![Ruff Status](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/ruff.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/ruff.yml)
+[![Ruff Status](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/ruff.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/ruff.yml)
 
 </div>
 
@@ -51,7 +51,7 @@ A device can be onboarded by issuing it an LDevID called the Domain Credential t
 management.
 Trustpoint offers several methods for obtaining the Domain Credential:
 
-- **[Trustpoint Client](https://github.com/TrustPoint-Project/trustpoint-client)**: User-friendly onboarding through a
+- **[Trustpoint Client](https://github.com/Trustpoint-Project/trustpoint-client)**: User-friendly onboarding through a
   client interface; based on CMP (RFCs [4210](https://datatracker.ietf.org/doc/html/rfc4210)
   and [9483](https://datatracker.ietf.org/doc/rfc9483/)).
 
@@ -90,7 +90,7 @@ project as associated partners. These include ARBURG GmbH + Co KG, Belden Inc., 
 GmbH, PHOENIX CONTACT GmbH & Co. KG and Siemens AG.
 
 Trustpoint is funded as part of a project sponsored by the German Federal Ministry of Education and Research. Questions
-can be asked in [Discussions](https://github.com/orgs/TrustPoint-Project/discussions) and will be answered by us. We
+can be asked in [Discussions](https://github.com/orgs/Trustpoint-Project/discussions) and will be answered by us. We
 look forward to hearing about your experiences with Trustpoint. You can send suggestions to
 trustpoint@campus-schwarzwald.de.
 
@@ -122,19 +122,19 @@ state the header and if the [python behave](https://behave.readthedocs.io/en/lat
 
 | Requirement | Title                                         | Status of the behave test                                                                                                                                                                                               |
 |-------------|-----------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| R_001       | Create, view, edit and delete an identity     | [![Test](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_001_feature_test.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_001_feature_test.yml)   |
+| R_001       | Create, view, edit and delete an identity     | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_001_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_001_feature_test.yml)   |
 | R_002       | Usage of any zero touch onboarding protocol   | No test present.                                                                                                                                                                                                        |
-| R_003       | Certificate Lifecycle Management              | [![Test](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_003_feature_test.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_003_feature_test.yml)   |
-| R_004       | REST API                                      | [![Test](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_004_feature_test.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_004_feature_test.yml)   |
-| R_005       | Docker Container Support                      | [![Test](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/docker-test-compose.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/docker-test-compose.yml) |
-| R_006       | Backup, Restore, and Update Mechanisms        | [![Test](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_006_feature_test.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_006_feature_test.yml)   |
-| R_007       | Logging Capabilities                          | [![Test](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_007_feature_test.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_007_feature_test.yml)   |
-| R_008       | Auto-Generated Issuing CAs                    | [![Test](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_008_feature_test.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_008_feature_test.yml)   |
+| R_003       | Certificate Lifecycle Management              | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_003_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_003_feature_test.yml)   |
+| R_004       | REST API                                      | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_004_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_004_feature_test.yml)   |
+| R_005       | Docker Container Support                      | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/docker-test-compose.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/docker-test-compose.yml) |
+| R_006       | Backup, Restore, and Update Mechanisms        | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_006_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_006_feature_test.yml)   |
+| R_007       | Logging Capabilities                          | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_007_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_007_feature_test.yml)   |
+| R_008       | Auto-Generated Issuing CAs                    | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_008_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_008_feature_test.yml)   |
 | R_009       | High Availability                             | No test present.                                                                                                                                                                                                        |
-| R_010       | CMP Endpoint for Onboarded Devices            | [![Test](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_010_feature_test.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_010_feature_test.yml)   |
-| R_011       | EST Endpoint for Onboarded Devices            | [![Test](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_011_feature_test.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_011_feature_test.yml)   |
-| R_012       | Language Selection and Translation            | [![Test](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_012_feature_test.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_012_feature_test.yml)   |
-| R_013       | Remote Credential Download                    | [![Test](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_013_feature_test.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_013_feature_test.yml)   |
-| R_101       | Security Level Configuration                  | [![Test](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_101_feature_test.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_101_feature_test.yml)   |
-| R_102       | Certificate Template Security                 | [![Test](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml)   |
-| F_001       | NTEU must be able to execute R_001 and R_002. | [![Test](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/f_001_feature_test.yml/badge.svg?branch=main)](https://github.com/TrustPoint-Project/trustpoint/actions/workflows/f_001_feature_test.yml)   |
+| R_010       | CMP Endpoint for Onboarded Devices            | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_010_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_010_feature_test.yml)   |
+| R_011       | EST Endpoint for Onboarded Devices            | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_011_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_011_feature_test.yml)   |
+| R_012       | Language Selection and Translation            | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_012_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_012_feature_test.yml)   |
+| R_013       | Remote Credential Download                    | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_013_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_013_feature_test.yml)   |
+| R_101       | Security Level Configuration                  | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_101_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_101_feature_test.yml)   |
+| R_102       | Certificate Template Security                 | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml)   |
+| F_001       | NTEU must be able to execute R_001 and R_002. | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/f_001_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/f_001_feature_test.yml)   |

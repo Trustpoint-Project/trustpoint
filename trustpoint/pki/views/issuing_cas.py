@@ -14,6 +14,12 @@ from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
+from trustpoint.logger import LoggerMixin
+from trustpoint.views.base import (
+    BulkDeleteView,
+    ContextDataMixin,
+    SortableTableMixin,
+)
 
 from pki.forms import (
     IssuingCaAddFileImportPkcs12Form,
@@ -22,12 +28,6 @@ from pki.forms import (
 )
 from pki.models import CertificateModel, IssuingCaModel
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import (
-    BulkDeleteView,
-    ContextDataMixin,
-    SortableTableMixin,
-)
-from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -148,7 +148,7 @@ class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateMode
 
         # PyCharm TypeChecker issue - this passes mypy
         # noinspection PyTypeChecker
-        # TODO(AlexHx8472): This is not a good query. Use issued credentials to get the certificates.
+        # TODO(AlexHx8472): This is not a good query. Use issued credentials to get the certificates.  # noqa: FIX002
         return CertificateModel.objects.filter(
             issuer_public_bytes=issuing_ca.credential.certificate.subject_public_bytes
         )

@@ -10,7 +10,10 @@ from django.utils.translation import gettext as _
 from management.security.manager import SecurityManager
 
 if TYPE_CHECKING:
-    from management.security import SecurityFeature
+    from django.http import HttpRequest
+
+    from management.security.features import SecurityFeature
+
 
 
 class SecurityLevelMixin:
@@ -46,7 +49,7 @@ class SecurityLevelMixin:
 class SecurityLevelMixinRedirect(SecurityLevelMixin):
     """A mixin that provides security feature checks for Django views with redirect feature."""
 
-    def __init__(self, disabled_by_security_level_url=None, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, disabled_by_security_level_url: str | None = None, *args: Any, **kwargs: Any) -> None:
         """Initializes the SecurityLevelMixin with the specified security feature and redirect URL.
 
         Parameters:
@@ -61,7 +64,7 @@ class SecurityLevelMixinRedirect(SecurityLevelMixin):
         super().__init__(*args, **kwargs)
         self.disabled_by_security_level_url = disabled_by_security_level_url
 
-    def dispatch(self, request, *args: Any, **kwargs: Any):
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any):
         """If the feature is not allowed, the user is redirected to the disabled_by_security_level_url with an error message.
 
         Parameters:
@@ -78,8 +81,12 @@ class SecurityLevelMixinRedirect(SecurityLevelMixin):
         """
         if not self.sec.is_feature_allowed(self.security_feature):
             msg = _(
-                'Your security setting %s does not allow the feature: %s'
-                % (self.get_security_level(), self.security_feature.value)
+                _(
+                    'Your security setting %s does not allow the feature: %s'
+                ) % (
+                    self.get_security_level(),
+                    self.security_feature.value,
+                )
             )
             messages.error(request, msg)
             return redirect(self.disabled_by_security_level_url)

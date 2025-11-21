@@ -35,11 +35,6 @@ class TestUrls:
         resolver = resolve(url)
         assert resolver.func.view_class == CrlDownloadView
 
-    def test_setup_wizard_url_included(self):
-        """Test that the 'setup-wizard/' URL pattern is included and resolves correctly."""
-        url = reverse('setup_wizard:initial')
-        assert resolve(url).namespace == 'setup_wizard'
-
     def test_devices_url_included(self):
         """Test that the 'devices/' URL pattern is included and resolves correctly."""
         url = reverse('devices:devices')

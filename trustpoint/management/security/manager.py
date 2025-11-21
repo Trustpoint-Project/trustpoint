@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from trustpoint.logger import LoggerMixin
+
 from management.models import SecurityConfig
 from management.security import LEVEL_FEATURE_MAP
-from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from management.security.features import SecurityFeature
@@ -15,10 +16,19 @@ if TYPE_CHECKING:
 class SecurityManager(LoggerMixin):
     """Manages the security level setting of the Trustpoint."""
 
-    def is_feature_allowed(self, feature: SecurityFeature, target_level: None | str = None) -> bool:
+    def is_feature_allowed(
+        self, feature: type[SecurityFeature] | SecurityFeature, target_level: None | str = None
+    ) -> bool:
         """Checks if the specified feature is allowed under the given security level.
 
         If 'target_level' is None, the current security level is used.
+
+        Args:
+            feature: Either a SecurityFeature class or instance
+            target_level: The security level to check against, or None for current level
+
+        Returns:
+            True if the feature is allowed at the specified security level
         """
         sec_level = self.get_security_level() if target_level is None else target_level
 
@@ -31,7 +41,10 @@ class SecurityManager(LoggerMixin):
 
         # If the level is defined in the dictionary, check membership
         allowed_features = LEVEL_FEATURE_MAP.get(level_choice, set())
-        return feature in allowed_features
+
+        # Handle both class and instance - check the class type
+        feature_class = feature if isinstance(feature, type) else type(feature)
+        return feature_class in allowed_features
 
     def get_security_level(self) -> str:
         """Returns the string representation of the security_mode, e.g. '0', '1', etc."""
@@ -59,7 +72,15 @@ class SecurityManager(LoggerMixin):
         """Returns the model holding the security settings."""
         return SecurityConfig.objects.first()
 
-    def enable_feature(self, feature: SecurityFeature, *args: dict) -> None:
-        """Enables a feature if it is allowed at the current security level."""
+    def enable_feature(self, feature: type[SecurityFeature] | SecurityFeature, kwargs: dict | None = None) -> None:
+        """Enables a feature if it is allowed at the current security level.
+
+        Args:
+            feature: Either a SecurityFeature class or instance
+            kwargs: Keyword arguments to pass to the enable method
+        """
         if self.is_feature_allowed(feature):
-            feature.enable(*args)
+            if kwargs is None:
+                feature.enable()
+            else:
+                feature.enable(**kwargs)

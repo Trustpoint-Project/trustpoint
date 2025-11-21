@@ -3,28 +3,28 @@
 from behave import given, runner, then, when
 
 
-@given('the TrustPoint component {component} is selected')
+@given('the Trustpoint component {component} is selected')
 def step_given_component_selected(context: runner.Context, component: str) -> None:  # noqa: ARG001
-    """Simulates selecting a TrustPoint component in the security configuration panel.
+    """Simulates selecting a Trustpoint component in the security configuration panel.
 
     Args:
         context (runner.Context): Behave context.
-        component (str): The selected TrustPoint component.
+        component (str): The selected Trustpoint component.
     """
-    msg = f'STEP: Given the TrustPoint component {component} is selected'
+    msg = f'STEP: Given the Trustpoint component {component} is selected'
     raise AssertionError(msg)
 
 
-@given('the TrustPoint component {component} has security level {security_level}')
+@given('the Trustpoint component {component} has security level {security_level}')
 def step_given_component_has_security_level(context: runner.Context, component: str, security_level: str) -> None:  # noqa: ARG001
-    """Ensures that the TrustPoint component has a specified security level.
+    """Ensures that the Trustpoint component has a specified security level.
 
     Args:
         context (runner.Context): Behave context.
-        component (str): The TrustPoint component.
+        component (str): The Trustpoint component.
         security_level (str): The current security level.
     """
-    msg = f'STEP: Given the TrustPoint component {component} has security level {security_level}'
+    msg = f'STEP: Given the Trustpoint component {component} has security level {security_level}'
     raise AssertionError(msg)
 
 
@@ -86,16 +86,16 @@ def step_then_reject_invalid_input(context: runner.Context, error_message: str) 
     raise AssertionError(msg)
 
 
-@then('the TrustPoint component {component} should still have security level {security_level}')
+@then('the Trustpoint component {component} should still have security level {security_level}')
 def step_then_security_level_persists(context: runner.Context, component: str, security_level: str) -> None:  # noqa: ARG001
     """Ensures that the security level persists after a system restart.
 
     Args:
         context (runner.Context): Behave context.
-        component (str): The TrustPoint component.
+        component (str): The Trustpoint component.
         security_level (str): The expected security level after restart.
     """
-    msg = f'STEP: Then the TrustPoint component {component} should still have security level {security_level}'
+    msg = f'STEP: Then the Trustpoint component {component} should still have security level {security_level}'
     raise AssertionError(msg)
 
 

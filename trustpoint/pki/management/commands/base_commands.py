@@ -22,7 +22,7 @@ from pki.models import CertificateModel
 from pki.util.x509 import CertificateGenerator
 
 if TYPE_CHECKING:
-    from trustpoint_core.types import PrivateKey
+    from trustpoint_core.crypto_types import PrivateKey
 
 
 class CertificateCreationCommandMixin(CertificateGenerator):
