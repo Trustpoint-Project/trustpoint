@@ -149,16 +149,16 @@ class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
         cred = help_context.cred_count
 
         tls_client_cmd = CmpSharedSecretCommandBuilder.get_tls_client_profile_command(
-            host=f'{base}/tls-client/{operation}', pk=device.pk, shared_secret=cmp_shared_secret, cred_number=cred
+            host=f'{base}/tls_client/{operation}', pk=device.pk, shared_secret=cmp_shared_secret, cred_number=cred
         )
         tls_server_cmd = CmpSharedSecretCommandBuilder.get_tls_server_profile_command(
-            host=f'{base}/tls-server/{operation}', pk=device.pk, shared_secret=cmp_shared_secret, cred_number=cred
+            host=f'{base}/tls_server/{operation}', pk=device.pk, shared_secret=cmp_shared_secret, cred_number=cred
         )
         opc_client_cmd = CmpSharedSecretCommandBuilder.get_opc_ua_client_profile_command(
-            host=f'{base}/opc-ua-client/{operation}', pk=device.pk, shared_secret=cmp_shared_secret, cred_number=cred
+            host=f'{base}/opc_ua_client/{operation}', pk=device.pk, shared_secret=cmp_shared_secret, cred_number=cred
         )
         opc_server_cmd = CmpSharedSecretCommandBuilder.get_opc_ua_server_profile_command(
-            host=f'{base}/opc-ua-server/{operation}', pk=device.pk, shared_secret=cmp_shared_secret, cred_number=cred
+            host=f'{base}/opc_ua_server/{operation}', pk=device.pk, shared_secret=cmp_shared_secret, cred_number=cred
         )
 
         def _build_section(
@@ -576,16 +576,16 @@ class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
         cred = help_context.cred_count
 
         tls_client_cmd = CmpClientCertificateCommandBuilder.get_tls_client_profile_command(
-            host=f'{base}/tls-client/{operation}', cred_number=cred
+            host=f'{base}/tls_client/{operation}', cred_number=cred
         )
         tls_server_cmd = CmpClientCertificateCommandBuilder.get_tls_server_profile_command(
-            host=f'{base}/tls-server/{operation}', cred_number=cred
+            host=f'{base}/tls_server/{operation}', cred_number=cred
         )
         opc_client_cmd = CmpClientCertificateCommandBuilder.get_opc_ua_client_profile_command(
-            host=f'{base}/opc-ua-client/{operation}', cred_number=cred
+            host=f'{base}/opc_ua_client/{operation}', cred_number=cred
         )
         opc_server_cmd = CmpClientCertificateCommandBuilder.get_opc_ua_server_profile_command(
-            host=f'{base}/opc-ua-server/{operation}', cred_number=cred
+            host=f'{base}/opc_ua_server/{operation}', cred_number=cred
         )
 
         def _build_section(

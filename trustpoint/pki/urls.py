@@ -3,7 +3,7 @@
 from django.urls import path, re_path
 from help_pages import pki_help_views
 
-from pki.views import certificates, domains, issuing_cas, owner_credentials, truststores
+from pki.views import cert_profiles, certificates, domains, issuing_cas, owner_credentials, truststores
 from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
 from pki.views.issuing_cas import IssuedCertificatesListView
 
@@ -161,6 +161,7 @@ urlpatterns = [
     path(
         'devid-registration/delete/<int:pk>/', DevIdRegistrationDeleteView.as_view(), name='devid_registration_delete'
     ),
+    # DevOwnerID views
     path('owner-credentials/', owner_credentials.OwnerCredentialTableView.as_view(), name='owner_credentials'),
     path(
         'owner-credentials/details/<int:pk>/',
@@ -176,6 +177,23 @@ urlpatterns = [
         r'^owner-credentials/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
         owner_credentials.OwnerCredentialBulkDeleteConfirmView.as_view(),
         name='owner_credentials-delete_confirm',
+    ),
+    # Certificate Profile views
+    path('cert-profiles/', cert_profiles.CertProfileTableView.as_view(), name='cert_profiles'),
+    path(
+        'cert-profiles/config/<int:pk>/',
+        cert_profiles.CertProfileConfigView.as_view(),
+        name='cert_profiles-details',
+    ),
+    path(
+        'cert-profiles/add/',
+        cert_profiles.CertProfileConfigView.as_view(),
+        name='cert_profiles-add',
+    ),
+    re_path(
+        r'^cert-profiles/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        cert_profiles.CertProfileBulkDeleteConfirmView.as_view(),
+        name='cert_profiles-delete_confirm',
     ),
     path(
         'trustpoint/download/tls-server/',

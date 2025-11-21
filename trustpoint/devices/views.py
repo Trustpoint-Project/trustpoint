@@ -94,7 +94,7 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
-# This must be removed in the future makeing use of the profile engine
+# TODO(Air): This must be removed in the future makeing use of the profile engine  # noqa: FIX002
 ALLOWED_APP_CRED_PROFILES = [
     {'profile': 'tls-server', 'label': 'TLS-Server Certficate'},
     {'profile': 'tls-client', 'label': 'TLS-Client Certificate'},
@@ -1492,18 +1492,16 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
             err_msg = 'Credential is not an issued credential.'
             raise Http404(err_msg)
 
-        credential_purpose = IssuedCredentialModel.IssuedCredentialPurpose(
-            issued_credential.issued_credential_purpose
-        ).label
+        cert_profile_name = issued_credential.issued_using_cert_profile
 
         domain_credential_value = IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL.value
         application_credential_value = IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL.value
 
         if issued_credential.issued_credential_type == domain_credential_value:
-            context['credential_type'] = credential_purpose
+            context['credential_type'] = cert_profile_name
 
         elif issued_credential.issued_credential_type == application_credential_value:
-            context['credential_type'] = credential_purpose + ' Credential'
+            context['credential_type'] = cert_profile_name + ' Credential'
 
         else:
             err_msg = 'Unknown IssuedCredentialType'
@@ -1560,10 +1558,8 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
             if not private_key_serializer or not certificate_serializer or not cert_collection_serializer:
                 raise Http404
 
-            credential_purpose = IssuedCredentialModel.IssuedCredentialPurpose(
-                self.object.issued_credential_purpose
-            ).label
-            credential_type_name = credential_purpose.replace(' ', '-').lower().replace('-credential', '')
+            cert_profile_name = self.object.issued_using_cert_profile
+            credential_type_name = cert_profile_name.replace(' ', '-').lower().replace('-credential', '')
 
             if file_format == CredentialFileFormat.PKCS12:
                 file_stream_data = io.BytesIO(credential_serializer.as_pkcs12(password=password))

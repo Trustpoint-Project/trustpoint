@@ -264,12 +264,11 @@ INSTALLED_APPS = [
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
     'est.apps.EstConfig',
+    'signer.apps.SignerConfig',
     'aoki.apps.AokiConfig',
     'management.apps.ManagementConfig',
     'notifications.apps.NotificationsConfig',
-
     'trustpoint_core',
-    
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

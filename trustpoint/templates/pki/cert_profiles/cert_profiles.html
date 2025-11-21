@@ -1,0 +1,84 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header">
+        <h1>{% trans 'Certificate Profiles' %}</h1>
+    </div>
+    <div class="card-body text-start" style="overflow-y: auto; flex: 1;">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th id="checkbox-column"><input type="checkbox"/></th>
+                    <th>
+                        <a href="?sort={% if current_sort == 'unique_name' %}-{% endif %}unique_name">
+                            {% trans 'Unique Name' %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="?sort={% if current_sort == 'display_name' %}-{% endif %}display_name">
+                            {% trans 'Display Name' %}
+                        </a>
+                    </th>
+                    <th>
+                        {% trans 'Active in Domains' %}
+                    </th>
+                    <th>
+                        <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
+                            {% trans 'Created at' %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="?sort={% if current_sort == 'updated_at' %}-{% endif %}updated_at">
+                            {% trans 'Updated at' %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="?sort={% if current_sort == 'is_default' %}-{% endif %}is_default">
+                            {% trans 'Is default' %}
+                        </a>
+                    </th>
+                    <th>{% trans 'Config' %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {# When adding or removing columns, please update the "colspan" attribute in the {% empty %} section accordingly #}
+                {% for profile in page_obj %}
+                    <tr>
+                        <td class="row_checkbox">
+                            <input type="checkbox" name="row_checkbox" value="{{ profile.id }}"/>
+                        </td>
+                        <td>{{ profile.unique_name }}</td>
+                        <td>{{ profile.display_name }}</td>
+                        <td></td>
+                        <td>{{ profile.created_at }}</td>
+                        <td>{{ profile.updated_at }}</td>
+                        <td>{% if profile.is_default == 1 %} ✔ {% else %} ✘ {% endif %}</td>
+                        <td><a href="config/{{ profile.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Edit' %}</a></td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="8" class="middle">{% trans 'No Certificate Profile has been added yet.' %}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% include 'trustpoint/pagination.html' %}
+    </div>
+
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <button type="button" class="btn btn-danger tp-table-select-btn me-2" data-tp-url="delete">{% trans 'Delete selected' %}</button>
+        </div>
+        <div class="m-1">
+            <a class="btn btn-primary ms-2" href="{% url 'pki:cert_profiles-add' %}">
+                {% trans 'Add new Certificate Profile' %}
+            </a>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}

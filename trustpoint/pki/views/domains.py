@@ -14,8 +14,9 @@ from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import DeleteView
 from django.views.generic.detail import DetailView
-from django.views.generic.edit import CreateView, FormView, UpdateView
+from django.views.generic.edit import CreateView, FormView
 from django.views.generic.list import ListView
+from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
     ContextDataMixin,
@@ -24,9 +25,14 @@ from trustpoint.views.base import (
 )
 
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
-from pki.models import CertificateModel, DevIdRegistration, DomainModel, IssuingCaModel
+from pki.models import (
+    CertificateModel,
+    CertificateProfileModel,
+    DevIdRegistration,
+    DomainModel,
+    IssuingCaModel,
+)
 from pki.models.truststore import TruststoreModel
-from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -81,19 +87,6 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
         return super().form_valid(form)
 
 
-class DomainUpdateView(DomainContextMixin, UpdateView[DomainModel]):
-    """View to edit a domain."""
-
-    # TODO(Air): This view is currently UNUSED. # noqa: FIX002
-    # If used, a mixin implementing the get_form method from the DomainCreateView should be added.
-
-    model = DomainModel
-    fields = '__all__'
-    template_name = 'pki/domains/add.html'
-    success_url = reverse_lazy('pki:domains')
-    ignore_url = reverse_lazy('pki:domains')
-
-
 class DomainDevIdRegistrationTableMixin(SortableTableMixin, ListInDetailView):
     """Mixin to add a table of DevID Registrations to the domain config view."""
 
@@ -117,7 +110,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
     success_url = reverse_lazy('pki:domains')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds (no) additional context data."""
+        """Adds additional context data."""
         context = super().get_context_data(**kwargs)
         domain: DomainModel = cast('DomainModel', self.get_object())
 
@@ -126,6 +119,20 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         certificates = CertificateModel.objects.filter(
             credential__in=[issued_credential.credential for issued_credential in issued_credentials]
         )
+
+        context['profile_data'] = {
+            profile.id: {
+                'unique_name': profile.unique_name,
+                'alias': '',
+                'is_allowed': False
+            }
+            for profile in CertificateProfileModel.objects.all()
+        }
+
+        for allowed_profile in domain.certificate_profiles.all():
+            profile_id = allowed_profile.certificate_profile.id
+            context['profile_data'][profile_id]['alias'] = allowed_profile.alias
+            context['profile_data'][profile_id]['is_allowed'] = True
 
         context['certificates'] = certificates
         context['domain_options'] = {}
@@ -140,6 +147,26 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         del kwargs
 
         domain = self.get_object()
+
+        # Handle assignments of  allowed certificate profiles in domain
+        # get fields from request POST
+        allowed_profile_data = {}
+        for key in request.POST:
+            if key.startswith('cert_p_allowed_'):
+                profile_id = key.removeprefix('cert_p_allowed_')
+                alias = request.POST.get(f'cert_p_alias_{profile_id}', '').strip()
+                allowed_profile_data[profile_id] = alias
+
+        rejected_aliases = domain.set_allowed_cert_profiles(allowed_profile_data)
+        for alias_value, profile in rejected_aliases:
+            messages.warning(
+                request,
+                _('Alias "{alias}" not applied for profile {profile} as it is already in use. '
+                'Please use an unique domain alias for each Certificate Profile.').format(
+                    alias=alias_value,
+                    profile=profile
+                )
+            )
 
         domain.save()
 
@@ -255,7 +282,7 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
         return cast('str', reverse_lazy('pki:domains-config', kwargs={'pk': domain.id}))
 
 
-class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView):
+class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView[DevIdRegistration, Any]):
     """View to delete a DevID Registration."""
 
     model = DevIdRegistration
@@ -269,7 +296,7 @@ class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView):
         return response
 
 
-class DevIdMethodSelectView(DomainContextMixin, FormView):
+class DevIdMethodSelectView(DomainContextMixin, FormView[DevIdAddMethodSelectForm]):
     """View to select the method to add a DevID Registration pattern."""
 
     template_name = 'pki/devid_registration/method_select.html'

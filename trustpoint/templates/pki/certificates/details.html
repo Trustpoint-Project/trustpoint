@@ -52,8 +52,6 @@
             </div>
             <div class="tab-pane fade" id="tab4-panel" role="tabpanel">
                 <div class="tp-card-centered-content">
-
-
                     {% include 'pki/certificates/components/extensions/key_usage_extension.html' %}
                     {% include 'pki/certificates/components/extensions/issuer_alternative_name_extension.html' %}
                     {% include 'pki/certificates/components/extensions/subject_alternative_name_extension.html' %}
@@ -75,11 +73,9 @@
     </div>
     <div class="card-footer d-flex justify-content-between align-items-center">
         <div class="tp-card-btn-footer m-1">
-            <button type="button" value="Back" class="btn btn-secondary btn-half" onClick="history.back()">{% trans
-                'Back' %}</button>
+            <button type="button" value="Back" class="btn btn-secondary btn-half" onClick="history.back()">{% trans 'Back' %}</button>
             <a href="{% url 'pki:certificates' %}" class="btn btn-secondary btn-half">{% trans 'Cancel' %}</a>
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#pemModal">{% trans
-                'Show PEM' %}</button>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#pemModal">{% trans 'Show PEM' %}</button>
             <a href="{% url 'pki:certificate-download' pk=cert.id %}" class="btn btn-primary">{% trans 'Download' %}</a>
         </div>
     </div>

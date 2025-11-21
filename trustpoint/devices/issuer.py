@@ -42,7 +42,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
         credential: CredentialSerializer,
         common_name: str,
         issued_credential_type: IssuedCredentialModel.IssuedCredentialType,
-        issued_credential_purpose: IssuedCredentialModel.IssuedCredentialPurpose,
+        issued_using_cert_profile: str,
     ) -> IssuedCredentialModel:
         """Saves the issued credential in the database.
 
@@ -50,7 +50,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
             credential: The credential serializer instance.
             common_name: The common name for the credential.
             issued_credential_type: The type of issued credential.
-            issued_credential_purpose: The purpose of the issued credential.
+            issued_using_cert_profile: The profile used for issuing the credential.
 
         Returns:
             The saved issued credential model.
@@ -58,13 +58,13 @@ class SaveCredentialToDbMixin(LoggerMixin):
         self.logger.info(
             "Saving credential for device '%s' (ID: %s) "
             "in domain '%s' - CN: '%s', "
-            "Type: %s, Purpose: %s",
+            "Type: %s, Profile: %s",
             self.device.common_name,
             self.device.pk,
             self.domain.unique_name,
             common_name,
             issued_credential_type.label,
-            issued_credential_purpose.label,
+            issued_using_cert_profile,
         )
         try:
             credential_model = CredentialModel.save_credential_serializer(
@@ -73,7 +73,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
 
             issued_credential_model = IssuedCredentialModel(
                 issued_credential_type=issued_credential_type,
-                issued_credential_purpose=issued_credential_purpose,
+                issued_using_cert_profile=issued_using_cert_profile,
                 common_name=common_name,
                 credential=credential_model,
                 device=self.device,
@@ -103,19 +103,19 @@ class SaveCredentialToDbMixin(LoggerMixin):
         certificate_chain: list[x509.Certificate],
         common_name: str,
         issued_credential_type: IssuedCredentialModel.IssuedCredentialType,
-        issued_credential_purpose: IssuedCredentialModel.IssuedCredentialPurpose,
+        issued_using_cert_profile: str,
     ) -> IssuedCredentialModel:
 
         self.logger.info(
             "Saving keyless credential for device '%s' (ID: %s) "
             "in domain '%s' - CN: '%s', "
-            "Type: %s, Purpose: %s",
+            "Type: %s, Profile: %s",
             self.device.common_name,
             self.device.pk,
             self.domain.unique_name,
             common_name,
             issued_credential_type.label,
-            issued_credential_purpose.label,
+            issued_using_cert_profile,
         )
 
         try:
@@ -124,7 +124,6 @@ class SaveCredentialToDbMixin(LoggerMixin):
                 device=self.device,
                 domain=self.domain,
                 issued_credential_type=issued_credential_type,
-                issued_credential_purpose=issued_credential_purpose,
                 common_name=common_name,
             )
             for issued_credential in existing_credentials:
@@ -143,7 +142,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
 
             issued_credential_model = IssuedCredentialModel(
                 issued_credential_type=issued_credential_type,
-                issued_credential_purpose=issued_credential_purpose,
+                issued_using_cert_profile=issued_using_cert_profile,
                 common_name=common_name,
                 credential=credential_model,
                 device=self.device,
@@ -158,13 +157,14 @@ class SaveCredentialToDbMixin(LoggerMixin):
                 self.device.common_name,
                 self.device.pk
             )
-        else:
-            self.logger.info(
-                "Successfully saved keyless IssuedCredentialModel (ID: %s) for device '%s'",
-                issued_credential_model.pk,
-                self.device.common_name
-            )
-            return issued_credential_model
+            raise
+
+        self.logger.info(
+            "Successfully saved keyless IssuedCredentialModel (ID: %s) for device '%s'",
+            issued_credential_model.pk,
+            self.device.common_name
+        )
+        return issued_credential_model
 
 
 
@@ -204,11 +204,11 @@ class CredentialSaver(SaveCredentialToDbMixin):
         certificate_chain: list[x509.Certificate],
         common_name: str,
         issued_credential_type: IssuedCredentialModel.IssuedCredentialType,
-        issued_credential_purpose: IssuedCredentialModel.IssuedCredentialPurpose,
+        cert_profile_disp_name: str,
     ) -> IssuedCredentialModel:
         """Saves a keyless (i.e. private key stays on requesting device) credential to the database."""
         return self._save_keyless_credential(
-            certificate, certificate_chain, common_name, issued_credential_type, issued_credential_purpose)
+            certificate, certificate_chain, common_name, issued_credential_type, cert_profile_disp_name)
 
 
 class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
@@ -483,7 +483,7 @@ class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
             credential,
             common_name,
             IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-            IssuedCredentialModel.IssuedCredentialPurpose.TLS_CLIENT,
+            'TLS Client',
         )
 
     def issue_tls_client_certificate(
@@ -519,7 +519,7 @@ class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
             ],
             common_name,
             IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-            IssuedCredentialModel.IssuedCredentialPurpose.TLS_CLIENT,
+            'TLS Client',
         )
 
 
@@ -590,7 +590,7 @@ class LocalTlsServerCredentialIssuer(BaseTlsCredentialIssuer):
             credential,
             common_name,
             IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-            IssuedCredentialModel.IssuedCredentialPurpose.TLS_SERVER,
+            'TLS Server',
         )
 
     def issue_tls_server_certificate(  # noqa: PLR0913
@@ -634,7 +634,7 @@ class LocalTlsServerCredentialIssuer(BaseTlsCredentialIssuer):
             ],
             common_name,
             IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-            IssuedCredentialModel.IssuedCredentialPurpose.TLS_SERVER,
+            'TLS Server'
         )
 
 
@@ -673,7 +673,7 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             credential=credential,
             common_name=self._pseudonym,
             issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
-            issued_credential_purpose=IssuedCredentialModel.IssuedCredentialPurpose.DOMAIN_CREDENTIAL,
+            issued_using_cert_profile='Trustpoint Domain Credential',
         )
 
         if self.device.onboarding_config:
@@ -710,7 +710,7 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             ],
             common_name=self._pseudonym,
             issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
-            issued_credential_purpose=IssuedCredentialModel.IssuedCredentialPurpose.DOMAIN_CREDENTIAL,
+            issued_using_cert_profile='Trustpoint Domain Credential'
         )
 
         if self.device.onboarding_config:
@@ -830,7 +830,7 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
             credential,
             common_name,
             IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-            IssuedCredentialModel.IssuedCredentialPurpose.OPCUA_SERVER,
+            'OPC UA Server'
         )
 
     def issue_opc_ua_server_certificate(  # noqa: PLR0913
@@ -876,7 +876,7 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
             ],
             common_name,
             IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-            IssuedCredentialModel.IssuedCredentialPurpose.OPCUA_SERVER,
+            'OPC UA Server',
         )
 
 
@@ -966,7 +966,7 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
             credential,
             common_name,
             IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-            IssuedCredentialModel.IssuedCredentialPurpose.OPCUA_CLIENT,
+            'OPC UA Client',
         )
 
     def issue_opc_ua_client_certificate(
@@ -1000,5 +1000,5 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
             ],
             common_name,
             IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-            IssuedCredentialModel.IssuedCredentialPurpose.OPCUA_CLIENT,
+            'OPC UA Client',
         )
