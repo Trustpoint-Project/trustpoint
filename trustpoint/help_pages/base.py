@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from django.http import Http404
 from django.urls import reverse
 from django.utils.html import format_html, format_html_join
+from django.utils.safestring import mark_safe
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -218,7 +219,21 @@ def build_tls_trust_store_section() -> HelpSection:
     """
     tls = ActiveTrustpointTlsServerCredentialModel.objects.first()
     if not tls or not tls.credential:
-        raise Http404(_('Trustpoint TLS server credential is missing.'))
+        msg = (
+            'This onboarding method is not securely available without TLS. '
+            'Please ensure you are running Trustpoint within the correctly configured Docker environment!'
+        )
+        msg = mark_safe('<div class="tp-message alert alert-danger d-flex" role="alert">'
+            '<svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="error:">'
+                '<use xlink:href="/static/img/icons.svg#icon-error"></use></svg>'
+            '<div>'
+                'This onboarding method is not securely available without TLS.<br>'
+                'Please ensure you are running Trustpoint within the correctly configured Docker environment!'
+            '</div></div>')
+        return HelpSection(
+            _non_lazy('Download TLS Trust-Store'),
+            [HelpRow(_non_lazy('Truststore is unavailable!'), msg, ValueRenderType.PLAIN)],
+        )
 
     root = tls.credential.get_last_in_chain()
     if not root:

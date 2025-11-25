@@ -88,7 +88,7 @@ class TestESTHelper(LoggerMixin):
             f'cert_requested must be of type CertificateSigningRequest, got {type(mock_context.cert_requested)}.'
         assert mock_context.domain == expected_domain, \
             f'Domain in context {mock_context.domain} does not match expected domain {expected_domain}'
-        assert mock_context.est_encoding in {'der'}
+        assert mock_context.est_encoding in {'pkcs7'}
 
         est_authenticator.authenticate(mock_context)
 

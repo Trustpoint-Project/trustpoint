@@ -2,9 +2,10 @@
 import base64
 from abc import ABC, abstractmethod
 
-from cryptography.hazmat.primitives._serialization import Encoding
+from asn1crypto import cms
+from cryptography.hazmat.primitives.serialization import Encoding, pkcs7
 from devices.models import OnboardingStatus
-from workflows.models import EnrollmentRequest, State
+from workflows.models import State
 
 from request.request_context import RequestContext
 
@@ -33,6 +34,7 @@ class EstMessageResponder(AbstractMessageResponder):
             context.http_response_status = 202
             context.http_response_content_type = 'text/plain'
             context.http_response_content = 'Enrollment request pending manual approval.'
+            # TODO(Air): Implement Retry-After header  # noqa: FIX002
             return None
         if workflow_state == State.REJECTED:
             context.enrollment_request.finalize(State.REJECTED)
@@ -66,8 +68,15 @@ class EstCertificateMessageResponder(EstMessageResponder):
             exc_msg = 'Issued certificate is not set in the context.'
             raise ValueError(exc_msg)
 
-        encoding = Encoding.DER if context.est_encoding in {'der', 'base64_der'} else Encoding.PEM
-        cert_bytes = context.issued_certificate.public_bytes(encoding=encoding)
+        encoding: Encoding = Encoding.PEM
+        if context.est_encoding in {'der', 'base64_der', 'pkcs7'}:
+            encoding = Encoding.DER
+
+        if context.est_encoding == 'pkcs7':
+            cert_bytes = pkcs7.serialize_certificates([context.issued_certificate], encoding=Encoding.DER)
+        else:
+            cert_bytes = context.issued_certificate.public_bytes(encoding=encoding)
+
         cert: str | bytes
 
         if context.est_encoding == 'base64_der':
@@ -77,6 +86,11 @@ class EstCertificateMessageResponder(EstMessageResponder):
         elif context.est_encoding == 'der':
             cert = cert_bytes
             content_type = 'application/pkix-cert'
+        elif context.est_encoding == 'pkcs7':
+            # this is the only type compliant with RFC 7030
+            # others are only provided for compatibility with practical implementations
+            cert = cert_bytes
+            content_type = 'application/pkcs7-mime; smime-type=certs-only'
         else:
             try:
                 cert = cert_bytes.decode('utf-8')

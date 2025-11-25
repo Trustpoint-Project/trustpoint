@@ -330,11 +330,11 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
                 hidden=True,
             ),
             HelpSection(
-                heading=_non_lazy('Convert the certificate from DER format to PEM format (Optional)'),
+                heading=_non_lazy('Convert the certificate from PKCS#7 to PEM format (Optional)'),
                 rows=[
                     HelpRow(
                         key=_non_lazy('OpenSSL Command'),
-                        value=EstUsernamePasswordCommandBuilder.get_conversion_der_pem_command(cred_number=cred),
+                        value=EstUsernamePasswordCommandBuilder.get_conversion_p7_pem_command(cred_number=cred),
                         value_render_type=ValueRenderType.CODE,
                     )
                 ],
@@ -498,11 +498,11 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
         )
 
         der_to_pem_convertion_section = HelpSection(
-            heading=_non_lazy('Convert the certificate from DER format to PEM format (Optional)'),
+            heading=_non_lazy('Convert the certificate from PKCS#7 to PEM format (Optional)'),
             rows=[
                 HelpRow(
                     key=_non_lazy('OpenSSL Command'),
-                    value=EstUsernamePasswordCommandBuilder.get_domain_credential_conversion_der_pem_command(),
+                    value=EstUsernamePasswordCommandBuilder.get_domain_credential_conversion_p7_pem_command(),
                     value_render_type=ValueRenderType.CODE,
                 )
             ],
@@ -749,11 +749,11 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
                 hidden=True,
             ),
             HelpSection(
-                heading=_non_lazy('Convert the certificate from DER format to PEM format (Optional)'),
+                heading=_non_lazy('Convert the certificate from PKCS#7 to PEM format (Optional)'),
                 rows=[
                     HelpRow(
                         key=_non_lazy('OpenSSL Command'),
-                        value=EstUsernamePasswordCommandBuilder.get_conversion_der_pem_command(cred_number=cred),
+                        value=EstUsernamePasswordCommandBuilder.get_conversion_p7_pem_command(cred_number=cred),
                         value_render_type=ValueRenderType.CODE,
                     )
                 ],
