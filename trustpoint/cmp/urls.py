@@ -8,6 +8,17 @@ app_name = 'cmp'
 
 urlpatterns = [
     path(
+        'initialization/<str:domain_name>',
+        views.CmpInitializationRequestView.as_view(),
+        name='initialization_wellknown',
+    ),
+    path(
+        'initialization/<str:domain_name>/',
+        views.CmpInitializationRequestView.as_view(),
+        name='initialization_wellknown_slash',
+    ),
+
+    path(
         'p/<str:domain_name>/<str:certificate_profile>/initialization',
         views.CmpInitializationRequestView.as_view(),
         name='initialization_profile',
