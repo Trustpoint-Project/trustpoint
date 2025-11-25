@@ -1,0 +1,13 @@
+Subject: {{ workflow.name }}: Error encountered
+
+An error occurred while processing the workflow.
+
+Workflow: {{ workflow.name }}
+Instance: {{ instance.id }}
+State:    {{ state }}
+Step:     {{ step }}
+
+Details:
+- Error: {{ payload.error|default:"(no details)" }}
+
+Review logs for more information.

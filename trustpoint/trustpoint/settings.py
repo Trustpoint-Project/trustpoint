@@ -28,8 +28,23 @@ try:
 except PackageNotFoundError:
     APP_VERSION = 'Version not found'
 
-def app_version(request):
-    return {'APP_VERSION': APP_VERSION}
+try:
+    with Path('/etc/hostname').open('r') as f:
+        CONTAINER_ID = f.read().strip()
+except FileNotFoundError:
+    CONTAINER_ID = 'unknown'
+
+def app_version(request) -> dict:
+    """Provide application version and container ID for use in templates.
+
+    Args:
+        request: The HTTP request object.
+
+    Returns:
+        dict: A dictionary containing the application version and container ID.
+    """
+    return {'APP_VERSION': APP_VERSION,
+            'CONTAINER_ID': CONTAINER_ID}
 
 # Monkeypatching Django, so stubs will work for all generics,
 # see: https://github.com/typeddjango/django-stubs
@@ -66,6 +81,7 @@ PUBLIC_PATHS = [
     '/aoki',
     '/crl',
 ]
+
 
 # ------------- Functions --------------
 
@@ -138,6 +154,20 @@ DOCKER_CONTAINER = False
 DEBUG = True
 ADMIN_ENABLED = bool(DEBUG)
 DEVELOPMENT_ENV = True
+
+
+
+# —––––––– Basic SMTP backend –––––––—
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    # EMAIL_HOST = os.environ.get('EMAIL_HOST')
+    # EMAIL_PORT = os.environ.get('EMAIL_PORT')
+    # EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+    # EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+    # EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', True)
+    DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', default='no‑reply@trustpoint.ai')
 
 
 # Settings for postgreql database
@@ -234,9 +264,11 @@ INSTALLED_APPS = [
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
     'est.apps.EstConfig',
+    'signer.apps.SignerConfig',
     'aoki.apps.AokiConfig',
     'management.apps.ManagementConfig',
     'notifications.apps.NotificationsConfig',
+    'trustpoint_core',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -247,6 +279,9 @@ INSTALLED_APPS = [
     'crispy_bootstrap5',
     'django_filters',
     'dbbackup',
+    'workflows.apps.WorkflowsConfig',
+    'rest_framework',
+    'drf_yasg',
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
@@ -381,3 +416,29 @@ class UIConfig:
 
     paginate_by: ClassVar[int] = 50
     notifications_paginate_by: ClassVar[int] = 5
+
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ],
+}
+
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'description': 'Enter JWT token as: Bearer {token}',
+            'name': 'Authorization',
+            'in': 'header',
+        }
+    },
+    'USE_SESSION_AUTH': False,  # disables Django login in Swagger UI
+}

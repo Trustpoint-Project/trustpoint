@@ -15,18 +15,22 @@
     <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; padding-top: 0;">
         <ul class="nav nav-tabs mt-3" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="tab1-tab" data-bs-toggle="tab" data-bs-target="#tab1-panel" type="button" role="tab">{% trans "Profile" %}</button>
+                <button class="nav-link active" id="tab1-tab" data-bs-toggle="tab" data-bs-target="#tab1-panel"
+                    type="button" role="tab">{% trans "Profile" %}</button>
             </li>
 
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="tab3-tab" data-bs-toggle="tab" data-bs-target="#tab3-panel" type="button" role="tab">{% trans "Key & Signature" %}</button>
+                <button class="nav-link" id="tab3-tab" data-bs-toggle="tab" data-bs-target="#tab3-panel" type="button"
+                    role="tab">{% trans "Key & Signature" %}</button>
             </li>
-               <li class="nav-item" role="presentation">
-                <button class="nav-link" id="tab4-tab" data-bs-toggle="tab" data-bs-target="#tab4-panel" type="button" role="tab">{% trans "Extensions" %}</button>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab4-tab" data-bs-toggle="tab" data-bs-target="#tab4-panel" type="button"
+                    role="tab">{% trans "Extensions" %}</button>
             </li>
 
-             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="tab5-tab" data-bs-toggle="tab" data-bs-target="#tab5-panel" type="button" role="tab">{% trans "Hierarchy & Additional" %}</button>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab5-tab" data-bs-toggle="tab" data-bs-target="#tab5-panel" type="button"
+                    role="tab">{% trans "Hierarchy & Additional" %}</button>
             </li>
         </ul>
         <div class="tab-content pt-4">
@@ -35,7 +39,7 @@
                     {% include 'pki/certificates/components/subject_and_names.html' %}
 
                     {% include 'pki/certificates/components/general.html' %}
-                     {% include 'pki/certificates/components/validity.html' %}
+                    {% include 'pki/certificates/components/validity.html' %}
                 </div>
             </div>
 
@@ -43,16 +47,14 @@
             <div class="tab-pane fade" id="tab3-panel" role="tabpanel">
                 <div class="tp-card-centered-content">
                     {% include 'pki/certificates/components/subject_public_key_info.html' %}
-                      {% include 'pki/certificates/components/signature.html' %}
+                    {% include 'pki/certificates/components/signature.html' %}
                 </div>
             </div>
-  <div class="tab-pane fade" id="tab4-panel" role="tabpanel">
+            <div class="tab-pane fade" id="tab4-panel" role="tabpanel">
                 <div class="tp-card-centered-content">
-
-
                     {% include 'pki/certificates/components/extensions/key_usage_extension.html' %}
-                               {% include 'pki/certificates/components/extensions/issuer_alternative_name_extension.html' %}
-                        {% include 'pki/certificates/components/extensions/subject_alternative_name_extension.html' %}
+                    {% include 'pki/certificates/components/extensions/issuer_alternative_name_extension.html' %}
+                    {% include 'pki/certificates/components/extensions/subject_alternative_name_extension.html' %}
                     {% include 'pki/certificates/components/extensions/basic_constraints_extension.html' %}
                 </div>
             </div>
@@ -62,7 +64,7 @@
                 <div class="tp-card-centered-content">
                     {% include 'pki/certificates/components/hierarchy.html' %}
                     {% if cert.credential_set.first.issued_credential %}
-                        {% include 'pki/certificates/components/additional.html' %}
+                    {% include 'pki/certificates/components/additional.html' %}
                     {% endif %}
                 </div>
             </div>
@@ -85,12 +87,15 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="pemModalLabel">{% trans "Certificate PEM" %}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Close' %}"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"
+                    aria-label="{% trans 'Close' %}"></button>
             </div>
             <div class="modal-body">
                 <div class="copy-container" style="position: relative;">
-                    <pre class="command-text" style="background-color: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 5px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 12px; max-height: 500px;">{{ cert.cert_pem }}</pre>
-                    <button type="button" class="copy-button" data-tooltip="Copy to clipboard" aria-label="Copy to clipboard" style="position: absolute; top: 10px; right: 10px;">
+                    <pre class="command-text"
+                        style="background-color: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 5px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 12px; max-height: 500px;">{{ cert.cert_pem }}</pre>
+                    <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
+                        aria-label="Copy to clipboard" style="position: absolute; top: 10px; right: 10px;">
                         <svg class="icon icon-copy" width="24" height="24" fill="currentColor">
                             <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
                         </svg>
@@ -102,39 +107,40 @@
 </div>
 
 
-<style>.nav-tabs {
-    border-bottom: 1px solid #34373c;
-    background: none;
-}
+<style>
+    .nav-tabs {
+        border-bottom: 1px solid #34373c;
+        background: none;
+    }
 
-.nav-tabs .nav-link {
+    .nav-tabs .nav-link {
 
-    border: none !important;
-    border-bottom: 3px solid transparent !important;
-    background: none !important;
-    color: #b7b8be;
-    font-weight: 500;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    margin-bottom: -1px;
-    transition: color 0.16s, border-bottom 0.16s;
-}
+        border: none !important;
+        border-bottom: 3px solid transparent !important;
+        background: none !important;
+        color: #b7b8be;
+        font-weight: 500;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        margin-bottom: -1px;
+        transition: color 0.16s, border-bottom 0.16s;
+    }
 
-.nav-tabs .nav-link.active {
-    color: #5196ff;
-    border-bottom: 3px solid #5196ff !important;
-    background: none !important;
-    font-weight: 600;
-    box-shadow: none !important;
-}
-.nav-tabs .nav-link:hover:not(.active),
-.nav-tabs .nav-link:focus:not(.active) {
-    color: #dde8ff;
-    border-bottom: 3px solid #363b40;
-    background: none !important;
-    box-shadow: none !important;
-}
+    .nav-tabs .nav-link.active {
+        color: #5196ff;
+        border-bottom: 3px solid #5196ff !important;
+        background: none !important;
+        font-weight: 600;
+        box-shadow: none !important;
+    }
 
+    .nav-tabs .nav-link:hover:not(.active),
+    .nav-tabs .nav-link:focus:not(.active) {
+        color: #dde8ff;
+        border-bottom: 3px solid #363b40;
+        background: none !important;
+        box-shadow: none !important;
+    }
 </style>
 
 {% endblock content %}

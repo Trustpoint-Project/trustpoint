@@ -1,6 +1,5 @@
 """Provides the `EstAuthentication` class using the Composite pattern for modular EST authentication."""
 
-import re
 from abc import ABC, abstractmethod
 from typing import Never
 
@@ -681,7 +680,7 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             return False
 
         # Check application certificate template is present
-        if not context.certificate_template:
+        if not context.cert_profile_str:
             error_message = 'Missing application certificate template.'
             self.logger.warning(
                 'CMP signature-based certification failed: Missing application certificate template')
@@ -758,11 +757,6 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
 
             # Parse common name value
             common_name_value = common_name.decode() if isinstance(common_name, bytes) else common_name
-
-            # Verify this is a domain credential
-            if not common_name_value or re.sub(r'[^a-zA-Z0-9]', '', common_name_value) != 'TrustpointDomainCredential':
-                err_msg = 'Not a domain credential.'
-                self._raise_value_error(err_msg)
 
         except (IndexError, ValueError) as e:
             err_msg = f'Failed to extract device information from certificate: {e}'

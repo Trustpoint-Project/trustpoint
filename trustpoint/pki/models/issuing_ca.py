@@ -6,24 +6,22 @@ import datetime
 from typing import TYPE_CHECKING
 
 from cryptography import x509
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes, serialization
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from pki.models.certificate import CertificateModel, RevokedCertificateModel
+from pki.models.credential import CredentialModel
 from trustpoint_core import oid
 from util.db import CustomDeleteActionModel
 from util.field import UniqueNameValidator
 
-from pki.models.certificate import CertificateModel, RevokedCertificateModel
-from pki.models.credential import CredentialModel
-from cryptography.hazmat.primitives import hashes
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet
     from trustpoint_core.serializer import CredentialSerializer
-    from util.db import CustomDeleteActionManager
 
 
 class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
@@ -49,7 +47,11 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
     unique_name = models.CharField(
         verbose_name=_('Issuing CA Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
     )
-    credential: CredentialModel = models.OneToOneField(CredentialModel, related_name='issuing_cas', on_delete=models.PROTECT)
+    credential: CredentialModel = models.OneToOneField(
+        CredentialModel,
+        related_name='issuing_cas',
+        on_delete=models.PROTECT,
+    )
 
     issuing_ca_type = models.IntegerField(
         verbose_name=_('Issuing CA Type'), choices=IssuingCaTypeChoice, null=False, blank=False
@@ -107,10 +109,20 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(_('The provided credential is not a valid CA; it does not contain a certificate.'))
         try:
             bc_extension = ca_cert.extensions.get_extension_for_class(x509.BasicConstraints)
-        except x509.ExtensionNotFound:
-            raise ValidationError(_('The provided certificate is not a valid CA certificate; it does not contain a Basic Constraints extension.'))
+        except x509.ExtensionNotFound as e:
+            raise ValidationError(
+                _(
+                    'The provided certificate is not a valid CA certificate; '
+                    'it does not contain a Basic Constraints extension.'
+                )
+            ) from e
         if not bc_extension.value.ca:
-            raise ValidationError(_('The provided certificate is not a valid CA certificate; it is an End Entity certificate.'))
+            raise ValidationError(
+                _(
+                    'The provided certificate is not a valid CA certificate; '
+                    'it is an End Entity certificate.'
+                )
+            )
 
         issuing_ca_types = (
             cls.IssuingCaTypeChoice.AUTOGEN_ROOT,
@@ -135,6 +147,14 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
         )
         issuing_ca.save()
         return issuing_ca
+
+    def _raise_value_error(self, message: str) -> None:
+        """Helper method to raise ValueError.
+
+        Args:
+            message: The error message to raise.
+        """
+        raise ValueError(message)
 
     def issue_crl(self) -> bool:
         """Issues a CRL with revoked certificates issued by this CA."""
@@ -172,7 +192,7 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
                     hashes.SHA3_224, hashes.SHA3_256, hashes.SHA3_384, hashes.SHA3_512
                 ))):
                 err_msg = 'Cannot build the domain credential, unknown hash algorithm found.'
-                raise ValueError(err_msg)
+                self._raise_value_error(err_msg)
 
             priv_k = self.credential.get_private_key_serializer().as_crypto()
 

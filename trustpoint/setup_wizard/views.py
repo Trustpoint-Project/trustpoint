@@ -3,48 +3,64 @@
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.core.management import call_command
-from django.core.management.base import CommandError
+from django.db import connection
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
+from django.utils.translation import gettext_lazy as _
 from django.views.generic import FormView, TemplateView, View
+from management.forms import KeyStorageConfigForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
+from management.models import KeyStorageConfig, PKCS11Token
 from pki.models import CertificateModel, CredentialModel, IssuingCaModel
+from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from trustpoint.logger import LoggerMixin
 
 from setup_wizard import SetupWizardState
-from setup_wizard.forms import EmptyForm, StartupWizardTlsCertificateForm
+from setup_wizard.forms import (
+    BackupPasswordForm,
+    BackupRestoreForm,
+    EmptyForm,
+    HsmSetupForm,
+    PasswordAutoRestoreForm,
+    StartupWizardTlsCertificateForm,
+)
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
-    from typing import Any
 
     from trustpoint_core.serializer import CertificateSerializer
 
-APACHE_PATH = Path(__file__).parent.parent.parent / 'docker/trustpoint/apache/tls'
-APACHE_KEY_PATH = APACHE_PATH / Path('apache-tls-server-key.key')
-APACHE_CERT_PATH = APACHE_PATH / Path('apache-tls-server-cert.pem')
-APACHE_CERT_CHAIN_PATH = APACHE_PATH / Path('apache-tls-server-cert-chain.pem')
 
-STATE_FILE_DIR = Path('/etc/trustpoint/wizard/transition/')
-SCRIPT_WIZARD_INITIAL = STATE_FILE_DIR / Path('wizard_initial.sh')
-SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY = STATE_FILE_DIR / Path('wizard_tls_server_credential_apply.sh')
-SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY_CANCEL = STATE_FILE_DIR / Path('wizard_tls_server_credential_apply_cancel.sh')
-SCRIPT_WIZARD_DEMO_DATA = STATE_FILE_DIR / Path('wizard_demo_data.sh')
-SCRIPT_WIZARD_CREATE_SUPER_USER = STATE_FILE_DIR / Path('wizard_create_super_user.sh')
-SCRIPT_WIZARD_RESTORE = STATE_FILE_DIR / Path('wizard_restore.sh')
+from management.apache_paths import (
+    APACHE_CERT_CHAIN_PATH,
+    APACHE_CERT_PATH,
+    APACHE_KEY_PATH,
+)
 
+from setup_wizard.state_dir_paths import (
+    SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS,
+    SCRIPT_WIZARD_BACKUP_PASSWORD,
+    SCRIPT_WIZARD_CREATE_SUPER_USER,
+    SCRIPT_WIZARD_DEMO_DATA,
+    SCRIPT_WIZARD_SETUP_CRYPTO_STORAGE,
+    SCRIPT_WIZARD_SETUP_HSM,
+    SCRIPT_WIZARD_SETUP_MODE,
+    SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY,
+    SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY_CANCEL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,11 +87,12 @@ class TrustpointTlsServerCredentialError(Exception):
         super().__init__(message)
 
 
-def execute_shell_script(script: Path) -> None:
-    """Execute a shell script.
+def execute_shell_script(script: Path, *args: str) -> None:
+    """Execute a shell script with optional arguments.
 
     Args:
         script (Path): The path to the shell script to execute.
+        *args (str): Additional arguments to pass to the script.
 
     Raises:
         FileNotFoundError: If the script does not exist.
@@ -91,7 +108,7 @@ def execute_shell_script(script: Path) -> None:
         err_msg = f'The script path {script_path} is not a valid file.'
         raise ValueError(err_msg)
 
-    command = ['sudo', str(script_path)]
+    command = ['sudo', str(script_path), *list(args)]
 
     # This method is executing all paths it gets.
     # The security is actually implemented using a sudoers file within the linux system -> noqa: S603.
@@ -121,21 +138,398 @@ class StartupWizardRedirect:
         Raises:
             ValueError: If the wizard state is unrecognized or invalid.
         """
-        if wizard_state == SetupWizardState.WIZARD_INITIAL:
-            return redirect('setup_wizard:initial', permanent=False)
-        if wizard_state == SetupWizardState.WIZARD_TLS_SERVER_CREDENTIAL_APPLY:
-            return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
-        if wizard_state == SetupWizardState.WIZARD_DEMO_DATA:
-            return redirect('setup_wizard:demo_data', permanent=False)
-        if wizard_state == SetupWizardState.WIZARD_CREATE_SUPER_USER:
-            return redirect('setup_wizard:create_super_user', permanent=False)
-        if wizard_state == SetupWizardState.WIZARD_COMPLETED:
-            return redirect('users:login', permanent=False)
+        state_to_url = {
+            SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE: 'setup_wizard:crypto_storage_setup',
+            SetupWizardState.WIZARD_SETUP_HSM: 'setup_wizard:hsm_setup',
+            SetupWizardState.WIZARD_SETUP_MODE: 'setup_wizard:setup_mode',
+            SetupWizardState.WIZARD_TLS_SERVER_CREDENTIAL_APPLY: 'setup_wizard:tls_server_credential_apply',
+            SetupWizardState.WIZARD_BACKUP_PASSWORD: 'setup_wizard:backup_password',
+            SetupWizardState.WIZARD_DEMO_DATA: 'setup_wizard:demo_data',
+            SetupWizardState.WIZARD_CREATE_SUPER_USER: 'setup_wizard:create_super_user',
+            SetupWizardState.WIZARD_COMPLETED: 'users:login',
+            SetupWizardState.WIZARD_SETUP_HSM_AUTORESTORE: 'setup_wizard:auto_restore_hsm_setup',
+            SetupWizardState.WIZARD_AUTO_RESTORE_PASSWORD: 'setup_wizard:auto_restore_password',
+        }
+
+        if wizard_state in [SetupWizardState.WIZARD_SETUP_HSM, SetupWizardState.WIZARD_SETUP_HSM_AUTORESTORE]:
+            try:
+                config = KeyStorageConfig.get_config()
+                if config.storage_type == KeyStorageConfig.StorageType.SOFTHSM:
+                    hsm_type = 'softhsm'
+                elif config.storage_type == KeyStorageConfig.StorageType.PHYSICAL_HSM:
+                    hsm_type = 'physical'
+                else:
+                    msg = 'Invalid storage type for HSM setup.'
+                    raise ValueError(msg) from None
+
+                return redirect(state_to_url[wizard_state], hsm_type=hsm_type, permanent=False)
+
+            except KeyStorageConfig.DoesNotExist:
+                msg = 'KeyStorageConfig is not configured.'
+                raise ValueError(msg) from None
+
+        if wizard_state in state_to_url:
+            return redirect(state_to_url[wizard_state], permanent=False)
+
         err_msg = 'Unknown wizard state found. Failed to redirect by state.'
-        raise ValueError(err_msg)
+        raise ValueError(err_msg) from None
 
 
-class SetupWizardInitialView(TemplateView):
+class HsmSetupMixin(LoggerMixin):
+    """Mixin that provides common HSM setup functionality for both initial setup and auto restore."""
+    request: HttpRequest
+
+    def form_valid(self, form: HsmSetupForm) -> HttpResponse:
+        """Handle form submission for HSM setup."""
+        cleaned_data = form.cleaned_data
+        hsm_type = cleaned_data['hsm_type']
+
+        if hsm_type != 'softhsm':
+            messages.add_message(self.request, messages.ERROR, 'Physical HSM is not yet supported.')
+            return redirect(self.get_error_redirect_url(), hsm_type=hsm_type, permanent=False)
+
+        module_path = cleaned_data['module_path']
+        slot = str(cleaned_data['slot'])
+        label = cleaned_data['label']
+
+        if not self._validate_hsm_inputs(module_path, slot, label):
+            return redirect(self.get_error_redirect_url(), hsm_type=hsm_type, permanent=False)
+
+        try:
+            result = self._run_hsm_setup_script(module_path, slot, label)
+            if result.returncode != 0:
+                self._raise_called_process_error(result.returncode)
+            token, created = self._get_or_update_token(hsm_type, module_path, slot, label)
+            self._generate_kek_and_dek(token)
+            self._add_success_message(hsm_type, created=created, token=token)
+        except Exception as exc:  # noqa: BLE001
+            return self._handle_hsm_setup_exception(exc)
+
+        return FormView.form_valid(cast('FormView[HsmSetupForm]', self), form)
+
+    def _validate_hsm_inputs(self, module_path: str, slot: str, label: str) -> bool:
+        """Validate HSM input fields and add error messages if invalid."""
+        if not re.match(r'^[\w\-/\.]+$', module_path):
+            messages.add_message(self.request, messages.ERROR, 'Invalid module path.')
+            return False
+        if not slot.isdigit():
+            messages.add_message(self.request, messages.ERROR, 'Invalid slot value.')
+            return False
+        if not re.match(r'^[\w\-]+$', label):
+            messages.add_message(self.request, messages.ERROR, 'Invalid label.')
+            return False
+        for arg in [module_path, slot, label]:
+            if not re.match(r'^[\w\-/\.]+$', arg):
+                messages.add_message(self.request, messages.ERROR, 'Invalid argument detected in command.')
+                return False
+        return True
+
+    def _run_hsm_setup_script(self, module_path: str, slot: str, label: str) -> subprocess.CompletedProcess[str]:
+        """Run the HSM setup shell script."""
+        setup_type = self.get_setup_type()
+        command = ['sudo', str(SCRIPT_WIZARD_SETUP_HSM), module_path, slot, label, setup_type]
+        return subprocess.run(command, capture_output=True, text=True, check=True)  # noqa: S603
+
+    def _get_or_update_token(self, hsm_type: str, module_path: str, slot: str, label: str) -> tuple[PKCS11Token, bool]:
+        """Get or update the PKCS11Token object."""
+        token, created = PKCS11Token.objects.get_or_create(
+            label=label,
+            defaults={
+                'slot': int(slot),
+                'module_path': module_path,
+            }
+        )
+        if not created:
+            token.slot = int(slot)
+            token.module_path = module_path
+            token.save()
+
+        self._assign_token_to_crypto_storage(token, hsm_type)
+
+        return token, created
+
+    def _assign_token_to_crypto_storage(self, token: PKCS11Token, hsm_type: str) -> None:
+        """Assign the created token to the appropriate crypto storage configuration."""
+        try:
+            config = KeyStorageConfig.get_config()
+
+            if hsm_type == 'softhsm' and config.storage_type == KeyStorageConfig.StorageType.SOFTHSM:
+                config.hsm_config = token
+                config.save(update_fields=['hsm_config'])
+                self.logger.info('Assigned SoftHSM token %s to crypto storage configuration', token.label)
+
+            elif hsm_type == 'physical' and config.storage_type == KeyStorageConfig.StorageType.PHYSICAL_HSM:
+                config.hsm_config = token
+                config.save(update_fields=['hsm_config'])
+                self.logger.info('Assigned Physical HSM token %s to crypto storage configuration', token.label)
+
+            else:
+                self.logger.warning(
+                    'Token HSM type %s does not match crypto storage type %s, not assigning',
+                    hsm_type, config.storage_type
+                )
+
+        except (AttributeError, ValueError, RuntimeError) as e:
+            self.logger.warning('Failed to assign token to crypto storage configuration: %s', e)
+
+    def _generate_kek_and_dek(self, token: PKCS11Token) -> None:
+        """Generate KEK and DEK for the token, log and warn on failure."""
+        try:
+            token.generate_kek(key_length=256)
+            self.logger.info('key encryption key (KEK) generated for token: %s', token.label)
+        except (subprocess.CalledProcessError, ValueError, RuntimeError) as e:
+            self.logger.exception('Failed to generate key encryption key (KEK)')
+            messages.add_message(self.request, messages.WARNING,
+                                 f'HSM setup completed, but key encryption key (KEK) generation failed: {e!s}')
+        try:
+            token.generate_and_wrap_dek()
+            self.logger.info('DEK generated and wrap for token: %s', token.label)
+        except Exception as e:
+            self.logger.exception('Failed to generate and wrap DEK')
+            messages.add_message(self.request, messages.WARNING,
+                                 f'HSM setup completed, but DEK generation failed: {e!s}')
+
+    def _raise_called_process_error(self, returncode: int) -> None:
+        """Raise a subprocess.CalledProcessError with the given return code."""
+        raise subprocess.CalledProcessError(returncode, str(SCRIPT_WIZARD_SETUP_HSM))
+
+    def _add_success_message(self, hsm_type: str, *, created: bool, token: PKCS11Token) -> None:
+        """Add a success message for HSM setup."""
+        action = 'created' if created else 'updated'
+        context = self.get_success_context()
+        messages.add_message(self.request, messages.SUCCESS,
+                             f'HSM setup completed successfully {context} with {hsm_type.upper()}. '
+                             f'PKCS#11 token configuration {action}.')
+        self.logger.info('PKCS11Token %s %s: %s', action, context, token)
+
+    def _handle_hsm_setup_exception(self, exc: Exception) -> HttpResponse:
+        """Handle exceptions during HSM setup and add appropriate error messages."""
+        hsm_type = self.request.POST.get('hsm_type', 'softhsm')
+        if isinstance(exc, subprocess.CalledProcessError):
+            err_msg = f'HSM setup failed: {self._map_exit_code_to_message(exc.returncode)}'
+        elif isinstance(exc, FileNotFoundError):
+            err_msg = f'HSM setup script not found: {SCRIPT_WIZARD_SETUP_HSM}'
+        else:
+            err_msg = 'An unexpected error occurred during HSM setup.'
+        messages.add_message(self.request, messages.ERROR, err_msg)
+        self.logger.exception('An error occurred during HSM setup')
+        return redirect(self.get_error_redirect_url(), hsm_type=hsm_type, permanent=False)
+
+    @staticmethod
+    def _map_exit_code_to_message(return_code: int) -> str:
+        """Map script exit codes to meaningful error messages."""
+        error_messages = {
+            1: 'Invalid number of arguments provided to HSM setup script.',
+            2: 'Trustpoint is not in the WIZARD_SETUP_HSM or WIZARD_SETUP_HSM_AUTORESTORE state.',
+            3: 'Found multiple wizard state files. The wizard state seems to be corrupted.',
+            4: 'HSM SO PIN file not found or not readable.',
+            5: 'HSM PIN file not found or not readable.',
+            6: 'HSM SO PIN is empty or could not be read from file.',
+            7: 'HSM PIN is empty or could not be read from file.',
+            8: 'PKCS#11 module not found.',
+            9: 'Failed to initialize HSM token or set user PIN.',
+            12: 'Failed to remove the WIZARD_SETUP_HSM or WIZARD_SETUP_HSM_AUTORESTORE state file.',
+            13: 'Failed to create the WIZARD_SETUP_MODE state file.',
+            19: 'Failed to access HSM slot as www-data user.',
+            20: 'Failed to create the WIZARD_AUTO_RESTORE_PASSWORD state file.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred during HSM setup.')
+
+    def get_setup_type(self) -> str:
+        """Return the setup type for the HSM script."""
+        msg = 'Subclasses must implement get_setup_type()'
+        raise NotImplementedError(msg)
+
+    def get_error_redirect_url(self) -> str:
+        """Return the URL to redirect to on error."""
+        msg = 'Subclasses must implement get_error_redirect_url()'
+        raise NotImplementedError(msg)
+
+    def get_success_context(self) -> str:
+        """Return context string for success messages."""
+        msg = 'Subclasses must implement get_success_context()'
+        raise NotImplementedError(msg)
+
+    def get_expected_wizard_state(self) -> SetupWizardState:
+        """Return the expected wizard state for this view."""
+        msg = 'Subclasses must implement get_expected_wizard_state()'
+        raise NotImplementedError(msg)
+
+class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
+    """View for handling crypto storage setup during the setup wizard."""
+
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/crypto_storage_setup.html'
+    form_class = KeyStorageConfigForm
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle request dispatch and wizard state validation."""
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE:
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form: KeyStorageConfigForm) -> HttpResponse:
+        """Handle valid form submission and determine next step based on storage type."""
+        try:
+            config = form.save_with_commit()
+            storage_type = config.storage_type
+
+            execute_shell_script(SCRIPT_WIZARD_SETUP_CRYPTO_STORAGE, storage_type)
+
+            messages.add_message(
+                self.request,
+                messages.SUCCESS,
+                f'Crypto storage configuration saved: {config.get_storage_type_display()}'
+            )
+
+            self.logger.info('Crypto storage configured with type: %s', storage_type)
+
+            if storage_type == KeyStorageConfig.StorageType.SOFTWARE:
+                return redirect('setup_wizard:setup_mode', permanent=False)
+            if storage_type == KeyStorageConfig.StorageType.SOFTHSM:
+                return redirect('setup_wizard:hsm_setup', hsm_type='softhsm', permanent=False)
+            if storage_type == KeyStorageConfig.StorageType.PHYSICAL_HSM:
+                    messages.add_message(
+                                    self.request,
+                                    messages.ERROR,
+                                    'Physical HSM is coming soon.'
+                                )
+                # return redirect('setup_wizard:hsm_setup', hsm_type='physical', permanent=False)  # noqa: ERA001
+
+            messages.add_message(
+                self.request,
+                messages.ERROR,
+                'Unknown storage type selected.'
+            )
+            return redirect('setup_wizard:crypto_storage_setup', permanent=False)
+
+        except subprocess.CalledProcessError as exception:
+            err_msg = f'Crypto storage script failed: {self._map_exit_code_to_message(exception.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:crypto_storage_setup', permanent=False)
+
+        except FileNotFoundError:
+            err_msg = f'Crypto storage script not found: {SCRIPT_WIZARD_SETUP_CRYPTO_STORAGE}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:crypto_storage_setup', permanent=False)
+
+        except Exception:
+            err_msg = 'An unexpected error occurred during crypto storage setup.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception('Crypto storage setup error')
+            return redirect('setup_wizard:crypto_storage_setup', permanent=False)
+
+    def form_invalid(self, form: KeyStorageConfigForm) -> HttpResponse:
+        """Handle invalid form submission."""
+        messages.add_message(
+            self.request,
+            messages.ERROR,
+            'Please correct the errors below and try again.'
+        )
+        return super().form_invalid(form)
+
+    @staticmethod
+    def _map_exit_code_to_message(return_code: int) -> str:
+        """Map script exit codes to meaningful error messages."""
+        error_messages = {
+            1: 'Trustpoint is not in the WIZARD_SETUP_CRYPTO_STORAGE state.',
+            2: 'Found multiple wizard state files. The wizard state seems to be corrupted.',
+            3: 'Failed to remove the WIZARD_SETUP_CRYPTO_STORAGE state file.',
+            4: 'Failed to create the next wizard state file.',
+            5: 'Invalid crypto storage type provided.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred during crypto storage setup.')
+
+class SetupWizardHsmSetupView(HsmSetupMixin, FormView[HsmSetupForm]):
+    """View for handling HSM setup during the setup wizard."""
+
+    form_class = HsmSetupForm
+    template_name = 'setup_wizard/hsm_setup.html'
+    http_method_names = ('get', 'post')
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle request dispatch and wizard state validation."""
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != self.get_expected_wizard_state():
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        hsm_type = kwargs.get('hsm_type')
+        if hsm_type not in ['softhsm', 'physical']:
+            messages.add_message(
+                self.request,
+                messages.ERROR,
+                'Invalid HSM type specified.'
+            )
+            return redirect('setup_wizard:crypto_storage_setup', permanent=False)
+
+        try:
+            config = KeyStorageConfig.get_config()
+
+            expected_storage_type = (
+                KeyStorageConfig.StorageType.SOFTHSM if hsm_type == 'softhsm'
+                else KeyStorageConfig.StorageType.PHYSICAL_HSM
+            )
+
+            if config.storage_type != expected_storage_type:
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    f'{hsm_type.title()} HSM setup is only available when {hsm_type.title()} HSM storage is selected.'
+                )
+                return redirect('setup_wizard:crypto_storage_setup', permanent=False)
+        except Exception:  # noqa: BLE001
+            return redirect('setup_wizard:crypto_storage_setup', permanent=False)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form(self, form_class: type[HsmSetupForm] | None = None) -> HsmSetupForm:
+        """Return a form instance with appropriate defaults based on HSM type."""
+        if form_class is None:
+            form_class = self.get_form_class()
+
+        hsm_type = self.kwargs.get('hsm_type')
+        form_kwargs = self.get_form_kwargs()
+
+        return form_class(hsm_type, **form_kwargs)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add HSM type to template context."""
+        context = super().get_context_data(**kwargs)
+        context['hsm_type'] = self.kwargs.get('hsm_type')
+        context['hsm_type_display'] = self.kwargs.get('hsm_type').replace('_', ' ').title()
+        return context
+
+    def get_setup_type(self) -> str:
+        """Return the setup type for the HSM script."""
+        return 'init_setup'
+
+    def get_success_url(self) -> str:
+        """Return the success URL after HSM setup."""
+        return str(reverse_lazy('setup_wizard:setup_mode'))
+
+    def get_error_redirect_url(self) -> str:
+        """Return the URL to redirect to on error."""
+        return 'setup_wizard:hsm_setup'
+
+    def get_success_context(self) -> str:
+        """Return context string for success messages."""
+        return 'for initial setup'
+
+    def get_expected_wizard_state(self) -> SetupWizardState:
+        """Return the expected wizard state for this view."""
+        return SetupWizardState.WIZARD_SETUP_HSM
+
+class SetupWizardSetupModeView(TemplateView):
     """View for the initial step of the setup wizard.
 
     This view is responsible for displaying the initial setup wizard page. It
@@ -150,10 +544,10 @@ class SetupWizardInitialView(TemplateView):
     """
 
     http_method_names = ('get',)
-    template_name = 'setup_wizard/initial.html'
+    template_name = 'setup_wizard/setup_mode.html'
 
     def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle GET requests for the initial setup wizard page.
+        """Handle GET requests for the setup mode wizard page.
 
         This method validates the current state of the setup wizard and redirects
         the user to the appropriate page. If the application is not running in a
@@ -171,14 +565,64 @@ class SetupWizardInitialView(TemplateView):
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_INITIAL:
+        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
             return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().get(*args, **kwargs)
 
+class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView[EmptyForm]):
+    """View for selecting the TLS server credential during setup."""
 
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/select_tls_server_credential.html'
+    form_class = EmptyForm
 
-class SetupWizardOptionsView(TemplateView):
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle request dispatch and wizard state validation."""
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
+            self.logger.warning(
+                "Unexpected wizard state '%s' expected '%s'",
+                wizard_state,
+                SetupWizardState.WIZARD_SETUP_MODE,
+            )
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests for the TLS server credential selection page."""
+        return super().get(*args, **kwargs)
+
+    def form_valid(self, _: EmptyForm) -> HttpResponse:
+        """Handle form submission for TLS server credential selection."""
+        try:
+            if 'generate_credential' in self.request.POST:
+                return redirect('setup_wizard:generate_tls_server_credential', permanent=False)
+            if 'import_credential' in self.request.POST:
+                return redirect('setup_wizard:import_tls_server_credential', permanent=False)
+            messages.add_message(
+                self.request,
+                messages.ERROR,
+                'Invalid option selected.'
+            )
+            return redirect('setup_wizard:select_tls_server_credential', permanent=False)
+
+        except FileNotFoundError:
+            err_msg = f'Setup mode script not found: {SCRIPT_WIZARD_SETUP_MODE}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:select_tls_server_credential', permanent=False)
+        except Exception:
+            err_msg = 'An unexpected error occurred during setup mode execution.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:select_tls_server_credential', permanent=False)
+
+class SetupWizardRestoreOptionsView(TemplateView):
     """View for the restore option during initialization.
 
     Attributes:
@@ -187,7 +631,7 @@ class SetupWizardOptionsView(TemplateView):
     """
 
     http_method_names = ('get',)
-    template_name = 'setup_wizard/options.html'
+    template_name = 'setup_wizard/restore_options.html'
 
     def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests for the initial setup wizard page.
@@ -208,48 +652,659 @@ class SetupWizardOptionsView(TemplateView):
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_INITIAL:
+        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
             return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().get(*args, **kwargs)
 
+class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
+    """View for setting up backup password for PKCS#11 token during the setup wizard.
 
-class BackupRestoreView(View, LoggerMixin):
-    """Upload a dump file and restore the database from it."""
+    This view allows users to set a backup password that can be used to recover
+    the DEK (Data Encryption Key) in case the HSM becomes unavailable. The password
+    is used to derive a BEK (Backup Encryption Key) using Argon2.
+    """
+
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/backup_password.html'
+    success_url = reverse_lazy('setup_wizard:demo_data')
+    form_class = BackupPasswordForm
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle request dispatch and wizard state validation."""
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_BACKUP_PASSWORD:
+            self.logger.warning(
+                "Unexpected wizard state '%s', expected '%s'. Redirecting to appropriate state.",
+                wizard_state,
+                SetupWizardState.WIZARD_BACKUP_PASSWORD,
+            )
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add password requirements to the context."""
+        context = super().get_context_data(**kwargs)
+        context['password_requirements'] = [
+            _('Your password can’t be too similar to your other personal information.'),  # noqa: RUF001
+            _('Your password must contain at least 8 characters.'),
+            _('Your password can’t be a commonly used password.'),  # noqa: RUF001
+            _('Your password can’t be entirely numeric.'),  # noqa: RUF001
+        ]
+        return context
+
+    def form_valid(self, form: BackupPasswordForm) -> HttpResponse:
+        """Handle valid form submission."""
+        password = form.cleaned_data.get('password')
+
+        try:
+            token = PKCS11Token.objects.first()
+            if not token:
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    'No PKCS#11 token found. This should not happen in the backup password step.'
+                )
+                self.logger.error('No PKCS11Token found in backup password step')
+                return redirect('setup_wizard:demo_data', permanent=False)
+
+            if not isinstance(password, str):
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    'Invalid password provided.'
+                )
+                self.logger.error('Invalid password type provided in backup password step')
+                return self.form_invalid(form)
+
+            token.set_backup_password(password)
+            execute_shell_script(SCRIPT_WIZARD_BACKUP_PASSWORD)
+
+            messages.add_message(
+                self.request,
+                messages.SUCCESS,
+                'Backup password set successfully.'
+            )
+            self.logger.info('Backup password set for token: %s', token.label)
+            return super().form_valid(form)
+
+        except subprocess.CalledProcessError as exc:
+            err_msg = f'Backup password script failed: {self._map_exit_code_to_message(exc.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:backup_password', permanent=False)
+        except FileNotFoundError:
+            err_msg = f'Backup password script not found: {SCRIPT_WIZARD_BACKUP_PASSWORD}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:backup_password', permanent=False)
+        except PKCS11Token.DoesNotExist as exc:
+            err_msg = str(exc)
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:backup_password', permanent=False)
+        except ValueError as exc:
+            err_msg = f'Invalid input: {exc!s}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return self.form_invalid(form)
+        except RuntimeError as exc:
+            err_msg = f'Failed to set backup password: {exc!s}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return self.form_invalid(form)
+        except Exception as exc:
+            # General exception handling with specific messages
+            err_msg = f'An unexpected error occurred: {exc!s}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return self.form_invalid(form)
+
+    def form_invalid(self, form: BackupPasswordForm) -> HttpResponse:
+        """Handle invalid form submission."""
+        messages.add_message(
+            self.request,
+            messages.ERROR,
+            'Please correct the errors below and try again.'
+        )
+        return super().form_invalid(form)
+
+    @staticmethod
+    def _map_exit_code_to_message(return_code: int) -> str:
+        """Map script exit codes to meaningful error messages."""
+        error_messages = {
+            1: 'Invalid arguments provided to backup password script.',
+            2: 'Trustpoint is not in the WIZARD_BACKUP_PASSWORD state.',
+            3: 'Found multiple wizard state files. The wizard state seems to be corrupted.',
+            4: 'Failed to remove the WIZARD_BACKUP_PASSWORD state file.',
+            5: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred during backup password setup.')
+
+class BackupPasswordRecoveryMixin(LoggerMixin):
+    """Mixin that provides backup password recovery functionality."""
+    request: HttpRequest
+
+    def handle_backup_password_recovery(self, backup_password: str) -> bool:
+        """Handle DEK recovery using backup password.
+
+        This method handles two scenarios:
+        1. Standard recovery: KEK exists, use it to wrap the recovered DEK
+        2. New KEK scenario: No KEK or KEK doesn't match, generate new KEK first
+
+        Args:
+            backup_password: The backup password provided by user
+
+        Returns:
+            bool: True if recovery was successful, False otherwise
+        """
+        try:
+            token = self._get_token_for_recovery()
+            if not token:
+                return False
+
+            has_kek = self._ensure_kek_exists(token)
+            if has_kek is None:
+                return False
+
+            dek_bytes = self._recover_dek_with_password(token, backup_password)
+            if not dek_bytes:
+                return False
+
+            if not self._wrap_and_save_dek(token, dek_bytes, had_kek=has_kek):
+                return False
+
+            self._cache_dek(token)
+            self._log_success(token, had_kek=has_kek)
+
+        except Exception:
+            self.logger.exception('Unexpected error during backup password recovery')
+            messages.add_message(
+                self.request,
+                messages.ERROR,
+                'Unexpected error during backup password recovery'
+            )
+            return False
+        else:
+            return True
+
+    def _get_token_for_recovery(self) -> PKCS11Token | None:
+        """Get the PKCS11Token for recovery."""
+        token = PKCS11Token.objects.first()
+        if not token:
+            self.logger.warning('No PKCS11Token found after restore for backup password recovery')
+            return None
+
+        if not token.has_backup_encryption():
+            self.logger.warning('No backup encryption found for token %s, skipping password recovery', token.label)
+            return None
+
+        return token
+
+    def _ensure_kek_exists(self, token: PKCS11Token) -> bool | None:
+        """Ensure KEK exists on the token, generate if needed.
+
+        Returns:
+            bool: True if KEK already existed, False if newly generated, None on error
+        """
+        has_kek = bool(token.kek)
+
+        if not has_kek:
+            self.logger.info('No KEK found on token %s - generating new KEK', token.label)
+            try:
+                token.generate_kek(key_length=256)
+                self.logger.info('New KEK generated successfully for token %s', token.label)
+            except (subprocess.CalledProcessError, ValueError, RuntimeError) as e:
+                self.logger.exception('Failed to generate new KEK for token %s', token.label)
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    f'Failed to generate new KEK: {e}'
+                )
+                return None
+
+        return has_kek
+
+    def _recover_dek_with_password(self, token: PKCS11Token, backup_password: str) -> bytes | None:
+        """Recover DEK using backup password."""
+        try:
+            return token.get_dek_with_backup_password(backup_password)
+        except (RuntimeError, ValueError):
+            self.logger.exception('Invalid backup password provided for token %s', token.label)
+            self.logger.exception('The restore process needs to be redone with the correct backup password.')
+            messages.add_message(
+                self.request,
+                messages.ERROR,
+                'Invalid backup password provided. DEK recovery failed. '
+            )
+            messages.add_message(
+                self.request,
+                messages.ERROR,
+                'The restore process needs to be redone with the correct backup password.'
+            )
+            return None
+
+    def _wrap_and_save_dek(self, token: PKCS11Token, dek_bytes: bytes, *,had_kek: bool) -> bool:
+        """Wrap recovered DEK with KEK and save."""
+        try:
+            wrapped_dek = token.wrap_dek(dek_bytes)
+            token.encrypted_dek = wrapped_dek
+            token.save(update_fields=['encrypted_dek'])
+
+            kek_status = 'newly generated' if not had_kek else 'existing'
+            self.logger.info(
+                'Successfully wrapped recovered DEK with %s KEK for token %s',
+                kek_status,
+                token.label
+            )
+        except RuntimeError as e:
+            self.logger.exception('Failed to wrap recovered DEK for token %s', token.label)
+            messages.add_message(
+                self.request,
+                messages.ERROR,
+                f'Failed to wrap recovered DEK with KEK: {e}'
+            )
+            return False
+        else:
+            return True
+
+    def _cache_dek(self, token: PKCS11Token) -> None:
+        """Cache the DEK for immediate use."""
+        try:
+            cached_dek = token.get_dek()
+            if cached_dek:
+                self.logger.info('DEK successfully cached for token %s after backup recovery', token.label)
+            else:
+                self.logger.warning('Failed to cache DEK for token %s after backup recovery', token.label)
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning('Failed to cache DEK for token %s: %s', token.label, e)
+
+    def _log_success(self, token: PKCS11Token, *, had_kek: bool) -> None:
+        """Log successful recovery."""
+        recovery_type = 'with new KEK generation' if not had_kek else 'with existing KEK'
+        self.logger.info(
+            'Successfully completed backup password recovery for token %s %s',
+            token.label,
+            recovery_type
+        )
+        messages.add_message(
+            self.request,
+            messages.SUCCESS,
+            'DEK successfully recovered using backup password and re-secured with HSM key.'
+        )
+
+
+class AutoRestoreHsmSetupView(HsmSetupMixin, FormView[HsmSetupForm]):
+    """View for handling HSM setup during auto restore process.
+
+    This view initializes the SoftHSM token when restoring to a new HSM installation
+    where the old KEK is lost. It uses the wizard_setup_hsm.sh script with 'auto_restore_setup' mode.
+    """
+
+    form_class = HsmSetupForm
+    template_name = 'setup_wizard/hsm_setup.html'
+    http_method_names = ('get', 'post')
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle request dispatch and wizard state validation."""
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != self.get_expected_wizard_state():
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        hsm_type = kwargs.get('hsm_type')
+        if hsm_type not in ['softhsm', 'physical']:
+            messages.add_message(
+                self.request,
+                messages.ERROR,
+                'Invalid HSM type specified.'
+            )
+            return redirect('users:login', permanent=False)
+
+        try:
+            config = KeyStorageConfig.get_config()
+
+            expected_storage_type = (
+                KeyStorageConfig.StorageType.SOFTHSM if hsm_type == 'softhsm'
+                else KeyStorageConfig.StorageType.PHYSICAL_HSM
+            )
+
+            if config.storage_type != expected_storage_type:
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    f'Auto restore HSM setup is only available when {hsm_type.title()} HSM storage is selected.'
+                )
+                return redirect('users:login', permanent=False)
+        except Exception:  # noqa: BLE001
+            return redirect('users:login', permanent=False)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form(self, form_class: type[HsmSetupForm] | None = None) -> HsmSetupForm:
+        """Return a form instance with appropriate defaults based on HSM type."""
+        if form_class is None:
+            form_class = self.get_form_class()
+
+        hsm_type = self.kwargs.get('hsm_type')
+        form_kwargs = self.get_form_kwargs()
+
+        return form_class(hsm_type, **form_kwargs)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add HSM type to template context."""
+        context = super().get_context_data(**kwargs)
+        context['hsm_type'] = self.kwargs.get('hsm_type')
+        context['hsm_type_display'] = self.kwargs.get('hsm_type').replace('_', ' ').title()
+        context['is_auto_restore'] = True
+        return context
+
+    def get_setup_type(self) -> str:
+        """Return the setup type for the HSM script (auto_restore_setup)."""
+        return 'auto_restore_setup'
+
+    def get_success_url(self) -> str:
+        """Return the success URL after HSM setup."""
+        return str(reverse_lazy('setup_wizard:auto_restore_password'))
+
+    def get_error_redirect_url(self) -> str:
+        """Return the URL to redirect to on error."""
+        return 'setup_wizard:auto_restore_hsm_setup'
+
+    def get_success_context(self) -> str:
+        """Return context string for success messages."""
+        return 'for auto restore'
+
+    def get_expected_wizard_state(self) -> SetupWizardState:
+        """Return the expected wizard state for this view."""
+        return SetupWizardState.WIZARD_SETUP_HSM_AUTORESTORE
+
+
+class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
+    """Upload a dump file and restore the database from it with optional backup password."""
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        backup_file = request.FILES.get('backup_file')
-        if not backup_file:
-            messages.error(request, 'No file uploaded for restore.')
-            return redirect('setup_wizard:options')
-        if not isinstance(backup_file.name, str):
-            messages.error(request, 'File corrupt, please provide valid name.')
-            return redirect('setup_wizard:options')
+        """Handle POST requests to upload a backup file and restore the database."""
+        form = BackupRestoreForm(request.POST, request.FILES)
 
+        if not form.is_valid():
+            return self._handle_invalid_form()
+
+        backup_file = form.cleaned_data['backup_file']
+        backup_password = form.cleaned_data.get('backup_password')
+
+        try:
+            return self._process_backup_file(backup_file, backup_password)
+        except subprocess.CalledProcessError as exception:
+            err_msg = f'Restore script failed: {self._map_exit_code_to_message(exception.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('users:login')
+        except FileNotFoundError:
+            err_msg = 'Restore script not found.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('users:login')
+        except Exception:
+            err_msg = 'An unexpected error occurred during the restore process.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('users:login')
+
+    def _handle_invalid_form(self) -> HttpResponse:
+        """Handle invalid form submission."""
+        messages.add_message(
+            self.request,
+            messages.ERROR,
+            'Please correct the errors below and try again.'
+        )
+        return redirect('users:login')
+
+    def _process_backup_file(self, backup_file: Any, backup_password: str | None) -> HttpResponse:
+        """Process the uploaded backup file."""
         temp_dir = settings.BACKUP_FILE_PATH
         temp_path = temp_dir / backup_file.name
-        # save upload
-        with open(temp_path, 'wb+') as f:
+
+        try:
+            self._save_backup_file(backup_file, temp_path)
+            self._restore_database(backup_file, backup_password)
+        finally:
+            self._cleanup_temp_file(temp_path)
+
+        return redirect('users:login')
+
+    def _save_backup_file(self, backup_file: Any, temp_path: Path) -> None:
+        """Save the uploaded backup file to a temporary location."""
+        with temp_path.open('wb+') as f:
             for chunk in backup_file.chunks():
                 f.write(chunk)
 
-        try:
-            self.logger.info(f'Restore process started {backup_file.name}')
-            call_command('trustpointrestore', '--filepath', str(temp_path))
-            messages.success(request, f'Trustpoint restored from {backup_file.name}')
-        except CommandError as e:
-            messages.error(request, str(e))
-        except FileNotFoundError as e:
-            messages.error(request, f'Backup file not found: {e}')
-        except PermissionError:
-            messages.error(request, 'Permission denied while processing the backup.')
-        except subprocess.CalledProcessError:
-            messages.error(request, 'Backup processing failed (pg_restore/awk).')
-        except Exception as e:
-            messages.error(request, f'Error restoring. {e}')
+        call_command('dbrestore', '-z', '--noinput', '-I', str(temp_path))
+
+    def _restore_database(self, backup_file: Any, backup_password: str | None) -> None:
+        """Restore the database from the backup file."""
+        if backup_password:
+            success = self.handle_backup_password_recovery(backup_password)
+            if not success:
+                messages.add_message(
+                    self.request,
+                    messages.ERROR,
+                    'Database restored successfully, but backup password recovery failed.'
+                )
         else:
-            return redirect('users:login')
-        return redirect('setup_wizard:initial')
+            self.logger.warning(
+                'No backup password provided, skipping DEK recovery. '
+                'Encrypted fields may not be accessible.'
+            )
+        call_command('trustpointrestore')
+
+        messages.add_message(
+            self.request,
+            messages.SUCCESS,
+            f'Trustpoint restored successfully from {backup_file.name}'
+        )
+
+    def _cleanup_temp_file(self, temp_path: Path) -> None:
+        """Clean up the temporary backup file."""
+        try:
+            if temp_path.exists():
+                temp_path.unlink()
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning('Failed to clean up temporary file %s: %s', temp_path, e)
+
+    @staticmethod
+    def _map_exit_code_to_message(return_code: int) -> str:
+        """Map script exit codes to meaningful error messages."""
+        error_messages = {
+            1: 'State file WIZARD_SETUP_MODE not found.',
+            3: 'Failed to remove the WIZARD_SETUP_MODE state file.',
+            4: 'Failed to create the WIZARD_COMPLETED state file.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred during the restore process.')
+
+class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, FormView[PasswordAutoRestoreForm]):
+    """View for handling backup password entry during auto restore process.
+
+    This view allows users to enter the backup password needed to recover
+    the DEK (Data Encryption Key) during the auto restore process. It validates
+    the current wizard state and processes the password recovery.
+    """
+
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/auto_restore_password.html'
+    success_url = reverse_lazy('users:login')
+    form_class = PasswordAutoRestoreForm
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle request dispatch and wizard state validation."""
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_AUTO_RESTORE_PASSWORD:
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add additional context data."""
+        context = super().get_context_data(**kwargs)
+        context['page_title'] = _('Auto Restore - Enter Backup Password')
+        context['page_description'] = _('Enter the backup password to complete the auto restore process.')
+        return context
+
+    def form_valid(self, form: PasswordAutoRestoreForm) -> HttpResponse:
+        """Handle valid form submission."""
+        backup_password = form.cleaned_data.get('password')
+
+        try:
+            success = self.handle_backup_password_recovery(cast('str', backup_password))
+
+            if not success:
+                return self.form_invalid(form)
+
+            self.logger.info('Extracting Trustpoint TLS certificates from database')
+            try:
+                self._extract_tls_certificates()
+            except Exception as e:
+                err_msg = f'Failed to extract TLS certificates: {e}'
+                self.logger.exception(err_msg)
+                messages.add_message(self.request, messages.ERROR, err_msg)
+                return self.form_invalid(form)
+
+            execute_shell_script(SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS)
+
+            self._deactivate_all_issuing_cas()
+
+            messages.add_message(
+                self.request,
+                messages.SUCCESS,
+                'Auto restore completed successfully. You can now log in.'
+            )
+            messages.add_message(
+                self.request,
+                messages.WARNING,
+                'All Certificate Authorities have been deactivated because their private keys are no longer '
+                'available after HSM change.'
+            )
+            self.logger.info('Auto restore completed successfully with backup password recovery')
+            return super().form_valid(form)
+
+        except subprocess.CalledProcessError as exc:
+            err_msg = f'Auto restore script failed: {self._map_exit_code_to_message(exc.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return self.form_invalid(form)
+
+        except FileNotFoundError:
+            err_msg = f'Auto restore script not found: {SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return self.form_invalid(form)
+
+        except Exception:
+            err_msg = 'An unexpected error occurred during auto restore password recovery.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception('Unexpected error during auto restore')
+            return self.form_invalid(form)
+
+    def form_invalid(self, form: PasswordAutoRestoreForm) -> HttpResponse:
+        """Handle invalid form submission."""
+        messages.add_message(
+            self.request,
+            messages.ERROR,
+            'Please correct the errors below and try again.'
+        )
+        return super().form_invalid(form)
+
+    def _raise_runtime_error(self, message: str) -> None:
+        """Helper method to raise RuntimeError with logging."""
+        self.logger.error(message)
+        raise RuntimeError(message)
+
+    def _deactivate_all_issuing_cas(self) -> None:
+        """Deactivate all Issuing CAs after HSM change.
+
+        When restoring to a new HSM, the private keys from the old HSM are no longer
+        available. This method deactivates all CAs to prevent operations that would
+        require the missing private keys.
+        """
+        try:
+            active_cas = IssuingCaModel.objects.filter(is_active=True)
+            count = active_cas.count()
+
+            if count > 0:
+                active_cas.update(is_active=False)
+                self.logger.info(
+                    'Deactivated %d Certificate Authority(ies) due to HSM change - '
+                    'private keys no longer available',
+                    count
+                )
+            else:
+                self.logger.info('No active Certificate Authorities found to deactivate')
+
+        except Exception:
+            self.logger.exception('Failed to deactivate Certificate Authorities')
+            # Don't raise - this is not critical enough to fail the restore process
+
+    def _extract_tls_certificates(self) -> None:
+        """Extract TLS certificates from database and write to files for Apache configuration.
+
+        This is called during auto restore to prepare TLS files before Apache configuration.
+
+        Raises:
+            RuntimeError: If TLS credential extraction fails.
+        """
+        try:
+            active_tls = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
+            tls_server_credential_model = active_tls.credential
+
+            if not tls_server_credential_model:
+                self._raise_runtime_error('TLS credential not found in database')
+
+            tls_server_credential_model = cast('CredentialModel', tls_server_credential_model)
+
+            private_key_pem = tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
+            certificate_pem = tls_server_credential_model.get_certificate_serializer().as_pem().decode()
+            trust_store_pem = tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
+
+            APACHE_KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
+            APACHE_KEY_PATH.write_text(private_key_pem)
+            APACHE_CERT_PATH.write_text(certificate_pem)
+
+            if trust_store_pem.strip():
+                APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+            elif APACHE_CERT_CHAIN_PATH.exists():
+                APACHE_CERT_CHAIN_PATH.unlink()
+
+            self.logger.info('TLS certificates extracted successfully')
+
+        except ActiveTrustpointTlsServerCredentialModel.DoesNotExist as e:
+            error_msg = 'Active TLS credential not found in database'
+            self.logger.exception(error_msg)
+            raise RuntimeError(error_msg) from e
+        except Exception as e:
+            error_msg = f'Failed to extract TLS certificates: {e}'
+            self.logger.exception(error_msg)
+            raise RuntimeError(error_msg) from e
+
+    @staticmethod
+    def _map_exit_code_to_message(return_code: int) -> str:
+        """Map script exit codes to meaningful error messages."""
+        error_messages = {
+            1: 'Trustpoint is not in the WIZARD_AUTO_RESTORE_PASSWORD state.',
+            2: 'Found multiple wizard state files. The wizard state seems to be corrupted.',
+            3: 'Failed to remove the WIZARD_AUTO_RESTORE_PASSWORD state file.',
+            4: 'Failed to create the WIZARD_COMPLETED state file.',
+            5: 'Failed to execute post-restore operations.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred during auto restore password processing.')
 
 class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWizardTlsCertificateForm]):
     """View for generating TLS Server Credentials in the setup wizard.
@@ -291,7 +1346,7 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_INITIAL:
+        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
             return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().dispatch(request, *args, **kwargs)
@@ -331,62 +1386,282 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
             active_tls.credential = trustpoint_tls_server_credential
             active_tls.save()
 
-            execute_shell_script(SCRIPT_WIZARD_INITIAL)
+            execute_shell_script(SCRIPT_WIZARD_SETUP_MODE)
 
             messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential generated successfully.')
 
             return super().form_valid(form)
         except subprocess.CalledProcessError as exception:
-            err_msg = f'Script error: {self._get_error_message_from_return_code(exception.returncode)}'
+            err_msg = f'Script error: {self._map_exit_code_to_message(exception.returncode)}'
             messages.add_message(self.request, messages.ERROR, err_msg)
             self.logger.exception(err_msg)
-            return redirect('setup_wizard:initial', permanent=False)
+            return redirect('setup_wizard:setup_mode', permanent=False)
         except FileNotFoundError:
-            err_msg = f'Transition script not found: {SCRIPT_WIZARD_INITIAL}.'
+            err_msg = f'Transition script not found: {SCRIPT_WIZARD_SETUP_MODE}.'
             messages.add_message(self.request, messages.ERROR, err_msg)
             self.logger.exception(err_msg)
-            return redirect('setup_wizard:initial', permanent=False)
+            return redirect('setup_wizard:setup_mode', permanent=False)
         except Exception:
             err_msg = 'Error generating TLS Server Credential.'
             messages.add_message(self.request, messages.ERROR, err_msg)
             self.logger.exception(err_msg)
-            return redirect('setup_wizard:initial', permanent=False)
+            return redirect('setup_wizard:setup_mode', permanent=False)
 
-    def _get_error_message_from_return_code(self, return_code: int) -> str:
-        """Maps return codes to error messages."""
+    @staticmethod
+    def _map_exit_code_to_message(return_code: int) -> str:
+        """Map script exit codes to meaningful error messages."""
         error_messages = {
-            1: 'Trustpoint is not in the WIZARD_INITIAL state. State file missing.',
-            2: 'Multiple state files detected. Wizard state is corrupted.',
-            3: 'Failed to remove the WIZARD_INITIAL state file.',
+            1: 'Trustpoint is not in the WIZARD_SETUP_MODE state. State file not found.',
+            2: 'Found multiple wizard state files. The wizard state appears corrupted.',
+            3: 'Failed to remove the WIZARD_SETUP_MODE state file.',
             4: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
         }
-        return error_messages.get(return_code, 'An unknown error occurred.')
+        return error_messages.get(return_code, 'An unknown error occurred during setup mode transition.')
 
-
-class SetupWizardImportTlsServerCredentialView(View):
-    """View for handling the import of TLS Server Credentials."""
+class SetupWizardImportTlsServerCredentialMethodSelectView(TemplateView):
+    """View for selecting the import method for TLS Server Credentials."""
 
     http_method_names = ('get',)
+    template_name = 'setup_wizard/import_method_select.html'
 
-    def get(self) -> HttpResponse:
-        """Handle GET requests for importing TLS Server Credentials.
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Override the dispatch method to enforce wizard state validation.
+
+        Args:
+            request (HttpRequest): The incoming HTTP request.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
 
         Returns:
-            HttpResponse: A redirect to the initial setup wizard page if the
-                          import feature is not implemented or the wizard state
-                          is incorrect.
+            HttpResponse: A redirect response to the appropriate page or
+                          the next handler in the dispatch chain.
         """
         if not DOCKER_CONTAINER:
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_INITIAL:
+        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
             return StartupWizardRedirect.redirect_by_state(wizard_state)
 
-        messages.add_message(
-            self.request, messages.ERROR, 'Import of the TLS-Server credential is not yet implemented.'
-        )
-        return redirect('setup_wizard:initial', permanent=False)
+        return super().dispatch(request, *args, **kwargs)
+
+
+class SetupWizardImportTlsServerCredentialPkcs12View(LoggerMixin, FormView[TlsAddFileImportPkcs12Form]):
+    """View for importing TLS Server Credentials using a PKCS#12 file in the setup wizard."""
+
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/import_tls_server_credential.html'
+    form_class = TlsAddFileImportPkcs12Form
+    success_url = reverse_lazy('setup_wizard:tls_server_credential_apply')
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Override the dispatch method to enforce wizard state validation.
+
+        Args:
+            request (HttpRequest): The incoming HTTP request.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
+
+        Returns:
+            HttpResponse: A redirect response to the appropriate page or
+                          the next handler in the dispatch chain.
+        """
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form: TlsAddFileImportPkcs12Form) -> HttpResponse:
+        """Handle a valid form submission for TLS Server Credential import.
+
+        Args:
+            form: The validated form containing the uploaded PKCS#12 file.
+
+        Returns:
+            HttpResponseRedirect: Redirect to the success URL upon successful
+                                  credential import, or an error page if
+                                  an exception occurs.
+        """
+        try:
+            tls_certificate = form.get_saved_credential()
+            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+            old_credential_id = active_tls.credential_id
+            active_tls.credential = tls_certificate
+            active_tls.save()
+            # Delete the old standard self-signed credential
+            if old_credential_id and old_credential_id != tls_certificate.id:
+                try:
+                    # Use raw SQL to bypass all model hooks and encrypted field access
+                    # First delete related records from through tables to handle foreign key constraints
+                    with connection.cursor() as cursor:
+                        # Delete from certificate chain order table
+                        cursor.execute(
+                            f'DELETE FROM {CertificateChainOrderModel._meta.db_table} WHERE credential_id = %s',  # noqa: SLF001,S608
+                            [old_credential_id]
+                        )
+                        # Delete from primary credential certificate table
+                        cursor.execute(
+                            f'DELETE FROM {PrimaryCredentialCertificate._meta.db_table} WHERE credential_id = %s',  # noqa: SLF001,S608
+                            [old_credential_id]
+                        )
+                        # Finally delete the credential itself
+                        cursor.execute(
+                            f'DELETE FROM {CredentialModel._meta.db_table} WHERE id = %s',  # noqa: SLF001,S608
+                            [old_credential_id]
+                        )
+                        deleted_count = cursor.rowcount
+                    if deleted_count > 0:
+                        self.logger.info('Deleted old TLS credential: %s', old_credential_id)
+                    else:
+                        self.logger.warning('No old TLS credential found with id: %s', old_credential_id)
+                except Exception as e:  # noqa: BLE001
+                    self.logger.warning('Failed to delete old TLS credential %s: %s', old_credential_id, e)
+            self.logger.info(
+                'Activated TLS credential: %s, certificate: %s',
+                tls_certificate.id, tls_certificate.certificate.id
+            )
+            execute_shell_script(SCRIPT_WIZARD_SETUP_MODE)
+            messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential imported successfully.')
+            return super().form_valid(form)
+        except subprocess.CalledProcessError as exception:
+            err_msg = f'Script error: {self._get_error_message_from_return_code(exception.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:setup_mode', permanent=False)
+        except FileNotFoundError:
+            err_msg = f'Transition script not found: {SCRIPT_WIZARD_SETUP_MODE}.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:setup_mode', permanent=False)
+        except Exception:
+            err_msg = 'Error importing TLS Server Credential.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:setup_mode', permanent=False)
+
+    def _get_error_message_from_return_code(self, return_code: int) -> str:
+        """Maps return codes to error messages."""
+        error_messages = {
+            1: 'Trustpoint is not in the WIZARD_SETUP_MODE state. State file missing.',
+            2: 'Multiple state files detected. Wizard state is corrupted.',
+            3: 'Failed to remove the WIZARD_SETUP_MODE state file.',
+            4: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred.')
+
+
+class SetupWizardImportTlsServerCredentialSeparateFilesView(
+    LoggerMixin, FormView[TlsAddFileImportSeparateFilesForm]
+):
+    """View for importing TLS Server Credentials using separate files in the setup wizard."""
+
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/import_tls_server_credential.html'
+    form_class = TlsAddFileImportSeparateFilesForm
+    success_url = reverse_lazy('setup_wizard:tls_server_credential_apply')
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Override the dispatch method to enforce wizard state validation.
+
+        Args:
+            request (HttpRequest): The incoming HTTP request.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
+
+        Returns:
+            HttpResponse: A redirect response to the appropriate page or
+                          the next handler in the dispatch chain.
+        """
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        wizard_state = SetupWizardState.get_current_state()
+        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
+            return StartupWizardRedirect.redirect_by_state(wizard_state)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form: TlsAddFileImportSeparateFilesForm) -> HttpResponse:
+        """Handle a valid form submission for TLS Server Credential import.
+
+        Args:
+            form: The validated form containing the uploaded certificate files.
+
+        Returns:
+            HttpResponseRedirect: Redirect to the success URL upon successful
+                                  credential import, or an error page if
+                                  an exception occurs.
+        """
+        try:
+            tls_certificate = form.get_saved_credential()
+            active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
+            old_credential_id = active_tls.credential_id
+            active_tls.credential = tls_certificate
+            active_tls.save()
+            # Delete the old standard self-signed credential
+            if old_credential_id and old_credential_id != tls_certificate.id:
+                try:
+                    # Use raw SQL to bypass all model hooks and encrypted field access
+                    # First delete related records from through tables to handle foreign key constraints
+                    with connection.cursor() as cursor:
+                        # Delete from certificate chain order table
+                        cursor.execute(
+                            f'DELETE FROM {CertificateChainOrderModel._meta.db_table} WHERE credential_id = %s',  # noqa: SLF001,S608
+                            [old_credential_id]
+                        )
+                        # Delete from primary credential certificate table
+                        cursor.execute(
+                            f'DELETE FROM {PrimaryCredentialCertificate._meta.db_table} WHERE credential_id = %s',  # noqa: SLF001,S608
+                            [old_credential_id]
+                        )
+                        # Finally delete the credential itself
+                        cursor.execute(
+                            f'DELETE FROM {CredentialModel._meta.db_table} WHERE id = %s',  # noqa: SLF001,S608
+                            [old_credential_id]
+                        )
+                        deleted_count = cursor.rowcount
+                    if deleted_count > 0:
+                        self.logger.info('Deleted old TLS credential: %s', old_credential_id)
+                    else:
+                        self.logger.warning('No old TLS credential found with id: %s', old_credential_id)
+                except Exception as e:  # noqa: BLE001
+                    self.logger.warning('Failed to delete old TLS credential %s: %s', old_credential_id, e)
+            self.logger.info(
+                'Activated TLS credential: %s, certificate: %s',
+                tls_certificate.id, tls_certificate.certificate.id
+            )
+            execute_shell_script(SCRIPT_WIZARD_SETUP_MODE)
+            messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential imported successfully.')
+            return super().form_valid(form)
+        except subprocess.CalledProcessError as exception:
+            err_msg = f'Script error: {self._get_error_message_from_return_code(exception.returncode)}'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:setup_mode', permanent=False)
+        except FileNotFoundError:
+            err_msg = f'Transition script not found: {SCRIPT_WIZARD_SETUP_MODE}.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:setup_mode', permanent=False)
+        except Exception:
+            err_msg = 'Error importing TLS Server Credential.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:setup_mode', permanent=False)
+
+    def _get_error_message_from_return_code(self, return_code: int) -> str:
+        """Maps return codes to error messages."""
+        error_messages = {
+            1: 'Trustpoint is not in the WIZARD_SETUP_MODE state. State file missing.',
+            2: 'Multiple state files detected. Wizard state is corrupted.',
+            3: 'Failed to remove the WIZARD_SETUP_MODE state file.',
+            4: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
+        }
+        return error_messages.get(return_code, 'An unknown error occurred.')
 
 
 class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
@@ -402,7 +1677,19 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
     http_method_names = ('get', 'post')
     form_class = EmptyForm
     template_name = 'setup_wizard/tls_server_credential_apply.html'
-    success_url = reverse_lazy('setup_wizard:demo_data')
+
+    def get_success_url(self) -> str:
+        """Return the success URL based on storage type."""
+        try:
+            config = KeyStorageConfig.get_config()
+            if config.storage_type in [
+                KeyStorageConfig.StorageType.SOFTHSM,
+                KeyStorageConfig.StorageType.PHYSICAL_HSM
+            ]:
+                return str(reverse_lazy('setup_wizard:backup_password'))
+            return str(reverse_lazy('setup_wizard:demo_data'))
+        except KeyStorageConfig.DoesNotExist:
+            return str(reverse_lazy('setup_wizard:demo_data'))
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests for the TLS Server Credential application view.
@@ -467,7 +1754,20 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
 
             self._write_pem_files(trustpoint_tls_server_credential_model)
 
-            execute_shell_script(SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY)
+            try:
+                config = KeyStorageConfig.get_config()
+                if config.storage_type in [
+                    KeyStorageConfig.StorageType.SOFTHSM,
+                    KeyStorageConfig.StorageType.PHYSICAL_HSM
+                ]:
+                    storage_param = 'hsm'
+                else:
+                    storage_param = 'no_hsm'
+            except KeyStorageConfig.DoesNotExist:
+                storage_param = 'no_hsm'
+                self.logger.warning('KeyStorageConfig not found, defaulting to no_hsm mode')
+
+            execute_shell_script(SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY, storage_param)
 
             messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential applied successfully.')
             return super().form_valid(form)
@@ -493,7 +1793,7 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
             self.logger.exception(err_msg)
             return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
 
-    def _raise_tls_credential_error(self, message: str) -> None:
+    def _raise_tls_credential_error(self, message: str) -> NoReturn:
         """Raise a TrustpointTlsServerCredentialError with a given message.
 
         Args:
@@ -602,7 +1902,8 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
         """Writes the private key, certificate, and trust store PEM files to disk.
 
         Args:
-            credential_model (CredentialModel): The credential model instance containing the keys and certificates.
+            credential_model (CredentialModel): The credential model instance containing
+            the keys and certificates.
         """
         private_key_pem = credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
         certificate_pem = credential_model.get_certificate_serializer().as_pem().decode()
@@ -610,8 +1911,13 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
 
         APACHE_KEY_PATH.write_text(private_key_pem)
         APACHE_CERT_PATH.write_text(certificate_pem)
-        APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
 
+        # Only write chain file if there's actually a chain (not empty)
+        if trust_store_pem.strip():
+            APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
+        elif APACHE_CERT_CHAIN_PATH.exists():
+            # Remove chain file if it exists but chain is empty
+            APACHE_CERT_CHAIN_PATH.unlink()
 
 class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
     """View for handling the cancellation of TLS Server Credential application.
@@ -652,7 +1958,7 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
             execute_shell_script(SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY_CANCEL)
 
             messages.add_message(request, messages.INFO, 'Generation of the TLS-Server credential canceled.')
-            return redirect('setup_wizard:initial', permanent=False)
+            return redirect('setup_wizard:setup_mode', permanent=False)
 
         except subprocess.CalledProcessError as exception:
             err_msg = (
@@ -685,7 +1991,7 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
         """Clears all credential and certificate data if canceled in the 'WIZARD_TLS_SERVER_CREDENTIAL_APPLY' state."""
         IssuingCaModel.objects.all().delete()
         CredentialModel.objects.all().delete()
-        #ActiveTrustpointTlsServerCredentialModel.objects.all().delete()
+        #ActiveTrustpointTlsServerCredentialModel.objects.all().delete()  # noqa: ERA001
         CertificateModel.objects.all().delete()
 
     def _map_exit_code_to_message(self, return_code: int) -> str:
@@ -700,7 +2006,6 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
             'permissions are set correctly.',
         }
         return error_messages.get(return_code, 'An unknown error occurred during the cancel operation.')
-
 
 class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
     """View for handling the demo data setup during the setup wizard.
@@ -730,14 +2035,16 @@ class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
         """Handle form submission for demo data setup."""
         try:
             if 'without-demo-data' in self.request.POST:
-                messages.add_message(self.request, messages.INFO, 'Setup Trustpoint with no demo data')
+                call_command('create_default_cert_profiles') # default cert profiles are always added
                 self._execute_notifications()
                 execute_shell_script(SCRIPT_WIZARD_DEMO_DATA)
+                messages.add_message(self.request, messages.SUCCESS, 'Setup Trustpoint with no demo data')
             elif 'with-demo-data' in self.request.POST:
-                messages.add_message(self.request, messages.INFO, 'Setup Trustpoint with demo data')
+                call_command('create_default_cert_profiles')
                 self._add_demo_data()
                 self._execute_notifications()
                 execute_shell_script(SCRIPT_WIZARD_DEMO_DATA)
+                messages.add_message(self.request, messages.SUCCESS, 'Setup Trustpoint with demo data')
             else:
                 messages.add_message(self.request, messages.ERROR, 'Invalid option selected for demo data setup.')
                 return redirect('setup_wizard:demo_data', permanent=False)
@@ -804,7 +2111,6 @@ class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
         }
         return error_messages.get(return_code, 'An unknown error occurred while executing the demo data script.')
 
-
 class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User]]):
     """View for handling the creation of a superuser during the setup wizard.
 
@@ -815,7 +2121,7 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User
     """
 
     http_method_names = ('get', 'post')
-    form_class = UserCreationForm
+    form_class: type[UserCreationForm[User]] = UserCreationForm
     template_name = 'setup_wizard/create_super_user.html'
     success_url = reverse_lazy('users:login')
 

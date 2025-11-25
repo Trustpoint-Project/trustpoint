@@ -2,11 +2,11 @@
 from abc import ABC, abstractmethod
 from typing import Never
 
-from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
-
 from aoki.views import AokiServiceMixin
-from request.request_context import RequestContext
+from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 from trustpoint.logger import LoggerMixin
+
+from request.request_context import RequestContext
 
 
 class AuthorizationComponent(ABC):
@@ -141,40 +141,38 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
             raise ValueError(err_msg)
 
 
-class CertificateTemplateAuthorization(AuthorizationComponent, LoggerMixin):
-    """Ensures the device is allowed to use the requested certificate template."""
-
-    def __init__(self, allowed_templates: list[str]) -> None:
-        """Initialize the authorization component with a list of allowed certificate templates."""
-        self.allowed_templates = allowed_templates
+class CertificateProfileAuthorization(AuthorizationComponent, LoggerMixin):
+    """Ensures the device is allowed to use the requested certificate profile."""
 
     def authorize(self, context: RequestContext) -> None:
-        """Authorize the request based on the certificate template."""
-        requested_template = context.certificate_template
+        """Authorize the request based on the certificate profile."""
+        requested_profile = context.cert_profile_str
 
-        if not requested_template:
-            error_message = 'Certificate template is missing in the context. Authorization denied.'
-            self.logger.warning('Certificate template authorization failed: Template information is missing')
+        if not requested_profile:
+            error_message = 'Certificate profile is missing in the context. Authorization denied.'
+            self.logger.warning('Certificate profile authorization failed: Profile information is missing')
             raise ValueError(error_message)
 
-        if requested_template not in self.allowed_templates:
-            context.http_response_content = f'Not authorized for requested certificate template "{requested_template}".'
+        if not context.domain:
+            error_message = 'Domain information is missing in the context. Authorization denied.'
+            self.logger.warning('Certificate profile authorization failed: Domain information is missing')
+            raise ValueError(error_message)
+
+        try:
+            context.certificate_profile_model = context.domain.get_allowed_cert_profile(requested_profile)
+        except ValueError as e:
+            context.http_response_content = f'Not authorized for requested certificate profile "{requested_profile}".'
             context.http_response_status = 403
             error_message = (
-                f"Unauthorized certificate template: '{requested_template}'. "
-                f"Allowed templates: {', '.join(self.allowed_templates)}."
+                f"Unauthorized certificate profile: '{requested_profile}'. "
+                f"Allowed profiles: {', '.join(context.domain.get_allowed_cert_profile_names())}."
             )
-            self.logger.warning(
-                (
-                    'Certificate template authorization failed: %(requested_template)s not in '
-                    'allowed templates %(allowed_templates)s'
-                ),
-                extra={'requested_template': requested_template, 'allowed_templates': self.allowed_templates})
-            raise ValueError(error_message)
+            self.logger.warning(error_message)
+            raise ValueError(error_message) from e
 
         self.logger.debug(
-            'Certificate template authorization successful for template: %(template)s',
-            extra={'template': requested_template}
+            'Certificate profile authorization successful for profile: %s',
+            requested_profile
         )
 
 
@@ -308,45 +306,37 @@ class CompositeAuthorization(AuthorizationComponent, LoggerMixin):
 
 class EstAuthorization(CompositeAuthorization):
     """Composite authorization handler for EST requests."""
-    def __init__(self, allowed_templates: list[str] | None = None, allowed_operations: list[str] | None = None) -> None:
+    def __init__(self, allowed_operations: list[str] | None = None) -> None:
         """Initialize the composite authorization handler with the default set of components.
 
         Args:
-            allowed_templates: List of allowed certificate templates. Defaults to ['tls-client'] if not provided.
             allowed_operations: List of allowed CMP operations. Defaults to ['cr', 'ir'] if not provided.
         """
         super().__init__()
 
-        if allowed_templates is None:
-            allowed_templates = ['tls-client']
-
         if allowed_operations is None:
             allowed_operations = ['simpleenroll', 'simplereenroll']
 
-        self.add(CertificateTemplateAuthorization(allowed_templates))
         self.add(DomainScopeValidation())
+        self.add(CertificateProfileAuthorization())
         self.add(ManualAuthorization())
         self.add(ProtocolAuthorization(['est']))
         self.add(EstOperationAuthorization(allowed_operations))
 
 class CmpAuthorization(CompositeAuthorization):
     """Composite authorization handler for EST requests."""
-    def __init__(self, allowed_templates: list[str] | None = None, allowed_operations: list[str] | None = None) -> None:
+    def __init__(self, allowed_operations: list[str] | None = None) -> None:
         """Initialize the composite authorization handler with the default set of components.
 
         Args:
-            allowed_templates: List of allowed certificate templates. Defaults to ['tls-client'] if not provided.
             allowed_operations: List of allowed CMP operations. Defaults to ['cr', 'ir'] if not provided.
         """
         super().__init__()
 
-        if allowed_templates is None:
-            allowed_templates = ['tls-client']
-
         if allowed_operations is None:
             allowed_operations = ['certification', 'initialization']
 
-        self.add(CertificateTemplateAuthorization(allowed_templates))
+        self.add(CertificateProfileAuthorization())
         self.add(DomainScopeValidation())
         self.add(DevOwnerIDAuthorization())
         self.add(ManualAuthorization())

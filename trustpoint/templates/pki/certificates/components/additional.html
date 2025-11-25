@@ -17,8 +17,8 @@
             <div>{{ issued_credential.get_issued_credential_type_display }}</div>
         </div>
         <div>
-            <div>{% trans 'Credential purpose' %}</div>
-            <div>{{ issued_credential.get_issued_credential_purpose_display }}</div>
+            <div>{% trans 'Certificate Profile' %}</div>
+            <div>{{ issued_credential.issued_using_cert_profile }}</div>
         </div>
     </div>
     {% endwith %}

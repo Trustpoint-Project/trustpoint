@@ -17,7 +17,7 @@ def test_issued_credential_creation(credential_instance: dict[str, Any], device_
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Test Issued Credential',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        issued_credential_purpose=IssuedCredentialModel.IssuedCredentialPurpose.TLS_CLIENT,
+        issued_using_cert_profile='TLS Client',
         credential=credential,
         device=device,
         domain=device.domain,
@@ -28,7 +28,7 @@ def test_issued_credential_creation(credential_instance: dict[str, Any], device_
     assert issued_credential.device == device, 'The issued credential should be linked to the correct device.'
     assert issued_credential.domain == device.domain, 'The issued credential should be linked to the correct domain.'
     assert issued_credential.issued_credential_type == IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
-    assert issued_credential.issued_credential_purpose == IssuedCredentialModel.IssuedCredentialPurpose.TLS_CLIENT
+    assert issued_credential.issued_using_cert_profile == 'TLS Client'
     assert issued_credential.common_name == 'Test Issued Credential', 'The common name should match the input.'
 
 
@@ -41,7 +41,7 @@ def test_is_valid_domain_credential(credential_instance: dict[str, Any], device_
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Valid Domain Credential',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
-        issued_credential_purpose=IssuedCredentialModel.IssuedCredentialPurpose.DOMAIN_CREDENTIAL,
+        issued_using_cert_profile='Trustpoint Domain Credential',
         credential=credential,
         device=device,
         domain=device.domain,
@@ -60,7 +60,7 @@ def test_revoke_issued_credential(credential_instance: dict[str, Any], device_in
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Credential To Revoke',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        issued_credential_purpose=IssuedCredentialModel.IssuedCredentialPurpose.TLS_CLIENT,
+        issued_using_cert_profile='TLS Client',
         credential=credential,
         device=device,
         domain=device.domain,
@@ -91,7 +91,7 @@ def test_get_credential_for_certificate(credential_instance: dict[str, Any], dev
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Retrieved Credential',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        issued_credential_purpose=IssuedCredentialModel.IssuedCredentialPurpose.TLS_CLIENT,
+        issued_using_cert_profile='TLS Client',
         credential=credential,
         device=device,
         domain=device.domain,
@@ -112,7 +112,7 @@ def test_pre_delete_issued_credential(credential_instance: dict[str, Any], devic
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Credential To Delete',
         issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        issued_credential_purpose=IssuedCredentialModel.IssuedCredentialPurpose.TLS_CLIENT,
+        issued_using_cert_profile='TLS Client',
         credential=credential,
         device=device,
         domain=device.domain,

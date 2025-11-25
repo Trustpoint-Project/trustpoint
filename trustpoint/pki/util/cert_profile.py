@@ -72,12 +72,30 @@ class SubjectModel(BaseModel):
     serial_number: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('serial_number'))
     country_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('country_name'))
     locality_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('locality_name'))
-    state_or_province_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('state_or_province_name'))
-    street_address: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('street_address'))
-    organization_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('organization_name'))
-    organizational_unit_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('organizational_unit_name'))
-    title: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('title'))
-    description: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('description'))
+    state_or_province_name: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        alias=ALIASES.get('state_or_province_name')
+    )
+    street_address: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        alias=ALIASES.get('street_address')
+    )
+    organization_name: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        alias=ALIASES.get('organization_name')
+    )
+    organizational_unit_name: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        alias=ALIASES.get('organizational_unit_name')
+    )
+    title: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        alias=ALIASES.get('title')
+    )
+    description: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        alias=ALIASES.get('description')
+    )
     postal_code: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('postal_code'))
     email_address: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('email_address'))
     name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('name'))
@@ -85,7 +103,10 @@ class SubjectModel(BaseModel):
     initials: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('initials'))
     pseudonym: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('pseudonym'))
     uid: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('uid'))
-    domain_component: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('domain_component'))
+    domain_component: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        alias=ALIASES.get('domain_component')
+    )
 
     # Should allow unknown fields, but not required
     model_config = ConfigDict(extra='allow')
@@ -144,11 +165,26 @@ class ExtendedKeyUsageExtensionModel(BaseExtensionModel):
 
 class ExtensionsModel(BaseModel):
     """Model for the extensions of a certificate profile."""
-    basic_constraints: BasicConstraintsExtensionModel | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('basic_constraints'))
-    key_usage: KeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('key_usage'))
-    extended_key_usage: ExtendedKeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('extended_key_usage'))
-    subject_alternative_name: SanExtensionModel | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('subject_alternative_name'))
-    crl_distribution_points: CRLDistributionPointsExtensionModel | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('crl_distribution_points'))
+    basic_constraints: BasicConstraintsExtensionModel | ProfileValuePropertyModel | None = Field(
+        default=None,
+        alias=ALIASES.get('basic_constraints'),
+    )
+    key_usage: KeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(
+        default=None,
+        alias=ALIASES.get('key_usage'),
+    )
+    extended_key_usage: ExtendedKeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(
+        default=None,
+        alias=ALIASES.get('extended_key_usage'),
+    )
+    subject_alternative_name: SanExtensionModel | ProfileValuePropertyModel | None = Field(
+        default=None,
+        alias=ALIASES.get('subject_alternative_name'),
+    )
+    crl_distribution_points: CRLDistributionPointsExtensionModel | ProfileValuePropertyModel | None = Field(
+        default=None,
+        alias=ALIASES.get('crl_distribution_points'),
+    )
 
 
 class ValidityModel(BaseModel):
@@ -198,6 +234,7 @@ class ProfileExtensionsModel(ExtensionsModel, CertProfileBaseModel):
 class CertProfileModel(CertProfileBaseModel):
     """Model for a certificate profile."""
     type: Literal['cert_profile']
+    display_name: str | None = None
     subject: ProfileSubjectModel = Field(alias='subj', default=ProfileSubjectModel())
     extensions: ProfileExtensionsModel = Field(alias='ext', default=ProfileExtensionsModel())
     validity: ValidityModel = Field(default=ValidityModel(days=10))

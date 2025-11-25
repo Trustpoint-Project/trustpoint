@@ -27,7 +27,7 @@ def est_simple_enrollment_view():
     view = EstSimpleEnrollmentView()
     view.request = MagicMock()
     view.requested_domain = MagicMock()
-    view.requested_cert_template_str = 'tls-client'
+    view.requested_cert_template_str = 'tls_client'
     return view
 
 

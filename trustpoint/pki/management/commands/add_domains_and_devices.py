@@ -6,11 +6,17 @@ import random
 import secrets
 import string
 
+from cryptography import x509
+from cryptography.hazmat.primitives.asymmetric import rsa, ec
 from devices.models import DeviceModel, OnboardingConfigModel, NoOnboardingConfigModel
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
+from management.models import KeyStorageConfig
 from pki.models import DevIdRegistration, DomainModel, IssuingCaModel, TruststoreModel
+from pki.util.x509 import CertificateGenerator
 from devices.models import OnboardingPkiProtocol, NoOnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
+from signer.models import SignerModel
+from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
 
 ALLOWED_CHARS = allowed_chars = string.ascii_letters + string.digits
@@ -62,10 +68,110 @@ def get_random_onboarding_pki_protocols(
     return random_protocols
 
 
-class Command(BaseCommand):
+def _get_private_key_location_from_config() -> PrivateKeyLocation:
+    """Determine the appropriate PrivateKeyLocation based on KeyStorageConfig."""
+    try:
+        storage_config = KeyStorageConfig.get_config()
+        if storage_config.storage_type in [
+            KeyStorageConfig.StorageType.SOFTHSM,
+            KeyStorageConfig.StorageType.PHYSICAL_HSM
+        ]:
+            return PrivateKeyLocation.HSM_PROVIDED
+    except KeyStorageConfig.DoesNotExist:
+        pass
+
+    return PrivateKeyLocation.SOFTWARE
+
+
+def create_signer_for_domain(
+    domain_name: str,
+    issuing_ca: IssuingCaModel
+) -> SignerModel:
+    """Creates a signer certificate for a domain using the domain's issuing CA."""
+    issuing_ca_private_key = issuing_ca.credential.get_private_key_serializer().as_crypto()
+    issuing_ca_cert = issuing_ca.credential.get_certificate_serializer().as_crypto()
+    issuing_ca_cn = issuing_ca.common_name
+
+    if isinstance(issuing_ca_private_key, rsa.RSAPrivateKey):
+        key_size = issuing_ca_private_key.key_size
+        signer_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
+    elif isinstance(issuing_ca_private_key, ec.EllipticCurvePrivateKey):
+        curve = issuing_ca_private_key.curve
+        signer_key = ec.generate_private_key(curve=curve)
+    else:
+        raise ValueError('Unsupported issuing CA private key type.')
+
+    digital_signature_extension = x509.KeyUsage(
+        digital_signature=True,
+        content_commitment=False,
+        key_encipherment=False,
+        data_encipherment=False,
+        key_agreement=False,
+        key_cert_sign=False,
+        crl_sign=False,
+        decipher_only=False,
+        encipher_only=False,
+    )
+
+    signer_cert, signer_key = CertificateGenerator.create_ee(
+        issuer_private_key=issuing_ca_private_key,
+        issuer_cn=issuing_ca_cn,
+        subject_name=f'Signer-{domain_name}',
+        private_key=signer_key,
+        extensions=[(digital_signature_extension, True)],
+        validity_days=365,
+    )
+
+    credential_serializer = CredentialSerializer(
+        private_key=signer_key,
+        certificate=signer_cert,
+        additional_certificates=[issuing_ca_cert],
+    )
+
+    private_key_location = _get_private_key_location_from_config()
+    credential_serializer.private_key_reference = PrivateKeyReference.from_private_key(
+        private_key=signer_key,
+        key_label=f'signer-{domain_name}',
+        location=private_key_location,
+    )
+
+    signer = SignerModel.create_new_signer(
+        unique_name=f'signer-{domain_name}',
+        credential_serializer=credential_serializer,
+    )
+
+    return signer
+
+
+from trustpoint.logger import LoggerMixin
+
+
+class Command(BaseCommand, LoggerMixin):
     """Add domains and associated device names with random onboarding protocol and serial number."""
 
     help = 'Add domains and associated device names with random onboarding protocol and serial number'
+
+    def log_and_stdout(self, message: str, level: str = 'info') -> None:
+        """Log a message and write it to stdout.
+
+        Parameters
+        ----------
+        message : str
+            The message to log and print.
+        level : str
+            The logging level ('info', 'warning', 'error', etc.).
+        """
+        log_method = getattr(self.logger, level, self.logger.info)
+        log_method(message)
+
+        if level == 'error':
+            self.stdout.write(self.style.ERROR(message))
+        elif level == 'warning':
+            self.stdout.write(self.style.WARNING(message))
+        elif level == 'info':
+            self.stdout.write(self.style.SUCCESS(message))
+        else:
+            self.stdout.write(message)
 
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Execute the command."""
@@ -127,8 +233,8 @@ class Command(BaseCommand):
             'homag': ('issuing-ca-b', 'idevid-truststore-RSA-3072'),
             'siemens': ('issuing-ca-c', 'idevid-truststore-RSA-4096'),
             'belden': ('issuing-ca-d', 'idevid-truststore-EC-256'),
-            'phoenix_contact': ('issuing-ca-e', 'idevid-truststore-EC-283'),
-            'schmalz': ('issuing-ca-f', 'idevid-truststore-EC-570'),
+            'phoenix_contact': ('issuing-ca-e', 'idevid-truststore-EC-384'),
+            'schmalz': ('issuing-ca-f', 'idevid-truststore-EC-521'),
         }
 
         onboarding_protocols = list(OnboardingProtocol)
@@ -138,7 +244,7 @@ class Command(BaseCommand):
         onboarding_protocols.remove(OnboardingProtocol.CMP_IDEVID)
         onboarding_protocols.remove(OnboardingProtocol.EST_IDEVID)
 
-        print('Starting the process of adding domains and devices...\n')
+        self.log_and_stdout('Starting the process of adding domains and devices...\n')
 
         for domain_name, devices in data.items():
             issuing_ca_name, truststore_name = domain_ca_truststore_map[domain_name]
@@ -151,9 +257,9 @@ class Command(BaseCommand):
             domain.save()
 
             if created:
-                print(f'Created new domain: {domain_name}')
+                self.log_and_stdout(f'Created new domain: {domain_name}')
             else:
-                print(f'Domain already exists: {domain_name}')
+                self.log_and_stdout(f'Domain already exists: {domain_name}')
 
             devid_reg, devid_created = DevIdRegistration.objects.get_or_create(
                 unique_name=f'devid-reg-{domain_name}',
@@ -163,11 +269,31 @@ class Command(BaseCommand):
             )
 
             if devid_created:
-                print(f"Created DevIdRegistration for domain '{domain_name}' with truststore '{truststore_name}'")
+                self.log_and_stdout(
+                    f"Created DevIdRegistration for domain '{domain_name}' and issuing CA "
+                    f"'{issuing_ca_name}' with truststore '{truststore_name}'"
+                )
             else:
-                print(f"DevIdRegistration already exists for domain '{domain_name}'")
+                self.log_and_stdout(
+                    f"DevIdRegistration already exists for domain '{domain_name}' "
+                    f"and issuing CA '{issuing_ca_name}'"
+                )
 
-            print(f'Domain({domain_name}, Issuing CA: {domain.issuing_ca})')
+            signer_unique_name = f'signer-{domain_name}'
+            if not SignerModel.objects.filter(unique_name=signer_unique_name).exists():
+                try:
+                    signer = create_signer_for_domain(domain_name, issuing_ca)
+                    self.log_and_stdout(
+                        f"Created signer '{signer.unique_name}' for domain '{domain_name}' "
+                        f"with CN '{signer.common_name}' issued by '{issuing_ca_name}'"
+                    )
+                except Exception as e:  # noqa: BLE001
+                    self.log_and_stdout(
+                        f"Failed to create signer for domain '{domain_name}': {e}",
+                        level='error'
+                    )
+            else:
+                self.log_and_stdout(f"Signer '{signer_unique_name}' already exists for domain '{domain_name}'")
 
             device_uses_onboarding = random.choice([True, False])  # noqa: S311
 
@@ -235,9 +361,6 @@ class Command(BaseCommand):
                 else:
 
                     serial_number = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))  # noqa: S311
-                    print(f"Creating device '{device_name}' in domain '{domain_name}' with:")
-                    print(f'  - Serial Number: {serial_number}')
-                    print('  - No Onboarding')
 
                     no_onboarding_pki_protocols = get_random_no_onboarding_pki_protocols()
 
@@ -264,9 +387,31 @@ class Command(BaseCommand):
 
                     no_onboarding_config_model.save()
                     device_model.save()
+                    try:
+                        device_model.save()
+                        if device_model.pk:
+                            onboarding_protocol_display = (
+                                device_model.onboarding_config.get_onboarding_protocol_display()
+                                if device_model.onboarding_config
+                                else 'No Onboarding'
+                            )
+                            pki_protocols = (
+                                device_model.onboarding_config.get_pki_protocols()
+                                if device_model.onboarding_config
+                                else device_model.no_onboarding_config.get_pki_protocols()
+                                if device_model.no_onboarding_config
+                                else []
+                            )
 
-            print(f'Device {device_name} created and saved.')
+                            self.log_and_stdout(
+                                f"Creating device '{device_model.common_name}' (ID {device_model.pk}) "
+                                f"in domain '{device_model.domain}' with Serial Number: {device_model.serial_number}; "
+                                f"Onboarding Protocol: {onboarding_protocol_display}; "
+                                f"PKI Protocols: {[p.label for p in pki_protocols]}"
+                            )
+                        else:
+                            self.log_and_stdout(f"Device '{device_name}' was not saved correctly.", level='warning')
+                    except Exception as e:  # noqa: BLE001
+                        self.log_and_stdout(f"Failed to create device '{device_name}': {e}", level='error')
 
-
-
-        print('\nProcess completed. All domains and devices have been added.')
+        self.log_and_stdout('Process completed. All domains and devices have been added.')

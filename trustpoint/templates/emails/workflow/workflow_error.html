@@ -1,0 +1,9 @@
+<p>An error occurred while processing the workflow.</p>
+<ul>
+  <li><b>Workflow:</b> {{ workflow.name }}</li>
+  <li><b>Instance:</b> {{ instance.id }}</li>
+  <li><b>State:</b> {{ state }}</li>
+  <li><b>Step:</b> {{ step }}</li>
+  <li><b>Error:</b> {{ payload.error|default:"(no details)" }}</li>
+</ul>
+<p>Review logs for more information.</p>
