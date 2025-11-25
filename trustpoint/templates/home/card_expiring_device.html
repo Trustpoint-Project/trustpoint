@@ -13,7 +13,7 @@
         <!-- row 1 -->
         <span class="small text-end">24 Hours</span>
         <span class="d-inline-flex align-items-center border border-white rounded-3 px-2 py-1 lh-1">
-          <span id="delta_count_24_expiring_device" class="small lh-1">6</span>
+          <span id="delta_count_24_expiring_device" class="small lh-1"></span>
           <i class="bi bi-caret-up-fill ms-1"></i>
         </span>
         <!-- row 2 -->
@@ -29,7 +29,7 @@
 
 <script>
   document.addEventListener('dashboardData', (event) =>{
-    const {today, week} = event.detail;
+    const {today} = event.detail;
     const delta_24 = 2;
     const delta_7 = 1;
     const active_today = today.device_counts.Pending;

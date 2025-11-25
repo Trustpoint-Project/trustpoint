@@ -15,7 +15,7 @@ document.addEventListener('dashboardData', (event) => {
   const today = event.detail.today || {};
   const raw = today.cert_counts_by_domain || [];
 
-  if (Object.keys(raw) === 0) return;
+  if (raw.length === 0) return;
 
   const allItems = raw
     .map(row => ({

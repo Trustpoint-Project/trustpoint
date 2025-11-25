@@ -1,9 +1,9 @@
 {% load static %}
-<div class="card rounded-5 position-relative dount-chart-card-container">
+<div class="card rounded-5 position-relative donut-chart-card-container">
   <div class="card-body">
     <h6 class="mb-3 fs-5">Device by Status</h6>
 
-    <div class="position-relative dount-chart-container">
+    <div class="position-relative donut-chart-container">
       <canvas id="chart_dount_device"></canvas>
     </div>
   </div>
@@ -24,7 +24,7 @@
       data,
       'chart_dount_device',
       'deviceByCounts',
-      {centerText:'Devices', labels:['Onboarded Devices', 'Expiring Devices', 'Expired Devices']}
+      {centerText:'Devices', labels:['Onboarded Devices', 'Pending Devices', 'Expired Devices']}
     );
   });
 </script>
