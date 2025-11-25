@@ -363,7 +363,7 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
       ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-color') || '#000';
       ctx.fillText(total, x, y - 8);
 
-      // Untertitel
+      // Subtitle
       ctx.font = '500 12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
       ctx.globalAlpha = 0.85;
       ctx.fillText(centerText, x, y + 16);
