@@ -360,7 +360,7 @@ class EstUsernamePasswordCommandBuilder:
         """
         return (
             'openssl pkcs7 -print_certs -inform DER -in domain-credential-certificate.p7c \\\n'
-            f'| sed -n \'/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p\' > domain-credential-certificate.pem'
+            '| sed -n \'/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p\' > domain-credential-certificate.pem'
         )
 
 

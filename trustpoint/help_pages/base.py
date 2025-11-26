@@ -219,17 +219,15 @@ def build_tls_trust_store_section() -> HelpSection:
     """
     tls = ActiveTrustpointTlsServerCredentialModel.objects.first()
     if not tls or not tls.credential:
-        msg = (
-            'This onboarding method is not securely available without TLS. '
-            'Please ensure you are running Trustpoint within the correctly configured Docker environment!'
+        msg = format_html(
+            '<div class="tp-message alert alert-danger d-flex" role="alert">'
+                '<svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="error:">'
+                    '<use xlink:href="/static/img/icons.svg#icon-error"></use></svg>'
+                '<div>{}<br>{}</div>'
+            '</div>',
+            'This onboarding method is not securely available without TLS.',
+            'Please ensure you are running Trustpoint within the correctly configured Docker environment!',
         )
-        msg = mark_safe('<div class="tp-message alert alert-danger d-flex" role="alert">'
-            '<svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="error:">'
-                '<use xlink:href="/static/img/icons.svg#icon-error"></use></svg>'
-            '<div>'
-                'This onboarding method is not securely available without TLS.<br>'
-                'Please ensure you are running Trustpoint within the correctly configured Docker environment!'
-            '</div></div>')
         return HelpSection(
             _non_lazy('Download TLS Trust-Store'),
             [HelpRow(_non_lazy('Truststore is unavailable!'), msg, ValueRenderType.PLAIN)],

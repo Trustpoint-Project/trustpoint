@@ -2,7 +2,6 @@
 import base64
 from abc import ABC, abstractmethod
 
-from asn1crypto import cms
 from cryptography.hazmat.primitives.serialization import Encoding, pkcs7
 from devices.models import OnboardingStatus
 from workflows.models import State
