@@ -1,7 +1,10 @@
 """This module contains cli commands which are displayed in the help pages."""
 
+from typing import Any
+
 from devices.views import NamedCurveMissingForEccErrorMsg
 from django.utils.translation import gettext as _
+from pki.util.cert_req_converter import JSONCertRequestCommandExtractor
 from trustpoint_core import oid
 
 
@@ -40,6 +43,43 @@ class KeyGenCommandBuilder:
 
 class CmpSharedSecretCommandBuilder:
     """Builds CMP shared-secret commands for different certificate profiles."""
+
+    @staticmethod
+    def get_dynamic_cert_profile_command(
+        host: str, pk: int, shared_secret: str, cred_number: int, profile_json: dict[str, Any]) -> str:
+        """Gets the dynamic certificate profile command.
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
+            pk: The primary key of the device in question used as Key Identifier (KID).
+            shared_secret: The shared secret.
+            cred_number: The credential number - counter of issued credentials.
+            profile_json: The normalized JSON representation of the certificate profile.
+
+        Returns:
+            The constructed command.
+        """
+        profile_subject_entries = JSONCertRequestCommandExtractor.profile_to_openssl_subj(profile_json)
+        profile_validity_days = JSONCertRequestCommandExtractor.profile_to_openssl_days(profile_json)
+        profile_sans = JSONCertRequestCommandExtractor.profile_to_openssl_sans(profile_json)
+        sans_line = f'-sans "{profile_sans}" \\\n' if profile_sans else ''
+
+        return (
+            'openssl cmp \\\n'
+            '-cmd cr \\\n'
+            '-implicit_confirm \\\n'
+            '-tls_used \\\n'
+            f'-server {host} \\\n'
+            f'-ref {pk} \\\n'
+            f'-secret pass:{shared_secret} \\\n'
+            f'-subject "{profile_subject_entries}" \\\n'
+            f'-days {profile_validity_days} \\\n'
+            f'{sans_line}'
+            f'-newkey key-{cred_number}.pem \\\n'
+            f'-certout certificate-{cred_number}.pem \\\n'
+            '-chainout chain-without-root.pem \\\n'
+            '-extracertsout full-chain.pem'
+        )
 
     @staticmethod
     def get_tls_client_profile_command(host: str, pk: int, shared_secret: str, cred_number: int) -> str:

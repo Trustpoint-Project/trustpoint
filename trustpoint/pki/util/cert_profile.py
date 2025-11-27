@@ -32,6 +32,8 @@ ALIASES: dict[str, AliasChoices] = {
     #'common_name': AliasChoices('common_name', 'cn', 'CN', 'commonName', '2.5.4.3')
 }
 
+CERT_PROFILE_KEYWORDS = {'type','allow', 'reject_mods', 'mutable', 'default', 'value', 'required'}
+
 def build_alias_map_name_oids(alias_map: dict[str, str], enum_cls: type[enum.Enum]) -> dict[str, str]:
     """Build a mapping of all known OID strings from trustpoint_core to their canonical field names."""
     for entry in enum_cls:
@@ -126,12 +128,11 @@ class BasicConstraintsExtensionModel(BaseExtensionModel):
 
 class SanExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
     """Model for the SAN extension of a certificate profile."""
-    dns_names: list[str] | ProfileValuePropertyModel | None = None
-    ip_addresses: list[str] | ProfileValuePropertyModel | None = None
-    rfc822_names: list[str] | ProfileValuePropertyModel | None = None
-    uris: list[str] | ProfileValuePropertyModel | None = None
-    other_names: list[str] | ProfileValuePropertyModel | None = None
-
+    dns_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, alias='dns')
+    ip_addresses: list[str] | ProfileValuePropertyModel | None = Field(default=None, alias='ip')
+    rfc822_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, alias='rfc822')
+    uris: list[str] | ProfileValuePropertyModel | None = Field(default=None, alias='uri')
+    other_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, alias='other')
     model_config = ConfigDict(extra='forbid')
 
 class CRLDistributionPointsExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
@@ -343,7 +344,7 @@ class JSONProfileVerifier:
             request, profile, profile_config, profile_allow if isinstance(profile_allow, list) else None)
 
         # Constraining profile fields that should not literally be in the request
-        skip_keys = {'type','allow', 'reject_mods', 'mutable', 'default', 'value', 'required'}
+        skip_keys = CERT_PROFILE_KEYWORDS
         filtered_profile = {k: v for k, v in profile.items() if k not in skip_keys}
 
         for field, profile_value in filtered_profile.items():

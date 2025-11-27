@@ -9,9 +9,11 @@ from typing import TYPE_CHECKING
 
 from django.http import Http404
 from django.urls import reverse
-from django.utils.html import format_html, format_html_join
+from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
+from pki.models.domain import DomainAllowedCertificateProfileModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 
 from help_pages.commands import KeyGenCommandBuilder
@@ -121,6 +123,7 @@ class HelpContext:
 
     domain: DomainModel
     domain_unique_name: str
+    allowed_app_profiles: list[DomainAllowedCertificateProfileModel]
     public_key_info: oid.PublicKeyInfo
     host_base: str  # https://IP:PORT
     host_cmp_path: str  # {host_base}/.well-known/cmp/p/{domain.unique_name}
@@ -179,24 +182,26 @@ def build_keygen_section(help_context: HelpContext, file_name: str) -> HelpSecti
     )
 
 
-def build_profile_select_section(app_cert_profiles: list[ApplicationCertificateProfile]) -> HelpSection:
+def build_profile_select_section(app_cert_profiles: list[DomainAllowedCertificateProfileModel]) -> HelpSection:
     """Builds the profile select section.
 
     Returns:
         The profile select section.
     """
-    options = format_html_join(
-        '',
-        '<option value="{}"{}>{}</option>',
-        (
-            (
-                p.profile_name,
-                ' selected' if i == 0 else '',
-                p.profile_label,
-            )
-            for i, p in enumerate(app_cert_profiles)
-        ),
-    )
+    options = mark_safe('')
+    for i, profile in enumerate(app_cert_profiles):
+        name = profile.alias or profile.certificate_profile.unique_name
+        title = profile.certificate_profile.display_name or name
+        options += format_html(
+            '<option value="{}"{}>{}</option>',
+            name,
+            ' selected' if i == 0 else '',
+            title,
+        )
+
+    if not options:
+        options = format_html('<option value="" selected disabled>{}</option>',
+                              _('No application certificate profiles allowed in domain.'))
     select = format_html(
         '<select id="cert-profile-select" class="form-select" aria-label="Certificate Profile Select">{}</select>',
         options,
@@ -218,7 +223,10 @@ def build_tls_trust_store_section() -> HelpSection:
     """
     tls = ActiveTrustpointTlsServerCredentialModel.objects.first()
     if not tls or not tls.credential:
-        raise Http404(_('Trustpoint TLS server credential is missing.'))
+        return HelpSection(
+            _non_lazy('TLS not available'),
+            [HelpRow(_non_lazy('TLS not available'), '-', ValueRenderType.PLAIN)],
+        )
 
     root = tls.credential.get_last_in_chain()
     if not root:

@@ -33,6 +33,7 @@ class EstMessageResponder(AbstractMessageResponder):
             context.http_response_status = 202
             context.http_response_content_type = 'text/plain'
             context.http_response_content = 'Enrollment request pending manual approval.'
+            # TODO(Air): Implement Retry-After header  # noqa: FIX002
             return None
         if workflow_state == State.REJECTED:
             context.enrollment_request.finalize(State.REJECTED)
