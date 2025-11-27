@@ -266,7 +266,7 @@ class JSONCertRequestCommandExtractor:
         san_parts = ''
         for san_type, san_values in san.items():
             if san_type in {'dns_names', 'uris', 'ip_addresses'}:
-                san_parts += ''.join([f'{v} ' for v in san_values])
+                san_parts += san_values + ' ' if isinstance(san_values, str) else ''.join([f'{v} ' for v in san_values])
             else:
                 logger.debug('JSON Cert Request Command Extractor: Skipping SAN type: %s', san_type)
         if san.get('critical', False):

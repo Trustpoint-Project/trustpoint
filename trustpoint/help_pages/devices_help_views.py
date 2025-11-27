@@ -191,7 +191,7 @@ class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
             except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
                 err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
                 err_sect = HelpSection(
-                    title,
+                    _non_lazy(f'Certificate Request for a {title} Certificate'),
                     [
                         HelpRow(_non_lazy('OpenSSL Command'), err_msg, ValueRenderType.PLAIN),
                     ],

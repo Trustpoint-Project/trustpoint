@@ -2,12 +2,21 @@
     "type": "cert_profile",
     "display_name": "OPC UA Client",
     "subj": {
-        "allow":"*"
+        "allow":"*",
+        "cn": {"default":"OPC-UA-Client"}
     },
     "reject_mods": false,
     "ext": {
         "basic_constraints": {
             "ca": false
+        },
+        "subject_alt_name": {
+            "allow": "*",
+            "uris": {
+                "required": true,
+                "default": ["urn:example_trustpoint_opcua:client"]
+            },
+            "critical": true
         }
     },
     "validity": {

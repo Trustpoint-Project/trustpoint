@@ -457,7 +457,7 @@ class JSONProfileVerifier:
                     continue
                 # TODO(Air): 're' case  # noqa: FIX002
                 # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
-                request[field] = self._apply_profile_rules(
+                request[field] = self._apply_profile_rules_sample(
                     request.setdefault(field, {}), profile_value, profile_config)
             elif JSONProfileVerifier._is_simple_type(profile_value):
                 request[field] = profile_value
