@@ -46,7 +46,7 @@ class CmpSharedSecretCommandBuilder:
 
     @staticmethod
     def get_dynamic_cert_profile_command(
-        host: str, pk: int, shared_secret: str, cred_number: int, profile_json: dict[str, Any]) -> str:
+        host: str, pk: int, shared_secret: str, cred_number: int, sample_request: dict[str, Any]) -> str:
         """Gets the dynamic certificate profile command.
 
         Args:
@@ -54,14 +54,14 @@ class CmpSharedSecretCommandBuilder:
             pk: The primary key of the device in question used as Key Identifier (KID).
             shared_secret: The shared secret.
             cred_number: The credential number - counter of issued credentials.
-            profile_json: The normalized JSON representation of the certificate profile.
+            sample_request: The sample certificate request in JSON format.
 
         Returns:
             The constructed command.
         """
-        profile_subject_entries = JSONCertRequestCommandExtractor.profile_to_openssl_subj(profile_json)
-        profile_validity_days = JSONCertRequestCommandExtractor.profile_to_openssl_days(profile_json)
-        profile_sans = JSONCertRequestCommandExtractor.profile_to_openssl_sans(profile_json)
+        profile_subject_entries = JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
+        profile_validity_days = JSONCertRequestCommandExtractor.sample_request_to_openssl_days(sample_request)
+        profile_sans = JSONCertRequestCommandExtractor.sample_request_to_openssl_sans(sample_request)
         sans_line = f'-sans "{profile_sans}" \\\n' if profile_sans else ''
 
         return (

@@ -374,7 +374,7 @@ class JSONProfileVerifier:
                         # Required field is missing in the request
                         msg = f"Field '{field}' is required but not present in the request."
                         raise ProfileValidationError(msg)
-                    # 're' case
+                    # TODO(Air): 're' case  # noqa: FIX002
                     # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
                     request[field] = self._apply_profile_rules(
                         request.setdefault(field, {}), profile_value, profile_config)
@@ -412,3 +412,60 @@ class JSONProfileVerifier:
         validated_request = self.validate_request(request=request)
         logger.debug('Validated Request before profile rules: %s', validated_request)
         return self._apply_profile_rules(validated_request, self.profile_dict)
+
+    def _apply_profile_rules_sample(self, request: dict[str, Any], profile: dict[str, Any],
+                             parent_profile_config: InheritedProfileConfig | None = None) -> dict[str, Any]:
+        """Apply the actual profile rules to one level of the request dict.
+
+        It needs them both request and profile to be in the same structure and hierarchy,
+        e.g. both in the "subject" sub-dict.
+        """
+        if not parent_profile_config: # top level
+            parent_profile_config = InheritedProfileConfig()
+
+        profile_allow = profile.get('allow', parent_profile_config.allow_implicit)
+        profile_reject_mods = profile.get('reject_mods', parent_profile_config.reject_mods)
+        profile_mutable = profile.get('mutable', parent_profile_config.mutable)
+
+        profile_config = InheritedProfileConfig(
+            allow_implicit=(profile_allow == '*'),
+            reject_mods=profile_reject_mods,
+            mutable=profile_mutable
+        )
+
+        # Constraining profile fields that should not literally be in the request
+        skip_keys = CERT_PROFILE_KEYWORDS
+        filtered_profile = {k: v for k, v in profile.items() if k not in skip_keys}
+
+        for field, profile_value in filtered_profile.items():
+            logger.debug('Processing field: %s Profile value: %s Request: %s', field, profile_value, request)
+            logger.debug('Field %s not in request %s', field, request)
+            if isinstance(profile_value, dict):
+            # check for default and required fields
+                if 'value' in profile_value:
+                    # Set default value from profile
+                    request[field] = profile_value['value']
+                    continue
+                if 'default' in profile_value:
+                    # Set default value from profile
+                    logger.debug("Setting default for field '%s' to %s", field, profile_value['default'])
+                    request[field] = profile_value['default']
+                    continue
+                if 'required' in profile_value:
+                    # Required field is missing in the request
+                    request[field] = f'CHANGEME_{field}_required'
+                    continue
+                # TODO(Air): 're' case  # noqa: FIX002
+                # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
+                request[field] = self._apply_profile_rules(
+                    request.setdefault(field, {}), profile_value, profile_config)
+            elif JSONProfileVerifier._is_simple_type(profile_value):
+                request[field] = profile_value
+            else:
+                logger.warning("Field '%s' in profile has type %s, skipping.", field, type(profile_value).__name__)
+            continue
+        return request
+
+    def get_sample_request(self) -> dict[str, Any]:
+        """Generate a sample certificate request that conforms to the profile."""
+        return self._apply_profile_rules_sample({}, self.profile_dict)

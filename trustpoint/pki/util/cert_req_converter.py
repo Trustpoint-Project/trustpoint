@@ -244,9 +244,9 @@ class JSONCertRequestCommandExtractor:
     """Adapter to extract defaults and values from a profile for use in OpenSSL commands (help pages)."""
 
     @staticmethod
-    def profile_to_openssl_subj(profile: dict[str, Any]) -> str:
+    def sample_request_to_openssl_subj(sample_req: dict[str, Any]) -> str:
         """Convert profile subject to OpenSSL command line subject string."""
-        subj = profile.get('subject', {})
+        subj = sample_req.get('subject', {})
         subj_str = ''
         for name_identifier, value in subj.items():
             if name_identifier in CERT_PROFILE_KEYWORDS:
@@ -259,11 +259,10 @@ class JSONCertRequestCommandExtractor:
         return subj_str
 
     @staticmethod
-    def profile_to_openssl_sans(profile: dict[str, Any]) -> str:
+    def sample_request_to_openssl_sans(sample_req: dict[str, Any]) -> str:
         """Convert profile SANs to OpenSSL CMP command line -sans string."""
-        ext = profile.get('extensions', {})
+        ext = sample_req.get('extensions', {})
         san = ext.get('subject_alternative_name', {})
-        print(san)
         san_parts = ''
         for san_type, san_values in san.items():
             if san_type in {'dns_names', 'uris', 'ip_addresses'}:
@@ -275,8 +274,8 @@ class JSONCertRequestCommandExtractor:
         return san_parts.strip()
 
     @staticmethod
-    def profile_to_openssl_days(profile: dict[str, Any]) -> int:
+    def sample_request_to_openssl_days(sample_req: dict[str, Any]) -> int:
         """Extract validity days from profile for OpenSSL CMP command line -days option."""
-        validity = profile.get('validity', {})
+        validity = sample_req.get('validity', {})
         validity_period = JSONCertRequestConverter.validity_period_from_json(validity)
         return validity_period.days

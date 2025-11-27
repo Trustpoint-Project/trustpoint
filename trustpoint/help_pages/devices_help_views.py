@@ -179,10 +179,10 @@ class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
 
             try:
                 cert_profile = json.loads(profile.certificate_profile.profile_json)
-                normalized_profile = JSONProfileVerifier(cert_profile).profile_dict
+                sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
 
                 cmd = CmpSharedSecretCommandBuilder.get_dynamic_cert_profile_command(
-                    profile_json=normalized_profile,
+                    sample_request=sample_request,
                     host=f'{base}/{name}/{operation}',
                     pk=device.pk,
                     shared_secret=cmp_shared_secret,
