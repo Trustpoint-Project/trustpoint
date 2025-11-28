@@ -18,7 +18,6 @@ from trustpoint.page_context import (
 )
 
 from help_pages.base import (
-    ApplicationCertificateProfile,
     HelpContext,
     HelpPageStrategy,
     build_extract_files_from_p12_section,
@@ -61,6 +60,7 @@ class BaseHelpView(PageContextMixin, DetailView[DevIdRegistration]):
 
         return HelpContext(
             devid_registration=devid_registration,
+            allowed_app_profiles=[], # not required, IDevID help views only for domain credential, not app certs
             domain=domain,
             domain_unique_name=domain.unique_name,
             public_key_info=public_key_info,
@@ -100,16 +100,6 @@ class BaseHelpView(PageContextMixin, DetailView[DevIdRegistration]):
 
 class OnboardingCmpIdevIdDomainCredentialStrategy(HelpPageStrategy):
     """Strategy for building the onboarding cmp shared-secret help page."""
-
-    _allowed_app_cert_profiles: list[ApplicationCertificateProfile]
-
-    def __init__(self, allowed_app_cert_profiles: list[ApplicationCertificateProfile]) -> None:
-        """Inits the object by setting the allowed app cert profiles.
-
-        Args:
-            allowed_app_cert_profiles: List of allowed application certificate profiles.
-        """
-        self._allowed_app_cert_profiles = allowed_app_cert_profiles
 
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
@@ -155,23 +145,11 @@ class OnboardingCmpIdevIdDomainCredentialStrategy(HelpPageStrategy):
 class OnboardingCmpIdevidRegistrationHelpView(BaseHelpView):
     """Help view for the CMP IDevID Registration, which displays the required OpenSSL commands."""
 
-    strategy = OnboardingCmpIdevIdDomainCredentialStrategy(
-        allowed_app_cert_profiles=list(ApplicationCertificateProfile)
-    )
+    strategy = OnboardingCmpIdevIdDomainCredentialStrategy()
 
 
 class OnboardingEstIdevIdDomainCredentialStrategy(HelpPageStrategy):
     """Strategy for building the onboarding cmp shared-secret help page."""
-
-    _allowed_app_cert_profiles: list[ApplicationCertificateProfile]
-
-    def __init__(self, allowed_app_cert_profiles: list[ApplicationCertificateProfile]) -> None:
-        """Inits the object by setting the allowed app cert profiles.
-
-        Args:
-            allowed_app_cert_profiles: List of allowed application certificate profiles.
-        """
-        self._allowed_app_cert_profiles = allowed_app_cert_profiles
 
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
@@ -253,6 +231,4 @@ class OnboardingEstIdevIdDomainCredentialStrategy(HelpPageStrategy):
 class OnboardingEstIdevidRegistrationHelpView(BaseHelpView):
     """Help view for the EST IDevID Registration, which displays the required OpenSSL commands."""
 
-    strategy = OnboardingEstIdevIdDomainCredentialStrategy(
-        allowed_app_cert_profiles=list(ApplicationCertificateProfile)
-    )
+    strategy = OnboardingEstIdevIdDomainCredentialStrategy()

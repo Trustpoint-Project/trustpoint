@@ -65,7 +65,7 @@ class ProfileValuePropertyModel(BaseModel):
     required: bool = False
     mutable: bool = True
 
-    model_config = ConfigDict(extra='forbid')
+    #model_config = ConfigDict(extra='forbid')
 
 class SubjectModel(BaseModel):
     """Model for the subject DN of a certificate profile."""

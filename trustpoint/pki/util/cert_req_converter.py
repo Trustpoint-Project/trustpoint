@@ -259,8 +259,9 @@ class JSONCertRequestCommandExtractor:
         return subj_str
 
     @staticmethod
-    def sample_request_to_openssl_sans(sample_req: dict[str, Any]) -> str:
+    def sample_request_to_openssl_cmp_sans(sample_req: dict[str, Any]) -> str:
         """Convert profile SANs to OpenSSL CMP command line -sans string."""
+        print(sample_req)
         ext = sample_req.get('extensions', {})
         san = ext.get('subject_alternative_name', {})
         san_parts = ''
@@ -272,6 +273,28 @@ class JSONCertRequestCommandExtractor:
         if san.get('critical', False):
             san_parts = 'critical, ' + san_parts
         return san_parts.strip()
+
+    @staticmethod
+    def sample_request_to_openssl_req_sans(sample_req: dict[str, Any]) -> str:
+        """Convert profile SANs to OpenSSL req command line -addext string."""
+        ext = sample_req.get('extensions', {})
+        san = ext.get('subject_alternative_name', {})
+        san_parts = ''
+        for san_type, san_values in san.items():
+            if san_type in 'dns_names':
+                san_parts += f'DNS:{san_values}, ' if isinstance(san_values, str) \
+                    else ''.join([f'DNS:{v}, ' for v in san_values])
+            elif san_type == 'uris':
+                san_parts += f'URI:{san_values}, ' if isinstance(san_values, str) \
+                    else ''.join([f'URI:{v}, ' for v in san_values])
+            elif san_type == 'ip_addresses':
+                san_parts += f'IP:{san_values}, ' if isinstance(san_values, str) \
+                    else ''.join([f'IP:{v}, ' for v in san_values])
+            else:
+                logger.debug('JSON Cert Request Command Extractor: Skipping SAN type: %s', san_type)
+        if san.get('critical', False):
+            san_parts = 'critical, ' + san_parts
+        return san_parts.rstrip(', ')
 
     @staticmethod
     def sample_request_to_openssl_days(sample_req: dict[str, Any]) -> int:
