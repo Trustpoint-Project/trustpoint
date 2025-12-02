@@ -295,13 +295,13 @@ class EstUsernamePasswordCommandBuilder:
             f'--cacert trustpoint-tls-trust-store.pem \\\n'
             '--header "Content-Type: application/pkcs10" \\\n'
             f'--data-binary "@csr-{cred_number}.der" \\\n'
-            f'-o certificate-{cred_number}.der \\\n'
+            f'-o certificate-{cred_number}.p7c \\\n'
             f'{host}'
         )
 
     @staticmethod
-    def get_conversion_der_pem_command(cred_number: int) -> str:
-        """Get the conversion DER to PEM command.
+    def get_conversion_p7_pem_command(cred_number: int) -> str:
+        """Get the conversion PKCS#7 (DER) to PEM command.
 
         Args:
             cred_number: The credential number - counter of issued credentials.
@@ -310,11 +310,8 @@ class EstUsernamePasswordCommandBuilder:
             The constructed command.
         """
         return (
-            'openssl x509 \\\n'
-            '-inform DER \\\n'
-            '-outform PEM \\\n'
-            f'-in certificate-{cred_number}.der \\\n'
-            f'-out certificate-{cred_number}.pem'
+            f'openssl pkcs7 -in certificate-{cred_number}.p7c \\\n'
+            f'-inform DER -print_certs -out  certificate-{cred_number}.pem'
         )
 
     @staticmethod
@@ -350,23 +347,20 @@ class EstUsernamePasswordCommandBuilder:
             f'--cacert trustpoint-tls-trust-store.pem \\\n'
             '--header "Content-Type: application/pkcs10" \\\n'
             f'--data-binary "@csr-domain-credential.der" \\\n'
-            f'-o domain-credential-certificate.der \\\n'
+            f'-o domain-credential-certificate.p7c \\\n'
             f'{host}'
         )
 
     @staticmethod
-    def get_domain_credential_conversion_der_pem_command() -> str:
+    def get_domain_credential_conversion_p7_pem_command() -> str:
         """Get the domain credential conversion DER to PEM command.
 
         Returns:
              The constructed command.
         """
         return (
-            'openssl x509 \\\n'
-            '-inform DER \\\n'
-            '-outform PEM \\\n'
-            '-in domain-credential-certificate.der \\\n'
-            '-out domain-credential-certificate.pem'
+            'openssl pkcs7 -in domain-credential-certificate.p7c \\\n'
+            '-inform DER -print_certs -out  domain-credential-certificate.pem'
         )
 
 
@@ -553,7 +547,7 @@ class EstClientCertificateCommandBuilder:
             f'--cacert trustpoint-tls-trust-store.pem \\\n'
             '--header "Content-Type: application/pkcs10" \\\n'
             f'--data-binary "@csr-{cred_number}.der" \\\n'
-            f'-o certificate-{cred_number}.der \\\n'
+            f'-o certificate-{cred_number}.p7c \\\n'
             f'{host}'
         )
 
