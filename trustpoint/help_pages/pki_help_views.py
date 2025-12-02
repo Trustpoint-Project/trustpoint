@@ -347,13 +347,13 @@ class CrlDownloadHelpView(PageContextMixin, DetailView[IssuingCaModel]):
 
         download_pem_cmd = (
             f'curl --cacert trustpoint-tls-trust-store.pem \\\n'
-            f'  -o {issuing_ca.unique_name}.crl \\\n'
+            f'  -o {issuing_ca.unique_name}.pem.crl \\\n'
             f'  "{crl_endpoint}"'
         )
 
         download_der_cmd = (
             f'curl --cacert trustpoint-tls-trust-store.pem \\\n'
-            f'  -o {issuing_ca.unique_name}.crl \\\n'
+            f'  -o {issuing_ca.unique_name}.der.crl \\\n'
             f'  "{crl_endpoint}?encoding=der"'
         )
 
