@@ -5,8 +5,8 @@
     <div class="d-flex align-items-center justify-content-between mb-3">
       <h1 class="h3 fw-bold mb-0">Dashboard</h1>
       <div class="d-flex gap-2">
-        <button type="button" class="btn rounded-pill px-4 device_btn" onclick="link_to_device()">+ Device</button>
-        <button type="button" class="btn rounded-pill px-4 domain_btn" onclick="link_to_domain()">+ Domain</button>
+        <a href="{% url 'devices:devices_create' %}" class="btn rounded-pill px-4 device_btn">+ Device</a>
+        <a href="{% url 'pki:domains-add' %}" class="btn rounded-pill px-4 domain_btn">+ Domain</a>
       </div>
     </div>
   </div>
@@ -16,6 +16,7 @@
   .device_btn{
     background-color: var(--trustpoint-ci);
     color: #fff;
+    text-decoration: none;
   }
 
   .device_btn:hover{
@@ -26,6 +27,7 @@
   .domain_btn{
     color: var(--trustpoint-ci);
     border-color: var(--trustpoint-ci);
+    text-decoration: none;
   }
 
   .domain_btn:hover{
@@ -34,13 +36,3 @@
     border-color: var(--trustpoint-ci);
   }
 </style>
-
-<script>
-  function link_to_device(){
-    window.location.href = "{% url 'devices:devices_create' %}"
-  }
-
-  function link_to_domain(){
-    window.location.href = "{% url 'pki:domains-add' %}"
-  }
-</script>

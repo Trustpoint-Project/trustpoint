@@ -15,14 +15,17 @@ document.addEventListener('dashboardData', (event) => {
   const today = event.detail.today || {};
   const raw = today.cert_counts_by_template || {};
 
-  if (Object.keys(raw).length === 0) return;
-
   const allItems = Object.entries(raw)
     .map(([key, value]) => ({
       label: key,
       value: value || 0
     }))
     .sort((a, b) => b.value - a.value);
+
+  if (!allItems.length) {
+    document.getElementById('no_certs_template_info').innerHTML = 'No certificates yet.';
+    return;
+  }
 
   const labels = allItems.map(i => i.label);
   const values = allItems.map(i => i.value);

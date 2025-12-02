@@ -6,6 +6,8 @@
       <canvas id="chart_device_by_domain" class="bar-chart-canvas"></canvas>
     </div>
 
+    <div id="no_devices_info" class="mt-3 text-muted"></div>
+
     <div id="chart_device_by_domain_legend" class="mt-3 bar-chart-legend"></div>
   </div>
 </div>
@@ -23,7 +25,10 @@ document.addEventListener('dashboardData', (event) => {
     }))
     .sort((a, b) => b.value - a.value);
 
-  if (!allItems.length) return;
+  if (!allItems.length) {
+    document.getElementById('no_devices_info').innerHTML = 'No onboarded devices yet.';
+    return;
+  }
 
   const labels = allItems.map(i => i.label);
   const values = allItems.map(i => i.value);

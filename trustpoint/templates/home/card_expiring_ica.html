@@ -38,10 +38,11 @@
 
 <script>
   document.addEventListener('dashboardData', (event) =>{
-    const delta_24 = 2;
-    const delta_7 = 1;
-    const active_today = 8;
-
+    const {today} = event.detail;
+    const expiring = today.expiring_issuing_ca_counts || {};
+    const delta_24 = expiring.expiring_in_24_hours || 0;
+    const delta_7 = expiring.expiring_in_7_days || 0;
+    const active_today = expiring.total_expiring || 0;
 
     document.getElementById('total_count_expiring_ica').textContent = active_today;
     document.getElementById('delta_count_24_expiring_ica').textContent = delta_24;

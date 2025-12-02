@@ -30,10 +30,10 @@
 <script>
   document.addEventListener('dashboardData', (event) =>{
     const {today} = event.detail;
-    const delta_24 = 2;
-    const delta_7 = 1;
-    const active_today = today.device_counts.Pending;
-
+    const expiring = today.expiring_device_counts || {};
+    const delta_24 = expiring.expiring_in_24_hours || 0;
+    const delta_7 = expiring.expiring_in_7_days || 0;
+    const active_today = expiring.total_expiring || 0;
 
     document.getElementById('total_count_expiring_device').textContent = active_today;
     document.getElementById('delta_count_24_expiring_device').textContent = delta_24;
