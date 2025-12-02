@@ -48,7 +48,7 @@ class TestEstPkiMessageParsing:
         parser.parse(mock_context)
 
         assert mock_context.cert_requested is not None
-        assert mock_context.est_encoding == 'base64_der'
+        assert mock_context.est_encoding == 'pkcs7'
         assert isinstance(mock_context.cert_requested, x509.CertificateSigningRequest)
 
     def test_parse_base64_der_csr_success(self, test_csr_fixture):
@@ -62,7 +62,7 @@ class TestEstPkiMessageParsing:
         parser.parse(mock_context)
 
         assert mock_context.cert_requested is not None
-        assert mock_context.est_encoding == 'base64_der'
+        assert mock_context.est_encoding == 'pkcs7'
         assert isinstance(mock_context.cert_requested, x509.CertificateSigningRequest)
 
     def test_parse_der_csr_success(self, test_csr_fixture):
@@ -76,7 +76,7 @@ class TestEstPkiMessageParsing:
         parser.parse(mock_context)
 
         assert mock_context.cert_requested is not None
-        assert mock_context.est_encoding == 'der'
+        assert mock_context.est_encoding == 'pkcs7'
         assert isinstance(mock_context.cert_requested, x509.CertificateSigningRequest)
 
     def test_parse_missing_raw_message(self):

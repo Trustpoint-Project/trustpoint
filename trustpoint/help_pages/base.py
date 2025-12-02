@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import abc
-import enum
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -13,18 +12,15 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
-from pki.models.domain import DomainAllowedCertificateProfileModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 
 from help_pages.commands import KeyGenCommandBuilder
 from help_pages.help_section import HelpRow, HelpSection, ValueRenderType
 
 if TYPE_CHECKING:
-    from typing import Self
-
     from devices.models import DeviceModel
     from pki.models import DevIdRegistration
-    from pki.models.domain import DomainModel
+    from pki.models.domain import DomainModel, DomainAllowedCertificateProfileModel
     from trustpoint_core import oid
 
 
@@ -145,9 +141,18 @@ def build_tls_trust_store_section() -> HelpSection:
     """
     tls = ActiveTrustpointTlsServerCredentialModel.objects.first()
     if not tls or not tls.credential:
+        msg = format_html(
+            '<div class="tp-message alert alert-danger d-flex" role="alert">'
+                '<svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="error:">'
+                    '<use xlink:href="/static/img/icons.svg#icon-error"></use></svg>'
+                '<div>{}<br>{}</div>'
+            '</div>',
+            'This onboarding method is not securely available without TLS.',
+            'Please ensure you are running Trustpoint within the correctly configured Docker environment!',
+        )
         return HelpSection(
-            _non_lazy('TLS not available'),
-            [HelpRow(_non_lazy('TLS not available'), '-', ValueRenderType.PLAIN)],
+            _non_lazy('Download TLS Trust-Store'),
+            [HelpRow(_non_lazy('Truststore is unavailable!'), msg, ValueRenderType.PLAIN)],
         )
 
     root = tls.credential.get_last_in_chain()
