@@ -58,6 +58,11 @@ def build_alias_map_name_oids(alias_map: dict[str, str], enum_cls: type[enum.Enu
 alias_map = build_alias_map_name_oids({}, NameOid)
 alias_map = build_alias_map_name_oids(alias_map, CertificateExtensionOid)
 
+# Important: Pydantic V2 model_config does not follow MRO!
+# Non-default Model config settings are taken from the last base class set to a non-default value.
+# To be on the safe side, set model_config on the final final child classes.
+# See: https://github.com/pydantic/pydantic/issues/9992
+
 class ProfileValuePropertyModel(BaseModel):
     """Model for a profile value property."""
     value: Any | None = None
@@ -69,45 +74,45 @@ class ProfileValuePropertyModel(BaseModel):
 
 class SubjectModel(BaseModel):
     """Model for the subject DN of a certificate profile."""
-    common_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('common_name'))
-    surname: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('surname'))
-    serial_number: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('serial_number'))
-    country_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('country_name'))
-    locality_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('locality_name'))
+    common_name: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('common_name'))
+    surname: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('surname'))
+    serial_number: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('serial_number'))
+    country_name: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('country_name'))
+    locality_name: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('locality_name'))
     state_or_province_name: str | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('state_or_province_name')
+        validation_alias=ALIASES.get('state_or_province_name')
     )
     street_address: str | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('street_address')
+        validation_alias=ALIASES.get('street_address')
     )
     organization_name: str | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('organization_name')
+        validation_alias=ALIASES.get('organization_name')
     )
     organizational_unit_name: str | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('organizational_unit_name')
+        validation_alias=ALIASES.get('organizational_unit_name')
     )
     title: str | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('title')
+        validation_alias=ALIASES.get('title')
     )
     description: str | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('description')
+        validation_alias=ALIASES.get('description')
     )
-    postal_code: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('postal_code'))
-    email_address: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('email_address'))
-    name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('name'))
-    given_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('given_name'))
-    initials: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('initials'))
-    pseudonym: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('pseudonym'))
-    uid: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('uid'))
+    postal_code: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('postal_code'))
+    email_address: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('email_address'))
+    name: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('name'))
+    given_name: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('given_name'))
+    initials: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('initials'))
+    pseudonym: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('pseudonym'))
+    uid: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('uid'))
     domain_component: str | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('domain_component')
+        validation_alias=ALIASES.get('domain_component')
     )
 
     # Should allow unknown fields, but not required
@@ -128,11 +133,11 @@ class BasicConstraintsExtensionModel(BaseExtensionModel):
 
 class SanExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
     """Model for the SAN extension of a certificate profile."""
-    dns_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, alias='dns')
-    ip_addresses: list[str] | ProfileValuePropertyModel | None = Field(default=None, alias='ip')
-    rfc822_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, alias='rfc822')
-    uris: list[str] | ProfileValuePropertyModel | None = Field(default=None, alias='uri')
-    other_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, alias='other')
+    dns_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='dns')
+    ip_addresses: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='ip')
+    rfc822_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='rfc822')
+    uris: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='uri')
+    other_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='other')
     model_config = ConfigDict(extra='forbid', validate_by_alias=False, validate_by_name=True)
 
 class CRLDistributionPointsExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
@@ -168,24 +173,25 @@ class ExtensionsModel(BaseModel):
     """Model for the extensions of a certificate profile."""
     basic_constraints: BasicConstraintsExtensionModel | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('basic_constraints'),
+        validation_alias=ALIASES.get('basic_constraints'),
     )
     key_usage: KeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('key_usage'),
+        validation_alias=ALIASES.get('key_usage'),
     )
     extended_key_usage: ExtendedKeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('extended_key_usage'),
+        validation_alias=ALIASES.get('extended_key_usage'),
     )
     subject_alternative_name: SanExtensionModel | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('subject_alternative_name'),
+        validation_alias=ALIASES.get('subject_alternative_name'),
     )
     crl_distribution_points: CRLDistributionPointsExtensionModel | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('crl_distribution_points'),
+        validation_alias=ALIASES.get('crl_distribution_points'),
     )
+    #model_config = ConfigDict(validate_by_validation_alias=False, validate_by_name=True)
 
 
 class ValidityModel(BaseModel):
@@ -236,16 +242,16 @@ class CertProfileModel(CertProfileBaseModel):
     """Model for a certificate profile."""
     type: Literal['cert_profile']
     display_name: str | None = None
-    subject: ProfileSubjectModel = Field(alias='subj', default=ProfileSubjectModel())
-    extensions: ProfileExtensionsModel = Field(alias='ext', default=ProfileExtensionsModel())
+    subject: ProfileSubjectModel = Field(validation_alias='subj', default=ProfileSubjectModel())
+    extensions: ProfileExtensionsModel = Field(validation_alias='ext', default=ProfileExtensionsModel())
     validity: ValidityModel = Field(default=ValidityModel(days=10))
 
 
 class CertRequestModel(BaseModel):
     """Model for a certificate request."""
     type: Literal['cert_request'] | None = 'cert_request'
-    subject: SubjectModel = Field(alias='subj', default=SubjectModel())
-    extensions: ExtensionsModel = Field(alias='ext', default=ExtensionsModel())
+    subject: SubjectModel = Field(validation_alias='subj', default=SubjectModel())
+    extensions: ExtensionsModel = Field(validation_alias='ext', default=ExtensionsModel())
     validity: ValidityModel = Field(default=ValidityModel(days=10))
 
     model_config = ConfigDict(extra='allow') # extra fields are validated by _apply_profile_rules
