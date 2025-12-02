@@ -92,7 +92,7 @@ class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateMode
                 'id': entry.id,
             })
         context['issuer_entries'] = issuer_entries
-        ip_addresses=[]
+        ip_addresses = []
         san_ext = getattr(cert, 'subject_alternative_name_extension', None)
         if san_ext and getattr(san_ext, 'subject_alt_name', None):
             ip_addresses = [
@@ -311,9 +311,8 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
     model = CertificateModel
     context_object_name = 'certificate'
 
-    def get(self, _request: HttpRequest, pk: str | None = None, *_args: Any, **_kwargs: Any) -> HttpResponse:
+    def get(self, _request: HttpRequest, _pk: str | None = None, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Download the active Trustpoint TLS server certificate."""
-        del pk
         tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
         if not tls_cert:
             msg = 'No TLS server certificate available. Are you on the development server?'
