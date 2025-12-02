@@ -310,8 +310,8 @@ class EstUsernamePasswordCommandBuilder:
             The constructed command.
         """
         return (
-            'openssl pkcs7 -print_certs -inform DER -in domain-credential-certificate.p7c \\\n'
-            f'| sed -n \'/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p\' > certificate-{cred_number}.pem'
+            f'openssl pkcs7 -in certificate-{cred_number}.p7c \\\n'
+            f'-inform DER -print_certs -out  certificate-{cred_number}.pem'
         )
 
     @staticmethod
@@ -359,8 +359,8 @@ class EstUsernamePasswordCommandBuilder:
              The constructed command.
         """
         return (
-            'openssl pkcs7 -print_certs -inform DER -in domain-credential-certificate.p7c \\\n'
-            '| sed -n \'/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p\' > domain-credential-certificate.pem'
+            'openssl pkcs7 -in domain-credential-certificate.p7c \\\n'
+            '-inform DER -print_certs -out  domain-credential-certificate.pem'
         )
 
 
@@ -547,7 +547,7 @@ class EstClientCertificateCommandBuilder:
             f'--cacert trustpoint-tls-trust-store.pem \\\n'
             '--header "Content-Type: application/pkcs10" \\\n'
             f'--data-binary "@csr-{cred_number}.der" \\\n'
-            f'-o certificate-{cred_number}.der \\\n'
+            f'-o certificate-{cred_number}.p7c \\\n'
             f'{host}'
         )
 

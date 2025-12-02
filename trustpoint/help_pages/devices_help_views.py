@@ -759,7 +759,7 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
                 ],
             ),
         ]
-        return sections, _non_lazy('HHelp - Issue Application Certificates using EST with a Domain Credential')
+        return sections, _non_lazy('Help - Issue Application Certificates using EST with a Domain Credential')
 
 
 class DeviceApplicationCertificateWithEstDomainCredentialHelpView(BaseHelpView):
