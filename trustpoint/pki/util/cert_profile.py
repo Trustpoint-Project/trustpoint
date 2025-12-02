@@ -133,7 +133,7 @@ class SanExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
     rfc822_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, alias='rfc822')
     uris: list[str] | ProfileValuePropertyModel | None = Field(default=None, alias='uri')
     other_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, alias='other')
-    model_config = ConfigDict(extra='forbid')
+    model_config = ConfigDict(extra='forbid', validate_by_alias=False, validate_by_name=True)
 
 class CRLDistributionPointsExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
     """Model for the CRL Distribution Points extension of a certificate profile.
