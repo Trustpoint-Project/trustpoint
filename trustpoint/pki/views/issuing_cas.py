@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import binascii
+from base64 import b64decode
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cryptography import x509
@@ -264,8 +266,26 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
         if not crl_pem:
             messages.warning(request, _('No CRL available for issuing CA %s.') % issuing_ca.unique_name)
             return redirect('pki:issuing_cas')
-        response = HttpResponse(crl_pem, content_type='application/x-pem-file')
-        response['Content-Disposition'] = f'attachment; filename="{issuing_ca.unique_name}.crl"'
+        encoding = request.GET.get('encoding', '').lower()
+        if encoding == 'der':
+            pem_lines = [line.strip() for line in crl_pem.splitlines() if line and not line.startswith('-----')]
+            b64data = ''.join(pem_lines)
+            try:
+                crl_der = b64decode(b64data)
+            except (binascii.Error, ValueError) as exc:
+                messages.error(
+                    request,
+                    _(
+                        'Failed to convert CRL to DER for issuing CA %s: %s'
+                    ) % (issuing_ca.unique_name, str(exc)),
+                )
+                return redirect('pki:issuing_cas')
+
+            response = HttpResponse(crl_der, content_type='application/pkix-crl')
+            response['Content-Disposition'] = f'attachment; filename="{issuing_ca.unique_name}.crl.der"'
+        else:
+            response = HttpResponse(crl_pem, content_type='application/x-pem-file')
+            response['Content-Disposition'] = f'attachment; filename="{issuing_ca.unique_name}.crl"'
         return response
 
 
