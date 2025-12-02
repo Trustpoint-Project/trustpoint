@@ -340,28 +340,6 @@ def test_api_list_issuing_cas_includes_crl_status(
 
 
 # ========================================
-# Help Page Tests
-# ========================================
-# Note: Help page tests are skipped as they require full URL configuration
-# which may not be available in isolated test environment.
-
-
-@pytest.mark.skip(reason="Requires full URL configuration")
-def test_crl_help_page_accessible(
-    authenticated_client: Client,
-    issuing_ca_instance: dict[str, Any]
-) -> None:
-    """Test that CRL download help page is accessible."""
-    issuing_ca = issuing_ca_instance['issuing_ca']
-    
-    url = reverse('pki:help_issuing_cas_crl_download', kwargs={'pk': issuing_ca.pk})
-    response = authenticated_client.get(url)
-    
-    assert response.status_code == 200
-    assert 'help_page' in response.context
-
-
-# ========================================
 # CRL Content Validation Tests
 # ========================================
 
