@@ -58,7 +58,11 @@
                     </a>
                 {% elif back_url %}
                     <a href="{% url back_url pk=idevid_registration.domain.pk %}" class="btn btn-primary">
-                        {% trans 'Back to Domain Configuration' %}
+                        {% if back_button_text %}
+                            {{ back_button_text }}
+                        {% else %}
+                            {% trans 'Back to Domain Configuration' %}
+                        {% endif %}
                     </a>
                 {% endif %}
             </div>

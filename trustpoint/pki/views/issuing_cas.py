@@ -243,6 +243,9 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[IssuingCaMode
             messages.success(request, _('CRL for Issuing CA %s has been generated.') % issuing_ca.unique_name)
         else:
             messages.error(request, _('Failed to generate CRL for Issuing CA %s.') % issuing_ca.unique_name)
+        next_url = request.GET.get('next')
+        if next_url:
+            return redirect(next_url)
         return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
 
 
