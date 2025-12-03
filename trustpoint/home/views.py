@@ -717,16 +717,16 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         try:
             expiring_device_counts = {
                 'total_expiring': DeviceModel.objects.filter(
-                    issued_credentials__certificate__not_valid_after__gt=now,
-                    issued_credentials__certificate__not_valid_after__lte=next_7_days
+                    issued_credentials__credential__certificate__not_valid_after__gt=now,
+                    issued_credentials__credential__certificate__not_valid_after__lte=next_7_days
                 ).distinct().count(),
                 'expiring_in_24_hours': DeviceModel.objects.filter(
-                    issued_credentials__certificate__not_valid_after__gt=now,
-                    issued_credentials__certificate__not_valid_after__lte=next_24_hours
+                    issued_credentials__credential__certificate__not_valid_after__gt=now,
+                    issued_credentials__credential__certificate__not_valid_after__lte=next_24_hours
                 ).distinct().count(),
                 'expiring_in_7_days': DeviceModel.objects.filter(
-                    issued_credentials__certificate__not_valid_after__gt=now,
-                    issued_credentials__certificate__not_valid_after__lte=next_7_days
+                    issued_credentials__credential__certificate__not_valid_after__gt=now,
+                    issued_credentials__credential__certificate__not_valid_after__lte=next_7_days
                 ).distinct().count(),
             }
         except Exception as exception:
@@ -747,11 +747,11 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         try:
             expired_device_counts = {
                 'total_expired': DeviceModel.objects.filter(
-                    issued_credentials__certificate__not_valid_after__lt=now
+                    issued_credentials__credential__certificate__not_valid_after__lt=now
                 ).distinct().count(),
                 'expired_in_last_7_days': DeviceModel.objects.filter(
-                    issued_credentials__certificate__not_valid_after__gte=last_7_days,
-                    issued_credentials__certificate__not_valid_after__lt=now
+                    issued_credentials__credential__certificate__not_valid_after__gte=last_7_days,
+                    issued_credentials__credential__certificate__not_valid_after__lt=now
                 ).distinct().count(),
             }
         except Exception as exception:
