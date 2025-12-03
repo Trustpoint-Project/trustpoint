@@ -39,15 +39,6 @@ async function fetchDashboardData(period) {
   }
 }
 
-async function printTest(){
-  const todayData = await fetchDashboardData('today');
-  const weekData = await fetchDashboardData('last_week');
-
-  console.log("todayData", todayData);
-  console.log("weekData", weekData);
-
-}
-
 function updateDeltaIcon(id, value) {
   const valueEl = document.getElementById(id);
   if (!valueEl) return;
@@ -75,6 +66,10 @@ async function loadDashboardData(){
       fetchDashboardData('today'),
       fetchDashboardData('last_week')
     ]);
+
+    // debug
+    console.log("todayData", todayData);
+    console.log("weekData", weekData);
 
     const event = new CustomEvent('dashboardData', {
       detail:{
@@ -461,8 +456,4 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
   return window[chartInstanceKey];
 }
 
-document.addEventListener("DOMContentLoaded", function (){
-  printTest()
-  loadDashboardData()
-
-})
+document.addEventListener("DOMContentLoaded", loadDashboardData)
