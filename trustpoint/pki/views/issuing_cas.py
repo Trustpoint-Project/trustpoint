@@ -14,6 +14,7 @@ from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
+from rest_framework import viewsets
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import (
     BulkDeleteView,
@@ -27,9 +28,11 @@ from pki.forms import (
     IssuingCaAddMethodSelectForm,
 )
 from pki.models import CertificateModel, IssuingCaModel
+from pki.serializer.issuing_ca import IssuingCaSerializer
 from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:
+    from typing import ClassVar
     from django.db.models import QuerySet
     from django.forms import Form
     from django.http import HttpRequest
@@ -256,3 +259,27 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
         response = HttpResponse(crl_pem, content_type='application/x-pem-file')
         response['Content-Disposition'] = f'attachment; filename="{issuing_ca.unique_name}.crl"'
         return response
+
+class IssuingCaViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing Device instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+
+    queryset = IssuingCaModel.objects.all()
+    serializer_class = IssuingCaSerializer
+    action_descriptions: ClassVar[dict[str, str]] = {
+        'list': 'Retrieve a list of all issuing cas.',
+        'retrieve': 'Retrieve a single Issuing CA by id.',
+        'create': 'Create a new Issuing CA with name, serial number, and status.',
+        'update': 'Update an existing Issuing CA.',
+        'partial_update': 'Partially update an existing Issuing CA.',
+        'destroy': 'Delete a Issuing CA.',
+    }
+
+    def get_view_description(self, *, html: bool = False) -> str:
+        """Return a description for the given action."""
+        if hasattr(self, 'action') and self.action in self.action_descriptions:
+            return self.action_descriptions[self.action]
+        return super().get_view_description(html)
