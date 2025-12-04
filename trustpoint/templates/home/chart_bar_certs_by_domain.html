@@ -14,8 +14,8 @@
 
 <script>
 document.addEventListener('dashboardData', (event) => {
-  const today = event.detail.today || {};
-  const raw = today.cert_counts_by_domain || [];
+  const total = event.detail.total || {};
+  const raw = total.cert_counts_by_domain || [];
 
   if (!raw.length) {
     document.getElementById('no_certs_info').innerHTML = 'No certificates yet.';

@@ -23,7 +23,7 @@ function generateDate(period) {
   return formatDate(periodStartDate);
 }
 
-// Funktion zum Abrufen der Dashboard-Daten über die Backend-API
+// Fetch dashboard data for a given period from the server backend API
 async function fetchDashboardData(period) {
   try {
     const formattedStartDate = generateDate(period);
@@ -62,19 +62,22 @@ function updateDeltaIcon(id, value) {
 
 async function loadDashboardData(){
   try{
-    const [todayData, weekData] = await Promise.all([
+    const [todayData, weekData, totalData] = await Promise.all([
       fetchDashboardData('today'),
-      fetchDashboardData('last_week')
+      fetchDashboardData('last_week'),
+      fetchDashboardData('total')
     ]);
 
     // debug
     console.log("todayData", todayData);
     console.log("weekData", weekData);
+    console.log("totalData", totalData);
 
     const event = new CustomEvent('dashboardData', {
       detail:{
         today: todayData,
-        week: weekData
+        week: weekData,
+        total: totalData
       }
     });
 
@@ -369,30 +372,29 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
   const noDataPlugin = {
     id:'noDataPlugin',
     afterDraw: (chart) => {
-      if (chart.data.datasets.length === 0){
-        const ctx = chart.ctx;
-        const width = chart.width;
-        const height = chart.height;
+      if (chart.data.datasets.length > 0) return;
+      const ctx = chart.ctx;
+      const width = chart.width;
+      const height = chart.height;
 
-        chart.clear();
+      chart.clear();
 
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-color') || '#000';
-        ctx.fillText('No data available', width / 2, height / 2 - 30);
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-color') || '#000';
+      ctx.fillText('No data available', width / 2, height / 2 - 30);
 
-        const img = new Image();
-        img.onload = function(){
-          const imgSize = 80;
-          const x = width/2-imgSize/2;
-          const y = height/2+10;
-          ctx.drawImage(img, x, y, imgSize, imgSize);
-        };
-        img.src = '../../static/img/tp-logo-128.png';
-        ctx.restore();
-      }
+      const img = new Image();
+      img.onload = function(){
+        const imgSize = 80;
+        const x = width/2-imgSize/2;
+        const y = height/2+10;
+        ctx.drawImage(img, x, y, imgSize, imgSize);
+      };
+      img.src = '../../static/img/tp-logo-128.png';
+      ctx.restore();
     }
   };
 

@@ -12,9 +12,9 @@
 
 <script>
 document.addEventListener('dashboardData', (event) => {
-  const today = event.detail.today || {};
-  const certByIssuingCa = Array.isArray(today.cert_counts_by_issuing_ca)
-    ? today.cert_counts_by_issuing_ca
+  const total = event.detail.total || {};
+  const certByIssuingCa = Array.isArray(total.cert_counts_by_issuing_ca)
+    ? total.cert_counts_by_issuing_ca
     : [];
 
   if (!certByIssuingCa.length) return;
