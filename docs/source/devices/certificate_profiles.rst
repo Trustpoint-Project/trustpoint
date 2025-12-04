@@ -90,6 +90,7 @@ Validity
 The ``validity`` field defines the validity period of the issued certificate. It supports the following sub-fields:
 
 .. code-block:: json
+
   {
     "validity": {
       // Method 1: Explit ISO 8601 timestamps
