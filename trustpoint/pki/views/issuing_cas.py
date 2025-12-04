@@ -28,6 +28,12 @@ from drf_spectacular.utils import (
     OpenApiParameter,
     extend_schema,
     inline_serializer,
+from rest_framework import viewsets
+from trustpoint.logger import LoggerMixin
+from trustpoint.views.base import (
+    BulkDeleteView,
+    ContextDataMixin,
+    SortableTableMixin,
 )
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
@@ -44,6 +50,8 @@ from pki.forms import (
     IssuingCaTruststoreAssociationForm,
     TruststoreAddForm,
 )
+from pki.models import CertificateModel, IssuingCaModel
+from pki.serializer.issuing_ca import IssuingCaSerializer
 from pki.models import CaModel, CertificateModel, CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
@@ -65,6 +73,7 @@ from trustpoint.views.base import (
 )
 
 if TYPE_CHECKING:
+    from typing import ClassVar
     from typing import ClassVar
 
     from django.db.models import QuerySet
@@ -1506,3 +1515,27 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[CaModel]):
                 )
 
         return response
+
+class IssuingCaViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing Device instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+
+    queryset = IssuingCaModel.objects.all()
+    serializer_class = IssuingCaSerializer
+    action_descriptions: ClassVar[dict[str, str]] = {
+        'list': 'Retrieve a list of all issuing cas.',
+        'retrieve': 'Retrieve a single Issuing CA by id.',
+        'create': 'Create a new Issuing CA with name, serial number, and status.',
+        'update': 'Update an existing Issuing CA.',
+        'partial_update': 'Partially update an existing Issuing CA.',
+        'destroy': 'Delete a Issuing CA.',
+    }
+
+    def get_view_description(self, *, html: bool = False) -> str:
+        """Return a description for the given action."""
+        if hasattr(self, 'action') and self.action in self.action_descriptions:
+            return self.action_descriptions[self.action]
+        return super().get_view_description(html)
