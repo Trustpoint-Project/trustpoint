@@ -22,9 +22,10 @@
 
 <script>
   document.addEventListener('dashboardData', (event) =>{
-    const {today, week} = event.detail;
-    const active_today = 5;
-    const delta = 2;
+    const {today} = event.detail;
+    const expired = today.expired_device_counts || {};
+    const active_today = expired.total_expired || 0;
+    const delta = expired.expired_in_last_7_days || 0;
 
     document.getElementById('total_count_expired_device').textContent = active_today;
     document.getElementById('delta_count_expired_device').textContent = delta;

@@ -29,7 +29,7 @@
 
 <script>
   document.addEventListener('dashboardData', (event) =>{
-    const {today, week} = event.detail;
+    const {today} = event.detail;
     const delta_24 = today.cert_counts.expiring_in_1_day;
     const delta_7 = today.cert_counts.expiring_in_7_days;
     const active_today = delta_24 + delta_7;

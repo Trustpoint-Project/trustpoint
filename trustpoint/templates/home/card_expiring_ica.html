@@ -2,7 +2,7 @@
   <div class="card-body p-4">
     <!-- header -->
     <div class="d-flex justify-content-between align-items-start mb-4">
-      <h6 class="fs-5 mb-0">Expiring Issuing CA</h6>
+      <h6 class="fs-5 mb-0">Expiring Issuing CAs</h6>
     </div>
     <!-- content -->
     <div class="d-flex align-items-end">
@@ -38,11 +38,11 @@
 
 <script>
   document.addEventListener('dashboardData', (event) =>{
-    const {today, week} = event.detail;
-    const delta_24 = 2;
-    const delta_7 = 1;
-    const active_today = 8;
-
+    const {today} = event.detail;
+    const expiring = today.expiring_issuing_ca_counts || {};
+    const delta_24 = expiring.expiring_in_24_hours || 0;
+    const delta_7 = expiring.expiring_in_7_days || 0;
+    const active_today = expiring.expiring_in_7_days || 0;
 
     document.getElementById('total_count_expiring_ica').textContent = active_today;
     document.getElementById('delta_count_24_expiring_ica').textContent = delta_24;

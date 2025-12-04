@@ -255,10 +255,16 @@
                                         {% trans 'Generate CRL' %}
                                     </a>
                                     {% if issuing_ca.last_crl_issued_at %}
-                                        <a href="{% url 'crl-download' pk=issuing_ca.pk %}"
-                                            class="btn btn-sm btn-primary">
-                                            {% trans 'Download CRL' %}
-                                        </a>
+                                        <div class="btn-group me-2" role="group">
+                                            <a href="{% url 'crl-download' pk=issuing_ca.pk %}"
+                                                class="btn btn-sm btn-primary">
+                                                {% trans 'Download CRL (PEM)' %}
+                                            </a>
+                                            <a href="{% url 'crl-download' pk=issuing_ca.pk %}?encoding=der"
+                                                class="btn btn-sm btn-primary">
+                                                {% trans 'Download CRL (DER)' %}
+                                            </a>
+                                        </div>
                                     {% else %}
                                         <a class="btn btn-sm btn-primary disabled">
                                             {% trans 'Download CRL' %}

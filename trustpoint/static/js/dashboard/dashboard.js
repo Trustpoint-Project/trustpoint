@@ -23,7 +23,7 @@ function generateDate(period) {
   return formatDate(periodStartDate);
 }
 
-// Funktion zum Abrufen der Dashboard-Daten über die Backend-API
+// Fetch dashboard data for a given period from the server backend API
 async function fetchDashboardData(period) {
   try {
     const formattedStartDate = generateDate(period);
@@ -37,15 +37,6 @@ async function fetchDashboardData(period) {
     console.error("Error fetching dashboard data:", error);
     return null;
   }
-}
-
-async function printTest(){
-  const todayData = await fetchDashboardData('today');
-  const weekData = await fetchDashboardData('last_week');
-
-  console.log("todayData", todayData);
-  console.log("weekData", weekData);
-
 }
 
 function updateDeltaIcon(id, value) {
@@ -71,15 +62,22 @@ function updateDeltaIcon(id, value) {
 
 async function loadDashboardData(){
   try{
-    const [todayData, weekData] = await Promise.all([
+    const [todayData, weekData, totalData] = await Promise.all([
       fetchDashboardData('today'),
-      fetchDashboardData('last_week')
+      fetchDashboardData('last_week'),
+      fetchDashboardData('total')
     ]);
+
+    // debug
+    console.log("todayData", todayData);
+    console.log("weekData", weekData);
+    console.log("totalData", totalData);
 
     const event = new CustomEvent('dashboardData', {
       detail:{
         today: todayData,
-        week: weekData
+        week: weekData,
+        total: totalData
       }
     });
 
@@ -96,19 +94,19 @@ function createHorizontalBarChart(
   legendId,
   chartInstanceName
 ) {
-  // Validierung der Eingabeparameter
+  // Validation of input parameters
   if (!Array.isArray(labels) || !Array.isArray(values)) {
-    console.error('Ungültige Daten: labels und values müssen Arrays sein');
+    console.error('Invalid data: labels and values must be arrays');
     return;
   }
 
   if (labels.length !== values.length) {
-    console.error('Ungültige Daten: labels und values müssen Arrays gleicher Länge sein');
+    console.error('Invalid data: labels and values must be arrays of equal length');
     return;
   }
 
   if (!canvasId || !legendId) {
-    console.error('Canvas ID und Legend ID sind erforderlich');
+    console.error('Canvas ID and Legend ID are required');
     return;
   }
 
@@ -116,7 +114,7 @@ function createHorizontalBarChart(
   const legendEl = document.getElementById(legendId);
 
   if (!canvasEl) {
-    console.error(`Canvas Element mit ID '${canvasId}' nicht gefunden`);
+    console.error(`Canvas element with ID '${canvasId}' not found`);
     return;
   }
 
@@ -128,8 +126,8 @@ function createHorizontalBarChart(
     .filter(item => item.value > 0)
     .sort((a, b) => b.value - a.value);
 
-  // Wichtig: Chart wird auch dann erstellt, wenn allItems leer ist.
-  // Das Plugin übernimmt dann die "Keine Daten"-Darstellung.
+  // Important: Chart is created even when allItems is empty.
+  // The plugin then handles the "No Data" display.
   const chartDisplayItems = allItems.slice(0, 5);
 
   const palette = [
@@ -195,13 +193,13 @@ function createHorizontalBarChart(
     }
   };
 
-  // Alten Chart zerstören falls vorhanden
+  // Destroy old chart if it exists
   const chartInstanceKey = `_${chartInstanceName}Chart`;
   if (window[chartInstanceKey]) {
     window[chartInstanceKey].destroy();
   }
 
-  // Neuen Chart erstellen
+  // Create new chart
   window[chartInstanceKey] = new Chart(canvasEl, {
     type: 'bar',
     data: {
@@ -232,7 +230,7 @@ function createHorizontalBarChart(
       plugins: {
         legend: { display: false },
 
-        // 👇 Hier konfigurierst du das No-Data-Plugin
+        // 👇 Here you configure the No-Data plugin
         noDataImagePlugin: {
           imageSrc: 'trustpoint/static/img/tp-logo-128.png',
           text: 'No Data'
@@ -252,7 +250,7 @@ const noDataImagePlugin = {
     const imageSrc = opts.imageSrc;
     const text = opts.text || 'No Data';
 
-    // Prüfen, ob es überhaupt sinnvolle Daten gibt
+    // Check if there is any meaningful data
     const hasData =
       chart.data &&
       chart.data.datasets &&
@@ -271,7 +269,7 @@ const noDataImagePlugin = {
     const height = bottom - top;
 
     ctx.save();
-    // Zeichenbereich leeren, damit keine Achsen o.ä. stören
+    // Clear drawing area so no axes etc. interfere
     ctx.clearRect(left, top, width, height);
 
     const drawTextOnly = () => {
@@ -290,7 +288,7 @@ const noDataImagePlugin = {
       return;
     }
 
-    // Bild-Caching im Plugin-Optionsobjekt
+    // Image caching in plugin options object
     if (!opts._img) {
       const img = new Image();
       img.src = imageSrc;
@@ -299,7 +297,7 @@ const noDataImagePlugin = {
 
       img.onload = () => {
         opts._imgLoaded = true;
-        chart.draw(); // Nachladen → Canvas neu zeichnen
+        chart.draw(); // Reload → Redraw canvas
       };
       img.onerror = () => {
         opts._imgLoaded = false;
@@ -318,7 +316,7 @@ const noDataImagePlugin = {
 
       ctx.drawImage(img, x, y, imgWidth, imgHeight);
 
-      // Optionaler Text darunter
+      // Optional text below
       ctx.save();
       ctx.font = '500 14px system-ui, -apple-system, Segoe UI, Roboto, Arial';
       ctx.fillStyle = '#6c757d';
@@ -327,7 +325,7 @@ const noDataImagePlugin = {
       ctx.fillText(text, left + width / 2, y + imgHeight + 8);
       ctx.restore();
     } else {
-      // Solange das Bild noch nicht geladen ist → Text anzeigen
+      // While the image is not yet loaded → Show text
       drawTextOnly();
     }
 
@@ -358,7 +356,7 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      // Zahl
+      // Number
       ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
       ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-color') || '#000';
       ctx.fillText(total, x, y - 8);
@@ -374,34 +372,33 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
   const noDataPlugin = {
     id:'noDataPlugin',
     afterDraw: (chart) => {
-      if (chart.data.datasets.length === 0){
-        const ctx = chart.ctx;
-        const width = chart.width;
-        const height = chart.height;
+      if (chart.data.datasets.length > 0) return;
+      const ctx = chart.ctx;
+      const width = chart.width;
+      const height = chart.height;
 
-        chart.clear()
+      chart.clear();
 
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-color') || '#000';
-        ctx.fillText('Keine Daten verfügbar', width / 2, height / 2 - 30);
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-color') || '#000';
+      ctx.fillText('No data available', width / 2, height / 2 - 30);
 
-        const img = new Image();
-        img.onload = function(){
-          const imgSize = 80;
-          const x = width/2-imgSize/2;
-          const y = height/2+10;
-          ctx.drawImage(img, x, y, imgSize, imgSize);
-        };
-        img.src = '../../static/img/tp-logo-128.png';
-        ctx.restore();
-      }
+      const img = new Image();
+      img.onload = function(){
+        const imgSize = 80;
+        const x = width/2-imgSize/2;
+        const y = height/2+10;
+        ctx.drawImage(img, x, y, imgSize, imgSize);
+      };
+      img.src = '../../static/img/tp-logo-128.png';
+      ctx.restore();
     }
   };
 
-  // Alten Chart zerstören
+  // Destroy old chart
   const chartInstanceKey = `_${chartInstanceName}Chart`;
   if (window[chartInstanceKey]) {
     window[chartInstanceKey].destroy();
@@ -461,8 +458,4 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
   return window[chartInstanceKey];
 }
 
-document.addEventListener("DOMContentLoaded", function (){
-  printTest()
-  loadDashboardData()
-
-})
+document.addEventListener("DOMContentLoaded", loadDashboardData)

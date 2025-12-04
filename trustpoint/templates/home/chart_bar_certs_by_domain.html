@@ -6,16 +6,21 @@
       <canvas id="chart_certs_by_domain" class="bar-chart-canvas"></canvas>
     </div>
 
+    <div id="no_certs_info" class="mt-3 text-muted"></div>
+
     <div id="chart_certs_by_domain_legend" class="mt-3 bar-chart-legend"></div>
   </div>
 </div>
 
 <script>
 document.addEventListener('dashboardData', (event) => {
-  const today = event.detail.today || {};
-  const raw = today.cert_counts_by_domain || [];
+  const total = event.detail.total || {};
+  const raw = total.cert_counts_by_domain || [];
 
-  if (Object.keys(raw) === 0) return;
+  if (!raw.length) {
+    document.getElementById('no_certs_info').innerHTML = 'No certificates yet.';
+    return;
+  }
 
   const allItems = raw
     .map(row => ({

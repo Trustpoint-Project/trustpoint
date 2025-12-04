@@ -100,7 +100,7 @@ For more details see the full [Trustpoint Documentation](https://trustpoint.read
 the full [Trustpoint-Client Documentation](https://trustpoint-client.readthedocs.io/en/latest/).
 
 For a quick setup and first impression use
-our [Quickstart Setup Guide](https://trustpoint.readthedocs.io/en/latest/quickstart_setup.html)
+our [Quickstart Setup Guide](https://trustpoint.readthedocs.io/en/latest/getting_started/quickstart_setup.html)
 
 ### Docker Hub
 
@@ -112,12 +112,12 @@ container yourself.
 ## Which features/requirements are finished and which are still w.i.p.?
 
 There are some requirements defined inside
-the [Test Plan](https://trustpoint.readthedocs.io/en/latest/test_plan/test_plan.html)
+the [Test Plan](https://trustpoint.readthedocs.io/en/latest/testing/test_plan.html)
 which are listed in
-the [chapter Requirements](https://trustpoint.readthedocs.io/en/latest/test_plan/test_plan.html#requirements).
+the [chapter Requirements](https://trustpoint.readthedocs.io/en/latest/testing/test_plan.html#requirements).
 To keep this README as short as possible but still as informative as possible,
 we will state the requirements defined in
-the [Test Plan](https://trustpoint.readthedocs.io/en/latest/test_plan/test_plan.html),
+the [Test Plan](https://trustpoint.readthedocs.io/en/latest/testing/test_plan.html),
 state the header and if the [python behave](https://behave.readthedocs.io/en/latest/) tests are passing or failing.
 
 | Requirement | Title                                         | Status of the behave test                                                                                                                                                                                               |

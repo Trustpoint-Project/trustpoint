@@ -1,6 +1,6 @@
 <div class="card rounded-5 position-relative bar-chart-card-container">
   <div class="card-body">
-    <h6 class="mb-3 fs-5">Device by Onboarding Protocoll</h6>
+    <h6 class="mb-3 fs-5">Device by Onboarding Protocol</h6>
 
     <div class="position-relative bar-chart-container">
       <canvas id="chart_device_by_op" class="bar-chart-canvas"></canvas>
@@ -14,7 +14,7 @@
 document.addEventListener('dashboardData', (event) => {
   const today = event.detail.today || {};
 
-  // device_counts_by_op ist ein Objekt:
+  // device_counts_by_op is an object:
   const raw = today.device_counts_by_op || {};
 
   const allItems = Object.entries(raw)
