@@ -1,6 +1,6 @@
 """Views for configuring PKCS#11 settings, including HSM PIN and token configuration."""
 
-from typing import Any, ClassVar
+from typing import Any
 
 from django.contrib import messages
 from django.utils.translation import gettext_lazy as _
@@ -12,7 +12,7 @@ from management.models import KeyStorageConfig, PKCS11Token
 class KeyStorageConfigView(TemplateView):
     """Class-based view for displaying key storage configuration (read-only)."""
     template_name = 'management/key_storage.html'
-    extra_context: ClassVar[dict[str, str]] = {'page_category': 'management', 'page_name': 'key_storage'}
+    extra_context: dict[str, str] = {'page_category': 'management', 'page_name': 'key_storage'}  # noqa: RUF012
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context to the template."""

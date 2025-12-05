@@ -8,11 +8,11 @@ from django.conf import settings
 from django.core.management import execute_from_command_line
 
 
-def _check_migration_name_duplicates(migration_name: str, base_path: Path, *_args: tuple) -> None:
+def _check_migration_name_duplicates(migration_name: str, base_path: Path, *_args: tuple[object, ...]) -> None:
     """Check for multiple migration files and warn if found."""
     for root, _dirs, files in os.walk(base_path):
         if 'migrations' in root:
-            mig_name_counts = {}
+            mig_name_counts: dict[str, int] = {}
             for file in files:
                 if file.endswith(migration_name + '.py'):
                     mig_name_counts[migration_name] = mig_name_counts.get(migration_name, 0) + 1
