@@ -92,9 +92,9 @@ class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateMode
                 'id': entry.id,
             })
         context['issuer_entries'] = issuer_entries
-        ip_addresses=[]
-        san_ext = getattr(cert, "subject_alternative_name_extension", None)
-        if san_ext and getattr(san_ext, "subject_alt_name", None):
+        ip_addresses = []
+        san_ext = getattr(cert, 'subject_alternative_name_extension', None)
+        if san_ext and getattr(san_ext, 'subject_alt_name', None):
             ip_addresses = [
                 str(entry).split(':', 1)[-1].strip()
                 for entry in san_ext.subject_alt_name.ip_addresses.all()
@@ -189,11 +189,16 @@ class CertificateDownloadView(CertificatesContextMixin, DetailView[CertificateMo
         except Exception as exception:
             raise Http404 from exception
 
+        certificate_model = CertificateModel.objects.get(pk=pk)
         file_name = self.kwargs.get('file_name', None)
         if not file_name:
-            file_name = f'certificate{file_format_enum.file_extension}'
+            if certificate_model.common_name:
+                common_name_safe = ''.join(c if c.isalnum() else '_' for c in certificate_model.common_name)
+                file_name = f'{common_name_safe}{file_format_enum.file_extension}'
+            else:
+                file_name = f'certificate{file_format_enum.file_extension}'
 
-        certificate_serializer = CertificateModel.objects.get(pk=pk).get_certificate_serializer()
+        certificate_serializer = certificate_model.get_certificate_serializer()
         file_bytes = certificate_serializer.as_format(file_format_enum)
 
         response = HttpResponse(file_bytes, content_type=file_format_enum.mime_type)
@@ -281,10 +286,16 @@ class CertificateMultipleDownloadView(
         except Exception as exception:
             raise Http404 from exception
 
-        data_to_archive = {
-            f'certificate-{i}': certificate_model.get_certificate_serializer().as_format(file_format_enum)
-            for i, certificate_model in enumerate(self.queryset)
-        }
+        data_to_archive = {}
+        for i, certificate_model in enumerate(self.queryset):
+            # Generate filename with certificate common name if available
+            if certificate_model.common_name:
+                # Sanitize common name for filename (replace spaces and special chars with underscores)
+                common_name_safe = ''.join(c if c.isalnum() else '_' for c in certificate_model.common_name)
+                file_key = f'{common_name_safe}'
+            else:
+                file_key = f'certificate-{i}'
+            data_to_archive[file_key] = certificate_model.get_certificate_serializer().as_format(file_format_enum)
 
         file_bytes = Archiver.archive(data_to_archive, archive_format_enum)
 
@@ -300,7 +311,7 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
     model = CertificateModel
     context_object_name = 'certificate'
 
-    def get(self, _request: HttpRequest, pk: str | None = None, *_args: Any, **_kwargs: Any) -> HttpResponse:
+    def get(self, _request: HttpRequest, _pk: str | None = None, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Download the active Trustpoint TLS server certificate."""
         tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
         if not tls_cert:
@@ -341,6 +352,7 @@ class CertificateViewSet(viewsets.ModelViewSet):
     )
     def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
         """API endpoint to get all certificates."""
+        del request, args, _kwargs
         queryset = self.get_queryset()
 
         for backend in list(self.filter_backends):

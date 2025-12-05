@@ -105,6 +105,11 @@ urlpatterns = [
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
     path('issuing-cas/crl-gen/<int:pk>/', issuing_cas.IssuingCaCrlGenerationView.as_view(), name='issuing_cas-crl-gen'),
     path(
+        'issuing-cas/config/<int:pk>/help/crl-download/',
+        pki_help_views.CrlDownloadHelpView.as_view(),
+        name='help_issuing_cas_crl_download',
+    ),
+    path(
         'issuing-cas/issued-certificates/<int:pk>',
         IssuedCertificatesListView.as_view(),
         name='issuing_ca-issued_certificates',

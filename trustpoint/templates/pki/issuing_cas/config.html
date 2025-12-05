@@ -250,20 +250,39 @@
                             <div>
                                 <div>{% trans 'Revocation list' %}</div>
                                 <div>
-                                    <a href="{% url 'pki:issuing_cas-crl-gen' pk=issuing_ca.pk %}"
-                                        class="btn btn-sm btn-primary me-2">
-                                        {% trans 'Generate CRL' %}
-                                    </a>
-                                    {% if issuing_ca.last_crl_issued_at %}
-                                        <a href="{% url 'crl-download' pk=issuing_ca.pk %}"
+                                    <div class="mb-2">
+                                        <a href="{% url 'pki:issuing_cas-crl-gen' pk=issuing_ca.pk %}"
                                             class="btn btn-sm btn-primary">
-                                            {% trans 'Download CRL' %}
+                                            {% trans 'Generate CRL' %}
                                         </a>
+                                    </div>
+                                    {% if issuing_ca.last_crl_issued_at %}
+                                        <div class="mb-2">
+                                            <div class="btn-group" role="group">
+                                                <a href="{% url 'crl-download' pk=issuing_ca.pk %}"
+                                                    class="btn btn-sm btn-primary">
+                                                    {% trans 'Download CRL (PEM)' %}
+                                                </a>
+                                                <a href="{% url 'crl-download' pk=issuing_ca.pk %}?encoding=der"
+                                                    class="btn btn-sm btn-primary">
+                                                    {% trans 'Download CRL (DER)' %}
+                                                </a>
+                                            </div>
+                                        </div>
                                     {% else %}
-                                        <a class="btn btn-sm btn-primary disabled">
-                                            {% trans 'Download CRL' %}
-                                        </a>
+                                        <div class="mb-2">
+                                            <a class="btn btn-sm btn-primary disabled">
+                                                {% trans 'Download CRL' %}
+                                            </a>
+                                        </div>
                                     {% endif %}
+                                    <div>
+                                        <a href="{% url 'pki:help_issuing_cas_crl_download' pk=issuing_ca.pk %}"
+                                            class="btn btn-sm btn-primary"
+                                            title="{% trans 'Show help for downloading CRL via curl' %}">
+                                            {% trans 'Download CRL with curl' %}
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                             <div>
