@@ -6,14 +6,17 @@ from typing import Any, override
 
 from devices.views import PublicKeyInfoMissingErrorMsg
 from django.http import Http404
+from django.urls import reverse
+from django.utils.html import format_html
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.detail import DetailView
 from management.models import TlsSettings
-from pki.models import DevIdRegistration
+from pki.models import DevIdRegistration, IssuingCaModel
 from trustpoint.page_context import (
     PKI_PAGE_CATEGORY,
     PKI_PAGE_DOMAIN_SUBCATEGORY,
+    PKI_PAGE_ISSUING_CAS_SUBCATEGORY,
     PageContextMixin,
 )
 
@@ -256,3 +259,148 @@ class OnboardingEstIdevidRegistrationHelpView(BaseHelpView):
     strategy = OnboardingEstIdevIdDomainCredentialStrategy(
         allowed_app_cert_profiles=list(ApplicationCertificateProfile)
     )
+
+
+# ------------------------------------------ CRL Download Help Page ---------------------------------------------------
+
+
+class CrlDownloadHelpView(PageContextMixin, DetailView[IssuingCaModel]):
+    """Help view for downloading CRLs via curl commands."""
+
+    template_name = 'help/help_page.html'
+    http_method_names = ('get',)
+    model = IssuingCaModel
+    context_object_name = 'issuing_ca'
+
+    page_category = PKI_PAGE_CATEGORY
+    page_name = PKI_PAGE_ISSUING_CAS_SUBCATEGORY
+
+    @override
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Gets the context data and builds the HelpPage for CRL download."""
+        context = super().get_context_data(**kwargs)
+        issuing_ca = self.object
+
+        host_base = f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}'
+        crl_endpoint = f'{host_base}/crl/{issuing_ca.pk}/'
+
+        has_crl = bool(issuing_ca.crl_pem)
+        crl_status_rows = []
+
+        if has_crl and issuing_ca.last_crl_issued_at:
+            crl_status_rows.append(
+                HelpRow(
+                    _non_lazy('CRL Status'),
+                    _non_lazy('Available'),
+                    ValueRenderType.PLAIN,
+                )
+            )
+            crl_status_rows.append(
+                HelpRow(
+                    _non_lazy('Last Generated'),
+                    issuing_ca.last_crl_issued_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
+                    ValueRenderType.PLAIN,
+                )
+            )
+        else:
+            crl_status_rows.append(
+                HelpRow(
+                    _non_lazy('CRL Status'),
+                    _non_lazy('Not Available - Generate a CRL first'),
+                    ValueRenderType.PLAIN,
+                )
+            )
+
+        help_page_url = reverse('pki:help_issuing_cas_crl_download', kwargs={'pk': issuing_ca.pk})
+        generate_url = reverse('pki:issuing_cas-crl-gen', kwargs={'pk': issuing_ca.pk})
+        generate_url_with_next = f'{generate_url}?next={help_page_url}'
+        generate_button = format_html(
+            '<a href="{}" class="btn btn-primary w-100">{}</a>',
+            generate_url_with_next,
+            _non_lazy('Generate CRL')
+        )
+        crl_status_rows.append(
+            HelpRow(
+                _non_lazy('Generate New CRL'),
+                generate_button,
+                ValueRenderType.PLAIN,
+            )
+        )
+
+        crl_status_section = HelpSection(_non_lazy('CRL Status'), crl_status_rows)
+
+        summary = HelpSection(
+            _non_lazy('Summary'),
+            [
+                HelpRow(
+                    _non_lazy('Issuing CA'),
+                    issuing_ca.unique_name,
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('CRL Download Endpoint'),
+                    crl_endpoint,
+                    ValueRenderType.CODE,
+                ),
+            ],
+        )
+
+        download_pem_cmd = (
+            f'curl --cacert trustpoint-tls-trust-store.pem \\\n'
+            f'  -o {issuing_ca.unique_name}.pem.crl \\\n'
+            f'  "{crl_endpoint}"'
+        )
+
+        download_der_cmd = (
+            f'curl --cacert trustpoint-tls-trust-store.pem \\\n'
+            f'  -o {issuing_ca.unique_name}.der.crl \\\n'
+            f'  "{crl_endpoint}?encoding=der"'
+        )
+
+        download_section = HelpSection(
+            _non_lazy('Download CRL'),
+            [
+                HelpRow(
+                    _non_lazy('Download CRL in PEM Format'),
+                    download_pem_cmd,
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Download CRL in DER Format'),
+                    download_der_cmd,
+                    ValueRenderType.CODE,
+                ),
+            ],
+        )
+
+        notes_section = HelpSection(
+            _non_lazy('Important Notes'),
+            [
+                HelpRow(
+                    _non_lazy('Public Access'),
+                    _non_lazy(
+                        'This endpoint does not require authentication and can be accessed by any client '
+                        'that needs to verify certificate revocation status.'
+                    ),
+                    ValueRenderType.PLAIN,
+                ),
+            ],
+        )
+
+        tls_trust_store_section = build_tls_trust_store_section()
+
+        sections = [summary, crl_status_section, tls_trust_store_section, download_section, notes_section]
+
+        context['help_page'] = HelpPage(
+            heading=_non_lazy(f'Help - Download CRL for {issuing_ca.unique_name}'), sections=sections
+        )
+        context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
+        context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
+
+        context['idevid_registration'] = type('obj', (object,), {
+            'domain': type('obj', (object,), {'pk': issuing_ca.pk})()
+        })()
+        context['back_url'] = f'{self.page_category}:{self.page_name}-config'
+        context['back_button_text'] = _non_lazy('Back to Issuing CA Configuration')
+
+        return context
