@@ -156,7 +156,8 @@ def build_tls_trust_store_section() -> HelpSection:
     if not tls or not tls.credential:
         msg = format_html(
             '<div class="tp-message alert alert-danger d-flex" role="alert">'
-                '<svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="error:">'
+                '<svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" '
+                'fill="currentColor" role="img" aria-label="error:">'
                     '<use xlink:href="/static/img/icons.svg#icon-error"></use></svg>'
                 '<div>{}<br>{}</div>'
             '</div>',

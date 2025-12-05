@@ -1,6 +1,7 @@
 """Adapter to convert from CertificateSigningRequest to JSON certificate request dict."""
 
 import datetime
+import ipaddress
 import logging
 from typing import Any
 
@@ -55,13 +56,13 @@ class JSONCertRequestConverter:
         return ku_dict
 
     @staticmethod
-    def _extensions_to_json(extensions: list[x509.Extension]) -> dict[str, Any]:
+    def _extensions_to_json(extensions: list[x509.Extension[Any]]) -> dict[str, Any]:
         req_ext = {}
         for ext in extensions:
             # Most essential extensions to handle:
             # SAN, KeyUsage, ExtendedKeyUsage, BasicConstraints, SKI, AKI, CRLDistributionPoints, AIA
             if isinstance(ext.value, x509.SubjectAlternativeName):
-                san: dict[str, list[str]] = JSONCertRequestConverter._san_value_to_json(ext.value)
+                san: dict[str, Any] = JSONCertRequestConverter._san_value_to_json(ext.value)
                 san['critical'] = ext.critical
                 req_ext['san'] = san
             elif isinstance(ext.value, x509.KeyUsage):
@@ -77,7 +78,7 @@ class JSONCertRequestConverter:
                     # (only if {"ca": true} is explicitly set in the profile)
                     exc_msg = 'Safeguard: Requesting CA certificates is not allowed.'
                     raise ValueError(exc_msg)
-                bc = {'ca': ext.value.ca, 'critical': ext.critical}
+                bc: dict[str, Any] = {'ca': ext.value.ca, 'critical': ext.critical}
                 if ext.value.path_length is not None:
                     bc['path_length'] = ext.value.path_length
                 req_ext['basic_constraints'] = bc
@@ -93,20 +94,23 @@ class JSONCertRequestConverter:
             raise ValueError(exc_msg)
         if isinstance(csr, x509.CertificateBuilder):
             subject_dn = csr._subject_name  # noqa: SLF001
-            extensions = csr._extensions  # noqa: SLF001
+            extensions = list(csr._extensions)  # noqa: SLF001
         else:
             subject_dn = csr.subject
-            extensions = csr.extensions
+            extensions = list(csr.extensions)
 
         req = {'type': 'cert_request', 'subj': {}, 'ext': {}}
+        subj_dict: dict[str, str] = {}
         for attr in subject_dn or []:
-            req['subj'][attr.oid.dotted_string] = attr.value
+            subj_dict[attr.oid.dotted_string] = attr.value
+        req['subj'] = subj_dict
         req['ext'] = JSONCertRequestConverter._extensions_to_json(extensions)
 
         return req
 
     @staticmethod
     def _subject_from_json(json: dict[str, Any], builder: x509.CertificateBuilder) -> x509.CertificateBuilder:
+        """Constructs and sets the subject name of an X.509 certificate builder from a JSON dictionary."""
         subj = json.get('subject', {})
         name_attributes = []
         for key, value in subj.items():
@@ -120,6 +124,7 @@ class JSONCertRequestConverter:
 
     @staticmethod
     def _ext_from_json(json: dict[str, Any], builder: x509.CertificateBuilder) -> x509.CertificateBuilder:
+        """Processes JSON data to add X.509 certificate extensions to a CertificateBuilder."""
         ext = json.get('extensions', {})
         for ext_name, ext_value in ext.items():
             critical = ext_value.get('critical', False)
@@ -133,8 +138,6 @@ class JSONCertRequestConverter:
                     elif san_type == 'uris':
                         san_list.extend([x509.UniformResourceIdentifier(v) for v in san_values])
                     elif san_type == 'ip_addresses':
-                        import ipaddress
-
                         san_list.extend([x509.IPAddress(ipaddress.ip_address(v)) for v in san_values])
                     else:
                         logger.debug('JSON Cert Request Adapter: Skipping unsupported SAN type: %s', san_type)
@@ -191,9 +194,9 @@ class JSONCertRequestConverter:
     @staticmethod
     def validity_period_from_json(validity: dict[str, Any]) -> datetime.timedelta:
         """Parses validity period from JSON."""
-        validity_period = 0
+        validity_period: datetime.timedelta
         if validity.get('duration'):
-            validity_period = validity['duration']
+            validity_period = datetime.timedelta(seconds=validity['duration'])
         else:
             days = validity.get('days', 0)
             hours = validity.get('hours', 0)
@@ -201,7 +204,7 @@ class JSONCertRequestConverter:
             seconds = validity.get('seconds', 0)
             validity_seconds = days * 86400 + hours * 3600 + minutes * 60 + seconds
             validity_period = datetime.timedelta(seconds=validity_seconds)
-        if validity_period == 0 or validity_period == datetime.timedelta(seconds=0):
+        if validity_period == datetime.timedelta(seconds=0):
             exc_msg = 'Validity period must be specified in the profile.'
             raise ValueError(exc_msg)
         return validity_period
@@ -223,10 +226,9 @@ class JSONCertRequestConverter:
         default_backdate = datetime.timedelta(hours=1)
 
         builder = builder.not_valid_before(datetime.datetime.now(datetime.UTC) - default_backdate)
-        builder = builder.not_valid_after(
+        return builder.not_valid_after(
             datetime.datetime.now(datetime.UTC) + validity_period
         )
-        return builder
 
     @staticmethod
     def from_json(json: dict[str, Any]) -> x509.CertificateBuilder:
@@ -261,7 +263,6 @@ class JSONCertRequestCommandExtractor:
     @staticmethod
     def sample_request_to_openssl_cmp_sans(sample_req: dict[str, Any]) -> str:
         """Convert profile SANs to OpenSSL CMP command line -sans string."""
-        print(sample_req)
         ext = sample_req.get('extensions', {})
         san = ext.get('subject_alternative_name', {})
         san_parts = ''

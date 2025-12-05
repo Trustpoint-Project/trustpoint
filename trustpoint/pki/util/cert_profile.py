@@ -70,15 +70,25 @@ class ProfileValuePropertyModel(BaseModel):
     required: bool = False
     mutable: bool = True
 
-    #model_config = ConfigDict(extra='forbid')
-
 class SubjectModel(BaseModel):
     """Model for the subject DN of a certificate profile."""
-    common_name: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('common_name'))
+    common_name: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        validation_alias=ALIASES.get('common_name'),
+    )
     surname: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('surname'))
-    serial_number: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('serial_number'))
-    country_name: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('country_name'))
-    locality_name: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('locality_name'))
+    serial_number: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        validation_alias=ALIASES.get('serial_number'),
+    )
+    country_name: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        validation_alias=ALIASES.get('country_name'),
+    )
+    locality_name: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        validation_alias=ALIASES.get('locality_name'),
+    )
     state_or_province_name: str | ProfileValuePropertyModel | None = Field(
         default=None,
         validation_alias=ALIASES.get('state_or_province_name')
@@ -103,8 +113,14 @@ class SubjectModel(BaseModel):
         default=None,
         validation_alias=ALIASES.get('description')
     )
-    postal_code: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('postal_code'))
-    email_address: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('email_address'))
+    postal_code: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        validation_alias=ALIASES.get('postal_code'),
+    )
+    email_address: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        validation_alias=ALIASES.get('email_address'),
+    )
     name: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('name'))
     given_name: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('given_name'))
     initials: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('initials'))
@@ -191,7 +207,7 @@ class ExtensionsModel(BaseModel):
         default=None,
         validation_alias=ALIASES.get('crl_distribution_points'),
     )
-    #model_config = ConfigDict(validate_by_validation_alias=False, validate_by_name=True)
+    #model_config = ConfigDict(validate_by_validation_alias=False, validate_by_name=True)  # noqa: ERA001
 
 
 class ValidityModel(BaseModel):
