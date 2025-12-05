@@ -1,0 +1,38 @@
+{% load static %}
+
+<div class="bg-body">
+  <div class="container-fluid px-0">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h1 class="h3 fw-bold mb-0">Dashboard</h1>
+      <div class="d-flex gap-2">
+        <a href="{% url 'devices:devices_create' %}" class="btn rounded-pill px-4 device_btn">+ Device</a>
+        <a href="{% url 'pki:domains-add' %}" class="btn rounded-pill px-4 domain_btn">+ Domain</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .device_btn{
+    background-color: var(--trustpoint-ci);
+    color: #fff;
+    text-decoration: none;
+  }
+
+  .device_btn:hover{
+    border-color: var(--trustpoint-ci);
+    color: var(--trustpoint-ci);
+  }
+
+  .domain_btn{
+    color: var(--trustpoint-ci);
+    border-color: var(--trustpoint-ci);
+    text-decoration: none;
+  }
+
+  .domain_btn:hover{
+    background-color: var(--trustpoint-ci);
+    color: #fff;
+    border-color: var(--trustpoint-ci);
+  }
+</style>
