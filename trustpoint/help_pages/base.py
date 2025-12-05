@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import abc
-import enum
+from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from django.http import Http404
 from django.urls import reverse
-from django.utils.html import format_html, format_html_join
+from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -18,90 +19,10 @@ from help_pages.commands import KeyGenCommandBuilder
 from help_pages.help_section import HelpRow, HelpSection, ValueRenderType
 
 if TYPE_CHECKING:
-    from typing import Self
-
     from devices.models import DeviceModel
     from pki.models import DevIdRegistration
-    from pki.models.domain import DomainModel
+    from pki.models.domain import DomainAllowedCertificateProfileModel, DomainModel
     from trustpoint_core import oid
-
-
-# ----------------------------------------- Application Certificate Profiles ------------------------------------------
-
-
-@dataclass(frozen=True)
-class ApplicationCertificateProfileData:
-    """The application certificate profile data class that holds both profile_name and profile_label."""
-
-    profile_name: str
-    profile_label: str
-
-
-class ApplicationCertificateProfile(enum.Enum):
-    """Allowed application credential profiles."""
-
-    TLS_CLIENT = ApplicationCertificateProfileData('tls_client', 'TLS-Client Certificate')
-    TLS_SERVER = ApplicationCertificateProfileData('tls_server', 'TLS-Server Certificate')
-    OPC_UA_CLIENT = ApplicationCertificateProfileData('opc_ua_client', 'OPC-UA-Client Certificate')
-    OPC_UA_SERVER = ApplicationCertificateProfileData('opc_ua_server', 'OPC-UA-Server Certificate')
-
-    @property
-    def profile_name(self) -> str:
-        """Return the name of the profile.
-
-        Returns:
-            The name of the profile.
-        """
-        return self.value.profile_name
-
-    @property
-    def profile_label(self) -> str:
-        """Return the label of the profile.
-
-        Returns:
-            The label of the profile.
-        """
-        return self.value.profile_label
-
-    @classmethod
-    def from_profile_name(cls, profile_name: str) -> Self:
-        """Gets the ApplicationCertificateProfile matching the name.
-
-        Returns:
-            The matching ApplicationCertificateProfile.
-
-        Raises:
-            ValueError: If no matching ApplicationCertificateProfile is found for the profile name provided.
-        """
-        for member in cls:
-            if member.value.profile_name == profile_name:
-                return member
-        err_msg = f'No ApplicationCertificateProfile with profile_name={profile_name} found.'
-        raise ValueError(err_msg)
-
-    @classmethod
-    def from_label(cls, profile_label: str) -> Self:
-        """Gets the ApplicationCertificateProfile matching the label.
-
-        Returns:
-            The matching ApplicationCertificateProfile.
-
-        Raises:
-            ValueError: If no matching ApplicationCertificateProfile is found for the label provided.
-        """
-        for member in cls:
-            if member.value.profile_label == profile_label:
-                return member
-        err_msg = f'No ApplicationCertificateProfile with profile_label={profile_label} found.'
-        raise ValueError(err_msg)
-
-    def __str__(self) -> str:
-        """Gets the profile_label as human-readable string.
-
-        Returns:
-            The profile_label.
-        """
-        return self.profile_label
 
 
 # --------------------------------------------------- Base Classes ----------------------------------------------------
@@ -121,6 +42,7 @@ class HelpContext:
 
     domain: DomainModel
     domain_unique_name: str
+    allowed_app_profiles: list[DomainAllowedCertificateProfileModel]
     public_key_info: oid.PublicKeyInfo
     host_base: str  # https://IP:PORT
     host_cmp_path: str  # {host_base}/.well-known/cmp/p/{domain.unique_name}
@@ -179,24 +101,38 @@ def build_keygen_section(help_context: HelpContext, file_name: str) -> HelpSecti
     )
 
 
-def build_profile_select_section(app_cert_profiles: list[ApplicationCertificateProfile]) -> HelpSection:
+def build_profile_select_section(app_cert_profiles: list[DomainAllowedCertificateProfileModel]) -> HelpSection:
     """Builds the profile select section.
 
     Returns:
         The profile select section.
     """
-    options = format_html_join(
-        '',
-        '<option value="{}"{}>{}</option>',
-        (
-            (
-                p.profile_name,
-                ' selected' if i == 0 else '',
-                p.profile_label,
-            )
-            for i, p in enumerate(app_cert_profiles)
-        ),
-    )
+    display_names = [
+        profile.certificate_profile.display_name
+        for profile in app_cert_profiles
+        if profile.certificate_profile.display_name
+    ]
+    display_name_counts = Counter(display_names)
+    options = mark_safe('')
+    for i, profile in enumerate(app_cert_profiles):
+        name = profile.alias or profile.certificate_profile.unique_name
+        display_name = profile.certificate_profile.display_name
+
+        if display_name and display_name_counts.get(display_name, 0) > 1:
+            title = f'{display_name} - {profile.certificate_profile.unique_name}'
+        else:
+            title = display_name or name
+
+        options += format_html(
+            '<option value="{}"{}>{}</option>',
+            name,
+            ' selected' if i == 0 else '',
+            title,
+        )
+
+    if not options:
+        options = format_html('<option value="" selected disabled>{}</option>',
+                              _('No application certificate profiles allowed in domain.'))
     select = format_html(
         '<select id="cert-profile-select" class="form-select" aria-label="Certificate Profile Select">{}</select>',
         options,
@@ -218,7 +154,20 @@ def build_tls_trust_store_section() -> HelpSection:
     """
     tls = ActiveTrustpointTlsServerCredentialModel.objects.first()
     if not tls or not tls.credential:
-        raise Http404(_('Trustpoint TLS server credential is missing.'))
+        msg = format_html(
+            '<div class="tp-message alert alert-danger d-flex" role="alert">'
+                '<svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" '
+                'fill="currentColor" role="img" aria-label="error:">'
+                    '<use xlink:href="/static/img/icons.svg#icon-error"></use></svg>'
+                '<div>{}<br>{}</div>'
+            '</div>',
+            'This onboarding method is not securely available without TLS.',
+            'Please ensure you are running Trustpoint within the correctly configured Docker environment!',
+        )
+        return HelpSection(
+            _non_lazy('Download TLS Trust-Store'),
+            [HelpRow(_non_lazy('Truststore is unavailable!'), msg, ValueRenderType.PLAIN)],
+        )
 
     root = tls.credential.get_last_in_chain()
     if not root:

@@ -92,9 +92,9 @@ class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateMode
                 'id': entry.id,
             })
         context['issuer_entries'] = issuer_entries
-        ip_addresses=[]
-        san_ext = getattr(cert, "subject_alternative_name_extension", None)
-        if san_ext and getattr(san_ext, "subject_alt_name", None):
+        ip_addresses = []
+        san_ext = getattr(cert, 'subject_alternative_name_extension', None)
+        if san_ext and getattr(san_ext, 'subject_alt_name', None):
             ip_addresses = [
                 str(entry).split(':', 1)[-1].strip()
                 for entry in san_ext.subject_alt_name.ip_addresses.all()
@@ -311,7 +311,7 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
     model = CertificateModel
     context_object_name = 'certificate'
 
-    def get(self, _request: HttpRequest, pk: str | None = None, *_args: Any, **_kwargs: Any) -> HttpResponse:
+    def get(self, _request: HttpRequest, _pk: str | None = None, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Download the active Trustpoint TLS server certificate."""
         tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
         if not tls_cert:
@@ -352,6 +352,7 @@ class CertificateViewSet(viewsets.ModelViewSet):
     )
     def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
         """API endpoint to get all certificates."""
+        del request, args, _kwargs
         queryset = self.get_queryset()
 
         for backend in list(self.filter_backends):
