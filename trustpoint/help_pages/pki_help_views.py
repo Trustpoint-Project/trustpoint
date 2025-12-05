@@ -149,12 +149,12 @@ class OnboardingCmpIdevidRegistrationHelpView(BaseHelpView):
 
 
 class OnboardingEstIdevIdDomainCredentialStrategy(HelpPageStrategy):
-    """Strategy for building the onboarding cmp shared-secret help page."""
+    """Strategy for building the onboarding EST shared-secret help page."""
 
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         operation = 'simpleenroll'
-        base = help_context.host_cmp_path
+        base = help_context.host_est_path
 
         summary = HelpSection(
             _non_lazy('Summary'),

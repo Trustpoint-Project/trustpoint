@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import abc
+from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -20,7 +21,7 @@ from help_pages.help_section import HelpRow, HelpSection, ValueRenderType
 if TYPE_CHECKING:
     from devices.models import DeviceModel
     from pki.models import DevIdRegistration
-    from pki.models.domain import DomainModel, DomainAllowedCertificateProfileModel
+    from pki.models.domain import DomainAllowedCertificateProfileModel, DomainModel
     from trustpoint_core import oid
 
 
@@ -106,10 +107,22 @@ def build_profile_select_section(app_cert_profiles: list[DomainAllowedCertificat
     Returns:
         The profile select section.
     """
+    display_names = [
+        profile.certificate_profile.display_name
+        for profile in app_cert_profiles
+        if profile.certificate_profile.display_name
+    ]
+    display_name_counts = Counter(display_names)
     options = mark_safe('')
     for i, profile in enumerate(app_cert_profiles):
         name = profile.alias or profile.certificate_profile.unique_name
-        title = profile.certificate_profile.display_name or name
+        display_name = profile.certificate_profile.display_name
+
+        if display_name and display_name_counts.get(display_name, 0) > 1:
+            title = f'{display_name} - {profile.certificate_profile.unique_name}'
+        else:
+            title = display_name or name
+
         options += format_html(
             '<option value="{}"{}>{}</option>',
             name,
