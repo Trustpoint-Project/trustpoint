@@ -32,6 +32,8 @@ ALIASES: dict[str, AliasChoices] = {
     #'common_name': AliasChoices('common_name', 'cn', 'CN', 'commonName', '2.5.4.3')
 }
 
+CERT_PROFILE_KEYWORDS = {'type','allow', 'reject_mods', 'mutable', 'default', 'value', 'required'}
+
 def build_alias_map_name_oids(alias_map: dict[str, str], enum_cls: type[enum.Enum]) -> dict[str, str]:
     """Build a mapping of all known OID strings from trustpoint_core to their canonical field names."""
     for entry in enum_cls:
@@ -56,6 +58,11 @@ def build_alias_map_name_oids(alias_map: dict[str, str], enum_cls: type[enum.Enu
 alias_map = build_alias_map_name_oids({}, NameOid)
 alias_map = build_alias_map_name_oids(alias_map, CertificateExtensionOid)
 
+# Important: Pydantic V2 model_config does not follow MRO!
+# Non-default Model config settings are taken from the last base class set to a non-default value.
+# To be on the safe side, set model_config on the final final child classes.
+# See: https://github.com/pydantic/pydantic/issues/9992
+
 class ProfileValuePropertyModel(BaseModel):
     """Model for a profile value property."""
     value: Any | None = None
@@ -63,49 +70,65 @@ class ProfileValuePropertyModel(BaseModel):
     required: bool = False
     mutable: bool = True
 
-    model_config = ConfigDict(extra='forbid')
-
 class SubjectModel(BaseModel):
     """Model for the subject DN of a certificate profile."""
-    common_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('common_name'))
-    surname: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('surname'))
-    serial_number: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('serial_number'))
-    country_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('country_name'))
-    locality_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('locality_name'))
+    common_name: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        validation_alias=ALIASES.get('common_name'),
+    )
+    surname: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('surname'))
+    serial_number: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        validation_alias=ALIASES.get('serial_number'),
+    )
+    country_name: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        validation_alias=ALIASES.get('country_name'),
+    )
+    locality_name: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        validation_alias=ALIASES.get('locality_name'),
+    )
     state_or_province_name: str | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('state_or_province_name')
+        validation_alias=ALIASES.get('state_or_province_name')
     )
     street_address: str | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('street_address')
+        validation_alias=ALIASES.get('street_address')
     )
     organization_name: str | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('organization_name')
+        validation_alias=ALIASES.get('organization_name')
     )
     organizational_unit_name: str | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('organizational_unit_name')
+        validation_alias=ALIASES.get('organizational_unit_name')
     )
     title: str | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('title')
+        validation_alias=ALIASES.get('title')
     )
     description: str | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('description')
+        validation_alias=ALIASES.get('description')
     )
-    postal_code: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('postal_code'))
-    email_address: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('email_address'))
-    name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('name'))
-    given_name: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('given_name'))
-    initials: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('initials'))
-    pseudonym: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('pseudonym'))
-    uid: str | ProfileValuePropertyModel | None = Field(default=None, alias=ALIASES.get('uid'))
+    postal_code: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        validation_alias=ALIASES.get('postal_code'),
+    )
+    email_address: str | ProfileValuePropertyModel | None = Field(
+        default=None,
+        validation_alias=ALIASES.get('email_address'),
+    )
+    name: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('name'))
+    given_name: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('given_name'))
+    initials: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('initials'))
+    pseudonym: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('pseudonym'))
+    uid: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('uid'))
     domain_component: str | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('domain_component')
+        validation_alias=ALIASES.get('domain_component')
     )
 
     # Should allow unknown fields, but not required
@@ -126,13 +149,12 @@ class BasicConstraintsExtensionModel(BaseExtensionModel):
 
 class SanExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
     """Model for the SAN extension of a certificate profile."""
-    dns_names: list[str] | ProfileValuePropertyModel | None = None
-    ip_addresses: list[str] | ProfileValuePropertyModel | None = None
-    rfc822_names: list[str] | ProfileValuePropertyModel | None = None
-    uris: list[str] | ProfileValuePropertyModel | None = None
-    other_names: list[str] | ProfileValuePropertyModel | None = None
-
-    model_config = ConfigDict(extra='forbid')
+    dns_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='dns')
+    ip_addresses: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='ip')
+    rfc822_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='rfc822')
+    uris: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='uri')
+    other_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='other')
+    model_config = ConfigDict(extra='forbid', validate_by_alias=False, validate_by_name=True)
 
 class CRLDistributionPointsExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
     """Model for the CRL Distribution Points extension of a certificate profile.
@@ -167,24 +189,25 @@ class ExtensionsModel(BaseModel):
     """Model for the extensions of a certificate profile."""
     basic_constraints: BasicConstraintsExtensionModel | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('basic_constraints'),
+        validation_alias=ALIASES.get('basic_constraints'),
     )
     key_usage: KeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('key_usage'),
+        validation_alias=ALIASES.get('key_usage'),
     )
     extended_key_usage: ExtendedKeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('extended_key_usage'),
+        validation_alias=ALIASES.get('extended_key_usage'),
     )
     subject_alternative_name: SanExtensionModel | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('subject_alternative_name'),
+        validation_alias=ALIASES.get('subject_alternative_name'),
     )
     crl_distribution_points: CRLDistributionPointsExtensionModel | ProfileValuePropertyModel | None = Field(
         default=None,
-        alias=ALIASES.get('crl_distribution_points'),
+        validation_alias=ALIASES.get('crl_distribution_points'),
     )
+    #model_config = ConfigDict(validate_by_validation_alias=False, validate_by_name=True)  # noqa: ERA001
 
 
 class ValidityModel(BaseModel):
@@ -235,16 +258,16 @@ class CertProfileModel(CertProfileBaseModel):
     """Model for a certificate profile."""
     type: Literal['cert_profile']
     display_name: str | None = None
-    subject: ProfileSubjectModel = Field(alias='subj', default=ProfileSubjectModel())
-    extensions: ProfileExtensionsModel = Field(alias='ext', default=ProfileExtensionsModel())
+    subject: ProfileSubjectModel = Field(validation_alias='subj', default=ProfileSubjectModel())
+    extensions: ProfileExtensionsModel = Field(validation_alias='ext', default=ProfileExtensionsModel())
     validity: ValidityModel = Field(default=ValidityModel(days=10))
 
 
 class CertRequestModel(BaseModel):
     """Model for a certificate request."""
     type: Literal['cert_request'] | None = 'cert_request'
-    subject: SubjectModel = Field(alias='subj', default=SubjectModel())
-    extensions: ExtensionsModel = Field(alias='ext', default=ExtensionsModel())
+    subject: SubjectModel = Field(validation_alias='subj', default=SubjectModel())
+    extensions: ExtensionsModel = Field(validation_alias='ext', default=ExtensionsModel())
     validity: ValidityModel = Field(default=ValidityModel(days=10))
 
     model_config = ConfigDict(extra='allow') # extra fields are validated by _apply_profile_rules
@@ -343,7 +366,7 @@ class JSONProfileVerifier:
             request, profile, profile_config, profile_allow if isinstance(profile_allow, list) else None)
 
         # Constraining profile fields that should not literally be in the request
-        skip_keys = {'type','allow', 'reject_mods', 'mutable', 'default', 'value', 'required'}
+        skip_keys = CERT_PROFILE_KEYWORDS
         filtered_profile = {k: v for k, v in profile.items() if k not in skip_keys}
 
         for field, profile_value in filtered_profile.items():
@@ -373,7 +396,7 @@ class JSONProfileVerifier:
                         # Required field is missing in the request
                         msg = f"Field '{field}' is required but not present in the request."
                         raise ProfileValidationError(msg)
-                    # 're' case
+                    # TODO(Air): 're' case  # noqa: FIX002
                     # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
                     request[field] = self._apply_profile_rules(
                         request.setdefault(field, {}), profile_value, profile_config)
@@ -411,3 +434,60 @@ class JSONProfileVerifier:
         validated_request = self.validate_request(request=request)
         logger.debug('Validated Request before profile rules: %s', validated_request)
         return self._apply_profile_rules(validated_request, self.profile_dict)
+
+    def _apply_profile_rules_sample(self, request: dict[str, Any], profile: dict[str, Any],
+                             parent_profile_config: InheritedProfileConfig | None = None) -> dict[str, Any]:
+        """Apply the actual profile rules to one level of the request dict.
+
+        It needs them both request and profile to be in the same structure and hierarchy,
+        e.g. both in the "subject" sub-dict.
+        """
+        if not parent_profile_config: # top level
+            parent_profile_config = InheritedProfileConfig()
+
+        profile_allow = profile.get('allow', parent_profile_config.allow_implicit)
+        profile_reject_mods = profile.get('reject_mods', parent_profile_config.reject_mods)
+        profile_mutable = profile.get('mutable', parent_profile_config.mutable)
+
+        profile_config = InheritedProfileConfig(
+            allow_implicit=(profile_allow == '*'),
+            reject_mods=profile_reject_mods,
+            mutable=profile_mutable
+        )
+
+        # Constraining profile fields that should not literally be in the request
+        skip_keys = CERT_PROFILE_KEYWORDS
+        filtered_profile = {k: v for k, v in profile.items() if k not in skip_keys}
+
+        for field, profile_value in filtered_profile.items():
+            logger.debug('Processing field: %s Profile value: %s Request: %s', field, profile_value, request)
+            logger.debug('Field %s not in request %s', field, request)
+            if isinstance(profile_value, dict):
+            # check for default and required fields
+                if 'value' in profile_value:
+                    # Set default value from profile
+                    request[field] = profile_value['value']
+                    continue
+                if 'default' in profile_value:
+                    # Set default value from profile
+                    logger.debug("Setting default for field '%s' to %s", field, profile_value['default'])
+                    request[field] = profile_value['default']
+                    continue
+                if 'required' in profile_value:
+                    # Required field is missing in the request
+                    request[field] = f'CHANGEME_{field}_required'
+                    continue
+                # TODO(Air): 're' case  # noqa: FIX002
+                # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
+                request[field] = self._apply_profile_rules_sample(
+                    request.setdefault(field, {}), profile_value, profile_config)
+            elif JSONProfileVerifier._is_simple_type(profile_value):
+                request[field] = profile_value
+            else:
+                logger.warning("Field '%s' in profile has type %s, skipping.", field, type(profile_value).__name__)
+            continue
+        return request
+
+    def get_sample_request(self) -> dict[str, Any]:
+        """Generate a sample certificate request that conforms to the profile."""
+        return self._apply_profile_rules_sample({}, self.profile_dict)

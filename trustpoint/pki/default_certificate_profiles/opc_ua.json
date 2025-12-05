@@ -1,11 +1,9 @@
 {
     "type": "cert_profile",
-    "display_name": "TLS Server",
+    "display_name": "OPC UA",
     "subj": {
         "allow":"*",
-        "cn": {
-            "default": "tls_server.local"
-        }
+        "cn": {"default":"OPC-UA"}
     },
     "reject_mods": false,
     "ext": {
@@ -13,11 +11,9 @@
             "ca": false
         },
         "subject_alternative_name": {
-            "dns_names": {
-                "default": ["localhost"]
-            },
-            "ip_addresses": {
-                "default": ["127.0.0.1", "::1"]
+            "uris": {
+                "required": true,
+                "default": ["urn:example_trustpoint_opcua"]
             },
             "critical": true
         }
