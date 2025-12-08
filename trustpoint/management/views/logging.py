@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import datetime
 import io
-import os
 import re
 import tarfile
 import zipfile
@@ -18,11 +17,11 @@ from django.utils.translation import gettext as _
 from django.views.generic import TemplateView, View
 from django.views.generic.base import RedirectView
 from django.views.generic.list import ListView
-
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
-from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH
 from trustpoint.views.base import SortableTableFromListMixin
+
+from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH
 
 if TYPE_CHECKING:
     from typing import Any
@@ -100,7 +99,7 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
 
     def get_queryset(self) -> list[dict[str, str]]: # type: ignore[override]
         """Gets a queryset of all valid Trustpoint log files in the log directory."""
-        all_files = os.listdir(LOG_DIR_PATH)
+        all_files = [file.name for file in LOG_DIR_PATH.iterdir()]
         valid_log_files = [f for f in all_files if re.compile(r'^trustpoint\.log(?:\.\d+)?$').match(f)]
 
         self.queryset = [self._get_log_file_data(log_file_name) for log_file_name in valid_log_files]   # type: ignore[assignment]

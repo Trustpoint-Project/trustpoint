@@ -20,7 +20,6 @@ from pki.util.keys import AutoGenPkiKeyAlgorithm
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
-
     from management.pkcs11_util import Pkcs11AESKey
 
 
@@ -415,17 +414,17 @@ class PKCS11Token(models.Model, LoggerMixin):
         """
         return f'{self.label} (Slot {self.slot})'
 
-    @classmethod
-    def load(cls) -> PKCS11Token:
-        """Returns the single instance, creating it if necessary."""
-        obj, _ = cls.objects.get_or_create(pk=1)
-        return obj
-
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Ensure only one instance exists (singleton pattern)."""
         self.full_clean()
         self.pk = 1
         super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls) -> PKCS11Token:
+        """Returns the single instance, creating it if necessary."""
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
 
     def clean(self) -> None:
         """Ensure only one PKCS11Token instance exists.
@@ -453,7 +452,7 @@ class PKCS11Token(models.Model, LoggerMixin):
         Raises:
             RuntimeError: If key generation fails
         """
-        from pki.models.credential import PKCS11Key
+        from pki.models.credential import PKCS11Key  # noqa: PLC0415
 
         try:
             kek, _ = PKCS11Key.objects.get_or_create(
