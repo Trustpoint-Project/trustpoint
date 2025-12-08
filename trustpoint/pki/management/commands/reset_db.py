@@ -86,6 +86,8 @@ class Command(BaseCommand):
             KeyStorageConfig.get_or_create_default()
             # Add default certificate profiles
             call_command('create_default_cert_profiles')
+        else:
+            KeyStorageConfig.get_or_create_default()
 
         # Create superuser if needed
         if not options.get('no_user'):

@@ -81,7 +81,7 @@ sftpgo_web_port(){
 
 # -------------------------- Input helpers ------------------------------------
 ask(){ local prompt="$1" def="${2:-}"; if [[ -n "$def" ]]; then read -r -p "$(bold)${prompt}$(rst) [default: ${def}] > " REPLY || true; REPLY="${REPLY:-$def}"; else read -r -p "$(bold)${prompt}$(rst) > " REPLY || true; fi; }
-ask_yes_no(){ local prompt="$1" def="${2:-y}" a; case "${def,,}" in y|yes) a="[Y/n]";; n|no) a="[y/N]";; *) a="[y/n]";; esac; read -r -p "$(bold)${prompt} ${a}$(rst) > " resp || true; resp="${resp:-$def}"; [[ "${resp,,}" =~ ^y ]]; }
+ask_yes_no(){ local prompt="$1" def="${2:-y}" a; case "${def}" in y|yes) a="[Y/n]";; n|no) a="[y/N]";; *) a="[y/n]";; esac; read -r -p "$(bold)${prompt} ${a}$(rst) > " resp || true; resp="${resp:-$def}"; [[ "${resp}" =~ ^y ]]; }
 ask_port(){ local prompt="$1" def="$2" p; while true; do ask "$prompt" "$def"; p="$REPLY"; [[ "$p" =~ ^[0-9]{1,5}$ ]] && (( p>0 && p<65536 )) && { echo "$p"; return; } ; warn "Invalid port. Enter 1..65535."; done; }
 ask_free_port(){ local prompt="$1" def="$2" p; while true; do p="$(ask_port "$prompt" "$def")"; if port_in_use "$p"; then warn "Port ${p} is already in use on this host. Pick another."; else echo "$p"; return; fi; done; }
 ask_user(){ local prompt="$1" def="$2" u; while true; do ask "$prompt" "$def"; u="$REPLY"; [[ "$u" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]] && { echo "$u"; return; } ; warn "Invalid username."; done; }
@@ -667,8 +667,8 @@ logs_selected(){
 }
 
 nuke_cmd(){
-  read -r -p "Remove ALL project containers, network, and DB volume (and ./sftpgo-data)? [y/N] " a; [[ "${a,,}" == "y" ]] || exit 0
-  read -r -p "Are you sure? This is destructive. [y/N] " b; [[ "${b,,}" == "y" ]] || exit 0
+  read -r -p "Remove ALL project containers, network, and DB volume (and ./sftpgo-data)? [y/N] " a; [[ "${a}" == "y" ]] || exit 0
+  read -r -p "Are you sure? This is destructive. [y/N] " b; [[ "${b}" == "y" ]] || exit 0
   stop_one trustpoint; stop_one postgres; stop_one mailpit; stop_one sftpgo
   docker network rm "$NET" >/dev/null 2>&1 || true
   docker volume rm "$VOL_DB" >/dev/null 2>&1 || true
