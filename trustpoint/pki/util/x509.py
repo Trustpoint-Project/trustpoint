@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import itertools
 import logging
+import urllib
 from datetime import UTC
 from typing import TYPE_CHECKING, cast
 
@@ -297,7 +298,7 @@ class ClientCertificateAuthenticationError(Exception):
     """Exception raised for general client certificate authentication failures."""
 
 
-class ApacheTLSClientCertExtractor:
+class NginxTLSClientCertExtractor:
     """Extracts the TLS client certificate from the request."""
 
     @staticmethod
@@ -317,28 +318,29 @@ class ApacheTLSClientCertExtractor:
         if not cert_data:
             error_message = 'Missing SSL_CLIENT_CERT header'
             raise ClientCertificateAuthenticationError(error_message)
-
+        # URL-decode the certificate
+        cert_data = urllib.parse.unquote(cert_data)
         try:
             client_cert = x509.load_pem_x509_certificate(cert_data.encode('utf-8'))
         except Exception as e:
             error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
             raise ClientCertificateAuthenticationError(error_message) from e
 
-        # Extract intermediate CAs from Apache variables
-        intermediate_cas = []
+        #  Extract intermediate CAs from Apache variables
+        # intermediate_cas = []
+        #
+        # for i in itertools.count():
+        #     ca = request.META.get(f'SSL_CLIENT_CERT_CHAIN_{i}')
+        #     if not ca:
+        #         break
+        #     try:
+        #         ca_cert = x509.load_pem_x509_certificate(ca.encode('utf-8'))
+        #     except Exception as e:
+        #         error_message = f'Invalid SSL_CLIENT_CERT_CHAIN_{i} PEM: {e}'
+        #         raise ClientCertificateAuthenticationError(error_message) from e
+        #     intermediate_cas.append(ca_cert)
 
-        for i in itertools.count():
-            ca = request.META.get(f'SSL_CLIENT_CERT_CHAIN_{i}')
-            if not ca:
-                break
-            try:
-                ca_cert = x509.load_pem_x509_certificate(ca.encode('utf-8'))
-            except Exception as e:
-                error_message = f'Invalid SSL_CLIENT_CERT_CHAIN_{i} PEM: {e}'
-                raise ClientCertificateAuthenticationError(error_message) from e
-            intermediate_cas.append(ca_cert)
-
-        return (client_cert, intermediate_cas)
+        return (client_cert, [])
 
 class CertificateVerifier:
     """Methods for verifying client and server certificates."""

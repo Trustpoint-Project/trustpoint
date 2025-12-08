@@ -18,7 +18,7 @@ from devices.models import (
 from trustpoint.logger import LoggerMixin
 
 from pki.models import DevIdRegistration, DomainModel, TruststoreModel
-from pki.util.x509 import ApacheTLSClientCertExtractor
+from pki.util.x509 import NginxTLSClientCertExtractor
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -233,7 +233,7 @@ class IDevIDAuthenticator(LoggerMixin):
     @classmethod
     def authenticate_idevid(cls, request: HttpRequest, domain: DomainModel | None = None) -> DeviceModel:
         """Authenticate client using IDevID certificate for Domain Credential request."""
-        idevid_cert, intermediate_cas = ApacheTLSClientCertExtractor.get_client_cert_as_x509(request)
+        idevid_cert, intermediate_cas = NginxTLSClientCertExtractor.get_client_cert_as_x509(request)
 
         return cls.authenticate_idevid_from_x509(
             idevid_cert=idevid_cert,

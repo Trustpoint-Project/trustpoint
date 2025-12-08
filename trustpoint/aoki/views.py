@@ -13,7 +13,7 @@ from django.views import View
 from pki.models.credential import CredentialModel, IDevIDReferenceModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
-from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
+from pki.util.x509 import NginxTLSClientCertExtractor, ClientCertificateAuthenticationError
 from trustpoint_core.oid import AlgorithmIdentifier
 
 from trustpoint.logger import LoggerMixin
@@ -68,7 +68,7 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
                 'No TLS server certificate available. Are you on the development server?', status = 500
             )
         try:
-            client_cert, intermediary_cas = ApacheTLSClientCertExtractor.get_client_cert_as_x509(request)
+            client_cert, intermediary_cas = NginxTLSClientCertExtractor.get_client_cert_as_x509(request)
         except ClientCertificateAuthenticationError:
             return LoggedHttpResponse(
                 'No valid TLS client certificate provided.', status = 401
