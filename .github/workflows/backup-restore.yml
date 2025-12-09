@@ -25,7 +25,7 @@ jobs:
 
       - name: Initialize database schema
         run: 
-          uv run trustpoint/manage.py inittrustpoint --tls
+          uv run trustpoint/manage.py inittrustpoint --tls --admin
 
       - name: Populate test data
         run: |
@@ -61,7 +61,9 @@ jobs:
         run: docker exec trustpoint sh -c "uv run trustpoint/manage.py dbrestore  -z --noinput -I trustpoint/media/backups/from_outside.dump.gz"
 
       - name: Restore Trustpoint in container
-        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointrestore"
+        run: |
+          docker exec trustpoint sh -c \
+          "uv run trustpoint/manage.py shell -c \"from setup_wizard.views import BackupPasswordRecoveryMixin; BackupPasswordRecoveryMixin().handle_backup_password_recovery('')\""
 
       - name: Validate post-restore deployment
         run: ./tests/scripts/test_successfull_restoration.sh

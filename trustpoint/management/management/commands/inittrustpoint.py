@@ -5,6 +5,7 @@ from pathlib import Path
 
 from django.conf import settings as django_settings
 from django.core.management import call_command
+from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandParser
 from django.utils.translation import gettext as _
 
@@ -22,7 +23,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser: CommandParser) -> None:
         """Adds command arguments/options."""
         parser.add_argument('--nomigrations', action='store_true', help='Migrations will not be executed.')
-        parser.add_argument('--tls', action='store_true', help='Tls is getting prepared')
+        parser.add_argument('--tls', action='store_true', help='Tls is getting prepared.')
+        parser.add_argument('--admin', action='store_true', help='Create super user.')
 
     def handle(self, **options: dict[str, str]) -> None:
         """Entrypoint for the command."""
@@ -72,3 +74,13 @@ class Command(BaseCommand):
                 self.stdout.write('Using existing crypto storage configuration')
             call_command('tls_cred', '--write_out')
             self.stdout.write('Done')
+
+        if options.get('admin'):
+            self.stdout.write('Creating superuser...')
+            call_command('createsuperuser', interactive=False, username='admin', email='')
+            user = User.objects.get(username='admin')
+            user.set_password('testing321')
+            user.save()
+            self.stdout.write('Superuser created:')
+            self.stdout.write('  Username: admin')
+            self.stdout.write('  Password: testing321')
