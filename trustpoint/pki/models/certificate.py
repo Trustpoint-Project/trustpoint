@@ -536,7 +536,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         # ---------------------------------------- TBSCertificate Fields (Body) ----------------------------------------
 
         version = certificate.version.value
-        serial_number = hex(certificate.serial_number)[2:].upper()
+        serial_number = f'{certificate.serial_number:x}'.upper()
 
         issuer = cls._get_issuer(certificate)
         issuer_public_bytes = certificate.issuer.public_bytes().hex().upper()

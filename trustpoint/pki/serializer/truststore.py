@@ -14,7 +14,7 @@ from util.field import UniqueNameValidator
 from pki.models.truststore import TruststoreModel
 
 
-class TruststoreSerializer(serializers.ModelSerializer):
+class TruststoreSerializer(serializers.ModelSerializer[TruststoreModel]):
     """Serializer for Certificate instances.
 
     Handles conversion between Certificate model objects and JSON representations.
@@ -29,7 +29,7 @@ class TruststoreSerializer(serializers.ModelSerializer):
     )
 
     intended_usage = serializers.ChoiceField(
-        choices=TruststoreModel.IntendedUsage, required=True, help_text='Intended usage for this truststore'
+        choices=TruststoreModel.IntendedUsage.choices, required=True, help_text='Intended usage for this truststore'
     )
 
     trust_store_file = serializers.FileField(write_only=True, required=True)
@@ -43,7 +43,7 @@ class TruststoreSerializer(serializers.ModelSerializer):
 
     def validate_trust_store_file(self, file: UploadedFile) -> bytes:
         """Validate uploaded truststore file."""
-        if not file:
+        if not file or not file.name:
             msg = 'Truststore file is required.'
             raise ValidationError(msg)
         if not file.name.lower().endswith(('.pem', '.p7b', '.p7c')):

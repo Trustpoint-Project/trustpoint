@@ -72,7 +72,7 @@ class TruststoreModel(models.Model):
         verbose_name=_('Unique Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
     )
 
-    certificates = models.ManyToManyField(
+    certificates: models.ManyToManyField[CertificateModel, TruststoreOrderModel] = models.ManyToManyField(
         to=CertificateModel, verbose_name=_('Truststore certificates'), through='TruststoreOrderModel'
     )
 
