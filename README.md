@@ -53,6 +53,8 @@ Trustpoint supports multiple enrollment and onboarding methods:
 A secure, automated onboarding protocol designed specifically for industrial environments.
 Zero-touch issuance of initial device credentials (LDevID)
 
+---
+
 **EST** (Enrollment over Secure Transport) [[RFC 7030](https://datatracker.ietf.org/doc/html/rfc7030)]
 
 Supports both onboarding and application certificate enrollment.
@@ -67,6 +69,8 @@ Capabilities:
 * Application certificate enrollment
 * Certificate renewal and re-enrollment
 
+---
+
 **CMP** (Certificate Management Protocol) [[RFC 9483](https://datatracker.ietf.org/doc/rfc9483/)]
 
 Flexible onboarding and certificate management for constrained or industrial devices.
@@ -80,6 +84,8 @@ Capabilities:
 * Onboarding (LDevID issuance)
 * Application certificate enrollment
 * Automated renewal and rekeying
+
+---
 
 **Additional Certificate Issuance Options**
 
