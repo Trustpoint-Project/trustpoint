@@ -49,10 +49,12 @@ The following options provide a complete lifecycle—from zero-touch onboarding 
 Trustpoint supports multiple enrollment and onboarding methods:
 
 **[AOKI](https://trustpoint.readthedocs.io/en/latest/devices/aoki.html)** (Zero-Touch Onboarding)
+
 A secure, automated onboarding protocol designed specifically for industrial environments.
 Zero-touch issuance of initial device credentials (LDevID)
 
 **EST** (Enrollment over Secure Transport) [[RFC 7030](https://datatracker.ietf.org/doc/html/rfc7030)]
+
 Supports both onboarding and application certificate enrollment.
 
 Authentication Methods:
@@ -66,6 +68,7 @@ Capabilities:
 * Certificate renewal and re-enrollment
 
 **CMP** (Certificate Management Protocol) [[RFC 9483](https://datatracker.ietf.org/doc/rfc9483/)]
+
 Flexible onboarding and certificate management for constrained or industrial devices.
 
 Authentication Methods:
