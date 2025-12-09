@@ -5,7 +5,6 @@ import traceback
 from collections.abc import Callable
 
 from behave import given, runner, step, then, when
-#from selenium import webdriver
 
 
 # Function to wrap steps and enforce failure on any exception
