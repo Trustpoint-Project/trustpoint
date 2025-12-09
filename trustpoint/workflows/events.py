@@ -73,21 +73,28 @@ class Events:
         protocol='SCEP',
         operation='PKIOperation',
         handler='certificate_request',
-    )
+    )"""
 
     device_created = Event(
         key='device_created',
-        protocol='',
-        operation='',
-        handler='device_created',
+        protocol='device',
+        operation='created',
+        handler='device_action',
+    )
+
+    device_onboarded = Event(
+        key='device_onboarded',
+        protocol='device',
+        operation='onboard',
+        handler='device_action',
     )
 
     device_deleted = Event(
         key='device_deleted',
-        protocol='',
-        operation='',
-        handler='device_deleted',
-    )"""
+        protocol='device',
+        operation='deleted',
+        handler='device_action',
+    )
 
     @classmethod
     def all(cls) -> list[Event]:

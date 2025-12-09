@@ -18,6 +18,7 @@ from pki.models.issuing_ca import IssuingCaModel
 
 class State(models.TextChoices):
     """Workflow and enrollment states."""
+
     RUNNING = 'Running', 'Running'
     AWAITING = 'AwaitingApproval', 'AwaitingApproval'
     APPROVED = 'Approved', 'Approved'
@@ -78,6 +79,7 @@ class WorkflowDefinition(models.Model):
 
     class Meta:
         """Database configuration for workflow definitions."""
+
         db_table = 'workflow_definitions'
         ordering = ('-created_at',)
 
@@ -97,6 +99,7 @@ class WorkflowScope(models.Model):
 
     class Meta:
         """Database configuration for Workflow Scope."""
+
         db_table = 'workflow_scopes'
         unique_together = (('workflow', 'ca_id', 'domain_id', 'device_id'),)
 
@@ -113,6 +116,93 @@ class WorkflowScope(models.Model):
         return f'{self.workflow.name} [{suffix}]'
 
 
+class DeviceRequest(models.Model):
+    """Represents a device lifecycle request (creation, deletion, onboarding).
+
+    Attributes:
+        id: UUID primary key.
+        device: Target device.
+        domain: Domain at the time of event (may be null).
+        ca: CA for domain (if applicable).
+        action: Device action type ("created", "onboarded", "deleted").
+        payload: Raw event payload from the handler.
+        aggregated_state: Aggregate state over all workflow instances.
+        finalized: True if all workflow instances have reached terminal states.
+        created_at: Request creation timestamp.
+        updated_at: Last update timestamp.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    device = models.ForeignKey(
+        DeviceModel,
+        on_delete=models.CASCADE,
+        related_name='device_requests',
+    )
+
+    domain = models.ForeignKey(
+        DomainModel,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='device_requests',
+    )
+
+    ca = models.ForeignKey(
+        IssuingCaModel,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='device_requests',
+    )
+
+    action = models.CharField(max_length=32)  # "created", "onboarded", "deleted"
+    payload = models.JSONField(default=dict, blank=True)
+
+    aggregated_state = models.CharField(
+        max_length=32,
+        choices=State.choices,
+        default=State.AWAITING,
+    )
+
+    finalized = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        """Database configuration for device workflow parent."""
+
+        ordering = ['-created_at']
+
+    def recompute_and_save(self) -> None:
+        """Recompute the aggregate final state from instances."""
+        instances = self.instances.all()
+
+        if not instances.exists():
+            self.aggregated_state = State.AWAITING
+            self.finalized = False
+        else:
+            states = {inst.state for inst in instances}
+            if any(s == State.FAILED for s in states):
+                self.aggregated_state = State.FAILED
+            elif all(s in {State.FINALIZED, State.ABORTED} for s in states):
+                self.aggregated_state = State.FINALIZED
+            elif any(s == State.AWAITING for s in states):
+                self.aggregated_state = State.AWAITING
+            else:
+                self.aggregated_state = State.RUNNING
+
+            self.finalized = all(inst.finalized for inst in instances)
+
+        self.save(update_fields=['aggregated_state', 'finalized', 'updated_at'])
+
+    @property
+    def badge_class(self) -> str:
+        """Return the CSS class for the aggregated state badge."""
+        return get_status_badge(self.aggregated_state)[1]
+
+
 # -------------------------------------
 # EnrollmentRequest (EST fan-out parent)
 # -------------------------------------
@@ -125,6 +215,7 @@ class EnrollmentRequest(models.Model):
     - Identity tuple groups repeated polls for the same CSR until a terminal outcome.
     - We keep request-level states distinct from instance-level strings to avoid confusion.
     """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     # Identity tuple (NOT unique → allow a new attempt after terminal)
@@ -144,6 +235,7 @@ class EnrollmentRequest(models.Model):
 
     class Meta:
         """Database configuration for enrollment request."""
+
         db_table = 'enrollment_requests'
         indexes = (
             # Fast lookup by identity tuple when reusing the "open" request
@@ -252,6 +344,7 @@ class EnrollmentRequest(models.Model):
 
 class WorkflowInstance(models.Model):
     """An initialized workflows."""
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     definition = models.ForeignKey(WorkflowDefinition, on_delete=models.CASCADE, related_name='instances')
 
@@ -263,6 +356,13 @@ class WorkflowInstance(models.Model):
         on_delete=models.CASCADE,
         related_name='instances',
         help_text='Parent request for EST fan-out orchestration.',
+    )
+    device_request = models.ForeignKey(
+        DeviceRequest,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='instances',
     )
 
     current_step = models.CharField(max_length=100, help_text='The step-ID we are currently at (e.g. "step-1")')
@@ -282,6 +382,7 @@ class WorkflowInstance(models.Model):
 
     class Meta:
         """Database configuration and indexes for workflow instances."""
+
         db_table = 'workflow_instances'
         indexes = (
             models.Index(fields=['state']),
