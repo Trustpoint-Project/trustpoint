@@ -30,8 +30,15 @@ jobs:
         with:
           target: "http://localhost:80"
           fail_action: false
-          cmd_options: "-a -J report_http_json.json -w report_http_md.md -r report_http_html.html"
+          cmd_options: "-a"
           allow_issue_writing: false
+
+      - name: Rename HTTP Reports
+        if: always()
+        run: |
+          mv report_json.json report_http_json.json || true
+          mv report_md.md report_http_md.md || true
+          mv report_html.html report_http_html.html || true
 
       - name: OWASP ZAP Baseline Scan (HTTPS)
         uses: zaproxy/action-baseline@v0.15.0
@@ -40,8 +47,15 @@ jobs:
         with:
           target: "https://localhost:443"
           fail_action: false
-          cmd_options: "-a -J report_https_json.json -w report_https_md.md -r report_https_html.html"
+          cmd_options: "-a"
           allow_issue_writing: false
+
+      - name: Rename HTTPS Reports
+        if: always()
+        run: |
+          mv report_json.json report_https_json.json || true
+          mv report_md.md report_https_md.md || true
+          mv report_html.html report_https_html.html || true
 
       - name: Upload ZAP Scan Reports
         uses: actions/upload-artifact@v4
