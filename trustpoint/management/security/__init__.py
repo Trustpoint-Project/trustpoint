@@ -1,3 +1,5 @@
+"""Security management package."""
+
 from management.models import SecurityConfig
 from management.security.features import AutoGenPkiFeature
 
