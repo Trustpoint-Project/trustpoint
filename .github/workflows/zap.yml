@@ -24,7 +24,7 @@ jobs:
           sleep 60
 
       - name: OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.12.0
+        uses: zaproxy/action-baseline@v0.15.0
         continue-on-error: true
         id: zap-scan
         with:
@@ -32,8 +32,6 @@ jobs:
           fail_action: false
           cmd_options: "-a"
           allow_issue_writing: false 
-          create_issue: false
-          artifact_name: "" 
 
       - name: Upload ZAP Scan Reports
         uses: actions/upload-artifact@v4
