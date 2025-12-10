@@ -29,6 +29,7 @@ jobs:
           target: "http://localhost:80"
           fail_action: true                 # fail on medium/high alerts
           cmd_options: "-a"
+          artifact_name: "zap-scan-results"
 
       - name: Cleanup
         if: always()
