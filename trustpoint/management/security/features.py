@@ -74,7 +74,7 @@ class AutoGenPkiFeature(SecurityFeature, LoggerMixin):
             cls.logger.warning('AutoGenPkiFeature.enable() called but is_enabled() returned False - not enabling')
 
     @classmethod
-    def disable(cls, **kwargs: object) -> None:
+    def disable(cls, **_kwargs: object) -> None:
         """Starts a thread that disables the auto-generated PKI."""
         cls.logger.info('AutoGenPkiFeature.disable() called')
 

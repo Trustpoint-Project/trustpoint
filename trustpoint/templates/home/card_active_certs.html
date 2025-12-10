@@ -1,0 +1,45 @@
+{% load static %}
+
+<div class="card rounded-5 text-white border-0 card-count-active-container">
+  <div class="card-body p-4">
+    <!--header-->
+    <div class="d-flex justify-content-between align-items-start mb-4">
+      <h6 class="fs-5 mb-0">Active Certificates</h6>
+      <button
+        class="btn btn-outline-light btn-sm rounded-circle d-inline-flex align-items-center justify-content-center p-0 card-count-btn-link"
+        onclick="link_to_certs()">
+        <i class="bi bi-arrow-up-right"></i>
+      </button>
+    </div>
+    <!--content-->
+    <div class="d-flex align-items-end">
+      <!--big number-->
+      <p id="total_count_active_certs" class="fw-bold display-3 lh-1 mb-0 me-2"></p>
+      <!--badge-->
+      <span
+        class="d-inline-flex align-items-center border rounded-3 px-2 py-1 lh-1 position-relative card-count-delta">
+        <span id="delta_count_active_certs" class="small me-1 lh-1"></span>
+        <i class="bi bi-caret-up-fill fs-6 lh-1"></i>
+      </span>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('dashboardData', (event) =>{
+    const {today, week} = event.detail;
+    const active_today = today.cert_counts.active;
+    const delta = week.cert_counts.active - active_today;
+
+    document.getElementById('total_count_active_certs').textContent = active_today;
+    document.getElementById('delta_count_active_certs').textContent = delta;
+
+    updateDeltaIcon('delta_count_active_certs', delta);
+
+  });
+
+  function link_to_certs(){
+    window.location.href = "{% url 'pki:certificates' %}"
+  }
+  
+</script>

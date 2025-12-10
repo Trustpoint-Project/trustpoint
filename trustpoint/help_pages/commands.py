@@ -1,7 +1,10 @@
 """This module contains cli commands which are displayed in the help pages."""
 
+from typing import Any
+
 from devices.views import NamedCurveMissingForEccErrorMsg
 from django.utils.translation import gettext as _
+from pki.util.cert_req_converter import JSONCertRequestCommandExtractor
 from trustpoint_core import oid
 
 
@@ -42,47 +45,25 @@ class CmpSharedSecretCommandBuilder:
     """Builds CMP shared-secret commands for different certificate profiles."""
 
     @staticmethod
-    def get_tls_client_profile_command(host: str, pk: int, shared_secret: str, cred_number: int) -> str:
-        """Gets the TLS-Client profile command.
+    def get_dynamic_cert_profile_command(
+        host: str, pk: int, shared_secret: str, cred_number: int, sample_request: dict[str, Any]) -> str:
+        """Gets the dynamic certificate profile command.
 
         Args:
             host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
             pk: The primary key of the device in question used as Key Identifier (KID).
             shared_secret: The shared secret.
             cred_number: The credential number - counter of issued credentials.
+            sample_request: The sample certificate request in JSON format.
 
         Returns:
             The constructed command.
         """
-        return (
-            'openssl cmp \\\n'
-            '-cmd cr \\\n'
-            '-implicit_confirm \\\n'
-            '-tls_used \\\n'
-            f'-server  {host} \\\n'
-            f'-ref {pk} \\\n'
-            f'-secret pass:{shared_secret} \\\n'
-            f'-subject "/CN=Trustpoint-TLS-Client-Credential-{cred_number}" \\\n'
-            '-days 10 \\\n'
-            f'-newkey key-{cred_number}.pem \\\n'
-            f'-certout certificate-{cred_number}.pem \\\n'
-            '-chainout chain-without-root.pem \\\n'
-            '-extracertsout full-chain.pem'
-        )
+        profile_subject_entries = JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
+        profile_validity_days = JSONCertRequestCommandExtractor.sample_request_to_openssl_days(sample_request)
+        profile_sans = JSONCertRequestCommandExtractor.sample_request_to_openssl_cmp_sans(sample_request)
+        sans_line = f'-sans "{profile_sans}" \\\n' if profile_sans else ''
 
-    @staticmethod
-    def get_tls_server_profile_command(host: str, pk: int, shared_secret: str, cred_number: int) -> str:
-        """Get the TLS-Server profile command.
-
-        Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
-            pk: The primary key of the device in question used as Key Identifier (KID).
-            shared_secret: The shared secret.
-            cred_number: The credential number - counter of issued credentials.
-
-        Returns:
-            The constructed command.
-        """
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
@@ -91,73 +72,13 @@ class CmpSharedSecretCommandBuilder:
             f'-server {host} \\\n'
             f'-ref {pk} \\\n'
             f'-secret pass:{shared_secret} \\\n'
-            f'-subject "/CN=Trustpoint-TLS-Server-Client-Credential-{cred_number}" \\\n'
-            '-days 10 \\\n'
-            '-sans "critical 127.0.0.1 ::1 localhost" \\\n'
+            f'-subject "{profile_subject_entries}" \\\n'
+            f'-days {profile_validity_days} \\\n'
+            f'{sans_line}'
             f'-newkey key-{cred_number}.pem \\\n'
             f'-certout certificate-{cred_number}.pem \\\n'
-            '-chainout chain-without-root.pem \\\n'
-            '-extracertsout full-chain.pem'
-        )
-
-    @staticmethod
-    def get_opc_ua_client_profile_command(host: str, pk: int, shared_secret: str, cred_number: int) -> str:
-        """Get the OPC-UA-Client profile command.
-
-        Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
-            pk: The primary key of the device in question used as Key Identifier (KID).
-            shared_secret: The shared secret.
-            cred_number: The credential number - counter of issued credentials.
-
-        Returns:
-            The constructed command.
-        """
-        return (
-            'openssl cmp \\\n'
-            '-cmd cr \\\n'
-            '-implicit_confirm \\\n'
-            '-tls_used \\\n'
-            f'-server  {host} \\\n'
-            f'-ref {pk} \\\n'
-            f'-secret pass:{shared_secret} \\\n'
-            f'-subject "/CN=Trustpoint-OPC-UA-Client-Credential-{cred_number}" \\\n'
-            '-days 10 \\\n'
-            f'-sans "critical URI:trustpoint.opc-ua-uri.de/credential-{cred_number}" \\\n'
-            f'-newkey key-{cred_number}.pem \\\n'
-            f'-certout certificate-{cred_number}.pem \\\n'
-            '-chainout chain-without-root.pem \\\n'
-            '-extracertsout full-chain.pem'
-        )
-
-    @staticmethod
-    def get_opc_ua_server_profile_command(host: str, pk: int, shared_secret: str, cred_number: int) -> str:
-        """Get the OPC-UA-Server profile command.
-
-        Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
-            pk: The primary key of the device in question used as Key Identifier (KID).
-            shared_secret: The shared secret.
-            cred_number: The credential number - counter of issued credentials.
-
-        Returns:
-            The constructed command.
-        """
-        return (
-            'openssl cmp \\\n'
-            '-cmd cr \\\n'
-            '-implicit_confirm \\\n'
-            '-tls_used \\\n'
-            f'-server {host} \\\n'
-            f'-ref {pk} \\\n'
-            f'-secret pass:{shared_secret} \\\n'
-            f'-subject "/CN=Trustpoint-OPC-UA-Server-Client-Credential-{cred_number}" \\\n'
-            '-days 10 \\\n'
-            f'-sans "critical 127.0.0.1 ::1 localhost URI::trustpoint.opc-ua-uri.de/credential-{cred_number}" \\\n'
-            f'-newkey key-{cred_number}.pem \\\n'
-            f'-certout certificate-{cred_number}.pem \\\n'
-            '-chainout chain-without-root.pem \\\n'
-            '-extracertsout full-chain.pem'
+            f'-chainout chain-{cred_number}.pem \\\n'
+            f'-extracertsout full-chain-{cred_number}.pem'
         )
 
     @staticmethod
@@ -194,87 +115,32 @@ class EstUsernamePasswordCommandBuilder:
     """Builds EST username-password commands for different certificate profiles."""
 
     @staticmethod
-    def get_tls_client_profile_command(cred_number: int) -> str:
-        """Get the TLS-Client profile command.
+    def get_dynamic_cert_profile_command(
+        cred_number: int, sample_request: dict[str, Any]) -> str:
+        """Gets the dynamic certificate profile command.
 
         Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
+            pk: The primary key of the device in question used as Key Identifier (KID).
+            shared_secret: The shared secret.
             cred_number: The credential number - counter of issued credentials.
-
+            sample_request: The sample certificate request in JSON format.
 
         Returns:
             The constructed command.
         """
+        profile_subject_entries = JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
+        profile_sans = JSONCertRequestCommandExtractor.sample_request_to_openssl_req_sans(sample_request)
+        sans_line = f'-addext "subjectAltName = {profile_sans}"' if profile_sans else ''
+
         return (
             'openssl req \\\n'
             '-new \\\n'
             f'-key key-{cred_number}.pem \\\n'
             '-outform DER \\\n'
             f'-out csr-{cred_number}.der \\\n'
-            f'-subj "/CN=Trustpoint-TLS-Client-Credential-{cred_number}"'
-        )
-
-    @staticmethod
-    def get_tls_server_profile_command(cred_number: int) -> str:
-        """Get the TLS-Server profile command.
-
-        Args:
-            cred_number: The credential number - counter of issued credentials.
-
-
-        Returns:
-            The constructed command.
-        """
-        return (
-            'openssl req \\\n'
-            '-new \\\n'
-            f'-key key-{cred_number}.pem \\\n'
-            '-outform DER \\\n'
-            f'-out csr-{cred_number}.der \\\n'
-            f'-subj "/CN=Trustpoint-TLS-Server-Client-Credential-{cred_number}" \\\n'
-            '-addext "subjectAltName = critical, IP:127.0.0.1, IP:::1, DNS:localhost"'
-        )
-
-    @staticmethod
-    def get_opc_ua_client_profile_command(cred_number: int) -> str:
-        """Get the OPC-UA-Client profile command.
-
-        Args:
-            cred_number: The credential number - counter of issued credentials.
-
-
-        Returns:
-            The constructed command.
-        """
-        return (
-            'openssl req \\\n'
-            '-new \\\n'
-            f'-key key-{cred_number}.pem \\\n'
-            '-outform DER \\\n'
-            f'-out csr-{cred_number}.der \\\n'
-            f'-subj "/CN=Trustpoint-OPC-UA-Client-Credential-{cred_number}" \\\n'
-            f'-addext "subjectAltName = critical, URI:trustpoint.opc-ua-uri.de/credential-{cred_number}"'
-        )
-
-    @staticmethod
-    def get_opc_ua_server_profile_command(cred_number: int) -> str:
-        """Get the OPC-UA-Server profile command.
-
-        Args:
-            cred_number: The credential number - counter of issued credentials.
-
-
-        Returns:
-            The constructed command.
-        """
-        return (
-            'openssl req \\\n'
-            '-new \\\n'
-            f'-key key-{cred_number}.pem \\\n'
-            '-outform DER \\\n'
-            f'-out csr-{cred_number}.der \\\n'
-            f'-subj "/CN=Trustpoint-OPC-UA-Server-Client-Credential-{cred_number}" \\\n'
-            '-addext "subjectAltName = critical, '
-            f'IP:127.0.0.1, IP:::1, DNS:localhost, URI:trustpoint.opc-ua-uri.de/credential-{cred_number}"'
+            f'-subj "{profile_subject_entries}" \\\n'
+            f'{sans_line}'
         )
 
     @staticmethod
@@ -365,47 +231,28 @@ class EstUsernamePasswordCommandBuilder:
 
 
 class CmpClientCertificateCommandBuilder:
-    """Builds CMP client-certificate commands for different certificate profiles."""
+    """Builds CMP client-certificate (domain credential auth) commands for different certificate profiles."""
 
     @staticmethod
-    def get_tls_client_profile_command(host: str, cred_number: int) -> str:
-        """Gets the TLS-Client profile command.
+    def get_dynamic_cert_profile_command(
+        host: str, cred_number: int, sample_request: dict[str, Any]) -> str:
+        """Gets the dynamic certificate profile command.
 
         Args:
             host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
+            pk: The primary key of the device in question used as Key Identifier (KID).
+            shared_secret: The shared secret.
             cred_number: The credential number - counter of issued credentials.
+            sample_request: The sample certificate request in JSON format.
 
         Returns:
             The constructed command.
         """
-        return (
-            'openssl cmp \\\n'
-            '-cmd cr \\\n'
-            '-implicit_confirm \\\n'
-            '-tls_used \\\n'
-            '-trusted domain-credential-full-chain.pem \\\n'
-            f'-server  {host} \\\n'
-            '-cert domain-credential-certificate.pem \\\n'
-            '-key domain-credential-key.pem \\\n'
-            f'-subject "/CN=Trustpoint-TLS-Client-Credential-{cred_number}" \\\n'
-            '-days 10 \\\n'
-            f'-newkey key-{cred_number}.pem \\\n'
-            f'-certout certificate-{cred_number}.pem \\\n'
-            f'-chainout chain-{cred_number}.pem \\\n'
-            f'-extracertsout full-chain-{cred_number}.pem'
-        )
+        profile_subject_entries = JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
+        profile_validity_days = JSONCertRequestCommandExtractor.sample_request_to_openssl_days(sample_request)
+        profile_sans = JSONCertRequestCommandExtractor.sample_request_to_openssl_cmp_sans(sample_request)
+        sans_line = f'-sans "{profile_sans}" \\\n' if profile_sans else ''
 
-    @staticmethod
-    def get_tls_server_profile_command(host: str, cred_number: int) -> str:
-        """Gets the TLS-Server profile command.
-
-        Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
-            cred_number: The credential number - counter of issued credentials.
-
-        Returns:
-            The constructed command.
-        """
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
@@ -415,67 +262,9 @@ class CmpClientCertificateCommandBuilder:
             f'-server {host} \\\n'
             '-cert domain-credential-certificate.pem \\\n'
             '-key domain-credential-key.pem \\\n'
-            f'-subject "/CN=Trustpoint-TLS-Server-Client-Credential-{cred_number}" \\\n'
-            '-days 10 \\\n'
-            '-sans "critical 127.0.0.1 ::1 localhost" \\\n'
-            f'-newkey key-{cred_number}.pem \\\n'
-            f'-certout certificate-{cred_number}.pem \\\n'
-            f'-chainout chain-{cred_number}.pem \\\n'
-            f'-extracertsout full-chain-{cred_number}.pem'
-        )
-
-    @staticmethod
-    def get_opc_ua_client_profile_command(host: str, cred_number: int) -> str:
-        """Gets the OPC-UA-Client profile command.
-
-        Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
-            cred_number: The credential number - counter of issued credentials.
-
-        Returns:
-            The constructed command.
-        """
-        return (
-            'openssl cmp \\\n'
-            '-cmd cr \\\n'
-            '-implicit_confirm \\\n'
-            '-tls_used \\\n'
-            '-trusted domain-credential-full-chain.pem \\\n'
-            f'-server  {host} \\\n'
-            '-cert domain-credential-certificate.pem \\\n'
-            '-key domain-credential-key.pem \\\n'
-            f'-subject "/CN=Trustpoint-OPC-UA-Client-Credential-{cred_number}" \\\n'
-            '-days 10 \\\n'
-            f'-sans "critical URI:trustpoint.opc-ua-uri.de/credential-{cred_number}" \\\n'
-            f'-newkey key-{cred_number}.pem \\\n'
-            f'-certout certificate-{cred_number}.pem \\\n'
-            f'-chainout chain-{cred_number}.pem \\\n'
-            f'-extracertsout full-chain-{cred_number}.pem'
-        )
-
-    @staticmethod
-    def get_opc_ua_server_profile_command(host: str, cred_number: int) -> str:
-        """Gets the OPC-UA-Server profile command.
-
-        Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
-            cred_number: The credential number - counter of issued credentials.
-
-        Returns:
-            The constructed command.
-        """
-        return (
-            'openssl cmp \\\n'
-            '-cmd cr \\\n'
-            '-implicit_confirm \\\n'
-            '-tls_used \\\n'
-            '-trusted domain-credential-full-chain.pem \\\n'
-            f'-server {host} \\\n'
-            '-cert domain-credential-certificate.pem \\\n'
-            '-key domain-credential-key.pem \\\n'
-            f'-subject "/CN=Trustpoint-OPC-UA-Server-Client-Credential-{cred_number}" \\\n'
-            '-days 10 \\\n'
-            f'-sans "critical 127.0.0.1 ::1 localhost URI::trustpoint.opc-ua-uri.de/credential-{cred_number}" \\\n'
+            f'-subject "{profile_subject_entries}" \\\n'
+            f'-days {profile_validity_days} \\\n'
+            f'{sans_line}'
             f'-newkey key-{cred_number}.pem \\\n'
             f'-certout certificate-{cred_number}.pem \\\n'
             f'-chainout chain-{cred_number}.pem \\\n'

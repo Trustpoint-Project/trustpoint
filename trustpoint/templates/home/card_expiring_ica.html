@@ -1,0 +1,55 @@
+<div class="card rounded-5 text-white border-0 card-count-expiring-container">
+  <div class="card-body p-4">
+    <!-- header -->
+    <div class="d-flex justify-content-between align-items-start mb-4">
+      <h6 class="fs-5 mb-0">Expiring Issuing CAs</h6>
+    </div>
+    <!-- content -->
+    <div class="d-flex align-items-end">
+      <!-- big number -->
+      <p id="total_count_expiring_ica" class="fw-bold display-3 lh-1 mb-0 me-3"></p>
+      <!-- grid-->
+      <div class="d-grid align-content-center position-relative card-count-expiring-delta">
+        <!-- row 1 -->
+        <span class="small text-end">24 Hours</span>
+        <span class="d-inline-flex align-items-center border border-white rounded-3 px-2 py-1 lh-1">
+          <span id="delta_count_24_expiring_ica" class="small lh-1"></span>
+          <i class="bi bi-caret-up-fill ms-1"></i>
+        </span>
+        <!-- row 2 -->
+        <span class="small text-end">7 Days</span>
+        <span class="d-inline-flex align-items-center border border-white rounded-3 px-2 py-1 lh-1">
+          <span id="delta_count_7_expiring_ica" class="small lh-1"></span>
+          <i class="bi bi-caret-up-fill ms-1"></i>
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .delta{
+    grid-template-columns: max-content max-content;
+    row-gap: .25rem;
+    column-gap: .5rem;
+    top: -5px;
+  }
+</style>
+
+<script>
+  document.addEventListener('dashboardData', (event) =>{
+    const {today} = event.detail;
+    const expiring = today.expiring_issuing_ca_counts || {};
+    const delta_24 = expiring.expiring_in_24_hours || 0;
+    const delta_7 = expiring.expiring_in_7_days || 0;
+    const active_today = expiring.expiring_in_7_days || 0;
+
+    document.getElementById('total_count_expiring_ica').textContent = active_today;
+    document.getElementById('delta_count_24_expiring_ica').textContent = delta_24;
+    document.getElementById('delta_count_7_expiring_ica').textContent = delta_7;
+
+    updateDeltaIcon('delta_count_24_expiring_ica', delta_24);
+    updateDeltaIcon('delta_count_7_expiring_ica', delta_7);
+
+  });
+</script>

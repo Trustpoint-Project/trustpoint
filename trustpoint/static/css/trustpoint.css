@@ -4,9 +4,17 @@
     src: url('/static/css/fonts/Quicksand.woff2') format('woff2');
 }
 
+@font-face {
+    font-family: 'bootstrap-icons';
+    src: url('/static/css/fonts/bootstrap-icons.woff2') format('woff2');
+}
+
+
 :root {
     --trustpoint-ci: #014bad;
     --trustpoint-dark-test: #0a74ff;
+    --trustpoint-light-blue: #96C3FF;
+    --trustpoint-light-gray: #848484;
     --tp-font-weight: 550;
     --tp-font-weight-h: 600; /* Used for headers and buttons */
 }

@@ -442,3 +442,5 @@ SWAGGER_SETTINGS = {
     },
     'USE_SESSION_AUTH': False,  # disables Django login in Swagger UI
 }
+
+SWAGGER_USE_COMPAT_RENDERERS = False

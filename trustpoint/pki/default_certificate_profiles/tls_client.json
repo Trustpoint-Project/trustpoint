@@ -2,7 +2,10 @@
     "type": "cert_profile",
     "display_name": "TLS Client",
     "subj": {
-        "allow":"*"
+        "allow":"*",
+        "cn": {
+            "default": "Example TLS Client"
+        }
     },
     "reject_mods": false,
     "ext": {

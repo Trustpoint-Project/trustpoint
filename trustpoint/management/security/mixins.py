@@ -10,7 +10,7 @@ from django.utils.translation import gettext as _
 from management.security.manager import SecurityManager
 
 if TYPE_CHECKING:
-    from django.http import HttpRequest
+    from django.http import HttpRequest, HttpResponse
 
     from management.security.features import SecurityFeature
 
@@ -64,8 +64,8 @@ class SecurityLevelMixinRedirect(SecurityLevelMixin):
         super().__init__(*args, **kwargs)
         self.disabled_by_security_level_url = disabled_by_security_level_url
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any):
-        """If the feature is not allowed, the user is redirected to the disabled_by_security_level_url with an error message.
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """If the feature is not allowed, the user is redirected to the disabled_by_security_level_url.
 
         Parameters:
         -----------
