@@ -25,13 +25,15 @@ jobs:
 
       - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
-        continue-on-error: true  # Don't fail the workflow, but track the result
+        continue-on-error: true
         id: zap-scan
         with:
           target: "http://localhost:80"
-          fail_action: false  # We'll handle failures manually
+          fail_action: false
           cmd_options: "-a"
-          allow_issue_writing: false  # Disable automatic issue creation to avoid duplicates
+          allow_issue_writing: false 
+          create_issue: false
+          artifact_name: "" 
 
       - name: Upload ZAP Scan Reports
         uses: actions/upload-artifact@v4
