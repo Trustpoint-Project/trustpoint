@@ -13,7 +13,7 @@ from django.views import View
 from pki.models.credential import CredentialModel, IDevIDReferenceModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
-from pki.util.x509 import NginxTLSClientCertExtractor, ClientCertificateAuthenticationError
+from pki.util.x509 import ClientCertificateAuthenticationError, NginxTLSClientCertExtractor
 from trustpoint_core.oid import AlgorithmIdentifier
 
 from trustpoint.logger import LoggerMixin

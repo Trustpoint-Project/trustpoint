@@ -14,6 +14,8 @@ from cryptography.hazmat.primitives import hashes
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management import call_command
 from django.utils.translation import gettext as _
+from management.models import AppVersion, KeyStorageConfig, PKCS11Token
+from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
 from packaging.version import Version
 from pki.models import PKCS11Key
 from pki.models.credential import CredentialModel
@@ -22,9 +24,6 @@ from setup_wizard import SetupWizardState
 from setup_wizard.state_dir_paths import SCRIPT_WIZARD_AUTO_RESTORE_SET
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from setup_wizard.views import execute_shell_script
-
-from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
-from management.models import AppVersion, KeyStorageConfig, PKCS11Token
 
 # Constants
 DEK_EXPECTED_LENGTH = 32

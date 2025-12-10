@@ -10,15 +10,15 @@ from cryptography.hazmat.primitives import hashes
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
 from django.utils.translation import gettext as _
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from setup_wizard.state_dir_paths import SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL
-from trustpoint.logger import LoggerMixin
-
 from management.nginx_paths import (
     NGINX_CERT_CHAIN_PATH,
     NGINX_CERT_PATH,
     NGINX_KEY_PATH,
 )
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from setup_wizard.state_dir_paths import SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL
+
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any

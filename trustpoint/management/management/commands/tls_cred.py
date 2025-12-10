@@ -4,12 +4,12 @@ import ipaddress
 
 from cryptography.hazmat.primitives import hashes
 from django.core.management.base import BaseCommand, CommandParser
+from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH, NGINX_PATH
 from pki.models.credential import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
-from trustpoint.logger import LoggerMixin
 
-from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH, NGINX_PATH
+from trustpoint.logger import LoggerMixin
 
 
 class Command(BaseCommand, LoggerMixin):

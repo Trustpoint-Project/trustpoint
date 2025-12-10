@@ -13,12 +13,11 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.db.utils import OperationalError, ProgrammingError
 from django.utils.translation import gettext as _
+from management.models import AppVersion
+from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
 from packaging.version import InvalidVersion, Version
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.state_dir_paths import SCRIPT_WIZARD_RESTORE
-
-from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
-from management.models import AppVersion
 
 if TYPE_CHECKING:
     from typing import Any

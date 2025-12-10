@@ -25,8 +25,6 @@ from management.models import KeyStorageConfig, PKCS11Token
 from pki.models import CertificateModel, CredentialModel, IssuingCaModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from trustpoint.logger import LoggerMixin
-
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import (
     BackupPasswordForm,
@@ -37,6 +35,8 @@ from setup_wizard.forms import (
     StartupWizardTlsCertificateForm,
 )
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
+
+from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
@@ -49,7 +49,6 @@ from management.nginx_paths import (
     NGINX_CERT_PATH,
     NGINX_KEY_PATH,
 )
-
 from setup_wizard.state_dir_paths import (
     SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS,
     SCRIPT_WIZARD_BACKUP_PASSWORD,
