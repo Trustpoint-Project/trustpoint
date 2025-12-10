@@ -144,6 +144,8 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
     """Advance an instance until AWAITING or a terminal outcome is reached."""
     with transaction.atomic():
         inst = WorkflowInstance.objects.select_for_update().get(pk=inst.pk)
+        print('inst')
+        print(inst)
 
         if inst.finalized:
             return
@@ -156,8 +158,11 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
 
             executor = StepExecutorFactory.create(step_type)
             result: ExecutorResult = executor.execute(inst, signal)
+            print('result')
+            print(result)
             _persist_step_context(inst, result)
-            cast('EnrollmentRequest', inst.enrollment_request).recompute_and_save()
+            if inst.enrollment_request:
+                inst.enrollment_request.recompute_and_save()
 
             if not _merge_global_vars(inst, result):
                 break
