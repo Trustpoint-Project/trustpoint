@@ -15,10 +15,9 @@ from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509.oid import NameOID
 from cryptography.x509.verification import PolicyBuilder, Store
 from management.models import KeyStorageConfig
-from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
-
 from pki.models import IssuingCaModel
 from pki.util.keys import CryptographyUtils
+from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -326,21 +325,21 @@ class NginxTLSClientCertExtractor:
             error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
             raise ClientCertificateAuthenticationError(error_message) from e
 
-        #  Extract intermediate CAs from Apache variables
-        # intermediate_cas = []
-        #
-        # for i in itertools.count():
-        #     ca = request.META.get(f'SSL_CLIENT_CERT_CHAIN_{i}')
-        #     if not ca:
-        #         break
-        #     try:
-        #         ca_cert = x509.load_pem_x509_certificate(ca.encode('utf-8'))
-        #     except Exception as e:
-        #         error_message = f'Invalid SSL_CLIENT_CERT_CHAIN_{i} PEM: {e}'
-        #         raise ClientCertificateAuthenticationError(error_message) from e
-        #     intermediate_cas.append(ca_cert)
+         # Extract intermediate CAs from Apache variables
+        intermediate_cas = []
 
-        return (client_cert, [])
+        for i in itertools.count():
+            ca = request.META.get(f'SSL_CLIENT_CERT_CHAIN_{i}')
+            if not ca:
+                break
+            try:
+                ca_cert = x509.load_pem_x509_certificate(ca.encode('utf-8'))
+            except Exception as e:
+                error_message = f'Invalid SSL_CLIENT_CERT_CHAIN_{i} PEM: {e}'
+                raise ClientCertificateAuthenticationError(error_message) from e
+            intermediate_cas.append(ca_cert)
+
+        return (client_cert, intermediate_cas)
 
 class CertificateVerifier:
     """Methods for verifying client and server certificates."""
