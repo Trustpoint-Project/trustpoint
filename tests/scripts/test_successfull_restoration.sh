@@ -25,7 +25,7 @@ for i in {1..30}; do
 done
 
 # 2) Inside-container SSL config & cert checks
-echo "🔒 Checking Apache SSL setup inside container '$CONTAINER' …"
+echo "🔒 Checking NGINX SSL setup inside container '$CONTAINER' …"
 docker exec "$CONTAINER" bash -lc '
   set -e
   # 2.1) SSL module
@@ -47,8 +47,8 @@ docker exec "$CONTAINER" bash -lc '
 
   # 2.3) Certificate files (chain file is optional)
   for f in \
-    /etc/trustpoint/tls/apache-tls-server-key.key \
-    /etc/trustpoint/tls/apache-tls-server-cert.pem
+    /etc/trustpoint/tls/nginx-tls-server-key.key \
+    /etc/trustpoint/tls/nginx-tls-server-cert.pem
   do
     if [[ -f "$f" ]]; then
       echo "  ✓ cert file $f found"
@@ -59,10 +59,10 @@ docker exec "$CONTAINER" bash -lc '
   done
 
   # Chain file is optional
-  if [[ -f /etc/trustpoint/tls/apache-tls-server-cert-chain.pem ]]; then
-    echo "  ✓ optional chain file /etc/trustpoint/tls/apache-tls-server-cert-chain.pem found"
+  if [[ -f /etc/trustpoint/tls/nginx-tls-server-cert-chain.pem ]]; then
+    echo "  ✓ optional chain file /etc/trustpoint/tls/nginx-tls-server-cert-chain.pem found"
   else
-    echo "  ℹ optional chain file /etc/trustpoint/tls/apache-tls-server-cert-chain.pem not present (OK)"
+    echo "  ℹ optional chain file /etc/trustpoint/tls/nginx-tls-server-cert-chain.pem not present (OK)"
   fi
 '
 

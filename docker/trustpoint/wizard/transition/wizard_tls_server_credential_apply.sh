@@ -67,10 +67,10 @@ else
     NEXT_STATE="WIZARD_DEMO_DATA"
 fi
 
-# Configure apache and TLS
-log "Configuring Nginx and TLS..."
+# Configure NGINX and TLS
+log "Configuring NGINX and TLS..."
 if ! /etc/trustpoint/wizard/transition/update_tls.sh; then
-    echo "ERROR: Failed to configure Apache and TLS."
+    echo "ERROR: Failed to configure NGINX and TLS."
     exit 7
 fi
 

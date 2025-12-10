@@ -325,7 +325,7 @@ class NginxTLSClientCertExtractor:
             error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
             raise ClientCertificateAuthenticationError(error_message) from e
 
-         # Extract intermediate CAs from Apache variables
+         # Extract intermediate CAs from NGINX variables
         intermediate_cas = []
 
         for i in itertools.count():

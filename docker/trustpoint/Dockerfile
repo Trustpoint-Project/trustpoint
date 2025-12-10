@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1 \
     PKCS11_PROXY_SOCKET=tcp://softhsm:5657
 
 # Make port 80 and 443 available to the world outside this container.
-# 80 will be redirected to 443 using TLS through the apache.
+# 80 will be redirected to 443 using TLS through NGINX.
 EXPOSE 80 443
 
 # Update apt repository and install required dependencies from apt

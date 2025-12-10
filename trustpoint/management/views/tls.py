@@ -287,7 +287,7 @@ class ActivateTlsServerView(View, LoggerMixin):
             active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
             active_tls.credential = tls_certificate
             active_tls.save()
-            UpdateTlsCommand().handle()  # Apply new Apache TLS configuration
+            UpdateTlsCommand().handle()  # Apply new NGINX TLS configuration
             self.logger.info(
                 'Activated TLS credential: %s, certificate: %s',
                 tls_certificate.id, tls_certificate.certificate.id

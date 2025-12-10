@@ -116,7 +116,7 @@ class Command(BaseCommand):
                 return
 
             self.stdout.write('Matching version in database found.')
-            self.stdout.write('Extrating tls cert and preparing for restoration of apache config...')
+            self.stdout.write('Extrating tls cert and preparing for restoration of NGINX config...')
 
             active_tls = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
             tls_server_credential_model = active_tls.credential
