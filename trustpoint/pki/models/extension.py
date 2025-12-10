@@ -227,11 +227,12 @@ class CertificateExtension(OrphanDeletionMixin):
         exc_msg = f'Extension OID not set for {self.__class__.__name__}.'
         raise AttributeError(exc_msg)
 
-    extension_oid.fget.short_description = EXTENSION_STR
+    # TODO(Air): do we even need this line? Is it for some Django admin thing? # noqa: FIX002
+    extension_oid.fget.short_description = EXTENSION_STR  # type: ignore[attr-defined]
 
     @classmethod
     @abc.abstractmethod
-    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> RT | None:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> CertificateExtension | None:
         """Stores the extension in the database.
 
         Meant to be called within an atomic transaction while storing a certificate.
@@ -244,7 +245,7 @@ class CertificateExtension(OrphanDeletionMixin):
         """
 
     @classmethod
-    def delete_if_orphaned(cls, instance: RT | None) -> None:
+    def delete_if_orphaned(cls, instance: OrphanDeletionMixin | None) -> None:
         """Removes the Extension instance if no longer referenced.
 
         Since all extension classes are only referenced by the Certificate model with on_delete=models.PROTECT,
@@ -492,7 +493,7 @@ class GeneralNamesModel(OrphanDeletionMixin, CustomDeleteActionModel):
         if existing_entry:
             self.ip_addresses.add(existing_entry)
         else:
-            ip_address = GeneralNameIpAddress(ip_type=ip_type, value=entry.value)
+            ip_address = GeneralNameIpAddress(ip_type=ip_type, value=str(entry.value))
             ip_address.save()
             self.ip_addresses.add(ip_address)
         self.save()
@@ -559,24 +560,29 @@ class GeneralNamesModel(OrphanDeletionMixin, CustomDeleteActionModel):
         Returns:
             GeneralNamesModel: The instance of the saved general names.
         """
-        if isinstance(general_names, x509.Extension):
-            general_names = general_names.value
+        general_names_list: (list[x509.GeneralName] | x509.ExtensionType)
+        general_names_list = general_names.value if isinstance(general_names, x509.Extension) else general_names
 
-        for entry in general_names:
-            if isinstance(entry, x509.RFC822Name):
-                self._save_rfc822_name(entry=entry)
-            if isinstance(entry, x509.DNSName):
-                self._save_dns_name(entry=entry)
-            elif isinstance(entry, x509.IPAddress):
-                self._save_ip_address(entry=entry)
-            elif isinstance(entry, x509.DirectoryName):
-                self._save_directory_name(entry=entry)
-            elif isinstance(entry, x509.UniformResourceIdentifier):
-                self._save_uri(entry=entry)
-            elif isinstance(entry, x509.RegisteredID):
-                self._save_registered_id(entry=entry)
-            elif isinstance(entry, x509.OtherName):
-                self._save_other_name(entry=entry)
+        try:
+            # mypy thinks x509.ExtensionType is not iterable, but it has __iter__ for all relevant subclasses
+            for entry in general_names_list:  # type: ignore[union-attr]
+                if isinstance(entry, x509.RFC822Name):
+                    self._save_rfc822_name(entry=entry)
+                if isinstance(entry, x509.DNSName):
+                    self._save_dns_name(entry=entry)
+                elif isinstance(entry, x509.IPAddress):
+                    self._save_ip_address(entry=entry)
+                elif isinstance(entry, x509.DirectoryName):
+                    self._save_directory_name(entry=entry)
+                elif isinstance(entry, x509.UniformResourceIdentifier):
+                    self._save_uri(entry=entry)
+                elif isinstance(entry, x509.RegisteredID):
+                    self._save_registered_id(entry=entry)
+                elif isinstance(entry, x509.OtherName):
+                    self._save_other_name(entry=entry)
+        except TypeError as e: # non-iterable passed
+            msg = f'Expected iterable of GeneralName, got {type(general_names_list).__name__}.'
+            raise TypeError(msg) from e
 
         return self
 
@@ -1509,9 +1515,7 @@ class AuthorityInformationAccessExtension(CertificateExtension, models.Model):
             adm = AccessDescriptionModel()
             adm.access_method = access_desc.access_method.dotted_string
 
-            gn_model = None
-            if access_desc.access_location is not None:
-                gn_model = GeneralNameModel.from_x509_general_name(access_desc.access_location)
+            gn_model = GeneralNameModel.from_x509_general_name(access_desc.access_location)
 
             adm.access_location = gn_model
             adm.save()
@@ -1552,9 +1556,7 @@ class SubjectInformationAccessExtension(CertificateExtension, models.Model):
             adm = AccessDescriptionModel()
             adm.access_method = access_desc.access_method.dotted_string
 
-            gn_model = None
-            if access_desc.access_location is not None:
-                gn_model = GeneralNameModel.from_x509_general_name(access_desc.access_location)
+            gn_model = GeneralNameModel.from_x509_general_name(access_desc.access_location)
 
             adm.access_location = gn_model
             adm.save()
