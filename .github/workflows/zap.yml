@@ -23,12 +23,22 @@ jobs:
           # give the app time to start
           sleep 60
 
-      - name: OWASP ZAP Baseline Scan
+      - name: OWASP ZAP Baseline Scan (HTTP)
         uses: zaproxy/action-baseline@v0.15.0
         continue-on-error: true
-        id: zap-scan
+        id: zap-scan-http
         with:
           target: "http://localhost:80"
+          fail_action: false
+          cmd_options: "-a"
+          allow_issue_writing: false
+
+      - name: OWASP ZAP Baseline Scan (HTTPS)
+        uses: zaproxy/action-baseline@v0.15.0
+        continue-on-error: true
+        id: zap-scan-https
+        with:
+          target: "https://localhost:443"
           fail_action: false
           cmd_options: "-a"
           allow_issue_writing: false 
