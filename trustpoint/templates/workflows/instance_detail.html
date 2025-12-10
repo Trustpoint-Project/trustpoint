@@ -9,19 +9,33 @@
   </div>
 
   <div class="card-body">
+
     {# --- Summary ---------------------------------------------------------------- #}
     <h5 class="mb-3">{% trans 'Summary' %}</h5>
     <dl class="row">
+
+      {# Enrollment Request (may be absent) #}
       <dt class="col-sm-3">{% trans 'Enrollment request' %}:</dt>
       <dd class="col-sm-9">
-        <a href="{% url 'workflows:request_detail' inst.enrollment_request.id %}">
-          {{ inst.enrollment_request.id }}
-        </a>
+        {% if inst.enrollment_request %}
+          <a href="{% url 'workflows:request_detail' inst.enrollment_request.id %}">
+            {{ inst.enrollment_request.id }}
+          </a>
+        {% else %}
+          <span class="text-muted">{% trans 'No enrollment request' %}</span>
+        {% endif %}
       </dd>
 
+      {# Enrollment Request State (may be absent) #}
       <dt class="col-sm-3">{% trans 'Enrollment request state' %}:</dt>
       <dd class="col-sm-9">
-        <span class="badge {{ inst.enrollment_request.badge_class }}">{{ inst.enrollment_request.aggregated_state }}</span>
+        {% if inst.enrollment_request %}
+          <span class="badge {{ inst.enrollment_request.badge_class }}">
+            {{ inst.enrollment_request.aggregated_state }}
+          </span>
+        {% else %}
+          <span class="badge bg-secondary">{% trans "N/A" %}</span>
+        {% endif %}
       </dd>
 
       <hr>
@@ -55,6 +69,7 @@
 
       <dt class="col-sm-3">{% trans 'Last updated' %}</dt>
       <dd class="col-sm-9">{{ inst.updated_at|date:"Y/m/d, H:i:s" }}</dd>
+
     </dl>
 
     <hr>
@@ -62,6 +77,7 @@
     {# --- Request info ----------------------------------------------------------- #}
     <h5 class="mb-3">{% trans 'Request' %}</h5>
     <ul>
+
       <li>
         <strong>{% trans 'Device' %}:</strong>
         <a href="{% url clm_url pk=payload.device_id %}">
@@ -89,26 +105,40 @@
 
       <li>
         <strong>{% trans 'Protocol' %}:</strong>
-        {{ payload.protocol|default:inst.enrollment_request.protocol }}
+        {% if payload.protocol %}
+          {{ payload.protocol }}
+        {% elif inst.enrollment_request %}
+          {{ inst.enrollment_request.protocol }}
+        {% else %}
+          <span class="text-muted">&mdash;</span>
+        {% endif %}
       </li>
 
       <li>
         <strong>{% trans 'Operation' %}:</strong>
-        {{ payload.operation|default:inst.enrollment_request.operation }}
+        {% if payload.operation %}
+          {{ payload.operation }}
+        {% elif inst.enrollment_request %}
+          {{ inst.enrollment_request.operation }}
+        {% else %}
+          <span class="text-muted">&mdash;</span>
+        {% endif %}
       </li>
+
     </ul>
 
     <hr>
 
     {# --- Steps / history -------------------------------------------------------- #}
     <h5 class="mb-3">{% trans 'Workflow steps' %}</h5>
+
     <table class="table table-sm">
       <thead>
         <tr>
-          <th class="text-nowrap">{% trans 'Step' %}</th>
-          <th class="text-nowrap">{% trans 'Status' %}</th>
-          <th class="text-nowrap">{% trans 'Type' %}</th>
-          <th class="text-nowrap">{% trans 'Details' %}</th>
+          <th>{% trans 'Step' %}</th>
+          <th>{% trans 'Status' %}</th>
+          <th>{% trans 'Type' %}</th>
+          <th>{% trans 'Details' %}</th>
         </tr>
       </thead>
       <tbody>
@@ -122,7 +152,9 @@
                 <ul class="mb-0">
                   {% for key, value in step.details.items %}
                     {% if step.error and key == 'error' %}
-                      <li><strong>{% trans 'Error' %}:</strong> <span class="text-danger">{{ step.error }}</span></li>
+                      <li><strong>{% trans 'Error' %}:</strong>
+                        <span class="text-danger">{{ step.error }}</span>
+                      </li>
                     {% else %}
                       <li><strong>{{ key }}:</strong> {{ value }}</li>
                     {% endif %}
@@ -153,15 +185,12 @@
       {% else %}
         <ul>
           <li><strong>{% trans 'Subject' %}:</strong> {{ csr_info.subject }}</li>
-
           {% if csr_info.common_name %}
             <li><strong>{% trans 'Common Name' %}:</strong> {{ csr_info.common_name }}</li>
           {% endif %}
-
           {% if csr_info.sans %}
             <li><strong>{% trans 'SANs' %}:</strong> {{ csr_info.sans|join:", " }}</li>
           {% endif %}
-
           <li><strong>{% trans 'Key Algorithm' %}:</strong> {{ csr_info.key_algorithm }}</li>
           <li><strong>{% trans 'Signature Algorithm' %}:</strong> {{ csr_info.signature_algorithm }}</li>
         </ul>
@@ -170,10 +199,10 @@
       <p class="text-muted">{% trans 'No CSR data available.' %}</p>
     {% endif %}
 
-    {% if csr_info %}
+    {% if csr_pem %}
       <hr>
       <h5 class="mb-3">{% trans 'CSR PEM' %}</h5>
-      {{ csr_pem }}
+      {{ csr_pem|linebreaksbr }}
     {% endif %}
 
     <hr>
@@ -193,12 +222,7 @@
       </form>
     {% endif %}
 
-    <button
-      type="button"
-      value="Back"
-      class="btn btn-secondary btn-half mt-2"
-      onClick="history.back()"
-    >
+    <button type="button" class="btn btn-secondary btn-half mt-2" onClick="history.back()">
       {% trans 'Back' %}
     </button>
 

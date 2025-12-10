@@ -8,3 +8,7 @@ class DevicesConfig(AppConfig):
 
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'devices'
+
+    def ready(self) -> None:
+        """Devices app initialization."""
+        import devices.signals  # noqa: F401, PLC0415
