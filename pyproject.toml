@@ -116,6 +116,33 @@ python_files = 'test_*.py'
 md_report = true
 md_report_output = 'md-report.md'
 
+[tool.coverage.run]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/features/*",
+    "*/management/commands/*",
+    "manage.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "def __str__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "from typing import TYPE_CHECKING",
+    "@abstractmethod",
+    "@abstract",
+    "@overload",
+    "class .*\\(Protocol\\):",
+    "if settings\\.DEBUG:",
+    "pass",
+]
+
 [tool.behave.userdata]
 'behave.formatter.html-pretty.title_string' = 'Trustpoint Test Report'
 'behave.formatter.html-pretty.show_summary' = 'true'
