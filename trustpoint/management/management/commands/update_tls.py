@@ -1,4 +1,4 @@
-"""Command to update the Apache TLS configuration to the current active TLS server credential."""
+"""Command to update the Nginx TLS configuration to the current active TLS server credential."""
 
 from __future__ import annotations
 
@@ -10,15 +10,15 @@ from cryptography.hazmat.primitives import hashes
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
 from django.utils.translation import gettext as _
+from management.nginx_paths import (
+    NGINX_CERT_CHAIN_PATH,
+    NGINX_CERT_PATH,
+    NGINX_KEY_PATH,
+)
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.state_dir_paths import SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL
-from trustpoint.logger import LoggerMixin
 
-from management.apache_paths import (
-    APACHE_CERT_CHAIN_PATH,
-    APACHE_CERT_PATH,
-    APACHE_KEY_PATH,
-)
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any
@@ -26,15 +26,15 @@ if TYPE_CHECKING:
 class Command(LoggerMixin, BaseCommand):
     """A Django management command to restore the Trustpoint container.
 
-    This restores the Apache TLS certificate.
+    This restores the Nginx TLS certificate.
     """
 
-    help = 'Updates Apache TLS config to the current active TLS server credential.'
+    help = 'Updates Nginx TLS config to the current active TLS server credential.'
 
     def handle(self, **options: Any) -> None:
         """Entrypoint for the command."""
         try:
-            self.logger.debug('Extracting TLS cert and preparing for update of Apache config...')
+            self.logger.debug('Extracting TLS cert and preparing for update of Nginx config...')
 
             active_tls = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
         except ObjectDoesNotExist as e:
@@ -48,15 +48,15 @@ class Command(LoggerMixin, BaseCommand):
         certificate_pem = tls_server_credential_model.get_certificate_serializer().as_pem().decode()
         trust_store_pem = tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
 
-        APACHE_KEY_PATH.write_text(private_key_pem)
-        APACHE_CERT_PATH.write_text(certificate_pem)
+        NGINX_KEY_PATH.write_text(private_key_pem)
+        NGINX_CERT_PATH.write_text(certificate_pem)
 
         # Only write chain file if there's actually a chain (not empty)
         if trust_store_pem.strip():
-            APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
-        elif APACHE_CERT_CHAIN_PATH.exists():
+            NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
+        elif NGINX_CERT_CHAIN_PATH.exists():
             # Remove chain file if it exists but chain is empty
-            APACHE_CERT_CHAIN_PATH.unlink()
+            NGINX_CERT_CHAIN_PATH.unlink()
 
         self.logger.debug('Finished with preparation.')
 
@@ -80,11 +80,11 @@ class Command(LoggerMixin, BaseCommand):
             self.logger.error('TLS update script failed with return code %d', result.returncode)
             self.logger.error('Script stdout: %s', result.stdout)
             self.logger.error('Script stderr: %s', result.stderr)
-            # Do not raise exception to allow TLS activation to succeed even if Apache restart fails
+            # Do not raise exception to allow TLS activation to succeed even if Nginx restart fails
         else:
             self.logger.debug('TLS update script executed successfully')
 
-        self.stdout.write('Apache TLS credential update successful.')
+        self.stdout.write('Nginx TLS credential update successful.')
         sha256_fingerprint = active_tls.credential.get_certificate().fingerprint(hashes.SHA256())
         formatted = ':'.join(f'{b:02X}' for b in sha256_fingerprint)
         self.stdout.write(f'TLS SHA256 fingerprint: {(formatted)}')

@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1 \
     PKCS11_PROXY_SOCKET=tcp://softhsm:5657
 
 # Make port 80 and 443 available to the world outside this container.
-# 80 will be redirected to 443 using TLS through the apache.
+# 80 will be redirected to 443 using TLS through NGINX.
 EXPOSE 80 443
 
 # Update apt repository and install required dependencies from apt
@@ -19,11 +19,9 @@ RUN apt-get update && \
         opensc \
         sudo \
         apt-utils \
-        apache2 \
-        apache2-utils \
+        nginx \
         gettext \
         cron \
-        apache2-dev \
         locales \
         postgresql-client \
         git \
@@ -70,12 +68,10 @@ RUN if [ "${BRANCH}" != "" ]; then \
 
 USER www-data
 RUN uv sync --python-preference only-system
-RUN uv pip install mod_wsgi
+RUN uv pip install gunicorn[gevent]
 USER root
 
-RUN uv run mod_wsgi-express install-module \
-    > /etc/apache2/mods-available/wsgi.load && \
-    a2enmod wsgi
+
 
 # Sets DEBUG = False and DOCKER_CONTAINER = True in the Django settings
 RUN sed -i '/DEBUG = True/s/True/False/' trustpoint/trustpoint/settings.py && \
@@ -106,11 +102,10 @@ RUN mkdir -p /etc/trustpoint/secrets && \
     chown -R www-data:www-data /etc/trustpoint/secrets && \
     chmod -R 700 /etc/trustpoint/secrets
 
-# Remove any enabled Apache sites and add new Apache configuration
-RUN rm -f /etc/apache2/sites-enabled/* && \
-    cp ./docker/trustpoint/apache/trustpoint-http-init.conf /etc/apache2/sites-available/trustpoint-http-init.conf && \
-    a2ensite trustpoint-http-init.conf && \
-    echo 'ServerName trustpoint' >> /etc/apache2/apache2.conf
+# NGINX CONFIGURATION
+RUN rm -f /etc/nginx/sites-enabled/*
+COPY ./docker/trustpoint/nginx/trustpoint-nginx-https.conf /etc/nginx/sites-available/trustpoint
+RUN chmod +x /etc/trustpoint/wizard/transition/*.sh
 
 # Make entrypoint script executable
 RUN chmod +x ./docker/trustpoint/entrypoint.sh

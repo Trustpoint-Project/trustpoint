@@ -38,13 +38,13 @@ fi
 
 log "Transitioned from WIZARD_AUTO_RESTORE_PASSWORD to WIZARD_COMPLETED state. Automatic restore operation completed."
 
-log "Configuring Apache and TLS after successful auto restore..."
+log "Configuring NGINX and TLS after successful auto restore..."
 
 TRANSITION_DIR="/etc/trustpoint/wizard/transition"
 
-# Configure Apache
-if ! "$TRANSITION_DIR/configure_apache.sh"; then
-    log "ERROR: Failed to configure Apache"
+# Configure NGINX
+if ! "$TRANSITION_DIR/configure_nginx.sh"; then
+    log "ERROR: Failed to configure NGINX"
     exit 5
 fi
 
@@ -54,5 +54,5 @@ if ! "$TRANSITION_DIR/update_tls.sh"; then
     exit 6
 fi
 
-log "Apache and TLS configuration completed successfully"
+log "NGINX and TLS configuration completed successfully"
 exit 0

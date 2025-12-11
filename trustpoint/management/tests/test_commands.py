@@ -239,9 +239,9 @@ class TlsCredCommandTest(TestCase):
     @patch('management.management.commands.tls_cred.TlsServerCredentialGenerator')
     @patch('management.management.commands.tls_cred.CredentialModel')
     @patch('management.management.commands.tls_cred.ActiveTrustpointTlsServerCredentialModel')
-    @patch('management.management.commands.tls_cred.APACHE_KEY_PATH')
-    @patch('management.management.commands.tls_cred.APACHE_CERT_PATH')
-    @patch('management.management.commands.tls_cred.APACHE_CERT_CHAIN_PATH')
+    @patch('management.management.commands.tls_cred.NGINX_KEY_PATH')
+    @patch('management.management.commands.tls_cred.NGINX_CERT_PATH')
+    @patch('management.management.commands.tls_cred.NGINX_CERT_CHAIN_PATH')
     def test_tls_cred_write_out(
         self,
         mock_chain_path: MagicMock,
@@ -465,9 +465,9 @@ class UpdateTlsCommandTest(TestCase):
 
     @patch('management.management.commands.update_tls.subprocess.run')
     @patch('management.management.commands.update_tls.Path')
-    @patch('management.management.commands.update_tls.APACHE_KEY_PATH')
-    @patch('management.management.commands.update_tls.APACHE_CERT_PATH')
-    @patch('management.management.commands.update_tls.APACHE_CERT_CHAIN_PATH')
+    @patch('management.management.commands.update_tls.NGINX_KEY_PATH')
+    @patch('management.management.commands.update_tls.NGINX_CERT_PATH')
+    @patch('management.management.commands.update_tls.NGINX_CERT_CHAIN_PATH')
     @patch('management.management.commands.update_tls.ActiveTrustpointTlsServerCredentialModel')
     def test_update_tls_success(
         self,
@@ -521,9 +521,9 @@ class UpdateTlsCommandTest(TestCase):
 
     @patch('management.management.commands.update_tls.subprocess.run')
     @patch('management.management.commands.update_tls.Path')
-    @patch('management.management.commands.update_tls.APACHE_KEY_PATH')
-    @patch('management.management.commands.update_tls.APACHE_CERT_PATH')
-    @patch('management.management.commands.update_tls.APACHE_CERT_CHAIN_PATH')
+    @patch('management.management.commands.update_tls.NGINX_KEY_PATH')
+    @patch('management.management.commands.update_tls.NGINX_CERT_PATH')
+    @patch('management.management.commands.update_tls.NGINX_CERT_CHAIN_PATH')
     @patch('management.management.commands.update_tls.ActiveTrustpointTlsServerCredentialModel')
     def test_update_tls_script_failure(
         self,

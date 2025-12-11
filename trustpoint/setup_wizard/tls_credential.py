@@ -42,7 +42,7 @@ class TlsServerCredentialGenerator:
         return PrivateKeySerializer(ec.generate_private_key(curve=ec.SECP256R1()))
 
     def generate_tls_server_credential(self) -> CredentialSerializer:
-        """Generates a self-signed TLS credential for use by the Trustpoint Apache server."""
+        """Generates a self-signed TLS credential for use by the Trustpoint NGINX server."""
         one_day = datetime.timedelta(1, 0, 0)
         private_key = ec.generate_private_key(curve=ec.SECP256R1())
         public_key = private_key.public_key()

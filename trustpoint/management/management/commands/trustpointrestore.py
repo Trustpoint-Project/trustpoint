@@ -1,4 +1,4 @@
-"""Management command to restore the Trustpoint container (Apache TLS + wizard)."""
+"""Management command to restore the Trustpoint container (Nginx TLS + wizard)."""
 
 from __future__ import annotations
 
@@ -13,12 +13,11 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.db.utils import OperationalError, ProgrammingError
 from django.utils.translation import gettext as _
+from management.models import AppVersion
+from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
 from packaging.version import InvalidVersion, Version
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.state_dir_paths import SCRIPT_WIZARD_RESTORE
-
-from management.apache_paths import APACHE_CERT_CHAIN_PATH, APACHE_CERT_PATH, APACHE_KEY_PATH
-from management.models import AppVersion
 
 if TYPE_CHECKING:
     from typing import Any
@@ -27,7 +26,7 @@ if TYPE_CHECKING:
 class Command(BaseCommand):
     """A Django management command to restore the Trustpoint container.
 
-    This restores the Apache TLS certificate and the wizard state.
+    This restores the NGINX TLS certificate and the wizard state.
     It is unrelated to the restore of a database backup.
     """
 
@@ -98,7 +97,7 @@ class Command(BaseCommand):
         return out
 
     def restore_trustpoint(self) -> None:
-        """Restore trustpoint (Apache TLS and wizard state) if DB is there."""
+        """Restore trustpoint (NGINX TLS and wizard state) if DB is there."""
         current = django_settings.APP_VERSION
         try:
             self.stdout.write('Starting with restoration')
@@ -117,7 +116,7 @@ class Command(BaseCommand):
                 return
 
             self.stdout.write('Matching version in database found.')
-            self.stdout.write('Extrating tls cert and preparing for restoration of apache config...')
+            self.stdout.write('Extrating tls cert and preparing for restoration of NGINX config...')
 
             active_tls = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
             tls_server_credential_model = active_tls.credential
@@ -131,15 +130,15 @@ class Command(BaseCommand):
             certificate_pem = tls_server_credential_model.get_certificate_serializer().as_pem().decode()
             trust_store_pem = tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
 
-            APACHE_KEY_PATH.write_text(private_key_pem)
-            APACHE_CERT_PATH.write_text(certificate_pem)
+            NGINX_KEY_PATH.write_text(private_key_pem)
+            NGINX_CERT_PATH.write_text(certificate_pem)
 
             # Only write chain file if there's actually a chain (not empty)
             if trust_store_pem.strip():
-                APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
-            elif APACHE_CERT_CHAIN_PATH.exists():
+                NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
+            elif NGINX_CERT_CHAIN_PATH.exists():
                 # Remove chain file if it exists but chain is empty
-                APACHE_CERT_CHAIN_PATH.unlink()
+                NGINX_CERT_CHAIN_PATH.unlink()
 
             self.stdout.write('Finished with preparation.')
 
