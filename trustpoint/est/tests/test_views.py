@@ -301,9 +301,9 @@ def test_est_simple_enrollment_default_view_csrf_exempt():
     assert hasattr(EstSimpleEnrollmentDefaultView, 'dispatch')
 
 
+@patch('est.views.DomainModel.objects.get')
 @patch.object(EstSimpleEnrollmentMixin, 'process_enrollment')
-@patch.object(DomainModel.objects, 'get')
-def test_est_simple_enrollment_default_view_post_success(mock_get_domain, mock_process, request_factory):
+def test_est_simple_enrollment_default_view_post_success(mock_process, mock_get_domain, request_factory):
     """Test POST request to EstSimpleEnrollmentDefaultView with existing default domain."""
     mock_domain = Mock(spec=DomainModel)
     mock_domain.unique_name = 'arburg'
@@ -329,7 +329,7 @@ def test_est_simple_enrollment_default_view_post_success(mock_get_domain, mock_p
     assert call_args[0][2] == 'tls_client'
 
 
-@patch.object(DomainModel.objects, 'get')
+@patch('est.views.DomainModel.objects.get')
 def test_est_simple_enrollment_default_view_post_domain_not_exist(mock_get_domain, request_factory):
     """Test POST request to EstSimpleEnrollmentDefaultView when default domain doesn't exist."""
     mock_get_domain.side_effect = DomainModel.DoesNotExist
