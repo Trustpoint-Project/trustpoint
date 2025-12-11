@@ -84,6 +84,20 @@
 
     <div class="card-footer d-flex justify-content-between tp-sticky-footer">
       <div class="tp-card-btn-footer m-1">
+        <button type="submit" formaction="{% url 'workflows:requests_bulk_signal' %}"
+                formmethod="post" name="action" value="approve"
+                class="btn btn-success me-2">
+          {% csrf_token %}
+          {% trans 'Approve selected' %}
+        </button>
+
+        <button type="submit" formaction="{% url 'workflows:requests_bulk_signal' %}"
+                formmethod="post" name="action" value="reject"
+                class="btn btn-danger me-2">
+          {% csrf_token %}
+          {% trans 'Reject selected' %}
+        </button>
+
         <button type="submit" class="btn btn-outline-danger">
           {% trans 'Abort selected' %}
         </button>

@@ -8,7 +8,7 @@ from django.urls import path
 
 from workflows.views import (
     BulkAbortEnrollmentRequestsView,
-    BulkSignalInstancesView,
+    BulkSignalEnrollmentRequestsView,
     CAListView,
     ContextCatalogView,
     DefinitionDetailView,
@@ -18,7 +18,7 @@ from workflows.views import (
     EnrollmentRequestListView,
     EventsListView,
     MailTemplateListView,
-    PendingApprovalsView,
+    SignalEnrollmentRequestView,
     SignalInstanceView,
     WizardPrefillView,
     WorkflowDefinitionDeleteView,
@@ -60,11 +60,11 @@ urlpatterns = [
     ),
 
     # approval console
-    path('waiting-approvals/', PendingApprovalsView.as_view(), name='pending_table'),
     path('wf-detail/<uuid:instance_id>/', WorkflowInstanceDetailView.as_view(), name='instance_detail'),
-    path('pending/bulk-signal/', BulkSignalInstancesView.as_view(), name='pending_bulk_signal'),
     path('instances/<uuid:instance_id>/signal/', SignalInstanceView.as_view(), name='signal'),
     path('requests/', EnrollmentRequestListView.as_view(), name='request_table'),
     path('requests/<uuid:pk>/', EnrollmentRequestDetailView.as_view(), name='request_detail'),
     path('requests/bulk-abort/', BulkAbortEnrollmentRequestsView.as_view(), name='requests_bulk_abort'),
+    path('request/<uuid:er_id>/signal/', SignalEnrollmentRequestView.as_view(),name='request_signal',),
+    path('requests/bulk/signal/', BulkSignalEnrollmentRequestsView.as_view(),name='requests_bulk_signal',),
 ]
