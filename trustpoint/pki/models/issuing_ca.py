@@ -3,21 +3,22 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, get_args
 
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import serialization
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from pki.models.certificate import CertificateModel, RevokedCertificateModel
-from pki.models.credential import CredentialModel
+from trustpoint.logger import LoggerMixin
 from trustpoint_core import oid
+from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from util.db import CustomDeleteActionModel
 from util.field import UniqueNameValidator
 
-from trustpoint.logger import LoggerMixin
+from pki.models.certificate import CertificateModel, RevokedCertificateModel
+from pki.models.credential import CredentialModel
 
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet
@@ -47,7 +48,7 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
     unique_name = models.CharField(
         verbose_name=_('Issuing CA Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
     )
-    credential: CredentialModel = models.OneToOneField(
+    credential: models.OneToOneField[CredentialModel] = models.OneToOneField(
         CredentialModel,
         related_name='issuing_cas',
         on_delete=models.PROTECT,
@@ -148,59 +149,55 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
         issuing_ca.save()
         return issuing_ca
 
-    def _raise_value_error(self, message: str) -> None:
-        """Helper method to raise ValueError.
+    def _issue_crl(self) -> None:
+        """Issues a CRL with revoked certificates issued by this CA."""
+        crl_issued_at = timezone.now()
+        self.last_crl_issued_at = crl_issued_at
 
-        Args:
-            message: The error message to raise.
-        """
-        raise ValueError(message)
+        ca_subject = self.credential.certificate.get_certificate_serializer().as_crypto().subject
+
+        crl_builder = x509.CertificateRevocationListBuilder(
+            issuer_name=ca_subject,
+            last_update=crl_issued_at,
+            next_update=crl_issued_at + datetime.timedelta(hours=24),  # (minutes=self.next_crl_generation_time)
+        )
+
+        crl_certificates = self.revoked_certificates.all()
+
+        for cert in crl_certificates:
+            revoked_cert = (
+                x509.RevokedCertificateBuilder()
+                .serial_number(int(cert.certificate.serial_number, 16))
+                .revocation_date(cert.revoked_at)
+                .add_extension(x509.CRLReason(x509.ReasonFlags(cert.revocation_reason)), critical=False)
+                .build()
+            )
+            crl_builder = crl_builder.add_revoked_certificate(revoked_cert)
+
+        hash_algorithm = self.credential.hash_algorithm
+
+        if hash_algorithm is not None and not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
+            err_msg = f'CRL: Hash algo must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
+            raise TypeError(err_msg)
+
+        priv_k = self.credential.get_private_key_serializer().as_crypto()
+
+        crl = crl_builder.sign(private_key=priv_k, algorithm=hash_algorithm)
+
+        self.crl_pem = crl.public_bytes(encoding=serialization.Encoding.PEM).decode()
+        self.save()
+
+        self.logger.info('CRL generation for CA %s finished.', self.unique_name)
 
     def issue_crl(self) -> bool:
-        """Issues a CRL with revoked certificates issued by this CA."""
+        """Issues a CRL with revoked certificates issued by this CA.
+
+        Returns:
+            bool: True if the CRL was successfully issued, False otherwise.
+        """
         self.logger.debug('Generating CRL for CA %s', self.unique_name)
-
         try:
-            crl_issued_at = timezone.now()
-            self.last_crl_issued_at = crl_issued_at
-
-            ca_subject = self.credential.certificate.get_certificate_serializer().as_crypto().subject
-
-            crl_builder = x509.CertificateRevocationListBuilder(
-                issuer_name=ca_subject,
-                last_update=crl_issued_at,
-                next_update=crl_issued_at + datetime.timedelta(hours=24),  # (minutes=self.next_crl_generation_time)
-            )
-
-            crl_certificates = self.revoked_certificates.all()
-
-            for cert in crl_certificates:
-                revoked_cert = (
-                    x509.RevokedCertificateBuilder()
-                    .serial_number(int(cert.certificate.serial_number, 16))
-                    .revocation_date(cert.revoked_at)
-                    .add_extension(x509.CRLReason(x509.ReasonFlags(cert.revocation_reason)), critical=False)
-                    .build()
-                )
-                crl_builder = crl_builder.add_revoked_certificate(revoked_cert)
-
-            hash_algorithm = self.credential.hash_algorithm
-
-            if (hash_algorithm is not None
-                and not isinstance(hash_algorithm, (
-                    hashes.SHA224, hashes.SHA256, hashes.SHA384, hashes.SHA512,
-                    hashes.SHA3_224, hashes.SHA3_256, hashes.SHA3_384, hashes.SHA3_512
-                ))):
-                err_msg = 'Cannot build the domain credential, unknown hash algorithm found.'
-                self._raise_value_error(err_msg)
-
-            priv_k = self.credential.get_private_key_serializer().as_crypto()
-
-            crl = crl_builder.sign(private_key=priv_k, algorithm=hash_algorithm)
-
-            self.crl_pem = crl.public_bytes(encoding=serialization.Encoding.PEM).decode()
-            self.save()
-
+            self._issue_crl()
             self.logger.info('CRL generation for CA %s finished.', self.unique_name)
         except Exception:
             self.logger.exception('CRL generation for CA %s failed', self.unique_name)

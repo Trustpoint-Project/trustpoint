@@ -11,7 +11,7 @@ from rest_framework import serializers
 from pki.models.certificate import CertificateModel
 
 
-class CertificateSerializer(serializers.ModelSerializer):
+class CertificateSerializer(serializers.ModelSerializer[CertificateModel]):
     """Serializer for Certificate instances.
 
     Handles conversion between Certificate model objects and JSON representations.

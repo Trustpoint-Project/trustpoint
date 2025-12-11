@@ -60,7 +60,7 @@ class AttributeTypeAndValue(models.Model):
         return f'{name_oid}={self.value}'
 
     @property
-    def abbreviation(self) -> str:
+    def abbreviation(self) -> str | None:
         """Returns the abbreviation of the attribute's OID."""
         return NameOid(self.oid).abbreviation
 
@@ -227,11 +227,12 @@ class CertificateExtension(OrphanDeletionMixin):
         exc_msg = f'Extension OID not set for {self.__class__.__name__}.'
         raise AttributeError(exc_msg)
 
-    extension_oid.fget.short_description = EXTENSION_STR
+    # TODO(Air): do we even need this line? Is it for some Django admin thing? # noqa: FIX002
+    extension_oid.fget.short_description = EXTENSION_STR  # type: ignore[attr-defined]
 
     @classmethod
     @abc.abstractmethod
-    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> RT | None:
+    def save_from_crypto_extensions(cls, extension: x509.Extension[T]) -> CertificateExtension | None:
         """Stores the extension in the database.
 
         Meant to be called within an atomic transaction while storing a certificate.
@@ -244,7 +245,7 @@ class CertificateExtension(OrphanDeletionMixin):
         """
 
     @classmethod
-    def delete_if_orphaned(cls, instance: RT | None) -> None:
+    def delete_if_orphaned(cls, instance: OrphanDeletionMixin | None) -> None:
         """Removes the Extension instance if no longer referenced.
 
         Since all extension classes are only referenced by the Certificate model with on_delete=models.PROTECT,
@@ -492,7 +493,7 @@ class GeneralNamesModel(OrphanDeletionMixin, CustomDeleteActionModel):
         if existing_entry:
             self.ip_addresses.add(existing_entry)
         else:
-            ip_address = GeneralNameIpAddress(ip_type=ip_type, value=entry.value)
+            ip_address = GeneralNameIpAddress(ip_type=ip_type, value=str(entry.value))
             ip_address.save()
             self.ip_addresses.add(ip_address)
         self.save()
@@ -559,24 +560,29 @@ class GeneralNamesModel(OrphanDeletionMixin, CustomDeleteActionModel):
         Returns:
             GeneralNamesModel: The instance of the saved general names.
         """
-        if isinstance(general_names, x509.Extension):
-            general_names = general_names.value
+        general_names_list: (list[x509.GeneralName] | x509.ExtensionType)
+        general_names_list = general_names.value if isinstance(general_names, x509.Extension) else general_names
 
-        for entry in general_names:
-            if isinstance(entry, x509.RFC822Name):
-                self._save_rfc822_name(entry=entry)
-            if isinstance(entry, x509.DNSName):
-                self._save_dns_name(entry=entry)
-            elif isinstance(entry, x509.IPAddress):
-                self._save_ip_address(entry=entry)
-            elif isinstance(entry, x509.DirectoryName):
-                self._save_directory_name(entry=entry)
-            elif isinstance(entry, x509.UniformResourceIdentifier):
-                self._save_uri(entry=entry)
-            elif isinstance(entry, x509.RegisteredID):
-                self._save_registered_id(entry=entry)
-            elif isinstance(entry, x509.OtherName):
-                self._save_other_name(entry=entry)
+        try:
+            # mypy thinks x509.ExtensionType is not iterable, but it has __iter__ for all relevant subclasses
+            for entry in general_names_list:  # type: ignore[union-attr]
+                if isinstance(entry, x509.RFC822Name):
+                    self._save_rfc822_name(entry=entry)
+                if isinstance(entry, x509.DNSName):
+                    self._save_dns_name(entry=entry)
+                elif isinstance(entry, x509.IPAddress):
+                    self._save_ip_address(entry=entry)
+                elif isinstance(entry, x509.DirectoryName):
+                    self._save_directory_name(entry=entry)
+                elif isinstance(entry, x509.UniformResourceIdentifier):
+                    self._save_uri(entry=entry)
+                elif isinstance(entry, x509.RegisteredID):
+                    self._save_registered_id(entry=entry)
+                elif isinstance(entry, x509.OtherName):
+                    self._save_other_name(entry=entry)
+        except TypeError as e: # non-iterable passed
+            msg = f'Expected iterable of GeneralName, got {type(general_names_list).__name__}.'
+            raise TypeError(msg) from e
 
         return self
 
@@ -733,7 +739,7 @@ class AuthorityKeyIdentifierExtension(CertificateExtension, CustomDeleteActionMo
             aki: x509.AuthorityKeyIdentifier = extension.value
             key_identifier = aki.key_identifier.hex().upper() if aki.key_identifier else None
             authority_cert_serial_number = (
-                hex(aki.authority_cert_serial_number)[2:].upper() if aki.authority_cert_serial_number else None
+                f'{aki.authority_cert_serial_number:x}'.upper() if aki.authority_cert_serial_number else None
             )
             gn = None
 
@@ -810,7 +816,7 @@ class NoticeReference(OrphanDeletionMixin, models.Model):
         max_length=1024, editable=False, verbose_name='Notice Numbers', null=True, blank=True
     )
 
-    objects = models.Manager['NoticeReference']
+    objects: models.Manager[NoticeReference]
 
     def __str__(self) -> str:
         """Returns a string representation of the NoticeReference."""
@@ -844,7 +850,7 @@ class CPSUriModel(OrphanDeletionMixin, models.Model):
 
     cps_uri = models.CharField(max_length=2048, editable=False, verbose_name='CPS URI')
 
-    objects = models.Manager['CPSUriModel']
+    objects: models.Manager[CPSUriModel]
 
     def __str__(self) -> str:
         """Returns a string representation of the CPSUriModel."""
@@ -906,7 +912,7 @@ class PolicyInformation(models.Model):
     policy_identifier = models.CharField(max_length=256, editable=False, verbose_name='Policy Identifier')
     policy_qualifiers = models.ManyToManyField(PolicyQualifierInfo, blank=True, related_name='policies', editable=False)
 
-    objects = models.Manager['PolicyInformation']
+    objects: models.Manager[PolicyInformation]
 
     def __str__(self) -> str:
         """Returns a string representation of the PolicyInformation."""
@@ -924,7 +930,7 @@ class CertificatePoliciesExtension(CertificateExtension, models.Model):
         PolicyInformation, related_name='certificate_policies', editable=False
     )
 
-    objects = models.Manager['CertificatePoliciesExtension']
+    objects: models.Manager[CertificatePoliciesExtension]
 
     def __str__(self) -> str:
         """Returns a string representation of the CertificatePolicies extension."""
@@ -1007,7 +1013,7 @@ class KeyPurposeIdModel(models.Model):
 
     oid = models.CharField(max_length=256, editable=False, verbose_name='Key Purpose OID', unique=True)
 
-    objects = models.Manager['KeyPurposeIdModel']
+    objects: models.Manager[KeyPurposeIdModel]
 
     def __str__(self) -> str:
         """Returns a string representation of the KeyPurposeIdModel."""
@@ -1023,7 +1029,7 @@ class ExtendedKeyUsageExtension(CertificateExtension, models.Model):
     critical = models.BooleanField(verbose_name='Critical', editable=False)
     key_purpose_ids = models.ManyToManyField(KeyPurposeIdModel, related_name='extended_key_usages', editable=False)
 
-    objects = models.Manager['ExtendedKeyUsageExtension']
+    objects: models.Manager[ExtendedKeyUsageExtension]
 
     def __str__(self) -> str:
         """Returns a string representation of the ExtendedKeyUsage extension."""
@@ -1214,7 +1220,7 @@ class NameConstraintsExtension(CertificateExtension, models.Model):
     permitted_subtrees = models.ManyToManyField(GeneralSubtree, related_name='permitted_subtrees_set', editable=False)
     excluded_subtrees = models.ManyToManyField(GeneralSubtree, related_name='excluded_subtrees_set', editable=False)
 
-    objects = models.Manager['NameConstraintsExtension']
+    objects: models.Manager[NameConstraintsExtension]
 
     class Meta(TypedModelMeta):
         """Meta class configuration."""
@@ -1435,7 +1441,7 @@ class CrlDistributionPointsExtension(CertificateExtension, models.Model):
     critical = models.BooleanField(verbose_name=_('Critical'), editable=False)
     distribution_points = models.ManyToManyField(DistributionPointModel, verbose_name='Distribution Points', blank=True)
 
-    objects = models.Manager['CrlDistributionPointsExtension']
+    objects: models.Manager[CrlDistributionPointsExtension]
 
     def __str__(self) -> str:
         """Returns a string representation of the extension."""
@@ -1488,7 +1494,7 @@ class AuthorityInformationAccessExtension(CertificateExtension, models.Model):
         AccessDescriptionModel, related_name='authority_info_access_syntax', blank=True
     )
 
-    objects = models.Manager['AuthorityInformationAccessExtension']
+    objects: models.Manager[AuthorityInformationAccessExtension]
 
     def __str__(self) -> str:
         return f'AuthorityInformationAccessExtension(critical={self.critical}, #authority_info_access_syntax={self.authority_info_access_syntax.count()})'  # noqa: E501
@@ -1509,9 +1515,7 @@ class AuthorityInformationAccessExtension(CertificateExtension, models.Model):
             adm = AccessDescriptionModel()
             adm.access_method = access_desc.access_method.dotted_string
 
-            gn_model = None
-            if access_desc.access_location is not None:
-                gn_model = GeneralNameModel.from_x509_general_name(access_desc.access_location)
+            gn_model = GeneralNameModel.from_x509_general_name(access_desc.access_location)
 
             adm.access_location = gn_model
             adm.save()
@@ -1530,7 +1534,7 @@ class SubjectInformationAccessExtension(CertificateExtension, models.Model):
         AccessDescriptionModel, related_name='subject_info_access_syntax', blank=True
     )
 
-    objects = models.Manager['SubjectInformationAccessExtension']
+    objects: models.Manager[SubjectInformationAccessExtension]
 
     def __str__(self) -> str:
         """Returns a string representation of the SubjectInformationAccess extension."""
@@ -1552,9 +1556,7 @@ class SubjectInformationAccessExtension(CertificateExtension, models.Model):
             adm = AccessDescriptionModel()
             adm.access_method = access_desc.access_method.dotted_string
 
-            gn_model = None
-            if access_desc.access_location is not None:
-                gn_model = GeneralNameModel.from_x509_general_name(access_desc.access_location)
+            gn_model = GeneralNameModel.from_x509_general_name(access_desc.access_location)
 
             adm.access_location = gn_model
             adm.save()
@@ -1577,7 +1579,7 @@ class InhibitAnyPolicyExtension(CertificateExtension, models.Model):
         blank=True, null=True, verbose_name='InhibitAnyPolicy', editable=False
     )
 
-    objects = models.Manager['InhibitAnyPolicyExtension']
+    objects: models.Manager[InhibitAnyPolicyExtension]
 
     def __str__(self) -> str:
         """Returns a string representation of the InhibitAnyPolicyExtension."""
@@ -1620,7 +1622,7 @@ class PolicyMappingModel(models.Model):
     issuer_domain_policy = models.CharField(max_length=256, verbose_name='Issuer Domain Policy OID', editable=False)
     subject_domain_policy = models.CharField(max_length=256, verbose_name='Subject Domain Policy OID', editable=False)
 
-    objects = models.Manager['PolicyMappingModel']
+    objects: models.Manager[PolicyMappingModel]
 
     class Meta:
         unique_together = ('issuer_domain_policy', 'subject_domain_policy')
@@ -1636,7 +1638,7 @@ class PolicyMappingsExtension(CertificateExtension, models.Model):
         PolicyMappingModel, related_name='policy_mappings_extension', editable=False
     )
 
-    objects = models.Manager['PolicyMappingsExtension']
+    objects: models.Manager[PolicyMappingsExtension]
 
     def __str__(self) -> str:
         mappings = ', '.join(
@@ -1699,7 +1701,7 @@ class PolicyConstraintsExtension(CertificateExtension, models.Model):
         blank=True, null=True, verbose_name='inhibitPolicyMapping', editable=False
     )
 
-    objects = models.Manager['PolicyConstraintsExtension']
+    objects: models.Manager[PolicyConstraintsExtension]
 
     def __str__(self) -> str:
         """Returns a string representation of the PolicyConstraintsExtension."""
@@ -1756,7 +1758,7 @@ class SubjectDirectoryAttributesExtension(CertificateExtension, models.Model):
         AttributeTypeAndValue, verbose_name=_('Subject Directory Attributes'), editable=False, blank=True
     )
 
-    objects = models.Manager['SubjectDirectoryAttributesExtension']
+    objects: models.Manager[SubjectDirectoryAttributesExtension]
 
     def __str__(self) -> str:
         """Returns a string representation of the SubjectDirectoryAttributesExtension."""
@@ -1810,7 +1812,7 @@ class FreshestCrlExtension(CertificateExtension, models.Model):
     critical = models.BooleanField(verbose_name='Critical', editable=False)
     distribution_points = models.ManyToManyField(DistributionPointModel, blank=True)
 
-    objects = models.Manager['FreshestCrlExtension']
+    objects: models.Manager[FreshestCrlExtension]
 
     def __str__(self) -> str:
         """Returns a string representation of the FreshestCrlExtension."""
