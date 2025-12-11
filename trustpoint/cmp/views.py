@@ -19,6 +19,7 @@ from request.request_context import RequestContext
 
 if TYPE_CHECKING:
     from typing import Any
+
     from django.http import HttpRequest, HttpResponse
 
 
