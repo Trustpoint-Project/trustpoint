@@ -6,7 +6,7 @@ which can be used within the apps.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast, Protocol, Self
+from typing import TYPE_CHECKING, Any, Protocol
 
 from django import forms as dj_forms
 from django.core.exceptions import ImproperlyConfigured
@@ -32,7 +32,7 @@ class IndexView(RedirectView):
     pattern_name: str = 'home:dashboard'
 
 
-class ListInDetailView(ListView):
+class ListInDetailView(ListView[Any]):
     """Helper view that combines a DetailView and a ListView.
 
     This is useful for displaying a list within a DetailView.
@@ -41,23 +41,28 @@ class ListInDetailView(ListView):
     """
 
     detail_context_object_name = 'object'
+    detail_model: type[models.Model]
 
     def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests."""
         self.object = self.get_object()
         return super().get(*args, **kwargs)
 
-    def get_queryset_for_object(self):
-        return self.detail_model.objects.all()
+    def get_queryset_for_object(self) -> models.QuerySet[Any, Any]:
+        """Get the queryset for the detail object."""
+        return self.detail_model.objects.all()  # type: ignore[attr-defined, no-any-return]
 
-    def get_object(self) -> models.odel:
+    def get_object(self) -> models.Model:
+        """Get the detail object from the URL pk parameter."""
         queryset = self.get_queryset_for_object()
         pk = self.kwargs.get('pk')
         if pk is None:
             exc_msg = 'detail object pk expected in url'
             raise AttributeError(exc_msg)
-        return get_object_or_404(queryset, pk=pk)
+        return get_object_or_404(queryset, pk=pk)  # type: ignore[no-any-return]
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the detail object to the context."""
         context = super().get_context_data(**kwargs)
         context[self.detail_context_object_name] = self.object
         return context
@@ -66,6 +71,7 @@ class SupportsGetContextData(Protocol):
     """For typing to provide super().get_context_data()."""
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Get the context data."""
         ...
 
 class ParentSupportsGetContextData(SupportsGetContextData, Protocol):
@@ -81,12 +87,14 @@ class SortableTableMixin[T: models.Model]:
     default_sort_param: str
     request: HttpRequest
     model: type[T]
+    queryset: models.QuerySet[Any, Any] | None
 
-    def get_queryset(self) -> models.QuerySet[Any]:
+    def get_queryset(self) -> models.QuerySet[Any, Any]:
+        """Get the queryset and apply sorting based on URL parameters."""
         if hasattr(self, 'queryset') and self.queryset is not None:
             queryset = self.queryset
         else:
-            queryset = self.model.objects.all()
+            queryset = self.model.objects.all()  # type: ignore[attr-defined]
 
         sort_param = self.request.GET.get('sort', self.default_sort_param)
         if hasattr(self.model, 'is_active'):
@@ -95,15 +103,25 @@ class SortableTableMixin[T: models.Model]:
 
 
     def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        context = super().get_context_data(*args, **kwargs)
+        """Add sorting information to the context."""
+        # Ensure object_list is passed to super() if not already in kwargs
+        # This is needed for proper ListView functionality
+        if 'object_list' not in kwargs and hasattr(self, 'object_list'):
+            kwargs['object_list'] = self.object_list
+
+        context = super().get_context_data(*args, **kwargs)  # type: ignore[misc]
+
+        # Defensive: ensure context is never None
+        if context is None:
+            context = {}
 
         # Get current sorting column
         sort_param = self.request.GET.get('sort', self.default_sort_param)
 
         # Pass sorting details to the template
         context['current_sort'] = sort_param
-        return context
-    
+        return context  # type: ignore[no-any-return]
+
 
 class SortableTableFromListMixin:
     """Adds utility for sorting a ListView query by URL parameters.
@@ -111,8 +129,13 @@ class SortableTableFromListMixin:
     default_sort_param must be set in the view to specify default sorting order.
     Use instead of SortableTableMixin when you have a list of dicts instead of a Django queryset.
     """
+    default_sort_param: str
+    request: HttpRequest
+    model: type[models.Model]
+    queryset: list[dict[str, str]] | None
+
     @staticmethod
-    def _sort_list_of_dicts(list_of_dicts: list[dict], sort_param: str) -> list[dict]:
+    def _sort_list_of_dicts(list_of_dicts: list[dict[str, str]], sort_param: str) -> list[dict[str, str]]:
         """Sorts a list of dictionaries by the given sort parameter.
 
         Args:
@@ -125,28 +148,31 @@ class SortableTableFromListMixin:
         return sorted(list_of_dicts, key=lambda x: x[sort_param.lstrip('-')], reverse=sort_param.startswith('-'))
 
     def get_queryset(self) -> list[dict[str, str]]:
+        """Get the queryset and apply sorting based on URL parameters."""
         if hasattr(self, 'queryset') and self.queryset is not None:
             queryset = self.queryset
         else:
-            queryset = self.model.objects.all()
+            queryset = self.model.objects.all()  # type: ignore[attr-defined]
 
         # Get sort parameter (e.g., "name" or "-name")
         sort_param = self.request.GET.get('sort', self.default_sort_param)
-        queryset_type = type(queryset)
         return self._sort_list_of_dicts(queryset, sort_param)
 
     def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        context = super().get_context_data(*args, **kwargs)
+        """Add sorting information to the context."""
+        context = super().get_context_data(*args, **kwargs)  # type: ignore[misc]
 
         # Get current sorting column
         sort_param = self.request.GET.get('sort', self.default_sort_param)
 
         # Pass sorting details to the template
         context['current_sort'] = sort_param
-        return context
+        return context  # type: ignore[no-any-return]
 
 class ContextDataMixin:
-    def get_context_data(self, **kwargs: Any) -> dict:
+    """Mixin to add context data from attributes prefixed with 'context_'."""
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds attributes prefixed with context_ to the context_data if it does not exist.
 
         Note:
@@ -176,15 +202,15 @@ class ContextDataMixin:
         super_get_context_method = getattr(super(), 'get_context_data', None)
         if super_get_context_method is None:
             return kwargs
-        return super_get_context_method(**kwargs)
+        return super_get_context_method(**kwargs)  # type: ignore[no-any-return]
 
 
-class BaseBulkDeleteView(FormMixin, BaseListView):
+class BaseBulkDeleteView(FormMixin[dj_forms.Form], BaseListView[Any]):
     """Base view for bulk deletion of objects."""
 
     queryset: Any
-    get_queryset: Callable
-    success_url = None
+    get_queryset: Callable[..., models.QuerySet[Any, Any]]
+    success_url: str | None = None
 
     form_class = dj_forms.Form
 
@@ -196,7 +222,7 @@ class BaseBulkDeleteView(FormMixin, BaseListView):
             return self.form_valid(form)
         return self.form_invalid(form)
 
-    def form_valid(self, _form: form_class) -> HttpResponse:
+    def form_valid(self, _form: dj_forms.Form) -> HttpResponse:
         """Delete the selected objects on valid form."""
         success_url = self.get_success_url()
         self.queryset.delete()
@@ -212,8 +238,11 @@ class BaseBulkDeleteView(FormMixin, BaseListView):
 
 
 class PrimaryKeyListFromPrimaryKeyString:
+    """Utility class to parse primary keys from a URL string."""
+
     @staticmethod
     def get_pks_as_list(pks: str) -> list[str]:
+        """Parse a slash-separated list of primary keys from a URL string."""
         if pks:
             pks_list = pks.split('/')
 
@@ -222,7 +251,8 @@ class PrimaryKeyListFromPrimaryKeyString:
                 del pks_list[-1]
 
             if len(pks_list) != len(set(pks_list)):
-                raise Http404('Duplicates in query primary key list found.')
+                error_msg = 'Duplicates in query primary key list found.'
+                raise Http404(error_msg)
 
             return pks_list
 
@@ -230,27 +260,35 @@ class PrimaryKeyListFromPrimaryKeyString:
 
 
 class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
-    def get_pks_path(self) -> str:
-        return self.kwargs.get('pks')
+    """Mixin to retrieve a queryset based on primary keys provided in the URL."""
+    kwargs: dict[str, Any]
+    model: type[models.Model]
+    queryset: models.QuerySet[Any, Any] | None
 
-    def get_queryset(self) -> None | models.QuerySet:
+    def get_pks_path(self) -> str:
+        """Retrieve the primary key path from the URL parameters."""
+        return self.kwargs.get('pks')  # type: ignore[return-value]
+
+    def get_queryset(self) -> models.QuerySet[Any, Any] | None:
+        """Retrieve a queryset based on primary keys provided in the URL."""
         if self.queryset:
             return self.queryset
 
         pks = self.get_pks_as_list(self.get_pks_path())
         if not pks:
-            return self.model.objects.all()
-        queryset = self.model.objects.filter(pk__in=pks)
+            return self.model.objects.all()  # type: ignore[attr-defined, no-any-return]
+        queryset = self.model.objects.filter(pk__in=pks)  # type: ignore[attr-defined]
 
         if len(pks) != len(queryset):
             queryset = None
 
         self.queryset = queryset
-        return queryset
+        return queryset  # type: ignore[no-any-return]
 
 
-class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFromUrlMixin, BaseBulkDeleteView):
-    pass
+class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFromUrlMixin, BaseBulkDeleteView):  # type: ignore[misc]
+    """View for bulk deletion of objects."""
+    model: type[models.Model]
 
 
 THRESHOLD_LOGGER_HTTP_STATUS: int = 400

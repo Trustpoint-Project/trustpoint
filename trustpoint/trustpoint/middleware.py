@@ -2,22 +2,29 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from django.conf import settings
-from django.contrib.auth.middleware import LoginRequiredMiddleware  # type: ignore[attr-defined]
+from django.contrib.auth.middleware import LoginRequiredMiddleware
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from django.http import HttpRequest, HttpResponse
 
 
-# TODO(AlexHx8472): Stubs not yet available in django-stubs.            # noqa: FIX002
-# TODO(AlexHx8472): We may want to contribute them to the project.      # noqa: FIX002
-class TrustpointLoginRequiredMiddleware(LoginRequiredMiddleware):  # type: ignore[misc]
+# TODO(AlexHx8472): Stubs not yet available in django-stubs.  # noqa: FIX002
+# TODO(AlexHx8472): We may want to contribute them to the project.  # noqa: FIX002
+class TrustpointLoginRequiredMiddleware(LoginRequiredMiddleware):
     """Middleware that redirects all unauthenticated requests to a login page."""
 
-    def process_view(  # type: ignore[no-untyped-def]   # noqa: ANN201
+    def process_view(
         self,
-        request,  # noqa: ANN001
-        view_func,  # noqa: ANN001
-        view_args,  # noqa: ANN001
-        view_kwargs,  # noqa: ANN001
-    ):
+        request: HttpRequest,
+        view_func: Callable[..., Any],
+        view_args: tuple[Any, ...],
+        view_kwargs: dict[str, Any],
+    ) -> None | HttpResponse:
         """Allow unauthenticated access to public paths, else redirect to login page."""
         if not request.user.is_authenticated and any(request.path.startswith(path) for path in settings.PUBLIC_PATHS):
             return None
