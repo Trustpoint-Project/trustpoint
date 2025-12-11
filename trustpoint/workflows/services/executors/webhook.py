@@ -9,6 +9,7 @@ from typing import Any
 
 import requests
 from django.template import Context, Template
+from jinja2.sandbox import SandboxedEnvironment
 
 from workflows.models import State, WorkflowInstance
 from workflows.services.context import build_context, set_in
@@ -150,7 +151,7 @@ def _build_auth(auth_cfg: Any) -> tuple[Any, str | None]:
 
 def _render_url(url_tpl: str, dj_ctx: Context) -> tuple[bool, str, str]:
     try:
-        url = Template(url_tpl).render(dj_ctx)
+        url = JINJA_SANDBOX_ENV.from_string(url_tpl).render(dj_ctx)
     except Exception as exc:
         logger.exception('Webhook: URL template render failed')
         return False, '', f'URL template error: {exc!s}'
@@ -166,7 +167,7 @@ def _build_headers(
     for k, v in headers_raw.items():
         sval = str(v)
         with contextlib.suppress(Exception):
-            sval = Template(sval).render(dj_ctx)
+            sval = JINJA_SANDBOX_ENV.from_string(sval).render(dj_ctx)
         headers[str(k)] = sval
 
     if bearer_token:
@@ -180,7 +181,7 @@ def _build_body(body_raw: Any, dj_ctx: Context) -> tuple[bool, dict[str, Any], s
 
     if isinstance(body_raw, str) and body_raw.strip():
         try:
-            rendered = Template(body_raw).render(dj_ctx)
+            rendered = JINJA_SANDBOX_ENV.from_string(body_raw).render(dj_ctx)
         except Exception as exc:
             logger.exception('Webhook: body template render failed')
             return False, {}, f'Body template error: {exc!s}'
