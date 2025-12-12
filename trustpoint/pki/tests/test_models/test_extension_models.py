@@ -696,3 +696,784 @@ class TestGeneralNamesModel:
         # Should reuse existing entry, not create new one
         assert GeneralNameDNSName.objects.filter(value='reuse-test.example.com').count() == 1
         assert gn_model.dns_names.first().id == existing_dns.id
+
+
+@pytest.mark.django_db
+class TestSubjectAlternativeNameExtension:
+    """Test suite for SubjectAlternativeNameExtension."""
+
+    def test_san_extension_creation(self):
+        """Test creating SubjectAlternativeNameExtension."""
+        from pki.models.extension import SubjectAlternativeNameExtension, GeneralNamesModel
+        
+        gn = GeneralNamesModel.objects.create()
+        san = SubjectAlternativeNameExtension.objects.create(
+            critical=False,
+            subject_alt_name=gn
+        )
+        assert san.critical is False
+        assert san.subject_alt_name == gn
+
+    def test_san_extension_str(self):
+        """Test __str__ method."""
+        from pki.models.extension import SubjectAlternativeNameExtension, GeneralNamesModel
+        
+        gn = GeneralNamesModel.objects.create()
+        san = SubjectAlternativeNameExtension.objects.create(
+            critical=True,
+            subject_alt_name=gn
+        )
+        result = str(san)
+        assert 'SubjectAlternativeNameExtension' in result
+        assert 'critical=True' in result
+
+    def test_san_save_from_crypto_extensions(self):
+        """Test save_from_crypto_extensions method."""
+        from cryptography import x509
+        from pki.models.extension import SubjectAlternativeNameExtension
+        
+        # Create crypto extension
+        crypto_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.SUBJECT_ALTERNATIVE_NAME,
+            critical=False,
+            value=x509.SubjectAlternativeName([
+                x509.DNSName('san-test.example.com'),
+                x509.RFC822Name('san@example.com'),
+            ])
+        )
+        
+        # Save it
+        result = SubjectAlternativeNameExtension.save_from_crypto_extensions(crypto_ext)
+        
+        assert result is not None
+        assert result.critical is False
+        assert result.subject_alt_name is not None
+        assert result.subject_alt_name.dns_names.count() == 1
+        assert result.subject_alt_name.rfc822_names.count() == 1
+
+    def test_san_save_from_crypto_wrong_type(self):
+        """Test save_from_crypto_extensions with wrong extension type."""
+        from cryptography import x509
+        from pki.models.extension import SubjectAlternativeNameExtension
+        
+        # Create extension with wrong value type
+        crypto_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.KEY_USAGE,
+            critical=True,
+            value=x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=False,
+                decipher_only=False,
+            )
+        )
+        
+        # Should return None for wrong type
+        result = SubjectAlternativeNameExtension.save_from_crypto_extensions(crypto_ext)
+        assert result is None
+
+    def test_san_post_delete_cleans_up_orphaned_general_names(self):
+        """Test that post_delete cleans up orphaned GeneralNamesModel."""
+        from pki.models.extension import SubjectAlternativeNameExtension, GeneralNamesModel
+        
+        gn = GeneralNamesModel.objects.create()
+        gn_id = gn.id
+        
+        san = SubjectAlternativeNameExtension.objects.create(
+            critical=False,
+            subject_alt_name=gn
+        )
+        
+        # Delete the SAN extension
+        san.delete()
+        
+        # GeneralNamesModel should be deleted (orphaned)
+        assert not GeneralNamesModel.objects.filter(id=gn_id).exists()
+
+
+@pytest.mark.django_db
+class TestIssuerAlternativeNameExtension:
+    """Test suite for IssuerAlternativeNameExtension."""
+
+    def test_ian_extension_creation(self):
+        """Test creating IssuerAlternativeNameExtension."""
+        from pki.models.extension import IssuerAlternativeNameExtension, GeneralNamesModel
+        
+        gn = GeneralNamesModel.objects.create()
+        ian = IssuerAlternativeNameExtension.objects.create(
+            critical=False,
+            issuer_alt_name=gn
+        )
+        assert ian.critical is False
+        assert ian.issuer_alt_name == gn
+
+    def test_ian_extension_str(self):
+        """Test __str__ method."""
+        from pki.models.extension import IssuerAlternativeNameExtension, GeneralNamesModel
+        
+        gn = GeneralNamesModel.objects.create()
+        ian = IssuerAlternativeNameExtension.objects.create(
+            critical=True,
+            issuer_alt_name=gn
+        )
+        result = str(ian)
+        assert 'IssuerAlternativeNameExtension' in result
+        assert 'critical=True' in result
+
+    def test_ian_save_from_crypto_extensions(self):
+        """Test save_from_crypto_extensions method."""
+        from cryptography import x509
+        from pki.models.extension import IssuerAlternativeNameExtension
+        
+        # Create crypto extension
+        crypto_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.ISSUER_ALTERNATIVE_NAME,
+            critical=False,
+            value=x509.IssuerAlternativeName([
+                x509.DNSName('ian-test.example.com'),
+                x509.RFC822Name('ian@example.com'),
+            ])
+        )
+        
+        # Save it
+        result = IssuerAlternativeNameExtension.save_from_crypto_extensions(crypto_ext)
+        
+        assert result is not None
+        assert result.critical is False
+        assert result.issuer_alt_name is not None
+        assert result.issuer_alt_name.dns_names.count() == 1
+        assert result.issuer_alt_name.rfc822_names.count() == 1
+
+    def test_ian_save_from_crypto_wrong_type(self):
+        """Test save_from_crypto_extensions with wrong extension type."""
+        from cryptography import x509
+        from pki.models.extension import IssuerAlternativeNameExtension
+        
+        # Create extension with wrong value type
+        crypto_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.KEY_USAGE,
+            critical=True,
+            value=x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=False,
+                decipher_only=False,
+            )
+        )
+        
+        # Should return None for wrong type
+        result = IssuerAlternativeNameExtension.save_from_crypto_extensions(crypto_ext)
+        assert result is None
+
+    def test_ian_post_delete_cleans_up_orphaned_general_names(self):
+        """Test that post_delete cleans up orphaned GeneralNamesModel."""
+        from pki.models.extension import IssuerAlternativeNameExtension, GeneralNamesModel
+        
+        gn = GeneralNamesModel.objects.create()
+        gn_id = gn.id
+        
+        ian = IssuerAlternativeNameExtension.objects.create(
+            critical=False,
+            issuer_alt_name=gn
+        )
+        
+        # Delete the IAN extension
+        ian.delete()
+        
+        # GeneralNamesModel should be deleted (orphaned)
+        assert not GeneralNamesModel.objects.filter(id=gn_id).exists()
+
+
+@pytest.mark.django_db
+class TestAuthorityKeyIdentifierExtension:
+    """Test suite for AuthorityKeyIdentifierExtension."""
+
+    def test_aki_extension_creation(self):
+        """Test creating AuthorityKeyIdentifierExtension."""
+        from pki.models.extension import AuthorityKeyIdentifierExtension
+        
+        aki = AuthorityKeyIdentifierExtension.objects.create(
+            critical=False,
+            key_identifier='0123456789ABCDEF',
+            authority_cert_serial_number=12345
+        )
+        assert aki.critical is False
+        assert aki.key_identifier == '0123456789ABCDEF'
+        assert aki.authority_cert_serial_number == 12345
+
+    def test_aki_extension_str(self):
+        """Test __str__ method."""
+        from pki.models.extension import AuthorityKeyIdentifierExtension
+        
+        aki = AuthorityKeyIdentifierExtension.objects.create(
+            critical=False,
+            key_identifier='FEDCBA9876543210'
+        )
+        result = str(aki)
+        assert 'AuthorityKeyIdentifier' in result
+        assert 'critical=False' in result
+
+
+@pytest.mark.django_db
+class TestSubjectKeyIdentifierExtension:
+    """Test suite for SubjectKeyIdentifierExtension."""
+
+    def test_ski_extension_creation(self):
+        """Test creating SubjectKeyIdentifierExtension."""
+        from pki.models.extension import SubjectKeyIdentifierExtension
+        
+        ski = SubjectKeyIdentifierExtension.objects.create(
+            key_identifier='AABBCCDDEEFF0011'
+        )
+        assert ski.key_identifier == 'AABBCCDDEEFF0011'
+
+    def test_ski_extension_str(self):
+        """Test __str__ method."""
+        from pki.models.extension import SubjectKeyIdentifierExtension
+        
+        ski = SubjectKeyIdentifierExtension.objects.create(
+            key_identifier='1122334455667788'
+        )
+        result = str(ski)
+        assert 'SubjectKeyIdentifierExtension' in result
+        assert '1122334455667788' in result
+
+    def test_ski_unique_constraint(self):
+        """Test unique constraint on key_identifier."""
+        from pki.models.extension import SubjectKeyIdentifierExtension
+        
+        SubjectKeyIdentifierExtension.objects.create(
+            key_identifier='UNIQUE123456'
+        )
+        # Should raise IntegrityError on duplicate
+        with pytest.raises(IntegrityError):
+            SubjectKeyIdentifierExtension.objects.create(
+                key_identifier='UNIQUE123456'
+            )
+
+
+@pytest.mark.django_db
+class TestExtendedKeyUsageExtension:
+    """Test suite for ExtendedKeyUsageExtension."""
+
+    def test_eku_extension_creation(self):
+        """Test creating ExtendedKeyUsageExtension."""
+        from pki.models.extension import ExtendedKeyUsageExtension, KeyPurposeIdModel
+        
+        eku = ExtendedKeyUsageExtension.objects.create(
+            critical=False
+        )
+        # Add some key purpose IDs
+        kp1 = KeyPurposeIdModel.objects.create(oid='1.3.6.1.5.5.7.3.1')  # serverAuth
+        kp2 = KeyPurposeIdModel.objects.create(oid='1.3.6.1.5.5.7.3.2')  # clientAuth
+        eku.key_purpose_ids.add(kp1, kp2)
+        
+        assert eku.critical is False
+        assert eku.key_purpose_ids.count() == 2
+
+    def test_eku_extension_str(self):
+        """Test __str__ method."""
+        from pki.models.extension import ExtendedKeyUsageExtension
+        
+        eku = ExtendedKeyUsageExtension.objects.create(
+            critical=True
+        )
+        result = str(eku)
+        assert 'ExtendedKeyUsageExtension' in result
+        assert 'critical=True' in result
+
+
+@pytest.mark.django_db
+class TestPolicyConstraintsExtension:
+    """Test suite for PolicyConstraintsExtension."""
+
+    def test_policy_constraints_creation(self):
+        """Test creating PolicyConstraintsExtension."""
+        from pki.models.extension import PolicyConstraintsExtension
+        
+        pc = PolicyConstraintsExtension.objects.create(
+            critical=True,
+            require_explicit_policy=2,
+            inhibit_policy_mapping=3
+        )
+        assert pc.critical is True
+        assert pc.require_explicit_policy == 2
+        assert pc.inhibit_policy_mapping == 3
+
+    def test_policy_constraints_str(self):
+        """Test __str__ method."""
+        from pki.models.extension import PolicyConstraintsExtension
+        
+        pc = PolicyConstraintsExtension.objects.create(
+            critical=False,
+            require_explicit_policy=1
+        )
+        result = str(pc)
+        assert 'PolicyConstraintsExtension' in result
+        assert 'critical=False' in result
+
+    def test_policy_constraints_allows_duplicate_with_different_critical(self):
+        """Test that PolicyConstraintsExtension allows duplicates with different critical flag."""
+        from pki.models.extension import PolicyConstraintsExtension
+        
+        pc1 = PolicyConstraintsExtension.objects.create(
+            critical=True,
+            require_explicit_policy=5,
+            inhibit_policy_mapping=5
+        )
+        # Can create another with same values but different critical flag
+        pc2 = PolicyConstraintsExtension.objects.create(
+            critical=False,
+            require_explicit_policy=5,
+            inhibit_policy_mapping=5
+        )
+        assert pc1.id != pc2.id
+
+
+@pytest.mark.django_db
+class TestGeneralNameIpAddressTypes:
+    """Test suite for GeneralNameIpAddress IP type variations."""
+
+    def test_ip_address_ipv4_address_type(self):
+        """Test IPv4 address type string representation."""
+        ip = GeneralNameIpAddress.objects.create(
+            ip_type=GeneralNameIpAddress.IpType.IPV4_ADDRESS,
+            value='10.0.0.1'
+        )
+        result = str(ip)
+        assert 'IPv4 Address' in result
+        assert '10.0.0.1' in result
+
+    def test_ip_address_ipv6_address_type(self):
+        """Test IPv6 address type string representation."""
+        ip = GeneralNameIpAddress.objects.create(
+            ip_type=GeneralNameIpAddress.IpType.IPV6_ADDRESS,
+            value='2001:db8::8a2e:370:7334'
+        )
+        result = str(ip)
+        assert 'IPv6 Address' in result
+
+    def test_ip_address_ipv4_network_type(self):
+        """Test IPv4 network type string representation."""
+        ip = GeneralNameIpAddress.objects.create(
+            ip_type=GeneralNameIpAddress.IpType.IPV4_NETWORK,
+            value='192.168.0.0/16'
+        )
+        result = str(ip)
+        assert 'IPv4 Network' in result
+
+    def test_ip_address_ipv6_network_type(self):
+        """Test IPv6 network type string representation."""
+        ip = GeneralNameIpAddress.objects.create(
+            ip_type=GeneralNameIpAddress.IpType.IPV6_NETWORK,
+            value='2001:db8::/48'
+        )
+        result = str(ip)
+        assert 'IPv6 Network' in result
+
+
+@pytest.mark.django_db
+class TestGeneralNamesModelEdgeCases:
+    """Test edge cases and error handling for GeneralNamesModel."""
+
+    def test_save_general_names_with_extension_object(self):
+        """Test save_general_names with x509.Extension object."""
+        from cryptography import x509
+        from pki.models.extension import GeneralNamesModel
+        
+        gn_model = GeneralNamesModel.objects.create()
+        
+        # Create an Extension object (not just a list)
+        crypto_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.SUBJECT_ALTERNATIVE_NAME,
+            critical=False,
+            value=x509.SubjectAlternativeName([
+                x509.DNSName('ext-test.example.com'),
+            ])
+        )
+        
+        result = gn_model.save_general_names(crypto_ext)
+        
+        assert result is not None
+        assert gn_model.dns_names.count() == 1
+
+    def test_save_ip_address_invalid_type_raises_error(self):
+        """Test that _save_ip_address raises TypeError for invalid IP type."""
+        from cryptography import x509
+        from pki.models.extension import GeneralNamesModel
+        from unittest.mock import Mock
+        
+        gn_model = GeneralNamesModel.objects.create()
+        
+        # Create a mock with an unsupported IP type
+        mock_entry = Mock(spec=x509.IPAddress)
+        mock_entry.value = "invalid_ip_type"
+        
+        with pytest.raises(TypeError, match='Unknown IP address type'):
+            gn_model._save_ip_address(mock_entry)
+
+    def test_general_names_model_str_with_multiple_types(self):
+        """Test __str__ with multiple general name types."""
+        from pki.models.extension import GeneralNamesModel
+        
+        gn_model = GeneralNamesModel.objects.create()
+        
+        # Add multiple types
+        dns = GeneralNameDNSName.objects.create(value='multi-test.example.com')
+        rfc = GeneralNameRFC822Name.objects.create(value='multi@example.com')
+        uri = GeneralNameUniformResourceIdentifier.objects.create(value='https://multi.example.com')
+        
+        gn_model.dns_names.add(dns)
+        gn_model.rfc822_names.add(rfc)
+        gn_model.uniform_resource_identifiers.add(uri)
+        
+        result = str(gn_model)
+        assert 'DNS:' in result
+        assert 'RFC822:' in result
+        assert 'URI:' in result
+        assert 'multi-test.example.com' in result
+
+
+@pytest.mark.django_db
+class TestAuthorityKeyIdentifierExtensionComplex:
+    """Test suite for AuthorityKeyIdentifierExtension complex scenarios."""
+
+    def test_aki_save_from_crypto_with_all_fields(self):
+        """Test save_from_crypto_extensions with all fields populated."""
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from datetime import datetime, timedelta, UTC
+        from pki.models.extension import AuthorityKeyIdentifierExtension
+        
+        # Create a CA cert to get the AKI from
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        subject = issuer = x509.Name([
+            x509.NameAttribute(x509.oid.NameOID.COUNTRY_NAME, "US"),
+            x509.NameAttribute(x509.oid.NameOID.COMMON_NAME, "Test CA"),
+        ])
+        
+        ca_cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(private_key.public_key())
+            .serial_number(1000)
+            .not_valid_before(datetime.now(UTC))
+            .not_valid_after(datetime.now(UTC) + timedelta(days=365))
+            .add_extension(
+                x509.SubjectKeyIdentifier.from_public_key(private_key.public_key()),
+                critical=False,
+            )
+            .sign(private_key, hashes.SHA256())
+        )
+        
+        # Now create a cert with AKI
+        ski_ext = ca_cert.extensions.get_extension_for_oid(
+            x509.oid.ExtensionOID.SUBJECT_KEY_IDENTIFIER
+        )
+        
+        aki_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.AUTHORITY_KEY_IDENTIFIER,
+            critical=False,
+            value=x509.AuthorityKeyIdentifier(
+                key_identifier=ski_ext.value.digest,
+                authority_cert_issuer=[x509.DirectoryName(issuer)],
+                authority_cert_serial_number=1000,
+            )
+        )
+        
+        result = AuthorityKeyIdentifierExtension.save_from_crypto_extensions(aki_ext)
+        
+        assert result is not None
+        assert result.key_identifier is not None
+        assert result.authority_cert_serial_number is not None
+        assert result.authority_cert_issuer is not None
+
+    def test_aki_save_from_crypto_minimal(self):
+        """Test save_from_crypto_extensions with minimal fields."""
+        from cryptography import x509
+        from pki.models.extension import AuthorityKeyIdentifierExtension
+        
+        aki_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.AUTHORITY_KEY_IDENTIFIER,
+            critical=False,
+            value=x509.AuthorityKeyIdentifier(
+                key_identifier=b'\x01\x02\x03\x04\x05',
+                authority_cert_issuer=None,
+                authority_cert_serial_number=None,
+            )
+        )
+        
+        result = AuthorityKeyIdentifierExtension.save_from_crypto_extensions(aki_ext)
+        
+        assert result is not None
+        assert result.key_identifier == '0102030405'
+        assert result.authority_cert_serial_number is None
+        assert result.authority_cert_issuer is None
+
+    def test_aki_post_delete_cleanup(self):
+        """Test that post_delete cleans up orphaned GeneralNamesModel."""
+        from pki.models.extension import AuthorityKeyIdentifierExtension, GeneralNamesModel
+        
+        gn = GeneralNamesModel.objects.create()
+        gn_id = gn.id
+        
+        aki = AuthorityKeyIdentifierExtension.objects.create(
+            critical=False,
+            key_identifier='AABBCCDD',
+            authority_cert_issuer=gn
+        )
+        
+        # Delete the AKI extension
+        aki.delete()
+        
+        # GeneralNamesModel should be deleted (orphaned)
+        assert not GeneralNamesModel.objects.filter(id=gn_id).exists()
+
+
+@pytest.mark.django_db
+class TestSubjectKeyIdentifierExtensionSaveFromCrypto:
+    """Test suite for SubjectKeyIdentifierExtension save_from_crypto_extensions."""
+
+    def test_ski_save_from_crypto_extensions(self):
+        """Test save_from_crypto_extensions method."""
+        from cryptography import x509
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from pki.models.extension import SubjectKeyIdentifierExtension
+        
+        # Generate a key and create SKI from it
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        ski_value = x509.SubjectKeyIdentifier.from_public_key(private_key.public_key())
+        
+        ski_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.SUBJECT_KEY_IDENTIFIER,
+            critical=False,
+            value=ski_value
+        )
+        
+        result = SubjectKeyIdentifierExtension.save_from_crypto_extensions(ski_ext)
+        
+        assert result is not None
+        assert result.key_identifier is not None
+        assert len(result.key_identifier) > 0
+
+    def test_ski_save_from_crypto_returns_existing(self):
+        """Test that save_from_crypto_extensions returns existing entry."""
+        from cryptography import x509
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from pki.models.extension import SubjectKeyIdentifierExtension
+        
+        # Generate a key and create SKI from it
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        ski_value = x509.SubjectKeyIdentifier.from_public_key(private_key.public_key())
+        key_id_hex = ski_value.digest.hex().upper()
+        
+        # Create existing entry with this key_identifier
+        existing = SubjectKeyIdentifierExtension.objects.create(
+            key_identifier=key_id_hex
+        )
+        
+        # Create extension with the same SKI
+        ski_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.SUBJECT_KEY_IDENTIFIER,
+            critical=False,
+            value=ski_value
+        )
+        
+        result = SubjectKeyIdentifierExtension.save_from_crypto_extensions(ski_ext)
+        
+        assert result is not None
+        assert result.id == existing.id
+
+    def test_ski_save_from_crypto_wrong_type(self):
+        """Test save_from_crypto_extensions with wrong extension type."""
+        from cryptography import x509
+        from pki.models.extension import SubjectKeyIdentifierExtension
+        
+        # Create extension with wrong value type
+        wrong_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.KEY_USAGE,
+            critical=True,
+            value=x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=False,
+                decipher_only=False,
+            )
+        )
+        
+        result = SubjectKeyIdentifierExtension.save_from_crypto_extensions(wrong_ext)
+        assert result is None
+
+
+@pytest.mark.django_db
+class TestExtendedKeyUsageExtensionSaveFromCrypto:
+    """Test suite for ExtendedKeyUsageExtension save_from_crypto_extensions."""
+
+    def test_eku_save_from_crypto_extensions(self):
+        """Test save_from_crypto_extensions method."""
+        from cryptography import x509
+        from cryptography.x509.oid import ExtendedKeyUsageOID
+        from pki.models.extension import ExtendedKeyUsageExtension
+        
+        # Create crypto extension
+        crypto_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.EXTENDED_KEY_USAGE,
+            critical=False,
+            value=x509.ExtendedKeyUsage([
+                ExtendedKeyUsageOID.SERVER_AUTH,
+                ExtendedKeyUsageOID.CLIENT_AUTH,
+            ])
+        )
+        
+        result = ExtendedKeyUsageExtension.save_from_crypto_extensions(crypto_ext)
+        
+        assert result is not None
+        assert result.critical is False
+        assert result.key_purpose_ids.count() == 2
+
+    def test_eku_save_from_crypto_reuses_key_purpose_ids(self):
+        """Test that save_from_crypto_extensions reuses existing KeyPurposeIdModel."""
+        from cryptography import x509
+        from cryptography.x509.oid import ExtendedKeyUsageOID
+        from pki.models.extension import ExtendedKeyUsageExtension, KeyPurposeIdModel
+        
+        # Pre-create a KeyPurposeIdModel
+        existing_kp = KeyPurposeIdModel.objects.create(
+            oid=ExtendedKeyUsageOID.SERVER_AUTH.dotted_string
+        )
+        
+        # Create crypto extension with the same OID
+        crypto_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.EXTENDED_KEY_USAGE,
+            critical=True,
+            value=x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH])
+        )
+        
+        result = ExtendedKeyUsageExtension.save_from_crypto_extensions(crypto_ext)
+        
+        assert result is not None
+        # Should have reused the existing KeyPurposeIdModel
+        assert KeyPurposeIdModel.objects.filter(
+            oid=ExtendedKeyUsageOID.SERVER_AUTH.dotted_string
+        ).count() == 1
+
+    def test_eku_save_from_crypto_wrong_type_raises_error(self):
+        """Test save_from_crypto_extensions with wrong extension type raises TypeError."""
+        from cryptography import x509
+        from pki.models.extension import ExtendedKeyUsageExtension
+        
+        # Create extension with wrong value type
+        wrong_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.KEY_USAGE,
+            critical=True,
+            value=x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=False,
+                decipher_only=False,
+            )
+        )
+        
+        with pytest.raises(TypeError, match='Expected an ExtendedKeyUsage extension'):
+            ExtendedKeyUsageExtension.save_from_crypto_extensions(wrong_ext)
+
+
+@pytest.mark.django_db
+class TestPolicyConstraintsExtensionSaveFromCrypto:
+    """Test suite for PolicyConstraintsExtension save_from_crypto_extensions."""
+
+    def test_policy_constraints_save_from_crypto(self):
+        """Test save_from_crypto_extensions method."""
+        from cryptography import x509
+        from pki.models.extension import PolicyConstraintsExtension
+        
+        # Create crypto extension
+        crypto_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.POLICY_CONSTRAINTS,
+            critical=True,
+            value=x509.PolicyConstraints(
+                require_explicit_policy=2,
+                inhibit_policy_mapping=3
+            )
+        )
+        
+        result = PolicyConstraintsExtension.save_from_crypto_extensions(crypto_ext)
+        
+        assert result is not None
+        assert result.critical is True
+        assert result.require_explicit_policy == 2
+        assert result.inhibit_policy_mapping == 3
+
+    def test_policy_constraints_save_from_crypto_returns_existing(self):
+        """Test that save_from_crypto_extensions returns existing entry."""
+        from cryptography import x509
+        from pki.models.extension import PolicyConstraintsExtension
+        
+        # Create existing entry
+        existing = PolicyConstraintsExtension.objects.create(
+            critical=False,
+            require_explicit_policy=5,
+            inhibit_policy_mapping=None
+        )
+        
+        # Create matching crypto extension
+        crypto_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.POLICY_CONSTRAINTS,
+            critical=False,
+            value=x509.PolicyConstraints(
+                require_explicit_policy=5,
+                inhibit_policy_mapping=None
+            )
+        )
+        
+        result = PolicyConstraintsExtension.save_from_crypto_extensions(crypto_ext)
+        
+        assert result is not None
+        assert result.id == existing.id
+
+    def test_policy_constraints_save_from_crypto_wrong_type_raises_error(self):
+        """Test save_from_crypto_extensions with wrong extension type raises TypeError."""
+        from cryptography import x509
+        from pki.models.extension import PolicyConstraintsExtension
+        
+        # Create extension with wrong value type
+        wrong_ext = x509.Extension(
+            oid=x509.oid.ExtensionOID.KEY_USAGE,
+            critical=True,
+            value=x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=False,
+                decipher_only=False,
+            )
+        )
+        
+        with pytest.raises(TypeError, match='Expected a PolicyConstraints extension'):
+            PolicyConstraintsExtension.save_from_crypto_extensions(wrong_ext)
