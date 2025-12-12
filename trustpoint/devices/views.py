@@ -2155,7 +2155,7 @@ class OpcUaGdsBulkDeleteView(AbstractBulkDeleteView):
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
-class DeviceViewSet(viewsets.ModelViewSet):
+class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
     """ViewSet for managing Device instances.
 
     Supports standard CRUD operations such as list, retrieve,
@@ -2173,7 +2173,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
         'destroy': 'Delete a device.',
     }
 
-    def get_view_description(self, *, html: bool = False) -> str:
+    def get_view_description(self, html: bool = False) -> str:  # noqa: FBT001, FBT002
         """Return a description for the given action."""
         if hasattr(self, 'action') and self.action in self.action_descriptions:
             return self.action_descriptions[self.action]

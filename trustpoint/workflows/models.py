@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, cast
+from typing import Any, ClassVar, cast
 
 from devices.models import DeviceModel
 from django.db import models
@@ -131,7 +131,6 @@ class DeviceRequest(models.Model):
         created_at: Request creation timestamp.
         updated_at: Last update timestamp.
     """
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     device = models.ForeignKey(
@@ -173,7 +172,11 @@ class DeviceRequest(models.Model):
     class Meta:
         """Database configuration for device workflow parent."""
 
-        ordering = ['-created_at']
+        ordering: ClassVar[list[str]] = ['-created_at']
+
+    def __str__(self) -> str:
+        """Return a human-readable representation of the device request."""
+        return f'DeviceRequest {self.id} - Action: {self.action} - State: {self.aggregated_state}'
 
     def recompute_and_save(self) -> None:
         """Recompute the aggregate final state from instances."""

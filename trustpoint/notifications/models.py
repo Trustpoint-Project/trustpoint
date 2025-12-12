@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from django.db import models
 from django.utils.encoding import force_str
@@ -371,6 +371,8 @@ class NotificationModel(models.Model):
             The translated short description.
         """
         if self.message_type == NotificationModel.NotificationMessageType.CUSTOM:
+            if self.message is None:
+                return force_str(_('Custom message not found.'))
             return self.message.short_description
         try:
             message_string = NotificationModel.NotificationMessageType(self.message_type).get_message()
@@ -386,6 +388,8 @@ class NotificationModel(models.Model):
             The translated long description.
         """
         if self.message_type == NotificationModel.NotificationMessageType.CUSTOM:
+            if self.message is None:
+                return _('Custom message not found.')
             return self.message.long_description
         try:
             message_string = NotificationModel.NotificationMessageType(self.message_type).get_message()
@@ -396,7 +400,7 @@ class NotificationModel(models.Model):
 class WeakECCCurve(models.Model):
     """Represents a weak or deprecated ECC curve."""
 
-    objects: models.Manager['WeakECCCurve']
+    objects: models.Manager[WeakECCCurve]
 
     class ECCCurveChoices(models.TextChoices):
         """Enumeration of weak or deprecated ECC curve OIDs."""
@@ -418,7 +422,7 @@ class WeakECCCurve(models.Model):
 
     def __str__(self) -> str:
         """Return the human-readable name for the ECC curve."""
-        return str(dict(self.ECCCurveChoices.choices).get(self.oid, self.oid)) # type: ignore[misc]
+        return str(dict(self.ECCCurveChoices.choices).get(self.oid, self.oid))
 
 
 class WeakSignatureAlgorithm(models.Model):
@@ -440,7 +444,7 @@ class WeakSignatureAlgorithm(models.Model):
 
     def __str__(self) -> str:
         """Return the human-readable name for the weak signature algorithm."""
-        return str(dict(self.SignatureChoices.choices).get(self.oid, self.oid)) # type: ignore[misc]
+        return str(dict(self.SignatureChoices.choices).get(self.oid, self.oid))
 
 class NotificationConfig(models.Model):
     """Stores global configuration for notification thresholds and behaviors."""
@@ -472,7 +476,7 @@ class NotificationConfig(models.Model):
         WeakSignatureAlgorithm,
         blank=True,
         help_text=_('Select signature algorithms considered weak or deprecated.')
-    ) # type: ignore
+    )
 
     class Meta:
         """Meta class configuration."""

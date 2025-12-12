@@ -174,7 +174,7 @@ def send_email(payload: EmailPayload, *, connection: Any = None) -> int:
     return msg.send()
 
 
-def send_simple(
+def send_simple(  # noqa: PLR0913 - Email service requires multiple parameters for standard email fields
     *,
     subject: str,
     body: str,

@@ -492,7 +492,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         """Helper function to raise NotImplementedError with a given message."""
         raise NotImplementedError(message)
 
-    def _parse_cert_template_extensions(self, extensions_asn1: rfc2459.Extensions) -> list[x509.Extension[Any]]:
+    def _parse_cert_template_extensions(self, extensions_asn1: rfc2459.Extensions) -> list[x509.Extension[Any]]:  # noqa: C901 - Core workflow orchestration requires multiple validation and conditional paths
         """Parse ASN.1 extensions from certTemplate into cryptography extension objects using fallback approach."""
         extensions_list = []
 
@@ -596,7 +596,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         except (ValueError, TypeError) as ip_error:
             self.logger.warning('Failed to parse IP address: %(error)s',
                                 extra={'error': str(ip_error)})
-            
+
     def _parse_basic_constraints(
         self, value: bytes, *, critical: bool
     ) -> x509.Extension[x509.BasicConstraints]:
@@ -670,7 +670,9 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             self.logger.exception('Failed to parse Extended Key Usage extension.')
             raise
 
-    def _parse_subject_key_identifier(self, value: bytes, *, critical: bool) -> x509.Extension[x509.SubjectKeyIdentifier]:
+    def _parse_subject_key_identifier(
+        self, value: bytes, *, critical: bool
+    ) -> x509.Extension[x509.SubjectKeyIdentifier]:
         """Parse Subject Key Identifier extension manually."""
         try:
             ski_asn1, _ = der_decoder.decode(value, asn1Spec=rfc2459.SubjectKeyIdentifier())
