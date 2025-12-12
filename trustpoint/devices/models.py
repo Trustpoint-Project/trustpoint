@@ -18,7 +18,6 @@ from pki.models.domain import DomainModel
 from pki.models.issuing_ca import IssuingCaModel
 from pki.models.truststore import TruststoreModel
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
-from trustpoint_core import oid
 from util.db import CustomDeleteActionModel
 from util.encrypted_fields import EncryptedCharField
 

@@ -697,7 +697,7 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
         ]
         return context
 
-    def form_valid(self, form: BackupPasswordForm) -> HttpResponse:
+    def form_valid(self, form: BackupPasswordForm) -> HttpResponse:  # noqa: PLR0911 - Multiple returns needed for comprehensive error handling
         """Handle valid form submission."""
         password = form.cleaned_data.get('password')
 

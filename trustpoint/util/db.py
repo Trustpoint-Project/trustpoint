@@ -153,4 +153,4 @@ class OrphanDeletionMixin(_ModelBase):
             return
 
         for instance in instance_pks:
-            cls.delete_if_orphaned(cls.objects.filter(pk=instance).first())
+            cls.delete_if_orphaned(cls.objects.filter(pk=instance).first())  # type: ignore[attr-defined]

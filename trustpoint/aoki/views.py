@@ -62,7 +62,7 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
         """Handle GET requests for AOKI initialization."""
         del args, kwargs  # Unused
         tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
-        if not tls_cert:
+        if not tls_cert or not tls_cert.credential:
             return LoggedHttpResponse(
                 'No TLS server certificate available. Are you on the development server?', status = 500
             )

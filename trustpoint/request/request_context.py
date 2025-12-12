@@ -1,16 +1,19 @@
 """This module contains the RequestContext class for managing request-specific named attributes."""
-from dataclasses import dataclass, fields
-from typing import Any
+from __future__ import annotations
 
-from cryptography import x509
-from cryptography.x509 import CertificateSigningRequest
-from cryptography.x509.base import CertificateBuilder
-from devices.models import DeviceModel
-from django.http import HttpRequest
-from pki.models import CertificateProfileModel, CredentialModel, DomainModel
-from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
-from workflows.events import Event
-from workflows.models import EnrollmentRequest
+from dataclasses import dataclass, fields
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from cryptography import x509
+    from cryptography.x509 import CertificateSigningRequest
+    from cryptography.x509.base import CertificateBuilder
+    from devices.models import DeviceModel
+    from django.http import HttpRequest
+    from pki.models import CertificateProfileModel, CredentialModel, DomainModel
+    from pyasn1_modules.rfc4210 import PKIMessage
+    from workflows.events import Event
+    from workflows.models import EnrollmentRequest
 
 
 @dataclass
@@ -48,7 +51,7 @@ class RequestContext:
     http_response_content: bytes | str | None = None
     http_response_content_type: str | None = None
 
-    # TODO: These two should be refactored into the overall Request Context
+    # TODO: These two should be refactored into the overall Request Context  # noqa: FIX002, TD002
     enrollment_request: EnrollmentRequest | None = None
     event: Event | None = None
 

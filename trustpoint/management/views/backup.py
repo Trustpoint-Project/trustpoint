@@ -75,7 +75,7 @@ def create_db_backup(path: Path) -> str:
     return filename
 
 
-class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView[Any]):
+class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # type: ignore[type-arg,misc]
     """Display existing backups and handle backup-related actions.
 
     GET:
