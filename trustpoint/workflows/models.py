@@ -172,8 +172,12 @@ class DeviceRequest(models.Model):
 
     class Meta:
         """Database configuration for device workflow parent."""
+        ordering = ('-created_at',)
 
-        ordering = ['-created_at']
+    def __str__(self) -> str:
+        """Return human-readable representation."""
+        device_id = self.device_id if self.device_id is not None else 'None'
+        return f'DeviceReq#{self.pk} {self.aggregated_state} action={self.action} device={device_id}'
 
     def recompute_and_save(self) -> None:
         """Recompute the aggregate final state from instances."""
