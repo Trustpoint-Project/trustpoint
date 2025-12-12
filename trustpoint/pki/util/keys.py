@@ -43,7 +43,7 @@ class KeyGenerator:
     """Utility class for generating private keys."""
 
     @staticmethod
-    def generate_private_key_for_public_key_info(key_info: PublicKeyInfo) -> PrivateKeySerializer:
+    def generate_private_key_for_public_key_info(key_info: PublicKeyInfo) -> PrivateKey:
         """Generates a private key for a public key info.
 
         Returns:
@@ -61,6 +61,9 @@ class KeyGenerator:
         Returns:
             The generated private key / key pair serializer.
         """
+        if not domain.issuing_ca:
+            exc_msg = 'Domain does not have an issuing CA associated.'
+            raise ValueError(exc_msg)
         issuing_ca_cert = domain.issuing_ca.credential.get_certificate_serializer().as_crypto()
         return PrivateKeySerializer(KeyPairGenerator.generate_key_pair_for_certificate(issuing_ca_cert))
 

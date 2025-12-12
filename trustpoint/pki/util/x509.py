@@ -33,7 +33,7 @@ class CertificateGenerator:
     def create_root_ca(
         cn: str,
         validity_days: int = 7300,
-        private_key: None | rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey = None,
+        private_key: None | PrivateKey = None,
         hash_algorithm: None | HashAlgorithm = None,
     ) -> tuple[x509.Certificate, PrivateKey]:
         """Creates a root CA certificate for testing and AutoGenPKI."""

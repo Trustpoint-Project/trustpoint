@@ -74,7 +74,8 @@ class AutoGenPki(LoggerMixin):
             except IssuingCaModel.DoesNotExist:
                 cls.logger.info('Creating new Root CA: %s', root_ca_name)
                 root_cert, root_1_key = CertificateGenerator.create_root_ca(
-                    root_ca_name, private_key=key_gen.generate_private_key_for_public_key_info(public_key_info)
+                    root_ca_name,
+                    private_key=key_gen.generate_private_key_for_public_key_info(public_key_info)
                 )
                 CertificateGenerator.save_issuing_ca(
                     issuing_ca_cert=root_cert,
