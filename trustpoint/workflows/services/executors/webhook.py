@@ -5,17 +5,36 @@ from __future__ import annotations
 import contextlib
 import json as _json
 import logging
+import re
 from typing import Any
 
 import requests
-from django.template import Context, Template
 
 from workflows.models import State, WorkflowInstance
 from workflows.services.context import build_context, set_in
 from workflows.services.executors.factory import AbstractStepExecutor
 from workflows.services.types import ExecutorResult
 
+_CTX_PLACEHOLDER_RE = re.compile(r'\{\{\s*ctx\.([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)*)\s*\}\}')
+
+def _lookup_ctx_path(ctx: dict[str, Any], path: str) -> Any:
+    cur: Any = ctx
+    for part in path.split('.'):
+        if not isinstance(cur, dict):
+            return None
+        cur = cur.get(part)
+    return cur
+
+def _render_ctx_placeholders(template: str, ctx: dict[str, Any]) -> str:
+    def repl(m: re.Match[str]) -> str:
+        path = m.group(1)
+        val = _lookup_ctx_path(ctx, path)
+        return '' if val is None else str(val)
+
+    return _CTX_PLACEHOLDER_RE.sub(repl, template)
+
 logger = logging.getLogger(__name__)
+
 
 
 class WebhookExecutor(AbstractStepExecutor):
@@ -56,20 +75,19 @@ class WebhookExecutor(AbstractStepExecutor):
         ) = _extract_webhook_config(params)
 
         ctx: dict[str, Any] = build_context(instance)
-        dj_ctx = Context({'ctx': ctx})
 
         auth, bearer_token = _build_auth(auth_cfg)
 
-        ok, url, err_msg = _render_url(url_tpl, dj_ctx)
+        ok, url, err_msg = _render_url(url_tpl, ctx)
         if not ok:
             return ExecutorResult(
                 status=State.FAILED,
                 context=_make_error_context(err_msg),
             )
 
-        headers = _build_headers(headers_raw, dj_ctx, bearer_token)
+        headers = _build_headers(headers_raw, ctx, bearer_token)
 
-        ok, data_kwargs, body_err = _build_body(body_raw, dj_ctx)
+        ok, data_kwargs, body_err = _build_body(body_raw, ctx)
         if not ok:
             return ExecutorResult(
                 status=State.FAILED,
@@ -148,25 +166,25 @@ def _build_auth(auth_cfg: Any) -> tuple[Any, str | None]:
     return auth, bearer_token
 
 
-def _render_url(url_tpl: str, dj_ctx: Context) -> tuple[bool, str, str]:
+def _render_url(url_tpl: str, ctx: dict[str, Any]) -> tuple[bool, str, str]:
     try:
-        url = Template(url_tpl).render(dj_ctx)
+        url = _render_ctx_placeholders(url_tpl, ctx)
     except Exception as exc:
-        logger.exception('Webhook: URL template render failed')
-        return False, '', f'URL template error: {exc!s}'
+        logger.exception('Webhook: URL render failed')
+        return False, '', f'URL render error: {exc!s}'
     return True, url, ''
 
 
 def _build_headers(
     headers_raw: dict[str, Any],
-    dj_ctx: Context,
+    ctx: dict[str, Any],
     bearer_token: str | None,
 ) -> dict[str, str]:
     headers: dict[str, str] = {}
     for k, v in headers_raw.items():
         sval = str(v)
         with contextlib.suppress(Exception):
-            sval = Template(sval).render(dj_ctx)
+            sval = _render_ctx_placeholders(sval, ctx)
         headers[str(k)] = sval
 
     if bearer_token:
@@ -174,16 +192,15 @@ def _build_headers(
 
     return headers
 
-
-def _build_body(body_raw: Any, dj_ctx: Context) -> tuple[bool, dict[str, Any], str]:
+def _build_body(body_raw: Any, ctx: dict[str, Any]) -> tuple[bool, dict[str, Any], str]:
     data_kwargs: dict[str, Any] = {}
 
     if isinstance(body_raw, str) and body_raw.strip():
         try:
-            rendered = Template(body_raw).render(dj_ctx)
+            rendered = _render_ctx_placeholders(body_raw, ctx)
         except Exception as exc:
-            logger.exception('Webhook: body template render failed')
-            return False, {}, f'Body template error: {exc!s}'
+            logger.exception('Webhook: body render failed')
+            return False, {}, f'Body render error: {exc!s}'
         try:
             data_kwargs['json'] = _json.loads(rendered)
         except _json.JSONDecodeError:
