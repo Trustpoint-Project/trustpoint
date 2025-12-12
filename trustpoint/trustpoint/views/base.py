@@ -270,7 +270,7 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
         """Retrieve the primary key path from the URL parameters."""
         return str(self.kwargs.get('pks'))
 
-    def get_queryset(self) -> models.QuerySet[Any, Any] | None:
+    def get_queryset(self) -> models.QuerySet[Any, Any]:
         """Retrieve a queryset based on primary keys provided in the URL."""
         if self.queryset:
             return self.queryset
@@ -287,7 +287,7 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
         return queryset  # type: ignore[no-any-return]
 
 
-class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFromUrlMixin, BaseBulkDeleteView):  # type: ignore[misc]
+class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFromUrlMixin, BaseBulkDeleteView):
     """View for bulk deletion of objects."""
     model: type[models.Model]
 

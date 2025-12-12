@@ -368,7 +368,6 @@ class CertificateViewSet(viewsets.ModelViewSet[CertificateModel]):
         for backend in self.filter_backends:
             if hasattr(backend, 'filter_queryset'):
                 queryset = backend().filter_queryset(self.request, queryset, self)
-                break
 
         page = self.paginate_queryset(queryset)
         if page is not None:
