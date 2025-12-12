@@ -61,7 +61,7 @@ jobs:
           mv report_html.html report_https_html.html || true
 
       - name: Upload ZAP Scan Reports
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: zap-reports
