@@ -19,6 +19,7 @@ from devices.models import (
     OnboardingProtocol,
     RemoteDeviceCredentialDownloadModel,
 )
+from django.db.models.signals import post_save, pre_save
 from django.http import HttpRequest
 from django.test.client import RequestFactory
 from management.models import KeyStorageConfig
@@ -28,6 +29,14 @@ from pki.models.domain import DomainAllowedCertificateProfileModel, DomainModel
 from pki.models.issuing_ca import IssuingCaModel
 from pki.util.x509 import CertificateGenerator
 from trustpoint_core.serializer import CredentialSerializer
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Pytest configuration hook - runs once before all tests."""
+    from devices import signals
+    
+    pre_save.disconnect(signals._cache_old_domain, sender=DeviceModel)
+    post_save.disconnect(signals._trigger_device_events, sender=DeviceModel)
 
 
 @pytest.fixture(autouse=True)
