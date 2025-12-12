@@ -16,6 +16,7 @@ from django.views import View
 from django.views.generic import DetailView, ListView
 from django.views.generic.edit import FormView
 from trustpoint.logger import LoggerMixin
+from trustpoint.settings import UIConfig
 from trustpoint.views.base import BulkDeleteView, ContextDataMixin, SortableTableMixin
 
 from signer.forms import (
@@ -26,7 +27,6 @@ from signer.forms import (
     SignHashForm,
 )
 from signer.models import SignedMessageModel, SignerModel
-from trustpoint.settings import UIConfig
 
 
 class SignerContextMixin(ContextDataMixin):
@@ -166,11 +166,11 @@ class SignedMessagesListView(SignerContextMixin, ListView[SignedMessageModel]):
         return context
 
 
-class SignerBulkDeleteConfirmView(SignerContextMixin, BulkDeleteView):  # type: ignore[misc]
+class SignerBulkDeleteConfirmView(SignerContextMixin, BulkDeleteView):
     """View to confirm the deletion of multiple Signers."""
 
     model = SignerModel
-    success_url = reverse_lazy('signer:signer_list')  # type: ignore[assignment]
+    success_url = reverse_lazy('signer:signer_list')
     ignore_url = reverse_lazy('signer:signer_list')
     template_name = 'signer/confirm_delete.html'
     context_object_name = 'signers'

@@ -47,7 +47,7 @@ class DomainContextMixin(ContextDataMixin):
     context_page_name = 'domains'
 
 
-class DomainTableView(DomainContextMixin, SortableTableMixin, ListView[DomainModel]):
+class DomainTableView(DomainContextMixin, SortableTableMixin[DomainModel], ListView[DomainModel]):
     """Domain Table View."""
 
     model = DomainModel
@@ -70,10 +70,11 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
         """Override get_form to filter out autogen root CAs."""
         form = super().get_form()
         # Filter out autogen root CAs
-        form.fields['issuing_ca'].queryset = IssuingCaModel.objects.exclude(
+        form.fields['issuing_ca'].queryset = IssuingCaModel.objects.exclude(  # type: ignore[attr-defined]
             issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
         ).filter(is_active=True)
-        form.fields['issuing_ca'].empty_label = None  # Remove empty "---------" choice
+        # Remove empty "---------" choice
+        form.fields['issuing_ca'].empty_label = None  # type: ignore[attr-defined]
         del form.fields['is_active']
         return form
 
@@ -87,7 +88,7 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
         return super().form_valid(form)
 
 
-class DomainDevIdRegistrationTableMixin(SortableTableMixin, ListInDetailView):
+class DomainDevIdRegistrationTableMixin(SortableTableMixin[DevIdRegistration], ListInDetailView):
     """Mixin to add a table of DevID Registrations to the domain config view."""
 
     model = DevIdRegistration
@@ -97,7 +98,8 @@ class DomainDevIdRegistrationTableMixin(SortableTableMixin, ListInDetailView):
 
     def get_queryset(self) -> QuerySet[DevIdRegistration]:
         """Gets the queryset for the DevID Registration table."""
-        self.queryset = DevIdRegistration.objects.filter(domain=self.get_object())
+        domain: DomainModel = cast('DomainModel', self.get_object())
+        self.queryset = DevIdRegistration.objects.filter(domain=domain)
         return super().get_queryset()
 
 
@@ -146,7 +148,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         del args
         del kwargs
 
-        domain = self.get_object()
+        domain: DomainModel = cast('DomainModel', self.get_object())
 
         # Handle assignments of  allowed certificate profiles in domain
         # get fields from request POST

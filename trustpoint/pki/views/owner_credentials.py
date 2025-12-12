@@ -14,6 +14,7 @@ from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 from trustpoint.logger import LoggerMixin
+from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
     ContextDataMixin,
@@ -22,7 +23,6 @@ from trustpoint.views.base import (
 
 from pki.forms import OwnerCredentialFileImportForm
 from pki.models import OwnerCredentialModel
-from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:
     from django.forms import Form
@@ -35,7 +35,8 @@ class OwnerCredentialContextMixin(ContextDataMixin):
     context_page_name = 'owner_credentials'
 
 
-class OwnerCredentialTableView(OwnerCredentialContextMixin, SortableTableMixin, ListView[OwnerCredentialModel]):
+class OwnerCredentialTableView(
+    OwnerCredentialContextMixin, SortableTableMixin[OwnerCredentialModel], ListView[OwnerCredentialModel]):
     """Owner Credential Table View."""
 
     model = OwnerCredentialModel
@@ -70,12 +71,14 @@ class OwnerCredentialDetailView(LoggerMixin, OwnerCredentialContextMixin, Detail
         owner_credential = self.get_object()
         idevid_refs: list[dict[str,str]] = []
         if owner_credential:
-            for ref in owner_credential.idevid_ref_set.all():
-                idevid_refs.append({
+            idevid_refs.extend(
+                {
                     'idevid_subj_sn': ref.idevid_subject_serial_number,
                     'idevid_x509_sn': ref.idevid_x509_serial_number,
                     'idevid_sha256_fingerprint': ref.idevid_sha256_fingerprint,
-                })
+                } for ref in owner_credential.idevid_ref_set.all()
+            )
+
         context['idevid_refs'] = idevid_refs
         return context
 

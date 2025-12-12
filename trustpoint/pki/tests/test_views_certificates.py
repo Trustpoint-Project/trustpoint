@@ -17,7 +17,7 @@ from pki.views.certificates import (
     CertificatesRedirectView,
     CertificateTableView,
     CertificateDetailView,
-    CmpIssuingCaCertificateDownloadView,
+    IssuingCaCertificateDownloadView,
     CertificateDownloadView,
     CertificateMultipleDownloadView,
     TlsServerCertificateDownloadView,
@@ -129,8 +129,8 @@ class TestCertificateDetailView:
 
 
 @pytest.mark.django_db
-class TestCmpIssuingCaCertificateDownloadView:
-    """Test suite for CmpIssuingCaCertificateDownloadView."""
+class TestIssuingCaCertificateDownloadView:
+    """Test suite for IssuingCaCertificateDownloadView."""
 
     def test_download_certificate_as_pem(self, rf: RequestFactory, admin_user, issuing_ca_instance):
         """Test downloading certificate as PEM."""
@@ -143,7 +143,7 @@ class TestCmpIssuingCaCertificateDownloadView:
         request = rf.get('')
         request.user = admin_user
         
-        view = CmpIssuingCaCertificateDownloadView()
+        view = IssuingCaCertificateDownloadView()
         view.kwargs = {'pk': cert_model.pk}
         
         response = view.get(request, pk=str(cert_model.pk))
@@ -159,7 +159,7 @@ class TestCmpIssuingCaCertificateDownloadView:
         request = rf.get('')
         request.user = admin_user
         
-        view = CmpIssuingCaCertificateDownloadView()
+        view = IssuingCaCertificateDownloadView()
         
         with pytest.raises(Http404):
             view.get(request, pk=None)

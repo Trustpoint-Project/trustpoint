@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from django.http import HttpRequest
+    from django_stubs_ext import StrPromise
 
 
 class IndexView(RedirectView):
@@ -135,7 +136,7 @@ class SortableTableFromListMixin:
     queryset: list[dict[str, str]] | None
 
     @staticmethod
-    def _sort_list_of_dicts(list_of_dicts: list[dict[str, str]], sort_param: str) -> list[dict[str, str]]:
+    def _sort_list_of_dicts(list_of_dicts: list[dict[str, Any]], sort_param: str) -> list[dict[str, Any]]:
         """Sorts a list of dictionaries by the given sort parameter.
 
         Args:
@@ -210,7 +211,7 @@ class BaseBulkDeleteView(FormMixin[dj_forms.Form], BaseListView[Any]):
 
     queryset: Any
     get_queryset: Callable[..., models.QuerySet[Any, Any]]
-    success_url: str | None = None
+    success_url: str | StrPromise | None = None
 
     form_class = dj_forms.Form
 
@@ -231,7 +232,7 @@ class BaseBulkDeleteView(FormMixin[dj_forms.Form], BaseListView[Any]):
     def get_success_url(self) -> str:
         """Returns the URL to redirect to after a successful deletion."""
         if self.success_url:
-            return self.success_url
+            return self.success_url  # type: ignore[return-value]
 
         exc_msg = 'No URL to redirect to. Provide a success_url.'
         raise ImproperlyConfigured(exc_msg)
@@ -251,8 +252,8 @@ class PrimaryKeyListFromPrimaryKeyString:
                 del pks_list[-1]
 
             if len(pks_list) != len(set(pks_list)):
-                error_msg = 'Duplicates in query primary key list found.'
-                raise Http404(error_msg)
+                err_msg = 'Duplicates in query primary key list found.'
+                raise Http404(err_msg)
 
             return pks_list
 
@@ -267,9 +268,9 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
 
     def get_pks_path(self) -> str:
         """Retrieve the primary key path from the URL parameters."""
-        return self.kwargs.get('pks')  # type: ignore[return-value]
+        return str(self.kwargs.get('pks'))
 
-    def get_queryset(self) -> models.QuerySet[Any, Any] | None:
+    def get_queryset(self) -> models.QuerySet[Any, Any]:
         """Retrieve a queryset based on primary keys provided in the URL."""
         if self.queryset:
             return self.queryset
@@ -280,13 +281,13 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
         queryset = self.model.objects.filter(pk__in=pks)  # type: ignore[attr-defined]
 
         if len(pks) != len(queryset):
-            queryset = None
+            queryset = self.model.objects.none()  # type: ignore[attr-defined]
 
         self.queryset = queryset
         return queryset  # type: ignore[no-any-return]
 
 
-class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFromUrlMixin, BaseBulkDeleteView):  # type: ignore[misc]
+class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFromUrlMixin, BaseBulkDeleteView):
     """View for bulk deletion of objects."""
     model: type[models.Model]
 

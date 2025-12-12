@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from devices.models import DeviceModel
     from django.http import HttpRequest
     from pki.models import CertificateProfileModel, CredentialModel, DomainModel
-    from pyasn1_modules.rfc4210 import PKIMessage
+    from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
     from workflows.events import Event
     from workflows.models import EnrollmentRequest
 

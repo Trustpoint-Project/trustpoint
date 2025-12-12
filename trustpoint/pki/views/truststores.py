@@ -17,10 +17,17 @@ from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_yasg.utils import swagger_auto_schema
+from drf_yasg.utils import swagger_auto_schema  # type: ignore[import-untyped]
 from rest_framework import filters, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from trustpoint.page_context import PKI_PAGE_CATEGORY, PKI_PAGE_TRUSTSTORES_SUBCATEGORY, PageContextMixin
+from trustpoint.settings import UIConfig
+from trustpoint.views.base import (
+    BulkDeleteView,
+    PrimaryKeyListFromPrimaryKeyString,
+    SortableTableMixin,
+)
 from trustpoint_core.archiver import ArchiveFormat, Archiver
 from trustpoint_core.serializer import CertificateFormat
 
@@ -29,12 +36,6 @@ from pki.models import DomainModel
 from pki.models.truststore import TruststoreModel
 from pki.serializer.truststore import TruststoreSerializer
 from pki.services.truststore import TruststoreService
-from trustpoint.settings import UIConfig
-from trustpoint.views.base import (
-    BulkDeleteView,
-    PrimaryKeyListFromPrimaryKeyString,
-    SortableTableMixin,
-)
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -49,13 +50,14 @@ class TruststoresRedirectView(RedirectView):
     pattern_name = 'pki:truststores'
 
 
-class TruststoresContextMixin:
+class TruststoresContextMixin(PageContextMixin):
     """Mixin which adds some extra context for the PKI Views."""
 
-    extra_context: ClassVar = {'page_category': 'pki', 'page_name': 'truststores'}
+    page_category = PKI_PAGE_CATEGORY
+    page_name = PKI_PAGE_TRUSTSTORES_SUBCATEGORY
 
 
-class TruststoreTableView(TruststoresContextMixin, SortableTableMixin, ListView[TruststoreModel]):
+class TruststoreTableView(TruststoresContextMixin, SortableTableMixin[TruststoreModel], ListView[TruststoreModel]):
     """Truststore Table View."""
 
     model = TruststoreModel
@@ -102,7 +104,7 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
 
     def get_success_url(self) -> str:
         """You could still use a success URL here if needed."""
-        return reverse_lazy('pki:truststores')
+        return reverse_lazy('pki:truststores')  # type: ignore[return-value]
 
     def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
         """Include domain in context only if pk is present."""
@@ -191,17 +193,19 @@ class TruststoreMultipleDownloadView(
     template_name = 'pki/truststores/download_multiple.html'
     context_object_name = 'truststores'
 
-    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
+    def get_context_data(self, *args: Any, **kwargs: dict[str, Any]) -> dict[str, Any]:  # type: ignore[override]
         """Adding the part of the url to the context, that contains the truststores primary keys.
 
         This is used for the {% url }% tags in the template to download files.
 
         Args:
+            *args: Positional arguments, unused.
             **kwargs: Keyword arguments passed to super().get_context_data().
 
         Returns:
             dict: The context data.
         """
+        del args
         context = super().get_context_data(**kwargs)
         context['pks_path'] = self.kwargs.get('pks')
         return context
@@ -307,7 +311,7 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
         return response
 
 
-class TruststoreViewSet(viewsets.ModelViewSet):
+class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
     """ViewSet for managing Truststore instances.
 
     Supports standard CRUD operations such as list, retrieve,
@@ -316,24 +320,26 @@ class TruststoreViewSet(viewsets.ModelViewSet):
 
     queryset = TruststoreModel.objects.all().order_by('-created_at')
     serializer_class = TruststoreSerializer
-    permission_classes: ClassVar = [IsAuthenticated]
-    filter_backends: ClassVar = [
+    permission_classes = (IsAuthenticated,)
+    filter_backends = (
         DjangoFilterBackend,
         filters.SearchFilter,
         filters.OrderingFilter
-    ]
+    )
     filterset_fields: ClassVar = ['intended_usage']
     search_fields: ClassVar = ['unique_name']
     ordering_fields: ClassVar = ['unique_name', 'created_at']
 
+    # ignoring untyped decorator (drf-yasg not typed)
     @swagger_auto_schema(
         operation_summary='Create a new truststore',
         operation_description='Add a new truststore by providing its unique_name, intended_usage and trust_store_file.',
         tags=['truststores'],
-    )
+    )  # type: ignore[misc]
     def create(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
         """API endpoint to create truststore."""
-        serializer = self.get_serializer(data=request.data)
+        del args, _kwargs
+        serializer = self.get_serializer(data=request.data)  # type: ignore[attr-defined]
         serializer.is_valid(raise_exception=True)
 
         truststore = TruststoreService().create(
@@ -351,13 +357,15 @@ class TruststoreViewSet(viewsets.ModelViewSet):
         operation_summary='List Truststores',
         operation_description='Retrieve truststore from the database.',
         tags=['truststores'],
-    )
+    )  # type: ignore[misc]
     def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
         """API endpoint to get all truststores."""
+        del request, args, _kwargs
         queryset = self.get_queryset()
 
         for backend in list(self.filter_backends):
-            queryset = backend().filter_queryset(self.request, queryset, self)
+            if hasattr(backend, 'filter_queryset'):
+                queryset = backend().filter_queryset(self.request, queryset, self)  # type: ignore[attr-defined]
 
         page = self.paginate_queryset(queryset)
         if page is not None:
