@@ -14,10 +14,9 @@ from pki.models.credential import CredentialModel, IDevIDReferenceModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
-from trustpoint_core.oid import AlgorithmIdentifier
-
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import LoggedHttpResponse
+from trustpoint_core.oid import AlgorithmIdentifier
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -36,7 +35,7 @@ class AokiServiceMixin:
             idevid_subj_sn = sn_b.decode() if isinstance(sn_b, bytes) else sn_b
         except (ValueError, IndexError):
             idevid_subj_sn = '_'
-        idevid_x509_sn = hex(idevid_cert.serial_number)[2:].zfill(16)
+        idevid_x509_sn = f'{idevid_cert.serial_number:x}'.zfill(16)
         idevid_sha256_fingerprint = idevid_cert.fingerprint(hashes.SHA256()).hex()
         return f'dev-owner:{idevid_subj_sn}.{idevid_x509_sn}.{idevid_sha256_fingerprint}'
 

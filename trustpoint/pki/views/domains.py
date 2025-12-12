@@ -47,7 +47,7 @@ class DomainContextMixin(ContextDataMixin):
     context_page_name = 'domains'
 
 
-class DomainTableView(DomainContextMixin, SortableTableMixin, ListView[DomainModel]):
+class DomainTableView(DomainContextMixin, SortableTableMixin[DomainModel], ListView[DomainModel]):
     """Domain Table View."""
 
     model = DomainModel

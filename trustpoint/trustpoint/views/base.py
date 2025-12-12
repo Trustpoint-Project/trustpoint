@@ -6,7 +6,7 @@ which can be used within the apps.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast, Protocol, Self
+from typing import TYPE_CHECKING, Any, Protocol
 
 from django import forms as dj_forms
 from django.core.exceptions import ImproperlyConfigured
@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from django.http import HttpRequest
+    from django_stubs_ext import StrPromise
 
 
 class IndexView(RedirectView):
@@ -103,7 +104,7 @@ class SortableTableMixin[T: models.Model]:
         # Pass sorting details to the template
         context['current_sort'] = sort_param
         return context
-    
+
 
 class SortableTableFromListMixin:
     """Adds utility for sorting a ListView query by URL parameters.
@@ -112,7 +113,7 @@ class SortableTableFromListMixin:
     Use instead of SortableTableMixin when you have a list of dicts instead of a Django queryset.
     """
     @staticmethod
-    def _sort_list_of_dicts(list_of_dicts: list[dict], sort_param: str) -> list[dict]:
+    def _sort_list_of_dicts(list_of_dicts: list[dict[str, Any]], sort_param: str) -> list[dict[str, Any]]:
         """Sorts a list of dictionaries by the given sort parameter.
 
         Args:
@@ -184,7 +185,7 @@ class BaseBulkDeleteView(FormMixin, BaseListView):
 
     queryset: Any
     get_queryset: Callable
-    success_url = None
+    success_url: str | StrPromise | None = None
 
     form_class = dj_forms.Form
 
@@ -196,7 +197,7 @@ class BaseBulkDeleteView(FormMixin, BaseListView):
             return self.form_valid(form)
         return self.form_invalid(form)
 
-    def form_valid(self, _form: form_class) -> HttpResponse:
+    def form_valid(self, _form: dj_forms.Form) -> HttpResponse:
         """Delete the selected objects on valid form."""
         success_url = self.get_success_url()
         self.queryset.delete()
@@ -212,8 +213,10 @@ class BaseBulkDeleteView(FormMixin, BaseListView):
 
 
 class PrimaryKeyListFromPrimaryKeyString:
+    """Mixin to extract a list of primary keys from a '/' separated (URL) string."""
     @staticmethod
     def get_pks_as_list(pks: str) -> list[str]:
+        """Gets the primary keys as a list from a '/' separated string."""
         if pks:
             pks_list = pks.split('/')
 
@@ -222,7 +225,8 @@ class PrimaryKeyListFromPrimaryKeyString:
                 del pks_list[-1]
 
             if len(pks_list) != len(set(pks_list)):
-                raise Http404('Duplicates in query primary key list found.')
+                err_msg = 'Duplicates in query primary key list found.'
+                raise Http404(err_msg)
 
             return pks_list
 
@@ -231,9 +235,11 @@ class PrimaryKeyListFromPrimaryKeyString:
 
 class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
     def get_pks_path(self) -> str:
-        return self.kwargs.get('pks')
+        """Gets the primary keys path from the URL kwargs."""
+        return str(self.kwargs.get('pks'))
 
-    def get_queryset(self) -> None | models.QuerySet:
+    def get_queryset(self) -> models.QuerySet:
+        """Gets the queryset of the objects with the primary keys specified in the URL."""
         if self.queryset:
             return self.queryset
 
@@ -243,7 +249,7 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
         queryset = self.model.objects.filter(pk__in=pks)
 
         if len(pks) != len(queryset):
-            queryset = None
+            queryset = self.model.objects.none()
 
         self.queryset = queryset
         return queryset
