@@ -10,7 +10,7 @@ This module provides Django class-based views for:
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 from cryptography import x509
@@ -20,13 +20,11 @@ from devices.models import DeviceModel
 from django.contrib import messages
 from django.db import IntegrityError, models
 from django.db.models import Count
-from django.db.models.query import QuerySet
 from django.http import (
     HttpRequest,
     HttpResponse,
     HttpResponseRedirect,
     JsonResponse,
-    QueryDict,
 )
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.timezone import now as tz_now
@@ -53,6 +51,9 @@ from workflows.services.context_catalog import build_catalog
 from workflows.services.engine import advance_instance
 from workflows.services.validators import validate_wizard_payload
 from workflows.services.wizard import transform_to_definition_schema
+
+if TYPE_CHECKING:
+    from django.db.models.query import QuerySet
 
 
 class ContextCatalogView(View):
@@ -786,6 +787,10 @@ class SignalInstanceView(View):
         if inst.finalized:
             messages.error(request, f'Workflow {inst.id} was already completed.')
 
+            if not isinstance(inst.enrollment_request, EnrollmentRequest):
+                msg = f'No EnrollmentRequest for inst {inst} found'
+                raise ValueError(msg)
+
             return redirect('workflows:request_detail', pk=inst.enrollment_request.pk)
 
         if not inst.enrollment_request:
@@ -842,8 +847,7 @@ class EnrollmentRequestListView(ListView[EnrollmentRequest]):
             params['include_finalized'] = 'on'
 
         self.filterset = EnrollmentRequestFilter(params, queryset=base_qs)
-        qs = self.filterset.qs
-        return qs
+        return cast('QuerySet[EnrollmentRequest]', self.filterset.qs)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add page metadata and filter to context."""
@@ -938,6 +942,15 @@ class SignalEnrollmentRequestView(View):
     """Approve or reject all workflow instances belonging to a single EnrollmentRequest."""
 
     def post(self, request: HttpRequest, er_id: UUID, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        """Handle approval or denial of an enrollment request.
+
+        Args:
+            request: The HTTP request containing the action.
+            er_id: The id of the enrollment request.
+
+        Returns:
+            HttpResponse redirecting back to the request table.
+        """
         action = request.POST.get('action')
         if action not in {'approve', 'reject'}:
             messages.error(request, f'Invalid action: {action!r}')
@@ -955,9 +968,11 @@ class SignalEnrollmentRequestView(View):
         if er.aggregated_state != State.AWAITING:
             messages.error(
                 request,
-                _(f'You cannot {action} a request already in state "{er.aggregated_state.lower()}"'),
+                _('You cannot %s a request already in state: "%s"') % (
+                    action,
+                    er.aggregated_state.lower(),
+                )
             )
-            return redirect('workflows:request_table')
 
         insts = list(er.instances.select_related('enrollment_request'))
 
@@ -985,6 +1000,14 @@ class BulkSignalEnrollmentRequestsView(View):
     """Bulk approve or reject enrollment requests."""
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        """Handle bulk approval or denial of enrollment requests.
+
+        Args:
+            request: The HTTP request containing the list of selected enrollment requests.
+
+        Returns:
+            HttpResponse redirecting back to the request table.
+        """
         action = request.POST.get('action')
         if action not in {'approve', 'reject'}:
             messages.error(request, f'Invalid bulk action: {action!r}')
@@ -1016,10 +1039,9 @@ class BulkSignalEnrollmentRequestsView(View):
                 )
                 return redirect('workflows:request_table')
 
-            if action == 'approve':
-                if any(inst.state == State.FAILED for inst in er.instances.all()):
-                    messages.error(request, 'Cannot approve requests containing failed instances.')
-                    return redirect('workflows:request_table')
+            if action == 'approve' and any(inst.state == State.FAILED for inst in er.instances.all()):
+                messages.error(request, 'Cannot approve requests containing failed instances.')
+                return redirect('workflows:request_table')
 
             updatable.append(er)
 

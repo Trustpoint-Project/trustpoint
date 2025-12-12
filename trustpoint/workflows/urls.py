@@ -65,6 +65,6 @@ urlpatterns = [
     path('requests/', EnrollmentRequestListView.as_view(), name='request_table'),
     path('requests/<uuid:pk>/', EnrollmentRequestDetailView.as_view(), name='request_detail'),
     path('requests/bulk-abort/', BulkAbortEnrollmentRequestsView.as_view(), name='requests_bulk_abort'),
-    path('request/<uuid:er_id>/signal/', SignalEnrollmentRequestView.as_view(),name='request_signal',),
-    path('requests/bulk/signal/', BulkSignalEnrollmentRequestsView.as_view(),name='requests_bulk_signal',),
+    path('request/<uuid:er_id>/signal/', SignalEnrollmentRequestView.as_view(),name='request_signal'),
+    path('requests/bulk/signal/', BulkSignalEnrollmentRequestsView.as_view(),name='requests_bulk_signal'),
 ]

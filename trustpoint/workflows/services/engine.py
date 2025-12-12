@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 
-from workflows.models import EnrollmentRequest, State, WorkflowInstance
+from workflows.models import State, WorkflowInstance
 from workflows.services.context import VARS_MAX_BYTES, compact_context_blob
 from workflows.services.executors.factory import StepExecutorFactory
 
@@ -144,8 +144,6 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
     """Advance an instance until AWAITING or a terminal outcome is reached."""
     with transaction.atomic():
         inst = WorkflowInstance.objects.select_for_update().get(pk=inst.pk)
-        print('inst')
-        print(inst)
 
         if inst.finalized:
             return
@@ -158,8 +156,6 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
 
             executor = StepExecutorFactory.create(step_type)
             result: ExecutorResult = executor.execute(inst, signal)
-            print('result')
-            print(result)
             _persist_step_context(inst, result)
             if inst.enrollment_request:
                 inst.enrollment_request.recompute_and_save()
