@@ -350,13 +350,14 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
         try:
             issuing_credential = self.domain.get_issuing_ca_or_value_error().credential
             issuer_certificate = issuing_credential.get_certificate()
-            hash_algorithm_enum = SignatureSuite.from_certificate(
+            algorithm_identifier = SignatureSuite.from_certificate(
                 issuer_certificate
-            ).algorithm_identifier.hash_algorithm
+            ).algorithm_identifier
+            hash_algorithm_enum = algorithm_identifier.hash_algorithm
             if hash_algorithm_enum is None:
                 err_msg = 'Failed to get hash algorithm.'
                 self._raise_value_error(err_msg)
-            hash_algorithm = hash_algorithm_enum.hash_algorithm()
+            hash_algorithm = hash_algorithm_enum.hash_algorithm()  # type: ignore[union-attr]
 
             if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
                 err_msg = (
@@ -364,6 +365,8 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
                     f'but found {type(hash_algorithm)}'
                 )
                 self._raise_type_error(err_msg)
+
+            allowed_hash_algorithm: AllowedCertSignHashAlgos = hash_algorithm  # type: ignore[assignment]
 
             one_day = datetime.timedelta(days=1)
 
@@ -423,7 +426,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
 
             certificate = certificate_builder.sign(
                 private_key=self.domain.get_issuing_ca_or_value_error().credential.get_private_key_serializer().as_crypto(),
-                algorithm=hash_algorithm,
+                algorithm=allowed_hash_algorithm,
             )
 
         except Exception:
