@@ -135,33 +135,3 @@ We are also providing the Trustpoint as a docker-container. Please see
 [Trustpoint on Docker Hub](https://hub.docker.com/r/trustpointproject/trustpoint) or follow the
 instructions in our [Trustpoint Documentation](https://trustpoint.readthedocs.io/en/latest/) to build the
 container yourself.
-
-## Which features/requirements are finished and which are still w.i.p.?
-
-There are some requirements defined inside
-the [Test Plan](https://trustpoint.readthedocs.io/en/latest/testing/test_plan.html)
-which are listed in
-the [chapter Requirements](https://trustpoint.readthedocs.io/en/latest/testing/test_plan.html#requirements).
-To keep this README as short as possible but still as informative as possible,
-we will state the requirements defined in
-the [Test Plan](https://trustpoint.readthedocs.io/en/latest/testing/test_plan.html),
-state the header and if the [python behave](https://behave.readthedocs.io/en/latest/) tests are passing or failing.
-
-| Requirement | Title                                         | Status of the behave test                                                                                                                                                                                               |
-|-------------|-----------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| R_001       | Create, view, edit and delete an identity     | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_001_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_001_feature_test.yml)   |
-| R_002       | Usage of any zero touch onboarding protocol   | No test present.                                                                                                                                                                                                        |
-| R_003       | Certificate Lifecycle Management              | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_003_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_003_feature_test.yml)   |
-| R_004       | REST API                                      | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_004_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_004_feature_test.yml)   |
-| R_005       | Docker Container Support                      | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/docker-test-compose.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/docker-test-compose.yml) |
-| R_006       | Backup, Restore, and Update Mechanisms        | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_006_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_006_feature_test.yml)   |
-| R_007       | Logging Capabilities                          | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_007_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_007_feature_test.yml)   |
-| R_008       | Auto-Generated Issuing CAs                    | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_008_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_008_feature_test.yml)   |
-| R_009       | High Availability                             | No test present.                                                                                                                                                                                                        |
-| R_010       | CMP Endpoint for Onboarded Devices            | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_010_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_010_feature_test.yml)   |
-| R_011       | EST Endpoint for Onboarded Devices            | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_011_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_011_feature_test.yml)   |
-| R_012       | Language Selection and Translation            | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_012_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_012_feature_test.yml)   |
-| R_013       | Remote Credential Download                    | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_013_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_013_feature_test.yml)   |
-| R_101       | Security Level Configuration                  | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_101_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_101_feature_test.yml)   |
-| R_102       | Certificate Template Security                 | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/r_102_feature_test.yml)   |
-| F_001       | NTEU must be able to execute R_001 and R_002. | [![Test](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/f_001_feature_test.yml/badge.svg?branch=main)](https://github.com/Trustpoint-Project/trustpoint/actions/workflows/f_001_feature_test.yml)   |
