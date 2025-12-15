@@ -69,6 +69,14 @@ def step_access_setup_wizard(context: runner.Context) -> None:
         context: The behave context
     """
     context.response = context.session.get(f'{context.base_url}/', allow_redirects=True)
+    
+    # Debug output
+    print(f'\n=== DEBUG: Access Setup Wizard')
+    print(f'=== DEBUG: Status Code: {context.response.status_code}')
+    print(f'=== DEBUG: Final URL: {context.response.url}')
+    print(f'=== DEBUG: Redirect history: {[r.url for r in context.response.history]}')
+    print(f'=== DEBUG: Response Text (first 500 chars):\n{context.response.text[:500]}\n')
+    
     assert context.response.status_code == HTTP_OK, \
         f'Failed to access setup wizard: {context.response.status_code}'
 
@@ -81,9 +89,18 @@ def step_verify_crypto_storage_step(context: runner.Context) -> None:
         context: The behave context
     """
     content_lower = context.response.text.lower()
+    
+    # Debug output
+    print(f'\n=== DEBUG: Response Status Code: {context.response.status_code}')
+    print(f'=== DEBUG: Response URL: {context.response.url}')
+    print(f'=== DEBUG: Response Text (first 500 chars):\n{context.response.text[:500]}')
+    print(f'=== DEBUG: Looking for "crypto" or "storage" in content')
+    print(f'=== DEBUG: "crypto" found: {"crypto" in content_lower}')
+    print(f'=== DEBUG: "storage" found: {"storage" in content_lower}')
+    
     assert 'crypto' in content_lower or \
            'storage' in content_lower, \
-           'Not at crypto storage setup step'
+           f'Not at crypto storage setup step. URL: {context.response.url}, First 200 chars: {context.response.text[:200]}'
 
 
 @when('the user selects "{storage_type}" as crypto storage')
