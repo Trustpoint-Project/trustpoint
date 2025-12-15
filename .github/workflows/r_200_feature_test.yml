@@ -63,59 +63,50 @@ jobs:
             sleep 5
           done
       
-      # Verify the setup wizard is accessible
-      - name: Test Setup Wizard Accessibility
+      # Verify the setup wizard is accessible (smoke test)
+      - name: Verify Setup Wizard Accessibility
         run: |
-          echo "Testing setup wizard accessibility..."
+          echo "Verifying setup wizard is accessible..."
+          http_code=$(curl -k -s -L -o /tmp/setup-wizard-page.html -w "%{http_code}" https://127.0.0.1/ || echo "000")
           
-          # First, try accessing the root path which should redirect to setup wizard
-          echo "Checking root path (should redirect to setup wizard)..."
-          http_code=$(curl -k -s -L -o /tmp/root-page.html -w "%{http_code}" https://127.0.0.1/ || echo "000")
-          echo "Root path returned: HTTP $http_code"
-          
-          # Check if we're on setup wizard (either at root or after redirect)
-          if grep -q -i "setup\|wizard\|crypto.*storage\|storage.*crypto" /tmp/root-page.html; then
-            echo "✓ Setup wizard is accessible from root path"
-            WIZARD_FOUND=true
+          if [ "$http_code" = "200" ] && grep -q -i "setup\|wizard\|crypto\|storage" /tmp/setup-wizard-page.html; then
+            echo "✓ Setup wizard is accessible"
           else
-            echo "Root path did not show setup wizard, trying direct setup-wizard URL..."
-            
-            # Try direct access to setup-wizard path
-            http_code=$(curl -k -s -L -o /tmp/setup-wizard.html -w "%{http_code}" https://127.0.0.1/setup-wizard/ || echo "000")
-            echo "Setup wizard path returned: HTTP $http_code"
-            
-            if [ "$http_code" = "200" ] && grep -q -i "setup\|wizard\|crypto\|storage" /tmp/setup-wizard.html; then
-              echo "✓ Setup wizard is accessible at /setup-wizard/"
-              WIZARD_FOUND=true
-            else
-              echo "✗ Setup wizard not found"
-              echo "Root page content:"
-              cat /tmp/root-page.html | head -50
-              echo ""
-              echo "Setup wizard page content:"
-              cat /tmp/setup-wizard.html | head -50
-              WIZARD_FOUND=false
-            fi
-          fi
-          
-          if [ "$WIZARD_FOUND" = "true" ]; then
-            echo ""
-            echo "✓ Docker Setup Wizard test PASSED"
-            echo "  - Container started successfully"
-            echo "  - Database initialized"
-            echo "  - Setup wizard is accessible"
-            echo "  - Ready for first-time user configuration"
-          else
+            echo "✗ Setup wizard not accessible"
             exit 1
           fi
       
-      # Upload the setup wizard HTML page as an artifact for inspection
-      - name: Upload Setup Wizard Page
+      # Setup local environment for running behave tests
+      - name: Setup local test environment
+        uses: ./.github/actions/setup-uv-action
+        with:
+          run_migrations: false  # Don't run migrations, we're testing against the Docker container
+      
+      # Configure connection to Docker container's database
+      - name: Configure test environment to use Docker database
+        run: |
+          # Export database connection settings to connect to the Docker PostgreSQL
+          echo "DATABASE_HOST=localhost" >> $GITHUB_ENV
+          echo "DATABASE_PORT=5432" >> $GITHUB_ENV
+          echo "DATABASE_USER=admin" >> $GITHUB_ENV
+          echo "DATABASE_PASSWORD=testing321" >> $GITHUB_ENV
+          echo "DATABASE_NAME=trustpoint_db" >> $GITHUB_ENV
+      
+      # Run the Behave feature test against the running Docker container
+      - name: Run Setup Wizard Feature Test
+        run: |
+          uv run python trustpoint/manage.py behave \
+            --format behave_html_pretty_formatter:PrettyHTMLFormatter \
+            --outfile behave-report.html \
+            trustpoint/features/R_200_docker_setup_wizard.feature
+      
+      # Upload the behave HTML report
+      - name: Upload Behave Test Report
         uses: actions/upload-artifact@v5
         if: always()
         with:
-          name: setup-wizard-page
-          path: /tmp/setup-wizard.html
+          name: r_200-behave-report
+          path: behave-report.html
       
       # Display container logs for debugging
       - name: Show container logs
