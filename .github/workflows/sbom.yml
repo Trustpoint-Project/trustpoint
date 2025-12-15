@@ -41,13 +41,13 @@ jobs:
         ls -lh sbom_spdx.json
 
     - name: Upload CycloneDX SBOM
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: sbom-cyclonedx
         path: sbom_cyclonedx.json
 
     - name: Upload SPDX SBOM
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: sbom-spdx
         path: sbom_spdx.json
