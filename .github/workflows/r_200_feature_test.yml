@@ -76,33 +76,24 @@ jobs:
             exit 1
           fi
       
-      # Setup local environment for running behave tests
-      - name: Setup local test environment
-        uses: ./.github/actions/setup-uv-action
-        with:
-          run_migrations: false  # Don't run migrations, we're testing against the Docker container
-      
-      # Configure connection to Docker container's database
-      - name: Configure test environment to use Docker database
+      # Install Python and dependencies for running behave tests
+      - name: Install Python and dependencies
         run: |
-          # Export database connection settings to connect to the Docker PostgreSQL
-          echo "DATABASE_HOST=localhost" >> $GITHUB_ENV
-          echo "DATABASE_PORT=5432" >> $GITHUB_ENV
-          echo "DATABASE_USER=admin" >> $GITHUB_ENV
-          echo "DATABASE_PASSWORD=testing321" >> $GITHUB_ENV
-          echo "DATABASE_NAME=trustpoint_db" >> $GITHUB_ENV
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          export PATH="$HOME/.cargo/bin:$PATH"
+          uv sync --group test
       
       # Run the Behave feature test against the running Docker container
       - name: Run Setup Wizard Feature Test
         run: |
-          # Run behave with verbose output and plain format to see errors
-          uv run python trustpoint/manage.py behave \
+          # Run behave directly (not through Django) to test against Docker container
+          uv run behave \
             --no-capture \
             --verbose \
             trustpoint/features/R_200_docker_setup_wizard.feature || true
           
           # Also generate HTML report (run again to ensure report is created)
-          uv run python trustpoint/manage.py behave \
+          uv run behave \
             --format behave_html_pretty_formatter:PrettyHTMLFormatter \
             --outfile behave-report.html \
             trustpoint/features/R_200_docker_setup_wizard.feature || true
