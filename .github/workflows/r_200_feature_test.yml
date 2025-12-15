@@ -77,23 +77,33 @@ jobs:
           fi
       
       # Install Python and dependencies for running behave tests
-      - name: Install Python and dependencies
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          export PATH="$HOME/.cargo/bin:$PATH"
-          uv sync --group dev
+      - name: Install and setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: "pyproject.toml"
+      
+      - name: Install dependencies
+        run: uv sync --group dev
       
       # Run the Behave feature test against the running Docker container
       - name: Run Setup Wizard Feature Test
+        env:
+          DJANGO_SETTINGS_MODULE: trustpoint.settings
         run: |
           # Run behave directly (not through Django) to test against Docker container
-          DJANGO_SETTINGS_MODULE=trustpoint.settings PYTHONPATH="${PWD}" uv run behave \
+          uv run behave \
             --no-capture \
             --verbose \
             trustpoint/features/R_200_docker_setup_wizard.feature || true
           
           # Also generate HTML report (run again to ensure report is created)
-          DJANGO_SETTINGS_MODULE=trustpoint.settings PYTHONPATH="${PWD}" uv run behave \
+          uv run behave \
             --format behave_html_pretty_formatter:PrettyHTMLFormatter \
             --outfile behave-report.html \
             trustpoint/features/R_200_docker_setup_wizard.feature || true
