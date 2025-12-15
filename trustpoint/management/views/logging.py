@@ -16,11 +16,11 @@ from django.utils.translation import gettext as _
 from django.views.generic import TemplateView, View
 from django.views.generic.base import RedirectView
 from django.views.generic.list import ListView
+
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
-from trustpoint.views.base import SortableTableFromListMixin
-
 from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH
+from trustpoint.views.base import SortableTableFromListMixin
 
 if TYPE_CHECKING:
     from typing import Any

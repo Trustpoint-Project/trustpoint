@@ -5,9 +5,9 @@ import itertools
 from abc import ABC, abstractmethod
 
 from cryptography import x509
-from trustpoint.logger import LoggerMixin
 
 from request.request_context import RequestContext
+from trustpoint.logger import LoggerMixin
 
 
 class ValidationComponent(ABC):

@@ -9,10 +9,10 @@ from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import DeleteView, TemplateView
-from home.views import ERROR, SUCCESS
-from trustpoint.logger import LoggerMixin
 
+from home.views import ERROR, SUCCESS
 from notifications.models import NotificationModel
+from trustpoint.logger import LoggerMixin
 
 
 class RefreshNotificationsView(LoggerMixin, TemplateView):

@@ -6,20 +6,20 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any, Never, get_args
 
-from cmp.util import NameParser
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.types import CertificatePublicKeyTypes
 from cryptography.hazmat.primitives.serialization import load_der_public_key
 from cryptography.x509.oid import ExtensionOID
-from pki.models import DomainModel
 from pyasn1.codec.ber import decoder as ber_decoder  # type: ignore[import-untyped]
 from pyasn1.codec.der import decoder as der_decoder  # type: ignore[import-untyped]
 from pyasn1.codec.der import encoder as der_encoder
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
-from trustpoint.logger import LoggerMixin
 
+from cmp.util import NameParser
+from pki.models import DomainModel
 from request.request_context import RequestContext
+from trustpoint.logger import LoggerMixin
 
 
 class ParsingComponent(ABC):

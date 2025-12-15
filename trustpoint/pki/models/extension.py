@@ -12,6 +12,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 from trustpoint_core.oid import CertificateExtensionOid, NameOid
+
 from util.db import CustomDeleteActionModel, OrphanDeletionMixin
 
 __all__ = [

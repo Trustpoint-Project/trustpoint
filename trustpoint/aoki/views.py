@@ -10,13 +10,14 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from django.http import JsonResponse
 from django.views import View
+from trustpoint_core.oid import AlgorithmIdentifier
+
 from pki.models.credential import CredentialModel, IDevIDReferenceModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import LoggedHttpResponse
-from trustpoint_core.oid import AlgorithmIdentifier
 
 if TYPE_CHECKING:
     from django.http import HttpRequest

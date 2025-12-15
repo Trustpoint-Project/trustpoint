@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.x509 import CertificateSigningRequest
 from django.db import transaction
 from django.db.models import Q
+
 from trustpoint.logger import LoggerMixin
 from workflows.models import DeviceRequest, EnrollmentRequest, State, WorkflowDefinition, WorkflowInstance
 from workflows.services.engine import advance_instance

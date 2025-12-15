@@ -27,12 +27,13 @@ from django.views.decorators.vary import vary_on_cookie
 from django.views.i18n import JavaScriptCatalog
 from drf_yasg import openapi  # type: ignore[import-untyped]
 from drf_yasg.views import get_schema_view  # type: ignore[import-untyped]
-from pki.views.issuing_cas import CrlDownloadView
 from rest_framework import permissions
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+
+from pki.views.issuing_cas import CrlDownloadView
 
 from .views import base
 

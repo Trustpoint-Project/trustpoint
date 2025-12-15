@@ -80,6 +80,10 @@ required-version = ">=0.8.20"
 [tool.ruff]
 line-length = 120
 indent-width = 4
+src = ["trustpoint"]  # Define source paths for proper import classification
+
+[tool.ruff.lint.isort]
+known-first-party = ["trustpoint", "devices", "pki", "management", "home", "users", "setup_wizard", "signer", "notifications"]
 
 [tool.ruff.lint.flake8-quotes]
 docstring-quotes = "double"

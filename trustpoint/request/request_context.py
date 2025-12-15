@@ -8,10 +8,11 @@ if TYPE_CHECKING:
     from cryptography import x509
     from cryptography.x509 import CertificateSigningRequest
     from cryptography.x509.base import CertificateBuilder
-    from devices.models import DeviceModel
     from django.http import HttpRequest
-    from pki.models import CertificateProfileModel, CredentialModel, DomainModel
     from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
+
+    from devices.models import DeviceModel
+    from pki.models import CertificateProfileModel, CredentialModel, DomainModel
     from workflows.events import Event
     from workflows.models import EnrollmentRequest
 

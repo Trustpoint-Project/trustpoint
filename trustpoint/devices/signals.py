@@ -4,11 +4,11 @@ from typing import Any
 from django.db.models.base import ModelBase
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
+
+from devices.models import DeviceModel
 from request.request_context import RequestContext
 from request.workflow_handler import WorkflowHandler
 from workflows.events import Events
-
-from devices.models import DeviceModel
 
 
 @receiver(pre_save, sender=DeviceModel)

@@ -8,6 +8,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 from trustpoint_core.serializer import CertificateCollectionSerializer
+
 from util.field import UniqueNameValidator
 
 from .certificate import CertificateModel

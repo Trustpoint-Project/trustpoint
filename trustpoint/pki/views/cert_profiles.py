@@ -15,16 +15,16 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic.edit import UpdateView
 from django.views.generic.list import ListView
+
+from pki.forms import CertProfileConfigForm
+from pki.models import CertificateProfileModel
 from trustpoint.logger import LoggerMixin
+from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
     ContextDataMixin,
     SortableTableMixin,
 )
-
-from pki.forms import CertProfileConfigForm
-from pki.models import CertificateProfileModel
-from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:
     from django.forms import Form

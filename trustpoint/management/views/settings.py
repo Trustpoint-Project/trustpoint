@@ -13,15 +13,15 @@ from django.utils.encoding import force_str
 from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic.edit import FormView
-from notifications.models import NotificationConfig, WeakECCCurve, WeakSignatureAlgorithm
-from pki.util.keys import AutoGenPkiKeyAlgorithm
-from trustpoint.logger import LoggerMixin
-from trustpoint.page_context import PageContextMixin
 
 from management.forms import SecurityConfigForm
 from management.models import LoggingConfig, SecurityConfig
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
+from notifications.models import NotificationConfig, WeakECCCurve, WeakSignatureAlgorithm
+from pki.util.keys import AutoGenPkiKeyAlgorithm
+from trustpoint.logger import LoggerMixin
+from trustpoint.page_context import PageContextMixin
 
 if TYPE_CHECKING:
     from typing import Any

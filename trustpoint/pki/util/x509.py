@@ -13,10 +13,10 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509.oid import NameOID
 from cryptography.x509.verification import PolicyBuilder, Store
-from management.models import KeyStorageConfig
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
+from management.models import KeyStorageConfig
 from pki.models import IssuingCaModel
 from pki.util.keys import CryptographyUtils
 

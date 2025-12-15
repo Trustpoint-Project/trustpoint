@@ -5,11 +5,10 @@ from __future__ import annotations
 import secrets
 import threading
 
-from trustpoint.logger import LoggerMixin
-
 from pki.models import DomainModel, IssuingCaModel, RevokedCertificateModel
 from pki.util.keys import AutoGenPkiKeyAlgorithm, KeyGenerator
 from pki.util.x509 import CertificateGenerator
+from trustpoint.logger import LoggerMixin
 
 UNIQUE_NAME_PREFIX = 'AutoGenPKI_Issuing_CA'
 DOMAIN_NAME_PREFIX = 'AutoGenPKI'
