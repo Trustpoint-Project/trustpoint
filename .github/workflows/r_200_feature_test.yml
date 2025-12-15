@@ -24,27 +24,55 @@ jobs:
           compose-file: "./docker-compose.yml"
           up-flags: "--build --wait"
       
-      # Wait for the application to be fully ready
+      # Check container status
+      - name: Check container status
+        run: |
+          echo "=== Checking container status ==="
+          docker compose ps
+          echo "=== Checking Trustpoint container logs ==="
+          docker compose logs trustpoint | tail -50
+      
+      # Wait for the application to be fully ready with better health check
       - name: Wait for Trustpoint to be ready
         run: |
           echo "Waiting for Trustpoint to be ready..."
-          for i in {1..30}; do
-            if curl -k -s -o /dev/null -w "%{http_code}" https://127.0.0.1/ | grep -q "200"; then
-              echo "Trustpoint is ready"
+          
+          # Check if container is running
+          if ! docker compose ps | grep -q "trustpoint.*running"; then
+            echo "ERROR: Trustpoint container is not running!"
+            docker compose logs trustpoint
+            exit 1
+          fi
+          
+          # Wait for HTTP response
+          for i in {1..60}; do
+            http_code=$(curl -k -s -o /dev/null -w "%{http_code}" https://127.0.0.1/ || echo "000")
+            if [ "$http_code" = "200" ] || [ "$http_code" = "302" ]; then
+              echo "✓ Trustpoint is ready (HTTP $http_code)"
               break
             fi
-            echo "Waiting... (attempt $i/30)"
-            sleep 5
+            echo "Waiting... (attempt $i/60, HTTP $http_code)"
+            
+            if [ $i -eq 60 ]; then
+              echo "ERROR: Trustpoint did not become ready in time"
+              docker compose logs trustpoint
+              exit 1
+            fi
+            sleep 3
           done
+      
+      # Install dev dependencies in the container
+      - name: Install dev dependencies
+        run: |
+          docker compose exec -T trustpoint bash -c "cd /var/www/html/trustpoint && uv sync --group dev"
       
       # Execute the setup wizard feature test inside the container
       - name: Run Setup Wizard Feature Test
         run: |
           docker compose exec -T trustpoint bash -c "\
-            source /venv/bin/activate && \
-            cd /trustpoint && \
-            python manage.py behave \
-            --format behave_html_pretty_formatter:PrettyHTMLFormatter \
+            cd /var/www/html/trustpoint/trustpoint && \
+            DJANGO_SETTINGS_MODULE=trustpoint.settings /var/www/html/trustpoint/.venv/bin/python -m behave \
+            --format html \
             --outfile /tmp/behave-report.html \
             features/R_200_docker_setup_wizard.feature"
       
@@ -63,14 +91,15 @@ jobs:
           name: r_200-docker-setup-wizard-html-report
           path: behave-report.html
       
-      # Display container logs for debugging if test fails
-      - name: Show container logs on failure
-        if: failure()
+      # Display container logs for debugging
+      - name: Show container logs
+        if: always()
         run: |
-          echo "=== Trustpoint Container Logs ==="
-          docker compose logs trustpoint
-          echo "=== PostgreSQL Container Logs ==="
-          docker compose logs postgres
+          echo "=== Trustpoint Container Logs (last 100 lines) ==="
+          docker compose logs --tail=100 trustpoint
+          echo ""
+          echo "=== PostgreSQL Container Logs (last 50 lines) ==="
+          docker compose logs --tail=50 postgres
       
       # Cleanup: Stop and remove containers
       - name: Cleanup containers
