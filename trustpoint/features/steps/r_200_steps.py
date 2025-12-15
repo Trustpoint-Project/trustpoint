@@ -8,9 +8,12 @@ import time
 import requests
 from behave import given, runner, then, when
 
+# Disable SSL warnings for self-signed certificates
+requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)  # type: ignore[attr-defined]
+
 HTTP_OK = 200
 HTTP_REDIRECT = 302
-DOCKER_URL = 'http://localhost'
+DOCKER_URL = 'https://localhost'
 
 
 def extract_csrf_token(html_content: str) -> str:
@@ -44,6 +47,8 @@ def step_docker_container_running(context: runner.Context) -> None:
     """
     # Create a session to maintain cookies across requests
     context.session = requests.Session()
+    # Disable SSL verification for self-signed certificates
+    context.session.verify = False
     context.base_url = DOCKER_URL
 
     # Verify the application is accessible
@@ -69,14 +74,6 @@ def step_access_setup_wizard(context: runner.Context) -> None:
         context: The behave context
     """
     context.response = context.session.get(f'{context.base_url}/', allow_redirects=True)
-    
-    # Debug output
-    print(f'\n=== DEBUG: Access Setup Wizard')
-    print(f'=== DEBUG: Status Code: {context.response.status_code}')
-    print(f'=== DEBUG: Final URL: {context.response.url}')
-    print(f'=== DEBUG: Redirect history: {[r.url for r in context.response.history]}')
-    print(f'=== DEBUG: Response Text (first 500 chars):\n{context.response.text[:500]}\n')
-    
     assert context.response.status_code == HTTP_OK, \
         f'Failed to access setup wizard: {context.response.status_code}'
 
@@ -89,18 +86,9 @@ def step_verify_crypto_storage_step(context: runner.Context) -> None:
         context: The behave context
     """
     content_lower = context.response.text.lower()
-    
-    # Debug output
-    print(f'\n=== DEBUG: Response Status Code: {context.response.status_code}')
-    print(f'=== DEBUG: Response URL: {context.response.url}')
-    print(f'=== DEBUG: Response Text (first 500 chars):\n{context.response.text[:500]}')
-    print(f'=== DEBUG: Looking for "crypto" or "storage" in content')
-    print(f'=== DEBUG: "crypto" found: {"crypto" in content_lower}')
-    print(f'=== DEBUG: "storage" found: {"storage" in content_lower}')
-    
-    assert 'crypto' in content_lower or \
-           'storage' in content_lower, \
-           f'Not at crypto storage setup step. URL: {context.response.url}, First 200 chars: {context.response.text[:200]}'
+    assert 'cryptographic storage configuration' in content_lower or \
+           ('storage' in content_lower and 'software' in content_lower), \
+           f'Not at crypto storage setup step. URL: {context.response.url}'
 
 
 @when('the user selects "{storage_type}" as crypto storage')
@@ -113,12 +101,19 @@ def step_select_crypto_storage(context: runner.Context, storage_type: str) -> No
     """
     csrf_token = extract_csrf_token(context.response.text)
 
-    # File system storage is typically option 0 or 1
-    storage_option = '0' if 'file' in storage_type.lower() else '1'
+    # Map user-friendly names to actual form values
+    storage_mapping = {
+        'file system': 'software',
+        'software': 'software',
+        'softhsm': 'softhsm',
+        'physical hsm': 'physical_hsm',
+    }
+    
+    storage_value = storage_mapping.get(storage_type.lower(), 'software')
 
     context.crypto_form_data = {
         'csrfmiddlewaretoken': csrf_token,
-        'crypto_storage_type': storage_option,
+        'storage_type': storage_value,
     }
 
 
@@ -139,36 +134,40 @@ def step_proceed_next(context: runner.Context) -> None:
             data=context.crypto_form_data,
             allow_redirects=True
         )
+        delattr(context, 'crypto_form_data')  # Clean up after submission
     elif hasattr(context, 'setup_mode_form_data'):
-        context.response = context.session.post(
-            current_url,
-            data=context.setup_mode_form_data,
-            allow_redirects=True
-        )
+        # Setup mode uses links, not forms - this is a no-op
+        # The navigation already happened in step_select_setup_mode
+        if hasattr(context, 'setup_mode_form_data'):
+            delattr(context, 'setup_mode_form_data')
     elif hasattr(context, 'tls_form_data'):
         context.response = context.session.post(
             current_url,
             data=context.tls_form_data,
             allow_redirects=True
         )
+        delattr(context, 'tls_form_data')
     elif hasattr(context, 'backup_form_data'):
         context.response = context.session.post(
             current_url,
             data=context.backup_form_data,
             allow_redirects=True
         )
+        delattr(context, 'backup_form_data')
     elif hasattr(context, 'demo_data_form_data'):
         context.response = context.session.post(
             current_url,
             data=context.demo_data_form_data,
             allow_redirects=True
         )
+        delattr(context, 'demo_data_form_data')
     elif hasattr(context, 'superuser_form_data'):
         context.response = context.session.post(
             current_url,
             data=context.superuser_form_data,
             allow_redirects=True
         )
+        delattr(context, 'superuser_form_data')
 
     assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
         f'Failed to proceed: {context.response.status_code}'
@@ -182,25 +181,40 @@ def step_verify_setup_mode_step(context: runner.Context) -> None:
         context: The behave context
     """
     content_lower = context.response.text.lower()
-    assert 'mode' in content_lower or \
-           'test' in content_lower, \
+    assert 'setup mode' in content_lower or \
+           ('setup' in content_lower and 'scratch' in content_lower), \
            'Not at setup mode selection step'
 
 
 @when('the user selects "{mode}" setup mode option')
 def step_select_setup_mode(context: runner.Context, mode: str) -> None:
-    """Selects the setup mode.
+    """Selects the setup mode by clicking the appropriate link.
 
     Args:
         context: The behave context
         mode: The setup mode to select
     """
-    csrf_token = extract_csrf_token(context.response.text)
-
-    context.setup_mode_form_data = {
-        'csrfmiddlewaretoken': csrf_token,
-        'setup_mode': 'test' if 'test' in mode.lower() else 'production',
-    }
+    # The setup mode page has links, not a form
+    # "Setup with Test Mode" or similar means "Start Fresh Setup"
+    # Extract the link URL from the page
+    if 'test' in mode.lower() or 'fresh' in mode.lower() or 'scratch' in mode.lower():
+        # Look for the "Start Fresh Setup" link
+        match = re.search(r'href="(/setup-wizard/select_tls_server_credential/)"', context.response.text)
+        if match:
+            url = match.group(1)
+            context.response = context.session.get(f'{context.base_url}{url}', allow_redirects=True)
+        else:
+            msg = 'Could not find fresh setup link'
+            raise AssertionError(msg)
+    else:
+        # Restore from backup option
+        match = re.search(r'href="(/setup-wizard/restore_options/)"', context.response.text)
+        if match:
+            url = match.group(1)
+            context.response = context.session.get(f'{context.base_url}{url}', allow_redirects=True)
+        else:
+            msg = 'Could not find restore backup link'
+            raise AssertionError(msg)
 
 
 @then('the wizard should be at the TLS server credential step')
@@ -211,9 +225,8 @@ def step_verify_tls_step(context: runner.Context) -> None:
         context: The behave context
     """
     content_lower = context.response.text.lower()
-    assert 'tls' in content_lower or \
-           'certificate' in content_lower or \
-           'credential' in content_lower, \
+    assert 'configure tls-server credential' in content_lower or \
+           ('tls' in content_lower and 'certificate' in content_lower), \
            'Not at TLS server credential step'
 
 
@@ -227,9 +240,15 @@ def step_select_tls_option(context: runner.Context, option: str) -> None:
     """
     csrf_token = extract_csrf_token(context.response.text)
 
+    # The form has buttons with different names: generate_credential or import_credential
+    if 'generate' in option.lower() or 'self-signed' in option.lower():
+        button_name = 'generate_credential'
+    else:
+        button_name = 'import_credential'
+
     context.tls_form_data = {
         'csrfmiddlewaretoken': csrf_token,
-        'tls_option': 'generate' if 'generate' in option.lower() else 'import',
+        button_name: '',  # Button clicks send empty value
     }
 
 
