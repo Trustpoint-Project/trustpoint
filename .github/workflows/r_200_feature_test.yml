@@ -86,18 +86,14 @@ jobs:
       # Run the Behave feature test against the running Docker container
       - name: Run Setup Wizard Feature Test
         run: |
-          # Set Django settings module and Python path
-          export DJANGO_SETTINGS_MODULE=trustpoint.settings
-          export PYTHONPATH="${PYTHONPATH}:${PWD}"
-          
           # Run behave directly (not through Django) to test against Docker container
-          uv run behave \
+          DJANGO_SETTINGS_MODULE=trustpoint.settings PYTHONPATH="${PWD}" uv run behave \
             --no-capture \
             --verbose \
             trustpoint/features/R_200_docker_setup_wizard.feature || true
           
           # Also generate HTML report (run again to ensure report is created)
-          uv run behave \
+          DJANGO_SETTINGS_MODULE=trustpoint.settings PYTHONPATH="${PWD}" uv run behave \
             --format behave_html_pretty_formatter:PrettyHTMLFormatter \
             --outfile behave-report.html \
             trustpoint/features/R_200_docker_setup_wizard.feature || true
