@@ -24,41 +24,40 @@ jobs:
           compose-file: "./docker-compose.yml"
           up-flags: "--build --wait"
       
-      # Check container status
-      - name: Check container status
-        run: |
-          echo "=== Checking container status ==="
-          docker compose ps
-          echo "=== Checking Trustpoint container logs ==="
-          docker compose logs trustpoint | tail -50
-      
-      # Wait for the application to be fully ready with better health check
+      # Wait for services to start up (database and application initialization)
       - name: Wait for Trustpoint to be ready
         run: |
           echo "Waiting for Trustpoint to be ready..."
+          echo "Initial startup delay for database initialization..."
+          sleep 30
           
-          # Check if container is running
-          if ! docker compose ps | grep -q "trustpoint.*running"; then
-            echo "ERROR: Trustpoint container is not running!"
-            docker compose logs trustpoint
-            exit 1
-          fi
+          echo "Checking container status..."
+          docker compose ps
           
-          # Wait for HTTP response
-          for i in {1..60}; do
+          echo "Waiting for HTTP response..."
+          for i in {1..40}; do
             http_code=$(curl -k -s -o /dev/null -w "%{http_code}" https://127.0.0.1/ || echo "000")
+            
             if [ "$http_code" = "200" ] || [ "$http_code" = "302" ]; then
               echo "✓ Trustpoint is ready (HTTP $http_code)"
+              docker compose logs trustpoint | tail -20
               break
             fi
-            echo "Waiting... (attempt $i/60, HTTP $http_code)"
             
-            if [ $i -eq 60 ]; then
+            echo "Waiting... (attempt $i/40, HTTP code: $http_code)"
+            
+            if [ $i -eq 40 ]; then
               echo "ERROR: Trustpoint did not become ready in time"
+              echo "=== Container Status ==="
+              docker compose ps
+              echo "=== Trustpoint Logs ==="
               docker compose logs trustpoint
+              echo "=== PostgreSQL Logs ==="
+              docker compose logs postgres
               exit 1
             fi
-            sleep 3
+            
+            sleep 5
           done
       
       # Install dev dependencies in the container
