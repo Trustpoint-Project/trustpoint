@@ -2,15 +2,34 @@
 
 from __future__ import annotations
 
+import re
 import time
 
+import requests
 from behave import given, runner, then, when
-from django.contrib.auth.models import User
-from django.middleware.csrf import get_token
-from django.test import Client
 
 HTTP_OK = 200
 HTTP_REDIRECT = 302
+DOCKER_URL = 'http://localhost'
+
+
+def extract_csrf_token(html_content: str) -> str:
+    """Extract CSRF token from HTML content.
+
+    Args:
+        html_content: The HTML content containing the CSRF token
+
+    Returns:
+        The CSRF token value
+
+    Raises:
+        AssertionError: If no CSRF token is found
+    """
+    match = re.search(r'csrfmiddlewaretoken["\']?\s*value=["\']([^"\']+)["\']', html_content)
+    if not match:
+        msg = 'CSRF token not found in response'
+        raise AssertionError(msg)
+    return match.group(1)
 
 
 @given('a fresh Trustpoint Docker container is running')
@@ -23,16 +42,16 @@ def step_docker_container_running(context: runner.Context) -> None:
     Args:
         context: The behave context
     """
-    # In the actual Docker test environment, containers are already running
-    # This step is primarily a documentation/verification step
-    context.client = Client()
+    # Create a session to maintain cookies across requests
+    context.session = requests.Session()
+    context.base_url = DOCKER_URL
 
     # Verify the application is accessible
     max_retries = 30
     for attempt in range(max_retries):
         try:
-            response = context.client.get('/', follow=True)
-            if response.status_code == HTTP_OK:
+            response = context.session.get(context.base_url, timeout=5)
+            if response.status_code in [HTTP_OK, HTTP_REDIRECT]:
                 break
         except Exception:  # noqa: BLE001
             if attempt < max_retries - 1:
@@ -49,7 +68,7 @@ def step_access_setup_wizard(context: runner.Context) -> None:
     Args:
         context: The behave context
     """
-    context.response = context.client.get('/setup-wizard/', follow=True)
+    context.response = context.session.get(f'{context.base_url}/', allow_redirects=True)
     assert context.response.status_code == HTTP_OK, \
         f'Failed to access setup wizard: {context.response.status_code}'
 
@@ -61,8 +80,9 @@ def step_verify_crypto_storage_step(context: runner.Context) -> None:
     Args:
         context: The behave context
     """
-    assert b'crypto' in context.response.content.lower() or \
-           b'storage' in context.response.content.lower(), \
+    content_lower = context.response.text.lower()
+    assert 'crypto' in content_lower or \
+           'storage' in content_lower, \
            'Not at crypto storage setup step'
 
 
@@ -74,7 +94,7 @@ def step_select_crypto_storage(context: runner.Context, storage_type: str) -> No
         context: The behave context
         storage_type: The type of crypto storage to select
     """
-    csrf_token = get_token(context.response.wsgi_request)
+    csrf_token = extract_csrf_token(context.response.text)
 
     # File system storage is typically option 0 or 1
     storage_option = '0' if 'file' in storage_type.lower() else '1'
@@ -92,42 +112,45 @@ def step_proceed_next(context: runner.Context) -> None:
     Args:
         context: The behave context
     """
+    # Get current URL for posting
+    current_url = context.response.url
+
     # Submit the current form data if available
     if hasattr(context, 'crypto_form_data'):
-        context.response = context.client.post(
-            context.response.request['PATH_INFO'],
-            context.crypto_form_data,
-            follow=True
+        context.response = context.session.post(
+            current_url,
+            data=context.crypto_form_data,
+            allow_redirects=True
         )
     elif hasattr(context, 'setup_mode_form_data'):
-        context.response = context.client.post(
-            context.response.request['PATH_INFO'],
-            context.setup_mode_form_data,
-            follow=True
+        context.response = context.session.post(
+            current_url,
+            data=context.setup_mode_form_data,
+            allow_redirects=True
         )
     elif hasattr(context, 'tls_form_data'):
-        context.response = context.client.post(
-            context.response.request['PATH_INFO'],
-            context.tls_form_data,
-            follow=True
+        context.response = context.session.post(
+            current_url,
+            data=context.tls_form_data,
+            allow_redirects=True
         )
     elif hasattr(context, 'backup_form_data'):
-        context.response = context.client.post(
-            context.response.request['PATH_INFO'],
-            context.backup_form_data,
-            follow=True
+        context.response = context.session.post(
+            current_url,
+            data=context.backup_form_data,
+            allow_redirects=True
         )
     elif hasattr(context, 'demo_data_form_data'):
-        context.response = context.client.post(
-            context.response.request['PATH_INFO'],
-            context.demo_data_form_data,
-            follow=True
+        context.response = context.session.post(
+            current_url,
+            data=context.demo_data_form_data,
+            allow_redirects=True
         )
     elif hasattr(context, 'superuser_form_data'):
-        context.response = context.client.post(
-            context.response.request['PATH_INFO'],
-            context.superuser_form_data,
-            follow=True
+        context.response = context.session.post(
+            current_url,
+            data=context.superuser_form_data,
+            allow_redirects=True
         )
 
     assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
@@ -141,8 +164,9 @@ def step_verify_setup_mode_step(context: runner.Context) -> None:
     Args:
         context: The behave context
     """
-    assert b'mode' in context.response.content.lower() or \
-           b'test' in context.response.content.lower(), \
+    content_lower = context.response.text.lower()
+    assert 'mode' in content_lower or \
+           'test' in content_lower, \
            'Not at setup mode selection step'
 
 
@@ -154,7 +178,7 @@ def step_select_setup_mode(context: runner.Context, mode: str) -> None:
         context: The behave context
         mode: The setup mode to select
     """
-    csrf_token = get_token(context.response.wsgi_request)
+    csrf_token = extract_csrf_token(context.response.text)
 
     context.setup_mode_form_data = {
         'csrfmiddlewaretoken': csrf_token,
@@ -169,9 +193,10 @@ def step_verify_tls_step(context: runner.Context) -> None:
     Args:
         context: The behave context
     """
-    assert b'tls' in context.response.content.lower() or \
-           b'certificate' in context.response.content.lower() or \
-           b'credential' in context.response.content.lower(), \
+    content_lower = context.response.text.lower()
+    assert 'tls' in content_lower or \
+           'certificate' in content_lower or \
+           'credential' in content_lower, \
            'Not at TLS server credential step'
 
 
@@ -183,7 +208,7 @@ def step_select_tls_option(context: runner.Context, option: str) -> None:
         context: The behave context
         option: The TLS option to select
     """
-    csrf_token = get_token(context.response.wsgi_request)
+    csrf_token = extract_csrf_token(context.response.text)
 
     context.tls_form_data = {
         'csrfmiddlewaretoken': csrf_token,
@@ -198,8 +223,9 @@ def step_verify_backup_step(context: runner.Context) -> None:
     Args:
         context: The behave context
     """
-    assert b'backup' in context.response.content.lower() or \
-           b'password' in context.response.content.lower(), \
+    content_lower = context.response.text.lower()
+    assert 'backup' in content_lower or \
+           'password' in content_lower, \
            'Not at backup password setup step'
 
 
@@ -222,7 +248,7 @@ def step_confirm_backup_password(context: runner.Context, password: str) -> None
         context: The behave context
         password: The backup password confirmation
     """
-    csrf_token = get_token(context.response.wsgi_request)
+    csrf_token = extract_csrf_token(context.response.text)
 
     context.backup_form_data = {
         'csrfmiddlewaretoken': csrf_token,
@@ -238,8 +264,9 @@ def step_verify_demo_data_step(context: runner.Context) -> None:
     Args:
         context: The behave context
     """
-    assert b'demo' in context.response.content.lower() or \
-           b'sample' in context.response.content.lower(), \
+    content_lower = context.response.text.lower()
+    assert 'demo' in content_lower or \
+           'sample' in content_lower, \
            'Not at demo data step'
 
 
@@ -250,7 +277,7 @@ def step_skip_demo_data(context: runner.Context) -> None:
     Args:
         context: The behave context
     """
-    csrf_token = get_token(context.response.wsgi_request)
+    csrf_token = extract_csrf_token(context.response.text)
 
     context.demo_data_form_data = {
         'csrfmiddlewaretoken': csrf_token,
@@ -265,9 +292,10 @@ def step_verify_superuser_step(context: runner.Context) -> None:
     Args:
         context: The behave context
     """
-    assert b'admin' in context.response.content.lower() or \
-           b'user' in context.response.content.lower() or \
-           b'account' in context.response.content.lower(), \
+    content_lower = context.response.text.lower()
+    assert 'admin' in content_lower or \
+           'user' in content_lower or \
+           'account' in content_lower, \
            'Not at superuser creation step'
 
 
@@ -280,7 +308,7 @@ def step_create_admin_account(context: runner.Context, username: str, password: 
         username: The admin username
         password: The admin password
     """
-    csrf_token = get_token(context.response.wsgi_request)
+    csrf_token = extract_csrf_token(context.response.text)
 
     context.superuser_form_data = {
         'csrfmiddlewaretoken': csrf_token,
@@ -343,8 +371,8 @@ def step_login_user(context: runner.Context, username: str, password: str) -> No
         password: The password to log in with
     """
     # Get the login page first
-    context.response = context.client.get('/users/login/', follow=True)
-    csrf_token = get_token(context.response.wsgi_request)
+    context.response = context.session.get(f'{context.base_url}/users/login/', allow_redirects=True)
+    csrf_token = extract_csrf_token(context.response.text)
 
     # Submit login form
     login_data = {
@@ -353,7 +381,7 @@ def step_login_user(context: runner.Context, username: str, password: str) -> No
         'password': password,
     }
 
-    context.response = context.client.post('/users/login/', login_data, follow=True)
+    context.response = context.session.post(f'{context.base_url}/users/login/', data=login_data, allow_redirects=True)
 
     assert context.response.status_code == HTTP_OK, \
         f'Login failed with status: {context.response.status_code}'
@@ -367,11 +395,8 @@ def step_verify_dashboard_access(context: runner.Context) -> None:
         context: The behave context
     """
     # Check if we're at a dashboard or authenticated page
-    assert b'logout' in context.response.content.lower() or \
-           b'dashboard' in context.response.content.lower() or \
-           b'trustpoint' in context.response.content.lower(), \
+    content_lower = context.response.text.lower()
+    assert 'logout' in content_lower or \
+           'dashboard' in content_lower or \
+           'trustpoint' in content_lower, \
            'Failed to access dashboard after login'
-
-    # Verify user is actually created
-    user_exists = User.objects.filter(username=context.admin_username).exists()
-    assert user_exists, f'Admin user {context.admin_username} was not created'
