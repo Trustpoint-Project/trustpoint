@@ -19,7 +19,6 @@ from trustpoint.page_context import (
     PKI_PAGE_CERTIFICATES_SUBCATEGORY,
     PageContextMixin,
 )
-from trustpoint.settings import UIConfig
 from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTableMixin
 from trustpoint_core.archiver import ArchiveFormat, Archiver
 from trustpoint_core.oid import NameOid
@@ -28,6 +27,7 @@ from trustpoint_core.serializer import CertificateFormat
 from pki.models import CertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.serializer.certificate import CertificateSerializer
+from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:
     from typing import ClassVar

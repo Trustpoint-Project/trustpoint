@@ -16,7 +16,6 @@ from django.views import View
 from django.views.generic import DetailView, ListView
 from django.views.generic.edit import FormView
 from trustpoint.logger import LoggerMixin
-from trustpoint.settings import UIConfig
 from trustpoint.views.base import BulkDeleteView, ContextDataMixin, SortableTableMixin
 
 from signer.forms import (
@@ -27,6 +26,7 @@ from signer.forms import (
     SignHashForm,
 )
 from signer.models import SignedMessageModel, SignerModel
+from trustpoint.settings import UIConfig
 
 
 class SignerContextMixin(ContextDataMixin):

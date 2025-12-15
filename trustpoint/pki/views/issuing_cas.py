@@ -27,7 +27,6 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from trustpoint.logger import LoggerMixin
-from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
     ContextDataMixin,
@@ -41,6 +40,7 @@ from pki.forms import (
 )
 from pki.models import CertificateModel, IssuingCaModel
 from pki.serializer import IssuingCaSerializer
+from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet

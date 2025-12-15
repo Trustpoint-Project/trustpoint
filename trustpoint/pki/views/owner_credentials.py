@@ -14,7 +14,6 @@ from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 from trustpoint.logger import LoggerMixin
-from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
     ContextDataMixin,
@@ -23,6 +22,7 @@ from trustpoint.views.base import (
 
 from pki.forms import OwnerCredentialFileImportForm
 from pki.models import OwnerCredentialModel
+from trustpoint.settings import UIConfig
 
 if TYPE_CHECKING:
     from django.forms import Form
