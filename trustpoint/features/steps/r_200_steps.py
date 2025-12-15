@@ -147,6 +147,24 @@ def step_proceed_next(context: runner.Context) -> None:
             allow_redirects=True
         )
         delattr(context, 'tls_form_data')
+        
+        # After applying TLS configuration, the server restarts with a new certificate
+        # We need to wait for the server to come back up and re-establish connection
+        time.sleep(5)  # Give server time to restart
+        
+        # Re-establish connection by making a new request (accepting the new certificate)
+        max_retries = 30
+        for attempt in range(max_retries):
+            try:
+                context.response = context.session.get(f'{context.base_url}/setup-wizard/', timeout=5, allow_redirects=True)
+                if context.response.status_code == HTTP_OK:
+                    break
+            except Exception:  # noqa: BLE001
+                if attempt < max_retries - 1:
+                    time.sleep(2)
+                else:
+                    msg = 'Could not reconnect after TLS configuration'
+                    raise AssertionError(msg) from None
     elif hasattr(context, 'backup_form_data'):
         context.response = context.session.post(
             current_url,
@@ -232,24 +250,54 @@ def step_verify_tls_step(context: runner.Context) -> None:
 
 @when('the user selects "{option}" TLS certificate option')
 def step_select_tls_option(context: runner.Context, option: str) -> None:
-    """Selects TLS credential option.
+    """Selects TLS credential option and completes the generation/import process.
 
     Args:
         context: The behave context
         option: The TLS option to select
     """
+    current_url = context.response.url
     csrf_token = extract_csrf_token(context.response.text)
 
     # The form has buttons with different names: generate_credential or import_credential
     if 'generate' in option.lower() or 'self-signed' in option.lower():
         button_name = 'generate_credential'
+        
+        # Step 1: Click "Generate Certificate" button
+        context.response = context.session.post(
+            current_url,
+            data={
+                'csrfmiddlewaretoken': csrf_token,
+                button_name: '',
+            },
+            allow_redirects=True
+        )
+        
+        # Step 2: Submit the SAN form (uses default values)
+        csrf_token = extract_csrf_token(context.response.text)
+        context.response = context.session.post(
+            context.response.url,
+            data={
+                'csrfmiddlewaretoken': csrf_token,
+                'ipv4_addresses': '127.0.0.1',
+                'ipv6_addresses': '::1',
+                'domain_names': 'localhost',
+            },
+            allow_redirects=True
+        )
+        
+        # Step 3: Submit "Apply TLS configuration" form
+        csrf_token = extract_csrf_token(context.response.text)
+        context.tls_form_data = {
+            'csrfmiddlewaretoken': csrf_token,
+        }
     else:
+        # Import credential flow (not fully implemented in this test)
         button_name = 'import_credential'
-
-    context.tls_form_data = {
-        'csrfmiddlewaretoken': csrf_token,
-        button_name: '',  # Button clicks send empty value
-    }
+        context.tls_form_data = {
+            'csrfmiddlewaretoken': csrf_token,
+            button_name: '',
+        }
 
 
 @then('the wizard should be at the backup password setup step')
@@ -317,7 +365,7 @@ def step_skip_demo_data(context: runner.Context) -> None:
 
     context.demo_data_form_data = {
         'csrfmiddlewaretoken': csrf_token,
-        'install_demo_data': 'false',
+        'without-demo-data': '',  # Button name for skipping demo data
     }
 
 
