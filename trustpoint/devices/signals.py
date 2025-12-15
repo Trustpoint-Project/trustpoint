@@ -12,12 +12,13 @@ from workflows.events import Events
 
 
 @receiver(pre_save, sender=DeviceModel)
-def _cache_old_domain(_sender: ModelBase, instance: DeviceModel, **_: Any) -> None:
+def _cache_old_domain(sender: ModelBase, instance: DeviceModel, **_: Any) -> None:  # noqa: ARG001
+    """Cache the old domain_id before saving to detect domain changes."""
     instance.old_domain_id = DeviceModel.objects.get(pk=instance.pk).domain_id if instance.pk else None  # type: ignore[attr-defined]
 
 
 @receiver(post_save, sender=DeviceModel)
-def _trigger_device_events(_sender: ModelBase, instance: DeviceModel, *,created: bool, **_: Any) -> None:
+def _trigger_device_events(sender: ModelBase, instance: DeviceModel, *, created: bool, **_: Any) -> None:  # noqa: ARG001
     handler = WorkflowHandler()
 
     # 1) Device created
