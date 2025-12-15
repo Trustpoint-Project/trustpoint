@@ -1,5 +1,8 @@
 name: R_200 - Docker Setup Wizard
 
+permissions:
+  contents: read
+
 # This workflow tests the initial setup wizard in a Docker environment
 # It verifies that a user can complete the full setup process in a fresh Docker deployment
 
@@ -69,11 +72,11 @@ jobs:
       - name: Run Setup Wizard Feature Test
         run: |
           docker compose exec -T trustpoint bash -c "\
-            cd /var/www/html/trustpoint/trustpoint && \
-            DJANGO_SETTINGS_MODULE=trustpoint.settings /var/www/html/trustpoint/.venv/bin/python -m behave \
+            cd /var/www/html/trustpoint && \
+            uv run python trustpoint/manage.py behave \
             --format behave_html_pretty_formatter:PrettyHTMLFormatter \
             --outfile /tmp/behave-report.html \
-            features/R_200_docker_setup_wizard.feature"
+            trustpoint/features/R_200_docker_setup_wizard.feature"
       
       # Copy the test report from container to host
       - name: Copy test report from container
