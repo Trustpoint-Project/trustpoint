@@ -71,7 +71,7 @@ jobs:
           docker compose exec -T trustpoint bash -c "\
             cd /var/www/html/trustpoint/trustpoint && \
             DJANGO_SETTINGS_MODULE=trustpoint.settings /var/www/html/trustpoint/.venv/bin/python -m behave \
-            --format html \
+            --format behave_html_pretty_formatter:PrettyHTMLFormatter \
             --outfile /tmp/behave-report.html \
             features/R_200_docker_setup_wizard.feature"
       
