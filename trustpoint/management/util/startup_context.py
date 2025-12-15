@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from setup_wizard import SetupWizardState
-
 from management.models import KeyStorageConfig
+from setup_wizard import SetupWizardState
 
 if TYPE_CHECKING:
     from packaging.version import Version

@@ -21,13 +21,6 @@ from drf_yasg.utils import swagger_auto_schema  # type: ignore[import-untyped]
 from rest_framework import filters, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from trustpoint.page_context import PKI_PAGE_CATEGORY, PKI_PAGE_TRUSTSTORES_SUBCATEGORY, PageContextMixin
-from trustpoint.settings import UIConfig
-from trustpoint.views.base import (
-    BulkDeleteView,
-    PrimaryKeyListFromPrimaryKeyString,
-    SortableTableMixin,
-)
 from trustpoint_core.archiver import ArchiveFormat, Archiver
 from trustpoint_core.serializer import CertificateFormat
 
@@ -36,6 +29,13 @@ from pki.models import DomainModel
 from pki.models.truststore import TruststoreModel
 from pki.serializer.truststore import TruststoreSerializer
 from pki.services.truststore import TruststoreService
+from trustpoint.page_context import PKI_PAGE_CATEGORY, PKI_PAGE_TRUSTSTORES_SUBCATEGORY, PageContextMixin
+from trustpoint.settings import UIConfig
+from trustpoint.views.base import (
+    BulkDeleteView,
+    PrimaryKeyListFromPrimaryKeyString,
+    SortableTableMixin,
+)
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar

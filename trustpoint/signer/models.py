@@ -4,9 +4,10 @@
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from pki.models.credential import CredentialModel
 from trustpoint_core import oid
 from trustpoint_core.serializer import CredentialSerializer
+
+from pki.models.credential import CredentialModel
 from util.db import CustomDeleteActionModel
 
 

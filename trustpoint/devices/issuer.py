@@ -8,20 +8,21 @@ from typing import TYPE_CHECKING, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
-from pki.models.credential import CredentialModel
-from pki.util.keys import KeyGenerator
-from trustpoint.logger import LoggerMixin
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
 
 from devices.models import DeviceModel, IssuedCredentialModel, OnboardingStatus
+from pki.models.credential import CredentialModel
+from pki.util.keys import KeyGenerator
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     import ipaddress
 
-    from pki.models.domain import DomainModel
     from trustpoint_core.crypto_types import PublicKey
+
+    from pki.models.domain import DomainModel
 
 
 class SaveCredentialToDbMixin(LoggerMixin):

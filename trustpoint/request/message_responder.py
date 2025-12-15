@@ -3,10 +3,10 @@ import base64
 from abc import ABC, abstractmethod
 
 from cryptography.hazmat.primitives.serialization import Encoding, pkcs7
-from devices.models import OnboardingStatus
-from workflows.models import State
 
+from devices.models import OnboardingStatus
 from request.request_context import RequestContext
+from workflows.models import State
 
 
 class AbstractMessageResponder(ABC):

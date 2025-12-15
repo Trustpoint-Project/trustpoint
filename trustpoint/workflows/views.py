@@ -16,7 +16,6 @@ from uuid import UUID
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
-from devices.models import DeviceModel
 from django.contrib import messages
 from django.db import IntegrityError, models
 from django.db.models import Count
@@ -31,11 +30,12 @@ from django.utils.timezone import now as tz_now
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import ListView
+from trustpoint_core.oid import AlgorithmIdentifier
+
+from devices.models import DeviceModel
 from pki.models import DomainModel, IssuingCaModel
 from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_DEVICES_SUBCATEGORY, PageContextMixin
-from trustpoint_core.oid import AlgorithmIdentifier
 from util.email import MailTemplates
-
 from workflows.events import Events
 from workflows.filters import EnrollmentRequestFilter
 from workflows.models import (

@@ -6,8 +6,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from django.utils.translation import gettext as _
-from util.email import normalize_addresses
 
+from util.email import normalize_addresses
 from workflows.events import Events
 from workflows.services.executors.factory import StepExecutorFactory
 

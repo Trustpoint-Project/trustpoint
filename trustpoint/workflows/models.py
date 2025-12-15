@@ -5,9 +5,10 @@ from __future__ import annotations
 import uuid
 from typing import Any, ClassVar, cast
 
-from devices.models import DeviceModel
 from django.db import models
 from django.db.models import JSONField
+
+from devices.models import DeviceModel
 from pki.models.domain import DomainModel
 from pki.models.issuing_ca import IssuingCaModel
 

@@ -16,13 +16,6 @@ from django.views.generic import DeleteView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import CreateView, FormView
 from django.views.generic.list import ListView
-from trustpoint.settings import UIConfig
-from trustpoint.views.base import (
-    BulkDeleteView,
-    ContextDataMixin,
-    ListInDetailView,
-    SortableTableMixin,
-)
 
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from pki.models import (
@@ -33,6 +26,13 @@ from pki.models import (
     IssuingCaModel,
 )
 from pki.models.truststore import TruststoreModel
+from trustpoint.settings import UIConfig
+from trustpoint.views.base import (
+    BulkDeleteView,
+    ContextDataMixin,
+    ListInDetailView,
+    SortableTableMixin,
+)
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet

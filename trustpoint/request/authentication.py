@@ -7,6 +7,10 @@ from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
+from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
+from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
+
 from devices.models import (
     DeviceModel,
     IssuedCredentialModel,
@@ -17,12 +21,8 @@ from devices.models import (
 )
 from pki.models import CredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
-from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
-from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
-from trustpoint.logger import LoggerMixin
-from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
-
 from request.request_context import RequestContext
+from trustpoint.logger import LoggerMixin
 
 
 class AuthenticationComponent(ABC):

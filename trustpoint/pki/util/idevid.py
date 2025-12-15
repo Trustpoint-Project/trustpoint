@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from cryptography import x509
 from cryptography.x509.verification import Criticality, ExtensionPolicy, PolicyBuilder, Store, VerificationError
+
 from devices.models import (
     DeviceModel,
     OnboardingConfigModel,
@@ -15,10 +16,9 @@ from devices.models import (
     OnboardingProtocol,
     OnboardingStatus,
 )
-from trustpoint.logger import LoggerMixin
-
 from pki.models import DevIdRegistration, DomainModel, TruststoreModel
 from pki.util.x509 import ApacheTLSClientCertExtractor
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from django.http import HttpRequest

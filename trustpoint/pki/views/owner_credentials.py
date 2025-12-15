@@ -13,6 +13,9 @@ from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
+
+from pki.forms import OwnerCredentialFileImportForm
+from pki.models import OwnerCredentialModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -20,9 +23,6 @@ from trustpoint.views.base import (
     ContextDataMixin,
     SortableTableMixin,
 )
-
-from pki.forms import OwnerCredentialFileImportForm
-from pki.models import OwnerCredentialModel
 
 if TYPE_CHECKING:
     from django.forms import Form

@@ -5,6 +5,7 @@ from typing import Any
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
+
 from trustpoint.logger import LoggerMixin
 
 

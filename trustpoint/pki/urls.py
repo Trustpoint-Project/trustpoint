@@ -1,8 +1,8 @@
 """URL configuration for the PKI application."""
 
 from django.urls import path, re_path
-from help_pages import pki_help_views
 
+from help_pages import pki_help_views
 from pki.views import cert_profiles, certificates, domains, issuing_cas, owner_credentials, truststores
 from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
 from pki.views.issuing_cas import IssuedCertificatesListView

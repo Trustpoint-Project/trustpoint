@@ -14,7 +14,6 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
-from trustpoint.logger import LoggerMixin
 
 from signer.models import SignedMessageModel, SignerModel
 from signer.serializers import (
@@ -24,6 +23,7 @@ from signer.serializers import (
     SignHashRequestSerializer,
     SignHashResponseSerializer,
 )
+from trustpoint.logger import LoggerMixin
 
 
 class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
