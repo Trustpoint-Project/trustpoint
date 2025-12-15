@@ -85,6 +85,8 @@ jobs:
       
       # Run the Behave feature test against the running Docker container
       - name: Run Setup Wizard Feature Test
+        env:
+          DJANGO_SETTINGS_MODULE: trustpoint.settings
         run: |
           # Run behave directly (not through Django) to test against Docker container
           uv run behave \
