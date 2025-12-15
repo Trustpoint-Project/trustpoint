@@ -1,0 +1,78 @@
+name: R_200 - Docker Setup Wizard
+
+# This workflow tests the initial setup wizard in a Docker environment
+# It verifies that a user can complete the full setup process in a fresh Docker deployment
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  docker-setup-wizard-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        
+      # Build and start Docker containers with docker-compose
+      - name: Build and start Docker containers
+        uses: hoverkraft-tech/compose-action@v2.4.1
+        with:
+          compose-file: "./docker-compose.yml"
+          up-flags: "--build --wait"
+      
+      # Wait for the application to be fully ready
+      - name: Wait for Trustpoint to be ready
+        run: |
+          echo "Waiting for Trustpoint to be ready..."
+          for i in {1..30}; do
+            if curl -k -s -o /dev/null -w "%{http_code}" https://127.0.0.1/ | grep -q "200"; then
+              echo "Trustpoint is ready"
+              break
+            fi
+            echo "Waiting... (attempt $i/30)"
+            sleep 5
+          done
+      
+      # Execute the setup wizard feature test inside the container
+      - name: Run Setup Wizard Feature Test
+        run: |
+          docker compose exec -T trustpoint bash -c "\
+            source /venv/bin/activate && \
+            cd /trustpoint && \
+            python manage.py behave \
+            --format behave_html_pretty_formatter:PrettyHTMLFormatter \
+            --outfile /tmp/behave-report.html \
+            features/R_200_docker_setup_wizard.feature"
+      
+      # Copy the test report from container to host
+      - name: Copy test report from container
+        if: always()
+        run: |
+          docker compose cp trustpoint:/tmp/behave-report.html ./behave-report.html || \
+          echo "Warning: Could not copy test report"
+      
+      # Upload the HTML test report as an artifact
+      - name: Upload Test Report
+        uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: r_200-docker-setup-wizard-html-report
+          path: behave-report.html
+      
+      # Display container logs for debugging if test fails
+      - name: Show container logs on failure
+        if: failure()
+        run: |
+          echo "=== Trustpoint Container Logs ==="
+          docker compose logs trustpoint
+          echo "=== PostgreSQL Container Logs ==="
+          docker compose logs postgres
+      
+      # Cleanup: Stop and remove containers
+      - name: Cleanup containers
+        if: always()
+        run: docker compose down -v
