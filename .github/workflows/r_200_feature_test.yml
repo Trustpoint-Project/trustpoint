@@ -98,6 +98,8 @@ jobs:
           uv run python trustpoint/manage.py behave \
             --format behave_html_pretty_formatter:PrettyHTMLFormatter \
             --outfile behave-report.html \
+            --no-capture \
+            --verbose \
             trustpoint/features/R_200_docker_setup_wizard.feature
       
       # Upload the behave HTML report
