@@ -68,32 +68,46 @@ jobs:
         run: |
           echo "Testing setup wizard accessibility..."
           
-          # Check if setup wizard page loads
-          http_code=$(curl -k -s -o /tmp/setup-wizard.html -w "%{http_code}" https://127.0.0.1/setup-wizard/ || echo "000")
+          # First, try accessing the root path which should redirect to setup wizard
+          echo "Checking root path (should redirect to setup wizard)..."
+          http_code=$(curl -k -s -L -o /tmp/root-page.html -w "%{http_code}" https://127.0.0.1/ || echo "000")
+          echo "Root path returned: HTTP $http_code"
           
-          if [ "$http_code" = "200" ]; then
-            echo "✓ Setup wizard is accessible (HTTP 200)"
-            
-            # Check if it contains expected setup wizard content
-            if grep -q -i "setup\|wizard\|crypto\|storage" /tmp/setup-wizard.html; then
-              echo "✓ Setup wizard page contains expected content"
-            else
-              echo "✗ Setup wizard page doesn't contain expected content"
-              cat /tmp/setup-wizard.html | head -50
-              exit 1
-            fi
+          # Check if we're on setup wizard (either at root or after redirect)
+          if grep -q -i "setup\|wizard\|crypto.*storage\|storage.*crypto" /tmp/root-page.html; then
+            echo "✓ Setup wizard is accessible from root path"
+            WIZARD_FOUND=true
           else
-            echo "✗ Setup wizard returned HTTP $http_code"
-            cat /tmp/setup-wizard.html
-            exit 1
+            echo "Root path did not show setup wizard, trying direct setup-wizard URL..."
+            
+            # Try direct access to setup-wizard path
+            http_code=$(curl -k -s -L -o /tmp/setup-wizard.html -w "%{http_code}" https://127.0.0.1/setup-wizard/ || echo "000")
+            echo "Setup wizard path returned: HTTP $http_code"
+            
+            if [ "$http_code" = "200" ] && grep -q -i "setup\|wizard\|crypto\|storage" /tmp/setup-wizard.html; then
+              echo "✓ Setup wizard is accessible at /setup-wizard/"
+              WIZARD_FOUND=true
+            else
+              echo "✗ Setup wizard not found"
+              echo "Root page content:"
+              cat /tmp/root-page.html | head -50
+              echo ""
+              echo "Setup wizard page content:"
+              cat /tmp/setup-wizard.html | head -50
+              WIZARD_FOUND=false
+            fi
           fi
           
-          echo ""
-          echo "✓ Docker Setup Wizard test PASSED"
-          echo "  - Container started successfully"
-          echo "  - Database initialized"
-          echo "  - Setup wizard is accessible"
-          echo "  - Ready for first-time user configuration"
+          if [ "$WIZARD_FOUND" = "true" ]; then
+            echo ""
+            echo "✓ Docker Setup Wizard test PASSED"
+            echo "  - Container started successfully"
+            echo "  - Database initialized"
+            echo "  - Setup wizard is accessible"
+            echo "  - Ready for first-time user configuration"
+          else
+            exit 1
+          fi
       
       # Upload the setup wizard HTML page as an artifact for inspection
       - name: Upload Setup Wizard Page
