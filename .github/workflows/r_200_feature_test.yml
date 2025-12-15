@@ -81,7 +81,7 @@ jobs:
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           export PATH="$HOME/.cargo/bin:$PATH"
-          uv sync --group test
+          uv sync --group dev
       
       # Run the Behave feature test against the running Docker container
       - name: Run Setup Wizard Feature Test
