@@ -13,10 +13,10 @@ Feature: Docker Setup Wizard
     When the user selects "File System" as crypto storage
     And the user proceeds to the next step
     Then the wizard should be at the setup mode selection step
-    When the user selects "Setup with Test Mode" option
+    When the user selects "Setup with Test Mode" setup mode option
     And the user proceeds to the next step
     Then the wizard should be at the TLS server credential step
-    When the user selects "Generate Self-Signed Certificate" option
+    When the user selects "Generate Self-Signed Certificate" TLS certificate option
     And the user proceeds to the next step
     Then the wizard should be at the demo data step
     When the user chooses to skip demo data

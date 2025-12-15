@@ -146,7 +146,7 @@ def step_verify_setup_mode_step(context: runner.Context) -> None:
            'Not at setup mode selection step'
 
 
-@when('the user selects "{mode}" option')
+@when('the user selects "{mode}" setup mode option')
 def step_select_setup_mode(context: runner.Context, mode: str) -> None:
     """Selects the setup mode.
 
@@ -175,7 +175,7 @@ def step_verify_tls_step(context: runner.Context) -> None:
            'Not at TLS server credential step'
 
 
-@when('the user selects "{option}" option')
+@when('the user selects "{option}" TLS certificate option')
 def step_select_tls_option(context: runner.Context, option: str) -> None:
     """Selects TLS credential option.
 
