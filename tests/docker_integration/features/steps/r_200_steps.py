@@ -176,25 +176,36 @@ def step_proceed_next(context: runner.Context) -> None:
         if hasattr(context, 'setup_mode_form_data'):
             delattr(context, 'setup_mode_form_data')
     elif hasattr(context, 'tls_form_data'):
+        print(f'DEBUG TLS: Posting to {current_url}')
+        print(f'DEBUG TLS: Form data: {context.tls_form_data}')
+        
         context.response = context.session.post(
             current_url,
             data=context.tls_form_data,
             allow_redirects=True
         )
+        
+        print(f'DEBUG TLS: Response status after POST: {context.response.status_code}')
+        print(f'DEBUG TLS: Response URL after POST: {context.response.url}')
+        
         delattr(context, 'tls_form_data')
         
         # After applying TLS configuration, the server restarts with a new certificate
         # We need to wait for the server to come back up and re-establish connection
-        time.sleep(5)  # Give server time to restart
+        time.sleep(10)  # Give server more time to restart
         
         # Re-establish connection by making a new request (accepting the new certificate)
+        # Try the root URL first, which should redirect to the current wizard step
         max_retries = 30
         for attempt in range(max_retries):
             try:
-                context.response = context.session.get(f'{context.base_url}/setup-wizard/', timeout=5, allow_redirects=True)
+                # Try root URL first - it should redirect to current setup step
+                context.response = context.session.get(f'{context.base_url}/', timeout=10, allow_redirects=True)
+                print(f'DEBUG TLS reconnect attempt {attempt + 1}: status={context.response.status_code}, url={context.response.url}')
                 if context.response.status_code == HTTP_OK:
                     break
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
+                print(f'DEBUG TLS reconnect attempt {attempt + 1}: exception={e}')
                 if attempt < max_retries - 1:
                     time.sleep(2)
                 else:
@@ -294,11 +305,14 @@ def step_select_tls_option(context: runner.Context, option: str) -> None:
     current_url = context.response.url
     csrf_token = extract_csrf_token(context.response.text)
 
+    print(f'DEBUG TLS Step 0: Starting at URL: {current_url}')
+
     # The form has buttons with different names: generate_credential or import_credential
     if 'generate' in option.lower() or 'self-signed' in option.lower():
         button_name = 'generate_credential'
         
         # Step 1: Click "Generate Certificate" button
+        print(f'DEBUG TLS Step 1: Clicking generate button at {current_url}')
         context.response = context.session.post(
             current_url,
             data={
@@ -307,8 +321,10 @@ def step_select_tls_option(context: runner.Context, option: str) -> None:
             },
             allow_redirects=True
         )
+        print(f'DEBUG TLS Step 1 result: status={context.response.status_code}, url={context.response.url}')
         
         # Step 2: Submit the SAN form (uses default values)
+        print(f'DEBUG TLS Step 2: Submitting SAN form at {context.response.url}')
         csrf_token = extract_csrf_token(context.response.text)
         context.response = context.session.post(
             context.response.url,
@@ -320,8 +336,10 @@ def step_select_tls_option(context: runner.Context, option: str) -> None:
             },
             allow_redirects=True
         )
+        print(f'DEBUG TLS Step 2 result: status={context.response.status_code}, url={context.response.url}')
         
         # Step 3: Submit "Apply TLS configuration" form
+        print(f'DEBUG TLS Step 3: Preparing apply TLS form at {context.response.url}')
         csrf_token = extract_csrf_token(context.response.text)
         context.tls_form_data = {
             'csrfmiddlewaretoken': csrf_token,
