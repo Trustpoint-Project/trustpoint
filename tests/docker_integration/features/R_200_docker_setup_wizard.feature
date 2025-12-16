@@ -90,3 +90,23 @@ Feature: Docker Setup Wizard
 
     When the user navigates to "/redoc/"
     Then the page should load without errors
+
+  Scenario: Add a new device with no onboarding and enable PKI protocols
+    When the user navigates to "/devices/create/no-onboarding/"
+    Then the page should load without errors
+    When the user fills the device form with:
+      | name         | TestDevice01         |
+      | description  | Device for PKI test |
+      | enable_cmp   | true                |
+      | enable_est   | true                |
+      | enable_manual| true                |
+    And the user enables CMP shared secret
+    And the user enables EST username password
+    And the user enables Manual enrollment
+    And the user submits the form
+    Then the device should be created successfully
+    And the device should have PKI protocols enabled:
+      | protocol     |
+      | CMP         |
+      | EST         |
+      | Manual      |

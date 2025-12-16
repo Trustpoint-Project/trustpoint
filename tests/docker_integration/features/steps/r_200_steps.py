@@ -1,8 +1,4 @@
-"""Python steps file for R_200 - Docker Setup Wizard test.
-
-This is an isolated test that only uses HTTP requests against a running
-Docker container. It does NOT require Django to be initialized.
-"""
+"""Python steps file for R_200 - Docker Setup Wizard test."""
 
 from __future__ import annotations
 
@@ -381,3 +377,63 @@ def step_verify_page_contains(context: runner.Context, text: str) -> None:
     check_for_errors(context.response.text, context.response.url)
     assert text.lower() in context.response.text.lower(), \
         f'Page does not contain "{text}". URL: {context.response.url}'
+
+
+@when('the user fills the device form with:')
+def step_fill_device_form(context: runner.Context) -> None:
+    """Fill the device creation form with provided table data."""
+    context.device_form = {row['name']: row['value'] for row in context.table}
+
+
+@when('the user enables CMP shared secret')
+def step_enable_cmp_shared_secret(context: runner.Context) -> None:
+    context.device_form = getattr(context, 'device_form', {})
+    context.device_form['no_onboarding_pki_protocols'] = context.device_form.get('no_onboarding_pki_protocols', [])
+    context.device_form['no_onboarding_pki_protocols'].append('1')  # CMP - Shared Secret (HMAC)
+
+
+@when('the user enables EST username password')
+def step_enable_est_username_password(context: runner.Context) -> None:
+    context.device_form = getattr(context, 'device_form', {})
+    context.device_form['no_onboarding_pki_protocols'] = context.device_form.get('no_onboarding_pki_protocols', [])
+    context.device_form['no_onboarding_pki_protocols'].append('4')  # EST - Username & Password
+
+
+@when('the user enables Manual enrollment')
+def step_enable_manual_enrollment(context: runner.Context) -> None:
+    context.device_form = getattr(context, 'device_form', {})
+    context.device_form['no_onboarding_pki_protocols'] = context.device_form.get('no_onboarding_pki_protocols', [])
+    context.device_form['no_onboarding_pki_protocols'].append('16')  # Manual
+
+
+@when('the user submits the form')
+def step_submit_device_form(context: runner.Context) -> None:
+    """Submit the device creation form."""
+    csrf_token = extract_csrf_token(context.response.text)
+    current_url = context.response.url
+    form_data = {
+        'csrfmiddlewaretoken': csrf_token,
+        'common_name': context.device_form.get('name', 'TestDevice01'),
+        'serial_number': context.device_form.get('serial_number', '123456'),
+        'domain': context.device_form.get('domain', '1'),  # '1' for arburg
+    }
+    # Add PKI protocols
+    protocols = context.device_form.get('no_onboarding_pki_protocols', ['1', '4', '16'])
+    for value in protocols:
+        form_data.setdefault('no_onboarding_pki_protocols', []).append(value)
+    context.response = context.session.post(current_url, data=form_data, allow_redirects=True)
+    assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
+        f'Device form submission failed: {context.response.status_code}'
+
+
+@then('the device should be created successfully')
+def step_device_created_successfully(context: runner.Context) -> None:
+    check_for_errors(context.response.text, context.response.url)
+    assert 'Device created' in context.response.text or 'Devices' in context.response.text, \
+        'Device creation confirmation not found.'
+
+
+@then('the device should have PKI protocols enabled:')
+def step_device_has_pki_protocols(context: runner.Context) -> None:
+    for row in context.table:
+        assert row['protocol'] in context.response.text, f"Protocol {row['protocol']} not found in device details."
