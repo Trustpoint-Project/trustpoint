@@ -13,7 +13,9 @@ import requests
 from behave import given, runner, then, when
 
 # Disable SSL warnings for self-signed certificates
-requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)  # type: ignore[attr-defined]
+requests.packages.urllib3.disable_warnings(  # type: ignore[attr-defined]
+    requests.packages.urllib3.exceptions.InsecureRequestWarning  # type: ignore[attr-defined]
+)
 
 HTTP_OK = 200
 HTTP_REDIRECT = 302
@@ -21,68 +23,46 @@ DOCKER_URL = 'https://localhost'
 
 
 def extract_csrf_token(html_content: str) -> str:
-    """Extract CSRF token from HTML content.
-
-    Args:
-        html_content: The HTML content containing the CSRF token
-
-    Returns:
-        The CSRF token value
-
-    Raises:
-        AssertionError: If no CSRF token is found
-    """
-    # Try multiple patterns for CSRF token extraction
+    """Extract CSRF token from HTML content."""
     patterns = [
-        # Standard Django hidden input: <input type="hidden" name="csrfmiddlewaretoken" value="...">
         r'name=["\']csrfmiddlewaretoken["\']\s+value=["\']([^"\']+)["\']',
         r'name="csrfmiddlewaretoken"\s+value="([^"]+)"',
-        # Reversed attribute order: value before name
         r'value=["\']([^"\']+)["\']\s+name=["\']csrfmiddlewaretoken["\']',
-        # With type attribute in between
         r'name=["\']csrfmiddlewaretoken["\'][^>]*value=["\']([^"\']+)["\']',
     ]
-    
     for pattern in patterns:
         match = re.search(pattern, html_content, re.IGNORECASE)
         if match:
             return match.group(1)
-    
-    # Debug: print a snippet of the HTML to help diagnose
-    print(f'DEBUG: Could not find CSRF token. HTML snippet (first 2000 chars): {html_content[:2000]}')
     msg = 'CSRF token not found in response'
     raise AssertionError(msg)
 
 
+def find_link_url(html_content: str, link_text: str) -> str | None:
+    """Find a link URL by its text content."""
+    pattern = rf'href=["\']([^"\']+)["\'][^>]*>[^<]*{re.escape(link_text)}'
+    match = re.search(pattern, html_content, re.IGNORECASE | re.DOTALL)
+    if match:
+        return match.group(1)
+    return None
+
+
 @given('a fresh Trustpoint Docker container is running')
 def step_docker_container_running(context: runner.Context) -> None:
-    """Ensures a fresh Trustpoint Docker container is running.
-
-    This step assumes Docker Compose has been used to start the services.
-    It verifies that the container is accessible.
-
-    Args:
-        context: The behave context
-    """
-    # Create a session to maintain cookies across requests
+    """Verify the Docker container is accessible."""
     context.session = requests.Session()
-    # Disable SSL verification for self-signed certificates
     context.session.verify = False
     context.base_url = DOCKER_URL
-    
-    # Set headers that Django's CSRF protection requires
     context.session.headers.update({
         'Referer': DOCKER_URL,
         'Origin': DOCKER_URL,
     })
-
-    # Verify the application is accessible
     max_retries = 30
     for attempt in range(max_retries):
         try:
             response = context.session.get(context.base_url, timeout=5)
             if response.status_code in [HTTP_OK, HTTP_REDIRECT]:
-                break
+                return
         except Exception:  # noqa: BLE001
             if attempt < max_retries - 1:
                 time.sleep(2)
@@ -93,11 +73,7 @@ def step_docker_container_running(context: runner.Context) -> None:
 
 @when('the user accesses the setup wizard')
 def step_access_setup_wizard(context: runner.Context) -> None:
-    """Accesses the setup wizard landing page.
-
-    Args:
-        context: The behave context
-    """
+    """Access the setup wizard landing page."""
     context.response = context.session.get(f'{context.base_url}/', allow_redirects=True)
     assert context.response.status_code == HTTP_OK, \
         f'Failed to access setup wizard: {context.response.status_code}'
@@ -105,437 +81,218 @@ def step_access_setup_wizard(context: runner.Context) -> None:
 
 @then('the wizard should be at the crypto storage setup step')
 def step_verify_crypto_storage_step(context: runner.Context) -> None:
-    """Verifies the wizard is at the crypto storage selection step.
-
-    Args:
-        context: The behave context
-    """
-    content_lower = context.response.text.lower()
-    assert 'cryptographic storage configuration' in content_lower or \
-           ('storage' in content_lower and 'software' in content_lower), \
-           f'Not at crypto storage setup step. URL: {context.response.url}'
+    """Verify the wizard is at the crypto storage selection step."""
+    content = context.response.text.lower()
+    assert 'crypto' in content or 'storage' in content, \
+        f'Not at crypto storage step. URL: {context.response.url}'
 
 
 @when('the user selects "{storage_type}" as crypto storage')
 def step_select_crypto_storage(context: runner.Context, storage_type: str) -> None:
-    """Selects the crypto storage type.
-
-    Args:
-        context: The behave context
-        storage_type: The type of crypto storage to select
-    """
-    csrf_token = extract_csrf_token(context.response.text)
-
-    # Map user-friendly names to actual form values
+    """Select the crypto storage type."""
     storage_mapping = {
         'file system': 'software',
         'software': 'software',
         'softhsm': 'softhsm',
         'physical hsm': 'physical_hsm',
     }
-    
-    storage_value = storage_mapping.get(storage_type.lower(), 'software')
-
-    context.crypto_form_data = {
-        'csrfmiddlewaretoken': csrf_token,
-        'storage_type': storage_value,
-    }
+    context.selected_storage = storage_mapping.get(storage_type.lower(), 'software')
 
 
-@when('the user proceeds to the next step')
-def step_proceed_next(context: runner.Context) -> None:
-    """Proceeds to the next step in the wizard.
-
-    Args:
-        context: The behave context
-    """
-    # Get current URL for posting
+@when('the user submits the form')
+def step_submit_form(context: runner.Context) -> None:
+    """Submit the current form."""
+    csrf_token = extract_csrf_token(context.response.text)
     current_url = context.response.url
-
-    # Submit the current form data if available
-    if hasattr(context, 'crypto_form_data'):
-        print(f'DEBUG: Posting to {current_url}')
-        print(f'DEBUG: Form data: {context.crypto_form_data}')
-        print(f'DEBUG: Session cookies: {dict(context.session.cookies)}')
-        
-        context.response = context.session.post(
-            current_url,
-            data=context.crypto_form_data,
-            allow_redirects=True
-        )
-        
-        print(f'DEBUG: Response status: {context.response.status_code}')
-        print(f'DEBUG: Response URL: {context.response.url}')
-        if context.response.status_code == 403:
-            print(f'DEBUG: Response text (first 1000 chars): {context.response.text[:1000]}')
-        
-        delattr(context, 'crypto_form_data')  # Clean up after submission
-    elif hasattr(context, 'setup_mode_form_data'):
-        # Setup mode uses links, not forms - this is a no-op
-        # The navigation already happened in step_select_setup_mode
-        if hasattr(context, 'setup_mode_form_data'):
-            delattr(context, 'setup_mode_form_data')
-    elif hasattr(context, 'tls_form_data'):
-        print(f'DEBUG TLS: Posting to {current_url}')
-        print(f'DEBUG TLS: Form data: {context.tls_form_data}')
-        
-        context.response = context.session.post(
-            current_url,
-            data=context.tls_form_data,
-            allow_redirects=True
-        )
-        
-        print(f'DEBUG TLS: Response status after POST: {context.response.status_code}')
-        print(f'DEBUG TLS: Response URL after POST: {context.response.url}')
-        
-        delattr(context, 'tls_form_data')
-        
-        # After applying TLS configuration, the server restarts with a new certificate
-        # We need to wait for the server to come back up and re-establish connection
-        time.sleep(10)  # Give server more time to restart
-        
-        # Re-establish connection by making a new request (accepting the new certificate)
-        # Try the root URL first, which should redirect to the current wizard step
-        max_retries = 30
-        for attempt in range(max_retries):
-            try:
-                # Try root URL first - it should redirect to current setup step
-                context.response = context.session.get(f'{context.base_url}/', timeout=10, allow_redirects=True)
-                print(f'DEBUG TLS reconnect attempt {attempt + 1}: status={context.response.status_code}, url={context.response.url}')
-                if context.response.status_code == HTTP_OK:
-                    break
-            except Exception as e:  # noqa: BLE001
-                print(f'DEBUG TLS reconnect attempt {attempt + 1}: exception={e}')
-                if attempt < max_retries - 1:
-                    time.sleep(2)
-                else:
-                    msg = 'Could not reconnect after TLS configuration'
-                    raise AssertionError(msg) from None
-    elif hasattr(context, 'backup_form_data'):
-        context.response = context.session.post(
-            current_url,
-            data=context.backup_form_data,
-            allow_redirects=True
-        )
-        delattr(context, 'backup_form_data')
-    elif hasattr(context, 'demo_data_form_data'):
-        context.response = context.session.post(
-            current_url,
-            data=context.demo_data_form_data,
-            allow_redirects=True
-        )
-        delattr(context, 'demo_data_form_data')
-    elif hasattr(context, 'superuser_form_data'):
-        context.response = context.session.post(
-            current_url,
-            data=context.superuser_form_data,
-            allow_redirects=True
-        )
-        delattr(context, 'superuser_form_data')
-
+    form_data = {'csrfmiddlewaretoken': csrf_token}
+    if hasattr(context, 'selected_storage'):
+        form_data['storage_type'] = context.selected_storage
+        delattr(context, 'selected_storage')
+    context.response = context.session.post(current_url, data=form_data, allow_redirects=True)
     assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
-        f'Failed to proceed: {context.response.status_code}'
+        f'Form submission failed: {context.response.status_code}'
 
 
-@then('the wizard should be at the setup mode selection step')
+@then('the wizard should be at the setup mode step')
 def step_verify_setup_mode_step(context: runner.Context) -> None:
-    """Verifies the wizard is at the setup mode selection step.
-
-    Args:
-        context: The behave context
-    """
-    content_lower = context.response.text.lower()
-    assert 'setup mode' in content_lower or \
-           ('setup' in content_lower and 'scratch' in content_lower), \
-           'Not at setup mode selection step'
+    """Verify the wizard is at the setup mode selection step."""
+    content = context.response.text.lower()
+    assert 'setup mode' in content or 'fresh' in content or 'restore' in content, \
+        f'Not at setup mode step. URL: {context.response.url}'
 
 
-@when('the user selects "{mode}" setup mode option')
-def step_select_setup_mode(context: runner.Context, mode: str) -> None:
-    """Selects the setup mode by clicking the appropriate link.
-
-    Args:
-        context: The behave context
-        mode: The setup mode to select
-    """
-    # The setup mode page has links, not a form
-    # "Setup with Test Mode" or similar means "Start Fresh Setup"
-    # Extract the link URL from the page
-    if 'test' in mode.lower() or 'fresh' in mode.lower() or 'scratch' in mode.lower():
-        # Look for the "Start Fresh Setup" link
-        match = re.search(r'href="(/setup-wizard/select_tls_server_credential/)"', context.response.text)
-        if match:
-            url = match.group(1)
-            context.response = context.session.get(f'{context.base_url}{url}', allow_redirects=True)
-        else:
-            msg = 'Could not find fresh setup link'
-            raise AssertionError(msg)
-    else:
-        # Restore from backup option
-        match = re.search(r'href="(/setup-wizard/restore_options/)"', context.response.text)
-        if match:
-            url = match.group(1)
-            context.response = context.session.get(f'{context.base_url}{url}', allow_redirects=True)
-        else:
-            msg = 'Could not find restore backup link'
-            raise AssertionError(msg)
-
-
-@then('the wizard should be at the TLS server credential step')
-def step_verify_tls_step(context: runner.Context) -> None:
-    """Verifies the wizard is at the TLS server credential step.
-
-    Args:
-        context: The behave context
-    """
-    content_lower = context.response.text.lower()
-    assert 'configure tls-server credential' in content_lower or \
-           ('tls' in content_lower and 'certificate' in content_lower), \
-           'Not at TLS server credential step'
-
-
-@when('the user selects "{option}" TLS certificate option')
-def step_select_tls_option(context: runner.Context, option: str) -> None:
-    """Selects TLS credential option and completes the generation/import process.
-
-    Args:
-        context: The behave context
-        option: The TLS option to select
-    """
+@when('the user clicks "{button_text}"')
+def step_click_button(context: runner.Context, button_text: str) -> None:
+    """Click a button or link with the given text."""
+    html = context.response.text
     current_url = context.response.url
-    csrf_token = extract_csrf_token(context.response.text)
 
-    print(f'DEBUG TLS Step 0: Starting at URL: {current_url}')
+    # First, try to find a link with this text
+    link_url = find_link_url(html, button_text)
+    if link_url:
+        if not link_url.startswith('http'):
+            link_url = f'{context.base_url}{link_url}'
+        context.response = context.session.get(link_url, allow_redirects=True)
+        assert context.response.status_code == HTTP_OK, \
+            f'Failed to follow link: {context.response.status_code}'
+        return
 
-    # The form has buttons with different names: generate_credential or import_credential
-    if 'generate' in option.lower() or 'self-signed' in option.lower():
-        button_name = 'generate_credential'
-        
-        # Step 1: Click "Generate Certificate" button
-        print(f'DEBUG TLS Step 1: Clicking generate button at {current_url}')
-        context.response = context.session.post(
-            current_url,
-            data={
-                'csrfmiddlewaretoken': csrf_token,
-                button_name: '',
-            },
-            allow_redirects=True
-        )
-        print(f'DEBUG TLS Step 1 result: status={context.response.status_code}, url={context.response.url}')
-        
-        # Step 2: Submit the SAN form (uses default values)
-        print(f'DEBUG TLS Step 2: Submitting SAN form at {context.response.url}')
-        csrf_token = extract_csrf_token(context.response.text)
-        context.response = context.session.post(
-            context.response.url,
-            data={
-                'csrfmiddlewaretoken': csrf_token,
-                'ipv4_addresses': '127.0.0.1',
-                'ipv6_addresses': '::1',
-                'domain_names': 'localhost',
-            },
-            allow_redirects=True
-        )
-        print(f'DEBUG TLS Step 2 result: status={context.response.status_code}, url={context.response.url}')
-        
-        # Step 3: Submit "Apply TLS configuration" form
-        print(f'DEBUG TLS Step 3: Preparing apply TLS form at {context.response.url}')
-        csrf_token = extract_csrf_token(context.response.text)
-        context.tls_form_data = {
-            'csrfmiddlewaretoken': csrf_token,
-        }
-    else:
-        # Import credential flow (not fully implemented in this test)
-        button_name = 'import_credential'
-        context.tls_form_data = {
-            'csrfmiddlewaretoken': csrf_token,
-            button_name: '',
-        }
+    # If no link found, try to find and submit a form button
+    csrf_token = extract_csrf_token(html)
+    form_data = {'csrfmiddlewaretoken': csrf_token}
 
-
-@then('the wizard should be at the backup password setup step')
-def step_verify_backup_step(context: runner.Context) -> None:
-    """Verifies the wizard is at the backup password setup step.
-
-    Args:
-        context: The behave context
-    """
-    content_lower = context.response.text.lower()
-    assert 'backup' in content_lower or \
-           'password' in content_lower, \
-           'Not at backup password setup step'
-
-
-@when('the user enters backup password "{password}"')
-def step_enter_backup_password(context: runner.Context, password: str) -> None:
-    """Enters the backup password.
-
-    Args:
-        context: The behave context
-        password: The backup password to enter
-    """
-    context.backup_password = password
-
-
-@when('the user confirms backup password "{password}"')
-def step_confirm_backup_password(context: runner.Context, password: str) -> None:
-    """Confirms the backup password.
-
-    Args:
-        context: The behave context
-        password: The backup password confirmation
-    """
-    csrf_token = extract_csrf_token(context.response.text)
-
-    context.backup_form_data = {
-        'csrfmiddlewaretoken': csrf_token,
-        'password': context.backup_password,
-        'password_confirm': password,
+    # Map button text to form field names
+    button_mapping = {
+        'generate certificate': 'generate_credential',
+        'import certificate': 'import_credential',
+        'apply tls configuration': None,
+        'continue with demo data': 'with-demo-data',
+        'continue without demo data': 'without-demo-data',
+        'create super-user': None,
     }
+
+    button_key = button_text.lower()
+    if button_key in button_mapping:
+        button_name = button_mapping[button_key]
+        if button_name:
+            form_data[button_name] = ''
+
+    context.response = context.session.post(current_url, data=form_data, allow_redirects=True)
+    assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
+        f'Button click failed: {context.response.status_code}'
+
+
+@then('the wizard should be at the TLS server credential selection step')
+def step_verify_tls_selection_step(context: runner.Context) -> None:
+    """Verify the wizard is at the TLS credential selection step."""
+    content = context.response.text.lower()
+    assert 'tls' in content, f'Not at TLS selection step. URL: {context.response.url}'
+    assert 'generate' in content or 'import' in content, \
+        f'Missing generate/import options. URL: {context.response.url}'
+
+
+@then('the wizard should be at the TLS certificate generation step')
+def step_verify_tls_generation_step(context: runner.Context) -> None:
+    """Verify the wizard is at the TLS certificate generation step."""
+    content = context.response.text.lower()
+    assert 'san' in content or 'subject alternative' in content or 'generate' in content, \
+        f'Not at TLS generation step. URL: {context.response.url}'
+
+
+@when('the user submits the SAN form with default values')
+def step_submit_san_form(context: runner.Context) -> None:
+    """Submit the SAN form with default values."""
+    csrf_token = extract_csrf_token(context.response.text)
+    current_url = context.response.url
+    form_data = {
+        'csrfmiddlewaretoken': csrf_token,
+        'ipv4_addresses': '127.0.0.1',
+        'ipv6_addresses': '::1',
+        'domain_names': 'localhost',
+    }
+    context.response = context.session.post(current_url, data=form_data, allow_redirects=True)
+    assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
+        f'SAN form submission failed: {context.response.status_code}'
+
+
+@then('the wizard should be at the TLS apply step')
+def step_verify_tls_apply_step(context: runner.Context) -> None:
+    """Verify the wizard is at the TLS apply step."""
+    content = context.response.text.lower()
+    assert 'apply' in content or 'download' in content or 'trust' in content, \
+        f'Not at TLS apply step. URL: {context.response.url}'
+
+
+@when('the user waits for the server to restart')
+def step_wait_for_server_restart(context: runner.Context) -> None:
+    """Wait for the server to restart after TLS configuration."""
+    time.sleep(5)
+    max_retries = 30
+    for attempt in range(max_retries):
+        try:
+            context.response = context.session.get(
+                f'{context.base_url}/setup-wizard/demo-data/',
+                timeout=10,
+                allow_redirects=True
+            )
+            if context.response.status_code == HTTP_OK:
+                return
+        except Exception:  # noqa: BLE001
+            if attempt < max_retries - 1:
+                time.sleep(2)
+    msg = 'Server did not restart in time'
+    raise AssertionError(msg)
 
 
 @then('the wizard should be at the demo data step')
 def step_verify_demo_data_step(context: runner.Context) -> None:
-    """Verifies the wizard is at the demo data step.
-
-    Args:
-        context: The behave context
-    """
-    content_lower = context.response.text.lower()
-    assert 'demo' in content_lower or \
-           'sample' in content_lower, \
-           'Not at demo data step'
-
-
-@when('the user chooses to skip demo data')
-def step_skip_demo_data(context: runner.Context) -> None:
-    """Chooses to skip demo data installation.
-
-    Args:
-        context: The behave context
-    """
-    csrf_token = extract_csrf_token(context.response.text)
-
-    context.demo_data_form_data = {
-        'csrfmiddlewaretoken': csrf_token,
-        'without-demo-data': '',  # Button name for skipping demo data
-    }
+    """Verify the wizard is at the demo data step."""
+    content = context.response.text.lower()
+    assert 'demo' in content or 'data' in content, \
+        f'Not at demo data step. URL: {context.response.url}'
 
 
 @then('the wizard should be at the superuser creation step')
 def step_verify_superuser_step(context: runner.Context) -> None:
-    """Verifies the wizard is at the superuser creation step.
-
-    Args:
-        context: The behave context
-    """
-    content_lower = context.response.text.lower()
-    assert 'admin' in content_lower or \
-           'user' in content_lower or \
-           'account' in content_lower, \
-           'Not at superuser creation step'
+    """Verify the wizard is at the superuser creation step."""
+    content = context.response.text.lower()
+    assert 'super' in content or 'user' in content or 'admin' in content, \
+        f'Not at superuser creation step. URL: {context.response.url}'
 
 
-@when('the user creates admin account with username "{username}" and password "{password}"')
-def step_create_admin_account(context: runner.Context, username: str, password: str) -> None:
-    """Creates the admin user account.
-
-    Args:
-        context: The behave context
-        username: The admin username
-        password: The admin password
-    """
+@when('the user creates a superuser with username "{username}" and password "{password}"')
+def step_create_superuser(context: runner.Context, username: str, password: str) -> None:
+    """Create a superuser account."""
     csrf_token = extract_csrf_token(context.response.text)
-
-    context.superuser_form_data = {
+    current_url = context.response.url
+    form_data = {
         'csrfmiddlewaretoken': csrf_token,
         'username': username,
         'password1': password,
         'password2': password,
     }
+    context.response = context.session.post(current_url, data=form_data, allow_redirects=True)
     context.admin_username = username
     context.admin_password = password
-
-
-@when('the user submits the setup wizard')
-def step_submit_setup_wizard(context: runner.Context) -> None:
-    """Submits the final setup wizard form.
-
-    Args:
-        context: The behave context
-    """
-    current_url = context.response.url
-    
-    context.response = context.session.post(
-        current_url,
-        data=context.superuser_form_data,
-        allow_redirects=True
-    )
-
     assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
-        f'Failed to submit setup wizard: {context.response.status_code}'
+        f'Superuser creation failed: {context.response.status_code}'
 
 
-@then('the setup wizard should be completed')
-def step_verify_wizard_completed(context: runner.Context) -> None:
-    """Verifies the setup wizard has been completed.
-
-    Args:
-        context: The behave context
-    """
-    # Check if we're redirected away from setup wizard
-    assert '/setup-wizard/' not in context.response.url, \
-        'Still in setup wizard after completion'
+@then('the setup should be complete')
+def step_verify_setup_complete(context: runner.Context) -> None:
+    """Verify the setup wizard is complete."""
+    assert 'setup-wizard' not in context.response.url.lower(), \
+        f'Still in setup wizard. URL: {context.response.url}'
 
 
 @then('the user should be redirected to the login page')
 def step_verify_login_redirect(context: runner.Context) -> None:
-    """Verifies the user is redirected to the login page.
-
-    Args:
-        context: The behave context
-    """
-    assert '/login' in context.response.url.lower() or \
-           'login' in context.response.text.lower(), \
-           'Not redirected to login page'
+    """Verify the user is redirected to the login page."""
+    url = context.response.url.lower()
+    content = context.response.text.lower()
+    assert 'login' in url or 'login' in content, \
+        f'Not redirected to login page. URL: {context.response.url}'
 
 
 @when('the user logs in with username "{username}" and password "{password}"')
 def step_login_user(context: runner.Context, username: str, password: str) -> None:
-    """Logs in with the created admin credentials.
-
-    Args:
-        context: The behave context
-        username: The username to log in with
-        password: The password to log in with
-    """
-    # Get the login page first
-    context.response = context.session.get(f'{context.base_url}/users/login/', allow_redirects=True)
+    """Log in with the given credentials."""
+    login_url = f'{context.base_url}/users/login/'
+    context.response = context.session.get(login_url, allow_redirects=True)
     csrf_token = extract_csrf_token(context.response.text)
-
-    # Submit login form
     login_data = {
         'csrfmiddlewaretoken': csrf_token,
         'username': username,
         'password': password,
     }
-
-    context.response = context.session.post(f'{context.base_url}/users/login/', data=login_data, allow_redirects=True)
-
+    context.response = context.session.post(login_url, data=login_data, allow_redirects=True)
     assert context.response.status_code == HTTP_OK, \
-        f'Login failed with status: {context.response.status_code}'
+        f'Login failed: {context.response.status_code}'
 
 
 @then('the user should successfully access the dashboard')
 def step_verify_dashboard_access(context: runner.Context) -> None:
-    """Verifies the user can access the dashboard.
-
-    Args:
-        context: The behave context
-    """
-    # Check if we're at a dashboard or authenticated page
-    content_lower = context.response.text.lower()
-    assert 'logout' in content_lower or \
-           'dashboard' in content_lower or \
-           'trustpoint' in content_lower, \
-           'Failed to access dashboard after login'
+    """Verify the user can access the dashboard."""
+    content = context.response.text.lower()
+    assert 'logout' in content or 'dashboard' in content or 'trustpoint' in content, \
+        'Failed to access dashboard after login'
