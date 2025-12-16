@@ -29,3 +29,67 @@ Feature: Docker Setup Wizard
     And the user should be redirected to the login page
     When the user logs in with username "admin" and password "AdminPass123!"
     Then the user should successfully access the dashboard
+
+    # Navigate to main views to verify they load without errors
+    When the user navigates to "/devices/"
+    Then the page should load without errors
+
+    When the user navigates to "/pki/domains/"
+    Then the page should load without errors
+
+    When the user navigates to "/pki/issuing-cas/"
+    Then the page should load without errors
+
+    When the user navigates to "/pki/certificates/"
+    Then the page should load without errors
+
+    When the user navigates to "/pki/truststores/"
+    Then the page should load without errors
+
+    When the user navigates to "/pki/owner-credentials/"
+    Then the page should load without errors
+
+    When the user navigates to "/pki/cert-profiles/"
+    Then the page should load without errors
+
+    When the user navigates to "/signer/"
+    Then the page should load without errors
+
+    When the user navigates to "/notifications/"
+    Then the page should load without errors
+
+    When the user navigates to "/management/settings/"
+    Then the page should load without errors
+
+    When the user navigates to "/management/tls/"
+    Then the page should load without errors
+
+    When the user navigates to "/management/logging/files/"
+    Then the page should load without errors
+
+    When the user navigates to "/management/backups/"
+    Then the page should load without errors
+
+    When the user navigates to "/management/key_storage/"
+    Then the page should load without errors
+
+    When the user navigates to "/management/help/"
+    Then the page should load without errors
+
+    When the user navigates to "/home/"
+    Then the page should load without errors
+
+    When the user navigates to "/home/dashboard/"
+    Then the page should load without errors
+
+    When the user navigates to "/devices/opc-ua-gds/"
+    Then the page should load without errors
+
+    When the user navigates to "/workflows/"
+    Then the page should load without errors
+
+    When the user navigates to "/swagger/"
+    Then the page should load without errors
+
+    When the user navigates to "/redoc/"
+    Then the page should load without errors

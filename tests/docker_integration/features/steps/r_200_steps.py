@@ -47,6 +47,46 @@ def find_link_url(html_content: str, link_text: str) -> str | None:
     return None
 
 
+def check_for_errors(html_content: str, url: str) -> None:
+    """Check for error messages in the HTML content.
+
+    Looks for common Django error patterns and Bootstrap alert-danger elements.
+
+    Args:
+        html_content: The HTML content to check
+        url: The current URL (for error messages)
+
+    Raises:
+        AssertionError: If any error is found on the page
+    """
+    error_patterns = [
+        # Django form errors
+        (r'<ul class="errorlist"[^>]*>(.*?)</ul>', 'Form validation error'),
+        # Bootstrap alert-danger
+        (r'alert-danger[^>]*>([^<]+)', 'Alert danger message'),
+        # Django messages framework errors
+        (r'class="[^"]*error[^"]*"[^>]*>([^<]+)', 'Error message'),
+        # Generic error class
+        (r'<div[^>]*class="[^"]*error[^"]*"[^>]*>(.*?)</div>', 'Error div'),
+        # HTTP 500 error page
+        (r'Server Error \(500\)', 'Server Error 500'),
+        # HTTP 404 error page
+        (r'Page not found \(404\)', 'Page not found 404'),
+        # Django debug page
+        (r'<title>([^<]*Exception[^<]*)</title>', 'Exception in title'),
+        (r'<title>([^<]*Error[^<]*)</title>', 'Error in title'),
+    ]
+
+    for pattern, error_type in error_patterns:
+        match = re.search(pattern, html_content, re.IGNORECASE | re.DOTALL)
+        if match:
+            error_content = match.group(1) if match.lastindex else match.group(0)
+            # Clean up the error content for display
+            error_content = re.sub(r'<[^>]+>', ' ', error_content).strip()[:200]
+            msg = f'{error_type} found on page {url}: {error_content}'
+            raise AssertionError(msg)
+
+
 @given('a fresh Trustpoint Docker container is running')
 def step_docker_container_running(context: runner.Context) -> None:
     """Verify the Docker container is accessible."""
@@ -82,6 +122,7 @@ def step_access_setup_wizard(context: runner.Context) -> None:
 @then('the wizard should be at the crypto storage setup step')
 def step_verify_crypto_storage_step(context: runner.Context) -> None:
     """Verify the wizard is at the crypto storage selection step."""
+    check_for_errors(context.response.text, context.response.url)
     content = context.response.text.lower()
     assert 'crypto' in content or 'storage' in content, \
         f'Not at crypto storage step. URL: {context.response.url}'
@@ -116,6 +157,7 @@ def step_submit_form(context: runner.Context) -> None:
 @then('the wizard should be at the setup mode step')
 def step_verify_setup_mode_step(context: runner.Context) -> None:
     """Verify the wizard is at the setup mode selection step."""
+    check_for_errors(context.response.text, context.response.url)
     content = context.response.text.lower()
     assert 'setup mode' in content or 'fresh' in content or 'restore' in content, \
         f'Not at setup mode step. URL: {context.response.url}'
@@ -165,6 +207,7 @@ def step_click_button(context: runner.Context, button_text: str) -> None:
 @then('the wizard should be at the TLS server credential selection step')
 def step_verify_tls_selection_step(context: runner.Context) -> None:
     """Verify the wizard is at the TLS credential selection step."""
+    check_for_errors(context.response.text, context.response.url)
     content = context.response.text.lower()
     assert 'tls' in content, f'Not at TLS selection step. URL: {context.response.url}'
     assert 'generate' in content or 'import' in content, \
@@ -174,6 +217,7 @@ def step_verify_tls_selection_step(context: runner.Context) -> None:
 @then('the wizard should be at the TLS certificate generation step')
 def step_verify_tls_generation_step(context: runner.Context) -> None:
     """Verify the wizard is at the TLS certificate generation step."""
+    check_for_errors(context.response.text, context.response.url)
     content = context.response.text.lower()
     assert 'san' in content or 'subject alternative' in content or 'generate' in content, \
         f'Not at TLS generation step. URL: {context.response.url}'
@@ -198,6 +242,7 @@ def step_submit_san_form(context: runner.Context) -> None:
 @then('the wizard should be at the TLS apply step')
 def step_verify_tls_apply_step(context: runner.Context) -> None:
     """Verify the wizard is at the TLS apply step."""
+    check_for_errors(context.response.text, context.response.url)
     content = context.response.text.lower()
     assert 'apply' in content or 'download' in content or 'trust' in content, \
         f'Not at TLS apply step. URL: {context.response.url}'
@@ -227,6 +272,7 @@ def step_wait_for_server_restart(context: runner.Context) -> None:
 @then('the wizard should be at the demo data step')
 def step_verify_demo_data_step(context: runner.Context) -> None:
     """Verify the wizard is at the demo data step."""
+    check_for_errors(context.response.text, context.response.url)
     content = context.response.text.lower()
     assert 'demo' in content or 'data' in content, \
         f'Not at demo data step. URL: {context.response.url}'
@@ -235,6 +281,7 @@ def step_verify_demo_data_step(context: runner.Context) -> None:
 @then('the wizard should be at the superuser creation step')
 def step_verify_superuser_step(context: runner.Context) -> None:
     """Verify the wizard is at the superuser creation step."""
+    check_for_errors(context.response.text, context.response.url)
     content = context.response.text.lower()
     assert 'super' in content or 'user' in content or 'admin' in content, \
         f'Not at superuser creation step. URL: {context.response.url}'
@@ -261,6 +308,7 @@ def step_create_superuser(context: runner.Context, username: str, password: str)
 @then('the setup should be complete')
 def step_verify_setup_complete(context: runner.Context) -> None:
     """Verify the setup wizard is complete."""
+    check_for_errors(context.response.text, context.response.url)
     assert 'setup-wizard' not in context.response.url.lower(), \
         f'Still in setup wizard. URL: {context.response.url}'
 
@@ -268,6 +316,7 @@ def step_verify_setup_complete(context: runner.Context) -> None:
 @then('the user should be redirected to the login page')
 def step_verify_login_redirect(context: runner.Context) -> None:
     """Verify the user is redirected to the login page."""
+    check_for_errors(context.response.text, context.response.url)
     url = context.response.url.lower()
     content = context.response.text.lower()
     assert 'login' in url or 'login' in content, \
@@ -293,6 +342,32 @@ def step_login_user(context: runner.Context, username: str, password: str) -> No
 @then('the user should successfully access the dashboard')
 def step_verify_dashboard_access(context: runner.Context) -> None:
     """Verify the user can access the dashboard."""
+    check_for_errors(context.response.text, context.response.url)
     content = context.response.text.lower()
     assert 'logout' in content or 'dashboard' in content or 'trustpoint' in content, \
         'Failed to access dashboard after login'
+
+
+@when('the user navigates to "{path}"')
+def step_navigate_to_path(context: runner.Context, path: str) -> None:
+    """Navigate to a specific path."""
+    url = f'{context.base_url}{path}'
+    context.response = context.session.get(url, allow_redirects=True)
+    assert context.response.status_code == HTTP_OK, \
+        f'Failed to navigate to {path}: {context.response.status_code}'
+
+
+@then('the page should load without errors')
+def step_verify_page_loads_without_errors(context: runner.Context) -> None:
+    """Verify the current page loads without any errors."""
+    check_for_errors(context.response.text, context.response.url)
+    assert context.response.status_code == HTTP_OK, \
+        f'Page returned error status: {context.response.status_code}'
+
+
+@then('the page should contain "{text}"')
+def step_verify_page_contains(context: runner.Context, text: str) -> None:
+    """Verify the page contains specific text."""
+    check_for_errors(context.response.text, context.response.url)
+    assert text.lower() in context.response.text.lower(), \
+        f'Page does not contain "{text}". URL: {context.response.url}'
