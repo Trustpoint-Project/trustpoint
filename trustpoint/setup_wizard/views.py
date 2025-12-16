@@ -20,6 +20,7 @@ from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import FormView, TemplateView, View
+
 from management.forms import KeyStorageConfigForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.models import KeyStorageConfig, PKCS11Token
 from pki.models import CertificateModel, CredentialModel, IssuingCaModel
@@ -696,7 +697,7 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
         ]
         return context
 
-    def form_valid(self, form: BackupPasswordForm) -> HttpResponse:
+    def form_valid(self, form: BackupPasswordForm) -> HttpResponse:  # noqa: PLR0911 - Multiple returns needed for comprehensive error handling
         """Handle valid form submission."""
         password = form.cleaned_data.get('password')
 

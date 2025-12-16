@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from pki.models.certificate import RevokedCertificateModel
-
 from devices.models import IssuedCredentialModel
+from pki.models.certificate import RevokedCertificateModel
 
 
 class DeviceCredentialRevocation:

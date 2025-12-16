@@ -9,8 +9,6 @@ from django.db import models, transaction
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from django.db.models import Manager
-
     _ModelBase = models.Model
 else:
     _ModelBase = object
@@ -71,8 +69,8 @@ class CustomDeleteActionModel(models.Model):
         return count
 
 
-class CustomDeleteActionQuerySet[_Model: CustomDeleteActionModel, _Row: CustomDeleteActionModel](
-    models.QuerySet[_Model, _Row]
+class CustomDeleteActionQuerySet[MDL: CustomDeleteActionModel, ROW: CustomDeleteActionModel](
+    models.QuerySet[MDL, ROW]
 ):
     """Overrides a model's queryset to invoke pre- and post-delete hooks.
 
@@ -97,7 +95,7 @@ class CustomDeleteActionQuerySet[_Model: CustomDeleteActionModel, _Row: CustomDe
         del args
         del kwargs
 
-        obj_set: set[_Row] = set()
+        obj_set: set[ROW] = set()
         for obj in self:
             obj_set.add(obj)
             obj.pre_delete()
@@ -122,7 +120,6 @@ class OrphanDeletionMixin(_ModelBase):
     """
 
     check_references_on_delete: tuple[str, ...] | None = None
-    objects: Manager[OrphanDeletionMixin]
 
     @classmethod
     def delete_if_orphaned(cls, instance: OrphanDeletionMixin | None) -> None:
@@ -156,4 +153,4 @@ class OrphanDeletionMixin(_ModelBase):
             return
 
         for instance in instance_pks:
-            cls.delete_if_orphaned(cls.objects.filter(pk=instance).first())
+            cls.delete_if_orphaned(cls.objects.filter(pk=instance).first())  # type: ignore[attr-defined]

@@ -8,20 +8,19 @@ import re
 import tarfile
 import zipfile
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
-from django.db import models
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
 from django.utils.translation import gettext as _
 from django.views.generic import TemplateView, View
 from django.views.generic.base import RedirectView
 from django.views.generic.list import ListView
+
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
-from trustpoint.views.base import SortableTableFromListMixin
-
 from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH
+from trustpoint.views.base import SortableTableFromListMixin
 
 if TYPE_CHECKING:
     from typing import Any
@@ -48,7 +47,7 @@ def language(request: HttpRequest) -> HttpResponse:
 # ------------------------------------------------------- Logging ------------------------------------------------------
 
 
-class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromListMixin, ListView[models.Model]):
+class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromListMixin, ListView):  # type: ignore[type-arg,misc]
     """View to display all log files in the log directory in a table."""
 
     http_method_names = ('get',)
@@ -97,13 +96,13 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
 
         return {'filename': log_filename, 'created_at': created_at, 'updated_at': updated_at}
 
-    def get_queryset(self) -> list[dict[str, str]]: # type: ignore[override]
+    def get_queryset(self) -> list[dict[str, str]]:  # type: ignore[override]
         """Gets a queryset of all valid Trustpoint log files in the log directory."""
         all_files = [file.name for file in LOG_DIR_PATH.iterdir()]
         valid_log_files = [f for f in all_files if re.compile(r'^trustpoint\.log(?:\.\d+)?$').match(f)]
 
-        self.queryset = [self._get_log_file_data(log_file_name) for log_file_name in valid_log_files]   # type: ignore[assignment]
-        return cast('list[dict[str, str]]', self.queryset)
+        self.queryset = [self._get_log_file_data(log_file_name) for log_file_name in valid_log_files]
+        return self.queryset
 
 
 

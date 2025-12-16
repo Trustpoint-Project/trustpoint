@@ -106,10 +106,10 @@ class TlsViewTest(TestCase):
         self.assertIn('san_ips', context)
         self.assertEqual(context['san_ips'], [])
     
-    @patch.object(TlsView, 'get_san_ips')
-    @patch.object(CertificateModel.objects, 'filter')
-    @patch.object(ActiveTrustpointTlsServerCredentialModel.objects, 'select_related')
-    def test_get_context_data_with_active_credential_and_san(self, mock_select_related, mock_filter, mock_get_san_ips):
+    @patch('management.views.tls.TlsView.get_san_ips')
+    @patch('management.views.tls.CertificateModel')
+    @patch('management.views.tls.ActiveTrustpointTlsServerCredentialModel')
+    def test_get_context_data_with_active_credential_and_san(self, mock_active_model, mock_cert_model, mock_get_san_ips):
         """Test get_context_data with active TLS credential and SAN data."""
         # Mock get_san_ips to avoid database queries in get_form_kwargs
         mock_get_san_ips.return_value = ['192.168.1.1']
@@ -151,7 +151,7 @@ class TlsViewTest(TestCase):
         # Mock active TLS credential
         mock_active_tls = Mock()
         mock_active_tls.credential = mock_credential
-        mock_select_related.return_value.get.return_value = mock_active_tls
+        mock_active_model.objects.select_related.return_value.get.return_value = mock_active_tls
         
         # Mock TLS certificates queryset
         mock_cert = Mock()
@@ -160,7 +160,7 @@ class TlsViewTest(TestCase):
         mock_queryset = Mock()
         mock_queryset.count.return_value = 1
         mock_queryset.__iter__ = Mock(return_value=iter([mock_cert]))
-        mock_filter.return_value = mock_queryset
+        mock_cert_model.objects.filter.return_value = mock_queryset
         
         # Get context data
         context = self.view.get_context_data()
@@ -179,10 +179,10 @@ class TlsViewTest(TestCase):
         self.assertEqual(context['issuer_details']['organization'], 'Example Corp')
         self.assertEqual(context['issuer_details']['common_name'], 'Test CA')
     
-    @patch.object(TlsView, 'get_san_ips')
-    @patch.object(CertificateModel.objects, 'filter')
-    @patch.object(ActiveTrustpointTlsServerCredentialModel.objects, 'select_related')
-    def test_get_context_data_with_certificate_no_san(self, mock_select_related, mock_filter, mock_get_san_ips):
+    @patch('management.views.tls.TlsView.get_san_ips')
+    @patch('management.views.tls.CertificateModel')
+    @patch('management.views.tls.ActiveTrustpointTlsServerCredentialModel')
+    def test_get_context_data_with_certificate_no_san(self, mock_active_model, mock_cert_model, mock_get_san_ips):
         """Test get_context_data with certificate but no SAN extension."""
         # Mock get_san_ips to avoid database queries
         mock_get_san_ips.return_value = []
@@ -198,7 +198,7 @@ class TlsViewTest(TestCase):
         
         mock_active_tls = Mock()
         mock_active_tls.credential = mock_credential
-        mock_select_related.return_value.get.return_value = mock_active_tls
+        mock_active_model.objects.select_related.return_value.get.return_value = mock_active_tls
         
         mock_cert = Mock()
         mock_cert.common_name = 'test cert'
@@ -206,7 +206,7 @@ class TlsViewTest(TestCase):
         mock_queryset = Mock()
         mock_queryset.count.return_value = 1
         mock_queryset.__iter__ = Mock(return_value=iter([mock_cert]))
-        mock_filter.return_value = mock_queryset
+        mock_cert_model.objects.filter.return_value = mock_queryset
         
         context = self.view.get_context_data()
         
@@ -235,9 +235,9 @@ class TlsViewTest(TestCase):
         result = self.view.get_san_ips()
         self.assertEqual(result, [])
     
-    @patch.object(GeneralNameIpAddress.objects, 'filter')
-    @patch.object(ActiveTrustpointTlsServerCredentialModel.objects, 'select_related')
-    def test_get_san_ips_with_ipv4_addresses(self, mock_select_related, mock_filter):
+    @patch('management.views.tls.GeneralNameIpAddress')
+    @patch('management.views.tls.ActiveTrustpointTlsServerCredentialModel')
+    def test_get_san_ips_with_ipv4_addresses(self, mock_active_model, mock_ip_model):
         """Test get_san_ips returns IPv4 addresses from SAN extension."""
         # Mock certificate with SAN extension
         mock_san_model = Mock()
@@ -250,12 +250,12 @@ class TlsViewTest(TestCase):
         
         mock_active_tls = Mock()
         mock_active_tls.credential = mock_credential
-        mock_select_related.return_value.get.return_value = mock_active_tls
+        mock_active_model.objects.select_related.return_value.get.return_value = mock_active_tls
         
         # Mock the IP addresses query
         mock_queryset = Mock()
         mock_queryset.values_list.return_value = ['192.168.1.1', '10.0.0.1']
-        mock_filter.return_value = mock_queryset
+        mock_ip_model.objects.filter.return_value = mock_queryset
         
         result = self.view.get_san_ips()
         

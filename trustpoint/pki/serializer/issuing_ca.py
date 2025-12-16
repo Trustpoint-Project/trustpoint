@@ -11,7 +11,7 @@ from rest_framework import serializers
 from pki.models.issuing_ca import IssuingCaModel
 
 
-class IssuingCaSerializer(serializers.ModelSerializer):
+class IssuingCaSerializer(serializers.ModelSerializer[IssuingCaModel]):
     """Serializer for Issuing CA instances."""
 
     common_name = serializers.CharField(read_only=True)

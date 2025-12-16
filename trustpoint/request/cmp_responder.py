@@ -9,18 +9,17 @@ from typing import TYPE_CHECKING, cast
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.serialization import Encoding
-from devices.models import OnboardingStatus
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc4210  # type: ignore[import-untyped]
 from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm
 
+from devices.models import OnboardingStatus
 from request.message_responder import AbstractMessageResponder
 from request.operation_processor import LocalCaCmpSignatureProcessor
 
 if TYPE_CHECKING:
     from pki.models import CredentialModel
-
     from request.request_context import RequestContext
 
 CMP_MESSAGE_VERSION = 2

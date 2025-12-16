@@ -7,9 +7,6 @@ from cryptography.hazmat.primitives import hashes
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
-from management.models import KeyStorageConfig
-from pki.models.certificate import CertificateModel
-from trustpoint.logger import LoggerMixin
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -18,9 +15,12 @@ from trustpoint_core.serializer import (
     PrivateKeyReference,
     PrivateKeySerializer,
 )
-from util.field import UniqueNameValidator, get_certificate_name
 
+from management.models import KeyStorageConfig
+from pki.models.certificate import CertificateModel
 from signer.models import SignerModel
+from trustpoint.logger import LoggerMixin
+from util.field import UniqueNameValidator, get_certificate_name
 
 
 def get_private_key_location_from_config() -> PrivateKeyLocation:

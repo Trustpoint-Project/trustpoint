@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING, Any
 import django_filters
 from django import forms
 from django.utils.translation import gettext_lazy as _
-from pki.models import DomainModel
 
-from workflows.models import EnrollmentRequest, State, WorkflowDefinition, WorkflowInstance
+from pki.models import DomainModel
+from workflows.models import EnrollmentRequest, State
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet

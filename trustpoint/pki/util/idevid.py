@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from cryptography import x509
 from cryptography.x509.verification import Criticality, ExtensionPolicy, PolicyBuilder, Store, VerificationError
+
 from devices.models import (
     DeviceModel,
     OnboardingConfigModel,

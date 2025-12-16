@@ -10,34 +10,32 @@ This module provides Django class-based views for:
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
-from devices.models import DeviceModel
 from django.contrib import messages
 from django.db import IntegrityError, models
 from django.db.models import Count
-from django.db.models.query import QuerySet
 from django.http import (
     HttpRequest,
     HttpResponse,
     HttpResponseRedirect,
     JsonResponse,
-    QueryDict,
 )
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.timezone import now as tz_now
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import ListView
+from trustpoint_core.oid import AlgorithmIdentifier
+
+from devices.models import DeviceModel
 from pki.models import DomainModel, IssuingCaModel
 from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_DEVICES_SUBCATEGORY, PageContextMixin
-from trustpoint_core.oid import AlgorithmIdentifier
 from util.email import MailTemplates
-
 from workflows.events import Events
 from workflows.filters import EnrollmentRequestFilter
 from workflows.models import (
@@ -53,6 +51,9 @@ from workflows.services.context_catalog import build_catalog
 from workflows.services.engine import advance_instance
 from workflows.services.validators import validate_wizard_payload
 from workflows.services.wizard import transform_to_definition_schema
+
+if TYPE_CHECKING:
+    from django.db.models.query import QuerySet
 
 
 class ContextCatalogView(View):
@@ -783,13 +784,13 @@ class SignalInstanceView(View):
             messages.error(request, f'Invalid action: {action!r}')
             return redirect('workflows:requests')
 
+        if not inst.enrollment_request:
+            raise ValueError
+
         if inst.finalized:
             messages.error(request, f'Workflow {inst.id} was already completed.')
 
             return redirect('workflows:request_detail', pk=inst.enrollment_request.pk)
-
-        if not inst.enrollment_request:
-            raise ValueError
 
         if inst.enrollment_request.aggregated_state != State.AWAITING:
             messages.error(request,
@@ -842,7 +843,7 @@ class EnrollmentRequestListView(ListView[EnrollmentRequest]):
             params['include_finalized'] = 'on'
 
         self.filterset = EnrollmentRequestFilter(params, queryset=base_qs)
-        qs = self.filterset.qs
+        qs: QuerySet[EnrollmentRequest] = self.filterset.qs
         return qs
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -938,6 +939,7 @@ class SignalEnrollmentRequestView(View):
     """Approve or reject all workflow instances belonging to a single EnrollmentRequest."""
 
     def post(self, request: HttpRequest, er_id: UUID, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        """Process approval or rejection of all workflow instances in an enrollment request."""
         action = request.POST.get('action')
         if action not in {'approve', 'reject'}:
             messages.error(request, f'Invalid action: {action!r}')
@@ -955,7 +957,7 @@ class SignalEnrollmentRequestView(View):
         if er.aggregated_state != State.AWAITING:
             messages.error(
                 request,
-                _(f'You cannot {action} a request already in state "{er.aggregated_state.lower()}"'),
+                _('You cannot %s a request already in state "%s"'), action, er.aggregated_state.lower()
             )
             return redirect('workflows:request_table')
 
@@ -985,6 +987,7 @@ class BulkSignalEnrollmentRequestsView(View):
     """Bulk approve or reject enrollment requests."""
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        """Process bulk approval or rejection of enrollment requests."""
         action = request.POST.get('action')
         if action not in {'approve', 'reject'}:
             messages.error(request, f'Invalid bulk action: {action!r}')
@@ -1016,10 +1019,9 @@ class BulkSignalEnrollmentRequestsView(View):
                 )
                 return redirect('workflows:request_table')
 
-            if action == 'approve':
-                if any(inst.state == State.FAILED for inst in er.instances.all()):
-                    messages.error(request, 'Cannot approve requests containing failed instances.')
-                    return redirect('workflows:request_table')
+            if action == 'approve' and any(inst.state == State.FAILED for inst in er.instances.all()):
+                messages.error(request, 'Cannot approve requests containing failed instances.')
+                return redirect('workflows:request_table')
 
             updatable.append(er)
 

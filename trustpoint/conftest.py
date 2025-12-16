@@ -355,7 +355,8 @@ def domain_credential_est_onboarding(
     domain: DomainModel = device.domain
 
     if domain is None:
-        raise ValueError("The associated domain for the device cannot be None")
+        msg = 'The associated domain for the device cannot be None'
+        raise ValueError(msg)
 
     credential_request = rsa_private_key.public_key()
 
@@ -376,7 +377,8 @@ def domain_credential_cmp_onboarding(
     domain: DomainModel = device.domain
 
     if domain is None:
-        raise ValueError("The associated domain for the device cannot be None")
+        msg = 'The associated domain for the device cannot be None'
+        raise ValueError(msg)
 
     credential_request = rsa_private_key.public_key()
 
@@ -397,12 +399,13 @@ def tls_client_certificate_instance_est_onboarding(
     domain: DomainModel = device.domain
 
     if domain is None:
-        raise ValueError("The associated domain for the device cannot be None")
+        msg = 'The associated domain for the device cannot be None'
+        raise ValueError(msg)
 
     credential_request = rsa_private_key.public_key()
 
     tls_client_issuer = LocalTlsClientCredentialIssuer(device=device, domain=domain)
-    common_name = "Fixture TLS Client Certificate"
+    common_name = 'Fixture TLS Client Certificate'
     issued_tls_client_certificate = tls_client_issuer.issue_tls_client_certificate(
         common_name=common_name,
         public_key=credential_request,
@@ -422,12 +425,13 @@ def tls_client_certificate_instance_est_no_onboarding(
     domain: DomainModel = device.domain
 
     if domain is None:
-        raise ValueError("The associated domain for the device cannot be None")
+        msg = 'The associated domain for the device cannot be None'
+        raise ValueError(msg)
 
     credential_request = rsa_private_key.public_key()
 
     tls_client_issuer = LocalTlsClientCredentialIssuer(device=device, domain=domain)
-    common_name = "TLS Client Certificate for EST without Onboarding"
+    common_name = 'TLS Client Certificate for EST without Onboarding'
 
     issued_tls_client_certificate = tls_client_issuer.issue_tls_client_certificate(
         common_name=common_name,
@@ -449,7 +453,8 @@ def domain_credential_instance_for_cmp(
     domain: DomainModel = device.domain
 
     if domain is None:
-        raise ValueError("The associated domain for the device cannot be None")
+        msg = 'The associated domain for the device cannot be None'
+        raise ValueError(msg)
 
     credential_request = rsa_private_key.public_key()
 
@@ -472,11 +477,12 @@ def tls_client_request_with_client_cert_header(
     domain = domain_credential_instance.credential.domain
 
     if domain is None:
-        raise ValueError("The associated domain for the domain credential cannot be None")
+        msg = 'The associated domain for the domain credential cannot be None'
+        raise ValueError(msg)
 
     csr_builder = x509.CertificateSigningRequestBuilder().subject_name(
         x509.Name([
-            x509.NameAttribute(x509.NameOID.COMMON_NAME, "TLS Client Certificate"),
+            x509.NameAttribute(x509.NameOID.COMMON_NAME, 'TLS Client Certificate'),
         ])
     )
     csr = csr_builder.sign(private_key=rsa_private_key, algorithm=hashes.SHA256())
@@ -490,9 +496,9 @@ def tls_client_request_with_client_cert_header(
 
     request_factory = RequestFactory()
     request = request_factory.post(
-        path=f"/.well-known/{protocol_str}/{domain_str}/{certtemplate_str}/{operation_str}",
+        path=f'/.well-known/{protocol_str}/{domain_str}/{certtemplate_str}/{operation_str}',
         data=csr.public_bytes(serialization.Encoding.DER),
-        content_type="application/pkcs10",
+        content_type='application/pkcs10',
         HTTP_SSL_CLIENT_CERT=domaincredential_pem,
     )
 
@@ -565,9 +571,7 @@ class CSRFixture:
         der_bytes = self.get_der()
         base64_bytes = base64.b64encode(der_bytes)
         # Add newlines every 64 characters to mimic common base64 formatting
-        lines = []
-        for i in range(0, len(base64_bytes), 64):
-            lines.append(base64_bytes[i:i + 64])
+        lines = [base64_bytes[i:i + 64] for i in range(0, len(base64_bytes), 64)]
         return b'\n'.join(lines) + b'\n'
 
     def get_cryptography_object(self) -> x509.CertificateSigningRequest:
@@ -576,7 +580,7 @@ class CSRFixture:
 
 
 @pytest.fixture
-def test_csr_fixture():
+def test_csr_fixture() -> CSRFixture:
     """Create a test CSR fixture that can be retrieved in multiple formats."""
     return CSRFixture()
 

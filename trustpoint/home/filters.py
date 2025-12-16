@@ -6,6 +6,7 @@ from typing import ClassVar
 import django_filters
 from django.db.models import QuerySet
 from django.utils import timezone
+
 from notifications.models import NotificationModel
 
 

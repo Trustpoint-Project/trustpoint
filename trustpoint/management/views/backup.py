@@ -14,12 +14,12 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView, View
-from trustpoint.logger import LoggerMixin
-from trustpoint.views.base import SortableTableFromListMixin
-from util.sftp import SftpClient, SftpError
 
 from management.forms import BackupOptionsForm
 from management.models import BackupOptions
+from trustpoint.logger import LoggerMixin
+from trustpoint.views.base import SortableTableFromListMixin
+from util.sftp import SftpClient, SftpError
 
 
 def get_backup_file_data(filename: str) -> dict[str, Any]:
@@ -75,7 +75,7 @@ def create_db_backup(path: Path) -> str:
     return filename
 
 
-class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView[Any]):
+class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # type: ignore[type-arg,misc]
     """Display existing backups and handle backup-related actions.
 
     GET:

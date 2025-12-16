@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
 from django.template import TemplateSyntaxError, engines
+
 from util.email import (
     EmailPayload,
     MailTemplates,
@@ -14,7 +15,6 @@ from util.email import (
     send_email,
     send_simple,
 )
-
 from workflows.models import State
 from workflows.services.context import build_context
 from workflows.services.executors.factory import AbstractStepExecutor

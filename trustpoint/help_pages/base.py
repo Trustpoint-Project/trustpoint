@@ -13,16 +13,17 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 
 from help_pages.commands import KeyGenCommandBuilder
 from help_pages.help_section import HelpRow, HelpSection, ValueRenderType
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 
 if TYPE_CHECKING:
+    from trustpoint_core import oid
+
     from devices.models import DeviceModel
     from pki.models import DevIdRegistration
     from pki.models.domain import DomainAllowedCertificateProfileModel, DomainModel
-    from trustpoint_core import oid
 
 
 # --------------------------------------------------- Base Classes ----------------------------------------------------

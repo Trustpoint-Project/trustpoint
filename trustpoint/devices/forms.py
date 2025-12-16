@@ -13,10 +13,6 @@ from crispy_forms.layout import HTML, Layout, Submit
 from django import forms
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
-from pki.models.certificate import RevokedCertificateModel
-from pki.models.domain import DomainModel
-from trustpoint.forms import DisableOptionsSelect
-from util.field import UniqueNameValidator
 
 from devices.models import (
     DeviceModel,
@@ -29,6 +25,10 @@ from devices.models import (
     OnboardingStatus,
     RemoteDeviceCredentialDownloadModel,
 )
+from pki.models.certificate import RevokedCertificateModel
+from pki.models.domain import DomainModel
+from trustpoint.forms import DisableOptionsSelect
+from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet

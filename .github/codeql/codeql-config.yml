@@ -1,0 +1,19 @@
+name: "CodeQL config"
+
+# Paths to exclude from analysis
+paths-ignore:
+  - '**/tests/**'
+  - '**/test_*.py'
+  - 'tests/**'
+  - 'trustpoint/**/tests/**'
+  - '**/conftest.py'
+  - 'htmlcov/**'
+  - '.pytest_cache/**'
+
+# Optionally specify paths to include (if you want to be explicit)
+# paths:
+#   - trustpoint
+
+# Query suites to use
+# queries:
+#   - uses: security-extended
