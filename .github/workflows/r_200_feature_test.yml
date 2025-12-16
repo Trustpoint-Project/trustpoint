@@ -98,16 +98,14 @@ jobs:
           # This avoids loading Django-dependent step files from trustpoint/features/steps
           cd ${{ github.workspace }}/tests/docker_integration
           
+          # Run behave with both console output and HTML report in a single run
+          # The setup wizard can only be completed once, so we can't run twice
           uv run python -m behave \
             --no-capture \
             --verbose \
-            features/R_200_docker_setup_wizard.feature || true
-          
-          # Also generate HTML report (run again to ensure report is created)
-          uv run python -m behave \
             --format behave_html_pretty_formatter:PrettyHTMLFormatter \
             --outfile ${{ github.workspace }}/behave-report.html \
-            features/R_200_docker_setup_wizard.feature || true
+            features/R_200_docker_setup_wizard.feature
       
       # Upload the behave HTML report
       - name: Upload Behave Test Report
