@@ -59,32 +59,42 @@ def check_for_errors(html_content: str, url: str) -> None:
     Raises:
         AssertionError: If any error is found on the page
     """
-    error_patterns = [
-        # Django form errors
-        (r'<ul class="errorlist"[^>]*>(.*?)</ul>', 'Form validation error'),
-        # Bootstrap alert-danger
-        (r'alert-danger[^>]*>([^<]+)', 'Alert danger message'),
-        # Django messages framework errors
-        (r'class="[^"]*error[^"]*"[^>]*>([^<]+)', 'Error message'),
-        # Generic error class
-        (r'<div[^>]*class="[^"]*error[^"]*"[^>]*>(.*?)</div>', 'Error div'),
-        # HTTP 500 error page
-        (r'Server Error \(500\)', 'Server Error 500'),
-        # HTTP 404 error page
-        (r'Page not found \(404\)', 'Page not found 404'),
-        # Django debug page
-        (r'<title>([^<]*Exception[^<]*)</title>', 'Exception in title'),
-        (r'<title>([^<]*Error[^<]*)</title>', 'Error in title'),
-    ]
+    from bs4 import BeautifulSoup
 
-    for pattern, error_type in error_patterns:
-        match = re.search(pattern, html_content, re.IGNORECASE | re.DOTALL)
-        if match:
-            error_content = match.group(1) if match.lastindex else match.group(0)
-            # Clean up the error content for display
-            error_content = re.sub(r'<[^>]+>', ' ', error_content).strip()[:200]
-            msg = f'{error_type} found on page {url}: {error_content}'
-            raise AssertionError(msg)
+    # Check for visible alert-danger (Bootstrap errors)
+    soup = BeautifulSoup(html_content, "html.parser")
+    for alert in soup.find_all(class_="alert-danger"):
+        style = alert.get("style", "")
+        classes = alert.get("class", [])
+        if "display: none" in style or "tp-d-none" in classes or "d-none" in classes:
+            continue
+        error_content = alert.get_text(strip=True)
+        if error_content:
+            raise AssertionError(f"Alert danger message found on page {url}: {error_content[:200]}")
+
+    # Django form errors
+    if soup.find("ul", class_="errorlist"):
+        raise AssertionError(f"Form validation error found on page {url}")
+
+    # Django messages framework errors (visible only)
+    for error_div in soup.find_all(class_=lambda c: c and "error" in c):
+        style = error_div.get("style", "")
+        classes = error_div.get("class", [])
+        if "display: none" in style or "tp-d-none" in classes or "d-none" in classes:
+            continue
+        error_content = error_div.get_text(strip=True)
+        if error_content:
+            raise AssertionError(f"Error message found on page {url}: {error_content[:200]}")
+
+    # HTTP 500/404 error page or Django debug page
+    if re.search(r'Server Error \(500\)', html_content, re.IGNORECASE):
+        raise AssertionError(f"Server Error 500 found on page {url}")
+    if re.search(r'Page not found \(404\)', html_content, re.IGNORECASE):
+        raise AssertionError(f"Page not found 404 on page {url}")
+    if re.search(r'<title>([^<]*Exception[^<]*)</title>', html_content, re.IGNORECASE):
+        raise AssertionError(f"Exception in title found on page {url}")
+    if re.search(r'<title>([^<]*Error[^<]*)</title>', html_content, re.IGNORECASE):
+        raise AssertionError(f"Error in title found on page {url}")
 
 
 @given('a fresh Trustpoint Docker container is running')
