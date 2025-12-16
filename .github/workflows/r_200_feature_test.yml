@@ -94,22 +94,20 @@ jobs:
       # Run the Behave feature test against the running Docker container
       - name: Run Setup Wizard Feature Test
         run: |
-          # Run behave directly (not through Django) to test against Docker container
-          # Set PYTHONPATH and run from workspace root to ensure imports work correctly
-          cd ${{ github.workspace }}
-          export PYTHONPATH="${{ github.workspace }}"
-          export DJANGO_SETTINGS_MODULE=trustpoint.settings
+          # Run behave from the isolated docker_integration test directory
+          # This avoids loading Django-dependent step files from trustpoint/features/steps
+          cd ${{ github.workspace }}/tests/docker_integration
           
           uv run python -m behave \
             --no-capture \
             --verbose \
-            trustpoint/features/R_200_docker_setup_wizard.feature || true
+            features/R_200_docker_setup_wizard.feature || true
           
           # Also generate HTML report (run again to ensure report is created)
           uv run python -m behave \
             --format behave_html_pretty_formatter:PrettyHTMLFormatter \
-            --outfile behave-report.html \
-            trustpoint/features/R_200_docker_setup_wizard.feature || true
+            --outfile ${{ github.workspace }}/behave-report.html \
+            features/R_200_docker_setup_wizard.feature || true
       
       # Upload the behave HTML report
       - name: Upload Behave Test Report
