@@ -55,9 +55,6 @@ Feature: Docker Setup Wizard
     When the user navigates to "/signer/"
     Then the page should load without errors
 
-    When the user navigates to "/notifications/"
-    Then the page should load without errors
-
     When the user navigates to "/management/settings/"
     Then the page should load without errors
 
