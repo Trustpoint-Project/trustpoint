@@ -32,11 +32,26 @@ def extract_csrf_token(html_content: str) -> str:
     Raises:
         AssertionError: If no CSRF token is found
     """
-    match = re.search(r'csrfmiddlewaretoken["\']?\s*value=["\']([^"\']+)["\']', html_content)
-    if not match:
-        msg = 'CSRF token not found in response'
-        raise AssertionError(msg)
-    return match.group(1)
+    # Try multiple patterns for CSRF token extraction
+    patterns = [
+        # Standard Django hidden input: <input type="hidden" name="csrfmiddlewaretoken" value="...">
+        r'name=["\']csrfmiddlewaretoken["\']\s+value=["\']([^"\']+)["\']',
+        r'name="csrfmiddlewaretoken"\s+value="([^"]+)"',
+        # Reversed attribute order: value before name
+        r'value=["\']([^"\']+)["\']\s+name=["\']csrfmiddlewaretoken["\']',
+        # With type attribute in between
+        r'name=["\']csrfmiddlewaretoken["\'][^>]*value=["\']([^"\']+)["\']',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, html_content, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    
+    # Debug: print a snippet of the HTML to help diagnose
+    print(f'DEBUG: Could not find CSRF token. HTML snippet (first 2000 chars): {html_content[:2000]}')
+    msg = 'CSRF token not found in response'
+    raise AssertionError(msg)
 
 
 @given('a fresh Trustpoint Docker container is running')
@@ -54,6 +69,12 @@ def step_docker_container_running(context: runner.Context) -> None:
     # Disable SSL verification for self-signed certificates
     context.session.verify = False
     context.base_url = DOCKER_URL
+    
+    # Set headers that Django's CSRF protection requires
+    context.session.headers.update({
+        'Referer': DOCKER_URL,
+        'Origin': DOCKER_URL,
+    })
 
     # Verify the application is accessible
     max_retries = 30
@@ -133,11 +154,21 @@ def step_proceed_next(context: runner.Context) -> None:
 
     # Submit the current form data if available
     if hasattr(context, 'crypto_form_data'):
+        print(f'DEBUG: Posting to {current_url}')
+        print(f'DEBUG: Form data: {context.crypto_form_data}')
+        print(f'DEBUG: Session cookies: {dict(context.session.cookies)}')
+        
         context.response = context.session.post(
             current_url,
             data=context.crypto_form_data,
             allow_redirects=True
         )
+        
+        print(f'DEBUG: Response status: {context.response.status_code}')
+        print(f'DEBUG: Response URL: {context.response.url}')
+        if context.response.status_code == 403:
+            print(f'DEBUG: Response text (first 1000 chars): {context.response.text[:1000]}')
+        
         delattr(context, 'crypto_form_data')  # Clean up after submission
     elif hasattr(context, 'setup_mode_form_data'):
         # Setup mode uses links, not forms - this is a no-op
