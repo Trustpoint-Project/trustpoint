@@ -93,11 +93,12 @@ jobs:
       
       # Run the Behave feature test against the running Docker container
       - name: Run Setup Wizard Feature Test
-        env:
-          DJANGO_SETTINGS_MODULE: trustpoint.settings
-          PYTHONPATH: ${{ github.workspace }}
         run: |
           # Run behave directly (not through Django) to test against Docker container
+          # Set PYTHONPATH to include workspace root so trustpoint.settings can be imported
+          export PYTHONPATH="${{ github.workspace }}"
+          export DJANGO_SETTINGS_MODULE=trustpoint.settings
+          
           uv run behave \
             --no-capture \
             --verbose \
