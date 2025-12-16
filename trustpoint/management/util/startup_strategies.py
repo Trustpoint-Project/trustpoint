@@ -17,8 +17,6 @@ from django.utils.translation import gettext as _
 from management.models import AppVersion, KeyStorageConfig, PKCS11Token
 from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
 from packaging.version import Version
-
-from management.apache_paths import APACHE_CERT_CHAIN_PATH, APACHE_CERT_PATH, APACHE_KEY_PATH
 from management.models import AppVersion, KeyStorageConfig, PKCS11Token
 from pki.models import PKCS11Key
 from pki.models.credential import CredentialModel
