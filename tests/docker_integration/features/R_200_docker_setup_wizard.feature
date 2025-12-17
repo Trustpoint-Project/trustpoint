@@ -91,7 +91,7 @@ Feature: Docker Setup Wizard
     When the user navigates to "/redoc/"
     Then the page should load without errors
 
-  Scenario: Add a new device with no onboarding and enable PKI protocols
+    # Add a new device with no onboarding and enable PKI protocols
     When the user navigates to "/devices/create/no-onboarding/"
     Then the page should load without errors
     When the user fills the device form with:
