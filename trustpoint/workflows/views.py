@@ -790,6 +790,10 @@ class SignalInstanceView(View):
         if inst.finalized:
             messages.error(request, f'Workflow {inst.id} was already completed.')
 
+            if not isinstance(inst.enrollment_request, EnrollmentRequest):
+                msg = f'No EnrollmentRequest for inst {inst} found'
+                raise ValueError(msg)
+
             return redirect('workflows:request_detail', pk=inst.enrollment_request.pk)
 
         if inst.enrollment_request.aggregated_state != State.AWAITING:
@@ -939,7 +943,15 @@ class SignalEnrollmentRequestView(View):
     """Approve or reject all workflow instances belonging to a single EnrollmentRequest."""
 
     def post(self, request: HttpRequest, er_id: UUID, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
-        """Process approval or rejection of all workflow instances in an enrollment request."""
+        """Handle approval or rejection of all workflow instances in an enrollment request.
+
+        Args:
+            request: The HTTP request containing the action.
+            er_id: The id of the enrollment request.
+
+        Returns:
+            HttpResponse redirecting back to the request table.
+        """
         action = request.POST.get('action')
         if action not in {'approve', 'reject'}:
             messages.error(request, f'Invalid action: {action!r}')
@@ -957,9 +969,11 @@ class SignalEnrollmentRequestView(View):
         if er.aggregated_state != State.AWAITING:
             messages.error(
                 request,
-                _('You cannot %s a request already in state "%s"'), action, er.aggregated_state.lower()
+                _('You cannot %s a request already in state: "%s"') % (
+                    action,
+                    er.aggregated_state.lower(),
+                )
             )
-            return redirect('workflows:request_table')
 
         insts = list(er.instances.select_related('enrollment_request'))
 
@@ -987,7 +1001,14 @@ class BulkSignalEnrollmentRequestsView(View):
     """Bulk approve or reject enrollment requests."""
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
-        """Process bulk approval or rejection of enrollment requests."""
+        """Handle bulk approval or rejection of enrollment requests.
+
+        Args:
+            request: The HTTP request containing the list of selected enrollment requests.
+
+        Returns:
+            HttpResponse redirecting back to the request table.
+        """
         action = request.POST.get('action')
         if action not in {'approve', 'reject'}:
             messages.error(request, f'Invalid bulk action: {action!r}')

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, ClassVar, cast
+from typing import Any, cast
 
 from django.db import models
 from django.db.models import JSONField
@@ -172,12 +172,12 @@ class DeviceRequest(models.Model):
 
     class Meta:
         """Database configuration for device workflow parent."""
-
-        ordering: ClassVar[list[str]] = ['-created_at']
+        ordering = ('-created_at',)
 
     def __str__(self) -> str:
         """Return a human-readable representation of the device request."""
-        return f'DeviceRequest {self.id} - Action: {self.action} - State: {self.aggregated_state}'
+        device_id = self.device_id if self.device_id is not None else 'None'
+        return f'DeviceReq#{self.pk} {self.aggregated_state} action={self.action} device={device_id}'
 
     def recompute_and_save(self) -> None:
         """Recompute the aggregate final state from instances."""
