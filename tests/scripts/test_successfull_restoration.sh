@@ -67,10 +67,10 @@ docker exec "$CONTAINER" bash -lc '
   done
 
   # Chain file is optional
-  if [[ -f /etc/trustpoint/tls/nginx-tls-server-cert-chain.pem ]]; then
-    echo "  ✓ optional chain file /etc/trustpoint/tls/nginx-tls-server-cert-chain.pem found"
+  if [[ -f /etc/trustpoint/nginx/tls/nginx-tls-server-cert-chain.pem ]]; then
+    echo "  ✓ optional chain file /etc/trustpoint/nginx/tls/nginx-tls-server-cert-chain.pem found"
   else
-    echo "  ℹ optional chain file /etc/trustpoint/tls/nginx-tls-server-cert-chain.pem not present (OK)"
+    echo "  ℹ optional chain file /etc/trustpoint/nginx/tls/nginx-tls-server-cert-chain.pem not present (OK)"
   fi
 '
 
@@ -132,8 +132,8 @@ docker exec "$CONTAINER" bash -lc '
 
    # 2.4) Certificate files (nginx TLS paths)
   for f in \
-    /etc/trustpoint/tls/nginx-tls-server-key.key \
-    /etc/trustpoint/tls/nginx-tls-server-cert.pem
+    /etc/trustpoint/nginx/tls/nginx-tls-server-key.key \
+    /etc/trustpoint/nginx/tls/nginx-tls-server-cert.pem
   do
     if [[ -f "$f" ]]; then
       echo "   cert file $f found"
@@ -144,10 +144,10 @@ docker exec "$CONTAINER" bash -lc '
   done
 
   # Chain file is optional
-  if [[ -f /etc/trustpoint/tls/nginx-tls-server-cert-chain.pem ]]; then
-    echo "  ✓ optional chain file /etc/trustpoint/tls/nginx-tls-server-cert-chain.pem found"
+  if [[ -f /etc/trustpoint/nginx/tls/nginx-tls-server-cert-chain.pem ]]; then
+    echo "  ✓ optional chain file /etc/trustpoint/nginx/tls/nginx-tls-server-cert-chain.pem found"
   else
-    echo "  ℹ optional chain file /etc/trustpoint/tls/nginx-tls-server-cert-chain.pem not present (OK)"
+    echo "  ℹ optional chain file /etc/trustpoint/nginx/tls/nginx-tls-server-cert-chain.pem not present (OK)"
   fi
 '
 
