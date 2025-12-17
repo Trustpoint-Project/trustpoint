@@ -6,3 +6,17 @@
 **/*.log
 **/*.log.*
 **/db.sqlite3
+**/*.dump.gz
+docs
+.github
+.pytest_cache
+.ruff_cache
+**/.mypy_cache
+**/behave-report.html
+**/md-report.md
+
+# Exclude sensitive files
+**/hsm_so_pin.txt
+**/hsm_pin.txt
+**/db_user.txt
+**/db_password.txt

@@ -28,19 +28,59 @@
 
     <div class="card tp-card-setup-wizard text-center">
         <div class="card-header">
-            <h1>{% trans "Trustpoint - Setup Wizard" %}</h1>
+            <h1>{% trans "Pre-population with Demo Data" %}</h1>
         </div>
         <div class="card-body pt-3 pb-4">
-            <h2>{% trans 'Pre-population with Demo Data' %}</h2>
-            <p>For testing the Trustpoint features and capabilities we recommend to pre-populate the database with demo data.</p>
-            <hr>
-            <form method="POST" class="text-start">
-                {% csrf_token %}
-                <div class="tp-form-btn-group tp-form-btn-group">
-                    <input type="submit" class="btn btn-primary w-100 mt-1" value="{% trans "Continue with Demo Data" %}" name="with-demo-data" />
-                    <input type="submit" class="btn btn-primary w-100 mt-1" value="{% trans "Continue without Demo Data" %}" name="without-demo-data" />
+            
+            <div class="row g-4 mb-4 justify-content-center">
+                <!-- With Demo Data Option -->
+                <div class="col-md-5">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <svg class="bi mb-3" width="48" height="48" fill="currentColor">
+                                <use href="{% static 'img/icons.svg' %}#icon-database"></use>
+                            </svg>
+                            <h5 class="card-title">{% trans 'Continue with Demo Data' %}</h5>
+                            <p class="card-text">
+                                {% trans 'Pre-populate the database with demo data for testing Trustpoint features and capabilities' %}
+                            </p>
+                            <span class="badge bg-info mb-3">{% trans 'Recommended for Testing' %}</span>
+                        </div>
+                        <div class="card-footer">
+                            <form method="POST" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" name="with-demo-data" class="btn btn-primary w-100">
+                                    {% trans 'Continue with Demo Data' %}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
                 </div>
-            </form>
+
+                <!-- Without Demo Data Option -->
+                <div class="col-md-5">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <svg class="bi mb-3" width="48" height="48" fill="currentColor">
+                                <use href="{% static 'img/icons.svg' %}#icon-x-circle"></use>
+                            </svg>
+                            <h5 class="card-title">{% trans 'Continue without Demo Data' %}</h5>
+                            <p class="card-text">
+                                {% trans 'Start with an empty database and configure everything manually' %}
+                            </p>
+                            <span class="badge bg-secondary mb-3">{% trans 'Production Setup' %}</span>
+                        </div>
+                        <div class="card-footer">
+                            <form method="POST" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" name="without-demo-data" class="btn btn-primary w-100">
+                                    {% trans 'Continue without Demo Data' %}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

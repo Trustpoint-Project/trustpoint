@@ -11,15 +11,19 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.management import BaseCommand, call_command
 
+from management.models import AppVersion, KeyStorageConfig
+
 if TYPE_CHECKING:
     from django.core.management.base import CommandParser
 
+ENGINE_SQLITE = 'django.db.backends.sqlite3'
+ENGINE_POSTGRESQL = 'django.db.backends.postgresql'
 
 class Command(BaseCommand):
     """Management command to reset the database and migrations."""
 
     help = (
-        'Resets the database by deleting all migrations, dropping '
+        'Resets the database by deleting current version migrations, dropping '
         'the database, then running makemigrations and migrate. '
         'Creates a superuser unless --no-user is provided.'
     )
@@ -29,6 +33,12 @@ class Command(BaseCommand):
         parser.add_argument('--add', action='store_true', help='Add demo domains and devices after reset.')
         parser.add_argument('--force', action='store_true', help='Force database reset without prompt.')
         parser.add_argument('--no-user', action='store_true', help='Skip superuser creation.')
+        parser.add_argument(
+            '--keep-all-migrations', action='store_true',
+            help='Use in CI environments, does not regenerate migrations.')
+        parser.add_argument(
+            '--initial-migrations', action='store_true',
+            help='DO NOT USE! Breaks the DB of existing installations! Remove all migrations and create initial.')
 
     def handle(self, *_args: tuple[str], **options: dict[str, str]) -> None:
         """Executes the command."""
@@ -42,24 +52,42 @@ class Command(BaseCommand):
 
         # Remove migration files
         self.stdout.write('Removing migration files...')
+        keep_established = not options.get('initial_migrations', False)
+        do_makemigrations = not options.get('keep_all_migrations', False)
         base_path = Path(__file__).resolve().parent.parent.parent.parent
-        self._remove_migration_files(base_path)
+        if do_makemigrations:
+            self._remove_migration_files(base_path, keep_established=keep_established)
 
         # Reset database depending on engine
         engine = settings.DATABASES['default']['ENGINE']
-        if engine == 'django.db.backends.sqlite3':
+        if engine == ENGINE_SQLITE:
             self._reset_sqlite(base_path)
-        elif engine == 'django.db.backends.postgresql':
+        elif engine == ENGINE_POSTGRESQL:
             self._reset_postgresql()
         else:
             self.stderr.write(f'Database engine {engine} is not supported by this command.')
             return
 
         # Run migrations
-        self.stdout.write('Running makemigrations...')
-        call_command('makemigrations')
+        if do_makemigrations:
+            migration_name = 'tp_v' + settings.APP_VERSION.replace('.', '_')
+            if options.get('initial_migrations'):
+                migration_name = 'initial'
+            self.stdout.write('Running makemigrations...')
+            call_command('makemigrations', name=migration_name)
         self.stdout.write('Running migrate...')
         call_command('migrate')
+
+        # Add default models for development server
+        if engine == ENGINE_SQLITE:
+            self.stdout.write('Adding default models for development server...')
+            AppVersion.objects.get_or_create(version=settings.APP_VERSION)
+            # Ensure crypto storage config exists for encrypted fields
+            KeyStorageConfig.get_or_create_default()
+            # Add default certificate profiles
+            call_command('create_default_cert_profiles')
+        else:
+            KeyStorageConfig.get_or_create_default()
 
         # Create superuser if needed
         if not options.get('no_user'):
@@ -78,12 +106,17 @@ class Command(BaseCommand):
         if options.get('add'):
             call_command('add_domains_and_devices')
 
-    def _remove_migration_files(self, base_path: Path) -> None:
+    def _remove_migration_files(self, base_path: Path, *_args: tuple, keep_established: bool) -> None:
         """Removes all Django migration files."""
+        current_version_py_id = settings.APP_VERSION.replace('.', '_')
         for root, _dirs, files in os.walk(base_path):
             if 'migrations' in root:
                 for file in files:
                     if (file.endswith('.py') and file != '__init__.py') or file.endswith('.pyc'):
+                        if (keep_established and
+                            (('_tp_v' in file and current_version_py_id not in file) or '0001_initial' in file)
+                        ):
+                            continue
                         try:
                             Path(Path(root) / file).unlink()
                         except Exception as e:  # noqa: BLE001

@@ -1,0 +1,18 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% block content %}
+    <div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+        <div class="card-header">
+            <h1>Log-File: {{ filename }}</h1>
+        </div>
+        <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; max-height: 90%;">
+            <pre>{{ log_content }}</pre>
+        </div>
+        <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+            <div class="tp-card-btn-footer m-1">
+                <button type="button" value="Back" class="btn btn-secondary" onClick="history.back()">{% trans 'Back' %}</button>
+                <a href="{% url 'management:logging-files-download' filename %} " class="btn btn-primary">{% trans 'Download' %}</a>
+            </div>
+        </div>
+    </div>
+{% endblock %}

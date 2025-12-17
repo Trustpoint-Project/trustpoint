@@ -1,0 +1,176 @@
+{% extends 'trustpoint/base.html' %}
+{% load static %}
+
+{% block content %}
+  <h1 class="mb-4">Workflows</h1>
+  <div class="mb-3">
+  <a class="btn btn-primary me-2" href="{% url 'workflows:definition_wizard' %}">+ Create New Workflow</a>
+  <a class="btn btn-secondary me-2" href="{% url 'workflows:request_table' %}">Pending Requests</a>
+  <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#importModal">
+    Import…
+  </button>
+</div>
+
+  <table class="table table-hover align-middle">
+    <thead class="table">
+      <tr>
+        <th>Name</th>
+        <th>Last Updated</th>
+        <th>Published</th>
+        <th class="text-end">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for wf in definitions %}
+        <tr>
+          <td>{{ wf.name }}</td>
+          <td>{{ wf.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+          <td>
+            {% if wf.published %}
+              <span class="badge bg-success">Yes</span>
+            {% else %}
+              <span class="badge bg-secondary">No</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a
+              href="{% url 'workflows:definition_wizard' %}?edit={{ wf.id }}"
+              class="btn btn-sm btn-outline-primary me-1"
+            >
+              Edit
+            </a>
+
+            {% if wf.published %}
+              <form method="post" action="{% url 'workflows:definition_publish' wf.id %}" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="pause">
+                <button type="submit" class="btn btn-sm btn-outline-warning me-1">Pause</button>
+              </form>
+            {% else %}
+              <form method="post" action="{% url 'workflows:definition_publish' wf.id %}" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="publish">
+                <button type="submit" class="btn btn-sm btn-outline-success me-1">Publish</button>
+              </form>
+            {% endif %}
+
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-danger delete-btn"
+              data-delete-url="{% url 'workflows:definition_delete' wf.id %}"
+              data-wf-name="{{ wf.name }}"
+            >
+              Delete
+            </button>
+            <a href="{% url 'workflows:definition_export' wf.id %}" class="btn btn-sm btn-outline-secondary me-1">Export</a>
+          </td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="4" class="text-center text-muted">
+            No workflows defined.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# Delete Confirmation Modal #}
+  <div
+    class="modal fade"
+    id="deleteModal"
+    tabindex="-1"
+    aria-hidden="true"
+  >
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form
+          id="deleteForm"
+          method="post"
+          action=""
+        >
+          {% csrf_token %}
+          <div class="modal-header">
+            <h5 class="modal-title">Confirm Delete</h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body">
+            Are you sure you want to delete workflow
+            <strong id="modalWfName"></strong>?
+            <p class="mt-2 text-danger small">
+              This will also delete all ongoing workflow instances.
+            </p>
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-bs-dismiss="modal"
+            >
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-danger">
+              Yes, delete
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Modal (clean, no publish toggle) -->
+  <div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <form
+        class="modal-content"
+        method="post"
+        action="{% url 'workflows:definition_import' %}"
+        enctype="multipart/form-data"
+      >
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title">Import Workflow</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-muted">
+            Choose a JSON file previously exported from this system.
+            The wizard will open prefilled so you can review, set scopes, and publish.
+          </p>
+          <div class="mb-3">
+            <label class="form-label">JSON File</label>
+            <input type="file" name="file" class="form-control" accept="application/json" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Import</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {# Load Bootstrap JS and wire up the modal #}
+  <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const modalEl   = document.getElementById('deleteModal');
+      const modal     = new bootstrap.Modal(modalEl);
+      const form      = document.getElementById('deleteForm');
+      const nameField = document.getElementById('modalWfName');
+
+      document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          form.action      = btn.getAttribute('data-delete-url');
+          nameField.textContent = btn.getAttribute('data-wf-name');
+          modal.show();
+        });
+      });
+    });
+  </script>
+{% endblock %}

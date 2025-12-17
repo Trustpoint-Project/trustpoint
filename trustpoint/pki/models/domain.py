@@ -2,21 +2,28 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
+from django_stubs_ext.db.models import TypedModelMeta
 from trustpoint_core import oid
+
 from util.field import UniqueNameValidator
 
-from . import IssuingCaModel
+if TYPE_CHECKING:
+    from typing import Any, ClassVar
 
-__all__ = ['DomainModel']
+from . import IssuingCaModel
+from .cert_profile import CertificateProfileModel
+
+__all__ = ['DomainAllowedCertificateProfileModel', 'DomainModel']
 
 
 class DomainModel(models.Model):
     """Domain Model."""
-
-    objects: models.Manager[DomainModel]
 
     unique_name = models.CharField(_('Domain Name'), max_length=100, unique=True, validators=[UniqueNameValidator()])
 
@@ -37,45 +44,13 @@ class DomainModel(models.Model):
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
     updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
 
-    auto_create_new_device = models.BooleanField(
-        _('Auto-create New Device'),
-        default=False,
-        help_text=_(
-            'Automatically create a new device if no device with the same serial number exists in the database.'
-        ),
-    )
+    def __repr__(self) -> str:
+        """Machine-readable representation of the Domain model instance.
 
-    allow_username_password_registration = models.BooleanField(
-        _('Allow username:password Enrollment'),
-        default=True,
-        help_text=_('New devices can be enrolled with a username and password.'),
-    )
-
-    allow_idevid_registration = models.BooleanField(
-        _('Allow IDevID Enrollment'),
-        default=False,
-        help_text=_('Allow registration of a new device using the IDevID of the Device.'),
-    )
-
-    domain_credential_auth = models.BooleanField(
-        _('Allow a Domain Credential for Authentication'),
-        default=True,
-        help_text=_('The EST server permits a domain credential issued by the domain Issuing CA for authentication.'),
-    )
-
-    username_password_auth = models.BooleanField(
-        _('Allow username:password for Authentication'),
-        default=False,
-        help_text=_('The EST server permits username and password for authentication.'),
-    )
-
-    allow_app_certs_without_domain = models.BooleanField(
-        _('Allow Application Certificates without Domain Credential'),
-        default=False,
-        help_text=_('Allow issuance of application certificates without a domain credential.'),
-    )
-
-    def __repr(self) -> str:
+        Returns:
+            str:
+                Machine-readable representation of the Domain model model instance.
+        """
         return f'DomainModel(unique_name={self.unique_name})'
 
     def __str__(self) -> str:
@@ -83,19 +58,24 @@ class DomainModel(models.Model):
 
         Returns:
             str:
-                Human-readable representation of the EndpointProfile model instance.
+                Human-readable representation of the Domain model model instance.
         """
         return self.unique_name
 
     def save(self, **kwargs: Any) -> None:
-        """Save the Domain model instance."""
-        self.clean()  # Ensure validation before saving
+        """Save the Domain model and add default certificate profiles."""
+        self.clean()
+        is_new_instance = not self.pk
         super().save(**kwargs)
+        if is_new_instance:
+            self._add_default_profiles()
+
 
     @property
     def signature_suite(self) -> oid.SignatureSuite:
         """Get the signature suite for the domain (based on its Issuing CA)."""
-        return oid.SignatureSuite.from_certificate(self.issuing_ca.credential.get_certificate_serializer().as_crypto())
+        return oid.SignatureSuite.from_certificate(
+            self.get_issuing_ca_or_value_error().credential.get_certificate_serializer().as_crypto())
 
     @property
     def public_key_info(self) -> oid.PublicKeyInfo:
@@ -107,3 +87,144 @@ class DomainModel(models.Model):
         if self.issuing_ca and self.issuing_ca.issuing_ca_type == IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT:
             exc_msg = 'The issuing CA associated with the domain cannot be an auto-generated root CA.'
             raise ValidationError(exc_msg)
+
+    def get_issuing_ca_or_value_error(self) -> IssuingCaModel:
+        """Gets the corresponding Issuing CA.
+
+        Returns:
+            The corresponding Issuing CA.
+
+        Raises:
+            ValueError: If no Issuing CA is set.
+        """
+        if not self.issuing_ca:
+            err_msg = f'Domain {self.unique_name} does not have a corresponding Issuing CA configured.'
+            raise ValueError(err_msg)
+        return self.issuing_ca
+
+    def get_allowed_cert_profiles(self) -> models.QuerySet[DomainAllowedCertificateProfileModel]:
+        """Gets the allowed certificate profiles for this domain.
+
+        Returns:
+            QuerySet of allowed DomainAllowedCertificateProfileModel instances.
+        """
+        return self.certificate_profiles.select_related('certificate_profile').all()
+
+    def get_allowed_cert_profile_names(self) -> set[str]:
+        """Gets the set of allowed certificate profile names for this domain.
+
+        Returns:
+            Set of allowed certificate profile names.
+        """
+        allowed_profiles = self.certificate_profiles.all()
+        allowed_profile_names = {profile.certificate_profile.unique_name for profile in allowed_profiles}
+        allowed_profile_names.update(profile.alias for profile in allowed_profiles if profile.alias)
+        return allowed_profile_names
+
+    def get_allowed_cert_profile(self, cert_profile_str: str) -> CertificateProfileModel:
+        """Gets the requested certificate profile if it is allowed for this domain. Else, raises a ValueError.
+
+        Args:
+            cert_profile_str: The name of the certificate profile to check.
+
+        Returns:
+            The requested CertificateProfileModel (if allowed).
+        """
+        # try query from alias first
+        profile_qs = self.certificate_profiles.filter(alias=cert_profile_str)
+        if not profile_qs.exists():
+            # fall back to unique_name
+            profile_qs = self.certificate_profiles.filter(
+                certificate_profile__unique_name=cert_profile_str
+            )
+        if not profile_qs.exists():
+            err_msg = f'Certificate profile "{cert_profile_str}" does not exist or not allowed in domain.'
+            raise ValueError(err_msg)
+        return profile_qs.first().certificate_profile  # type: ignore[union-attr]
+
+    def set_allowed_cert_profiles(self, allowed_profile_data: dict[str, str]) -> set[tuple[str, str]]:
+        """Sets the certificate profiles allowed in the domain.
+
+        Args:
+            allowed_profile_data: Dict where key is allowed certificate profile ID (str) and value is optional alias
+
+        Returns:
+            Set of rejected aliases due to duplication in the form of (alias, profile unique name)
+        """
+        existing_aliases = set()
+        rejected_aliases = set()
+        with transaction.atomic():
+            self.certificate_profiles.all().delete()
+            for profile in CertificateProfileModel.objects.all():
+                id_str = str(profile.id)
+                is_allowed = id_str in allowed_profile_data
+                alias_value = allowed_profile_data.get(id_str, '')
+                if not is_allowed:
+                    continue
+
+                if alias_value:
+                    if alias_value in existing_aliases:
+                        rejected_aliases.add((alias_value, profile.unique_name))
+                        alias_value = ''
+                    else:
+                        existing_aliases.add(alias_value)
+
+                # Create new relation
+                DomainAllowedCertificateProfileModel.objects.create(
+                    domain=self,
+                    certificate_profile=profile,
+                    alias=alias_value
+                )
+
+        return rejected_aliases
+
+
+    def _add_default_profiles(self) -> None:
+        """Adds default certificate profiles to the domain as allowed."""
+        default_profiles = CertificateProfileModel.objects.filter(is_default=True)
+        for profile in default_profiles:
+            DomainAllowedCertificateProfileModel.objects.get_or_create(
+                domain=self,
+                certificate_profile=profile,
+            )
+
+
+
+class DomainAllowedCertificateProfileModel(models.Model):
+    """Model representing allowed certificate profiles for a domain."""
+
+    domain = models.ForeignKey(
+        DomainModel,
+        on_delete=models.CASCADE,
+        related_name='certificate_profiles'
+    )
+    certificate_profile = models.ForeignKey(
+        CertificateProfileModel,
+        on_delete=models.CASCADE,
+        related_name='domains'
+    )
+    # Domain-specific alias for the certificate profile name
+    alias = models.CharField(max_length=255, default='')
+
+    class Meta(TypedModelMeta):
+        """Meta information."""
+        constraints: ClassVar = [
+            # allow duplicate empty aliases
+            models.UniqueConstraint(
+                fields=['domain', 'alias'],
+                name='unique_domain_alias_when_not_empty',
+                condition=~Q(alias=''),
+            ),
+            models.UniqueConstraint(
+                fields=['domain', 'certificate_profile'],
+                name='unique_domain_certificate_profile'
+            ),
+        ]
+
+    def __str__(self) -> str:
+        """String representation of the DomainAllowedCertificateProfileModel."""
+        name_str = f'{self.domain.unique_name} - {self.certificate_profile.unique_name}'
+        if self.alias:
+            name_str += f' (alias: {self.alias})'
+        return name_str
+

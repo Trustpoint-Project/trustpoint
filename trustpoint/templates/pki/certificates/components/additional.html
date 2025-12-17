@@ -1,23 +1,25 @@
 {% load i18n %}
 {% block additional %}
-    <h2>Additional</h2>
+    <h2>{% trans 'Associated Credential' %}</h2>
     <hr class="hr-m">
+    {% with cert.credential_set.first.issued_credential as issued_credential %}
     <div class="tp-kvp-list">
         <div>
-            <div>Issued to Device</div>
-            <div>{{ cert.issued_device_certificate.device.device_name }}</div>
+            <div>{% trans 'Issued to Device' %}</div>
+            <div>{{ issued_credential.device.common_name }}</div>
         </div>
         <div>
-            <div>Certificate Type</div>
-            <div>{{ cert.issued_device_certificate.certificate_type }}</div>
+            <div>{% trans 'Issued via protocol' %}</div>
+            <div>{{ issued_credential.device.get_onboarding_protocol_display }}</div>
         </div>
         <div>
-            <div>Issued via protocol</div>
-            <div>{{ cert.issued_device_certificate.protocol }}</div>
+            <div>{% trans 'Credential type' %}</div>
+            <div>{{ issued_credential.get_issued_credential_type_display }}</div>
         </div>
         <div>
-            <div>Template Name</div>
-            <div>{{ cert.issued_device_certificate.template_name }}</div>
+            <div>{% trans 'Certificate Profile' %}</div>
+            <div>{{ issued_credential.issued_using_cert_profile }}</div>
         </div>
     </div>
+    {% endwith %}
 {% endblock additional %}

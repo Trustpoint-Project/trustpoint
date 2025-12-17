@@ -15,31 +15,75 @@ import logging
 import os
 import socket
 import time
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import django_stubs_ext
 import psycopg
 from django.utils.translation import gettext_lazy as _
 
+try:
+    APP_VERSION = version('trustpoint')
+except PackageNotFoundError:
+    APP_VERSION = 'Version not found'
+
+try:
+    with Path('/etc/hostname').open('r') as f:
+        CONTAINER_ID = f.read().strip()
+except FileNotFoundError:
+    CONTAINER_ID = 'unknown'
+
+def app_version(_request: Any) -> dict[str, str]:
+    """Provide application version and container ID for use in templates.
+
+    Args:
+        _request: The HTTP request object (unused).
+
+    Returns:
+        dict: A dictionary containing the application version and container ID.
+    """
+    return {'APP_VERSION': APP_VERSION,
+            'CONTAINER_ID': CONTAINER_ID}
+
 # Monkeypatching Django, so stubs will work for all generics,
 # see: https://github.com/typeddjango/django-stubs
 django_stubs_ext.monkeypatch()
 
-DOCKER_CONTAINER = False
+# ------------- Paths --------------
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Settings for postgreql database
-POSTGRESQL = True
-DATABASE_ENGINE = 'django.db.backends.postgresql'
-DATABASE_HOST = 'localhost'
-DATABASE_PORT = '5432'
-DATABASE_NAME = 'trustpoint_db'
-DATABASE_USER = 'admin'
-DATABASE_PASSWORD = 'testing321'  # noqa: S105
+LOCALE_PATHS = [BASE_DIR / Path('trustpoint/locale')]
 
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/5.0/howto/static-files/
+STATIC_URL = 'static/'
+
+MEDIA_ROOT = BASE_DIR / Path('media')
+MEDIA_URL = '/media/'
+
+STATICFILES_DIRS = [BASE_DIR / Path('static')]
+
+STATIC_ROOT = Path(__file__).parent.parent / Path('collected_static')
+
+LOG_DIR_PATH = BASE_DIR / Path('media/log/')
+LOG_DIR_PATH.mkdir(parents=True, exist_ok=True)
+LOG_FILE_PATH = LOG_DIR_PATH / Path('trustpoint.log')
+
+BACKUP_FILE_PATH = MEDIA_ROOT / Path('backups')
+
+PUBLIC_PATHS = [
+    '/setup-wizard',
+    '/.well-known/cmp',
+    '/.well-known/est',
+    '/aoki',
+    '/crl',
+]
+
+
+# ------------- Functions --------------
 
 def is_postgre_available() -> bool:
     """Checks whether PostgreSQL is available and issues differentiated error messages.
@@ -58,7 +102,7 @@ def is_postgre_available() -> bool:
     port = int(os.environ.get('DATABASE_PORT', DATABASE_PORT))
     user = os.environ.get('DATABASE_USER', DATABASE_USER)
     password = os.environ.get('DATABASE_PASSWORD', DATABASE_PASSWORD)
-    db_name = os.environ.get('DATABASE_NAME', DATABASE_NAME)
+    db_name = os.environ.get('POSTGRES_DB', POSTGRES_DB)
 
     try:
         print(f'Trying to connect to {host}:{port}...')
@@ -89,6 +133,20 @@ def is_postgre_available() -> bool:
     return True
 
 
+# ------------- Variables --------------
+
+ALLOWED_HOSTS = ['*']
+WSGI_APPLICATION = 'trustpoint.wsgi.application'
+
+
+# mDNS service discovery advertisement
+ADVERTISED_HOST = '127.0.0.1'
+ADVERTISED_PORT = 443
+
+
+DOCKER_CONTAINER = False
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
@@ -97,22 +155,105 @@ DEBUG = True
 ADMIN_ENABLED = bool(DEBUG)
 DEVELOPMENT_ENV = True
 
-# SECURITY WARNING: keep the secret key used in production secret!
+
+
+# Basic SMTP backend
 if DEBUG:
-    SECRET_KEY = 'DEV-ENVIRON-SECRET-KEY-lh2rw0b0z$s9e=!4see)@_8ta_up&ad&m01$i+g5z@nz5u$0wi'  # noqa: S105
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 else:
-    # TODO(AlexHx8472): Use proper docker secrets handling.
-    SECRET_KEY = Path('/etc/trustpoint/secrets/django_secret_key.env').read_text()
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', default='no-reply@trustpoint.ai')
 
-ALLOWED_HOSTS = ['*']
 
-# mDNS service discovery advertisement
-ADVERTISED_HOST = '127.0.0.1'
-ADVERTISED_PORT = 443
+# Settings for postgreql database
+POSTGRESQL = True
+DATABASE_ENGINE = 'django.db.backends.postgresql'
+DATABASE_HOST = 'localhost'
+DATABASE_PORT = '5432'
+POSTGRES_DB = 'trustpoint_db'
+DATABASE_USER = 'admin'
+DATABASE_PASSWORD = 'testing321'  # noqa: S105
+
+
+# Settomg for email backend
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@trustpoint.de')
+
+# Default: console (safe for dev/showcases)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# If EMAIL_HOST is present, switch to SMTP
+_email_host = os.getenv('EMAIL_HOST')  # e.g. "smtp.customer.tld" or "mailpit"
+if _email_host:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = _email_host
+    EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+
+    # Sensible defaults based on port; env can override
+    _SMTP_TLS_PORT = 587
+    _SMTP_SSL_PORT = 465
+    _use_tls_env = os.getenv('EMAIL_USE_TLS')
+    _use_ssl_env = os.getenv('EMAIL_USE_SSL')
+    EMAIL_USE_TLS = (_use_tls_env.lower() in ('1', 'true', 'yes')) if _use_tls_env else (EMAIL_PORT == _SMTP_TLS_PORT)
+    EMAIL_USE_SSL = (_use_ssl_env.lower() in ('1', 'true', 'yes')) if _use_ssl_env else (EMAIL_PORT == _SMTP_SSL_PORT)
+
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')       # auth only if both non-empty
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+    EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
+
+
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    },
+    'dbbackup': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'OPTIONS': {
+            'location': BACKUP_FILE_PATH,
+        },
+    },
+}
+
+
+# Default primary key field type
+# https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
+
+CRISPY_TEMPLATE_PACK = 'bootstrap5'
+
+LOGIN_REDIRECT_URL = 'home:dashboard'
+LOGIN_URL = 'users:login'
+
+DJANGO_LOG_LEVEL = 'INFO'
+
+TAGGIT_CASE_INSENSITIVE = True
+
+DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+
+ROOT_URLCONF = 'trustpoint.urls'
+
+
+# Internationalization
+LANGUAGE_CODE = 'en-us'
+
+LANGUAGES = [
+    ('de', _('German')),
+    ('en', _('English')),
+]
+
+USE_I18N = True
+
+USE_TZ = True
+TIME_ZONE = 'UTC'
 
 # Application definition
-
 INSTALLED_APPS = [
+    'help_pages.apps.HelpPagesConfig',
+    'shared.apps.SharedConfig',
     'setup_wizard.apps.SetupWizardConfig',
     'users.apps.UsersConfig',
     'home.apps.HomeConfig',
@@ -120,7 +261,11 @@ INSTALLED_APPS = [
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
     'est.apps.EstConfig',
-    'settings.apps.SettingsConfig',
+    'signer.apps.SignerConfig',
+    'aoki.apps.AokiConfig',
+    'management.apps.ManagementConfig',
+    'notifications.apps.NotificationsConfig',
+    'trustpoint_core',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -129,6 +274,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'crispy_forms',
     'crispy_bootstrap5',
+    'django_filters',
+    'dbbackup',
+    'workflows.apps.WorkflowsConfig',
+    'rest_framework',
+    'drf_yasg',
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
@@ -148,7 +298,6 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'trustpoint.urls'
 
 TEMPLATES = [
     {
@@ -161,42 +310,15 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'trustpoint.settings.app_version',
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'trustpoint.wsgi.application'
-
-
-# Database
-# https://docs.djangoproject.com/en/5.0/ref/settings/#databases
-
-
-if is_postgre_available():
-    DATABASES = {
-        'default': {
-            'ENGINE': os.environ.get('DATABASE_ENGINE', DATABASE_ENGINE),
-            'NAME': os.environ.get('DATABASE_NAME', DATABASE_NAME),
-            'USER': os.environ.get('DATABASE_USER', DATABASE_USER),
-            'PASSWORD': os.environ.get('DATABASE_PASSWORD', DATABASE_PASSWORD),
-            'HOST': os.environ.get('DATABASE_HOST', DATABASE_HOST),
-            'PORT': os.environ.get('DATABASE_PORT', DATABASE_PORT),
-        }
-    }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-            'OPTIONS': {'timeout': 20},
-        },
-    }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -213,65 +335,41 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# Internationalization
-# https://docs.djangoproject.com/en/5.0/topics/i18n/
-
-LANGUAGE_CODE = 'en-us'
-
-LANGUAGES = [
-    ('de', _('German')),
-    ('en', _('English')),
-]
-
-
-USE_I18N = True
-
-USE_TZ = True
-TIME_ZONE = 'UTC'
-
-LOCALE_PATHS = [BASE_DIR / Path('trustpoint/locale')]
-
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.0/howto/static-files/
-
-STATIC_URL = 'static/'
-
-MEDIA_ROOT = BASE_DIR / Path('media')
-MEDIA_URL = '/media/'
-
-STATICFILES_DIRS = [BASE_DIR / Path('static')]
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
-
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# Database
+# https://docs.djangoproject.com/en/5.0/ref/settings/#databases
+if is_postgre_available():
+    DATABASES = {
+        'default': {
+            'ENGINE': DATABASE_ENGINE,
+            'NAME': os.environ.get('POSTGRES_DB', POSTGRES_DB),
+            'USER': os.environ.get('DATABASE_USER', DATABASE_USER),
+            'PASSWORD': os.environ.get('DATABASE_PASSWORD', DATABASE_PASSWORD),
+            'HOST': os.environ.get('DATABASE_HOST', DATABASE_HOST),
+            'PORT': os.environ.get('DATABASE_PORT', DATABASE_PORT),
+        }
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': str(BASE_DIR / 'db.sqlite3'),
+            'OPTIONS': {'timeout': 20},  # type: ignore[dict-item]
+        },
+    }
 
 
-CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
-
-CRISPY_TEMPLATE_PACK = 'bootstrap5'
-
-LOGIN_REDIRECT_URL = 'home:dashboard'
-LOGIN_URL = 'users:login'
-
-DJANGO_LOG_LEVEL = 'INFO'
-
-TAGGIT_CASE_INSENSITIVE = True
-
-STATIC_ROOT = Path(__file__).parent.parent / Path('collected_static')
-
-LOG_DIR_PATH = BASE_DIR / Path('media/log/')
-LOG_DIR_PATH.mkdir(parents=True, exist_ok=True)
-LOG_FILE_PATH = LOG_DIR_PATH / Path('trustpoint.log')
-
-DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+# SECURITY WARNING: keep the secret key used in production secret!
+if DEBUG:
+    SECRET_KEY = 'DEV-ENVIRON-SECRET-KEY-lh2rw0b0z$s9e=!4see)@_8ta_up&ad&m01$i+g5z@nz5u$0wi'  # noqa: S105
+else:
+    # TODO(AlexHx8472): Use proper docker secrets handling.  # noqa: FIX002
+    SECRET_KEY = Path('/etc/trustpoint/secrets/django_secret_key.env').read_text()
 
 
 class UTCFormatter(logging.Formatter):
     """Custom logging formatter to use UTC time."""
 
-    converter = time.gmtime
+    converter = staticmethod(time.gmtime)
 
 
 LOGGING = {
@@ -316,10 +414,30 @@ class UIConfig:
     paginate_by: ClassVar[int] = 50
     notifications_paginate_by: ClassVar[int] = 5
 
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ],
+}
 
-PUBLIC_PATHS = [
-    '/setup-wizard',
-    '/.well-known/cmp',
-    '/.well-known/est',
-    '/crl',
-]
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'description': 'Enter JWT token as: Bearer {token}',
+            'name': 'Authorization',
+            'in': 'header',
+        }
+    },
+    'USE_SESSION_AUTH': False,  # disables Django login in Swagger UI
+}
+
+SWAGGER_USE_COMPAT_RENDERERS = False

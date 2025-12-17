@@ -1,7 +1,11 @@
 name: Pytest
 
 # Trigger this workflow on pull requests to ensure tests are executed before merging.
-on: [pull_request]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
   pytest:
@@ -13,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4  # Ensures the repository code is available.
+        uses: actions/checkout@v6  # Ensures the repository code is available.
 
       - name: Setup uv environment
         uses: ./.github/actions/setup-uv-action  # Call the reusable setup step.
@@ -24,7 +28,8 @@ jobs:
         run: |
           mkdir -p reports
           uv run pytest \
-          --md-report-flavor gfm \
+          --md-report-flavor github \
+          --md-report-color never \
           --html=reports/pytest-report.html \
           --junitxml=reports/junit-report.xml \
           trustpoint/ 
@@ -39,15 +44,15 @@ jobs:
           echo "</details>" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Test Reports even if tests fail
-        uses: actions/upload-artifact@v4  # Uploads reports for review.
+        uses: actions/upload-artifact@v6  # Uploads reports for review.
         if: always()  # Ensures this step runs even if pytest fails.
         with:
           name: pytest-reports
           path: reports/
 
-      - name: Render the report to the PR when tests fail
+      - name: Render the report to the PR
         uses: marocchino/sticky-pull-request-comment@v2  # Posts test results as a comment on PRs.
-        if: failure()  # Only runs if tests fail.
+        if: always()  # Always runs.
         with:
           header: test-report
           recreate: true  # Replaces previous test reports to keep PR comments clean.

@@ -1,9 +1,13 @@
 name: R_103
 
-on: [pull_request]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
   test:
     uses: ./.github/workflows/behave-test-template.yml
     with:
-      feature_file: R_103_security_configuration
+      feature_file: R_103_domain_management

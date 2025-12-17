@@ -1,0 +1,10 @@
+Hi {{ owner_name }},
+
+Your certificate {{ cert_name }} (serial {{ serial }})
+will expire on {{ expiry_date }}.
+
+Please renew it before then to avoid service interruption:
+{{ renewal_link }}
+
+Best,
+Trustpoint PKI

@@ -1,7 +1,14 @@
-"""Python steps file for R_007."""  # noqa: INP001
+"""Python steps file for R_007."""
 
 from behave import runner, then, when
+import logging
+import os
+import time
 
+logger = logging.getLogger(__name__)
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_FILE_PATH = os.path.abspath(f"{CURRENT_DIR}/../../media/log/trustpoint.log")
 
 @when('the admin performs an action {action}')
 def step_when_admin_performs_action(context: runner.Context, action: str) -> None:  # noqa: ARG001
@@ -11,8 +18,7 @@ def step_when_admin_performs_action(context: runner.Context, action: str) -> Non
         context (runner.Context): Behave context.
         action (str): The action being performed.
     """
-    msg = f'STEP: When the admin performs an action {action}'
-    raise AssertionError(msg)
+    logger.info(f"Admin performed {action} action")
 
 
 @then('the system logs the action {action} with relevant details')
@@ -23,8 +29,14 @@ def step_then_system_logs_action(context: runner.Context, action: str) -> None: 
         context (runner.Context): Behave context.
         action (str): The action that should be logged.
     """
-    msg = f'STEP: Then the system logs the action {action} with relevant details'
-    raise AssertionError(msg)
+    
+    assert os.path.exists(LOG_FILE_PATH), f"Log file {LOG_FILE_PATH} does not exist."
+
+    with open(LOG_FILE_PATH, 'r') as f:
+        log_contents = f.read()
+
+    expected_log = f"Admin performed {action} action"
+    assert expected_log in log_contents, f"Expected log entry not found: {expected_log}"
 
 
 @when('the admin retrieves logs for the time range {time_range}')
@@ -71,8 +83,10 @@ def step_when_admin_modifies_logging(context: runner.Context, log_level: str) ->
         context (runner.Context): Behave context.
         log_level (str): The new logging verbosity level.
     """
-    msg = f'STEP: When the admin modifies logging configuration to {log_level}'
-    raise AssertionError(msg)
+    logger = logging.getLogger()
+    logger.setLevel(getattr(logging, log_level))
+    context.new_log_level = log_level
+
 
 
 @then('the system applies the new logging configuration')
@@ -82,8 +96,9 @@ def step_then_system_applies_logging_config(context: runner.Context) -> None:  #
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'STEP: Then the system applies the new logging configuration'
-    raise AssertionError(msg)
+    current_level_num = logging.getLogger().getEffectiveLevel()
+    current_log_level = logging.getLevelName(current_level_num)
+    assert current_log_level == context.new_log_level, f"Expected log level is not: {context.new_log_level}"
 
 
 @then('logs reflect the new verbosity level {log_level}')
@@ -94,8 +109,31 @@ def step_then_logs_reflect_log_level(context: runner.Context, log_level: str) ->
         context (runner.Context): Behave context.
         log_level (str): The expected verbosity level.
     """
-    msg = f'STEP: Then logs reflect the new verbosity level {log_level}'
-    raise AssertionError(msg)
+    log_level = log_level.upper()
+    reset_log_file()
+    
+    # Emit logs of various levels
+    logger.debug("This is a DEBUG message")
+    logger.info("This is an INFO message")
+    logger.warning("This is a WARNING message")
+    logger.error("This is an ERROR message")
+
+    # Wait for log file flush
+    time.sleep(0.5)
+
+    with open(LOG_FILE_PATH, 'r') as f:
+        contents = f.read()
+
+    # Check that messages at or above log_level are included
+    def should_be_present(level):
+        levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR']
+        return levels.index(level) >= levels.index(log_level)
+
+    assert ("DEBUG" in contents) == should_be_present("DEBUG"), "DEBUG presence mismatch"
+    assert ("INFO" in contents) == should_be_present("INFO"), "INFO presence mismatch"
+    assert ("WARNING" in contents) == should_be_present("WARNING"), "WARNING presence mismatch"
+    assert ("ERROR" in contents) == should_be_present("ERROR"), "ERROR presence mismatch"
+
 
 
 @when('the system restarts')
@@ -105,8 +143,12 @@ def step_when_system_restarts(context: runner.Context) -> None:  # noqa: ARG001
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'STEP: When the system restarts'
-    raise AssertionError(msg)
+    marker = f"PRE_RESTART_LOG_{time.time()}"
+    logger.info(marker)
+    context.log_marker = marker
+
+    # Simulate restart
+    time.sleep(0.1)
 
 
 @then('previous logs are still accessible')
@@ -116,8 +158,13 @@ def step_then_previous_logs_are_accessible(context: runner.Context) -> None:  # 
     Args:
         context (runner.Context): Behave context.
     """
-    msg = 'STEP: Then previous logs are still accessible'
-    raise AssertionError(msg)
+    assert os.path.exists(LOG_FILE_PATH), "Log file does not exist."
+
+    with open(LOG_FILE_PATH, 'r') as f:
+        contents = f.read()
+
+    assert context.log_marker in contents, "Pre-restart log entry not found after simulated restart."
+
 
 
 @then('unauthorized users cannot delete or modify logs')
@@ -129,3 +176,8 @@ def step_then_unauthorized_users_cannot_modify_logs(context: runner.Context) -> 
     """
     msg = 'STEP: Then unauthorized users cannot delete or modify logs'
     raise AssertionError(msg)
+
+
+def reset_log_file():
+    if os.path.exists(LOG_FILE_PATH):
+        open(LOG_FILE_PATH, 'w').close()

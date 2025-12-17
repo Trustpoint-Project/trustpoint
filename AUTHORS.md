@@ -40,6 +40,8 @@ Full Name is required, all other fields are optional.
 * Christian Schwinne (Aircoookie) <christian.schwinne A hshl.de> - Hamm-Lippstadt University of Applied Sciences
 * Dominik Isaak
 * Florian Handke (FHatCSW) <florian.handke A campus-schwarzwald.de> - Campus Schwarzwald gGmbH
+* Ibrahim Almountaka Sambare (ibrahimsambare) <ibrahim.realmountaka A campus-schwarzwald.de> - Campus Schwarzwald / ESILV Paris
+* Kevin Rohn (KevinRohn)
 * Mario Kemper
 * Mohammad Zeeshan
 * Omkar Joglekar

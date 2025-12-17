@@ -95,16 +95,13 @@ if (checkboxColumn) {
     tableSelectButtons.forEach(function(el) {
         el.addEventListener('click', function(event) {
             let url_path = event.target.getAttribute('data-tp-url') + '/';
-            let at_least_one_checked = false;
             checkboxes.forEach(function(el) {
                 if (el.checked) {
                     url_path += el.value + '/';
                     at_least_one_checked = true;
                 }
             });
-            if (at_least_one_checked === true) {
-                window.location.href = url_path;
-            }
+            window.location.href = url_path;
         })
     });
 }
@@ -239,39 +236,77 @@ function togglePemSelectDisable() {
 
 // ------------------------------------------------- Device Creation --------------------------------------------------
 
-const onboardingAndPkiConfigurationSelect = document.getElementById('id_onboarding_and_pki_configuration');
+
+const onboardingAndPkiConfigurationSelect = document.getElementById('id_onboarding_protocol');
 const idevidTrustStoreSelectWrapper = document.getElementById('id_idevid_trust_store_select_wrapper');
+const pkiProtocolEstSelect = document.getElementById('id_allowed_pki_protocols_0');
+const pkiProtocolCmpSelect = document.getElementById('id_allowed_pki_protocols_1');
+
+// const onboardingAndPkiConfigurationSelect = document.getElementById('id_onboarding_and_pki_configuration');
 
 const domainCredentialOnboardingCheckbox = document.getElementById('id_domain_credential_onboarding');
-const onboardingAndPkiConfigurationWrapper = document.getElementById('id_onboarding_and_pki_configuration_wrapper');
+const onboardingAndPkiConfigurationWrapper = document.getElementById('id_onboarding_protocol_wrapper');
 const pkiConfigurationWrapper = document.getElementById('id_pki_configuration_wrapper');
+const allowedPkiProtocolsHeader = document.getElementById('id_allowed_pki_protocols_header');
+const allowedPkiProtocolsHr = document.getElementById('id_allowed_pki_protocols_hr');
+const allowedPkiProtocolsWrapper = document.getElementById('id_allowed_pki_protocols_wrapper');
 
 onboardingAndPkiConfigurationSelect?.addEventListener('change', function(event) {
    const selectedOptionValue = event.target.options[event.target.selectedIndex].value;
+   console.log(selectedOptionValue);
 
     switch (selectedOptionValue) {
         case 'est_username_password':
-        case 'cmp_shared_secret':
-        case 'aoki_est':
-        case 'aoki_cmp':
             addClassIfNotPresent(idevidTrustStoreSelectWrapper, 'd-none');
+            pkiProtocolEstSelect.checked = true;
+            pkiProtocolCmpSelect.checked = false;
+            break;
+        case 'cmp_shared_secret':
+            addClassIfNotPresent(idevidTrustStoreSelectWrapper, 'd-none');
+            pkiProtocolEstSelect.checked = false;
+            pkiProtocolCmpSelect.checked = true;
+            break;
+        case 'manual':
+            addClassIfNotPresent(idevidTrustStoreSelectWrapper, 'd-none');
+            pkiProtocolEstSelect.checked = true;
+            pkiProtocolCmpSelect.checked = true;
             break;
         case 'est_idevid':
+            removeClassIfPresent(idevidTrustStoreSelectWrapper, 'd-none');
+            pkiProtocolEstSelect.checked = true;
+            pkiProtocolCmpSelect.checked = false;
+            break;
         case 'cmp_idevid':
             removeClassIfPresent(idevidTrustStoreSelectWrapper, 'd-none');
+            pkiProtocolEstSelect.checked = false;
+            pkiProtocolCmpSelect.checked = true;
             break;
     }
 });
 
-domainCredentialOnboardingCheckbox?.addEventListener('change', function(event) {
-    if (event.target.checked) {
+function handleOnboardingCheckbox(checked) {
+    if (checked) {
         addClassIfNotPresent(pkiConfigurationWrapper, 'd-none');
         removeClassIfPresent(onboardingAndPkiConfigurationWrapper, 'd-none');
+        removeClassIfPresent(allowedPkiProtocolsHeader, 'd-none');
+        removeClassIfPresent(allowedPkiProtocolsHr, 'd-none');
+        removeClassIfPresent(allowedPkiProtocolsWrapper, 'd-none');
     } else {
         removeClassIfPresent(pkiConfigurationWrapper, 'd-none');
         addClassIfNotPresent(onboardingAndPkiConfigurationWrapper, 'd-none');
+        addClassIfNotPresent(allowedPkiProtocolsHeader, 'd-none');
+        addClassIfNotPresent(allowedPkiProtocolsHr, 'd-none');
+        addClassIfNotPresent(allowedPkiProtocolsWrapper, 'd-none');
     }
+}
+
+domainCredentialOnboardingCheckbox?.addEventListener('change', function(event) {
+    handleOnboardingCheckbox(event.target.checked);
 });
+
+if (domainCredentialOnboardingCheckbox) {
+    handleOnboardingCheckbox(domainCredentialOnboardingCheckbox.checked);
+}
 
 function addClassIfNotPresent(element, className) {
   if (!element.classList.contains(className)) {
@@ -285,3 +320,30 @@ function removeClassIfPresent(element, className) {
   }
 }
 
+// -------------------------------------------- Help Pages - Hidden Toggle ---------------------------------------------
+
+let certProfileSelect = document.getElementById('cert-profile-select');
+let sections = {};
+
+if (certProfileSelect) {
+    for (const option of certProfileSelect.options) {
+        const el = document.getElementById(option.value);
+        if (el) {
+            sections[option.value] = el;
+        }
+    }
+}
+
+function displayOnly(sectionIdToDisplay) {
+    for (const [id, el] of Object.entries(sections)) {
+        if (id == sectionIdToDisplay) {
+            el.removeAttribute('hidden');
+        } else {
+            el.setAttribute('hidden', '');
+        }
+    }
+}
+
+certProfileSelect?.addEventListener("change", function() {
+    displayOnly(certProfileSelect.value);   
+});

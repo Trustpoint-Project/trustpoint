@@ -1,0 +1,8 @@
+Hello {{ owner_name }},
+
+Your device with ID {{ device_id }} has been onboarded successfully on {{ timestamp }}.
+
+If this was not you, please contact support immediately.
+
+Thanks,
+Trustpoint Team

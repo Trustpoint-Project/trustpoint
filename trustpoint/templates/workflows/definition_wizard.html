@@ -1,0 +1,100 @@
+{% extends 'trustpoint/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container py-4">
+  <!-- Page header + Variables button -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="mb-0">Create / Edit Workflow</h1>
+    <button
+      type="button"
+      id="wf-vars-btn"
+      class="btn btn-outline-secondary btn-sm"
+    >
+      Variables <span class="text-muted small">(Ctrl+K)</span>
+    </button>
+  </div>
+
+  <div class="row">
+    <!-- Left: Form -->
+    <div class="col-md-7">
+      <!-- Basic Info -->
+      <div class="card mb-3">
+        <div class="card-header">Basic Info</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label for="wf-name" class="form-label">Name</label>
+            <input type="text" id="wf-name" class="form-control" placeholder="Workflow name">
+          </div>
+          <div class="mb-3">
+            <label for="event-handler" class="form-label">Event Type</label>
+            <select id="event-handler" class="form-select"></select>
+          </div>
+          <div class="row g-2">
+            <div class="col" id="proto-container">
+              <label for="event-protocol" class="form-label">Protocol</label>
+              <select id="event-protocol" class="form-select"></select>
+            </div>
+            <div class="col" id="op-container">
+              <label for="event-operation" class="form-label">Operation</label>
+              <select id="event-operation" class="form-select"></select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Steps -->
+      <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>Steps</span>
+          <button id="add-step-btn" class="btn btn-sm btn-primary">+ Step</button>
+        </div>
+        <div class="card-body" id="steps-list"></div>
+      </div>
+
+      <!-- Scopes -->
+      <div class="card mb-3">
+        <div class="card-header">Scopes</div>
+        <div class="card-body">
+          <div class="row g-2 mb-2">
+            <div class="col-md-4">
+              <label for="scope-type" class="form-label">Type</label>
+              <select id="scope-type" class="form-select">
+                <option value="CA">CA</option>
+                <option value="Domain">Domain</option>
+                <option value="Device">Device</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label for="scope-multi" class="form-label">Select</label>
+              <select id="scope-multi" multiple class="form-select" style="height:120px;"></select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+              <button id="add-scope-btn" class="btn btn-sm btn-primary w-100">+ Add</button>
+            </div>
+          </div>
+          <ul id="scopes-list" class="list-group"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Preview & Save -->
+    <div class="col-md-5">
+      <div class="card mb-3">
+        <div class="card-header">JSON Preview</div>
+        <div class="card-body p-2" style="max-height:80vh; overflow:auto;">
+          <pre id="json-preview" class="bg p-2"></pre>
+        </div>
+      </div>
+
+      <div class="d-grid gap-2">
+        <button id="save-draft-btn" class="btn btn-outline-secondary">Save Draft</button>
+        <button id="publish-btn"    class="btn btn-success">Publish</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Load the modular wizard -->
+<script type="module" src="{% static 'js/workflow/main.js' %}"></script>
+{% endblock %}

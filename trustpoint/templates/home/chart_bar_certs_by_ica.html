@@ -1,0 +1,42 @@
+<div class="card rounded-5 position-relative bar-chart-card-container">
+  <div class="card-body">
+    <h6 class="mb-3 fs-5">Certificates by Issuing CA</h6>
+
+    <div class="position-relative bar-chart-container">
+      <canvas id="chart_certs_by_ica" class="bar-chart-canvas"></canvas>
+    </div>
+
+    <div id="chart_certs_by_ica_legend" class="mt-3 bar-chart-legend"></div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('dashboardData', (event) => {
+  const total = event.detail.total || {};
+  const certByIssuingCa = Array.isArray(total.cert_counts_by_issuing_ca)
+    ? total.cert_counts_by_issuing_ca
+    : [];
+
+  if (!certByIssuingCa.length) return;
+
+  const allItems = certByIssuingCa
+    .map(row => ({
+      label: row.ca_name,
+      value: Number(row.cert_count) || 0
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  const labels = allItems.map(i => i.label);
+  const values = allItems.map(i => i.value);
+
+  if (allItems.length) {
+    createHorizontalBarChart(
+      labels,
+      values,
+      'chart_certs_by_ica',
+      'chart_certs_by_ica_legend',
+      'certsByIca'
+  )};
+
+});
+</script>

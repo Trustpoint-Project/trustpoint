@@ -41,7 +41,7 @@
         </li>
         <li>
             <div>{% trans 'PKI Protocol' %}</div>
-            <div>{{ device.get_pki_protocol_display }}</div>
+            <div>{{ device.get_no_onboarding_pki_protocol_display }}</div>
         </li>
         <li>
             <div>{% trans 'Domain Credential Onboarding' %}</div>
@@ -140,7 +140,7 @@
                     {% trans 'Inactive' %}{% endif %}</div>
             </li>
             <li>
-                <div>{% trans 'Created At' %}</div>
+                <div>{% trans 'Created at' %}</div>
                 <div>{{ device.domain.issuing_ca.created_at }}</div>
             </li>
         </ul>

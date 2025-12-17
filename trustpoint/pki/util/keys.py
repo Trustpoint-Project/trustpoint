@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, get_args
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.db import models
+from trustpoint_core.crypto_types import PublicKey
 from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
 from trustpoint_core.serializer import PrivateKeySerializer
 
 if TYPE_CHECKING:
-    from trustpoint_core.types import PrivateKey
+    from typing import Any, TypeGuard
 
-    from pki.models.credential import CredentialModel
+    from trustpoint_core.crypto_types import PrivateKey
+
     from pki.models.domain import DomainModel
 
 
@@ -41,7 +43,7 @@ class KeyGenerator:
     """Utility class for generating private keys."""
 
     @staticmethod
-    def generate_private_key_for_public_key_info(key_info: PublicKeyInfo) -> PrivateKeySerializer:
+    def generate_private_key_for_public_key_info(key_info: PublicKeyInfo) -> PrivateKey:
         """Generates a private key for a public key info.
 
         Returns:
@@ -59,6 +61,9 @@ class KeyGenerator:
         Returns:
             The generated private key / key pair serializer.
         """
+        if not domain.issuing_ca:
+            exc_msg = 'Domain does not have an issuing CA associated.'
+            raise ValueError(exc_msg)
         issuing_ca_cert = domain.issuing_ca.credential.get_certificate_serializer().as_crypto()
         return PrivateKeySerializer(KeyPairGenerator.generate_key_pair_for_certificate(issuing_ca_cert))
 
@@ -86,3 +91,15 @@ class CryptographyUtils:
 
         err_msg = 'A suitable hash algorithm is not yet specified for the given private key type.'
         raise ValueError(err_msg)
+
+
+def is_supported_public_key(public_key: Any) -> TypeGuard[PublicKey]:
+    """TypeGuard function that narrows down the public key type.
+
+    Args:
+        public_key: The loaded public key to check if it is supported.
+
+    Returns:
+        True if it is supported, False otherwise.
+    """
+    return isinstance(public_key, get_args(PublicKey))

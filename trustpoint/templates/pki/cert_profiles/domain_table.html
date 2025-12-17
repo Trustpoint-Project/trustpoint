@@ -1,0 +1,36 @@
+{% load i18n %}
+
+{% block content %}
+<div class="table-responsive">
+    <table class="table">
+        <thead>
+        <tr>
+            <th>
+                {% trans 'Allowed' %}
+            </th>
+            <th>
+                {% trans 'Unique Name' %}
+            </th>
+            <th>
+                {% trans 'Alias' %}
+            </th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for id, profile in profile_data.items %}
+        <tr>
+            <td><input type="checkbox" name="cert_p_allowed_{{ id }}" {% if profile.is_allowed %}checked{% endif %}></td>
+            <td>{{ profile.unique_name }}</td>
+            <td><input type="text" class="form-control" name="cert_p_alias_{{ id }}" value="{{ profile.alias }}" placeholder="{{ profile.unique_name }}"></td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="3" class="middle">{% trans 'There are no Certificate Profiles configured.' %}</td>
+        </tr>
+        {% endfor %}
+
+        </tbody>
+    </table>
+    {% include 'trustpoint/pagination.html' %}
+</div>
+{% endblock content %}

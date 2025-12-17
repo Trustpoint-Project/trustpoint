@@ -1,3 +1,4 @@
+"""Basic test EST client implementation."""
 import base64
 import logging
 
@@ -9,19 +10,23 @@ from cryptography.hazmat.primitives.serialization.pkcs7 import load_der_pkcs7_ce
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+#ruff: noqa: LOG015
 
 class ESTClient:
+    """EST Client representing a single EST request."""
     def __init__(
         self,
         est_url,
         auth_type,
-        domain,
+        domain=None,
         cert_template=None,
         username=None,
         password=None,
         cert_path=None,
         key_path=None,
         ca_cert_path=None,
+        out_cert_path=None,
+        out_key_path=None,
     ):
         """Initialize the EST client with the necessary authentication parameters.
 
@@ -34,6 +39,8 @@ class ESTClient:
         :param cert_path: Client certificate path for Mutual TLS
         :param key_path: Client private key path for Mutual TLS
         :param ca_cert_path: CA certificate path for verifying the EST server
+        :param out_cert_path: Output path for the issued certificate
+        :param out_key_path: Output path for the private key
         """
         self.est_url = est_url.rstrip('/')
         self.auth_type = auth_type
@@ -44,12 +51,14 @@ class ESTClient:
         self.cert_path = cert_path
         self.key_path = key_path
         self.ca_cert_path = ca_cert_path
+        self.out_cert_path = out_cert_path
+        self.out_key_path = out_key_path
 
         self.session = requests.Session()
 
         logging.info('EST Client initialized with authentication type: %s', self.auth_type)
 
-    def _get_auth(self):
+    def _get_auth(self) -> tuple:
         """Returns authentication parameters based on the chosen method."""
         auth = None
         cert = None
@@ -64,12 +73,13 @@ class ESTClient:
 
         return auth, cert
 
-    def enroll(self, common_name, serial_number, save_key=True):
+    def enroll(self, common_name, serial_number, save_key=True) -> None:
         """Performs EST enrollment to obtain a new certificate, with an option to store the private key."""
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
         if save_key:
-            with open('private_key.pem', 'wb') as key_file:
+            private_key_path = self.out_key_path or 'private_key.pem'
+            with open(private_key_path, 'wb') as key_file:
                 key_file.write(
                     private_key.private_bytes(
                         encoding=serialization.Encoding.PEM,
@@ -77,7 +87,7 @@ class ESTClient:
                         encryption_algorithm=serialization.NoEncryption(),
                     )
                 )
-            logging.info("Private key saved as 'private_key.pem'")
+            logging.info("Private key saved as '%s'", private_key_path)
 
         csr_builder = x509.CertificateSigningRequestBuilder()
         csr_builder = csr_builder.subject_name(
@@ -93,7 +103,10 @@ class ESTClient:
         csr_der = csr.public_bytes(encoding=serialization.Encoding.DER)
         logging.info(f'CSR (DER; hex dump): {csr_der.hex()}')
 
-        url = f'{self.est_url}/{self.domain}/{self.cert_template}/simpleenroll/'
+        if self.domain and self.cert_template:
+            url = f'{self.est_url}/{self.domain}/{self.cert_template}/simpleenroll/'
+        else:
+            url = f'{self.est_url}/simpleenroll/'
         headers = {'Content-Type': 'application/pkcs10'}
         auth, cert = self._get_auth()
 
@@ -103,13 +116,14 @@ class ESTClient:
         if response.status_code == 200:
             cert_der = response.content
             cert_pem = x509.load_der_x509_certificate(cert_der).public_bytes(encoding=serialization.Encoding.PEM)
-            with open('issued_cert.pem', 'wb') as cert_file:
+            cert_path = self.out_cert_path or 'issued_cert.pem'
+            with open(cert_path, 'wb') as cert_file:
                 cert_file.write(cert_pem)
-            logging.info("Certificate received and saved as 'issued_cert.pem'")
+            logging.info("Certificate received and saved as '%s'", cert_path)
         else:
-            logging.error('Enrollment failed: %s', response.text)
+            logging.error('Enrollment failed (%i): %s', response.status_code, response.text)
 
-    def reenroll(self, cert_path, key_path=None, generate_new_key=False):
+    def reenroll(self, cert_path, key_path=None, generate_new_key=False) -> None:
         """Performs EST reenrollment using an existing certificate.
 
         :param cert_path: Path to the existing certificate
@@ -122,7 +136,8 @@ class ESTClient:
         if generate_new_key or not key_path:
             logging.info('Generating a new private key for reenrollment.')
             private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-            with open('reenrolled_private_key.pem', 'wb') as key_file:
+            key_path = 'reenrolled_' + (self.out_key_path or 'private_key.pem')
+            with open(key_path, 'wb') as key_file:
                 key_file.write(
                     private_key.private_bytes(
                         encoding=serialization.Encoding.PEM,
@@ -130,7 +145,6 @@ class ESTClient:
                         encryption_algorithm=serialization.NoEncryption(),
                     )
                 )
-            key_path = 'reenrolled_private_key.pem'
         else:
             logging.info('Using the existing private key for reenrollment.')
             with open(key_path, 'rb') as key_file:
@@ -141,11 +155,24 @@ class ESTClient:
 
         logging.info(f'Reenrollment CSR subject: {existing_cert.subject}')
 
+        try:
+            san_extension = existing_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        except x509.ExtensionNotFound:
+            pass
+        else:
+            csr_builder = csr_builder.add_extension(
+                san_extension.value,
+                critical=False,
+            )
+
         csr = csr_builder.sign(private_key, hashes.SHA256())
         csr_der = csr.public_bytes(encoding=serialization.Encoding.DER)
         logging.info(f'CSR (DER; hex dump): {csr_der.hex()}')
 
-        url = f'{self.est_url}/{self.domain}/{self.cert_template}/simplereenroll/'
+        if self.domain and self.cert_template:
+            url = f'{self.est_url}/{self.domain}/{self.cert_template}/simplereenroll/'
+        else:
+            url = f'{self.est_url}/simplereenroll/'
         headers = {'Content-Type': 'application/pkcs10'}
         auth, cert = self._get_auth()
 
@@ -155,19 +182,19 @@ class ESTClient:
         if response.status_code == 200:
             cert_der = response.content
             cert_pem = x509.load_der_x509_certificate(cert_der).public_bytes(encoding=serialization.Encoding.PEM)
-            with open('reenrolled_cert.pem', 'wb') as cert_file:
+            cert_path = 'reenrolled_' + (self.out_cert_path or 'cert.pem')
+            with open(cert_path, 'wb') as cert_file:
                 cert_file.write(cert_pem)
-            logging.info("Reenrollment successful. Certificate saved as 'reenrolled_cert.pem'")
+            logging.info("Reenrollment successful. Certificate saved as '%s'", cert_path)
         else:
-            logging.error('Reenrollment failed: %s', response.text)
+            logging.error('Reenrollment failed (%i): %s', response.status_code, response.text)
 
-    def get_ca_certificates(self):
+    def get_ca_certificates(self) -> None:
         """Retrieves CA certificates from the EST /cacerts endpoint."""
         url = f'{self.est_url}/{self.domain}/cacerts/'
-        auth, cert = self._get_auth()
 
         logging.info('Fetching CA certificates from %s', url)
-        response = self.session.get(url, auth=auth, cert=cert)
+        response = self.session.get(url, verify=self.ca_cert_path)
 
         if response.status_code == 200:
             der_data = (
@@ -183,20 +210,64 @@ class ESTClient:
                 with open(f'ca_cert{i}.pem', 'wb') as cert_file:
                     cert_file.write(pem)
         else:
-            logging.error('Failed to retrieve CA certificates: %s', response.text)
+            logging.error('Failed to retrieve CA certificates (%i): %s', response.status_code, response.text)
 
 
 if __name__ == '__main__':
-    client = ESTClient(
+    dc_client = ESTClient(
         est_url='https://localhost:443/.well-known/est',
-        auth_type='both',
+        auth_type='mutual_tls',#'both',
         domain='arburg',
-        cert_template='tlsserver',
-        username='admin',
-        password='testing321',
-        cert_path='cert.pem',
-        key_path='key.pem',
+        cert_template='domain_credential',
+        username=None,#'admin',
+        password=None,#'testing321',
+        cert_path='idevid.pem',
+        key_path='idevid_pk.pem',
         ca_cert_path='trust_store.pem',
+        out_cert_path='dc_cert.pem',
+        out_key_path='dc_private_key.pem',
     )
-    client.enroll(common_name='test.example.com', serial_number='123456789', save_key=True)
-    client.get_ca_certificates()
+    # enroll Domain Credential
+    dc_client.enroll(common_name='test2.example.com', serial_number='123456788', save_key=True)
+    # dc_client.reenroll(
+    #     cert_path='dc_cert.pem',
+    #     key_path='dc_private_key.pem',
+    #     generate_new_key=False,
+    # )
+    # client.get_ca_certificates()
+
+    # use Domain Credential to request an application certificate
+    app_client = ESTClient(
+        est_url='https://localhost:443/.well-known/est',
+        auth_type='mutual_tls',#'both',
+        domain='arburg',
+        cert_template='tlsclient',
+        username=None,#'admin',
+        password=None,#'testing321',
+        cert_path='dc_cert.pem',
+        key_path='dc_private_key.pem',
+        ca_cert_path='trust_store.pem',
+        out_cert_path='app_cert.pem',
+        out_key_path='app_key.pem',
+    )
+    #app_client.enroll(common_name='test4.example.com', serial_number='4232', save_key=True)
+
+    app_reenroll_client = ESTClient(
+        est_url='https://localhost:443/.well-known/est',
+        auth_type='mutual_tls',#'both',
+        domain='arburg',
+        cert_template='tlsclient',
+        username=None,#'admin',
+        password=None,#'testing321',
+        cert_path='app_cert.pem',
+        key_path='app_key.pem',
+        ca_cert_path='trust_store.pem',
+        out_cert_path='app_cert.pem',
+        out_key_path='app_key.pem',
+    )
+    # re-enroll the application certificate
+    #app_reenroll_client.reenroll(
+    #    cert_path='app_cert.pem',
+    #    key_path='app_key.pem',
+    #    generate_new_key=False,
+    #)

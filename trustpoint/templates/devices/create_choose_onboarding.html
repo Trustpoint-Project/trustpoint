@@ -1,0 +1,46 @@
+{% extends 'trustpoint/base.html' %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+{% block content %}
+    <div class="card">
+        <div class="card-header d-flex">
+            {% if page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY %}
+                <h1>{% trans 'Create new Device' %}</h1>
+            {% elif page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY %}
+                <h1>{% trans 'Create new OPC UA GDS' %}</h1>
+            {% endif %}
+        </div>
+
+        <div class="card-body py-3">
+            <h2 class="d-inline-block">Choose Onboarding Mechanism</h2>
+
+            <div class="d-flex gap-3 mt-3">
+                <div class="card flex-fill d-flex flex-column">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title"><strong>Use Onboarding (Recommended)</strong></h5>
+                        <hr class="hr-m">
+                        <p class="card-text flex-grow-1">If a domain credential shall be issued that will in turn be used for authentication, please choose Onboarding.</p>
+                        <a href="{% url use_onboarding_url %}" class="btn btn-primary mt-auto w-100" style="max-width: 250px; margin-left: auto; margin-right: auto;">
+                            Onboarding
+                        </a>
+                    </div>
+                </div>
+                <div class="card flex-fill d-flex flex-column">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title"><strong>Do not use onboarding</strong></h5>
+                        <hr class="hr-m">
+                        <p class="card-text flex-grow-1">If the trustpoint shall directly issue application certificates without using a domain credential, please choose No Onboarding.</p>
+                        <a href="{% url use_no_onboarding_url  %}" class="btn btn-primary mt-auto w-100" style="max-width: 250px; margin-left: auto; margin-right: auto;">
+                            No Onboarding
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <div class="tp-card-btn-footer m-1">
+                <a href="{% url cancel_create_url %}" class="btn btn-secondary min-width-20">{% trans 'Cancel' %}</a>
+            </div>
+        </div>
+{% endblock content %}

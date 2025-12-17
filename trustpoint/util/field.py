@@ -1,7 +1,11 @@
+"""This module contains validators that are used in several different apps in the trustpoint project."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from cryptography import x509
+from cryptography.x509.oid import NameOID
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
 
@@ -10,11 +14,68 @@ if TYPE_CHECKING:
 
 
 class UniqueNameValidator(RegexValidator):
-    form_label = _('(Must start with a letter. Can only contain letters, digits, underscores and hyphens)')
+    """Validates unique names used in the trustpoint."""
+
+    form_label = _(
+        '(All UTF-8 characters are allowed except control characters (e.g., newline, tab).)'
+    )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes a UniqueNameValidator object.
+
+        Args:
+            args: Positional arguments are discarded.
+            kwargs: Keyword arguments are discarded._
+        """
+        del args
+        del kwargs
+        msg = f'Enter a valid unique name. {self.form_label}.'
+        trans_msg = _(msg)
         super().__init__(
-            regex=r'^[a-zA-Z]+[a-zA-Z0-9_-]+$',
-            message=_(f'Enter a valid unique name. {self.form_label}.'),
+            regex=r'^[^\x00-\x1F\x7F-\x9F]+$',
+            message=trans_msg,
             code='invalid_unique_name',
         )
+
+    def __call__(self, value: Any) -> None:
+        """Trim trailing spaces before validation."""
+        if isinstance(value, str):
+            value = value.rstrip()
+        super().__call__(value)
+
+
+def get_certificate_name(cert: x509.Certificate) -> str :
+    """Extracts a name from an x509 certificate to auto-populate model Unique Name fields.
+
+    Args:
+        cert: x509 Certificate.
+    Priority:
+      1. CN (Common Name) from Subject DN
+      2. First SAN entry
+    """
+    # Try CN from Subject DN
+    try:
+        cn = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
+        if cn:
+            return cn if isinstance(cn, str) else cn.decode('utf-8')
+    except IndexError:
+        pass
+
+    # Try SAN extension (first entry)
+    try:
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        san_names = san.value.get_values_for_type(x509.DNSName)
+        if san_names:
+            return san_names[0]
+        san_names = san.value.get_values_for_type(x509.UniformResourceIdentifier)
+        if san_names:
+            candidate = san_names[0]
+            if candidate.startswith('dev-owner:'): # AOKI DevOwnerID
+                candidate = 'Owner of SN: ' + candidate.removeprefix('dev-owner:').split('.')[0]
+            return candidate
+
+    except x509.ExtensionNotFound:
+        pass  # SAN not present
+
+    exc_msg = 'No valid CN or SAN found in the certificate. Unique name is required.'
+    raise ValueError(exc_msg)

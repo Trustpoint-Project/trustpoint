@@ -1,0 +1,19 @@
+{
+    "type": "cert_profile",
+    "display_name": "TLS Client",
+    "subj": {
+        "allow":"*",
+        "cn": {
+            "default": "Example TLS Client"
+        }
+    },
+    "reject_mods": false,
+    "ext": {
+        "basic_constraints": {
+            "ca": false
+        }
+    },
+    "validity": {
+        "days": 10
+    }
+}

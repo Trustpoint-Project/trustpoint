@@ -1,19 +1,20 @@
+{% load i18n %}
 {% block issuer_alternative_name_extension %}
+
     {% if cert.issuer_alternative_name_extension %}
-        <h2>Issuer Alternative Name (IAN) Extension</h2><hr class="hr-m">
+<h2>{% trans 'Issuer Alternative Name (IAN) Extension' %}</h2><hr class="hr-m">
         <div class="tp-kvp-list">
             <div>
-                <div>Extension OID</div>
+                <div>{% trans 'Extension OID' %}</div>
                 <div>{{ cert.issuer_alternative_name_extension.extension_oid }}</div>
             </div>
             <div>
-                <div>Critical</div>
+                <div>{% trans 'Critical' %}</div>
                 <div>{{ cert.issuer_alternative_name_extension.critical }}</div>
             </div>
-            <hr>
         {% if cert.issuer_alternative_name_extension.rfc822_names and cert.issuer_alternative_name_extension.rfc822_names.all %}
             <div>
-                <div>RFC822 Names (IAN)</div>
+                <div>{% trans 'RFC822 Names (IAN)' %}</div>
                 <div>
                     {% for entry in cert.issuer_alternative_name_extension.rfc822_names.all %}
                         {{ entry }}<br>
@@ -22,9 +23,9 @@
             </div>
         {% endif %}
 
-        {% if cert.issuer_alternative_name_extension.dns_names and  cert.issuer_alternative_name_extension.dns_names.all %}
+        {% if cert.issuer_alternative_name_extension.dns_names and cert.issuer_alternative_name_extension.dns_names.all %}
             <div>
-                <div>DNS Names (IAN)</div>
+                <div>{% trans 'DNS Names (IAN)' %}</div>
                 <div>
                     {% for entry in cert.issuer_alternative_name_extension.dns_names.all %}
                         {{ entry }}<br>
@@ -33,9 +34,9 @@
             </div>
         {% endif %}
 
-        {% if cert.issuer_alternative_name_extension.directory_names and  cert.issuer_alternative_name_extension.directory_names.all %}
+        {% if cert.issuer_alternative_name_extension.directory_names and cert.issuer_alternative_name_extension.directory_names.all %}
             <div>
-                <div>Directory Names (IAN)</div>
+                <div>{% trans 'Directory Names (IAN)' %}</div>
                 <div>
                     {% for entry in cert.issuer_alternative_name_extension.directory_names.all %}
                         {{ entry }}<br>
@@ -44,9 +45,9 @@
             </div>
         {% endif %}
 
-        {% if cert.issuer_alternative_name_extension.uniform_resource_identifiers and  cert.issuer_alternative_name_extension.uniform_resource_identifiers.all %}
+        {% if cert.issuer_alternative_name_extension.uniform_resource_identifiers and cert.issuer_alternative_name_extension.uniform_resource_identifiers.all %}
             <div>
-                <div>Uniform Resource Identifiers (IAN)</div>
+                <div>{% trans 'Uniform Resource Identifiers (IAN)' %}</div>
                 <div>
                     {% for entry in cert.issuer_alternative_name_extension.uniform_resource_identifiers.all %}
                         {{ entry }}<br>
@@ -55,9 +56,9 @@
             </div>
         {% endif %}
 
-        {% if cert.issuer_alternative_name_extension.ip_addresses and  cert.issuer_alternative_name_extension.ip_addresses.all %}
+        {% if cert.issuer_alternative_name_extension.ip_addresses and cert.issuer_alternative_name_extension.ip_addresses.all %}
             <div>
-                <div>Uniform Resource Identifiers (IAN)</div>
+                <div>{% trans 'IP Addresses (IAN)' %}</div>
                 <div>
                     {% for entry in cert.issuer_alternative_name_extension.ip_addresses.all %}
                         {{ entry }}<br>
@@ -66,9 +67,9 @@
             </div>
         {% endif %}
 
-        {% if cert.issuer_alternative_name_extension.registered_ids and  cert.issuer_alternative_name_extension.registered_ids.all %}
+        {% if cert.issuer_alternative_name_extension.registered_ids and cert.issuer_alternative_name_extension.registered_ids.all %}
             <div>
-                <div>Uniform Resource Identifiers (IAN)</div>
+                <div>{% trans 'Registered IDs (IAN)' %}</div>
                 <div>
                     {% for entry in cert.issuer_alternative_name_extension.registered_ids.all %}
                         {{ entry }}<br>
@@ -77,9 +78,9 @@
             </div>
         {% endif %}
 
-        {% if cert.issuer_alternative_name_extension.other_names and  cert.issuer_alternative_name_extension.other_names.all %}
+        {% if cert.issuer_alternative_name_extension.other_names and cert.issuer_alternative_name_extension.other_names.all %}
             <div>
-                <div>Other Names (IAN)</div>
+                <div>{% trans 'Other Names (IAN)' %}</div>
                 <div>
                     {% for entry in cert.issuer_alternative_name_extension.other_names.all %}
                         {{ entry }}<br>
@@ -88,5 +89,7 @@
             </div>
         {% endif %}
         </div>
+
+
     {% endif %}
 {% endblock issuer_alternative_name_extension %}

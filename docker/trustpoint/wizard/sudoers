@@ -1,0 +1,25 @@
+Defaults        env_reset
+Defaults        mail_badpass
+Defaults        secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# This fixes CVE-2005-4890 and possibly breaks some versions of kdesu
+# (#1011624, https://bugs.kde.org/show_bug.cgi?id=452532)
+Defaults        use_pty
+
+# User privilege specification
+root    ALL=(ALL:ALL) ALL
+
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_setup_crypto_storage.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_setup_hsm.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_setup_mode.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_tls_server_credential_apply.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_tls_server_credential_apply_cancel.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_backup_password.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_demo_data.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_create_super_user.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_restore.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_auto_restore_password_set.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_auto_restore_success.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_complete_setup.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/wizard_reset_to_crypto_storage.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/transition/update_tls.sh

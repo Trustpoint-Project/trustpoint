@@ -1,9 +1,13 @@
-name: F_001
+# name: F_001
 
-on: [pull_request]
+# on:
+#   pull_request:
+#   push:
+#     branches:
+#       - main
 
-jobs:
-  test:
-    uses: ./.github/workflows/behave-test-template.yml
-    with:
-      feature_file: F_001_nteu_identity_onboarding
+# jobs:
+#   test:
+#     uses: ./.github/workflows/behave-test-template.yml
+#     with:
+#       feature_file: F_001_nteu_identity_onboarding

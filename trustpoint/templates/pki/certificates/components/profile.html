@@ -1,0 +1,32 @@
+{% load i18n %}
+{% block profile %}
+    <h2>{% trans 'Profile' %}</h2>
+    <hr class="hr-m">
+
+    <div class="tp-kvp-list">
+        <div>
+            <div>{% trans 'Subject' %}</div>
+            <div>
+                {% for entry in cert.subject.all %}
+                    {{ entry.value }}<br>
+                {% endfor %}
+            </div>
+        </div>
+        <div>
+            <div>{% trans 'Common Name' %}</div>
+            <div>{{ cert.common_name }}</div>
+        </div>
+
+       <div>
+            <div>{% trans 'Serial Number' %}</div>
+            <div>{{ cert.serial_number }}</div>
+        </div>
+        <div>
+            <div>{% trans 'Fingerprint (SHA256)' %}</div>
+            <div>{{ cert.sha256_fingerprint }}</div>
+        </div>
+
+
+    </div>
+
+{% endblock profile %}

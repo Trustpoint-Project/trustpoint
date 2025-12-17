@@ -11,19 +11,25 @@ from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import ngettext
 from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
-from trustpoint_core.file_builder.certificate import (
-    CertificateCollectionArchiveFileBuilder,
-    CertificateCollectionBuilder,
-)
-from trustpoint_core.file_builder.enum import ArchiveFormat, CertificateFileFormat
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_yasg.utils import swagger_auto_schema  # type: ignore[import-untyped]
+from rest_framework import filters, status, viewsets
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from trustpoint_core.archiver import ArchiveFormat, Archiver
+from trustpoint_core.serializer import CertificateFormat
 
 from pki.forms import TruststoreAddForm
 from pki.models import DomainModel
 from pki.models.truststore import TruststoreModel
+from pki.serializer.truststore import TruststoreSerializer
+from pki.services.truststore import TruststoreService
+from trustpoint.page_context import PKI_PAGE_CATEGORY, PKI_PAGE_TRUSTSTORES_SUBCATEGORY, PageContextMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
@@ -44,13 +50,14 @@ class TruststoresRedirectView(RedirectView):
     pattern_name = 'pki:truststores'
 
 
-class TruststoresContextMixin:
+class TruststoresContextMixin(PageContextMixin):
     """Mixin which adds some extra context for the PKI Views."""
 
-    extra_context: ClassVar = {'page_category': 'pki', 'page_name': 'truststores'}
+    page_category = PKI_PAGE_CATEGORY
+    page_name = PKI_PAGE_TRUSTSTORES_SUBCATEGORY
 
 
-class TruststoreTableView(TruststoresContextMixin, SortableTableMixin, ListView[TruststoreModel]):
+class TruststoreTableView(TruststoresContextMixin, SortableTableMixin[TruststoreModel], ListView[TruststoreModel]):
     """Truststore Table View."""
 
     model = TruststoreModel
@@ -81,11 +88,23 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
                 )
             )
 
+        n_certificates = truststore.number_of_certificates
+        msg_str = ngettext(
+            'Successfully created the Truststore %(name)s with %(count)i certificate.',
+            'Successfully created the Truststore %(name)s with %(count)i certificates.',
+            n_certificates,
+        ) % {
+            'name': truststore.unique_name,
+            'count': n_certificates,
+        }
+
+        messages.success(self.request, msg_str)
+
         return HttpResponseRedirect(reverse('pki:truststores'))
 
     def get_success_url(self) -> str:
         """You could still use a success URL here if needed."""
-        return reverse_lazy('pki:truststores')
+        return reverse_lazy('pki:truststores')  # type: ignore[return-value]
 
     def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
         """Include domain in context only if pk is present."""
@@ -150,13 +169,12 @@ class TruststoreDownloadView(TruststoresContextMixin, DetailView[TruststoreModel
             return super().get(request, *args, **kwargs)
 
         try:
-            file_format_enum = CertificateFileFormat(value=self.kwargs.get('file_format'))
+            file_format_enum = CertificateFormat(value=self.kwargs.get('file_format'))
         except Exception as exception:
             raise Http404 from exception
 
         certificate_serializer = TruststoreModel.objects.get(pk=pk).get_certificate_collection_serializer()
-
-        file_bytes = CertificateCollectionBuilder.build(certificate_serializer, file_format=file_format_enum)
+        file_bytes = certificate_serializer.as_format(file_format_enum)
 
         response = HttpResponse(file_bytes, content_type=file_format_enum.mime_type)
         response['Content-Disposition'] = f'attachment; filename="truststore{file_format_enum.file_extension}"'
@@ -175,17 +193,19 @@ class TruststoreMultipleDownloadView(
     template_name = 'pki/truststores/download_multiple.html'
     context_object_name = 'truststores'
 
-    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
+    def get_context_data(self, *args: Any, **kwargs: dict[str, Any]) -> dict[str, Any]:  # type: ignore[override]
         """Adding the part of the url to the context, that contains the truststores primary keys.
 
         This is used for the {% url }% tags in the template to download files.
 
         Args:
+            *args: Positional arguments, unused.
             **kwargs: Keyword arguments passed to super().get_context_data().
 
         Returns:
             dict: The context data.
         """
+        del args
         context = super().get_context_data(**kwargs)
         context['pks_path'] = self.kwargs.get('pks')
         return context
@@ -233,7 +253,7 @@ class TruststoreMultipleDownloadView(
             return super().get(request, *args, **kwargs)
 
         try:
-            file_format_enum = CertificateFileFormat(value=file_format)
+            file_format_enum = CertificateFormat(value=file_format)
         except Exception as exception:
             raise Http404 from exception
 
@@ -246,11 +266,12 @@ class TruststoreMultipleDownloadView(
             TruststoreModel.objects.get(pk=pk).get_certificate_collection_serializer() for pk in pks_list
         ]
 
-        file_bytes = CertificateCollectionArchiveFileBuilder.build(
-            certificate_collection_serializers=certificate_collection_serializers,
-            file_format=file_format_enum,
-            archive_format=archive_format_enum,
-        )
+        data_to_archive = {
+            f'trust-store-{i}': trust_store.as_format(file_format_enum)
+            for i, trust_store in enumerate(certificate_collection_serializers)
+        }
+
+        file_bytes = Archiver.archive(data_to_archive, archive_format_enum)
 
         response = HttpResponse(file_bytes, content_type=archive_format_enum.mime_type)
         response['Content-Disposition'] = f'attachment; filename="truststores{archive_format_enum.file_extension}"'
@@ -288,3 +309,68 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
         messages.success(self.request, _('Successfully deleted {count} Truststore(s).').format(count=deleted_count))
 
         return response
+
+
+class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
+    """ViewSet for managing Truststore instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+
+    queryset = TruststoreModel.objects.all().order_by('-created_at')
+    serializer_class = TruststoreSerializer
+    permission_classes = (IsAuthenticated,)
+    filter_backends = (
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter
+    )
+    filterset_fields: ClassVar = ['intended_usage']
+    search_fields: ClassVar = ['unique_name']
+    ordering_fields: ClassVar = ['unique_name', 'created_at']
+
+    # ignoring untyped decorator (drf-yasg not typed)
+    @swagger_auto_schema(
+        operation_summary='Create a new truststore',
+        operation_description='Add a new truststore by providing its unique_name, intended_usage and trust_store_file.',
+        tags=['truststores'],
+    )  # type: ignore[misc]
+    def create(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+        """API endpoint to create truststore."""
+        del args, _kwargs
+        serializer = self.get_serializer(data=request.data)  # type: ignore[attr-defined]
+        serializer.is_valid(raise_exception=True)
+
+        truststore = TruststoreService().create(
+            unique_name=serializer.validated_data.get('unique_name'),
+            intended_usage=serializer.validated_data['intended_usage'],
+            trust_store_file=serializer.validated_data['trust_store_file'],
+        )
+
+        return Response(
+            TruststoreSerializer(truststore).data,
+            status=status.HTTP_201_CREATED
+        )
+
+    @swagger_auto_schema(
+        operation_summary='List Truststores',
+        operation_description='Retrieve truststore from the database.',
+        tags=['truststores'],
+    )  # type: ignore[misc]
+    def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+        """API endpoint to get all truststores."""
+        del request, args, _kwargs
+        queryset = self.get_queryset()
+
+        for backend in list(self.filter_backends):
+            if hasattr(backend, 'filter_queryset'):
+                queryset = backend().filter_queryset(self.request, queryset, self)  # type: ignore[attr-defined]
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

@@ -1,0 +1,30 @@
+{% load static %}
+<div class="card rounded-5 position-relative donut-chart-card-container">
+  <div class="card-body">
+    <h6 class="mb-3 fs-5">Devices by Status</h6>
+
+    <div class="position-relative donut-chart-container">
+      <canvas id="chart_dount_device"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("dashboardData", (event) =>{
+    const today = event.detail.today || {};
+
+    const data = {
+      active: today.device_counts.Onboarded,
+      expiring: today.device_counts.Pending,
+      expired: 0,
+      total: today.device_counts.total
+    }
+
+    createDonutChart(
+      data,
+      'chart_dount_device',
+      'deviceByCounts',
+      {centerText:'Devices', labels:['Onboarded Devices', 'Pending Devices', 'Expired Devices']}
+    );
+  });
+</script>

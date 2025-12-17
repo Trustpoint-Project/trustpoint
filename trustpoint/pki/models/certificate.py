@@ -10,6 +10,7 @@ from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from django.contrib import admin
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
@@ -23,7 +24,6 @@ from trustpoint_core.oid import (
     SignatureSuite,
 )
 from trustpoint_core.serializer import CertificateSerializer, PublicKeySerializer
-from util.db import CustomDeleteActionModel
 
 from pki.models.extension import (
     AttributeTypeAndValue,
@@ -44,7 +44,8 @@ from pki.models.extension import (
     SubjectInformationAccessExtension,
     SubjectKeyIdentifierExtension,
 )
-from trustpoint.views.base import LoggerMixin
+from trustpoint.logger import LoggerMixin
+from util.db import CustomDeleteActionModel
 
 __all__ = ['CertificateModel', 'RevokedCertificateModel']
 
@@ -54,8 +55,6 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
 
     See RFC5280 for more information.
     """
-
-    objects: models.Manager[CertificateModel]
 
     class CertificateStatus(models.TextChoices):
         """CertificateModel status."""
@@ -73,28 +72,80 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         # We only allow version 3 or later if any are available in the future.
         V3 = 2, _('Version 3')
 
-    SignatureAlgorithmOidChoices = models.TextChoices(
-        'SIGNATURE_ALGORITHM_OID', [(x.dotted_string, x.dotted_string) for x in AlgorithmIdentifier]
-    )
+    # We are explicitly and statically defining the types we want to allow to be stored to the database.
+    # This has the nice effect, that it is also mypy compliant without any additions.
 
-    PublicKeyAlgorithmOidChoices = models.TextChoices(
-        'PUBLIC_KEY_ALGORITHM_OID', [(x.dotted_string, x.dotted_string) for x in PublicKeyAlgorithmOid]
-    )
+    class SignatureAlgorithmOidChoices(models.TextChoices):
+        """Signature Algorithm OIDs."""
 
-    PublicKeyEcCurveOidChoices = models.TextChoices(
-        'PUBLIC_KEY_EC_CURVE_OID', [(x.dotted_string, x.dotted_string) for x in NamedCurve]
-    )
+        RSA_MD5 = AlgorithmIdentifier.RSA_MD5.dotted_string
+        RSA_SHA1 = AlgorithmIdentifier.RSA_SHA1.dotted_string
+        RSA_SHA1_ALT = AlgorithmIdentifier.RSA_SHA1_ALT.dotted_string
+        RSA_SHA224 = AlgorithmIdentifier.RSA_SHA224.dotted_string
+        RSA_SHA256 = AlgorithmIdentifier.RSA_SHA256.dotted_string
+        RSA_SHA384 = AlgorithmIdentifier.RSA_SHA384.dotted_string
+        RSA_SHA512 = AlgorithmIdentifier.RSA_SHA512.dotted_string
+        RSA_SHA3_224 = AlgorithmIdentifier.RSA_SHA3_224.dotted_string
+        RSA_SHA3_256 = AlgorithmIdentifier.RSA_SHA3_256.dotted_string
+        RSA_SHA3_384 = AlgorithmIdentifier.RSA_SHA3_384.dotted_string
+        RSA_SHA3_512 = AlgorithmIdentifier.RSA_SHA3_512.dotted_string
+
+        ECDSA_SHA1 = AlgorithmIdentifier.ECDSA_SHA1.dotted_string
+        ECDSA_SHA224 = AlgorithmIdentifier.ECDSA_SHA224.dotted_string
+        ECDSA_SHA256 = AlgorithmIdentifier.ECDSA_SHA256.dotted_string
+        ECDSA_SHA384 = AlgorithmIdentifier.ECDSA_SHA384.dotted_string
+        ECDSA_SHA512 = AlgorithmIdentifier.ECDSA_SHA512.dotted_string
+        ECDSA_SHA3_224 = AlgorithmIdentifier.ECDSA_SHA3_224.dotted_string
+        ECDSA_SHA3_256 = AlgorithmIdentifier.ECDSA_SHA3_256.dotted_string
+        ECDSA_SHA3_384 = AlgorithmIdentifier.ECDSA_SHA3_384.dotted_string
+        ECDSA_SHA3_512 = AlgorithmIdentifier.ECDSA_SHA3_512.dotted_string
+
+        PASSWORD_BASED_MAC = AlgorithmIdentifier.PASSWORD_BASED_MAC.dotted_string
+
+    class PublicKeyAlgorithmOidChoices(models.TextChoices):
+        """Public Key Algorithm OIDs."""
+
+        ECC = PublicKeyAlgorithmOid.ECC.dotted_string
+        RSA = PublicKeyAlgorithmOid.RSA.dotted_string
+
+    class PublicKeyEcCurveOidChoices(models.TextChoices):
+        """Public Key EC Curve OIDs."""
+
+        NONE = ''
+        SECP192R1 = NamedCurve.SECP192R1.dotted_string
+        SECP224R1 = NamedCurve.SECP224R1.dotted_string
+        SECP256K1 = NamedCurve.SECP256K1.dotted_string
+        SECP256R1 = NamedCurve.SECP256R1.dotted_string
+        SECP384R1 = NamedCurve.SECP384R1.dotted_string
+        SECP521R1 = NamedCurve.SECP521R1.dotted_string
+
+        BRAINPOOLP256R1 = NamedCurve.BRAINPOOLP256R1.dotted_string
+        BRAINPOOLP384R1 = NamedCurve.BRAINPOOLP384R1.dotted_string
+        BRAINPOOLP512R1 = NamedCurve.BRAINPOOLP512R1.dotted_string
+
+        SECT163K1 = NamedCurve.SECT163K1.dotted_string
+        SECT163R2 = NamedCurve.SECT163R2.dotted_string
+        SECT233K1 = NamedCurve.SECT233K1.dotted_string
+        SECT233R1 = NamedCurve.SECT233R1.dotted_string
+        SECT283K1 = NamedCurve.SECT283K1.dotted_string
+        SECT283R1 = NamedCurve.SECT283R1.dotted_string
+        SECT409K1 = NamedCurve.SECT409K1.dotted_string
+        SECT409R1 = NamedCurve.SECT409R1.dotted_string
+        SECT571K1 = NamedCurve.SECT571K1.dotted_string
+        SECT571R1 = NamedCurve.SECT571R1.dotted_string
 
     # ----------------------------------------------- Custom Data Fields -----------------------------------------------
 
     is_self_signed = models.BooleanField(verbose_name=_('Self-Signed'), null=False, blank=False)
 
-    # TODO(Alex): This is kind of a hack.
+    # TODO(AlexHx8472): This is kind of a hack. # noqa: FIX002
     # This information is already available through the subject relation
     # Property would not be sortable.
     # We may want to resolve this later by modifying the queryset within the view
     common_name = models.CharField(verbose_name=_('Common Name'), max_length=256, default='')
-    sha256_fingerprint = models.CharField(verbose_name=_('Fingerprint (SHA256)'), max_length=256, editable=False)
+    sha256_fingerprint = models.CharField(
+        verbose_name=_('Fingerprint (SHA256)'), max_length=256, editable=False, unique=True
+    )
 
     # ------------------------------------------ Certificate Fields (Header) -------------------------------------------
 
@@ -155,7 +206,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         max_length=256,
         editable=False,
         choices=PublicKeyEcCurveOidChoices,
-        default=None,
+        default=PublicKeyEcCurveOidChoices.NONE,
     )
 
     # Subject Public Key Info - Curve Name if ECC, None otherwise
@@ -165,7 +216,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
 
     # ---------------------------------------------------- Raw Data ----------------------------------------------------
 
-    cert_pem = models.CharField(verbose_name=_('Certificate (PEM)'), max_length=65536, editable=False, unique=True)
+    cert_pem = models.TextField(verbose_name=_('Certificate (PEM)'), editable=False)
     public_key_pem = models.CharField(verbose_name=_('Public Key (PEM, SPKI)'), max_length=65536, editable=False)
 
     # ----------------------------------------- CertificateModel Creation Data -----------------------------------------
@@ -274,27 +325,45 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     )
 
     authority_information_access_extension = models.ForeignKey(
-        AuthorityInformationAccessExtension, null=True, blank=True, on_delete=models.PROTECT,
+        AuthorityInformationAccessExtension,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
     )
 
     subject_information_access_extension = models.ForeignKey(
-        SubjectInformationAccessExtension, null=True, blank=True, on_delete=models.PROTECT,
+        SubjectInformationAccessExtension,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
     )
 
     inhibit_any_policy_extension = models.ForeignKey(
-        InhibitAnyPolicyExtension, null=True, blank=True, on_delete=models.PROTECT,
+        InhibitAnyPolicyExtension,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
     )
 
     policy_constraints_extension = models.ForeignKey(
-        PolicyConstraintsExtension, null=True, blank=True, on_delete=models.PROTECT,
+        PolicyConstraintsExtension,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
     )
 
     subject_directory_attributes_extension = models.ForeignKey(
-        SubjectDirectoryAttributesExtension, null=True, blank=True, on_delete=models.PROTECT,
+        SubjectDirectoryAttributesExtension,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
     )
 
     freshest_crl_extension = models.ForeignKey(
-        FreshestCrlExtension, null=True, blank=True, on_delete=models.PROTECT,
+        FreshestCrlExtension,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
     )
 
     class Meta(TypedModelMeta):
@@ -327,18 +396,19 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     # --------------------------------------------------- Properties ---------------------------------------------------
 
     @property
+    @admin.display(description=_('Signature Algorithm'))
     def signature_algorithm(self) -> str:
         """Name of the signature algorithm."""
-        return AlgorithmIdentifier(self.signature_algorithm_oid).verbose_name
-
-    signature_algorithm.fget.short_description = _('Signature Algorithm')
+        return AlgorithmIdentifier.from_dotted_string(self.signature_algorithm_oid).verbose_name
 
     @property
+    @admin.display(description=_('Signature Padding Scheme'))
     def signature_algorithm_padding_scheme(self) -> str:
         """Padding scheme if RSA is used, otherwise None."""
-        return AlgorithmIdentifier(self.signature_algorithm_oid).padding_scheme.verbose_name
-
-    signature_algorithm_padding_scheme.fget.short_description = _('Signature Padding Scheme')
+        padding_scheme = AlgorithmIdentifier.from_dotted_string(self.signature_algorithm_oid).padding_scheme
+        if padding_scheme is None:
+            return ''
+        return padding_scheme.name
 
     @property
     def signature_suite(self) -> SignatureSuite:
@@ -361,6 +431,13 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
             return self.CertificateStatus.EXPIRED
         return self.CertificateStatus.OK
 
+    @property
+    def days_left(self) -> int:
+        """Returns number of days from now until not_valid_after. If expired, returns 0."""
+        now = datetime.datetime.now(datetime.UTC)
+        if self.not_valid_after > now:
+            return (self.not_valid_after - now).days
+        return 0
     @property
     def is_ca(self) -> bool:
         """Check if the certificate is a CA certificate."""
@@ -386,18 +463,24 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     def _get_subject(cert: x509.Certificate) -> list[tuple[str, str]]:
         subject: list[tuple[str, str]] = []
         for rdn in cert.subject.rdns:
-            subject.extend(
-                [attr_type_and_value.oid.dotted_string, attr_type_and_value.value] for attr_type_and_value in rdn
-            )
+            for attr_type_and_value in rdn:
+                if isinstance(attr_type_and_value.value, bytes):
+                    value = attr_type_and_value.value.hex()
+                else:
+                    value = attr_type_and_value.value
+                subject.append((attr_type_and_value.oid.dotted_string, value))
         return subject
 
     @staticmethod
     def _get_issuer(cert: x509.Certificate) -> list[tuple[str, str]]:
         issuer: list[tuple[str, str]] = []
         for rdn in cert.issuer.rdns:
-            issuer.extend(
-                [attr_type_and_value.oid.dotted_string, attr_type_and_value.value] for attr_type_and_value in rdn
-            )
+            for attr_type_and_value in rdn:
+                if isinstance(attr_type_and_value.value, bytes):
+                    value = attr_type_and_value.value.hex()
+                else:
+                    value = attr_type_and_value.value
+            issuer.append((attr_type_and_value.oid.dotted_string, value))
         return issuer
 
     @staticmethod
@@ -419,11 +502,11 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
 
     def get_certificate_serializer(self) -> CertificateSerializer:
         """Get the serializer for the certificate."""
-        return CertificateSerializer(self.cert_pem)
+        return CertificateSerializer.from_pem(self.cert_pem.encode())
 
     def get_public_key_serializer(self) -> PublicKeySerializer:
         """Get the serializer for the certificate's public key."""
-        return PublicKeySerializer(self.public_key_pem)
+        return PublicKeySerializer.from_pem(self.public_key_pem.encode())
 
     # ---------------------------------------------- Private save methods ----------------------------------------------
 
@@ -453,7 +536,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         # ---------------------------------------- TBSCertificate Fields (Body) ----------------------------------------
 
         version = certificate.version.value
-        serial_number = hex(certificate.serial_number)[2:].upper()
+        serial_number = f'{certificate.serial_number:x}'.upper()
 
         issuer = cls._get_issuer(certificate)
         issuer_public_bytes = certificate.issuer.public_bytes().hex().upper()
@@ -573,7 +656,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         subject: list[tuple[str, str]],
         issuer: list[tuple[str, str]],
     ) -> CertificateModel:
-        cert_model._save()  # noqa: SLF001
+        cert_model._save()
         for oid, value in subject:
             if oid == NameOid.COMMON_NAME.dotted_string:
                 cert_model.common_name = value
@@ -581,7 +664,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         cls._save_issuer(cert_model, issuer)
         cls._save_extensions(cert_model, certificate)
 
-        cert_model._save()  # noqa: SLF001
+        cert_model._save()
         return cert_model
 
     # ---------------------------------------------- Public save methods -----------------------------------------------
@@ -596,29 +679,63 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         return cls._save_certificate(certificate=certificate)
 
     # ---------------------------------------------- Post-deletion cleanup ---------------------------------------------
+    def pre_delete(self) -> None:
+        """Store the related objects before deletion."""
+        self._related_objects = {
+            'basic_constraints_extension': self.basic_constraints_extension,
+            'key_usage_extension': self.key_usage_extension,
+            'issuer_alternative_name_extension': self.issuer_alternative_name_extension,
+            'subject_alternative_name_extension': self.subject_alternative_name_extension,
+            'authority_key_identifier_extension': self.authority_key_identifier_extension,
+            'subject_key_identifier_extension': self.subject_key_identifier_extension,
+            'certificate_policies_extension': self.certificate_policies_extension,
+            'extended_key_usage_extension': self.extended_key_usage_extension,
+            'name_constraints_extension': self.name_constraints_extension,
+            'crl_distribution_points_extension': self.crl_distribution_points_extension,
+            'authority_information_access_extension': self.authority_information_access_extension,
+            'subject_information_access_extension': self.subject_information_access_extension,
+            'inhibit_any_policy_extension': self.inhibit_any_policy_extension,
+            'policy_constraints_extension': self.policy_constraints_extension,
+            'freshest_crl_extension': self.freshest_crl_extension,
+        }
+
     def post_delete(self) -> None:
         """Clean up related orphaned extension models."""
-        BasicConstraintsExtension.delete_if_orphaned(self.basic_constraints_extension)
-        KeyUsageExtension.delete_if_orphaned(self.key_usage_extension)
-        IssuerAlternativeNameExtension.delete_if_orphaned(self.issuer_alternative_name_extension)
-        SubjectAlternativeNameExtension.delete_if_orphaned(self.subject_alternative_name_extension)
-        AuthorityKeyIdentifierExtension.delete_if_orphaned(self.authority_key_identifier_extension)
-        SubjectKeyIdentifierExtension.delete_if_orphaned(self.subject_key_identifier_extension)
-        CertificatePoliciesExtension.delete_if_orphaned(self.certificate_policies_extension)
-        ExtendedKeyUsageExtension.delete_if_orphaned(self.extended_key_usage_extension)
-        NameConstraintsExtension.delete_if_orphaned(self.name_constraints_extension)
-        CrlDistributionPointsExtension.delete_if_orphaned(self.crl_distribution_points_extension)
-        AuthorityInformationAccessExtension.delete_if_orphaned(self.authority_information_access_extension)
-        SubjectInformationAccessExtension.delete_if_orphaned(self.subject_information_access_extension)
-        InhibitAnyPolicyExtension.delete_if_orphaned(self.inhibit_any_policy_extension)
-        PolicyConstraintsExtension.delete_if_orphaned(self.policy_constraints_extension)
-        FreshestCrlExtension.delete_if_orphaned(self.freshest_crl_extension)
+        BasicConstraintsExtension.delete_if_orphaned(self._related_objects['basic_constraints_extension'])
+        KeyUsageExtension.delete_if_orphaned(self._related_objects['key_usage_extension'])
+        IssuerAlternativeNameExtension.delete_if_orphaned(self._related_objects['issuer_alternative_name_extension'])
+        SubjectAlternativeNameExtension.delete_if_orphaned(self._related_objects['subject_alternative_name_extension'])
+        AuthorityKeyIdentifierExtension.delete_if_orphaned(self._related_objects['authority_key_identifier_extension'])
+        SubjectKeyIdentifierExtension.delete_if_orphaned(self._related_objects['subject_key_identifier_extension'])
+        CertificatePoliciesExtension.delete_if_orphaned(self._related_objects['certificate_policies_extension'])
+        ExtendedKeyUsageExtension.delete_if_orphaned(self._related_objects['extended_key_usage_extension'])
+        NameConstraintsExtension.delete_if_orphaned(self._related_objects['name_constraints_extension'])
+        CrlDistributionPointsExtension.delete_if_orphaned(self._related_objects['crl_distribution_points_extension'])
+        AuthorityInformationAccessExtension.delete_if_orphaned(
+            self._related_objects['authority_information_access_extension']
+        )
+        SubjectInformationAccessExtension.delete_if_orphaned(
+            self._related_objects['subject_information_access_extension']
+        )
+        InhibitAnyPolicyExtension.delete_if_orphaned(self._related_objects['inhibit_any_policy_extension'])
+        PolicyConstraintsExtension.delete_if_orphaned(self._related_objects['policy_constraints_extension'])
+        FreshestCrlExtension.delete_if_orphaned(self._related_objects['freshest_crl_extension'])
+
+    # ---------------------------------------------- Utility ---------------------------------------------
+    def subjects_match(self, other_subject: x509.Name) -> bool:
+        """Check if the provided subject is identical to the one of this certificate.
+
+        Args:
+            other_subject (x509.Name): The subject to compare to.
+
+        Returns:
+            bool: True if the subjects match, False otherwise.
+        """
+        return self.subject_public_bytes == other_subject.public_bytes().hex().upper()
 
 
 class RevokedCertificateModel(models.Model):
     """Model to store revoked certificates."""
-
-    objects: models.Manager[RevokedCertificateModel]
 
     class ReasonCode(models.TextChoices):
         """Revocation reasons per RFC 5280."""

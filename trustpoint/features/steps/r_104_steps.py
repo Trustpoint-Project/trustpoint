@@ -1,173 +1,122 @@
-"""Python steps file for R_104."""  # noqa: INP001
+"""Python steps file for R_001."""
 
 from behave import given, runner, then, when
+from pki.models import TruststoreModel
+from bs4 import BeautifulSoup
+import os
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-@given('the user has role {role}')
-def step_given_user_role(context: runner.Context, role: str) -> None:  # noqa: ARG001
-    """Ensures the user has a specified role.
+@given('a truststore {truststore_name} with {intended_usage} exist')
+def step_truststore_exists(context: runner.Context, truststore_name: str, intended_usage: str) -> None:  # noqa: ARG001
+    """.
+
+    Args:
+        context: Behave context.
+        truststore_name (str): The name of the truststore.
+        intended_usage (str): The intended usage of the truststore.
+    """
+    truststore_file_path = os.path.abspath(f"{CURRENT_DIR}/../../../tests/data/trust-store/trust_store.pem")
+    usage = 0
+    if intended_usage == "TLS":
+        usage = 1
+    elif intended_usage == "Generic":
+        usage = 2
+    with open(truststore_file_path, 'rb') as f:
+      # Prepare POST data
+      truststore_add_form_data = {
+        'unique_name': truststore_name,
+        'intended_usage': usage,
+        'trust_store_file': f,
+      }
+      context.response = context.authenticated_client.post('/pki/truststores/add/', truststore_add_form_data, follow=True)
+      assert context.response.status_code == 200, f"Failed to add new truststore."
+      context.truststore = TruststoreModel.objects.get(unique_name=truststore_name)
+
+@when('the admin fills in the truststore details with {name}, {intended_usage} and {file_type}')
+def step_fill_truststore_details(context: runner.Context, name: str, intended_usage: str, file_type: str) -> None:  # noqa: ARG001
+    """Fills in the truststore creation form.
 
     Args:
         context (runner.Context): Behave context.
-        role (str): The role assigned to the user.
+        name (str): The name of the truststore.
+        intended_usage (str): The intended usage of the truststore.
+        file_type (str): The file type of the truststore.
     """
-    msg = f'STEP: Given the user has role {role}'
-    raise AssertionError(msg)
+    truststore_file_path = os.path.abspath(f"{CURRENT_DIR}/../../../tests/data/trust-store/trust_store{file_type}")
+    usage = 0
+    if intended_usage == "TLS":
+        usage = 1
+    elif intended_usage == "Generic":
+        usage = 2
 
-
-@given('a certificate template named {template_name} exists')
-def step_given_certificate_template_exists(context: runner.Context, template_name: str) -> None:  # noqa: ARG001
-    """Ensures that a specific certificate template exists.
+    # Prepare POST data
+    context.truststore_add_form_data = {
+      'unique_name': name,
+      'intended_usage': usage,
+      'trust_store_file': truststore_file_path,
+    }
+@then('the new truststore with {name} and {intended_usage} should appear in the truststore list')
+def step_truststore_list(context: runner.Context, name: str, intended_usage: str) -> None:  # noqa: ARG001
+    """Verifies that the new truststore appears in the truststore list.
 
     Args:
         context (runner.Context): Behave context.
-        template_name (str): The name of the certificate template.
+        name (str): The name of the truststore.
+        intended_usage (str): The intended usage of the truststore.
     """
-    msg = f'STEP: Given a certificate template named {template_name} exists'
-    raise AssertionError(msg)
+    soup = BeautifulSoup(context.response.content, "html.parser")
+
+    # Find all <td> elements
+    tds = soup.find_all("td")
+
+    # Get their text content (unescaped and stripped)
+    values = [td.get_text(strip=True) for td in tds]
+
+    assert name in values, f"Truststore {name} doesn't exist"
+    assert intended_usage in values, f"Intended usage {intended_usage} doesn't exist"
 
 
-@when('the user attempts to access certificate templates')
-def step_when_user_attempts_access_templates(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates a user attempting to access certificate templates.
+@when('the admin deletes the truststore with the name {name}')
+def step_delete_truststore(context: runner.Context, name: str) -> None:  # noqa: ARG001
+    """Deletes an truststore by name.
 
     Args:
         context (runner.Context): Behave context.
+        name (str): The name of the truststore to be deleted.
     """
-    msg = 'STEP: When the user attempts to access certificate templates'
-    raise AssertionError(msg)
+
+    context.response = context.authenticated_client.get(
+        '/pki/truststores/delete/'+ str(context.truststore.id),
+        follow=True,
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest"
+    )
+
+    assert context.response.status_code == 200, "Truststore delete form submission failed"
+    assert b"Confirm Truststore Deletion" in context.response.content
+    context.response = context.authenticated_client.post(f"/pki/truststores/delete/{context.truststore.id}/", data={}, follow=True)
+    assert context.response.status_code == 200, "Truststore deletion response"
+    assert not TruststoreModel.objects.filter(id=context.truststore.id).exists(), f"Deletion of Truststore with name {name} failed"
 
 
-@when('the user attempts to modify the certificate template')
-def step_when_user_attempts_modify_template(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates a user attempting to modify a certificate template.
+@then('the truststore {name} should no longer appear in the truststore list')
+def step_verify_truststore_deletion(context: runner.Context, name: str) -> None:  # noqa: ARG001
+    """Verifies that the truststore no longer appears in the list.
 
     Args:
         context (runner.Context): Behave context.
+        name (str): The name of the truststore.
     """
-    msg = 'STEP: When the user attempts to modify the certificate template'
-    raise AssertionError(msg)
+    assert name not in context.response, f"Truststore with name {name} still exist in the list"
 
 
-@when('an unauthorized user attempts to access it')
-def step_when_unauthorized_access_attempted(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates an unauthorized user attempting to access a sensitive certificate template.
+@when('the admin attempts to view the details of a non-existent truststore {non_existent_truststore_id}')
+def step_attempt_view_nonexistent(context: runner.Context, non_existent_truststore_id: str) -> None:  # noqa: ARG001
+    """Attempts to view details of a non-existent truststore.
 
     Args:
         context (runner.Context): Behave context.
+        non_existent_truststore_id (str): The id a non-existent truststore.
     """
-    msg = 'STEP: When an unauthorized user attempts to access it'
-    raise AssertionError(msg)
-
-
-@when('a non-admin user attempts to delete it')
-def step_when_non_admin_attempts_delete(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates a non-admin user attempting to delete a certificate template.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    msg = 'STEP: When a non-admin user attempts to delete it'
-    raise AssertionError(msg)
-
-
-@when('an admin exports the template')
-def step_when_admin_exports_template(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates an admin exporting a certificate template.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    msg = 'STEP: When an admin exports the template'
-    raise AssertionError(msg)
-
-
-@when('a non-admin user attempts to export the template')
-def step_when_non_admin_attempts_export(context: runner.Context) -> None:  # noqa: ARG001
-    """Simulates a non-admin user attempting to export a certificate template.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    msg = 'STEP: When a non-admin user attempts to export the template'
-    raise AssertionError(msg)
-
-
-@then('access should be {access_outcome}')
-def step_then_access_outcome(context: runner.Context, access_outcome: str) -> None:  # noqa: ARG001
-    """Ensures that access to certificate templates is correctly granted or denied.
-
-    Args:
-        context (runner.Context): Behave context.
-        access_outcome (str): The expected access outcome ('granted' or 'denied').
-    """
-    msg = f'STEP: Then access should be {access_outcome}'
-    raise AssertionError(msg)
-
-
-@then('modification should be {modification_outcome}')
-def step_then_modification_outcome(context: runner.Context, modification_outcome: str) -> None:  # noqa: ARG001
-    """Ensures that modification attempts are correctly handled.
-
-    Args:
-        context (runner.Context): Behave context.
-        modification_outcome (str): The expected modification outcome ('allowed' or 'denied').
-    """
-    msg = f'STEP: Then modification should be {modification_outcome}'
-    raise AssertionError(msg)
-
-
-@then('the deletion should be rejected')
-def step_then_deletion_rejected(context: runner.Context) -> None:  # noqa: ARG001
-    """Ensures that unauthorized deletion attempts are rejected.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    msg = 'STEP: Then the deletion should be rejected'
-    raise AssertionError(msg)
-
-
-@then('an error message {error_message} should be shown')
-def step_then_error_message_shown(context: runner.Context, error_message: str) -> None:  # noqa: ARG001
-    """Ensures that an appropriate error message is shown for unauthorized actions.
-
-    Args:
-        context (runner.Context): Behave context.
-        error_message (str): The expected error message.
-    """
-    msg = f'STEP: Then an error message {error_message} should be shown'
-    raise AssertionError(msg)
-
-
-@then('the exported template should be encrypted')
-def step_then_export_encrypted(context: runner.Context) -> None:  # noqa: ARG001
-    """Ensures that exported certificate templates are encrypted.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    msg = 'STEP: Then the exported template should be encrypted'
-    raise AssertionError(msg)
-
-
-@then('export should be denied')
-def step_then_export_denied(context: runner.Context) -> None:  # noqa: ARG001
-    """Ensures that unauthorized export attempts are denied.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    msg = 'STEP: Then export should be denied'
-    raise AssertionError(msg)
-
-
-@then('the attempt should be logged')
-def step_then_attempt_should_be_logged(context: runner.Context) -> None:  # noqa: ARG001
-    """Ensures that unauthorized actions are logged.
-
-    Args:
-        context (runner.Context): Behave context.
-    """
-    msg = 'STEP: Then the attempt should be logged'
-    raise AssertionError(msg)
+    #Navigate (GET request) to the truststore detailed page
+    context.response = context.authenticated_client.get(f"/pki/truststores/config/{non_existent_truststore_id}")

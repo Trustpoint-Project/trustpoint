@@ -13,11 +13,18 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import DeleteView
-from django.views.generic.edit import CreateView, FormView, UpdateView
+from django.views.generic.detail import DetailView
+from django.views.generic.edit import CreateView, FormView
 from django.views.generic.list import ListView
 
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
-from pki.models import CertificateModel, DevIdRegistration, DomainModel, IssuingCaModel
+from pki.models import (
+    CertificateModel,
+    CertificateProfileModel,
+    DevIdRegistration,
+    DomainModel,
+    IssuingCaModel,
+)
 from pki.models.truststore import TruststoreModel
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -40,7 +47,7 @@ class DomainContextMixin(ContextDataMixin):
     context_page_name = 'domains'
 
 
-class DomainTableView(DomainContextMixin, SortableTableMixin, ListView[DomainModel]):
+class DomainTableView(DomainContextMixin, SortableTableMixin[DomainModel], ListView[DomainModel]):
     """Domain Table View."""
 
     model = DomainModel
@@ -59,32 +66,29 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
     success_url = reverse_lazy('pki:domains')
     ignore_url = reverse_lazy('pki:domains')
 
-    def get_form(self, form_class: Any = None) -> Any:
+    def get_form(self, _form_class: Any = None) -> Any:
         """Override get_form to filter out autogen root CAs."""
         form = super().get_form()
         # Filter out autogen root CAs
-        form.fields['issuing_ca'].queryset = IssuingCaModel.objects.exclude(
+        form.fields['issuing_ca'].queryset = IssuingCaModel.objects.exclude(  # type: ignore[attr-defined]
             issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
         ).filter(is_active=True)
-        form.fields['issuing_ca'].empty_label = None  # Remove empty "---------" choice
+        # Remove empty "---------" choice
+        form.fields['issuing_ca'].empty_label = None  # type: ignore[attr-defined]
         del form.fields['is_active']
         return form
 
-
-class DomainUpdateView(DomainContextMixin, UpdateView[DomainModel]):
-    """View to edit a domain."""
-
-    # TODO(Air): This view is currently UNUSED. # noqa: FIX002
-    # If used, a mixin implementing the get_form method from the DomainCreateView should be added.
-
-    model = DomainModel
-    fields = '__all__'
-    template_name = 'pki/domains/add.html'
-    success_url = reverse_lazy('pki:domains')
-    ignore_url = reverse_lazy('pki:domains')
+    def form_valid(self, form: BaseModelForm[DomainModel]) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        domain = form.save()
+        messages.success(
+            self.request,
+            _('Successfully created domain {name}.').format(name=domain.unique_name),
+        )
+        return super().form_valid(form)
 
 
-class DomainDevIdRegistrationTableMixin(SortableTableMixin, ListInDetailView):
+class DomainDevIdRegistrationTableMixin(SortableTableMixin[DevIdRegistration], ListInDetailView):
     """Mixin to add a table of DevID Registrations to the domain config view."""
 
     model = DevIdRegistration
@@ -94,7 +98,8 @@ class DomainDevIdRegistrationTableMixin(SortableTableMixin, ListInDetailView):
 
     def get_queryset(self) -> QuerySet[DevIdRegistration]:
         """Gets the queryset for the DevID Registration table."""
-        self.queryset = DevIdRegistration.objects.filter(domain=self.get_object())
+        domain: DomainModel = cast('DomainModel', self.get_object())
+        self.queryset = DevIdRegistration.objects.filter(domain=domain)
         return super().get_queryset()
 
 
@@ -107,9 +112,9 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
     success_url = reverse_lazy('pki:domains')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds (no) additional context data."""
+        """Adds additional context data."""
         context = super().get_context_data(**kwargs)
-        domain: DomainModel = cast(DomainModel, self.get_object())
+        domain: DomainModel = cast('DomainModel', self.get_object())
 
         issued_credentials = domain.issued_credentials.all()
 
@@ -117,37 +122,24 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             credential__in=[issued_credential.credential for issued_credential in issued_credentials]
         )
 
+        context['profile_data'] = {
+            profile.id: {
+                'unique_name': profile.unique_name,
+                'alias': '',
+                'is_allowed': False
+            }
+            for profile in CertificateProfileModel.objects.all()
+        }
+
+        for allowed_profile in domain.certificate_profiles.all():
+            profile_id = allowed_profile.certificate_profile.id
+            context['profile_data'][profile_id]['alias'] = allowed_profile.alias
+            context['profile_data'][profile_id]['is_allowed'] = True
+
         context['certificates'] = certificates
-        context['domain_options'] = {
-            'auto_create_new_device': domain.auto_create_new_device,
-            'allow_username_password_registration': domain.allow_username_password_registration,
-            'allow_idevid_registration': domain.allow_idevid_registration,
-            'domain_credential_auth': domain.domain_credential_auth,
-            'username_password_auth': domain.username_password_auth,
-            'allow_app_certs_without_domain': domain.allow_app_certs_without_domain,
-        }
-
-        context['domain_help_texts'] = {
-            'auto_create_new_device': domain._meta.get_field('auto_create_new_device').help_text,
-            'allow_username_password_registration': domain._meta.get_field(
-                'allow_username_password_registration'
-            ).help_text,
-            'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').help_text,
-            'domain_credential_auth': domain._meta.get_field('domain_credential_auth').help_text,
-            'username_password_auth': domain._meta.get_field('username_password_auth').help_text,
-            'allow_app_certs_without_domain': domain._meta.get_field('allow_app_certs_without_domain').help_text,
-        }
-
-        context['domain_verbose_name'] = {
-            'auto_create_new_device': domain._meta.get_field('auto_create_new_device').verbose_name,
-            'allow_username_password_registration': domain._meta.get_field(
-                'allow_username_password_registration'
-            ).verbose_name,
-            'allow_idevid_registration': domain._meta.get_field('allow_idevid_registration').verbose_name,
-            'domain_credential_auth': domain._meta.get_field('domain_credential_auth').verbose_name,
-            'username_password_auth': domain._meta.get_field('username_password_auth').verbose_name,
-            'allow_app_certs_without_domain': domain._meta.get_field('allow_app_certs_without_domain').verbose_name,
-        }
+        context['domain_options'] = {}
+        context['domain_help_texts'] = {}
+        context['domain_verbose_name'] = {}
 
         return context
 
@@ -156,14 +148,27 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         del args
         del kwargs
 
-        domain = self.get_object()
+        domain: DomainModel = cast('DomainModel', self.get_object())
 
-        domain.auto_create_new_device = 'auto_create_new_device' in request.POST
-        domain.allow_username_password_registration = 'allow_username_password_registration' in request.POST
-        domain.allow_idevid_registration = 'allow_idevid_registration' in request.POST
-        domain.domain_credential_auth = 'domain_credential_auth' in request.POST
-        domain.username_password_auth = 'username_password_auth' in request.POST
-        domain.allow_app_certs_without_domain = 'allow_app_certs_without_domain' in request.POST
+        # Handle assignments of  allowed certificate profiles in domain
+        # get fields from request POST
+        allowed_profile_data = {}
+        for key in request.POST:
+            if key.startswith('cert_p_allowed_'):
+                profile_id = key.removeprefix('cert_p_allowed_')
+                alias = request.POST.get(f'cert_p_alias_{profile_id}', '').strip()
+                allowed_profile_data[profile_id] = alias
+
+        rejected_aliases = domain.set_allowed_cert_profiles(allowed_profile_data)
+        for alias_value, profile in rejected_aliases:
+            messages.warning(
+                request,
+                _('Alias "{alias}" not applied for profile {profile} as it is already in use. '
+                'Please use an unique domain alias for each Certificate Profile.').format(
+                    alias=alias_value,
+                    profile=profile
+                )
+            )
 
         domain.save()
 
@@ -269,7 +274,7 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
         dev_id_registration = form.save()
         messages.success(
             self.request,
-            f'Successfully created DevID Registration: {dev_id_registration.unique_name}',
+            _('Successfully created DevID registration pattern {name}.').format(name=dev_id_registration.unique_name),
         )
         return super().form_valid(form)
 
@@ -279,7 +284,7 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
         return cast('str', reverse_lazy('pki:domains-config', kwargs={'pk': domain.id}))
 
 
-class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView):
+class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView[DevIdRegistration, Any]):
     """View to delete a DevID Registration."""
 
     model = DevIdRegistration
@@ -293,7 +298,7 @@ class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView):
         return response
 
 
-class DevIdMethodSelectView(DomainContextMixin, FormView):
+class DevIdMethodSelectView(DomainContextMixin, FormView[DevIdAddMethodSelectForm]):
     """View to select the method to add a DevID Registration pattern."""
 
     template_name = 'pki/devid_registration/method_select.html'
@@ -332,9 +337,12 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
     def get_queryset(self) -> QuerySet[CertificateModel]:
         """Return only certificates associated with the domain's issued credentials."""
         domain: DomainModel = self.get_domain()
+        if domain.issuing_ca is None:
+            msg = 'Domain has no issuing CA configured.'
+            raise Http404(msg)
         # PyCharm TypeChecker issue - this passes mypy
         # noinspection PyTypeChecker
-        # TODO(AlexHx8472): This must be limited to the actual domain.
+        # TODO(AlexHx8472): This must be limited to the actual domain.  # noqa: FIX002
         return CertificateModel.objects.filter(
             issuer_public_bytes=domain.issuing_ca.credential.certificate.subject_public_bytes
         )
@@ -350,3 +358,18 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
         domain = self.get_domain()
         context['domain'] = domain
         return context
+
+class OnboardingMethodSelectIdevidHelpView(DomainContextMixin, DetailView[DevIdRegistration]):
+    """View to select the protocol for IDevID enrollment."""
+
+    template_name = 'pki/domains/idevid_method_select.html'
+    context_object_name = 'devid_registration'
+    model = DevIdRegistration
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the required context for the template."""
+        context = super().get_context_data(**kwargs)
+        context['pk'] = self.object.pk
+
+        return context
+

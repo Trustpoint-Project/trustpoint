@@ -1,0 +1,30 @@
+{% load static %}
+<div class="card rounded-5 position-relative donut-chart-card-container">
+  <div class="card-body">
+    <h6 class="mb-3 fs-5">Issuing CAs by Status</h6>
+
+    <div class="position-relative donut-chart-container">
+      <canvas id="chart_dount_ica"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("dashboardData", (event) =>{
+    const today = event.detail.today || {};
+    
+    const data = {
+      active: today.issuing_ca_counts.active,
+      expiring: 0,
+      expired: today.issuing_ca_counts.expired,
+      total: today.issuing_ca_counts.total
+    }
+
+    createDonutChart(
+      data,
+      'chart_dount_ica',
+      'icaByCounts',
+      {centerText:'Issuing CA', labels:['Active Issuing CA', 'Expiring Issuing CA', 'Expired Issuing CA']}
+    );
+  });
+</script>

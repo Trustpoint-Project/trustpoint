@@ -56,6 +56,8 @@
                 </div>
             </div>
 
+
+
             <div class="tp-menu-group">
                 <a href="{% url 'pki:domains' %}" class="tp-menu-head {% if page_category == 'pki' %}tp-menu-active{% endif %}">
                     <svg class="bi" fill="currentColor" role="img">
@@ -69,27 +71,65 @@
                     <a href="{% url 'pki:domains' %}" class="tp-menu-item {% if page_name == 'domains' %}tp-menu-active{% endif %}">{% trans 'Domains' %}</a>
                     <a href="{% url 'pki:issuing_cas' %}" class="tp-menu-item {% if page_name == 'issuing_cas' %}tp-menu-active{% endif %}">{% trans 'Issuing CAs' %}</a>
                     <a href="{% url 'pki:certificates' %}" class="tp-menu-item {% if page_name == 'certificates' %}tp-menu-active{% endif %}">{% trans 'Certificates' %}</a>
+                    <a href="{% url 'pki:cert_profiles' %}" class="tp-menu-item {% if page_name == 'cert_profiles' %}tp-menu-active{% endif %}">{% trans 'Certificate Profiles' %}</a>
                     <a href="{% url 'pki:truststores' %}" class="tp-menu-item {% if page_name == 'truststores' %}tp-menu-active{% endif %}">{% trans 'Truststores' %}</a>
+                    <a href="{% url 'pki:owner_credentials' %}" class="tp-menu-item {% if page_name == 'owner_credentials' %}tp-menu-active{% endif %}">{% trans 'DevOwnerIDs' %}</a>
+                </div>
+            </div>
+            <div class="tp-menu-group">
+                <a href="{% url 'signer:signer_list' %}" class="tp-menu-head {% if page_category == 'signer' %}tp-menu-active{% endif %}">
+                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pen" viewBox="0 0 16 16">
+  <path d="m13.498.795.149-.149a1.207 1.207 0 1 1 1.707 1.708l-.149.148a1.5 1.5 0 0 1-.059 2.059L4.854 14.854a.5.5 0 0 1-.233.131l-4 1a.5.5 0 0 1-.606-.606l1-4a.5.5 0 0 1 .131-.232l9.642-9.642a.5.5 0 0 0-.642.056L6.854 4.854a.5.5 0 1 1-.708-.708L9.44.854A1.5 1.5 0 0 1 11.5.796a1.5 1.5 0 0 1 1.998-.001m-.644.766a.5.5 0 0 0-.707 0L1.95 11.756l-.764 3.057 3.057-.764L14.44 3.854a.5.5 0 0 0 0-.708z"/>
+</svg>
+                    {% translate "Signing" %}
+
+                </a>
+
+            </div>
+
+            <div class="tp-menu-group">
+               <a href="{% url 'management:settings' %}" class="tp-menu-head {% if page_category == 'management' %}tp-menu-active{% endif %}">
+                    <svg class="bi" fill="currentColor" role="img">
+                        <use href="{% static 'img/icons.svg' %}#icon-settings"></use></svg>
+                        {% translate "Management" %}
+                    <div class="btn-collapse" data-category="management"
+                        aria-expanded="{% if page_category == 'management' %}true{% else %}false{% endif %}">
+                    </div>
+                </a>
+                <div class="tp-menu-collapse {% if page_category == 'management' %}show{% endif %}">
+                    <a href="{% url 'management:settings' %}" class="tp-menu-item {% if page_name == 'settings' %}tp-menu-active{% endif %}">{% trans "Settings" %}</a>
+                    <a href="{% url 'management:logging-files' %}" class="tp-menu-item {% if page_name == 'logging' %}tp-menu-active{% endif %}">{% trans "Logging" %}</a>
+                    <a href="{% url 'management:tls' %}" class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}">{% trans "TLS" %}</a>
+                    <a href="{% url 'management:backups' %}" class="tp-menu-item {% if page_name == 'backup' %}tp-menu-active{% endif %}">{% trans "Backups" %}</a>
+                    <a href="{% url 'management:key_storage' %}" class="tp-menu-item {% if page_name == 'key_storage' %}tp-menu-active{% endif %}">{% trans "Key Storage" %}</a>
                 </div>
             </div>
 
             <div class="tp-menu-group">
-                <a href="{% url 'settings:language' %}" class="tp-menu-head {% if page_category == 'settings' %}tp-menu-active{% endif %}">
+                <a href="{% url 'workflows:definition_table' %}"
+                    class="tp-menu-head {% if page_category == 'workflows' %}tp-menu-active{% endif %}">
                     <svg class="bi" fill="currentColor" role="img">
-                        <use href="{% static 'img/icons.svg' %}#icon-settings"></use></svg>
-                        {% translate "Settings" %}
-                    <div class="btn-collapse" data-category="settings"
-                        aria-expanded="{% if page_category == 'settings' %}true{% else %}false{% endif %}">
+                    <use href="{% static 'img/icons.svg' %}#icon-card-checklist"></use>
+                    </svg>
+                    {% translate "Workflows" %}
+                    <div class="btn-collapse" data-category="workflows"
+                        aria-expanded="{% if page_category == 'workflows' %}true{% else %}false{% endif %}">
                     </div>
                 </a>
-                <div class="tp-menu-collapse {% if page_category == 'settings' %}show{% endif %}">
-                    <a href="{% url 'settings:language' %}" class="tp-menu-item {% if page_name == 'language' %}tp-menu-active{% endif %}">{% trans "Language" %}</a>
-                    <a href="{% url 'settings:logging-files' %}" class="tp-menu-item {% if page_name == 'logging' %}tp-menu-active{% endif %}">{% trans "Logging" %}</a>
-{#                    <a href="{% url 'settings:network' %}" class="tp-menu-item {% if page_name == 'network' %}tp-menu-active{% endif %}">{% trans "Network" %}</a>#}
-{#                    <a href="{% url 'settings:ntp' %}" class="tp-menu-item {% if page_name == 'ntp' %}tp-menu-active{% endif %}">{% trans "NTP" %}</a>#}
-                    <a href="{% url 'settings:security' %}" class="tp-menu-item {% if page_name == 'security' %}tp-menu-active{% endif %}">{% trans "Security" %}</a>
+
+                <div class="tp-menu-collapse {% if page_category == 'workflows' %}show{% endif %}">
+                    <a href="{% url 'workflows:definition_table' %}"
+                    class="tp-menu-item {% if page_name == 'definitions' %}tp-menu-active{% endif %}">
+                    {% trans "Workflows" %}
+                    </a>
+
+                    <a href="{% url 'workflows:request_table' %}"
+                    class="tp-menu-item {% if page_name == 'pending_requests' %}tp-menu-active{% endif %}">
+                    {% trans "Pending Requests" %}
+                    </a>
+
                 </div>
-            </div>
+                </div>
             <div class="tp-menu-footer">
                 <div class="tp-menu-group">
                     <button class="tp-menu-head theme-toggle" type="button">
@@ -100,6 +140,12 @@
                             <use href="{% static 'img/icons.svg' %}#icon-moon-stars"></use></svg>
                             <span class="light-only">{% trans "Dark theme" %}</span>
                     </button>
+                    <a href="{% url 'management:help' %}" class="tp-menu-head">
+                        <svg class="bi" fill="currentColor" width="16" height="16" role="img">
+                            <use href="{% static 'img/icons.svg' %}#icon-question-circle"></use>
+                        </svg>
+                        {% trans "Help & Support" %}
+                    </a>
                     <form method="POST" action="{% url 'users:logout' %}">
                         {% csrf_token %}
                         <button class="tp-menu-head" type="submit">
@@ -110,9 +156,7 @@
                     </form>
 
                 </div>
-                <div id="tp-version">
-                    v0.2.0
-                </div>
+                <div id="tp-version">v{{ APP_VERSION }}</div>
             </div>
         </nav>
 

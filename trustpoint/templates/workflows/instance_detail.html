@@ -1,0 +1,231 @@
+{% extends 'trustpoint/base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h1 class="mb-0">{% trans 'Workflow Instance Details' %}</h1>
+  </div>
+
+  <div class="card-body">
+
+    {# --- Summary ---------------------------------------------------------------- #}
+    <h5 class="mb-3">{% trans 'Summary' %}</h5>
+    <dl class="row">
+
+      {# Enrollment Request (may be absent) #}
+      <dt class="col-sm-3">{% trans 'Enrollment request' %}:</dt>
+      <dd class="col-sm-9">
+        {% if inst.enrollment_request %}
+          <a href="{% url 'workflows:request_detail' inst.enrollment_request.id %}">
+            {{ inst.enrollment_request.id }}
+          </a>
+        {% else %}
+          <span class="text-muted">{% trans 'No enrollment request' %}</span>
+        {% endif %}
+      </dd>
+
+      {# Enrollment Request State (may be absent) #}
+      <dt class="col-sm-3">{% trans 'Enrollment request state' %}:</dt>
+      <dd class="col-sm-9">
+        {% if inst.enrollment_request %}
+          <span class="badge {{ inst.enrollment_request.badge_class }}">
+            {{ inst.enrollment_request.aggregated_state }}
+          </span>
+        {% else %}
+          <span class="badge bg-secondary">{% trans "N/A" %}</span>
+        {% endif %}
+      </dd>
+
+      <hr>
+
+      <dt class="col-sm-3">{% trans 'Instance ID' %}</dt>
+      <dd class="col-sm-9">{{ inst.id }}</dd>
+
+      <dt class="col-sm-3">{% trans 'Workflow' %}</dt>
+      <dd class="col-sm-9">
+        <a href="{% url 'workflows:definition_wizard' %}?edit={{ inst.definition.id }}">
+          {{ inst.definition.name }}
+        </a>
+      </dd>
+
+      <dt class="col-sm-3">{% trans 'State' %}</dt>
+      <dd class="col-sm-9">
+        <span class="badge {{ inst.badge_class }}">{{ inst.state }}</span>
+      </dd>
+
+      <dt class="col-sm-3">{% trans 'Current step' %}</dt>
+      <dd class="col-sm-9">
+        {% if current_step_label %}
+          {{ current_step_label }} <span class="text-muted">({{ inst.current_step }})</span>
+        {% else %}
+          <span class="text-muted">&mdash;</span>
+        {% endif %}
+      </dd>
+
+      <dt class="col-sm-3">{% trans 'Requested at' %}</dt>
+      <dd class="col-sm-9">{{ inst.created_at|date:"Y/m/d, H:i:s" }}</dd>
+
+      <dt class="col-sm-3">{% trans 'Last updated' %}</dt>
+      <dd class="col-sm-9">{{ inst.updated_at|date:"Y/m/d, H:i:s" }}</dd>
+
+    </dl>
+
+    <hr>
+
+    {# --- Request info ----------------------------------------------------------- #}
+    <h5 class="mb-3">{% trans 'Request' %}</h5>
+    <ul>
+
+      <li>
+        <strong>{% trans 'Device' %}:</strong>
+        <a href="{% url clm_url pk=payload.device_id %}">
+          {{ device_name }} ({{ device_serial_number }})
+        </a>
+      </li>
+
+      <li>
+        <strong>{% trans 'Domain' %}:</strong>
+        {% if payload.domain_id and domain_name %}
+          <a href="{% url 'pki:domains-config' payload.domain_id %}">{{ domain_name }}</a>
+        {% else %}
+          <span class="text-muted">&mdash;</span>
+        {% endif %}
+      </li>
+
+      <li>
+        <strong>{% trans 'CA' %}:</strong>
+        {% if payload.ca_id and ca_name %}
+          <a href="{% url 'pki:issuing_cas-config' payload.ca_id %}">{{ ca_name }}</a>
+        {% else %}
+          <span class="text-muted">&mdash;</span>
+        {% endif %}
+      </li>
+
+      <li>
+        <strong>{% trans 'Protocol' %}:</strong>
+        {% if payload.protocol %}
+          {{ payload.protocol }}
+        {% elif inst.enrollment_request %}
+          {{ inst.enrollment_request.protocol }}
+        {% else %}
+          <span class="text-muted">&mdash;</span>
+        {% endif %}
+      </li>
+
+      <li>
+        <strong>{% trans 'Operation' %}:</strong>
+        {% if payload.operation %}
+          {{ payload.operation }}
+        {% elif inst.enrollment_request %}
+          {{ inst.enrollment_request.operation }}
+        {% else %}
+          <span class="text-muted">&mdash;</span>
+        {% endif %}
+      </li>
+
+    </ul>
+
+    <hr>
+
+    {# --- Steps / history -------------------------------------------------------- #}
+    <h5 class="mb-3">{% trans 'Workflow steps' %}</h5>
+
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>{% trans 'Step' %}</th>
+          <th>{% trans 'Status' %}</th>
+          <th>{% trans 'Type' %}</th>
+          <th>{% trans 'Details' %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for step in steps %}
+          <tr>
+            <td>{{ step.label }}</td>
+            <td><span class="badge {{ step.badge_class }}">{{ step.status }}</span></td>
+            <td><code>{{ step.type }}</code></td>
+            <td>
+              {% if step.error or step.details %}
+                <ul class="mb-0">
+                  {% for key, value in step.details.items %}
+                    {% if step.error and key == 'error' %}
+                      <li><strong>{% trans 'Error' %}:</strong>
+                        <span class="text-danger">{{ step.error }}</span>
+                      </li>
+                    {% else %}
+                      <li><strong>{{ key }}:</strong> {{ value }}</li>
+                    {% endif %}
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <span class="text-muted">&mdash;</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4" class="text-center text-muted">
+              {% trans 'No step metadata is available for this instance.' %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <hr>
+
+    {# --- CSR -------------------------------------------------------------------- #}
+    <h5 class="mb-3">{% trans 'CSR details' %}</h5>
+    {% if csr_info %}
+      {% if csr_info.error %}
+        <div class="alert alert-warning">{{ csr_info.error }}</div>
+      {% else %}
+        <ul>
+          <li><strong>{% trans 'Subject' %}:</strong> {{ csr_info.subject }}</li>
+          {% if csr_info.common_name %}
+            <li><strong>{% trans 'Common Name' %}:</strong> {{ csr_info.common_name }}</li>
+          {% endif %}
+          {% if csr_info.sans %}
+            <li><strong>{% trans 'SANs' %}:</strong> {{ csr_info.sans|join:", " }}</li>
+          {% endif %}
+          <li><strong>{% trans 'Key Algorithm' %}:</strong> {{ csr_info.key_algorithm }}</li>
+          <li><strong>{% trans 'Signature Algorithm' %}:</strong> {{ csr_info.signature_algorithm }}</li>
+        </ul>
+      {% endif %}
+    {% else %}
+      <p class="text-muted">{% trans 'No CSR data available.' %}</p>
+    {% endif %}
+
+    {% if csr_pem %}
+      <hr>
+      <h5 class="mb-3">{% trans 'CSR PEM' %}</h5>
+      {{ csr_pem|linebreaksbr }}
+    {% endif %}
+
+    <hr>
+
+    {# --- Actions ---------------------------------------------------------------- #}
+    <h5 class="mb-3">{% trans 'Actions' %}</h5>
+
+    {% if can_signal %}
+      <form method="post" action="{% url 'workflows:signal' inst.id %}">
+        {% csrf_token %}
+        <button type="submit" name="action" value="approve" class="btn btn-success me-2">
+          {% trans 'Approve' %}
+        </button>
+        <button type="submit" name="action" value="reject" class="btn btn-danger me-2">
+          {% trans 'Reject' %}
+        </button>
+      </form>
+    {% endif %}
+
+    <button type="button" class="btn btn-secondary btn-half mt-2" onClick="history.back()">
+      {% trans 'Back' %}
+    </button>
+
+  </div>
+</div>
+{% endblock %}
