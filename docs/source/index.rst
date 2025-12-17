@@ -40,6 +40,7 @@ Welcome to Trustpoint's documentation!
    :caption: 🔒 Security
 
    security/pkcs11
+   security/db_encryption
 
 .. toctree::
    :maxdepth: 2
@@ -66,5 +67,7 @@ Welcome to Trustpoint's documentation!
    development/architecture/credentials
    development/auto_restore
    development/sbom
+   development/workflow
+   release-checklist
    devices/workflow
 

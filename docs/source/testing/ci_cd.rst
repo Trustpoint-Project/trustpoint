@@ -153,9 +153,9 @@ The only difference is that we now run :term:`ruff` and upload the report if the
     :language: yaml
     :caption: ruff workflow
 
-==============
+===============
 CodeQL Pipeline
-==============
+===============
 
 We use `CodeQL <https://codeql.github.com/>`_ for automated security analysis of the codebase.
 This pipeline runs CodeQL analysis on multiple languages including Python, JavaScript/TypeScript, and GitHub Actions.

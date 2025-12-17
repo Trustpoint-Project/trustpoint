@@ -227,20 +227,20 @@ The Trustpoint container includes pre-configured SoftHSM support with token dire
 
 **Docker Compose Secrets**:
 
-````yaml
-secrets:
-  db_user:
-    file: db_user.txt
-  db_password:
-    file: db_password.txt
-  hsm_pin:
-    file: hsm_pin.txt
-  hsm_so_pin:
-    file: hsm_so_pin.txt
+.. code-block:: yaml
 
-environment:
-  POSTGRES_USER_FILE: /run/secrets/db_user
-  POSTGRES_PASSWORD_FILE: /run/secrets/db_password
-  HSM_PIN_FILE: /run/secrets/hsm_pin
-  HSM_SO_PIN_FILE: /run/secrets/hsm_so_pin
-````
+   secrets:
+     db_user:
+       file: db_user.txt
+     db_password:
+       file: db_password.txt
+     hsm_pin:
+       file: hsm_pin.txt
+     hsm_so_pin:
+       file: hsm_so_pin.txt
+
+   environment:
+     POSTGRES_USER_FILE: /run/secrets/db_user
+     POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+     HSM_PIN_FILE: /run/secrets/hsm_pin
+     HSM_SO_PIN_FILE: /run/secrets/hsm_so_pin
