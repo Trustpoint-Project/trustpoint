@@ -103,6 +103,7 @@ exclude = ["**/migrations/*", "**/manage.py", "**/tests/*", "**/management/comma
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/**.py" = ["S101"]
 "**/tests.py" = ["S101"]
+"**/features/**/*.py" = ["S101"]
 
 
 [tool.ruff.format]
