@@ -24,7 +24,7 @@ from trustpoint.logger import LoggerMixin
 
 class TestCMPHelper(LoggerMixin):
     def test_cmp_no_onboarding_shared_secret_auth(self, cmp_device_without_onboarding) -> None:
-        """Test client certificate validation when the request does not contain the 'SSL_CLIENT_CERT' header."""
+        """Test client certificate validation when the request does not contain the 'HTTP_SSL_CLIENT_CERT' header."""
         device = cmp_device_without_onboarding.get('device')
 
         domain_str = device.domain.unique_name

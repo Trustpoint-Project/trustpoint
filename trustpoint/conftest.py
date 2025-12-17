@@ -472,7 +472,7 @@ def tls_client_request_with_client_cert_header(
 ) -> tuple[HttpRequest, str, str, str]:
     """Fixture to create an HttpRequest for a tls_client certificate request.
 
-    Includes the client certificate in the 'SSL_CLIENT_CERT' header for authentication.
+    Includes the client certificate in the 'HTTP_SSL_CLIENT_CERT' header for authentication.
     """
     domain = domain_credential_instance.credential.domain
 

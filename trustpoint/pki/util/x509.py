@@ -325,16 +325,16 @@ class NginxTLSClientCertExtractor:
         Raises:
             ClientCertificateAuthenticationError: if no client certificate found or it is not a valid PEM-encoded cert.
         """
-        cert_data = request.META.get('SSL_CLIENT_CERT')
+        cert_data = request.META.get('HTTP_SSL_CLIENT_CERT')
         if not cert_data:
-            error_message = 'Missing SSL_CLIENT_CERT header'
+            error_message = 'Missing HTTP_SSL_CLIENT_CERT header'
             raise ClientCertificateAuthenticationError(error_message)
         # URL-decode the certificate
         cert_data = urllib.parse.unquote(cert_data)
         try:
             client_cert = x509.load_pem_x509_certificate(cert_data.encode('utf-8'))
         except Exception as e:
-            error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
+            error_message = f'Invalid HTTP_SSL_CLIENT_CERT header: {e}'
             raise ClientCertificateAuthenticationError(error_message) from e
 
          # Extract intermediate CAs from NGINX variables
