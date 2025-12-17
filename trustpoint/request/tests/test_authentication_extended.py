@@ -168,7 +168,7 @@ class TestClientCertificateAuthenticationExtended:
         with patch.object(IssuedCredentialModel, 'is_valid_domain_credential') as mock_valid:
             mock_valid.return_value = (False, "Certificate is revoked")
             
-            with pytest.raises(ValueError, match="Invalid SSL_CLIENT_CERT header: Certificate is revoked"):
+            with pytest.raises(ValueError, match="Invalid HTTP_SSL_CLIENT_CERT header: Certificate is revoked"):
                 auth.authenticate(context)
 
 

@@ -98,7 +98,7 @@ class ClientCertificateAuthentication(AuthenticationComponent, LoggerMixin):
             is_valid, reason = issued_credential.is_valid_domain_credential()
             if not is_valid:
                 self.logger.warning('Invalid client certificate: %s', reason)
-                error_message = f'Invalid SSL_CLIENT_CERT header: {reason}'
+                error_message = f'Invalid HTTP_SSL_CLIENT_CERT header: {reason}'
                 self._raise_certificate_error(error_message)
 
             self.logger.info('Successfully authenticated device via client certificate')

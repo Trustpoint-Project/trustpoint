@@ -2,6 +2,7 @@
 import base64
 import contextlib
 import itertools
+import urllib
 from abc import ABC, abstractmethod
 
 from cryptography import x509
@@ -168,7 +169,7 @@ class ClientCertificateValidation(ValidationComponent, LoggerMixin):
     """Check and optionally process the SSL client certificate from the request headers."""
 
     def validate(self, context: RequestContext) -> None:
-        """Check for the presence of the 'SSL_CLIENT_CERT' header and set the certificate in the context if present."""
+        """Check for the presence of the 'HTTP_SSL_CLIENT_CERT' header and set the cert in the context if present."""
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
             self.logger.warning('Client certificate validation failed: Raw message is missing')
@@ -178,18 +179,19 @@ class ClientCertificateValidation(ValidationComponent, LoggerMixin):
             self.logger.debug('Client certificate validation skipped: Raw message META is missing')
             return
 
-        ssl_client_cert = context.raw_message.META.get('SSL_CLIENT_CERT')
+        ssl_client_cert = context.raw_message.META.get('HTTP_SSL_CLIENT_CERT')
 
         if ssl_client_cert is None:
-            self.logger.debug('Client certificate validation skipped: No SSL_CLIENT_CERT present')
+            self.logger.debug('Client certificate validation skipped: No HTTP_SSL_CLIENT_CERT present')
             return
 
         if not ssl_client_cert or not ssl_client_cert.strip():
-            self.logger.debug('Client certificate validation skipped: SSL_CLIENT_CERT is empty')
+            self.logger.debug('Client certificate validation skipped: HTTP_SSL_CLIENT_CERT is empty')
             return
 
         try:
-            encoded_cert = ssl_client_cert.encode()
+            ssl_client_cert_unquoted = urllib.parse.unquote(ssl_client_cert)
+            encoded_cert = ssl_client_cert_unquoted.encode('utf-8')
             client_certificate = x509.load_pem_x509_certificate(encoded_cert)
             context.client_certificate = client_certificate
 
@@ -201,7 +203,7 @@ class ClientCertificateValidation(ValidationComponent, LoggerMixin):
             self.logger.debug(
                 "Client certificate validation successful: Certificate loaded for subject '%s'", subject_cn)
         except Exception as e:
-            error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
+            error_message = f'Invalid HTTP_SSL_CLIENT_CERT header: {e}'
             self.logger.warning('Client certificate validation failed: %s', e)
             raise ValueError(error_message) from e
 
