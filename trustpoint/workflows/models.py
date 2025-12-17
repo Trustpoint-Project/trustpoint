@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, ClassVar, cast
+from typing import Any, cast
 
 from django.db import models
 from django.db.models import JSONField
