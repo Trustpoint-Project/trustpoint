@@ -20,7 +20,6 @@ from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation,
 from management.models import KeyStorageConfig
 from pki.models import IssuingCaModel
 from pki.util.keys import CryptographyUtils
-from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
 if TYPE_CHECKING:
     from django.http import HttpRequest

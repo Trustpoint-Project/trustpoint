@@ -14,10 +14,10 @@ from cryptography.hazmat.primitives import hashes
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management import call_command
 from django.utils.translation import gettext as _
+from packaging.version import Version
+
 from management.models import AppVersion, KeyStorageConfig, PKCS11Token
 from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
-from packaging.version import Version
-from management.models import AppVersion, KeyStorageConfig, PKCS11Token
 from pki.models import PKCS11Key
 from pki.models.credential import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -263,7 +263,7 @@ class StandardTlsCredentialStrategy(TlsCredentialStrategy):
         """
         context.output.write('Saving credential to database...')
 
-        
+
         trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
             credential_serializer=tls_server_credential,
             credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,

@@ -18,7 +18,6 @@ from devices.models import (
 )
 from pki.models import DevIdRegistration, DomainModel, TruststoreModel
 from pki.util.x509 import NginxTLSClientCertExtractor
-
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:

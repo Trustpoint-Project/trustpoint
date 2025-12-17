@@ -36,7 +36,6 @@ from setup_wizard.forms import (
     StartupWizardTlsCertificateForm,
 )
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
-
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
 
