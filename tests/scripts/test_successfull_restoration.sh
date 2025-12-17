@@ -55,8 +55,8 @@ docker exec "$CONTAINER" bash -lc '
 
    # 2.4) Certificate files (nginx TLS paths)
   for f in \
-    /etc/trustpoint/tls/nginx-tls-server-key.key \
-    /etc/trustpoint/tls/nginx-tls-server-cert.pem
+    /etc/trustpoint/nginx/tls/nginx-tls-server-key.key \
+    /etc/trustpoint/nginx/tls/nginx-tls-server-cert.pem
   do
     if [[ -f "$f" ]]; then
       echo "   cert file $f found"
