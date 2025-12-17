@@ -132,7 +132,7 @@ class EstUsernamePasswordCommandBuilder:
         """
         profile_subject_entries = JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
         profile_sans = JSONCertRequestCommandExtractor.sample_request_to_openssl_req_sans(sample_request)
-        sans_line = f'-addext "subjectAltName = {profile_sans}"' if profile_sans else ''
+        sans_line = f'-addext "subjectAltName = {profile_sans}" \\\n' if profile_sans else ''
 
         return (
             'openssl req \\\n'
@@ -140,8 +140,8 @@ class EstUsernamePasswordCommandBuilder:
             f'-key key-{cred_number}.pem \\\n'
             '-outform DER \\\n'
             f'-out csr-{cred_number}.der \\\n'
-            f'-subj "{profile_subject_entries}" \\\n'
             f'{sans_line}'
+            f'-subj "{profile_subject_entries}"'
         )
 
     @staticmethod
