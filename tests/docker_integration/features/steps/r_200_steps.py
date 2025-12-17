@@ -406,7 +406,7 @@ def step_enable_manual_enrollment(context: runner.Context) -> None:
     context.device_form['no_onboarding_pki_protocols'].append('16')  # Manual
 
 
-@when('the user submits the form')
+@when('the user submits the device form')
 def step_submit_device_form(context: runner.Context) -> None:
     """Submit the device creation form."""
     csrf_token = extract_csrf_token(context.response.text)

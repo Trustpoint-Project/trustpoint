@@ -103,7 +103,7 @@ Feature: Docker Setup Wizard
     And the user enables CMP shared secret
     And the user enables EST username password
     And the user enables Manual enrollment
-    And the user submits the form
+    And the user submits the device form
     Then the device should be created successfully
     And the device should have PKI protocols enabled:
       | protocol     |
