@@ -5,9 +5,11 @@ from __future__ import annotations
 import logging
 import re
 import time
+from typing import Any
 
 import requests
 from behave import given, runner, then, when
+from bs4 import BeautifulSoup
 
 # Set up logging for debug output
 logging.basicConfig(level=logging.DEBUG)
@@ -48,6 +50,32 @@ def find_link_url(html_content: str, link_text: str) -> str | None:
     return None
 
 
+def _is_visible_element(element: Any) -> bool:
+    """Check if an HTML element is visible."""
+    style = element.get('style', '')
+    classes = element.get('class', [])
+    return not (
+        'display: none' in style or
+        'tp-d-none' in classes or
+        'd-none' in classes
+    )
+
+
+def _check_http_errors(html_content: str, url: str) -> None:
+    """Check for HTTP error pages."""
+    error_patterns = [
+        (r'Server Error \(500\)', 'Server Error 500 found on page {url}'),
+        (r'Page not found \(404\)', 'Page not found 404 on page {url}'),
+        (r'<title>([^<]*Exception[^<]*)</title>', 'Exception in title found on page {url}'),
+        (r'<title>([^<]*Error[^<]*)</title>', 'Error in title found on page {url}'),
+    ]
+
+    for pattern, error_template in error_patterns:
+        if re.search(pattern, html_content, re.IGNORECASE):
+            error_msg = error_template.format(url=url)
+            raise AssertionError(error_msg)
+
+
 def check_for_errors(html_content: str, url: str) -> None:
     """Check for error messages in the HTML content.
 
@@ -60,42 +88,31 @@ def check_for_errors(html_content: str, url: str) -> None:
     Raises:
         AssertionError: If any error is found on the page
     """
-    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html_content, 'html.parser')
 
     # Check for visible alert-danger (Bootstrap errors)
-    soup = BeautifulSoup(html_content, 'html.parser')
     for alert in soup.find_all(class_='alert-danger'):
-        style = alert.get('style', '')
-        classes = alert.get('class', [])
-        if 'display: none' in style or 'tp-d-none' in classes or 'd-none' in classes:
-            continue
-        error_content = alert.get_text(strip=True)
-        if error_content:
-            raise AssertionError(f'Alert danger message found on page {url}: {error_content[:200]}')
+        if _is_visible_element(alert):
+            error_content = alert.get_text(strip=True)
+            if error_content:
+                error_msg = f'Alert danger message found on page {url}: {error_content[:200]}'
+                raise AssertionError(error_msg)
 
     # Django form errors
     if soup.find('ul', class_='errorlist'):
-        raise AssertionError(f'Form validation error found on page {url}')
+        error_msg = f'Form validation error found on page {url}'
+        raise AssertionError(error_msg)
 
     # Django messages framework errors (visible only)
     for error_div in soup.find_all(class_=lambda c: c and 'error' in c):
-        style = error_div.get('style', '')
-        classes = error_div.get('class', [])
-        if 'display: none' in style or 'tp-d-none' in classes or 'd-none' in classes:
-            continue
-        error_content = error_div.get_text(strip=True)
-        if error_content:
-            raise AssertionError(f'Error message found on page {url}: {error_content[:200]}')
+        if _is_visible_element(error_div):
+            error_content = error_div.get_text(strip=True)
+            if error_content:
+                error_msg = f'Error message found on page {url}: {error_content[:200]}'
+                raise AssertionError(error_msg)
 
     # HTTP 500/404 error page or Django debug page
-    if re.search(r'Server Error \(500\)', html_content, re.IGNORECASE):
-        raise AssertionError(f'Server Error 500 found on page {url}')
-    if re.search(r'Page not found \(404\)', html_content, re.IGNORECASE):
-        raise AssertionError(f'Page not found 404 on page {url}')
-    if re.search(r'<title>([^<]*Exception[^<]*)</title>', html_content, re.IGNORECASE):
-        raise AssertionError(f'Exception in title found on page {url}')
-    if re.search(r'<title>([^<]*Error[^<]*)</title>', html_content, re.IGNORECASE):
-        raise AssertionError(f'Error in title found on page {url}')
+    _check_http_errors(html_content, url)
 
 
 @given('a fresh Trustpoint Docker container is running')
@@ -392,6 +409,7 @@ def step_fill_device_form(context: runner.Context) -> None:
 
 @when('the user enables CMP shared secret')
 def step_enable_cmp_shared_secret(context: runner.Context) -> None:
+    """Enable CMP shared secret protocol for device onboarding."""
     context.device_form = getattr(context, 'device_form', {})
     context.device_form['no_onboarding_pki_protocols'] = context.device_form.get('no_onboarding_pki_protocols', [])
     context.device_form['no_onboarding_pki_protocols'].append('1')  # CMP - Shared Secret (HMAC)
@@ -399,6 +417,7 @@ def step_enable_cmp_shared_secret(context: runner.Context) -> None:
 
 @when('the user enables EST username password')
 def step_enable_est_username_password(context: runner.Context) -> None:
+    """Enable EST username password protocol for device onboarding."""
     context.device_form = getattr(context, 'device_form', {})
     context.device_form['no_onboarding_pki_protocols'] = context.device_form.get('no_onboarding_pki_protocols', [])
     context.device_form['no_onboarding_pki_protocols'].append('4')  # EST - Username & Password
@@ -406,6 +425,7 @@ def step_enable_est_username_password(context: runner.Context) -> None:
 
 @when('the user enables Manual enrollment')
 def step_enable_manual_enrollment(context: runner.Context) -> None:
+    """Enable manual enrollment protocol for device onboarding."""
     context.device_form = getattr(context, 'device_form', {})
     context.device_form['no_onboarding_pki_protocols'] = context.device_form.get('no_onboarding_pki_protocols', [])
     context.device_form['no_onboarding_pki_protocols'].append('16')  # Manual
@@ -428,8 +448,7 @@ def step_submit_device_form(context: runner.Context) -> None:
         ]
 
         # Add each PKI protocol as a separate tuple
-        for value in protocols:
-            final_form_data.append(('no_onboarding_pki_protocols', value))
+        final_form_data.extend(('no_onboarding_pki_protocols', value) for value in protocols)
 
         logger.debug('Submitting device form to %s', current_url)
         logger.debug('Form data: %s', final_form_data)
@@ -461,13 +480,17 @@ def step_device_created_successfully(context: runner.Context) -> None:
     check_for_errors(context.response.text, context.response.url)
 
     success_indicators = ['Device created', 'Devices', 'TestDevice01', 'success']
-    found_indicators = [indicator for indicator in success_indicators if indicator.lower() in context.response.text.lower()]
+    found_indicators = [
+        indicator for indicator in success_indicators
+        if indicator.lower() in context.response.text.lower()
+    ]
 
     logger.debug('Found success indicators: %s', found_indicators)
 
     if not any(indicator.lower() in context.response.text.lower() for indicator in success_indicators):
         logger.debug('Full response content: %s', context.response.text)
-        raise AssertionError(f'Device creation confirmation not found. URL: {context.response.url}')
+        error_msg = f'Device creation confirmation not found. URL: {context.response.url}'
+        raise AssertionError(error_msg)
 
 
 @then('the device should have PKI protocols enabled:')
@@ -482,6 +505,7 @@ def step_device_has_pki_protocols(context: runner.Context) -> None:
         if protocol.lower() not in context.response.text.lower():
             logger.debug("Protocol '%s' not found in response", protocol)
             logger.debug('Response content: %s', context.response.text)
-            raise AssertionError(f'Protocol {protocol} not found in device details. URL: {context.response.url}')
+            error_msg = f'Protocol {protocol} not found in device details. URL: {context.response.url}'
+            raise AssertionError(error_msg)
 
         logger.debug("Protocol '%s' found successfully", protocol)
