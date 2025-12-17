@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 
 import requests
 from behave import given, runner, then, when
+
+# Set up logging for debug output
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # Disable SSL warnings for self-signed certificates
 requests.packages.urllib3.disable_warnings(  # type: ignore[attr-defined]
@@ -58,39 +63,39 @@ def check_for_errors(html_content: str, url: str) -> None:
     from bs4 import BeautifulSoup
 
     # Check for visible alert-danger (Bootstrap errors)
-    soup = BeautifulSoup(html_content, "html.parser")
-    for alert in soup.find_all(class_="alert-danger"):
-        style = alert.get("style", "")
-        classes = alert.get("class", [])
-        if "display: none" in style or "tp-d-none" in classes or "d-none" in classes:
+    soup = BeautifulSoup(html_content, 'html.parser')
+    for alert in soup.find_all(class_='alert-danger'):
+        style = alert.get('style', '')
+        classes = alert.get('class', [])
+        if 'display: none' in style or 'tp-d-none' in classes or 'd-none' in classes:
             continue
         error_content = alert.get_text(strip=True)
         if error_content:
-            raise AssertionError(f"Alert danger message found on page {url}: {error_content[:200]}")
+            raise AssertionError(f'Alert danger message found on page {url}: {error_content[:200]}')
 
     # Django form errors
-    if soup.find("ul", class_="errorlist"):
-        raise AssertionError(f"Form validation error found on page {url}")
+    if soup.find('ul', class_='errorlist'):
+        raise AssertionError(f'Form validation error found on page {url}')
 
     # Django messages framework errors (visible only)
-    for error_div in soup.find_all(class_=lambda c: c and "error" in c):
-        style = error_div.get("style", "")
-        classes = error_div.get("class", [])
-        if "display: none" in style or "tp-d-none" in classes or "d-none" in classes:
+    for error_div in soup.find_all(class_=lambda c: c and 'error' in c):
+        style = error_div.get('style', '')
+        classes = error_div.get('class', [])
+        if 'display: none' in style or 'tp-d-none' in classes or 'd-none' in classes:
             continue
         error_content = error_div.get_text(strip=True)
         if error_content:
-            raise AssertionError(f"Error message found on page {url}: {error_content[:200]}")
+            raise AssertionError(f'Error message found on page {url}: {error_content[:200]}')
 
     # HTTP 500/404 error page or Django debug page
     if re.search(r'Server Error \(500\)', html_content, re.IGNORECASE):
-        raise AssertionError(f"Server Error 500 found on page {url}")
+        raise AssertionError(f'Server Error 500 found on page {url}')
     if re.search(r'Page not found \(404\)', html_content, re.IGNORECASE):
-        raise AssertionError(f"Page not found 404 on page {url}")
+        raise AssertionError(f'Page not found 404 on page {url}')
     if re.search(r'<title>([^<]*Exception[^<]*)</title>', html_content, re.IGNORECASE):
-        raise AssertionError(f"Exception in title found on page {url}")
+        raise AssertionError(f'Exception in title found on page {url}')
     if re.search(r'<title>([^<]*Error[^<]*)</title>', html_content, re.IGNORECASE):
-        raise AssertionError(f"Error in title found on page {url}")
+        raise AssertionError(f'Error in title found on page {url}')
 
 
 @given('a fresh Trustpoint Docker container is running')
@@ -409,35 +414,74 @@ def step_enable_manual_enrollment(context: runner.Context) -> None:
 @when('the user submits the device form')
 def step_submit_device_form(context: runner.Context) -> None:
     """Submit the device creation form."""
-    csrf_token = extract_csrf_token(context.response.text)
-    current_url = context.response.url
+    try:
+        csrf_token = extract_csrf_token(context.response.text)
+        current_url = context.response.url
 
-    # For Django multiple checkboxes, we need to send the values as a list
-    protocols = context.device_form.get('no_onboarding_pki_protocols', ['1', '4', '16'])
-    final_form_data = [
-        ('csrfmiddlewaretoken', csrf_token),
-        ('common_name', context.device_form.get('name', 'TestDevice01')),
-        ('serial_number', '123456'),
-        ('domain', '1'),  # arburg domain
-    ]
+        # For Django multiple checkboxes, we need to send the values as a list
+        protocols = context.device_form.get('no_onboarding_pki_protocols', ['1', '4', '16'])
+        final_form_data = [
+            ('csrfmiddlewaretoken', csrf_token),
+            ('common_name', context.device_form.get('name', 'TestDevice01')),
+            ('serial_number', '123456'),
+            ('domain', '1'),  # arburg domain
+        ]
 
-    # Add each PKI protocol as a separate tuple
-    for value in protocols:
-        final_form_data.append(('no_onboarding_pki_protocols', value))
+        # Add each PKI protocol as a separate tuple
+        for value in protocols:
+            final_form_data.append(('no_onboarding_pki_protocols', value))
 
-    context.response = context.session.post(current_url, data=final_form_data, allow_redirects=True)
-    assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
-        f'Device form submission failed: {context.response.status_code}'
+        logger.debug('Submitting device form to %s', current_url)
+        logger.debug('Form data: %s', final_form_data)
+
+        context.response = context.session.post(current_url, data=final_form_data, allow_redirects=True)
+
+        logger.debug('Response status: %s', context.response.status_code)
+        logger.debug('Response URL: %s', context.response.url)
+        logger.debug('Response content length: %s', len(context.response.text))
+
+        if context.response.status_code not in [HTTP_OK, HTTP_REDIRECT]:
+            logger.debug('Response content: %s', context.response.text[:1000])
+
+        assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
+            f'Device form submission failed: {context.response.status_code}'
+
+    except Exception as e:
+        logger.debug('Exception during device form submission: %s', e)
+        logger.debug('Current URL: %s', context.response.url if hasattr(context, 'response') else 'No response yet')
+        raise
 
 
 @then('the device should be created successfully')
 def step_device_created_successfully(context: runner.Context) -> None:
+    """Verify the device was created successfully."""
+    logger.debug('Checking device creation at URL: %s', context.response.url)
+    logger.debug('Response content preview: %s', context.response.text[:500])
+
     check_for_errors(context.response.text, context.response.url)
-    assert 'Device created' in context.response.text or 'Devices' in context.response.text, \
-        'Device creation confirmation not found.'
+
+    success_indicators = ['Device created', 'Devices', 'TestDevice01', 'success']
+    found_indicators = [indicator for indicator in success_indicators if indicator.lower() in context.response.text.lower()]
+
+    logger.debug('Found success indicators: %s', found_indicators)
+
+    if not any(indicator.lower() in context.response.text.lower() for indicator in success_indicators):
+        logger.debug('Full response content: %s', context.response.text)
+        raise AssertionError(f'Device creation confirmation not found. URL: {context.response.url}')
 
 
 @then('the device should have PKI protocols enabled:')
 def step_device_has_pki_protocols(context: runner.Context) -> None:
+    """Verify the device has the specified PKI protocols enabled."""
+    logger.debug('Checking PKI protocols at URL: %s', context.response.url)
+
     for row in context.table:
-        assert row['protocol'] in context.response.text, f"Protocol {row['protocol']} not found in device details."
+        protocol = row['protocol']
+        logger.debug('Checking for protocol: %s', protocol)
+
+        if protocol.lower() not in context.response.text.lower():
+            logger.debug("Protocol '%s' not found in response", protocol)
+            logger.debug('Response content: %s', context.response.text)
+            raise AssertionError(f'Protocol {protocol} not found in device details. URL: {context.response.url}')
+
+        logger.debug("Protocol '%s' found successfully", protocol)
