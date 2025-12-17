@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, cast
+from typing import Any, ClassVar, cast
 
-from devices.models import DeviceModel
 from django.db import models
 from django.db.models import JSONField
+
+from devices.models import DeviceModel
 from pki.models.domain import DomainModel
 from pki.models.issuing_ca import IssuingCaModel
 
@@ -131,7 +132,6 @@ class DeviceRequest(models.Model):
         created_at: Request creation timestamp.
         updated_at: Last update timestamp.
     """
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     device = models.ForeignKey(
@@ -175,7 +175,7 @@ class DeviceRequest(models.Model):
         ordering = ('-created_at',)
 
     def __str__(self) -> str:
-        """Return human-readable representation."""
+        """Return a human-readable representation of the device request."""
         device_id = self.device_id if self.device_id is not None else 'None'
         return f'DeviceReq#{self.pk} {self.aggregated_state} action={self.action} device={device_id}'
 

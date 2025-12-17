@@ -12,13 +12,13 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
+from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
+
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
 from pki.models.issuing_ca import IssuingCaModel
 from pki.models.truststore import TruststoreModel
-from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
-from trustpoint_core import oid
 from util.db import CustomDeleteActionModel
 from util.encrypted_fields import EncryptedCharField
 

@@ -14,7 +14,6 @@ from django.contrib import admin
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
-from trustpoint.logger import LoggerMixin
 from trustpoint_core.oid import (
     AlgorithmIdentifier,
     CertificateExtensionOid,
@@ -25,7 +24,6 @@ from trustpoint_core.oid import (
     SignatureSuite,
 )
 from trustpoint_core.serializer import CertificateSerializer, PublicKeySerializer
-from util.db import CustomDeleteActionModel
 
 from pki.models.extension import (
     AttributeTypeAndValue,
@@ -46,6 +44,8 @@ from pki.models.extension import (
     SubjectInformationAccessExtension,
     SubjectKeyIdentifierExtension,
 )
+from trustpoint.logger import LoggerMixin
+from util.db import CustomDeleteActionModel
 
 __all__ = ['CertificateModel', 'RevokedCertificateModel']
 

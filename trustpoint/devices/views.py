@@ -21,19 +21,9 @@ from django.views.generic.base import RedirectView, TemplateView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
-from pki.models.certificate import CertificateModel
-from pki.models.credential import CredentialModel
 from rest_framework import viewsets
-from trustpoint.logger import LoggerMixin
-from trustpoint.page_context import (
-    DEVICES_PAGE_CATEGORY,
-    DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
-    PageContextMixin,
-)
 from trustpoint_core.archiver import Archiver
 from trustpoint_core.serializer import CredentialFileFormat
-from util.mult_obj_views import get_primary_keys_from_str_as_list_of_ints
 
 from devices.filters import DeviceFilter
 from devices.forms import (
@@ -70,7 +60,17 @@ from devices.models import (
 )
 from devices.revocation import DeviceCredentialRevocation
 from devices.serializers import DeviceSerializer
+from pki.models.certificate import CertificateModel
+from pki.models.credential import CredentialModel
+from trustpoint.logger import LoggerMixin
+from trustpoint.page_context import (
+    DEVICES_PAGE_CATEGORY,
+    DEVICES_PAGE_DEVICES_SUBCATEGORY,
+    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
+    PageContextMixin,
+)
 from trustpoint.settings import UIConfig
+from util.mult_obj_views import get_primary_keys_from_str_as_list_of_ints
 
 if TYPE_CHECKING:
     import ipaddress
@@ -2155,7 +2155,7 @@ class OpcUaGdsBulkDeleteView(AbstractBulkDeleteView):
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
-class DeviceViewSet(viewsets.ModelViewSet):
+class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
     """ViewSet for managing Device instances.
 
     Supports standard CRUD operations such as list, retrieve,
@@ -2173,7 +2173,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
         'destroy': 'Delete a device.',
     }
 
-    def get_view_description(self, *, html: bool = False) -> str:
+    def get_view_description(self, html: bool = False) -> str:  # noqa: FBT001, FBT002
         """Return a description for the given action."""
         if hasattr(self, 'action') and self.action in self.action_descriptions:
             return self.action_descriptions[self.action]

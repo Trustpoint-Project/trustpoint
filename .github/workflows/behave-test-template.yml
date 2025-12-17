@@ -29,7 +29,7 @@ jobs:
           trustpoint/features/${{ inputs.feature_file }}.feature
 
       - name: Upload Test Report
-        uses: actions/upload-artifact@v5  # Uploads the test report for review.
+        uses: actions/upload-artifact@v6  # Uploads the test report for review.
         if: always()  # Ensures the report is uploaded even if tests fail.
         with:
           name: ${{ inputs.feature_file }}-html-report  # Name report based on the feature file tested.

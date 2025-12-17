@@ -9,9 +9,9 @@ from typing import ClassVar, cast
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import UploadedFile
 from rest_framework import serializers
-from util.field import UniqueNameValidator
 
 from pki.models.truststore import TruststoreModel
+from util.field import UniqueNameValidator
 
 
 class TruststoreSerializer(serializers.ModelSerializer[TruststoreModel]):

@@ -5,17 +5,17 @@ from typing import get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
-from devices.issuer import CredentialSaver
-from devices.models import IssuedCredentialModel
 from django.http import HttpRequest
-from management.models import TlsSettings
-from pki.models import CredentialModel
-from pki.util.keys import is_supported_public_key
-from trustpoint.logger import LoggerMixin
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 
+from devices.issuer import CredentialSaver
+from devices.models import IssuedCredentialModel
+from management.models import TlsSettings
+from pki.models import CredentialModel
+from pki.util.keys import is_supported_public_key
 from request.request_context import RequestContext
+from trustpoint.logger import LoggerMixin
 
 
 class AbstractOperationProcessor(ABC):
@@ -32,7 +32,7 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
     def process_operation(self, context: RequestContext) -> None:
         """Process the certificate issuance operation."""
         if context.enrollment_request and not context.enrollment_request.is_valid():
-            return
+            return None
         # decide which processor to use based on domain configuration
         if context.domain and context.domain.issuing_ca:
             processor = LocalCaCertificateIssueProcessor()
@@ -45,6 +45,10 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
     def _get_credential_type_for_template(context: RequestContext
             ) -> tuple[IssuedCredentialModel.IssuedCredentialType, str]:
         """Map certificate template to issued credential type."""
+        if context.certificate_profile_model is None:
+            exc_msg = 'Certificate profile model is required but not set in context.'
+            raise ValueError(exc_msg)
+
         profile_display_name = (context.certificate_profile_model.display_name
                                 or context.certificate_profile_model.unique_name)
 
@@ -68,7 +72,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
         port_str = f':{port}' if port else ''
         return f'http://{TlsSettings.get_first_ipv4_address()}{port_str}/crl/{ca_id}'
 
-    def process_operation(self, context: RequestContext) -> None:
+    def process_operation(self, context: RequestContext) -> None:  # noqa: C901, PLR0915 - Core workflow orchestration requires multiple validation and conditional paths
         """Process the certificate issuance operation."""
         if not context.device:
             exc_msg = 'Device must be set in the context to issue a certificate.'

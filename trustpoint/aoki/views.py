@@ -10,12 +10,12 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from django.http import JsonResponse
 from django.views import View
+from trustpoint_core.oid import AlgorithmIdentifier
+
 from pki.models.credential import CredentialModel, IDevIDReferenceModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pki.util.x509 import ApacheTLSClientCertExtractor, ClientCertificateAuthenticationError
-from trustpoint_core.oid import AlgorithmIdentifier
-
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import LoggedHttpResponse
 
@@ -36,7 +36,7 @@ class AokiServiceMixin:
             idevid_subj_sn = sn_b.decode() if isinstance(sn_b, bytes) else sn_b
         except (ValueError, IndexError):
             idevid_subj_sn = '_'
-        idevid_x509_sn = hex(idevid_cert.serial_number)[2:].zfill(16)
+        idevid_x509_sn = f'{idevid_cert.serial_number:x}'.zfill(16)
         idevid_sha256_fingerprint = idevid_cert.fingerprint(hashes.SHA256()).hex()
         return f'dev-owner:{idevid_subj_sn}.{idevid_x509_sn}.{idevid_sha256_fingerprint}'
 
@@ -63,7 +63,7 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
         """Handle GET requests for AOKI initialization."""
         del args, kwargs  # Unused
         tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
-        if not tls_cert:
+        if not tls_cert or not tls_cert.credential:
             return LoggedHttpResponse(
                 'No TLS server certificate available. Are you on the development server?', status = 500
             )

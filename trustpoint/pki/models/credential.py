@@ -9,9 +9,6 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
-from management.models import KeyStorageConfig, PKCS11Token
-from management.pkcs11_util import Pkcs11AESKey, Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
-from trustpoint.logger import LoggerMixin
 from trustpoint_core import oid
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
@@ -20,11 +17,14 @@ from trustpoint_core.serializer import (
     PrivateKeyLocation,
     PrivateKeySerializer,
 )
+
+from management.models import KeyStorageConfig, PKCS11Token
+from management.pkcs11_util import Pkcs11AESKey, Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
+from pki.models import CertificateModel
+from trustpoint.logger import LoggerMixin
 from util.db import CustomDeleteActionModel
 from util.encrypted_fields import EncryptedCharField
 from util.field import UniqueNameValidator
-
-from pki.models import CertificateModel
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar

@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.x509 import CertificateSigningRequest
 from django.db import transaction
 from django.db.models import Q
+
 from trustpoint.logger import LoggerMixin
 from workflows.models import DeviceRequest, EnrollmentRequest, State, WorkflowDefinition, WorkflowInstance
 from workflows.services.engine import advance_instance
@@ -30,6 +31,7 @@ class WorkflowHandler(ABC, LoggerMixin):
     """Abstract base class for workflow handler."""
 
     def handle(self, context: RequestContext) -> None:
+        """Execute workflow logic."""
         if not context.event:
             self.logger.error('No event found for the Workflow.')
             return
@@ -38,7 +40,6 @@ class WorkflowHandler(ABC, LoggerMixin):
         if h == 'certificate_request':
             CertificateRequestHandler().handle(context)
         elif h == 'device_action':
-            print('DEVCIE ACTION')
             DeviceActionHandler().handle(context)
 
 
@@ -51,6 +52,7 @@ class DeviceActionHandler(WorkflowHandler):
         payload: dict[str, Any] | None = None,
         **_: Any,
     ) -> None:
+        """Handle device action events and trigger workflows accordingly."""
         if not context.device:
             msg = 'DeviceActionHandler requires a device.'
             raise ValueError(msg)
@@ -88,10 +90,6 @@ class DeviceActionHandler(WorkflowHandler):
             )
         ]
 
-        print(f'len: {len(definitions)}')
-        for defi in WorkflowDefinition.objects.all():
-            print(f'events: {defi.definition.get('events')}')
-
         for wf in definitions:
             meta = wf.definition or {}
             steps = meta.get('steps', [])
@@ -119,7 +117,7 @@ class DeviceActionHandler(WorkflowHandler):
             inst.refresh_from_db()
 
         dr.recompute_and_save()
-        context.device_request = dr
+        context.device_request = dr  # type: ignore[attr-defined]
 
 
 class CertificateRequestHandler(WorkflowHandler):
@@ -136,7 +134,7 @@ class CertificateRequestHandler(WorkflowHandler):
 
         return (True, '')
 
-    def handle(
+    def handle(  # noqa: C901, PLR0912, PLR0915 - Core workflow orchestration requires multiple validation and conditional paths
         self,
         context: RequestContext,
         payload: dict[str, Any] | None = None,
@@ -174,7 +172,7 @@ class CertificateRequestHandler(WorkflowHandler):
         device_id = _norm(context.device.pk)
 
         fingerprint = hashlib.sha256(csr.tbs_certrequest_bytes).hexdigest()
-        template = context.cert_profile_str  # TODO: rename to profile throughout EnrollmentRequest
+        template = context.cert_profile_str or ''  # TODO: ren. profile throughout EnrollmentRequest  # noqa: E501, FIX002, TD002
 
         # Find or create an open EnrollmentRequest
         req = (

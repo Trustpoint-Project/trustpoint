@@ -10,11 +10,10 @@ from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_yasg.utils import swagger_auto_schema
+from drf_yasg.utils import swagger_auto_schema  # type: ignore[import-untyped]
 from rest_framework import filters, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTableMixin
 from trustpoint_core.archiver import ArchiveFormat, Archiver
 from trustpoint_core.oid import NameOid
 from trustpoint_core.serializer import CertificateFormat
@@ -22,7 +21,13 @@ from trustpoint_core.serializer import CertificateFormat
 from pki.models import CertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.serializer.certificate import CertificateSerializer
+from trustpoint.page_context import (
+    PKI_PAGE_CATEGORY,
+    PKI_PAGE_CERTIFICATES_SUBCATEGORY,
+    PageContextMixin,
+)
 from trustpoint.settings import UIConfig
+from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTableMixin
 
 if TYPE_CHECKING:
     from typing import ClassVar
@@ -35,13 +40,14 @@ class CertificatesRedirectView(RedirectView):
     pattern_name = 'pki:certificates'
 
 
-class CertificatesContextMixin:
-    """Mixin which adds some extra context for the PKI Views."""
+class CertificatesContextMixin(PageContextMixin):
+    """Mixin which adds data to the context for the PKI -> Certificates application."""
+    page_category = PKI_PAGE_CATEGORY
+    page_name = PKI_PAGE_CERTIFICATES_SUBCATEGORY
 
-    extra_context: ClassVar = {'page_category': 'pki', 'page_name': 'certificates'}
 
-
-class CertificateTableView(CertificatesContextMixin, SortableTableMixin, ListView[CertificateModel]):
+class CertificateTableView(
+    CertificatesContextMixin, SortableTableMixin[CertificateModel], ListView[CertificateModel]):
     """Certificate Table View."""
 
     model = CertificateModel
@@ -103,13 +109,13 @@ class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateMode
 
         return context
 
-class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, DetailView[CertificateModel]):
+class IssuingCaCertificateDownloadView(CertificatesContextMixin, DetailView[CertificateModel]):
     """View for downloading a single certificate."""
 
     model = CertificateModel
     context_object_name = 'certificate'
 
-    def get(self, _request: HttpRequest, pk: str | None = None, *_args: Any, **_kwargs: Any) -> HttpResponse:
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """HTTP GET Method.
 
         If only the certificate primary key are passed in the url, the download summary will be displayed.
@@ -129,6 +135,8 @@ class CmpIssuingCaCertificateDownloadView(CertificatesContextMixin, DetailView[C
         Raises:
             Http404
         """
+        del args, request
+        pk = kwargs.get('pk')
         if not pk:
             raise Http404
 
@@ -311,10 +319,11 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
     model = CertificateModel
     context_object_name = 'certificate'
 
-    def get(self, _request: HttpRequest, _pk: str | None = None, *_args: Any, **_kwargs: Any) -> HttpResponse:
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Download the active Trustpoint TLS server certificate."""
+        del args, kwargs, request
         tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
-        if not tls_cert:
+        if not tls_cert or not tls_cert.credential:
             msg = 'No TLS server certificate available. Are you on the development server?'
             raise Http404(msg)
 
@@ -327,36 +336,38 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
 
         return response
 
-class CertificateViewSet(viewsets.ModelViewSet):
-    """ViewSet for managing Device instances.
+class CertificateViewSet(viewsets.ModelViewSet[CertificateModel]):
+    """ViewSet for managing Certificate instances.
 
     Supports standard CRUD operations such as list, retrieve,
     create, update, and delete.
     """
     queryset = CertificateModel.objects.all().order_by('-created_at')
     serializer_class = CertificateSerializer
-    permission_classes: ClassVar = [IsAuthenticated]
-    filter_backends: ClassVar = [
+    permission_classes = (IsAuthenticated,)
+    filter_backends = (
         DjangoFilterBackend,
         filters.SearchFilter,
         filters.OrderingFilter
-    ]
+    )
     filterset_fields: ClassVar = ['serial_number', 'not_valid_before']
     search_fields: ClassVar = ['common_name', 'sha256_fingerprint']
     ordering_fields: ClassVar = ['common_name', 'created_at']
 
+    # ignoring untyped decorator (drf-yasg not typed)
     @swagger_auto_schema(
         operation_summary='List certificates',
         operation_description='Retrieve certificates from the database.',
         tags=['certificates']
-    )
+    ) # type: ignore[misc]
     def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
         """API endpoint to get all certificates."""
         del request, args, _kwargs
         queryset = self.get_queryset()
 
-        for backend in list(self.filter_backends):
-            queryset = backend().filter_queryset(self.request, queryset, self)
+        for backend in self.filter_backends:
+            if hasattr(backend, 'filter_queryset'):
+                queryset = backend().filter_queryset(self.request, queryset, self)
 
         page = self.paginate_queryset(queryset)
         if page is not None:

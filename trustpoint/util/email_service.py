@@ -1,3 +1,4 @@
+"""Email sending service."""
 from collections.abc import Mapping
 from typing import Any
 
@@ -12,7 +13,7 @@ class EmailService(LoggerMixin):
     """Render and send multipart (text+HTML) emails."""
 
     @staticmethod
-    def send_email(
+    def send_email(  # noqa: PLR0913 - Email service requires multiple parameters for standard email fields
         subject: str,
         to: list[str],
         template_name: str,

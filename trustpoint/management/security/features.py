@@ -5,10 +5,9 @@ import threading
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, cast
 
+from management.models import SecurityConfig
 from pki.auto_gen_pki import AutoGenPki
 from trustpoint.logger import LoggerMixin
-
-from management.models import SecurityConfig
 
 if TYPE_CHECKING:
     from pki.util.keys import AutoGenPkiKeyAlgorithm

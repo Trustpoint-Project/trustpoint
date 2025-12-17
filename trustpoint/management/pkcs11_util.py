@@ -19,8 +19,9 @@ from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from cryptography.hazmat.primitives.serialization import Encoding, KeySerializationEncryption, PrivateFormat
 from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass, lib
 from pkcs11.exceptions import NoSuchKey, PKCS11Error  # type: ignore[import-untyped]
-from trustpoint.logger import LoggerMixin
 from trustpoint_core.oid import NamedCurve
+
+from trustpoint.logger import LoggerMixin
 
 
 class Pkcs11Utilities(LoggerMixin):

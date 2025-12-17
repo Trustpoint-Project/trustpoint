@@ -339,6 +339,55 @@ class JSONProfileVerifier:
                 raise ProfileValidationError(msg)
             del request[field]
 
+    def _handle_profile_only_field(self, profile_value: Any, field: str, request: dict[str, Any],
+                                   profile_config: InheritedProfileConfig) -> None:
+        if isinstance(profile_value, dict):
+        # check for default and required fields
+            if 'value' in profile_value:
+                # Set default value from profile
+                request[field] = profile_value['value']
+                return
+            if 'default' in profile_value:
+                # Set default value from profile
+                logger.debug("Setting default for field '%s' to %s", field, profile_value['default'])
+                request[field] = profile_value['default']
+                return
+            if 'required' in profile_value:
+                # Required field is missing in the request
+                msg = f"Field '{field}' is required but not present in the request."
+                raise ProfileValidationError(msg)
+            # TODO(Air): 're' case  # noqa: FIX002
+            # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
+            request[field] = self._apply_profile_rules(
+                request.setdefault(field, {}), profile_value, profile_config)
+        elif JSONProfileVerifier._is_simple_type(profile_value):
+            request[field] = profile_value
+        else:
+            logger.warning("Field '%s' in profile has type %s, skipping.", field, type(profile_value).__name__)
+
+    def _handle_profile_and_req_field(self, profile_value: Any, field: str, request: dict[str, Any],
+                                      profile_config: InheritedProfileConfig) -> None:
+        profile_mutable = profile_config.mutable
+        profile_reject_mods = profile_config.reject_mods
+
+        if isinstance(profile_value, dict):
+            request[field] = self._apply_profile_rules(request.setdefault(field, {}), profile_value, profile_config)
+            local_value_mutable = profile_value.get('mutable', profile_mutable)
+            if 'value' in profile_value and not local_value_mutable:
+                # Field is not mutable, force the value from the profile
+                if profile_reject_mods and request[field] != profile_value['value']:
+                    msg = f"Field '{field}' is not mutable in the profile."
+                    raise ProfileValidationError(msg)
+                request[field] = profile_value['value']
+                return
+        elif JSONProfileVerifier._is_simple_type(profile_value) and not profile_mutable:
+            if profile_reject_mods and request[field] != profile_value:
+                msg = f"Field '{field}' is not mutable in the profile."
+                raise ProfileValidationError(msg)
+            request[field] = profile_value
+        else:
+            logger.warning("Field '%s' in profile has type %s, skipping.", field, type(profile_value).__name__)
+
     def _apply_profile_rules(self, request: dict[str, Any], profile: dict[str, Any],
                              parent_profile_config: InheritedProfileConfig | None = None) -> dict[str, Any]:
         """Apply the actual profile rules to one level of the request dict.
@@ -381,49 +430,10 @@ class JSONProfileVerifier:
                 continue
             if field not in request:
                 logger.debug('Field %s not in request %s', field, request)
-                if isinstance(profile_value, dict):
-                # check for default and required fields
-                    if 'value' in profile_value:
-                        # Set default value from profile
-                        request[field] = profile_value['value']
-                        continue
-                    if 'default' in profile_value:
-                        # Set default value from profile
-                        logger.debug("Setting default for field '%s' to %s", field, profile_value['default'])
-                        request[field] = profile_value['default']
-                        continue
-                    if 'required' in profile_value:
-                        # Required field is missing in the request
-                        msg = f"Field '{field}' is required but not present in the request."
-                        raise ProfileValidationError(msg)
-                    # TODO(Air): 're' case  # noqa: FIX002
-                    # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
-                    request[field] = self._apply_profile_rules(
-                        request.setdefault(field, {}), profile_value, profile_config)
-                elif JSONProfileVerifier._is_simple_type(profile_value):
-                    request[field] = profile_value
-                else:
-                    logger.warning("Field '%s' in profile has type %s, skipping.", field, type(profile_value).__name__)
+                self._handle_profile_only_field(profile_value, field, request, profile_config)
                 continue
             # Field is present in both request and profile
-            if isinstance(profile_value, dict):
-                request[field] = self._apply_profile_rules(request.setdefault(field, {}), profile_value, profile_config)
-                local_value_mutable = profile_value.get('mutable', profile_mutable)
-                if 'value' in profile_value and not local_value_mutable:
-                    # Field is not mutable, force the value from the profile
-                    if profile_reject_mods and request[field] != profile_value['value']:
-                        msg = f"Field '{field}' is not mutable in the profile."
-                        raise ProfileValidationError(msg)
-                    request[field] = profile_value['value']
-                    continue
-            elif JSONProfileVerifier._is_simple_type(profile_value) and not profile_mutable:
-                if profile_reject_mods and request[field] != profile_value:
-                    msg = f"Field '{field}' is not mutable in the profile."
-                    raise ProfileValidationError(msg)
-                request[field] = profile_value
-            else:
-                logger.warning("Field '%s' in profile has type %s, skipping.", field, type(profile_value).__name__)
-                continue
+            self._handle_profile_and_req_field(profile_value, field, request, profile_config)
 
         logger.debug('Resulting request at profile level %s: %s', profile, request)
 

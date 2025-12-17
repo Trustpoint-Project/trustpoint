@@ -3,12 +3,11 @@
 import base64
 from typing import Any, cast
 
-from django.db import transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-from pki.models.credential import CredentialModel
+
 from pki.models.domain import DomainModel
 from request.authentication import EstAuthentication
 from request.authorization import EstAuthorization
@@ -142,7 +141,7 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
             EstErrorMessageResponder.build_response(ctx)
 
         return LoggedHttpResponse(
-            content=ctx.http_response_content,
+            content=ctx.http_response_content or b'',
             status=ctx.http_response_status,
             content_type=ctx.http_response_content_type
         )
@@ -201,7 +200,7 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
         del args
 
-        # TODO: This should really be done by the message parser,
+        # TODO: This should really be done by the message parser,  # noqa: FIX002, TD002
         # it also needs to handle the case where one or both are omitted
         try:
             domain_name = cast('str', kwargs.get('domain'))
@@ -249,7 +248,7 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
             EstErrorMessageResponder.build_response(ctx)
 
         return LoggedHttpResponse(
-            content=ctx.http_response_content,
+            content=ctx.http_response_content or b'',
             status=ctx.http_response_status,
             content_type=ctx.http_response_content_type
         )

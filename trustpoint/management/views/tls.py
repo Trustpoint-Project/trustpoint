@@ -10,15 +10,15 @@ from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import FormView, TemplateView, View
+
+from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
+from management.management.commands.update_tls import Command as UpdateTlsCommand
+from management.models import TlsSettings
 from pki.models import CertificateModel, CredentialModel, GeneralNameIpAddress
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.forms import StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.logger import LoggerMixin
-
-from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
-from management.management.commands.update_tls import Command as UpdateTlsCommand
-from management.models import TlsSettings
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse

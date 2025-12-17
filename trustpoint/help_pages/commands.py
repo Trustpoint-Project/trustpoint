@@ -2,10 +2,11 @@
 
 from typing import Any
 
-from devices.views import NamedCurveMissingForEccErrorMsg
 from django.utils.translation import gettext as _
-from pki.util.cert_req_converter import JSONCertRequestCommandExtractor
 from trustpoint_core import oid
+
+from devices.views import NamedCurveMissingForEccErrorMsg
+from pki.util.cert_req_converter import JSONCertRequestCommandExtractor
 
 
 class KeyGenCommandBuilder:

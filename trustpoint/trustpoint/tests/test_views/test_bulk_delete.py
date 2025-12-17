@@ -98,8 +98,9 @@ class TestPrimaryKeyQuerysetFromUrlMixin(TestCase):
 
         view = TestView()
         queryset = view.get_queryset()
-        # Should return None when pk count doesn't match queryset count
-        assert queryset is None
+        # Should return an empty queryset when pk count doesn't match queryset count
+        assert isinstance(queryset, QuerySet)
+        assert queryset.count() == 0
 
     def test_get_queryset_cached(self) -> None:
         """Test that queryset is cached."""
