@@ -177,6 +177,49 @@ Key Components
 Docker Integration
 ------------------
 
+Setup Instructions
+~~~~~~~~~~~~~~~~~~~
+
+To set up SoftHSM with Docker, you need to create the required secret files in the root directory of the project:
+
+1. Create the database user file:
+
+   .. code-block:: bash
+
+      echo "<DB_USER>" > db_user.txt
+
+2. Create the database password file:
+
+   .. code-block:: bash
+
+      echo "<DB_PASSWORD>" > db_password.txt
+
+3. Create the HSM PIN file:
+
+   .. code-block:: bash
+
+      echo "<HSM_PIN>" > hsm_pin.txt
+
+4. Create the HSM SO PIN file:
+
+   .. code-block:: bash
+
+      echo "<HSM_SO_PIN>" > hsm_so_pin.txt
+
+Set appropriate permissions on the secret files:
+
+.. code-block:: bash
+
+   chmod 600 db_user.txt db_password.txt hsm_pin.txt hsm_so_pin.txt
+
+To start the Trustpoint application with SoftHSM support, run the following command:
+
+.. code-block:: bash
+
+   docker compose -f docker-compose.softhsm.yml up --build
+
+This will build and start the containers for Trustpoint, PostgreSQL, and SoftHSM.
+
 Container Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -186,12 +229,18 @@ The Trustpoint container includes pre-configured SoftHSM support with token dire
 
 ````yaml
 secrets:
+  db_user:
+    file: db_user.txt
+  db_password:
+    file: db_password.txt
   hsm_pin:
     file: hsm_pin.txt
   hsm_so_pin:
     file: hsm_so_pin.txt
 
 environment:
+  POSTGRES_USER_FILE: /run/secrets/db_user
+  POSTGRES_PASSWORD_FILE: /run/secrets/db_password
   HSM_PIN_FILE: /run/secrets/hsm_pin
   HSM_SO_PIN_FILE: /run/secrets/hsm_so_pin
 ````
