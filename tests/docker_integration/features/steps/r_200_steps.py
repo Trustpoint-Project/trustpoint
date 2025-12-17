@@ -411,17 +411,21 @@ def step_submit_device_form(context: runner.Context) -> None:
     """Submit the device creation form."""
     csrf_token = extract_csrf_token(context.response.text)
     current_url = context.response.url
-    form_data = {
-        'csrfmiddlewaretoken': csrf_token,
-        'common_name': context.device_form.get('name', 'TestDevice01'),
-        'serial_number': context.device_form.get('serial_number', '123456'),
-        'domain': context.device_form.get('domain', '1'),  # '1' for arburg
-    }
-    # Add PKI protocols
+
+    # For Django multiple checkboxes, we need to send the values as a list
     protocols = context.device_form.get('no_onboarding_pki_protocols', ['1', '4', '16'])
+    final_form_data = [
+        ('csrfmiddlewaretoken', csrf_token),
+        ('common_name', context.device_form.get('name', 'TestDevice01')),
+        ('serial_number', '123456'),
+        ('domain', '1'),  # arburg domain
+    ]
+
+    # Add each PKI protocol as a separate tuple
     for value in protocols:
-        form_data.setdefault('no_onboarding_pki_protocols', []).append(value)
-    context.response = context.session.post(current_url, data=form_data, allow_redirects=True)
+        final_form_data.append(('no_onboarding_pki_protocols', value))
+
+    context.response = context.session.post(current_url, data=final_form_data, allow_redirects=True)
     assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
         f'Device form submission failed: {context.response.status_code}'
 
