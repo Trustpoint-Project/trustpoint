@@ -4,6 +4,24 @@
 CI/CD
 *****
 
+.. |pytest-badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml/badge.svg
+   :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/pytest.yml
+
+.. |codecov-badge| image:: https://codecov.io/gh/Trustpoint-Project/trustpoint/graph/badge.svg?token=0N31L1QWPE
+   :target: https://codecov.io/gh/Trustpoint-Project/trustpoint
+
+.. |mypy-badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/mypy.yml/badge.svg
+   :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/mypy.yml
+
+.. |ruff-badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/ruff.yml/badge.svg
+   :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/ruff.yml
+
+.. |codeql-badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/codeql.yml/badge.svg
+   :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/codeql.yml
+
+.. |zap-badge| image:: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/zap.yml/badge.svg
+   :target: https://github.com/Trustpoint-Project/trustpoint/actions/workflows/zap.yml
+
 This chapter describes the CI/CD pipelines used in the project.
 The pipelines automate various tasks such as testing, building, and deploying.
 
@@ -15,10 +33,12 @@ GitHub Actions are used to manage automated workflows.
 Below is an overview of the key workflows included in the project:
 
 - **Behave Pipeline**: Runs :term:`behave` tests and uploads the results.
-- **Codecov Pipeline**: Runs unit tests via pytest and uploads the test coverage.
-- **Pytest Pipeline**: Runs unit tests via pytest and uploads the results.
-- **mypy Pipeline**: Runs :term:`mypy` checks and uploads the results.
-- **Ruff Pipeline**: Runs :term:`ruff` checks and uploads the results.
+- **Codecov Pipeline**: Runs unit tests via pytest and uploads the test coverage. |codecov-badge|
+- **CodeQL Pipeline**: Runs CodeQL security analysis on the codebase. |codeql-badge|
+- **Pytest Pipeline**: Runs unit tests via pytest and uploads the results. |pytest-badge|
+- **mypy Pipeline**: Runs :term:`mypy` checks and uploads the results. |mypy-badge|
+- **Ruff Pipeline**: Runs :term:`ruff` checks and uploads the results. |ruff-badge|
+- **ZAP Pipeline**: Runs OWASP ZAP security scans on the web application. |zap-badge|
 
 -------------------------------
 Sequence Diagram CI/CD Pipeline
@@ -132,3 +152,29 @@ The only difference is that we now run :term:`ruff` and upload the report if the
 .. literalinclude:: ../../../.github/workflows/ruff.yml
     :language: yaml
     :caption: ruff workflow
+
+==============
+CodeQL Pipeline
+==============
+
+We use `CodeQL <https://codeql.github.com/>`_ for automated security analysis of the codebase.
+This pipeline runs CodeQL analysis on multiple languages including Python, JavaScript/TypeScript, and GitHub Actions.
+It performs static analysis to identify potential security vulnerabilities and code quality issues.
+The analysis is configured with a custom CodeQL configuration file and runs on a schedule as well as on pushes and pull requests to the main branch.
+
+.. literalinclude:: ../../../.github/workflows/codeql.yml
+    :language: yaml
+    :caption: CodeQL workflow
+
+============
+ZAP Pipeline
+============
+
+We use `OWASP ZAP <https://www.zaproxy.org/>`_ (Zed Attack Proxy) for automated security scanning of the web application.
+This pipeline performs baseline security scans on both HTTP and HTTPS endpoints of the running Trustpoint application.
+It starts the application using Docker Compose, runs ZAP scans on ports 80 (HTTP) and 443 (HTTPS), and uploads the scan reports as artifacts.
+The pipeline fails if high or medium severity issues are found, while low severity issues are reported as warnings.
+
+.. literalinclude:: ../../../.github/workflows/zap.yml
+    :language: yaml
+    :caption: ZAP workflow
