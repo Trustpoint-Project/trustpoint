@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import itertools
 import logging
+import urllib
 from datetime import UTC
 from typing import TYPE_CHECKING, get_args
 
@@ -308,7 +309,7 @@ class ClientCertificateAuthenticationError(Exception):
     """Exception raised for general client certificate authentication failures."""
 
 
-class ApacheTLSClientCertExtractor:
+class NginxTLSClientCertExtractor:
     """Extracts the TLS client certificate from the request."""
 
     @staticmethod
@@ -328,14 +329,15 @@ class ApacheTLSClientCertExtractor:
         if not cert_data:
             error_message = 'Missing SSL_CLIENT_CERT header'
             raise ClientCertificateAuthenticationError(error_message)
-
+        # URL-decode the certificate
+        cert_data = urllib.parse.unquote(cert_data)
         try:
             client_cert = x509.load_pem_x509_certificate(cert_data.encode('utf-8'))
         except Exception as e:
             error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
             raise ClientCertificateAuthenticationError(error_message) from e
 
-        # Extract intermediate CAs from Apache variables
+         # Extract intermediate CAs from NGINX variables
         intermediate_cas = []
 
         for i in itertools.count():

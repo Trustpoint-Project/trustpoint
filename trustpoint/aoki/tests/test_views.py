@@ -136,7 +136,7 @@ class TestAokiInitializationRequestView:
     def test_get_no_client_cert(self, request_factory, mock_tls_cert):
         """Test AOKI initialization when no client certificate is provided."""
         with patch.object(ActiveTrustpointTlsServerCredentialModel.objects, 'first', return_value=mock_tls_cert):
-            with patch('aoki.views.ApacheTLSClientCertExtractor.get_client_cert_as_x509', 
+            with patch('aoki.views.NginxTLSClientCertExtractor.get_client_cert_as_x509',
                       side_effect=ClientCertificateAuthenticationError('No cert')):
                 request = request_factory.get('/aoki/init/')
                 view = AokiInitializationRequestView()
@@ -149,7 +149,7 @@ class TestAokiInitializationRequestView:
     def test_get_idevid_authentication_failed(self, request_factory, mock_tls_cert, mock_idevid_cert):
         """Test AOKI initialization when IDevID authentication fails."""
         with patch.object(ActiveTrustpointTlsServerCredentialModel.objects, 'first', return_value=mock_tls_cert):
-            with patch('aoki.views.ApacheTLSClientCertExtractor.get_client_cert_as_x509', 
+            with patch('aoki.views.NginxTLSClientCertExtractor.get_client_cert_as_x509',
                       return_value=(mock_idevid_cert, [])):
                 with patch('aoki.views.IDevIDAuthenticator.authenticate_idevid_from_x509_no_device',
                           side_effect=IDevIDAuthenticationError('Auth failed')):
@@ -166,7 +166,7 @@ class TestAokiInitializationRequestView:
         domain = domain_instance['domain']
         
         with patch.object(ActiveTrustpointTlsServerCredentialModel.objects, 'first', return_value=mock_tls_cert):
-            with patch('aoki.views.ApacheTLSClientCertExtractor.get_client_cert_as_x509', 
+            with patch('aoki.views.NginxTLSClientCertExtractor.get_client_cert_as_x509',
                       return_value=(mock_idevid_cert, [])):
                 with patch('aoki.views.IDevIDAuthenticator.authenticate_idevid_from_x509_no_device',
                           return_value=(domain, 'test_sn')):
@@ -193,7 +193,7 @@ class TestAokiInitializationRequestView:
         mock_owner_credential.get_private_key.return_value = rsa_private_key
         
         with patch.object(ActiveTrustpointTlsServerCredentialModel.objects, 'first', return_value=mock_tls_cert):
-            with patch('aoki.views.ApacheTLSClientCertExtractor.get_client_cert_as_x509', 
+            with patch('aoki.views.NginxTLSClientCertExtractor.get_client_cert_as_x509',
                       return_value=(mock_idevid_cert, [])):
                 with patch('aoki.views.IDevIDAuthenticator.authenticate_idevid_from_x509_no_device',
                           return_value=(domain, 'test_sn')):
@@ -237,7 +237,7 @@ class TestAokiInitializationRequestView:
         mock_owner_credential.get_private_key.return_value = ec_private_key
         
         with patch.object(ActiveTrustpointTlsServerCredentialModel.objects, 'first', return_value=mock_tls_cert):
-            with patch('aoki.views.ApacheTLSClientCertExtractor.get_client_cert_as_x509', 
+            with patch('aoki.views.NginxTLSClientCertExtractor.get_client_cert_as_x509',
                       return_value=(mock_idevid_cert, [])):
                 with patch('aoki.views.IDevIDAuthenticator.authenticate_idevid_from_x509_no_device',
                           return_value=(domain, 'test_sn')):
@@ -268,7 +268,7 @@ class TestAokiInitializationRequestView:
         mock_owner_credential.get_private_key.return_value = Mock()
         
         with patch.object(ActiveTrustpointTlsServerCredentialModel.objects, 'first', return_value=mock_tls_cert):
-            with patch('aoki.views.ApacheTLSClientCertExtractor.get_client_cert_as_x509', 
+            with patch('aoki.views.NginxTLSClientCertExtractor.get_client_cert_as_x509',
                       return_value=(mock_idevid_cert, [])):
                 with patch('aoki.views.IDevIDAuthenticator.authenticate_idevid_from_x509_no_device',
                           return_value=(domain, 'test_sn')):
@@ -299,7 +299,7 @@ class TestAokiInitializationRequestView:
         mock_owner_credential.get_private_key.return_value = rsa_private_key
         
         with patch.object(ActiveTrustpointTlsServerCredentialModel.objects, 'first', return_value=mock_tls_cert):
-            with patch('aoki.views.ApacheTLSClientCertExtractor.get_client_cert_as_x509', 
+            with patch('aoki.views.NginxTLSClientCertExtractor.get_client_cert_as_x509',
                       return_value=(mock_idevid_cert, [])):
                 with patch('aoki.views.IDevIDAuthenticator.authenticate_idevid_from_x509_no_device',
                           return_value=(domain, 'test_sn')):

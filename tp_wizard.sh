@@ -73,7 +73,7 @@ stop_one(){ local n="$1"; exists "$n" || return 0; running "$n" && docker stop "
 tcp_check(){ local host="$1" port="$2" ts=$(( $(date +%s) + ${3:-5} )); while (( $(date +%s) < ts )); do (exec 3<>"/dev/tcp/$host/$port") >/dev/null 2>&1 && { exec 3>&- 3<&-; return 0; }; sleep 1; done; return 1; }
 port_in_use(){ tcp_check 127.0.0.1 "$1" 1; }
 
-# SFTPGo host web port resolver (avoid Apache :80)
+# SFTPGo host web port resolver (avoid NGINX :80)
 sftpgo_web_port(){
   local p; p="$(docker port sftpgo 8080/tcp 2>/dev/null | awk -F: '{print $2}')" || true
   echo "${p:-$SFTPGO_WEB_PORT}"

@@ -1,0 +1,72 @@
+
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Trustpoint</title>
+        <script src="/static/js/theme.js"></script>
+        <link rel="stylesheet" href="/static/css/bootstrap.min.css">
+        <link rel="stylesheet" href="/static/css/trustpoint.css">
+        <link rel="icon" href="/static/img/favicon-32.png">
+        
+    </head>
+
+    <body id="bs-override" class="body-users">
+        <header class="tp-page-header tp-page-header-users navbar border-bottom border-body">
+            <a class="navbar-brand tp-primary" href="#">
+                <!--<img src="/static/img/tp-logo-128.png" width="64" height="45" alt="Trustpoint"></a> -->
+                <img src="/static/img/tp-logo-horizontal-512.png" alt="Trustpoint" id="tp-logo" class="light-only">
+                <img src="/static/img/tp-logo-horizontal-white-point.png" alt="Trustpoint" id="tp-logo" class="dark-only">
+                <!-- <img src="/static/img/tp-logo-horizontal-0A74FF.png" alt="Trustpoint" id="tp-logo" class="dark-only"> -->
+            </a>
+            <div class="d-flex">
+                <div class="theme-toggle theme-toggle-icon">
+                    <svg class="bi theme-icon dark-only" width="20" height="20" fill="#ffffff" role="img" aria-label="Change theme">
+                        <use href="/static/img/icons.svg#icon-sun-fill"></use></svg>
+                    <svg class="bi theme-icon light-only" width="20" height="20" fill="#000000" role="img" aria-label="Change theme">
+                        <use href="/static/img/icons.svg#icon-night"></use></svg>
+                </div>
+            </div>
+        </header>
+
+        <main class="tp-main tp-main-users">
+            <div>
+                
+
+    
+
+    <div class="card tp-card-users text-center">
+        <div class="card-header">
+            <h1>Trustpoint - Login</h1>
+        </div>
+        <div class="card-body pt-3 pb-4">
+
+            <form method="POST" class="text-start">
+                <input type="hidden" name="csrfmiddlewaretoken" value="czplQIjW4FBBi65BteB5YOB9GLb1KVWVsMsx4daZ6uOZxL5g1NGgCc41fywlcJKT">
+                <fieldset class="form-group tp-form-group">
+                    
+
+<div id="div_id_username" class="mb-3"> <label
+                for="id_username" class="form-label requiredField">
+                Username<span class="asteriskField">*</span> </label> <input type="text" name="username" autofocus autocapitalize="none" autocomplete="username" maxlength="150" class="textinput form-control" required id="id_username"> </div> <div id="div_id_password" class="mb-3"> <label
+                for="id_password" class="form-label requiredField">
+                Password<span class="asteriskField">*</span> </label> <input type="password" name="password" autocomplete="current-password" class="passwordinput form-control" required id="id_password"> </div>
+
+                </fieldset>
+                <hr>
+                <div class="tp-form-btn-group tp-form-btn-group">
+                    <button class="btn btn-primary w-100 mt-1" type="submit">Login</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+            </div>
+        </main>
+
+        <script src="/static/js/bootstrap.bundle.min.js"></script>
+    </body>
+
+</html>

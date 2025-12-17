@@ -302,9 +302,9 @@ class TestBackupAutoRestorePasswordViewHelpers:
         self.view._deactivate_all_issuing_cas()
 
     @patch('setup_wizard.views.ActiveTrustpointTlsServerCredentialModel.objects.get')
-    @patch('setup_wizard.views.APACHE_KEY_PATH')
-    @patch('setup_wizard.views.APACHE_CERT_PATH')
-    @patch('setup_wizard.views.APACHE_CERT_CHAIN_PATH')
+    @patch('setup_wizard.views.NGINX_KEY_PATH')
+    @patch('setup_wizard.views.NGINX_CERT_PATH')
+    @patch('setup_wizard.views.NGINX_CERT_CHAIN_PATH')
     def test_extract_tls_certificates_success(
         self, mock_chain_path, mock_cert_path, mock_key_path, mock_get
     ):
@@ -361,9 +361,9 @@ class TestBackupAutoRestorePasswordViewHelpers:
             self.view._extract_tls_certificates()
 
     @patch('setup_wizard.views.ActiveTrustpointTlsServerCredentialModel.objects.get')
-    @patch('setup_wizard.views.APACHE_KEY_PATH')
-    @patch('setup_wizard.views.APACHE_CERT_PATH')
-    @patch('setup_wizard.views.APACHE_CERT_CHAIN_PATH')
+    @patch('setup_wizard.views.NGINX_KEY_PATH')
+    @patch('setup_wizard.views.NGINX_CERT_PATH')
+    @patch('setup_wizard.views.NGINX_CERT_CHAIN_PATH')
     def test_extract_tls_certificates_empty_chain(
         self, mock_chain_path, mock_cert_path, mock_key_path, mock_get
     ):

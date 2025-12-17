@@ -279,9 +279,9 @@ class TestTlsServerCredentialApplyFormValid:
 class TestWritePemFiles:
     """Test _write_pem_files static method."""
 
-    @patch('setup_wizard.views.APACHE_KEY_PATH')
-    @patch('setup_wizard.views.APACHE_CERT_PATH')
-    @patch('setup_wizard.views.APACHE_CERT_CHAIN_PATH')
+    @patch('setup_wizard.views.NGINX_KEY_PATH')
+    @patch('setup_wizard.views.NGINX_CERT_PATH')
+    @patch('setup_wizard.views.NGINX_CERT_CHAIN_PATH')
     def test_write_pem_files_success(self, mock_chain_path, mock_cert_path, mock_key_path):
         """Test successful PEM files writing."""
         # Mock serializers
@@ -312,9 +312,9 @@ class TestWritePemFiles:
         mock_cert_path.write_text.assert_called_once_with('CERTIFICATE')
         mock_chain_path.write_text.assert_called_once_with('CERT CHAIN')
 
-    @patch('setup_wizard.views.APACHE_KEY_PATH')
-    @patch('setup_wizard.views.APACHE_CERT_PATH')
-    @patch('setup_wizard.views.APACHE_CERT_CHAIN_PATH')
+    @patch('setup_wizard.views.NGINX_KEY_PATH')
+    @patch('setup_wizard.views.NGINX_CERT_PATH')
+    @patch('setup_wizard.views.NGINX_CERT_CHAIN_PATH')
     def test_write_pem_files_empty_chain(self, mock_chain_path, mock_cert_path, mock_key_path):
         """Test PEM files writing with empty certificate chain."""
         # Mock serializers

@@ -24,9 +24,9 @@ trap 'log ERROR "in ${FUNCNAME[0]:-main} at line $LINENO (exit=$?)"; exit 1' ERR
 STATE_DIR="/etc/trustpoint/wizard/state"
 WIZARD_SETUP_MODE="$STATE_DIR/WIZARD_SETUP_MODE"
 WIZARD_COMPLETED="$STATE_DIR/WIZARD_COMPLETED"
-APACHE_TLS_DIR="/etc/trustpoint/tls"
 
-log INFO "STARTING APACHE RESTORE"
+
+log INFO "STARTING NGINX RESTORE"
 
 # 5) Check wizard state
 log INFO "Checking for state file $WIZARD_SETUP_MODE"
@@ -49,11 +49,17 @@ then
     exit 4
 fi
 
-# 12) if Apache is already running, update tls and gracefully restart
-if pgrep apache2 >/dev/null; then
-   /etc/trustpoint/wizard/transition/update_tls.sh
-   log INFO "Restarting Apache (graceful)"
-   apache2ctl graceful
+# 12) if Nginx is already running, update tls and gracefully restart
+log INFO "DEBUG: Checking if nginx is running"
+if pgrep nginx >/dev/null; then
+    log INFO "DEBUG: Nginx is running, updating TLS"
+    if [ -f "/etc/trustpoint/wizard/transition/update_tls.sh" ]; then
+        /etc/trustpoint/wizard/transition/update_tls.sh
+    fi
+    log INFO "Reloading Nginx"
+    nginx -s reload
+else
+    log INFO "DEBUG: Nginx is not running"
 fi
 
 log INFO "RESTORE SCRIPT COMPLETED SUCCESSFULLY"

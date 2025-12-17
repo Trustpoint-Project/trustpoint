@@ -16,8 +16,8 @@ from django.core.management import call_command
 from django.utils.translation import gettext as _
 from packaging.version import Version
 
-from management.apache_paths import APACHE_CERT_CHAIN_PATH, APACHE_CERT_PATH, APACHE_KEY_PATH
 from management.models import AppVersion, KeyStorageConfig, PKCS11Token
+from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
 from pki.models import PKCS11Key
 from pki.models.credential import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -263,6 +263,7 @@ class StandardTlsCredentialStrategy(TlsCredentialStrategy):
         """
         context.output.write('Saving credential to database...')
 
+
         trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
             credential_serializer=tls_server_credential,
             credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
@@ -278,7 +279,7 @@ class StandardTlsCredentialStrategy(TlsCredentialStrategy):
             raise RuntimeError(error_msg) from e
 
         context.output.write(f'ActiveTrustpoint TLS record {"created" if created else "updated"}')
-        context.output.write(f'Writing TLS files to {APACHE_KEY_PATH.parent}...')
+        context.output.write(f'Writing TLS files to {NGINX_KEY_PATH.parent}...')
 
         private_key_pem = active_tls.credential.get_private_key_serializer().as_pkcs8_pem().decode()
         certificate_pem = active_tls.credential.get_certificate_serializer().as_pem().decode()
@@ -295,7 +296,7 @@ class StandardTlsCredentialStrategy(TlsCredentialStrategy):
             Tuple of (private_key_pem, certificate_pem, trust_store_pem)
         """
         context.output.write('Skipping database save for temporary TLS...')
-        context.output.write(f'Writing TLS files to {APACHE_KEY_PATH.parent}...')
+        context.output.write(f'Writing TLS files to {NGINX_KEY_PATH.parent}...')
 
         private_key_serializer = tls_server_credential.get_private_key_serializer()
         if private_key_serializer is None:
@@ -315,16 +316,16 @@ class StandardTlsCredentialStrategy(TlsCredentialStrategy):
     def _write_pem_files(
         self, private_key_pem: str, certificate_pem: str, trust_store_pem: str
     ) -> None:
-        """Write PEM files to Apache paths."""
-        APACHE_KEY_PATH.write_text(private_key_pem)
-        APACHE_CERT_PATH.write_text(certificate_pem)
+        """Write PEM files to Nginx paths."""
+        NGINX_KEY_PATH.write_text(private_key_pem)
+        NGINX_CERT_PATH.write_text(certificate_pem)
 
         # Only write chain file if there's actually a chain (not empty)
         if trust_store_pem.strip():
-            APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
-        elif APACHE_CERT_CHAIN_PATH.exists():
+            NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
+        elif NGINX_CERT_CHAIN_PATH.exists():
             # Remove chain file if it exists but chain is empty
-            APACHE_CERT_CHAIN_PATH.unlink()
+            NGINX_CERT_CHAIN_PATH.unlink()
 
     def _display_fingerprint(
         self, context: StartupContext, active_tls: Any, tls_server_credential: Any
@@ -704,7 +705,7 @@ class RestoreSoftwareWizardCompletedStrategy(StartupStrategy):
 
     @staticmethod
     def extract_tls_from_database(context: StartupContext) -> None:
-        """Extract TLS certificates from database and write to Apache paths."""
+        """Extract TLS certificates from database and write to Nginx paths."""
         try:
             context.output.write('Extracting TLS certificates from database...')
 
@@ -720,15 +721,15 @@ class RestoreSoftwareWizardCompletedStrategy(StartupStrategy):
             certificate_pem = tls_server_credential_model.get_certificate_serializer().as_pem().decode()
             trust_store_pem = tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
 
-            APACHE_KEY_PATH.write_text(private_key_pem)
-            APACHE_CERT_PATH.write_text(certificate_pem)
+            NGINX_KEY_PATH.write_text(private_key_pem)
+            NGINX_CERT_PATH.write_text(certificate_pem)
 
             # Only write chain file if there's actually a chain (not empty)
             if trust_store_pem.strip():
-                APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
-            elif APACHE_CERT_CHAIN_PATH.exists():
+                NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
+            elif NGINX_CERT_CHAIN_PATH.exists():
                 # Remove chain file if it exists but chain is empty
-                APACHE_CERT_CHAIN_PATH.unlink()
+                NGINX_CERT_CHAIN_PATH.unlink()
 
             context.output.write(context.output.success('TLS certificates extracted successfully'))
 
