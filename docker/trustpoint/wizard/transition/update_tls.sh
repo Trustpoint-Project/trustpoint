@@ -1,7 +1,11 @@
 #!/bin/bash
 # /etc/trustpoint/wizard/transition/update_tls_nginx.sh
-
+NGINX_TLS_DIR="/etc/trustpoint/tls/"
 LOGFILE=/var/www/html/trustpoint/trustpoint/media/log/trustpoint.log
+
+
+set -eE -o pipefail
+
 
 log() {
     local level=$1; shift
@@ -11,10 +15,10 @@ log() {
 log INFO "Starting TLS certificate setup for nginx"
 
 # Create nginx TLS directory
-mkdir -p /etc/trustpoint/nginx/tls/
+mkdir -p "$NGINX_TLS_DIR"
 
-# Check if certificates exist in nginx directory and copy them
-NGINX_TLS_DIR="/etc/trustpoint/nginx/tls"
+
+
 
 # 2) Move new TLS certs
 log INFO "Move TLS Server credentials into $NGINX_TLS_DIR"
@@ -22,7 +26,7 @@ log INFO "Move TLS Server credentials into $NGINX_TLS_DIR"
 # Copies the TLS-Server credentials into the nginx TLS directory.
 if ! mv /var/www/html/trustpoint/docker/trustpoint/nginx/tls/* "$NGINX_TLS_DIR"
 then
-    log "ERROR: Failed to copy Trustpoint TLS files to $NGINX_TLS_DIR."
+    log ERROR "Failed to copy Trustpoint TLS files to $NGINX_TLS_DIR."
     exit 5
 fi
 

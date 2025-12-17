@@ -14,12 +14,15 @@ echo "PostgreSQL database is available!"
 
 run_as_www_data "uv run trustpoint/manage.py startup_manager"
 
+# Configure TLS (always needed - will gracefully handle missing files)
+/etc/trustpoint/wizard/transition/update_tls.sh
+
 #  Configure nginx
 /etc/trustpoint/wizard/transition/configure_nginx.sh
 
-# Configure TLS (always needed - will gracefully handle missing files)
-/etc/trustpoint/wizard/transition/update_tls.sh
-ln -sf /etc/nginx/sites-available/trustpoint /etc/nginx/sites-enabled/trustpoint
+
+
+
 echo "Starting cron service..."
 cron
 
