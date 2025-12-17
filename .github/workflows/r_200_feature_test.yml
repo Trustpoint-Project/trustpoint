@@ -109,7 +109,7 @@ jobs:
       
       # Upload the behave HTML report
       - name: Upload Behave Test Report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: r_200-behave-report
