@@ -20,7 +20,6 @@ This diagram illustrates the `RequestContext` class, its attributes, and its met
         + operation: str | None
         + protocol: str | None
         + cert_profile_str: str | None
-        + response_format: str | None
         + est_encoding: str | None
         + domain_str: str | None
         + domain: DomainModel | None

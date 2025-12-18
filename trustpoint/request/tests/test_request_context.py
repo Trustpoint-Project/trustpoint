@@ -134,7 +134,6 @@ class TestRequestContext:
             operation='enroll',
             protocol='est',
             cert_profile_str='server_cert',
-            response_format='pkcs7',
             est_encoding='base64',
             domain_str='test.example.com',
             domain=mock_domain,
@@ -153,7 +152,6 @@ class TestRequestContext:
         assert context.operation == 'enroll'
         assert context.protocol == 'est'
         assert context.cert_profile_str == 'server_cert'
-        assert context.response_format == 'pkcs7'
         assert context.est_encoding == 'base64'
         assert context.domain_str == 'test.example.com'
         assert context.domain == mock_domain
@@ -193,7 +191,7 @@ class TestRequestContext:
 
         expected_fields = [
             'raw_message', 'parsed_message', 'operation', 'protocol',
-            'cert_profile_str', 'response_format', 'est_encoding',
+            'cert_profile_str', 'est_encoding',
             'domain_str', 'domain', 'device', 'certificate_profile_model', 'cert_requested',
             'est_username', 'est_password', 'cmp_shared_secret',
             'client_certificate', 'client_intermediate_certificate',
