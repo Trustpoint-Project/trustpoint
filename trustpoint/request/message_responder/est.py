@@ -1,28 +1,20 @@
-"""Responds to the PKI message according to the original request protocol."""
+"""EST-specific message responder classes."""
 import base64
-from abc import ABC, abstractmethod
 
 from cryptography.hazmat.primitives.serialization import Encoding, pkcs7
 
 from devices.models import OnboardingStatus
-from request.request_context import RequestContext
+from request.request_context import EstBaseRequestContext, EstCertificateRequestContext
 from workflows.models import State
 
-
-class AbstractMessageResponder(ABC):
-    """Abstract base class for message responders."""
-
-    @staticmethod
-    @abstractmethod
-    def build_response(context: RequestContext) -> None:
-        """Abstract base method for building a response to a message."""
+from .base import AbstractMessageResponder
 
 
 class EstMessageResponder(AbstractMessageResponder):
     """Builds response to EST requests."""
 
     @staticmethod
-    def build_response(context: RequestContext) -> None:
+    def build_response(context: EstBaseRequestContext) -> None:
         """Respond to an EST message."""
         if not context.enrollment_request:
             exc_msg = 'No enrollment request is set in the context.'
@@ -61,7 +53,7 @@ class EstCertificateMessageResponder(EstMessageResponder):
     """Respond to an EST enrollment message with the issued certificate."""
 
     @staticmethod
-    def build_response(context: RequestContext) -> None:
+    def build_response(context: EstCertificateRequestContext) -> None:
         """Respond to an EST enrollment message with the issued certificate."""
         if context.issued_certificate is None:
             exc_msg = 'Issued certificate is not set in the context.'
@@ -109,7 +101,7 @@ class EstErrorMessageResponder(EstMessageResponder):
     """Respond to an EST message with an error."""
 
     @staticmethod
-    def build_response(context: RequestContext) -> None:
+    def build_response(context: EstBaseRequestContext) -> None:
         """Respond to an EST message with an error."""
         # Set appropriate HTTP status code and error message in context
         context.http_response_status = context.http_response_status or 500

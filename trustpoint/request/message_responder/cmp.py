@@ -15,8 +15,8 @@ from pyasn1_modules import rfc2459, rfc4210  # type: ignore[import-untyped]
 from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm
 
 from devices.models import OnboardingStatus
-from request.message_responder import AbstractMessageResponder
-from request.operation_processor import LocalCaCmpSignatureProcessor
+from request.message_responder.message_responder import AbstractMessageResponder
+from request.operation_processor.operation_processor import LocalCaCmpSignatureProcessor
 
 if TYPE_CHECKING:
     from pki.models import CredentialModel

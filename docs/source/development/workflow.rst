@@ -1,6 +1,6 @@
-=================
-Request Workflow
-=================
+================
+Request Pipeline
+================
 
 
 Request Context Module Diagram
@@ -359,10 +359,6 @@ Authorization Module Diagram
         + authorize(context: RequestContext)
     }
 
-    class ManualAuthorization {
-        + authorize(context: RequestContext)
-    }
-
     ' Dependency: Context object used in all authorization methods.
     class RequestContext {
         + protocol: str
@@ -377,7 +373,6 @@ Authorization Module Diagram
     AuthorizationComponent <|-- OperationAuthorization
     AuthorizationComponent <|-- CertificateProfileAuthorization
     AuthorizationComponent <|-- DomainScopeValidation
-    AuthorizationComponent <|-- ManualAuthorization
     AuthorizationComponent <|-- CompositeAuthorization
     CompositeAuthorization <|-- EstAuthorization
 
@@ -389,7 +384,6 @@ Authorization Module Diagram
     OperationAuthorization --> RequestContext : reads operation
     CertificateProfileAuthorization --> RequestContext : checks template
     DomainScopeValidation --> RequestContext : validates domain
-    ManualAuthorization --> RequestContext : overrides decisions
 
     @enduml
 

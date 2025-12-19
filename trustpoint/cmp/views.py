@@ -10,13 +10,13 @@ from django.views.generic.base import View
 
 from est.views import LoggedHttpResponse  # TEMP
 from request.authentication import CmpAuthentication
-from request.authorization import CmpAuthorization
-from request.cmp_responder import CmpMessageResponder
-from request.http_request_validator import CmpHttpRequestValidator
-from request.operation_processor import CertificateIssueProcessor
-from request.pki_message_parser import CmpMessageParser
+from request.authorization.authorization import CmpAuthorization
+from request.message_parser.pki_message_parser import CmpMessageParser
+from request.message_responder.cmp_responder import CmpMessageResponder
+from request.operation_processor.operation_processor import CertificateIssueProcessor
 from request.profile_validator import ProfileValidator
 from request.request_context import RequestContext
+from request.request_validator.http_request_validator import CmpHttpRequestValidator
 
 if TYPE_CHECKING:
     from typing import Any
