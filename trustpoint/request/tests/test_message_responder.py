@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pytest
 
 from devices.models import OnboardingStatus
-from request.message_responder import (
+from request.message_responder.message_responder import (
     EstCertificateMessageResponder,
     EstErrorMessageResponder,
     EstMessageResponder,

@@ -6,11 +6,11 @@ from django.test.client import RequestFactory
 from pki.util.cert_profile import JSONProfileVerifier
 from pki.util.cert_req_converter import JSONCertRequestConverter
 
-from request.authentication import EstAuthentication
-from request.authorization import CertificateProfileAuthorization, EstAuthorization, EstOperationAuthorization
-from request.http_request_validator import EstHttpRequestValidator
-from request.operation_processor import CertificateIssueProcessor
-from request.pki_message_parser import EstMessageParser
+from request.authentication.base import EstAuthentication
+from request.authorization.authorization import CertificateProfileAuthorization, EstAuthorization, EstOperationAuthorization
+from request.request_validator.http_request_validator import EstHttpRequestValidator
+from request.operation_processor.operation_processor import CertificateIssueProcessor
+from request.message_parser.pki_message_parser import EstMessageParser
 from request.request_context import RequestContext
 from trustpoint.logger import LoggerMixin
 
