@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.contrib import messages
 from django.db.models import ProtectedError, QuerySet
@@ -15,7 +15,12 @@ from django.utils.translation import gettext as _
 from django.views.generic.base import TemplateView
 from django.views.generic.edit import UpdateView
 from django.views.generic.list import ListView
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_yasg.utils import swagger_auto_schema
 from pydantic import ValidationError
+from rest_framework import filters, status, viewsets
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import (
     BulkDeleteView,
@@ -25,6 +30,7 @@ from trustpoint.views.base import (
 
 from pki.forms import CertProfileConfigForm
 from pki.models import CertificateProfileModel
+from pki.serializer.cert_profile import CertProfileSerializer
 from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
 from trustpoint.settings import UIConfig
 
@@ -221,3 +227,37 @@ class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
                 .format(count=deleted_count))
 
         return response
+
+class CertProfileViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing Certificate Profile instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+    queryset = CertificateProfileModel.objects.all().order_by('-created_at')
+    serializer_class = CertProfileSerializer
+    permission_classes: ClassVar = [IsAuthenticated]
+    filter_backends: ClassVar = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter
+    ]
+    filterset_fields: ClassVar = ['unique_name', 'created_at']
+    search_fields: ClassVar = ['unique_name', 'display_name']
+    ordering_fields: ClassVar = ['unique_name', 'created_at']
+
+    action_descriptions: ClassVar[dict[str, str]] = {
+        'list': 'Retrieve a list of all certificate profiles.',
+        'retrieve': 'Retrieve a single certificate profiles by id.',
+        'create': 'Create a new certificate profiles .',
+        'update': 'Update an existing certificate profiles.',
+        'partial_update': 'Partially update an existing certificate profiles.',
+        'destroy': 'Delete a certificate profiles.',
+    }
+
+    def get_view_description(self, *, html: bool = False) -> str:
+        """Return a description for the given action."""
+        if hasattr(self, 'action') and self.action in self.action_descriptions:
+            return self.action_descriptions[self.action]
+        return super().get_view_description(html)
+
