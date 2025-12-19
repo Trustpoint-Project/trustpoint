@@ -4,22 +4,28 @@ import io
 import tarfile
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from django.conf import settings
 from django.contrib import messages
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView, View
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_yasg.utils import swagger_auto_schema
+from rest_framework import filters, status, viewsets
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import SortableTableFromListMixin
 from util.sftp import SftpClient, SftpError
 
 from management.forms import BackupOptionsForm
 from management.models import BackupOptions
+from management.serializer.backup import BackupSerializer
 
 
 def get_backup_file_data(filename: str) -> dict[str, Any]:
@@ -415,3 +421,36 @@ class BackupFilesDeleteMultipleView(View, LoggerMixin):
             messages.error(request, f"Errors deleting: {', '.join(errors)}")
 
         return redirect('management:backups')
+
+
+class BackupViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing Backup instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+    queryset = BackupOptions.objects.all().order_by('-user')
+    serializer_class = BackupSerializer
+    permission_classes: ClassVar = [IsAuthenticated]
+    filter_backends: ClassVar = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter
+    ]
+    filterset_fields: ClassVar = ['user']
+    search_fields: ClassVar = ['user']
+    ordering_fields: ClassVar = ['user']
+    action_descriptions: ClassVar[dict[str, str]] = {
+        'list': 'Retrieve a list of all backups.',
+        'retrieve': 'Retrieve a single backup by id.',
+        'create': 'Create a new backup with name, serial number, and status.',
+        'update': 'Update an existing backup.',
+        'partial_update': 'Partially update an existing backup.',
+        'destroy': 'Delete a backup.',
+    }
+
+    def get_view_description(self, *, html: bool = False) -> str:
+        """Return a description for the given action."""
+        if hasattr(self, 'action') and self.action in self.action_descriptions:
+            return self.action_descriptions[self.action]
+        return super().get_view_description(html)
