@@ -5,8 +5,10 @@ Defines routes that map API requests to their corresponding viewsets and views.
 from rest_framework.routers import DefaultRouter
 
 from management.views.backup import BackupViewSet
+from management.views.tls import TlsViewSet
 
 router = DefaultRouter()
 router.register(r'backups', BackupViewSet, basename='backup')
+router.register(r'tls', TlsViewSet, basename='tls')
 
 urlpatterns = router.urls

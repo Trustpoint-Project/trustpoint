@@ -10,6 +10,11 @@ from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import FormView, TemplateView, View
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_yasg.utils import swagger_auto_schema
+from rest_framework import filters, status, viewsets
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from pki.models import GeneralNameIpAddress
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, CertificateModel, CredentialModel
 from setup_wizard.forms import StartupWizardTlsCertificateForm
@@ -19,6 +24,7 @@ from trustpoint.logger import LoggerMixin
 from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.management.commands.update_tls import Command as UpdateTlsCommand
 from management.models import TlsSettings
+from management.serializer.credential import CredentialSerializer
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -294,3 +300,36 @@ class ActivateTlsServerView(View, LoggerMixin):
             self.logger.exception('Unexpected error activating TLS certificate')
             messages.error(request, 'An unexpected error occurred while activating TLS certificate')
         return redirect(reverse('management:tls'))
+
+
+class TlsViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing Backup instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+    queryset = CredentialModel.objects.all().order_by('-created_at')
+    serializer_class = CredentialSerializer
+    permission_classes: ClassVar = [IsAuthenticated]
+    filter_backends: ClassVar = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter
+    ]
+    filterset_fields: ClassVar = ['credential_type']
+    search_fields: ClassVar = ['certificates']
+    ordering_fields: ClassVar = ['created_at']
+    action_descriptions: ClassVar[dict[str, str]] = {
+        'list': 'Retrieve a list of all TLS Certificates.',
+        'retrieve': 'Retrieve a single TLS Certificate by id.',
+        'create': 'Create a TLS Certificate.',
+        'update': 'Update an existing TLS Certificate.',
+        'partial_update': 'Partially update an existing TLS Certificate.',
+        'destroy': 'Delete a TLS Certificate.',
+    }
+
+    def get_view_description(self, *, html: bool = False) -> str:
+        """Return a description for the given action."""
+        if hasattr(self, 'action') and self.action in self.action_descriptions:
+            return self.action_descriptions[self.action]
+        return super().get_view_description(html)
