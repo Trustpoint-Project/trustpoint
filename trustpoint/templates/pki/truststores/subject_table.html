@@ -1,0 +1,43 @@
+<style>
+.subject-table {
+    border-collapse: collapse;
+    margin-top: 6px;
+    margin-bottom: 12px;
+}
+.subject-table td {
+    padding: 2px 18px 2px 0;
+    text-align: left;
+    vertical-align: top;
+    border: none;
+}
+.subject-table td:first-child {
+    min-width: 140px;
+    max-width: 220px;
+    font-weight: bold;
+}
+.subject-table td:nth-child(2) {
+    min-width: 115px;
+    color: #b0b0b0;
+}
+.subject-table td:last-child {
+    min-width: 100px;
+    font-weight: normal;
+}
+</style>
+
+<table class="subject-table">
+  {% for entry in entries %}
+  <tr>
+      {% if entry.name %}
+        <td>{{ entry.name }}</td>
+        <td>({{ entry.oid }})</td>
+      {% else %}
+        <td></td>
+        <td>({{ entry.oid }})</td>
+      {% endif %}
+      <td>{{ entry.value }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="3">No entries</td></tr>
+  {% endfor %}
+</table>
