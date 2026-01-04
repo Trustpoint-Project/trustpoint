@@ -61,6 +61,7 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
     """View to create a new domain."""
 
     model = DomainModel
+    model = DomainModel
     fields = '__all__'
     template_name = 'pki/domains/add.html'
     success_url = reverse_lazy('pki:domains')

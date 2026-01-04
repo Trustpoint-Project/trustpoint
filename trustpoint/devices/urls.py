@@ -18,6 +18,9 @@ urlpatterns = [
         'create/', views.DeviceCreateChooseOnboardingView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create'
     ),
     path(
+        'new-onboarding/', views.DeviceCreateAddOnboardingTypeView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_new_onboarding'
+    ),
+    path(
         'opc-ua-gds/create/',
         views.OpcUaGdsCreateChooseOnboardingView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_create',
