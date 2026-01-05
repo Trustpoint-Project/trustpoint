@@ -18,7 +18,7 @@ from devices.models import (
     OnboardingPkiProtocol,
 )
 from pki.util.keys import KeyGenerator
-from request.authentication import (
+from request.authentication.base import (
     ClientCertificateAuthentication,
     CmpSharedSecretAuthentication,
     IDevIDAuthentication,

@@ -4,10 +4,10 @@ import socket
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 
-from request.authentication import CmpAuthentication
-from request.authorization import CmpAuthorization
-from request.http_request_validator import CmpHttpRequestValidator
-from request.pki_message_parser import CmpMessageParser
+from request.authentication.base import CmpAuthentication
+from request.authorization.base import CmpAuthorization
+from request.request_validator.http_req import CmpHttpRequestValidator
+from request.message_parser.base import CmpMessageParser
 from request.request_context import RequestContext
 from request.tests.cmp_mock_server import CMPMockServer
 from request.tests.openssl_cmp_factory import (

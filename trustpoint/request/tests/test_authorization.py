@@ -5,14 +5,13 @@ import pytest
 from devices.models import DeviceModel
 from pki.models.domain import DomainModel
 
-from request.authorization import (
+from request.authorization.base import (
     AuthorizationComponent,
     CertificateProfileAuthorization,
     CompositeAuthorization,
     DomainScopeValidation,
     EstAuthorization,
     EstOperationAuthorization,  # Changed from OperationAuthorization
-    ManualAuthorization,
     ProtocolAuthorization,
 )
 from request.request_context import RequestContext
@@ -310,18 +309,6 @@ class TestDomainScopeValidation:
         assert "Device domain: 'None'" in str(exc_info.value)
 
 
-class TestManualAuthorization:
-    """Test cases for ManualAuthorization."""
-
-    def test_manual_authorization_success(self) -> None:
-        """Test that manual authorization always succeeds (no implementation)."""
-        auth = ManualAuthorization()
-        context = Mock(spec=RequestContext)
-
-        # Should not raise an exception since authorize method is empty
-        auth.authorize(context=context)
-
-
 class TestCompositeAuthorization:
     """Test cases for CompositeAuthorization."""
 
@@ -464,7 +451,6 @@ class TestEstAuthorization:
         expected_types = [
             'DomainScopeValidation', 
             'CertificateProfileAuthorization',
-            'ManualAuthorization',
             'ProtocolAuthorization',
             'EstOperationAuthorization'
         ]

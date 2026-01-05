@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pki.models import DomainModel
 
-from request.pki_message_parser import (
+from request.message_parser.base import (
     CertProfileParsing,
     CmpMessageParser,
     CmpPkiMessageParsing,

@@ -3,7 +3,7 @@
 import base64
 from unittest.mock import MagicMock
 
-from request.request_validator.http_request_validator import (
+from request.request_validator.http_req import (
     AcceptHeaderValidation,
     AuthorizationHeaderValidation,
     ClientCertificateValidation,

@@ -6,7 +6,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from devices.models import IssuedCredentialModel
 
-from request.authentication import (
+from request.authentication.base import (
     ClientCertificateAuthentication,
     UsernamePasswordAuthentication,
 )

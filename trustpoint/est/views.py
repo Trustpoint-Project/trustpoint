@@ -9,12 +9,12 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from pki.models.domain import DomainModel
-from request.authentication import EstAuthentication
-from request.authorization import EstAuthorization
-from request.http_request_validator import EstHttpRequestValidator
-from request.message_responder import EstErrorMessageResponder, EstMessageResponder
-from request.operation_processor import CertificateIssueProcessor
-from request.pki_message_parser import EstMessageParser
+from request.authentication.base import EstAuthentication
+from request.authorization.base import EstAuthorization
+from request.request_validator.http_req import EstHttpRequestValidator
+from request.message_responder.base import EstErrorMessageResponder, EstMessageResponder
+from request.operation_processor.base import CertificateIssueProcessor
+from request.message_parser.base import EstMessageParser
 from request.profile_validator import ProfileValidator
 from request.request_context import RequestContext
 from request.workflow_handler import WorkflowHandler
