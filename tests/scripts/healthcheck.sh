@@ -33,3 +33,5 @@ else
   echo "✅ Healthcheck erfolgreich. Vollständige Antwort:"
   cat response.txt
 fi
+
+

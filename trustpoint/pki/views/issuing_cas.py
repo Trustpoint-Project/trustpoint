@@ -20,18 +20,12 @@ from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_yasg import openapi
-from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi  # type: ignore[import-untyped]
+from drf_yasg.utils import swagger_auto_schema  # type: ignore[import-untyped]
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from trustpoint.logger import LoggerMixin
-from trustpoint.views.base import (
-    BulkDeleteView,
-    ContextDataMixin,
-    SortableTableMixin,
-)
 
 from pki.forms import (
     IssuingCaAddFileImportPkcs12Form,
@@ -40,7 +34,13 @@ from pki.forms import (
 )
 from pki.models import CertificateModel, IssuingCaModel
 from pki.serializer import IssuingCaSerializer
+from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
+from trustpoint.views.base import (
+    BulkDeleteView,
+    ContextDataMixin,
+    SortableTableMixin,
+)
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -55,7 +55,7 @@ class IssuingCaContextMixin(ContextDataMixin):
     context_page_name = 'issuing_cas'
 
 
-class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin, ListView[IssuingCaModel]):
+class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin[IssuingCaModel], ListView[IssuingCaModel]):
     """Issuing CA Table View."""
 
     model = IssuingCaModel
@@ -292,32 +292,34 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
         return response
 
 
-class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet):
+class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[IssuingCaModel]):
     """ViewSet for managing Issuing CA instances via REST API."""
 
     queryset = IssuingCaModel.objects.all().order_by('-created_at')
     serializer_class = IssuingCaSerializer
-    permission_classes: ClassVar = [IsAuthenticated]
-    filter_backends: ClassVar = [
+    permission_classes = (IsAuthenticated,)
+    filter_backends = (
         DjangoFilterBackend,
         filters.SearchFilter,
         filters.OrderingFilter,
-    ]
+    )
     filterset_fields: ClassVar = ['unique_name', 'is_active', 'issuing_ca_type']
     search_fields: ClassVar = ['unique_name', 'credential__certificate__common_name']
     ordering_fields: ClassVar = ['unique_name', 'created_at', 'updated_at']
 
+    # ignoring untyped decorator (drf-yasg not typed)
     @swagger_auto_schema(
         operation_summary='List Issuing CAs',
         operation_description='Retrieve all Issuing CAs from the database.',
         tags=['issuing-cas'],
-    )
+    )  # type: ignore[misc]
     def list(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> Response:
         """API endpoint to get all Issuing CAs."""
         queryset = self.get_queryset()
 
         for backend in list(self.filter_backends):
-            queryset = backend().filter_queryset(self.request, queryset, self)
+            if hasattr(backend, 'filter_queryset'):
+                queryset = backend().filter_queryset(self.request, queryset, self)  # type: ignore[attr-defined]
 
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -331,10 +333,10 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet):
         operation_summary='Retrieve Issuing CA',
         operation_description='Retrieve details of a specific Issuing CA by ID.',
         tags=['issuing-cas'],
-    )
+    )  # type: ignore[misc]
     def retrieve(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Response:
         """API endpoint to get a single Issuing CA by ID."""
-        return super().retrieve(request, *args, **kwargs)
+        return super().retrieve(request, *args, **kwargs)  # type: ignore[arg-type]
 
     @action(
         detail=True,
@@ -366,7 +368,7 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet):
             ),
             500: 'Failed to generate CRL',
         },
-    )
+    )  # type: ignore[misc]
     def generate_crl(self, _request: HttpRequest, **_kwargs: Any) -> Response:
         """Generate a new CRL for this Issuing CA."""
         issuing_ca = self.get_object()
@@ -423,7 +425,7 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet):
                 },
             ),
         },
-    )
+    )  # type: ignore[misc]
     def crl(self, request: HttpRequest, **_kwargs: Any) -> HttpResponse:
         """Download the CRL for this Issuing CA."""
         issuing_ca = self.get_object()

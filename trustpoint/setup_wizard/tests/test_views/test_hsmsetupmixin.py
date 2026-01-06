@@ -120,13 +120,13 @@ class HsmSetupMixinTestCase(TestCase):
         self.assertIn('test_setup', call_args)
 
     @pytest.mark.django_db
-    @patch.object(PKCS11Token.objects, 'get_or_create')
-    def test_get_or_update_token_create_new(self, mock_get_or_create):
+    @patch('setup_wizard.views.PKCS11Token')
+    def test_get_or_update_token_create_new(self, mock_token_model):
         """Test creating a new PKCS11Token."""
         mock_token = Mock()
         mock_token.label = 'Trustpoint-SoftHSM'
         mock_token.save = Mock()
-        mock_get_or_create.return_value = (mock_token, True)
+        mock_token_model.objects.get_or_create.return_value = (mock_token, True)
 
         with patch.object(self.view, '_assign_token_to_crypto_storage') as mock_assign:
             token, created = self.view._get_or_update_token(

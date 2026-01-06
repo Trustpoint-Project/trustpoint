@@ -5,17 +5,19 @@ from __future__ import annotations
 import datetime
 import itertools
 import logging
+import urllib
 from datetime import UTC
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, get_args
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509.oid import NameOID
 from cryptography.x509.verification import PolicyBuilder, Store
-from management.models import KeyStorageConfig
+from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
+from management.models import KeyStorageConfig
 from pki.models import IssuingCaModel
 from pki.util.keys import CryptographyUtils
 
@@ -33,7 +35,7 @@ class CertificateGenerator:
     def create_root_ca(
         cn: str,
         validity_days: int = 7300,
-        private_key: None | rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey = None,
+        private_key: None | PrivateKey = None,
         hash_algorithm: None | HashAlgorithm = None,
     ) -> tuple[x509.Certificate, PrivateKey]:
         """Creates a root CA certificate for testing and AutoGenPKI."""
@@ -62,6 +64,9 @@ class CertificateGenerator:
 
         if hash_algorithm is None:
             hash_algorithm = SHA256()
+        if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
+            err_msg = f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
+            raise TypeError(err_msg)
 
         public_key = private_key.public_key()
         builder = x509.CertificateBuilder()
@@ -152,6 +157,9 @@ class CertificateGenerator:
             builder = builder.add_extension(ext, critical=critical)
 
         hash_algorithm = CryptographyUtils.get_hash_algorithm_for_private_key(issuer_private_key)
+        if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
+            err_msg = f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
+            raise TypeError(err_msg)
 
         certificate = builder.sign(
             private_key=issuer_private_key,
@@ -178,9 +186,10 @@ class CertificateGenerator:
         ]
         if (chain_depth == 0):
             # Create a self-signed EE
-            key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-            cert, _key = CertificateGenerator.create_ee(key, 'Test End Entity', 'Test End Entity', key, ee_extensions)
-            return ([cert], [key])
+            ee_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+            cert, _key = CertificateGenerator.create_ee(
+                ee_key, 'Test End Entity', 'Test End Entity', ee_key, ee_extensions)
+            return ([cert], [ee_key])
 
         certs = []
         keys = []
@@ -274,6 +283,9 @@ class CertificateGenerator:
                 logger.error(error_msg)
                 raise ValueError(error_msg)
 
+        if not issuing_ca_credential_serializer.private_key:
+            err_msg = 'Issuing CA credential serializer must have a private key before saving.'
+            raise ValueError(err_msg)
         issuing_ca_credential_serializer.private_key_reference = (
             PrivateKeyReference.from_private_key(
                 private_key=issuing_ca_credential_serializer.private_key,
@@ -290,14 +302,14 @@ class CertificateGenerator:
 
         logger.info("Issuing CA '%s' saved successfully.", unique_name)
 
-        return cast('IssuingCaModel', issuing_ca)
+        return issuing_ca
 
 
 class ClientCertificateAuthenticationError(Exception):
     """Exception raised for general client certificate authentication failures."""
 
 
-class ApacheTLSClientCertExtractor:
+class NginxTLSClientCertExtractor:
     """Extracts the TLS client certificate from the request."""
 
     @staticmethod
@@ -313,18 +325,19 @@ class ApacheTLSClientCertExtractor:
         Raises:
             ClientCertificateAuthenticationError: if no client certificate found or it is not a valid PEM-encoded cert.
         """
-        cert_data = request.META.get('SSL_CLIENT_CERT')
+        cert_data = request.META.get('HTTP_SSL_CLIENT_CERT')
         if not cert_data:
-            error_message = 'Missing SSL_CLIENT_CERT header'
+            error_message = 'Missing HTTP_SSL_CLIENT_CERT header'
             raise ClientCertificateAuthenticationError(error_message)
-
+        # URL-decode the certificate
+        cert_data = urllib.parse.unquote(cert_data)
         try:
             client_cert = x509.load_pem_x509_certificate(cert_data.encode('utf-8'))
         except Exception as e:
-            error_message = f'Invalid SSL_CLIENT_CERT header: {e}'
+            error_message = f'Invalid HTTP_SSL_CLIENT_CERT header: {e}'
             raise ClientCertificateAuthenticationError(error_message) from e
 
-        # Extract intermediate CAs from Apache variables
+         # Extract intermediate CAs from NGINX variables
         intermediate_cas = []
 
         for i in itertools.count():

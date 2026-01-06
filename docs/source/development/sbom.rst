@@ -27,9 +27,9 @@ SPDX SBOM
 
 The SPDX-formatted SBOM is available in JSON format: `Download SPDX SBOM <https://github.com/Trustpoint-Project/trustpoint/blob/main/sbom_spdx.json>`_
 
-^^^^^^^^^^^^
+^^^^^^^^^^^^^^^
 CycloneDX SBOM
-^^^^^^^^^^^^
+^^^^^^^^^^^^^^^
 
 The CycloneDX-formatted SBOM is available in JSON format: `Download CycloneDX SBOM <https://github.com/Trustpoint-Project/trustpoint/blob/main/sbom_cyclonedx.json>`_
 

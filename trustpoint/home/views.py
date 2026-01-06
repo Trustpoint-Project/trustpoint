@@ -6,7 +6,6 @@ from collections import Counter
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, OnboardingStatus
 from django.contrib import messages
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -20,6 +19,8 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import RedirectView, TemplateView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
+
+from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, OnboardingStatus
 from notifications.models import NotificationModel, NotificationStatus
 from pki.models import CertificateModel, CertificateProfileModel, IssuingCaModel
 from trustpoint.logger import LoggerMixin
@@ -46,7 +47,7 @@ class DashboardView(SortableTableMixin[NotificationModel], ListView[Notification
     """Renders the dashboard page for authenticated users. Uses the 'home/dashboard.html' template."""
 
     template_name = 'home/dashboard.html'
-    model = type[NotificationModel]
+    model = NotificationModel
     context_object_name = 'notifications'
     default_sort_param = '-created_at'
     paginate_by = UIConfig.notifications_paginate_by

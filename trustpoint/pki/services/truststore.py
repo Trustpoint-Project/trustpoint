@@ -3,10 +3,10 @@
 from django.core.exceptions import ValidationError
 from django.db.models.query import QuerySet
 from trustpoint_core.serializer import CertificateCollectionSerializer
-from util.field import get_certificate_name
 
 from pki.forms import TruststoreAddForm
 from pki.models.truststore import TruststoreModel
+from util.field import get_certificate_name
 
 
 class TruststoreService:
@@ -20,7 +20,7 @@ class TruststoreService:
         queryset = TruststoreModel.objects.all()
         return queryset.order_by('-created_at')
 
-    def create(self, unique_name: str, intended_usage: str, trust_store_file: bytes) -> QuerySet[TruststoreModel]:
+    def create(self, unique_name: str, intended_usage: str, trust_store_file: bytes) -> TruststoreModel:
         """Create a new Truststore instance."""
         try:
             certificate_collection_serializer = CertificateCollectionSerializer.from_bytes(trust_store_file)

@@ -38,7 +38,7 @@ The auto restore workflow varies depending on what HSM components are available:
         ↓
     sudo wizard_auto_restore_success.sh
         ↓
-    Apache & TLS config → WIZARD_COMPLETED
+    NGINX & TLS config → WIZARD_COMPLETED
         ↓
     Done!
 
@@ -70,7 +70,7 @@ The auto restore workflow varies depending on what HSM components are available:
         ↓
     sudo wizard_auto_restore_success.sh
         ↓
-    Apache & TLS config → WIZARD_COMPLETED
+    NGINX & TLS config → WIZARD_COMPLETED
         ↓
     Done!
 
@@ -86,7 +86,7 @@ The auto restore workflow varies depending on what HSM components are available:
         ↓
     DEK unwrapped using existing KEK
         ↓
-    Apache & TLS config → WIZARD_COMPLETED
+    NGINX & TLS config → WIZARD_COMPLETED
         ↓
     Done!
 

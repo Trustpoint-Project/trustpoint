@@ -42,6 +42,7 @@ from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
 from django.conf import settings
 
+from devices.models import DeviceModel
 from workflows.context.strategy.registry import StrategyRegistry
 
 if TYPE_CHECKING:

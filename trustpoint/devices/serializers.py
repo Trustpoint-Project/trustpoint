@@ -9,7 +9,7 @@ from rest_framework import serializers
 from .models import DeviceModel
 
 
-class DeviceSerializer(serializers.ModelSerializer):
+class DeviceSerializer(serializers.ModelSerializer[DeviceModel]):
     """Serializer for Device instances.
 
     Handles conversion between Device model objects and JSON representations.

@@ -20,13 +20,12 @@ from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import FormView, TemplateView, View
+
 from management.forms import KeyStorageConfigForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.models import KeyStorageConfig, PKCS11Token
 from pki.models import CertificateModel, CredentialModel, IssuingCaModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from trustpoint.logger import LoggerMixin
-
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import (
     BackupPasswordForm,
@@ -37,6 +36,7 @@ from setup_wizard.forms import (
     StartupWizardTlsCertificateForm,
 )
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
+from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
@@ -44,12 +44,11 @@ if TYPE_CHECKING:
     from trustpoint_core.serializer import CertificateSerializer
 
 
-from management.apache_paths import (
-    APACHE_CERT_CHAIN_PATH,
-    APACHE_CERT_PATH,
-    APACHE_KEY_PATH,
+from management.nginx_paths import (
+    NGINX_CERT_CHAIN_PATH,
+    NGINX_CERT_PATH,
+    NGINX_KEY_PATH,
 )
-
 from setup_wizard.state_dir_paths import (
     SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS,
     SCRIPT_WIZARD_BACKUP_PASSWORD,
@@ -697,7 +696,7 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
         ]
         return context
 
-    def form_valid(self, form: BackupPasswordForm) -> HttpResponse:
+    def form_valid(self, form: BackupPasswordForm) -> HttpResponse:  # noqa: PLR0911 - Multiple returns needed for comprehensive error handling
         """Handle valid form submission."""
         password = form.cleaned_data.get('password')
 
@@ -1254,9 +1253,9 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             # Don't raise - this is not critical enough to fail the restore process
 
     def _extract_tls_certificates(self) -> None:
-        """Extract TLS certificates from database and write to files for Apache configuration.
+        """Extract TLS certificates from database and write to files for Nginx configuration.
 
-        This is called during auto restore to prepare TLS files before Apache configuration.
+        This is called during auto restore to prepare TLS files before Nginx configuration.
 
         Raises:
             RuntimeError: If TLS credential extraction fails.
@@ -1274,14 +1273,14 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             certificate_pem = tls_server_credential_model.get_certificate_serializer().as_pem().decode()
             trust_store_pem = tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
 
-            APACHE_KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
-            APACHE_KEY_PATH.write_text(private_key_pem)
-            APACHE_CERT_PATH.write_text(certificate_pem)
+            NGINX_KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
+            NGINX_KEY_PATH.write_text(private_key_pem)
+            NGINX_CERT_PATH.write_text(certificate_pem)
 
             if trust_store_pem.strip():
-                APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
-            elif APACHE_CERT_CHAIN_PATH.exists():
-                APACHE_CERT_CHAIN_PATH.unlink()
+                NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
+            elif NGINX_CERT_CHAIN_PATH.exists():
+                NGINX_CERT_CHAIN_PATH.unlink()
 
             self.logger.info('TLS certificates extracted successfully')
 
@@ -1806,17 +1805,17 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
         error_messages = {
             1: 'State file not found. Ensure Trustpoint is in the correct state.',
             2: 'Multiple state files detected. The wizard state is corrupted.',
-            3: 'Failed to create the required TLS directory for Apache.',
-            4: 'Failed to clear existing files in the Apache TLS directory.',
-            5: 'Failed to copy Trustpoint TLS files to the Apache directory.',
-            6: 'Failed to remove existing Apache sites from sites-enabled.',
-            7: 'Failed to copy HTTP config to Apache sites-available.',
-            8: 'Failed to copy HTTP config to Apache sites-enabled.',
-            9: 'Failed to copy HTTPS config to Apache sites-available.',
-            10: 'Failed to copy HTTPS config to Apache sites-enabled.',
-            11: 'Failed to enable Apache mod_ssl.',
-            12: 'Failed to enable Apache mod_rewrite.',
-            13: 'Failed to restart Apache gracefully.',
+            3: 'Failed to create the required TLS directory for Nginx.',
+            4: 'Failed to clear existing files in the Nginx TLS directory.',
+            5: 'Failed to copy Trustpoint TLS files to the Nginx directory.',
+            6: 'Failed to remove existing Nginx sites from sites-enabled.',
+            7: 'Failed to copy HTTP config to Nginx sites-available.',
+            8: 'Failed to copy HTTP config to Nginx sites-enabled.',
+            9: 'Failed to copy HTTPS config to Nginx sites-available.',
+            10: 'Failed to copy HTTPS config to Nginx sites-enabled.',
+            11: 'Failed to enable Nginx mod_ssl.',
+            12: 'Failed to enable Nginx mod_rewrite.',
+            13: 'Failed to restart Nginx gracefully.',
             14: 'Failed to remove the current state file.',
             15: 'Failed to create the next state file.',
         }
@@ -1909,15 +1908,15 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
         certificate_pem = credential_model.get_certificate_serializer().as_pem().decode()
         trust_store_pem = credential_model.get_certificate_chain_serializer().as_pem().decode()
 
-        APACHE_KEY_PATH.write_text(private_key_pem)
-        APACHE_CERT_PATH.write_text(certificate_pem)
+        NGINX_KEY_PATH.write_text(private_key_pem)
+        NGINX_CERT_PATH.write_text(certificate_pem)
 
         # Only write chain file if there's actually a chain (not empty)
         if trust_store_pem.strip():
-            APACHE_CERT_CHAIN_PATH.write_text(trust_store_pem)
-        elif APACHE_CERT_CHAIN_PATH.exists():
+            NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
+        elif NGINX_CERT_CHAIN_PATH.exists():
             # Remove chain file if it exists but chain is empty
-            APACHE_CERT_CHAIN_PATH.unlink()
+            NGINX_CERT_CHAIN_PATH.unlink()
 
 class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
     """View for handling the cancellation of TLS Server Credential application.

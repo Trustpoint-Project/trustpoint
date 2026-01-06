@@ -5,9 +5,9 @@ Defines the `DeviceFilter` used to filter the devices list view.
 import django_filters
 from django import forms
 from django.utils.translation import gettext_lazy as _
-from pki.models import DomainModel
 
 from devices.models import DeviceModel
+from pki.models import DomainModel
 
 
 class DeviceFilter(django_filters.FilterSet):

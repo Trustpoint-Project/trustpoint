@@ -163,11 +163,13 @@ by Django.
 Building auto documentation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code:: bash
+.. code-block:: bash
+
    uv sync --group docs
    cd ../docs
    sphinx-apidoc -f -e -o ./source ../trustpoint /*/migrations/*
    make html
+   open build/html/index.html
 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Adding dependencies to the project

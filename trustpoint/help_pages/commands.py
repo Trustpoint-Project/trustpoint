@@ -2,10 +2,11 @@
 
 from typing import Any
 
-from devices.views import NamedCurveMissingForEccErrorMsg
 from django.utils.translation import gettext as _
-from pki.util.cert_req_converter import JSONCertRequestCommandExtractor
 from trustpoint_core import oid
+
+from devices.views import NamedCurveMissingForEccErrorMsg
+from pki.util.cert_req_converter import JSONCertRequestCommandExtractor
 
 
 class KeyGenCommandBuilder:
@@ -131,7 +132,7 @@ class EstUsernamePasswordCommandBuilder:
         """
         profile_subject_entries = JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
         profile_sans = JSONCertRequestCommandExtractor.sample_request_to_openssl_req_sans(sample_request)
-        sans_line = f'-addext "subjectAltName = {profile_sans}"' if profile_sans else ''
+        sans_line = f'-addext "subjectAltName = {profile_sans}" \\\n' if profile_sans else ''
 
         return (
             'openssl req \\\n'
@@ -139,8 +140,8 @@ class EstUsernamePasswordCommandBuilder:
             f'-key key-{cred_number}.pem \\\n'
             '-outform DER \\\n'
             f'-out csr-{cred_number}.der \\\n'
-            f'-subj "{profile_subject_entries}" \\\n'
             f'{sans_line}'
+            f'-subj "{profile_subject_entries}"'
         )
 
     @staticmethod

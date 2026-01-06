@@ -70,7 +70,7 @@ def test_get_credential_for_certificate(mock_get, mock_filter) -> None:
 def test_tls_client_cert_verification_no_cert(est_simple_enrollment_view) -> None:
     """Tests the TLS client certificate verification if no valid PEM is passed."""
     est_simple_enrollment_view.request.META = {
-        'SSL_CLIENT_CERT': '41foobar',
+        'HTTP_SSL_CLIENT_CERT': '41foobar',
     }
     with pytest.raises(ClientCertificateAuthenticationError):
         IDevIDAuthenticator.authenticate_idevid(

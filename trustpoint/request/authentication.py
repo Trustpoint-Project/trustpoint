@@ -7,6 +7,10 @@ from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
+from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
+from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
+from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
+
 from devices.models import (
     DeviceModel,
     IssuedCredentialModel,
@@ -17,12 +21,8 @@ from devices.models import (
 )
 from pki.models import CredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
-from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
-from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
-from trustpoint.logger import LoggerMixin
-from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
-
 from request.request_context import RequestContext
+from trustpoint.logger import LoggerMixin
 
 
 class AuthenticationComponent(ABC):
@@ -98,7 +98,7 @@ class ClientCertificateAuthentication(AuthenticationComponent, LoggerMixin):
             is_valid, reason = issued_credential.is_valid_domain_credential()
             if not is_valid:
                 self.logger.warning('Invalid client certificate: %s', reason)
-                error_message = f'Invalid SSL_CLIENT_CERT header: {reason}'
+                error_message = f'Invalid HTTP_SSL_CLIENT_CERT header: {reason}'
                 self._raise_certificate_error(error_message)
 
             self.logger.info('Successfully authenticated device via client certificate')

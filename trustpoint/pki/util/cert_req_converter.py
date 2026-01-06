@@ -123,39 +123,50 @@ class JSONCertRequestConverter:
         return builder
 
     @staticmethod
-    def _ext_from_json(json: dict[str, Any], builder: x509.CertificateBuilder) -> x509.CertificateBuilder:
+    def _general_name_from_json(ext_value: dict[str, Any]) -> list[x509.GeneralName]:
+        """Converts SAN values from JSON to a list of x509.GeneralName objects."""
+        general_names: list[x509.GeneralName] = []
+        for san_type, san_values in ext_value.items():
+            if san_type == 'dns_names':
+                general_names.extend([x509.DNSName(v) for v in san_values])
+            elif san_type == 'rfc822_names':
+                general_names.extend([x509.RFC822Name(v) for v in san_values])
+            elif san_type == 'uris':
+                general_names.extend([x509.UniformResourceIdentifier(v) for v in san_values])
+            elif san_type == 'ip_addresses':
+                general_names.extend([x509.IPAddress(ipaddress.ip_address(v)) for v in san_values])
+            else:
+                logger.debug('JSON Cert Request Converter: Skipping unsupported SAN type: %s', san_type)
+        return general_names
+
+    @staticmethod
+    def _ku_from_json(ext_value: dict[str, Any]) -> x509.KeyUsage:
+        """Converts Key Usage values from JSON to an x509.KeyUsage object."""
+        return x509.KeyUsage(
+            digital_signature=ext_value.get('digital_signature', False),
+            content_commitment=ext_value.get('content_commitment', False),
+            key_encipherment=ext_value.get('key_encipherment', False),
+            data_encipherment=ext_value.get('data_encipherment', False),
+            key_agreement=ext_value.get('key_agreement', False),
+            key_cert_sign=ext_value.get('key_cert_sign', False),
+            crl_sign=ext_value.get('crl_sign', False),
+            encipher_only=ext_value.get('encipher_only', False),
+            decipher_only=ext_value.get('decipher_only', False),
+        )
+
+    @staticmethod
+    def _ext_from_json(json: dict[str, Any], builder: x509.CertificateBuilder) -> x509.CertificateBuilder:  # noqa: C901 (makes sense to check all supported extensions here)
         """Processes JSON data to add X.509 certificate extensions to a CertificateBuilder."""
         ext = json.get('extensions', {})
         for ext_name, ext_value in ext.items():
             critical = ext_value.get('critical', False)
             if ext_name == 'subject_alternative_name':
-                san_list: list[x509.GeneralName] = []
-                for san_type, san_values in ext_value.items():
-                    if san_type == 'dns_names':
-                        san_list.extend([x509.DNSName(v) for v in san_values])
-                    elif san_type == 'rfc822_names':
-                        san_list.extend([x509.RFC822Name(v) for v in san_values])
-                    elif san_type == 'uris':
-                        san_list.extend([x509.UniformResourceIdentifier(v) for v in san_values])
-                    elif san_type == 'ip_addresses':
-                        san_list.extend([x509.IPAddress(ipaddress.ip_address(v)) for v in san_values])
-                    else:
-                        logger.debug('JSON Cert Request Adapter: Skipping unsupported SAN type: %s', san_type)
+                san_list: list[x509.GeneralName] = JSONCertRequestConverter._general_name_from_json(ext_value)
                 if san_list:
                     builder = builder.add_extension(x509.SubjectAlternativeName(san_list), critical=critical)
             elif ext_name == 'key_usage':
                 builder = builder.add_extension(
-                    x509.KeyUsage(
-                        digital_signature=ext_value.get('digital_signature', False),
-                        content_commitment=ext_value.get('content_commitment', False),
-                        key_encipherment=ext_value.get('key_encipherment', False),
-                        data_encipherment=ext_value.get('data_encipherment', False),
-                        key_agreement=ext_value.get('key_agreement', False),
-                        key_cert_sign=ext_value.get('key_cert_sign', False),
-                        crl_sign=ext_value.get('crl_sign', False),
-                        encipher_only=ext_value.get('encipher_only', False),
-                        decipher_only=ext_value.get('decipher_only', False),
-                    ),
+                    JSONCertRequestConverter._ku_from_json(ext_value),
                     critical=critical,
                 )
             elif ext_name == 'extended_key_usage':
