@@ -1,7 +1,7 @@
 from typing import Any
 
-from django.db.models.signals import post_save, pre_save
 from django.db.models.base import ModelBase
+from django.db.models.signals import post_save, pre_delete, pre_save
 from django.dispatch import receiver
 from request.request_context import RequestContext
 from request.workflow_handler import WorkflowHandler
@@ -31,7 +31,7 @@ def _trigger_device_events(sender: ModelBase, instance: DeviceModel, created: bo
         handler.handle(ctx)
         return
 
-    # 2) Device onboarded
+    # 2) Device onboarded (domain changed from old→new)
     old = getattr(instance, '_old_domain_id', None)
     new = instance.domain_id
 
@@ -44,3 +44,16 @@ def _trigger_device_events(sender: ModelBase, instance: DeviceModel, created: bo
             operation='onboarded',
         )
         handler.handle(ctx)
+
+
+@receiver(pre_delete, sender=DeviceModel)
+def _trigger_device_deleted(sender: ModelBase, instance: DeviceModel, **_: Any) -> None:
+    """Trigger the device_deleted workflow event when a device is removed."""
+    ctx = RequestContext(
+        event=Events.device_deleted,
+        device=instance,
+        domain=instance.domain,
+        protocol='device',
+        operation='deleted',
+    )
+    WorkflowHandler().handle(ctx)

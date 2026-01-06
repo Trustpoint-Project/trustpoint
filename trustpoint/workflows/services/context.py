@@ -40,8 +40,9 @@ from typing import TYPE_CHECKING, Any
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
-from devices.models import DeviceModel
 from django.conf import settings
+
+from workflows.context.strategy.registry import StrategyRegistry
 
 if TYPE_CHECKING:
     from workflows.models import WorkflowInstance
@@ -192,66 +193,23 @@ def set_in(root: dict[str, Any], path: str, value: Any, *, forbid_overwrite: boo
 # ---------------------------- main API ----------------------------
 
 
-def build_context(instance: WorkflowInstance) -> dict[str, Any]:
-    """Compose the template context ``ctx`` for a workflow instance.
-
-    Args:
-        instance: Workflow instance for which to build the context.
-
-    Returns:
-        dict[str, Any]: A plain dict suitable for Django templates.
-    """
-    payload: dict[str, Any] = dict(instance.payload or {})
-    step_contexts: dict[str, Any] = dict(instance.step_contexts or {})
-
-    # Optional CSR enrichment
-    csr_info = _parse_csr_info(payload.get('csr_pem')) or {}
-
-    # Per-step outputs (exclude reserved keys like "$vars")
-    steps_by_id: dict[str, Any] = {
-        key: value
-        for key, value in step_contexts.items()
-        if isinstance(key, str) and not key.startswith(_RESERVED_PREFIX)
+def build_context(instance: WorkflowInstance) -> dict:
+    ctx = {
+        'workflow': {...},
+        'instance': {...},
+        'device': {...},
+        'request': {...},
+        'steps': {...},
     }
 
-    # Safe names for convenient template access
-    step_names: dict[str, str] = {raw: _safe_step_key(raw) for raw in steps_by_id}
-    steps_safe: dict[str, Any] = {step_names[raw]: value for raw, value in steps_by_id.items()}
+    # Determine which strategy should apply
+    handler = instance.definition.definition.get('events', [{}])[0].get('handler')
+    strategy = StrategyRegistry.get(handler)
 
-    # Device (required for current usage; will raise if missing)
-    device = DeviceModel.objects.get(pk=payload.get('device_id', ''))
+    # Merge strategy-provided variables:
+    ctx['strategy_variables'] = strategy.get_variables()
+    ctx['strategy_values'] = strategy.get_values(ctx)
 
-    # Global variables bucket ($vars in engine)
-    vars_map: dict[str, Any] = dict(step_contexts.get('$vars') or {})
-
-    request = {
-        'protocol': payload.get('protocol'),
-        'operation': payload.get('operation'),
-        'enrollment_request_id': payload.get('fingerprint'),
-        'csr_pem': payload.get('csr_pem'),
-        **csr_info,
-    }
-
-    ctx: dict[str, Any] = {
-        'meta': {'schema': CTX_SCHEMA_VERSION},
-        'workflow': {
-            'id': str(instance.definition.pk),
-            'name': instance.definition.name,
-            'instance_id': instance.id,
-            'instance_state': instance.state,
-        },
-        'device': {
-            'common_name': device.common_name,
-            'serial_number': device.serial_number,
-            'device_id': device.pk,
-            'domain': device.domain,
-            'device_type': device.device_type,
-            'created_at': device.created_at,
-        },
-        'request': request,
-        'steps': steps_safe,
-        'vars': vars_map,
-    }
     return ctx
 
 

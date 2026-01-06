@@ -136,7 +136,9 @@ class DeviceRequest(models.Model):
 
     device = models.ForeignKey(
         DeviceModel,
-        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name='device_requests',
     )
 
@@ -201,6 +203,18 @@ class DeviceRequest(models.Model):
     def badge_class(self) -> str:
         """Return the CSS class for the aggregated state badge."""
         return get_status_badge(self.aggregated_state)[1]
+    
+    def abort(self) -> None:
+        """Abort this request and all non-finalized child workflow instances."""
+        if self.finalized:
+            return
+
+        self.aggregated_state = State.ABORTED
+        self.finalized = True
+        self.save(update_fields=["aggregated_state", "finalized", "updated_at"])
+
+        for inst in self.instances.filter(finalized=False):
+            inst.finalize(State.ABORTED)
 
 
 # -------------------------------------

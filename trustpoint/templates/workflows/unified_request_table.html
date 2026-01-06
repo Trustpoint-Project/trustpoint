@@ -1,0 +1,216 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+
+  <div class="card-header">
+    <h1 class="mb-0">{% trans 'Pending Requests' %}</h1>
+  </div>
+
+  {# --- FILTERS --- #}
+  <form method="get" class="card-body pb-2">
+    <div class="row g-2 align-items-end">
+
+      {# Row 1 #}
+      <div class="col-md-4">
+        {{ filter_form.device_name.label_tag }}
+        {{ filter_form.device_name }}
+      </div>
+
+      <div class="col-md-4">
+        {{ filter_form.domain.label_tag }}
+        {{ filter_form.domain }}
+      </div>
+
+      <div class="col-md-2">
+        {{ filter_form.type.label_tag }}
+        {{ filter_form.type }}
+      </div>
+
+      <div class="col-md-2">
+        {{ filter_form.state.label_tag }}
+        {{ filter_form.state }}
+      </div>
+
+      {# Row 2 #}
+      <div class="col-md-2">
+        {{ filter_form.protocol.label_tag }}
+        {{ filter_form.protocol }}
+      </div>
+
+      <div class="col-md-2">
+        {{ filter_form.operation.label_tag }}
+        {{ filter_form.operation }}
+      </div>
+
+      <div class="col-md-2">
+        {{ filter_form.action.label_tag }}
+        {{ filter_form.action }}
+      </div>
+
+      <div class="col-md-2">
+        {{ filter_form.template.label_tag }}
+        {{ filter_form.template }}
+      </div>
+
+      <div class="col-md-2">
+        {{ filter_form.requested_from.label_tag }}
+        {{ filter_form.requested_from }}
+      </div>
+
+      <div class="col-md-2">
+        {{ filter_form.requested_to.label_tag }}
+        {{ filter_form.requested_to }}
+      </div>
+
+      {# Row 3: apply + include finalized #}
+      <div class="col-12 d-flex justify-content-between align-items-center mt-2">
+        <div class="form-check">
+          {{ filter_form.include_finalized }}
+          {{ filter_form.include_finalized.label_tag }}
+        </div>
+
+        <button class="btn btn-primary btn-sm">
+          {% trans "Apply Filters" %}
+        </button>
+      </div>
+
+    </div>
+  </form>
+
+  {# --- BULK ACTION FORM (applies to both request types) --- #}
+  <form method="post" action="{% url 'workflows:requests_bulk_abort' %}"
+        style="flex-grow: 1; display: flex; flex-direction: column;">
+    {% csrf_token %}
+
+    <div class="card-body pt-0" style="overflow: auto; flex-grow: 1; max-height: 90%;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>
+              <input type="checkbox"
+                     onclick="document.querySelectorAll('input[name=&quot;row_checkbox&quot;]').forEach(cb=>cb.checked=this.checked);">
+            </th>
+
+            <th>{% trans 'Type' %}</th>
+            <th>{% trans 'Device' %}</th>
+            <th>{% trans 'Domain' %}</th>
+            <th>{% trans 'Protocol' %}</th>
+            <th>{% trans 'Operation' %}</th>
+            <th>{% trans 'Action' %}</th>
+            <th>{% trans 'Template' %}</th>
+            <th>{% trans 'Workflows' %}</th>
+            <th>{% trans 'Created' %}</th>
+            <th>{% trans 'State' %}</th>
+            <th class="text-end">{% trans 'Action' %}</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for r in requests %}
+            <tr>
+              <td>
+                <input type="checkbox" name="row_checkbox" value="{{ r.request_type }}:{{ r.id }}">
+              </td>
+
+              <td>{{ r.request_type }}</td>
+
+              <td>
+                {% if r.device_id %}
+                  <a href="{% url 'devices:devices_certificate_lifecycle_management' pk=r.device_id %}">
+                    {{ r.device__common_name }} ({{ r.device__serial_number }})
+                  </a>
+                {% else %}&mdash;{% endif %}
+              </td>
+
+              <td>
+                {% if r.domain_id %}
+                  <a href="{% url 'pki:domains-detail' pk=r.domain_id %}">
+                    {{ r.domain__unique_name }}
+                  </a>
+                {% else %}&mdash;{% endif %}
+              </td>
+
+              <td>
+                {% if r.request_type == "Enrollment" %}
+                  {{ r.protocol }}
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
+
+              <td>
+                {% if r.request_type == "Enrollment" %}
+                  {{ r.operation }}
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
+
+              <td>
+                {% if r.request_type == "Device" %}
+                  {{ r.action_text|capfirst }}
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
+
+              <td>
+                {% if r.request_type == "Enrollment" %}
+                  {{ r.template_text|default:"—" }}
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
+
+              <td>{{ r.instance_count }}</td>
+              <td>{{ r.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+
+              <td>
+                <span class="badge {{ r.badge_css }}">{{ r.aggregated_state }}</span>
+              </td>
+
+              <td class="text-end">
+                {% if r.request_type == "Enrollment" %}
+                  <a href="{% url 'workflows:request_detail' r.id %}" class="btn btn-sm btn-primary">{% trans "Open" %}</a>
+                {% else %}
+                  <a href="{% url 'workflows:device_request_detail' r.id %}" class="btn btn-sm btn-primary">{% trans "Open" %}</a>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="12" class="text-center py-4">
+                {% trans 'No requests.' %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+      <div class="tp-card-btn-footer m-1">
+        <button type="submit" formaction="{% url 'workflows:requests_bulk_signal' %}"
+                name="action" value="approve"
+                class="btn btn-success me-2">
+          {% trans 'Approve selected' %}
+        </button>
+
+        <button type="submit" formaction="{% url 'workflows:requests_bulk_signal' %}"
+                name="action" value="reject"
+                class="btn btn-danger me-2">
+          {% trans 'Reject selected' %}
+        </button>
+
+        <button type="submit" class="btn btn-outline-danger">
+          {% trans 'Abort selected' %}
+        </button>
+      </div>
+      <div class="m-1"></div>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

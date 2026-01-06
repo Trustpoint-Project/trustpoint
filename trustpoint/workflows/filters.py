@@ -1,107 +1,128 @@
-"""Filter classes for workflow instances and enrollment requests."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import Any
 
-import django_filters
 from django import forms
 from django.utils.translation import gettext_lazy as _
 from pki.models import DomainModel
 
-from workflows.models import EnrollmentRequest, State, WorkflowDefinition, WorkflowInstance
+from workflows.models import State
 
-if TYPE_CHECKING:
-    from django.db.models import QuerySet
 
-class EnrollmentRequestFilter(django_filters.FilterSet):
-    """Filters for the enrollment request list."""
-
-    device_name = django_filters.CharFilter(
-        label=_('Device'),
-        field_name='device__common_name',
-        lookup_expr='icontains',
-        widget=forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': _('Search device…')}),
+class UnifiedRequestFilterForm(forms.Form):
+    device_name = forms.CharField(
+        label=_("Device"),
+        required=False,
+        widget=forms.TextInput(
+            attrs={"class": "form-control form-control-sm", "placeholder": _("Search device…")}
+        ),
     )
 
-    include_finalized = django_filters.BooleanFilter(
-        label=_('Include finalized/aborted requests'),
-        method='filter_include_finalized',
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-    )
-
-    domain = django_filters.ModelChoiceFilter(
-        label=_('Domain'),
-        field_name='domain',
+    domain = forms.ModelChoiceField(
+        label=_("Domain"),
+        required=False,
         queryset=DomainModel.objects.all(),
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
+        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
     )
 
-    protocol = django_filters.CharFilter(
-        label=_('Protocol'),
-        field_name='protocol',
-        lookup_expr='icontains',
-        widget=forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': _('EST, CMP, …')}),
+    type = forms.ChoiceField(
+        label=_("Type"),
+        required=False,
+        choices=(
+            ("", _("All")),
+            ("Enrollment", _("Enrollment")),
+            ("Device", _("Device Event")),
+        ),
+        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
     )
 
-    operation = django_filters.CharFilter(
-        label=_('Operation'),
-        field_name='operation',
-        lookup_expr='icontains',
-        widget=forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': _('simpleenroll, …')}),
+    state = forms.ChoiceField(
+        label=_("State"),
+        required=False,
+        choices=(("", _("All")), *State.choices),
+        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
     )
 
-    template = django_filters.CharFilter(
-        label=_('Template'),
-        field_name='template',
-        lookup_expr='icontains',
-        widget=forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': _('Template…')}),
+    include_finalized = forms.BooleanField(
+        label=_("Include finalized/aborted requests"),
+        required=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
     )
 
-    state = django_filters.ChoiceFilter(
-        label=_('State'),
-        field_name='aggregated_state',
-        choices=State.choices,
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
+    protocol = forms.CharField(
+        label=_("Protocol"),
+        required=False,
+        widget=forms.TextInput(
+            attrs={"class": "form-control form-control-sm", "placeholder": _("EST, CMP, …")}
+        ),
     )
 
-    requested_from = django_filters.DateTimeFilter(
-        label=_('Requested from'),
-        field_name='created_at',
-        lookup_expr='gte',
-        widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
+    operation = forms.CharField(
+        label=_("Operation"),
+        required=False,
+        widget=forms.TextInput(
+            attrs={"class": "form-control form-control-sm", "placeholder": _("simpleenroll, …")}
+        ),
     )
 
-    requested_to = django_filters.DateTimeFilter(
-        label=_('Requested to'),
-        field_name='created_at',
-        lookup_expr='lte',
-        widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
+    action = forms.CharField(
+        label=_("Action"),
+        required=False,
+        widget=forms.TextInput(
+            attrs={"class": "form-control form-control-sm", "placeholder": _("created, onboarded, …")}
+        ),
     )
 
-    class Meta:
-        """Configuration for EnrollmentRequestFilter."""
-        model = EnrollmentRequest
-        fields: tuple[str, ...] = ()
+    template = forms.CharField(
+        label=_("Template"),
+        required=False,
+        widget=forms.TextInput(
+            attrs={"class": "form-control form-control-sm", "placeholder": _("tls_client, …")}
+        ),
+    )
 
-    def filter_include_finalized(
-        self,
-        queryset: QuerySet[EnrollmentRequest],
-        _name: str,
-        value: Any,
-    ) -> QuerySet[EnrollmentRequest]:
-        """Filter finalized enrollment requests.
+    requested_from = forms.DateTimeField(
+        label=_("Requested from"),
+        required=False,
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "form-control form-control-sm"}),
+    )
 
-        - Unchecked (value is False/None): only non-finalized requests.
-        - Checked (value is True): include finalized as well.
+    requested_to = forms.DateTimeField(
+        label=_("Requested to"),
+        required=False,
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "form-control form-control-sm"}),
+    )
 
-        Args:
-            queryset: Base queryset of enrollment requests.
-            _name: Name of the filter (unused).
-            value: Boolean-like value from the filter widget.
 
-        Returns:
-            QuerySet[EnrollmentRequest]: Filtered queryset.
-        """
-        if value:
-            return queryset
-        return queryset.filter(finalized=False)
+@dataclass(frozen=True)
+class UnifiedRequestFilters:
+    device_name: str
+    domain_id: int | None
+    type: str
+    state: str
+    include_finalized: bool
+    protocol: str
+    operation: str
+    action: str
+    template: str
+    requested_from: Any
+    requested_to: Any
+
+    @classmethod
+    def from_form(cls, form: UnifiedRequestFilterForm) -> "UnifiedRequestFilters":
+        cd = form.cleaned_data
+        dom = cd.get("domain")
+        return cls(
+            device_name=str(cd.get("device_name") or "").strip(),
+            domain_id=int(dom.id) if dom is not None else None,
+            type=str(cd.get("type") or ""),
+            state=str(cd.get("state") or ""),
+            include_finalized=bool(cd.get("include_finalized") or False),
+            protocol=str(cd.get("protocol") or "").strip(),
+            operation=str(cd.get("operation") or "").strip(),
+            action=str(cd.get("action") or "").strip(),
+            template=str(cd.get("template") or "").strip(),
+            requested_from=cd.get("requested_from"),
+            requested_to=cd.get("requested_to"),
+        )

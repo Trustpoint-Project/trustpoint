@@ -10,6 +10,7 @@ This module provides Django class-based views for:
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -18,8 +19,10 @@ from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
 from devices.models import DeviceModel
 from django.contrib import messages
+from django.core.paginator import Paginator
 from django.db import IntegrityError, models
-from django.db.models import Count
+from django.db.models import Case, CharField, Count, F, Value, When
+from django.db.models.functions import Cast
 from django.db.models.query import QuerySet
 from django.http import (
     HttpRequest,
@@ -38,9 +41,12 @@ from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_DEVICES_
 from trustpoint_core.oid import AlgorithmIdentifier
 from util.email import MailTemplates
 
+from workflows.context.registry import get_strategy
 from workflows.events import Events
-from workflows.filters import EnrollmentRequestFilter
+from workflows.filters import UnifiedRequestFilterForm, UnifiedRequestFilters
 from workflows.models import (
+    BADGE_MAP,
+    DeviceRequest,
     EnrollmentRequest,
     State,
     WorkflowDefinition,
@@ -54,24 +60,40 @@ from workflows.services.engine import advance_instance
 from workflows.services.validators import validate_wizard_payload
 from workflows.services.wizard import transform_to_definition_schema
 
+# class ContextCatalogView(View):
+#     """Return a flattened, searchable catalog of {{ ctx.* }} variables for a running instance."""
+
+#     def get(self, _request: HttpRequest, instance_id: UUID, *_args: Any, **_kwargs: Any) -> JsonResponse:
+#         """Return JSON catalog of available template paths for {{ ctx.* }}.
+
+#         Args:
+#             _request: The HTTP request.
+#             instance_id: Workflow instance UUID.
+
+#         Returns:
+#             JsonResponse with 'usage' and 'vars' (each var has key, label, sample).
+#         """
+#         inst = get_object_or_404(WorkflowInstance, pk=instance_id)
+#         ctx = build_context(inst)  # returns a dict
+#         catalog = build_catalog(ctx)
+#         return JsonResponse(catalog, safe=True)
 
 class ContextCatalogView(View):
-    """Return a flattened, searchable catalog of {{ ctx.* }} variables for a running instance."""
-
-    def get(self, _request: HttpRequest, instance_id: UUID, *_args: Any, **_kwargs: Any) -> JsonResponse:
-        """Return JSON catalog of available template paths for {{ ctx.* }}.
-
-        Args:
-            _request: The HTTP request.
-            instance_id: Workflow instance UUID.
-
-        Returns:
-            JsonResponse with 'usage' and 'vars' (each var has key, label, sample).
-        """
+    def get(self, _request, instance_id, *_args, **_kwargs):
         inst = get_object_or_404(WorkflowInstance, pk=instance_id)
-        ctx = build_context(inst)  # returns a dict
-        catalog = build_catalog(ctx)
-        return JsonResponse(catalog, safe=True)
+
+        handler = inst.definition.definition.get("events", [{}])[0].get("handler")
+        strategy = get_strategy(handler)
+
+        groups = strategy.get_groups(inst)
+
+        return JsonResponse(
+            {
+                "handler": handler,
+                "groups": groups,
+            },
+            safe=True,
+        )
 
 
 class MailTemplateListView(View):
@@ -809,54 +831,174 @@ class SignalInstanceView(View):
 
         return redirect('workflows:request_detail', pk=inst.enrollment_request.pk)
 
-class EnrollmentRequestListView(ListView[EnrollmentRequest]):
-    """List EnrollmentRequests (main pending requests page)."""
+class DeviceRequestDetailView(ListView[WorkflowInstance]):
+    model = WorkflowInstance
+    template_name = "workflows/device_request_detail.html"
+    context_object_name = "instances"
+    paginate_by = 50
 
-    model = EnrollmentRequest
-    template_name = 'workflows/enrollment_request_table.html'
-    context_object_name = 'requests'
-    paginate_by = 25
-
-    def get_queryset(self) -> QuerySet[EnrollmentRequest]:
-        """Return EnrollmentRequests annotated with workflow instance counts, filtered."""
-        base_qs = (
-            EnrollmentRequest.objects.select_related('device', 'domain', 'ca')
-            .annotate(workflow_count=Count('instances'))
-            .order_by('-created_at')
+    def get_queryset(self) -> QuerySet[WorkflowInstance]:
+        dr = get_object_or_404(DeviceRequest, pk=self.kwargs["pk"])
+        return (
+            WorkflowInstance.objects.filter(device_request=dr)
+            .select_related(
+                "definition",
+                "device_request",
+                "device_request__device",
+                "device_request__domain",
+                "device_request__ca",
+            )
+            .order_by("-created_at")
         )
 
-        params = self.request.GET.copy()
-
-        # Default: only non-finalized unless user explicitly sets it
-        if 'finalized' not in params:
-            params = params.copy()
-            params['finalized'] = 'False'
-
-        # Default: AwaitingApproval unless user explicitly sets state
-        if 'state' not in params:
-            params = params.copy()
-            params['state'] = State.AWAITING
-
-        if params.get('state') in {State.FINALIZED, State.ABORTED}:
-            params = params.copy()
-            params['include_finalized'] = 'on'
-
-        self.filterset = EnrollmentRequestFilter(params, queryset=base_qs)
-        qs = self.filterset.qs
-        return qs
-
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add page metadata and filter to context."""
-        if self.request.GET.get('state') in {State.FINALIZED, State.ABORTED}:
-            self.filterset.form.initial['include_finalized'] = True
         context = super().get_context_data(**kwargs)
-        context['page_category'] = 'workflows'
-        context['page_name'] = 'pending_requests'
-        context['filter'] = getattr(self, 'filterset', None)
-        # preserve query string when changing sort/pagination if needed later
-        params = self.request.GET.copy()
-        context['preserve_qs'] = params.urlencode()
+        dr = get_object_or_404(
+            DeviceRequest.objects.select_related("device", "domain", "ca"),
+            pk=self.kwargs["pk"],
+        )
+        context["dr"] = dr
+        context["page_category"] = "workflows"
+        context["page_name"] = "requests"
         return context
+
+
+class UnifiedRequestListView(View):
+    template_name = "workflows/unified_request_table.html"
+    paginate_by = 25
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        form = UnifiedRequestFilterForm(request.GET)
+        form.is_valid()  # must run to populate cleaned_data
+        flt = UnifiedRequestFilters.from_form(form)
+
+        badge_case = Case(
+            *[When(aggregated_state=k, then=Value(v[1])) for k, v in BADGE_MAP.items()],
+            default=Value("bg-secondary text-light"),
+            output_field=CharField(),
+        )
+
+        # ---- Enrollment QS ---------------------------------------------------
+        ers = (
+            EnrollmentRequest.objects.select_related("device", "domain", "ca")
+            .annotate(instance_count=Count("instances"))
+        )
+
+        if flt.template:
+            ers = ers.filter(template__icontains=flt.template)
+
+        ers_rows = (
+            ers.annotate(
+                request_type=Value("Enrollment", output_field=CharField()),
+                action_text=Value("", output_field=CharField()),
+                template_text=Cast("template", output_field=CharField()),
+                badge_css=badge_case,
+            )
+            .values(
+                "id",
+                "created_at",
+                "aggregated_state",
+                "finalized",
+                "request_type",
+                "action_text",
+                "protocol",
+                "operation",
+                "template_text",
+                "instance_count",
+                "device_id",
+                "domain_id",
+                "device__common_name",
+                "device__serial_number",
+                "domain__unique_name",
+                "badge_css",
+            )
+        )
+
+        # ---- Device QS -------------------------------------------------------
+        drs = (
+            DeviceRequest.objects.select_related("device", "domain", "ca")
+            .annotate(instance_count=Count("instances"))
+        )
+
+        if not flt.include_finalized:
+            drs = drs.filter(finalized=False)
+        if flt.state:
+            drs = drs.filter(aggregated_state=flt.state)
+        if flt.device_name:
+            drs = drs.filter(device__common_name__icontains=flt.device_name)
+        if flt.domain_id is not None:
+            drs = drs.filter(domain_id=flt.domain_id)
+        if flt.requested_from:
+            drs = drs.filter(created_at__gte=flt.requested_from)
+        if flt.requested_to:
+            drs = drs.filter(created_at__lte=flt.requested_to)
+
+        # Action filter (DeviceRequest only)
+        if flt.action:
+            drs = drs.filter(action__icontains=flt.action)
+
+        drs_rows = (
+            drs.annotate(
+                request_type=Value("Device", output_field=CharField()),
+                action_text=Cast("action", output_field=CharField()),
+                protocol=Value("", output_field=CharField()),
+                operation=Value("", output_field=CharField()),
+                template_text=Value("", output_field=CharField()),
+                badge_css=badge_case,
+            )
+            .values(
+                "id",
+                "created_at",
+                "aggregated_state",
+                "finalized",
+                "request_type",
+                "action_text",
+                "protocol",
+                "operation",
+                "template_text",
+                "instance_count",
+                "device_id",
+                "domain_id",
+                "device__common_name",
+                "device__serial_number",
+                "domain__unique_name",
+                "badge_css",
+            )
+        )
+
+        # ---- Choose source / UNION ------------------------------------------
+        if flt.type == "Enrollment":
+            unified = ers_rows
+        elif flt.type == "Device":
+            unified = drs_rows
+        else:
+            unified = ers_rows.union(drs_rows, all=True)
+
+        # ---- Sorting ---------------------------------------------------------
+        sort = (request.GET.get("sort") or "-created_at").strip()
+        allowed_sorts = {"created_at", "aggregated_state", "request_type"}
+        reverse = sort.startswith("-")
+        key = sort.lstrip("-")
+        if key not in allowed_sorts:
+            key = "created_at"
+            reverse = True
+        unified = unified.order_by(f"-{key}" if reverse else key)
+
+        paginator = Paginator(unified, self.paginate_by)
+        page_obj = paginator.get_page(request.GET.get("page"))
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "page_obj": page_obj,
+                "requests": page_obj.object_list,
+                "filter_form": form,
+                "page_category": "workflows",
+                "page_name": "pending_requests",
+                "preserve_qs": request.GET.urlencode(),
+            },
+        )
 
 
 class EnrollmentRequestDetailView(ListView[WorkflowInstance]):
@@ -895,43 +1037,52 @@ class EnrollmentRequestDetailView(ListView[WorkflowInstance]):
         return context
 
 
+def _parse_selected_rows(values: list[str]) -> tuple[list[UUID], list[UUID]]:
+    """Return (enrollment_ids, device_ids) from checkbox values."""
+    enr: list[UUID] = []
+    dev: list[UUID] = []
+
+    for raw in values:
+        if not raw:
+            continue
+        try:
+            typ, sid = raw.split(":", 1)
+            uid = UUID(sid)
+        except Exception:  # noqa: BLE001
+            continue
+
+        if typ == "Enrollment":
+            enr.append(uid)
+        elif typ == "Device":
+            dev.append(uid)
+
+    return enr, dev
+
 class BulkAbortEnrollmentRequestsView(View):
-    """POST endpoint to abort multiple EnrollmentRequests."""
-
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
-        """Handles the POST request for bulk abortion of enrollment requests.
+        selected = request.POST.getlist("row_checkbox")
+        if not selected:
+            messages.warning(request, "Please select at least one request.")
+            return redirect("workflows:request_table")
 
-        Args:
-            request: The django request object.
-            _args: Positional arguments are discarded.
-            kwargs: Keyword arguments are passed to get_context_data.
+        enr_ids, dev_ids = _parse_selected_rows(selected)
 
-        Returns:
-            The HttpResponseRedirect.
-        """
-        selected_ids: list[str] = request.POST.getlist('row_checkbox')
-        if not selected_ids:
-            messages.warning(request, 'Please select at least one request.')
-            return redirect('workflows:request_table')
+        aborted = 0
 
-        # Only abort non-finalized requests
-        qs = EnrollmentRequest.objects.filter(id__in=selected_ids, finalized=False)
-
-        if not qs.exists():
-            messages.warning(request, 'No abortable enrollment requests were found.')
-            return redirect('workflows:request_table')
-
-        aborted_count = 0
-        for er in qs:
+        for er in EnrollmentRequest.objects.filter(id__in=enr_ids, finalized=False):
             er.abort()
-            aborted_count += 1
+            aborted += 1
 
-        if aborted_count == 0:
-            messages.warning(request, 'No enrollment requests were aborted.')
+        for dr in DeviceRequest.objects.filter(id__in=dev_ids, finalized=False):
+            dr.abort()
+            aborted += 1
+
+        if aborted == 0:
+            messages.warning(request, "No abortable requests were found.")
         else:
-            messages.success(request, f'Aborted {aborted_count} enrollment request(s).')
+            messages.success(request, f"Aborted {aborted} request(s).")
 
-        return redirect('workflows:request_table')
+        return redirect("workflows:request_table")
 
 
 class SignalEnrollmentRequestView(View):
@@ -982,58 +1133,72 @@ class SignalEnrollmentRequestView(View):
 
 
 class BulkSignalEnrollmentRequestsView(View):
-    """Bulk approve or reject enrollment requests."""
-
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
-        action = request.POST.get('action')
-        if action not in {'approve', 'reject'}:
-            messages.error(request, f'Invalid bulk action: {action!r}')
-            return redirect('workflows:request_table')
+        action = request.POST.get("action")
+        if action not in {"approve", "reject"}:
+            messages.error(request, f"Invalid bulk action: {action!r}")
+            return redirect("workflows:request_table")
 
-        selected_ids: list[str] = request.POST.getlist('row_checkbox')
-        if not selected_ids:
-            messages.warning(request, 'Please select at least one request.')
-            return redirect('workflows:request_table')
+        selected = request.POST.getlist("row_checkbox")
+        if not selected:
+            messages.warning(request, "Please select at least one request.")
+            return redirect("workflows:request_table")
 
-        qs = (
-            EnrollmentRequest.objects.filter(id__in=selected_ids)
-            .prefetch_related('instances')
-        )
+        enr_ids, dev_ids = _parse_selected_rows(selected)
 
-        updatable: list[EnrollmentRequest] = []
+        enr_qs = EnrollmentRequest.objects.filter(id__in=enr_ids).prefetch_related("instances")
+        dev_qs = DeviceRequest.objects.filter(id__in=dev_ids).prefetch_related("instances")
 
-        for er in qs:
+        # Validate “possible action”
+        for er in enr_qs:
             if er.finalized:
-                messages.error(request, 'Cannot update finalized requests.')
-                return redirect('workflows:request_table')
-
+                messages.error(request, "Cannot update finalized requests.")
+                return redirect("workflows:request_table")
             if er.aggregated_state != State.AWAITING:
                 messages.error(
                     request,
-                    _(
-                        'You cannot %(a)a a request which is already in state "%(s)s".'
-                    ) % {'s': er.aggregated_state.lower(), 'a': action},
+                    _(f'You cannot {action} a request already in state "{er.aggregated_state.lower()}"'),
                 )
-                return redirect('workflows:request_table')
+                return redirect("workflows:request_table")
+            if action == "approve" and any(inst.state == State.FAILED for inst in er.instances.all()):
+                messages.error(request, "Cannot approve requests containing failed instances.")
+                return redirect("workflows:request_table")
 
-            if action == 'approve':
-                if any(inst.state == State.FAILED for inst in er.instances.all()):
-                    messages.error(request, 'Cannot approve requests containing failed instances.')
-                    return redirect('workflows:request_table')
-
-            updatable.append(er)
+        for dr in dev_qs:
+            if dr.finalized:
+                messages.error(request, "Cannot update finalized requests.")
+                return redirect("workflows:request_table")
+            if dr.aggregated_state != State.AWAITING:
+                messages.error(
+                    request,
+                    _(f'You cannot {action} a request already in state "{dr.aggregated_state.lower()}"'),
+                )
+                return redirect("workflows:request_table")
+            if action == "approve" and any(inst.state == State.FAILED for inst in dr.instances.all()):
+                messages.error(request, "Cannot approve requests containing failed instances.")
+                return redirect("workflows:request_table")
 
         updated = 0
-        for er in updatable:
+
+        for er in enr_qs:
             for inst in er.instances.all():
                 advance_instance(inst, signal=action)
                 inst.refresh_from_db()
             er.recompute_and_save()
             updated += 1
 
-        if action == 'approve':
-            messages.success(request, f'{updated} request(s) approved.')
-        else:
-            messages.warning(request, f'{updated} request(s) rejected.')
+        for dr in dev_qs:
+            for inst in dr.instances.all():
+                advance_instance(inst, signal=action)
+                inst.refresh_from_db()
+            dr.recompute_and_save()
+            updated += 1
 
-        return redirect('workflows:request_table')
+        if updated == 0:
+            messages.warning(request, "No requests were updated.")
+        elif action == "approve":
+            messages.success(request, f"{updated} request(s) approved.")
+        else:
+            messages.warning(request, f"{updated} request(s) rejected.")
+
+        return redirect("workflows:request_table")
