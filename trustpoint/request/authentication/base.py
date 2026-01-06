@@ -8,7 +8,7 @@ from devices.models import (
     IssuedCredentialModel,
 )
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
-from request.request_context import RequestContext
+from request.request_context import BaseRequestContext
 from trustpoint.logger import LoggerMixin
 
 
@@ -16,14 +16,14 @@ class AuthenticationComponent(ABC):
     """Abstract base class for authentication components."""
 
     @abstractmethod
-    def authenticate(self, context: RequestContext) -> DeviceModel | None:
+    def authenticate(self, context: BaseRequestContext) -> DeviceModel | None:
         """Authenticate a request using specific logic."""
 
 
 class ClientCertificateAuthentication(AuthenticationComponent, LoggerMixin):
     """Handles authentication via client certificates."""
 
-    def authenticate(self, context: RequestContext) -> None:
+    def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate using the client certificate from the context."""
         if not context.client_certificate:
             return
@@ -63,7 +63,7 @@ class ClientCertificateAuthentication(AuthenticationComponent, LoggerMixin):
 class IDevIDAuthentication(AuthenticationComponent, LoggerMixin):
     """Handles authentication via IDevID certificates."""
 
-    def authenticate(self, context: RequestContext) -> None:
+    def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate the request using the IDevID mechanism."""
         # Early return if raw_message is missing
         if not context.raw_message:
@@ -120,7 +120,7 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
         """Remove an authentication component from the composite."""
         self.components.remove(component)
 
-    def authenticate(self, context: RequestContext) -> None:
+    def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate the request using all registered components."""
         authentication_errors = []
 

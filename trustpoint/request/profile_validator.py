@@ -5,7 +5,7 @@ from pydantic_core import ValidationError
 
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from pki.util.cert_req_converter import JSONCertRequestConverter
-from request.request_context import RequestContext
+from request.request_context import BaseCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 
@@ -13,11 +13,11 @@ class ProfileValidator(LoggerMixin):
     """Converts and validates certificate requests against profiles."""
 
     @classmethod
-    def validate(cls, context: RequestContext) -> None:
+    def validate(cls, context: BaseCertificateRequestContext) -> None:
         """Validates the certificate request against the profile.
 
         Args:
-            context (RequestContext): The request context containing the certificate request.
+            context (BaseCertificateRequestContext): The request context containing the certificate request.
         """
         cert_request_json = JSONCertRequestConverter.to_json(context.cert_requested)
         cls.logger.info('Cert Request JSON: %s', cert_request_json)

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 # Request context classes follow the naming convention of <Protocol><Operation>RequestContext
 
-@dataclass
+@dataclass(kw_only=True)
 class BaseRequestContext:
     """Base class for all specific request context classes."""
     operation: str | None = None
@@ -55,6 +55,7 @@ class BaseRequestContext:
         return (f'{self.__class__.__name__}(protocol={self.protocol}, '
                 f'operation={self.operation}, domain_str={self.domain_str})')
 
+@dataclass(kw_only=True)
 class BaseCertificateRequestContext(BaseRequestContext):
     """Shared context for all certificate request operations."""
     cert_requested: CertificateSigningRequest | CertificateBuilder | None = None
@@ -69,10 +70,13 @@ class BaseCertificateRequestContext(BaseRequestContext):
     event: Event | None = None
 
 
+@dataclass(kw_only=True)
 class BaseRevocationRequestContext(BaseRequestContext):
     """Shared context for all revocation request operations."""
     credential_to_revoke: IssuedCredentialModel | None = None
 
+
+@dataclass(kw_only=True)
 class HttpBaseRequestContext(BaseRequestContext):
     """Shared context for all protocols that use HTTP(s) for message transfer."""
     raw_message: HttpRequest | None = None
@@ -82,6 +86,8 @@ class HttpBaseRequestContext(BaseRequestContext):
     http_response_content: bytes | str | None = None
     http_response_content_type: str | None = None
 
+
+@dataclass(kw_only=True)
 class EstBaseRequestContext(HttpBaseRequestContext):
     """Shared context for all EST requests."""
     parsed_message: CertificateSigningRequest | None = None
@@ -89,20 +95,27 @@ class EstBaseRequestContext(HttpBaseRequestContext):
     est_username: str | None = None
     est_password: str | None = None
 
+
+@dataclass(kw_only=True)
 class CmpBaseRequestContext(HttpBaseRequestContext):
     """Shared context for all CMP requests."""
     parsed_message: PKIMessage | None = None
     cmp_shared_secret: str | None = None
 
+
+@dataclass(kw_only=True)
 class RestBaseRequestContext(HttpBaseRequestContext):
     """Shared context for all REST API requests."""
 
+
+@dataclass(kw_only=True)
 class EstCertificateRequestContext(EstBaseRequestContext, BaseCertificateRequestContext):
     """EST context for certificate enrollment requests."""
 
 class EstRevocationRequestContext(EstBaseRequestContext, BaseRevocationRequestContext):
     """EST context for certificate revocation requests."""
 
+@dataclass(kw_only=True)
 class CmpCertificateRequestContext(CmpBaseRequestContext, BaseCertificateRequestContext):
     """CMP context for certificate enrollment requests (IR/CR)."""
 

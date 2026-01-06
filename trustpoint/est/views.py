@@ -9,14 +9,14 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from pki.models.domain import DomainModel
-from request.authentication.base import EstAuthentication
-from request.authorization.base import EstAuthorization
-from request.request_validator.http_req import EstHttpRequestValidator
-from request.message_responder.base import EstErrorMessageResponder, EstMessageResponder
-from request.operation_processor.base import CertificateIssueProcessor
-from request.message_parser.base import EstMessageParser
+from request.authentication import EstAuthentication
+from request.authorization import EstAuthorization
+from request.message_parser import EstMessageParser
+from request.message_responder import EstErrorMessageResponder, EstMessageResponder
+from request.operation_processor import CertificateIssueProcessor
 from request.profile_validator import ProfileValidator
-from request.request_context import RequestContext
+from request.request_context import EstCertificateRequestContext
+from request.request_validator.http_req import EstHttpRequestValidator
 from request.workflow_handler import WorkflowHandler
 from trustpoint.logger import LoggerMixin
 from workflows.events import Events
@@ -99,7 +99,7 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
 
         try:
-            ctx = RequestContext(
+            ctx = EstCertificateRequestContext(
                 raw_message=request,
                 protocol='est',
                 operation='simpleenroll',
@@ -206,7 +206,7 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
             domain_name = cast('str', kwargs.get('domain'))
             cert_profile = cast('str', kwargs.get('certtemplate'))
 
-            ctx = RequestContext(
+            ctx = EstCertificateRequestContext(
                 raw_message=request,
                 protocol='est',
                 operation='simplereenroll',

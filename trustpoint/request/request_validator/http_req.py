@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 
 from cryptography import x509
 
-from request.request_context import RequestContext
+from request.request_context import BaseRequestContext, HttpBaseRequestContext
 from trustpoint.logger import LoggerMixin
 
 
@@ -15,7 +15,7 @@ class ValidationComponent(ABC):
     """Abstract base class to represent a component in composite validation."""
 
     @abstractmethod
-    def validate(self, context: RequestContext) -> None:
+    def validate(self, context: HttpBaseRequestContext) -> None:
         """Execute validation logic and enrich context."""
 
 class PayloadSizeValidation(ValidationComponent, LoggerMixin):
@@ -25,7 +25,7 @@ class PayloadSizeValidation(ValidationComponent, LoggerMixin):
         """Initialize the PayloadSizeValidation with the maximum allowed payload size."""
         self.max_payload_size = max_payload_size
 
-    def validate(self, context: RequestContext) -> None:
+    def validate(self, context: HttpBaseRequestContext) -> None:
         """Validate the payload size against the maximum allowed size."""
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
@@ -56,7 +56,7 @@ class ContentTypeValidation(ValidationComponent, LoggerMixin):
         """Initialize the ContentTypeValidation with the expected content type."""
         self.expected_content_type = expected_content_type
 
-    def validate(self, context: RequestContext) -> None:
+    def validate(self, context: HttpBaseRequestContext) -> None:
         """Validate the presence of the 'Content-Type' header and check if it matches the expected type."""
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
@@ -94,7 +94,7 @@ class AcceptHeaderValidation(ValidationComponent, LoggerMixin):
         """Initialize the AcceptHeaderValidation with a list of allowed content types."""
         self.allowed_content_types = allowed_content_types
 
-    def validate(self, context: RequestContext) -> None:
+    def validate(self, context: HttpBaseRequestContext) -> None:
         """Validate the presence of the 'Accept' header and check if it matches any of the allowed types."""
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
@@ -128,7 +128,7 @@ class AcceptHeaderValidation(ValidationComponent, LoggerMixin):
 class AuthorizationHeaderValidation(ValidationComponent, LoggerMixin):
     """Validate Authorization header for HTTP Basic Auth."""
 
-    def validate(self, context: RequestContext) -> None:
+    def validate(self, context: HttpBaseRequestContext) -> None:
         """Validate the presence and format of the 'Authorization' header and extract credentials."""
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
@@ -168,7 +168,7 @@ class AuthorizationHeaderValidation(ValidationComponent, LoggerMixin):
 class ClientCertificateValidation(ValidationComponent, LoggerMixin):
     """Check and optionally process the SSL client certificate from the request headers."""
 
-    def validate(self, context: RequestContext) -> None:
+    def validate(self, context: HttpBaseRequestContext) -> None:
         """Check for the presence of the 'HTTP_SSL_CLIENT_CERT' header and set the cert in the context if present."""
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
@@ -211,7 +211,7 @@ class ClientCertificateValidation(ValidationComponent, LoggerMixin):
 class IntermediateCertificatesValidation(ValidationComponent, LoggerMixin):
     """Validate and process intermediate CA certificates from the request headers."""
 
-    def validate(self, context: RequestContext) -> None:
+    def validate(self, context: HttpBaseRequestContext) -> None:
         """Extract and validate intermediate CA certificates from the 'SSL_CLIENT_CERT_CHAIN_*' headers."""
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
@@ -246,7 +246,7 @@ class IntermediateCertificatesValidation(ValidationComponent, LoggerMixin):
 class ContentTransferEncodingValidation(ValidationComponent, LoggerMixin):
     """Validate the Content-Transfer-Encoding header and decode base64-encoded messages if required."""
 
-    def validate(self, context: RequestContext) -> None:
+    def validate(self, context: HttpBaseRequestContext) -> None:
         """Validates and processes requests with a Content-Transfer-Encoding header set to 'base64'."""
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
@@ -301,7 +301,7 @@ class CompositeValidation(ValidationComponent, LoggerMixin):
             self.logger.warning(error_message)
             raise ValueError(error_message)
 
-    def validate(self, context: RequestContext) -> None:
+    def validate(self, context: BaseRequestContext) -> None:
         """Validate all child components."""
         self.logger.debug('Starting composite validation with %d components', len(self.components))
 
