@@ -5,8 +5,8 @@
 # Required
 version: 2
 
-# Build all formats
-formats: all
+# Exclude PDF and ePub builds as latexmk times out after 15 min
+formats: html, htmlzip
 
 # Set the OS, Python version, and other tools you might need
 build:
