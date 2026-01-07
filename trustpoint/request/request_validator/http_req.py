@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 
 from cryptography import x509
 
-from request.request_context import BaseRequestContext, HttpBaseRequestContext
+from request.request_context import HttpBaseRequestContext
 from trustpoint.logger import LoggerMixin
 
 
@@ -123,46 +123,6 @@ class AcceptHeaderValidation(ValidationComponent, LoggerMixin):
             raise ValueError(error_message)
 
         self.logger.debug('Accept header validation successful: %s', accept_header)
-
-
-class AuthorizationHeaderValidation(ValidationComponent, LoggerMixin):
-    """Validate Authorization header for HTTP Basic Auth."""
-
-    def validate(self, context: HttpBaseRequestContext) -> None:
-        """Validate the presence and format of the 'Authorization' header and extract credentials."""
-        if context.raw_message is None:
-            error_message = 'Raw message is missing from the context.'
-            self.logger.warning('Authorization header validation failed: Raw message is missing')
-            raise ValueError(error_message)
-
-        if not hasattr(context.raw_message, 'headers') or not context.raw_message.headers:
-            error_message = 'Raw message is missing headers.'
-            self.logger.warning('Authorization header validation failed: Raw message headers are missing')
-            raise ValueError(error_message)
-
-        auth_header = context.raw_message.headers.get('Authorization')
-        if not auth_header:
-            self.logger.debug('Authorization header validation skipped: No Authorization header present')
-            return
-
-        if not auth_header.startswith('Basic '):
-            error_message = "Authorization header must start with 'Basic'."
-            self.logger.warning("Authorization header validation failed: "
-                                "Header does not start with 'Basic': %s...", auth_header[:20])
-            raise ValueError(error_message)
-
-        try:
-            credentials = base64.b64decode(auth_header.split(' ', 1)[1].strip()).decode('utf-8')
-            est_username, est_password = credentials.split(':', 1)
-
-            context.est_username = est_username
-            context.est_password = est_password
-            self.logger.debug("Authorization header validation successful: "
-                              "Extracted credentials for user '%s'", est_username)
-        except Exception as e:
-            error_message = "Malformed 'Authorization' header credentials."
-            self.logger.warning('Authorization header validation failed: Malformed credentials - %s', e)
-            raise ValueError(error_message) from e
 
 
 class ClientCertificateValidation(ValidationComponent, LoggerMixin):
@@ -301,7 +261,7 @@ class CompositeValidation(ValidationComponent, LoggerMixin):
             self.logger.warning(error_message)
             raise ValueError(error_message)
 
-    def validate(self, context: BaseRequestContext) -> None:
+    def validate(self, context: HttpBaseRequestContext) -> None:
         """Validate all child components."""
         self.logger.debug('Starting composite validation with %d components', len(self.components))
 
@@ -346,10 +306,6 @@ class EstHttpRequestValidator(CompositeValidation):
         self.add(PayloadSizeValidation(max_payload_size=65536))
         self.add(ContentTypeValidation(expected_content_type='application/pkcs10'))
         self.add(AcceptHeaderValidation(allowed_content_types=['application/pkcs7-mime','*/*']))
-        self.add(AuthorizationHeaderValidation())
         self.add(ClientCertificateValidation())
         self.add(IntermediateCertificatesValidation())
         self.add(ContentTransferEncodingValidation())
-
-
-

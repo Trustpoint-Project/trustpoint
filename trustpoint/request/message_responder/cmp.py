@@ -17,10 +17,11 @@ from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm
 from devices.models import OnboardingStatus
 from request.message_responder.base import AbstractMessageResponder
 from request.operation_processor import LocalCaCmpSignatureProcessor
+from request.request_context import CmpCertificateRequestContext
 
 if TYPE_CHECKING:
     from pki.models import CredentialModel
-    from request.request_context import CmpBaseRequestContext, CmpCertificateRequestContext
+    from request.request_context import BaseRequestContext, CmpBaseRequestContext
 
 CMP_MESSAGE_VERSION = 2
 SENDER_NONCE_LENGTH = 16
@@ -30,10 +31,10 @@ class CmpMessageResponder(AbstractMessageResponder):
     """Builds response to CMP requests."""
 
     @staticmethod
-    def build_response(context: CmpBaseRequestContext) -> None:
+    def build_response(context: BaseRequestContext) -> None:
         """Respond to a CMP message."""
         responder: CmpMessageResponder
-        if context.issued_certificate:
+        if isinstance(context, CmpCertificateRequestContext) and context.issued_certificate:
             if context.operation == 'initialization':
                 responder = CmpInitializationResponder()
                 return responder.build_response(context)

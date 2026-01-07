@@ -7,17 +7,64 @@ from typing import Never
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 
-from request.request_context import EstBaseRequestContext, EstCertificateRequestContext
+from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingComponent
 
 
+class EstAuthorizationHeaderParsing(ParsingComponent, LoggerMixin):
+    """Validate Authorization header for HTTP Basic Auth."""
+
+    def parse(self, context: BaseRequestContext) -> None:
+        """Validate and parse the 'Authorization' header and extract credentials."""
+        if not isinstance(context, EstBaseRequestContext):
+            exc_msg = 'EstAuthorizationHeaderParsing requires a subclass of EstBaseRequestContext.'
+            raise TypeError(exc_msg)
+
+        if context.raw_message is None:
+            error_message = 'Raw message is missing from the context.'
+            self.logger.warning('Authorization header validation failed: Raw message is missing')
+            raise ValueError(error_message)
+
+        if not hasattr(context.raw_message, 'headers') or not context.raw_message.headers:
+            error_message = 'Raw message is missing headers.'
+            self.logger.warning('Authorization header validation failed: Raw message headers are missing')
+            raise ValueError(error_message)
+
+        auth_header = context.raw_message.headers.get('Authorization')
+        if not auth_header:
+            self.logger.debug('Authorization header validation skipped: No Authorization header present')
+            return
+
+        if not auth_header.startswith('Basic '):
+            error_message = "Authorization header must start with 'Basic'."
+            self.logger.warning("Authorization header validation failed: "
+                                "Header does not start with 'Basic': %s...", auth_header[:20])
+            raise ValueError(error_message)
+
+        try:
+            credentials = base64.b64decode(auth_header.split(' ', 1)[1].strip()).decode('utf-8')
+            est_username, est_password = credentials.split(':', 1)
+
+            context.est_username = est_username
+            context.est_password = est_password
+            self.logger.debug("Authorization header validation successful: "
+                              "Extracted credentials for user '%s'", est_username)
+        except Exception as e:
+            error_message = "Malformed 'Authorization' header credentials."
+            self.logger.warning('Authorization header validation failed: Malformed credentials - %s', e)
+            raise ValueError(error_message) from e
+
+
 class EstPkiMessageParsing(ParsingComponent, LoggerMixin):
     """Component for parsing EST-specific PKI messages."""
 
-    def parse(self, context: EstBaseRequestContext) -> None:
+    def parse(self, context: BaseRequestContext) -> None:
         """Parse a DER-encoded PKCS#10 certificate signing request."""
+        if not isinstance(context, EstCertificateRequestContext):
+            exc_msg = 'EstPkiMessageParsing requires an EstCertificateRequestContext.'
+            raise TypeError(exc_msg)
 
         def raise_parsing_error(message: str) -> None:
             """Helper to raise a ValueError with given error message."""
@@ -86,8 +133,12 @@ class EstPkiMessageParsing(ParsingComponent, LoggerMixin):
 class EstCsrSignatureVerification(ParsingComponent, LoggerMixin):
     """Parses the context to fetch the CSR and verifies its signature using the public key contained in the CSR."""
 
-    def parse(self, context: EstCertificateRequestContext) -> None:
+    def parse(self, context: BaseRequestContext) -> None:
         """Validates the signature of the CSR stored in the context."""
+        if not isinstance(context, EstCertificateRequestContext):
+            exc_msg = 'EstCsrSignatureVerification requires an EstCertificateRequestContext.'
+            raise TypeError(exc_msg)
+
         csr = context.cert_requested
         if csr is None:
             err_msg = 'CSR not found in the parsing context. Ensure it was parsed before signature verification.'
@@ -150,6 +201,7 @@ class EstMessageParser(CompositeParsing):
     def __init__(self) -> None:
         """Initialize the composite parser with the default set of parsing components."""
         super().__init__()
+        self.add(EstAuthorizationHeaderParsing())
         self.add(EstPkiMessageParsing())
         self.add(DomainParsing())
         self.add(CertProfileParsing())

@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from cryptography.x509 import CertificateSigningRequest
     from cryptography.x509.base import CertificateBuilder
     from django.http import HttpRequest
-    from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
+    from pyasn1_modules.rfc4210 import PKIFailureInfo, PKIMessage  # type: ignore[import-untyped]
 
     from devices.models import DeviceModel, IssuedCredentialModel
     from pki.models import CertificateProfileModel, CredentialModel, DomainModel
@@ -35,6 +35,20 @@ class BaseRequestContext:
 
     client_certificate: x509.Certificate | None = None
     client_intermediate_certificate: list[x509.Certificate] | None = None
+
+    # TODO: This should be refactored into the overall Request Context  # noqa: FIX002, TD002
+    event: Event | None = None
+
+    def error(self, ext_msg: str | bytes |None,
+              http_status: int | None = None,
+              cmp_code: PKIFailureInfo | None = None) -> None:
+        """Set an error message in the context."""
+        if isinstance(self, HttpBaseRequestContext):
+            self.http_response_content = ext_msg
+            self.http_response_status = http_status
+        if isinstance(self, CmpBaseRequestContext):
+            self.error_details = ext_msg
+            self.error_code = cmp_code
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the context to a dictionary."""
@@ -65,7 +79,7 @@ class BaseCertificateRequestContext(BaseRequestContext):
 
     certificate_profile_model: CertificateProfileModel | None = None
 
-    # TODO: These two should be refactored into the overall Request Context  # noqa: FIX002, TD002
+    # TODO: This should be refactored into the overall Request Context  # noqa: FIX002, TD002
     enrollment_request: EnrollmentRequest | None = None
     event: Event | None = None
 
@@ -101,6 +115,8 @@ class CmpBaseRequestContext(HttpBaseRequestContext):
     """Shared context for all CMP requests."""
     parsed_message: PKIMessage | None = None
     cmp_shared_secret: str | None = None
+    error_code: PKIFailureInfo | None = None
+    error_details: str | None = None
 
 
 @dataclass(kw_only=True)

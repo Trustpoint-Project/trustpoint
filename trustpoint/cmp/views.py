@@ -15,7 +15,7 @@ from request.message_parser import CmpMessageParser
 from request.message_responder.cmp import CmpMessageResponder
 from request.operation_processor import CertificateIssueProcessor
 from request.profile_validator import ProfileValidator
-from request.request_context import CmpBaseRequestContext
+from request.request_context import CmpCertificateRequestContext
 from request.request_validator.http_req import CmpHttpRequestValidator
 
 if TYPE_CHECKING:
@@ -42,7 +42,7 @@ class CmpInitializationRequestView(View):
         # Default to 'domain_credential' if not provided
         cert_profile = cast('str', kwargs.get('certificate_profile', 'domain_credential'))
 
-        ctx = CmpBaseRequestContext(
+        ctx = CmpCertificateRequestContext(
             raw_message=request,
             domain_str=domain_name,
             protocol='cmp',
@@ -93,7 +93,7 @@ class CmpCertificationRequestView(View):
         # Default to 'tls_client' if not provided (TBD)
         cert_profile = cast('str', kwargs.get('certificate_profile', 'tls_client'))
 
-        ctx = CmpBaseRequestContext(
+        ctx = CmpCertificateRequestContext(
             raw_message=request,
             domain_str=domain_name,
             protocol='cmp',

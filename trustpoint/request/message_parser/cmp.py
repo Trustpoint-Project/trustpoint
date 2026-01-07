@@ -13,7 +13,7 @@ from pyasn1.codec.der import encoder as der_encoder
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
 
 from cmp.util import NameParser
-from request.request_context import CmpBaseRequestContext
+from request.request_context import BaseRequestContext, CmpBaseRequestContext
 from trustpoint.logger import LoggerMixin
 
 from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingComponent
@@ -22,8 +22,12 @@ from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingCo
 class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
     """Component for parsing CMP-specific PKI messages."""
 
-    def parse(self, context: CmpBaseRequestContext) -> None:
+    def parse(self, context: BaseRequestContext) -> None:
         """Parse a CMP PKI message."""
+        if not isinstance(context, CmpBaseRequestContext):
+            exc_msg = 'CmpPkiMessageParsing requires a CmpBaseRequestContext.'
+            raise TypeError(exc_msg)
+
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
             self.logger.warning('CMP PKI message parsing failed: Raw message is missing')
@@ -109,8 +113,12 @@ class CmpHeaderValidation(ParsingComponent, LoggerMixin):
         self.implicit_confirm_oid = implicit_confirm_oid
         self.implicit_confirm_str_value = implicit_confirm_str_value
 
-    def parse(self, context: CmpBaseRequestContext) -> None:
+    def parse(self, context: BaseRequestContext) -> None:
         """Validate the CMP message header."""
+        if not isinstance(context, CmpBaseRequestContext):
+            exc_msg = 'CmpHeaderValidation requires a CmpBaseRequestContext.'
+            raise TypeError(exc_msg)
+
         if context.parsed_message is None:
             error_message = 'Parsed message is missing from the context.'
             self.logger.warning('CMP header validation failed: Parsed message is missing')
@@ -168,8 +176,12 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         """
         self.cert_template_version = cert_template_version
 
-    def parse(self, context: CmpBaseRequestContext) -> None:
+    def parse(self, context: BaseRequestContext) -> None:
         """Validate the CMP body type and extract the appropriate body."""
+        if not isinstance(context, CmpBaseRequestContext):
+            exc_msg = 'CmpBodyValidation requires a CmpBaseRequestContext.'
+            raise TypeError(exc_msg)
+
         if context.parsed_message is None:
             error_message = 'Parsed message is missing from the context.'
             self.logger.warning('CMP body type validation failed: Parsed message is missing')

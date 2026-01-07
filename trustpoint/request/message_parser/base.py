@@ -53,8 +53,11 @@ class DomainParsing(ParsingComponent, LoggerMixin):
 class CertProfileParsing(ParsingComponent, LoggerMixin):
     """Parses the certificate profile from the request context object."""
 
-    def parse(self, context: BaseCertificateRequestContext) -> None:
+    def parse(self, context: BaseRequestContext) -> None:
         """Extract and validate the certificate profile, then add it to the context."""
+        if not isinstance(context, BaseCertificateRequestContext):
+            # Not a certificate request context; skip parsing profile
+            return
         certprofile_str = context.cert_profile_str
         if not certprofile_str:
             error_message = 'Certificate profile is missing in the request context.'
