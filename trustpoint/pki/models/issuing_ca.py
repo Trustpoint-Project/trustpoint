@@ -66,6 +66,9 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
     updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
     last_crl_issued_at = models.DateTimeField(verbose_name=_('Last CRL Issued'), null=True, blank=True)
+    crl_number = models.PositiveIntegerField(
+        verbose_name=_('CRL Number'), default=0,
+    )
 
     crl_pem = models.TextField(editable=False, default='', verbose_name=_('CRL in PEM format'))
 
@@ -161,6 +164,8 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
             last_update=crl_issued_at,
             next_update=crl_issued_at + datetime.timedelta(hours=24),  # (minutes=self.next_crl_generation_time)
         )
+        self.crl_number += 1
+        crl_builder = crl_builder.add_extension(x509.CRLNumber(self.crl_number), critical=False)
 
         crl_certificates = self.revoked_certificates.all()
 
