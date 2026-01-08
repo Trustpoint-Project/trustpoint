@@ -2,10 +2,10 @@
 {% block sub_details %}
     <div>
         <div>
-            {% for certificate in truststore.certificates.all %}
+            {% for context in cert_context %}
                 <div>
-                    <a href="{% url 'pki:certificate-detail' pk=certificate.id %}" class="btn btn-primary">
-                        {{ certificate.common_name }}
+                    <a href="{% url 'pki:certificate-detail' pk=context.certificate.id %}" class="btn btn-primary">
+                        {{ context.certificate.common_name }}
                     </a>
                 </div>
                 <br>
@@ -14,27 +14,25 @@
                     <div>
                         <div>Subject</div>
                         <div>
-                            {% for entry in certificate.subject.all %}
-                                {{ entry }}<br>
-                            {% endfor %}
+                            {% include 'pki/truststores/subject_table.html' with entries=context.subject_entries %}
                         </div>
+
                     </div>
 
                     <div>
                         <div>Issuer</div>
                         <div>
-                            {% for entry in certificate.issuer.all %}
-                                {{ entry }}<br>
-                            {% endfor %}
-                        </div>
+                        {% include 'pki/truststores/subject_table.html' with entries=context.issuer_entries  %}
+                    </div>
+
                     </div>
                     <div>
                         <div>{% trans 'Serial Number' %}</div>
-                        <div>{{ certificate.serial_number }}</div>
+                        <div>{{ context.certificate.serial_number }}</div>
                     </div>
                     <div>
                         <div>Fingerprint (SHA256)</div>
-                        <div>{{ certificate.sha256_fingerprint }}</div>
+                        <div>{{ context.certificate.sha256_fingerprint }}</div>
                     </div>
                 </div>
             {% endfor %}
