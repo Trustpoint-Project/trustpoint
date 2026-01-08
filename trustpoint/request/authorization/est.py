@@ -1,5 +1,5 @@
 """Provides the 'EstAuthentication' class using the Composite pattern for modular EST authorization."""
-from request.request_context import EstBaseRequestContext
+from request.request_context import BaseRequestContext, EstBaseRequestContext
 from trustpoint.logger import LoggerMixin
 
 from .base import (
@@ -18,8 +18,12 @@ class EstOperationAuthorization(AuthorizationComponent, LoggerMixin):
         """Initialize the authorization component with a list of allowed operations."""
         self.allowed_operations = allowed_operations
 
-    def authorize(self, context: EstBaseRequestContext) -> None:
+    def authorize(self, context: BaseRequestContext) -> None:
         """Authorize the request based on the operation type."""
+        if not isinstance(context, EstBaseRequestContext):
+            exc_msg = 'EstOperationAuthorization requires an EstBaseRequestContext.'
+            raise TypeError(exc_msg)
+
         operation = context.operation
 
         if not operation:

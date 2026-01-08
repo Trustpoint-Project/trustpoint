@@ -3,7 +3,7 @@ from typing import Never
 
 from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 
-from request.request_context import CmpBaseRequestContext
+from request.request_context import BaseRequestContext, CmpBaseRequestContext
 from trustpoint.logger import LoggerMixin
 
 from .base import (
@@ -23,8 +23,12 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
         """Initialize the authorization component with a list of allowed operations."""
         self.allowed_operations = allowed_operations
 
-    def authorize(self, context: CmpBaseRequestContext) -> None:
+    def authorize(self, context: BaseRequestContext) -> None:
         """Authorize the request based on the operation type."""
+        if not isinstance(context, CmpBaseRequestContext):
+            exc_msg = 'CmpOperationAuthorization requires a CmpBaseRequestContext.'
+            raise TypeError(exc_msg)
+
         operation = context.operation
 
         if not operation:

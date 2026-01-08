@@ -6,7 +6,7 @@ from cryptography import x509
 
 from devices.models import DeviceModel, IssuedCredentialModel
 from pki.models import CredentialModel
-from request.request_context import EstBaseRequestContext, EstCertificateRequestContext
+from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 from .base import (
@@ -20,8 +20,12 @@ from .base import (
 class UsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
     """Handles authentication via username/password credentials."""
 
-    def authenticate(self, context: EstBaseRequestContext) -> None:
+    def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate using username and password from the context."""
+        if not isinstance(context, EstBaseRequestContext):
+            exc_msg = 'UsernamePasswordAuthentication requires an EstBaseRequestContext.'
+            raise TypeError(exc_msg)
+
         if not (context.est_username and context.est_password):
             return
 
@@ -99,8 +103,12 @@ class ReenrollmentAuthentication(AuthenticationComponent, LoggerMixin):
         """Raise a ValueError with the given message."""
         raise ValueError(message)
 
-    def authenticate(self, context: EstCertificateRequestContext) -> None:
+    def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate the client for reenrollment."""
+        if not isinstance(context, EstCertificateRequestContext):
+            exc_msg = 'ReenrollmentAuthentication requires an EstCertificateRequestContext.'
+            raise TypeError(exc_msg)
+
         if not self._validate_context(context):
             return
 

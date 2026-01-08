@@ -8,7 +8,7 @@ from devices.models import (
     IssuedCredentialModel,
 )
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
-from request.request_context import BaseRequestContext
+from request.request_context import BaseRequestContext, HttpBaseRequestContext
 from trustpoint.logger import LoggerMixin
 
 
@@ -66,7 +66,7 @@ class IDevIDAuthentication(AuthenticationComponent, LoggerMixin):
     def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate the request using the IDevID mechanism."""
         # Early return if raw_message is missing
-        if not context.raw_message:
+        if not isinstance(context, HttpBaseRequestContext) or not context.raw_message:
             return
 
         try:

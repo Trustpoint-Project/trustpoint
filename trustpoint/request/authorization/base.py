@@ -46,8 +46,12 @@ class ProtocolAuthorization(AuthorizationComponent, LoggerMixin):
 class CertificateProfileAuthorization(AuthorizationComponent, LoggerMixin):
     """Ensures the device is allowed to use the requested certificate profile."""
 
-    def authorize(self, context: BaseCertificateRequestContext) -> None:
+    def authorize(self, context: BaseRequestContext) -> None:
         """Authorize the request based on the certificate profile."""
+        if not isinstance(context, BaseCertificateRequestContext):
+            # Not a certificate request context; skip profile authorization
+            return
+
         requested_profile = context.cert_profile_str
 
         if not requested_profile:

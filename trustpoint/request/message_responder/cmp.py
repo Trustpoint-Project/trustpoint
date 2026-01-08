@@ -17,11 +17,11 @@ from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm
 from devices.models import OnboardingStatus
 from request.message_responder.base import AbstractMessageResponder
 from request.operation_processor import LocalCaCmpSignatureProcessor
-from request.request_context import CmpCertificateRequestContext
+from request.request_context import CmpBaseRequestContext, CmpCertificateRequestContext
 
 if TYPE_CHECKING:
     from pki.models import CredentialModel
-    from request.request_context import BaseRequestContext, CmpBaseRequestContext
+    from request.request_context import BaseRequestContext
 
 CMP_MESSAGE_VERSION = 2
 SENDER_NONCE_LENGTH = 16
@@ -254,8 +254,12 @@ class CmpInitializationResponder(CmpMessageResponder):
 
 
     @staticmethod
-    def build_response(context: CmpCertificateRequestContext) -> None:
+    def build_response(context: BaseRequestContext) -> None:
         """Respond to a CMP initialization message with the issued certificate."""
+        if not isinstance(context, CmpCertificateRequestContext):
+            exc_msg = 'CmpInitializationResponder requires a CmpCertificateRequestContext.'
+            raise TypeError(exc_msg)
+
         if context.issued_certificate is None:
             exc_msg = 'Issued certificate is not set in the context.'
             raise ValueError(exc_msg)
@@ -368,8 +372,12 @@ class CmpCertificationResponder(CmpMessageResponder):
         return cp_message
 
     @staticmethod
-    def build_response(context: CmpCertificateRequestContext) -> None:
-        """Respond to a CMP initialization message with the issued certificate."""
+    def build_response(context: BaseRequestContext) -> None:
+        """Respond to a CMP certification message with the issued certificate."""
+        if not isinstance(context, CmpCertificateRequestContext):
+            exc_msg = 'CmpCertificationResponder requires a CmpCertificateRequestContext.'
+            raise TypeError(exc_msg)
+
         if context.issued_certificate is None:
             exc_msg = 'Issued certificate is not set in the context.'
             raise ValueError(exc_msg)
@@ -413,8 +421,11 @@ class CmpErrorMessageResponder(CmpMessageResponder):
     """Respond to a CMP message with an error."""
 
     @staticmethod
-    def build_response(context: CmpBaseRequestContext) -> None:
+    def build_response(context: BaseRequestContext) -> None:
         """Respond to a CMP message with an error."""
+        if not isinstance(context, CmpBaseRequestContext):
+            exc_msg = 'CmpErrorMessageResponder requires a CmpBaseRequestContext.'
+            raise TypeError(exc_msg)
         # Set appropriate HTTP status code and error message in context
         # TODO(Air): Use CMP error message format instead of plain text  # noqa: FIX002
         # perhaps add context.cmp_failure_status from PKIFailureInfo values

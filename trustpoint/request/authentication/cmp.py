@@ -18,7 +18,7 @@ from devices.models import (
     OnboardingProtocol,
 )
 from pki.util.idevid import IDevIDAuthenticator
-from request.request_context import CmpBaseRequestContext, CmpCertificateRequestContext
+from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 from .base import AuthenticationComponent, ClientCertificateAuthentication, CompositeAuthentication
@@ -41,8 +41,12 @@ class CmpAuthenticationBase(AuthenticationComponent, LoggerMixin):
 class CmpSharedSecretAuthentication(CmpAuthenticationBase):
     """Handles CMP authentication using shared secrets with HMAC-based protection."""
 
-    def authenticate(self, context: CmpBaseRequestContext) -> None:
+    def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate using CMP shared secret HMAC protection."""
+        if not isinstance(context, CmpBaseRequestContext):
+            exc_msg = 'CmpSharedSecretAuthentication requires a CmpBaseRequestContext.'
+            raise TypeError(exc_msg)
+
         if not self._validate_context(context):
             return
 
@@ -220,8 +224,12 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
         """Initialize the CMP signature-based authentication component."""
 
 
-    def authenticate(self, context: CmpCertificateRequestContext) -> None:
+    def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate using CMP signature-based protection for initialization requests."""
+        if not isinstance(context, CmpCertificateRequestContext):
+            exc_msg = 'CmpSignatureBasedInitializationAuthentication requires a CmpCertificateRequestContext.'
+            raise TypeError(exc_msg)
+
         if not self._validate_context(context):
             return
 
@@ -380,8 +388,12 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
 class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, LoggerMixin):
     """Handles CMP signature-based authentication for certification requests using domain credentials."""
 
-    def authenticate(self, context: CmpCertificateRequestContext) -> None:
+    def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate using CMP signature-based protection for certification requests."""
+        if not isinstance(context, CmpCertificateRequestContext):
+            exc_msg = 'CmpSignatureBasedCertificationAuthentication requires a CmpCertificateRequestContext.'
+            raise TypeError(exc_msg)
+
         if not self._should_authenticate(context):
             return
 
