@@ -19,3 +19,5 @@ class WorkflowsConfig(AppConfig):
         """
         # Import for side effects: module-level code performs registrations.
         import_module('workflows.services.executors')
+        import_module('workflows.context.strategy.certificate_request')
+        import_module('workflows.context.strategy.device_action')

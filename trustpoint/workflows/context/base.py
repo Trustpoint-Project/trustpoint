@@ -4,23 +4,21 @@ from typing import Any
 
 
 class ContextStrategy:
-    """Base class for all context strategies.
+    """Base class for context *catalog* strategies.
 
-    Each strategy produces:
-      - variables: descriptors for UI (key → label)
-      - values: actual values extracted from the runtime context
+    These strategies are used ONLY for the UI variable catalog (wizard/help):
+    they return groups of variables with dot-paths and sample values.
+
+    They are NOT used to build runtime template context.
     """
 
-    key: str = 'base'
-    label: str = 'Base Strategy'
+    handler: str = ''
 
-    # UI descriptions of variables provided by this strategy
-    variables: dict[str, str] = {}
-
-    def get_variables(self) -> dict[str, str]:
-        """Return UI-descriptive metadata."""
-        return self.variables
-
-    def get_values(self, ctx: dict[str, Any]) -> dict[str, Any]:
-        """Compute runtime values for the strategy-specific variables."""
+    def get_design_time_groups(
+        self,
+        *,
+        protocol: str | None = None,
+        operation: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return grouped variable catalog entries for the given instance."""
         raise NotImplementedError

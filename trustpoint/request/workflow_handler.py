@@ -76,7 +76,7 @@ class DeviceActionHandler(WorkflowHandler):
             domain=domain,
             ca=ca,
             action=action,
-            aggregated_state=State.AWAITING,
+            aggregated_state=State.RUNNING,
             finalized=False,
             payload=payload,
         )
@@ -90,33 +90,37 @@ class DeviceActionHandler(WorkflowHandler):
             )
         ]
 
-        for wf in definitions:
-            meta = wf.definition or {}
-            steps = meta.get('steps', [])
-            if not steps:
-                continue
+        if definitions:
+            print('Found definition')
+            for wf in definitions:
+                meta = wf.definition or {}
+                steps = meta.get('steps', [])
+                if not steps:
+                    continue
 
-            first_step = steps[0]['id']
+                first_step = steps[0]['id']
 
-            inst = WorkflowInstance.objects.create(
-                definition=wf,
-                device_request=dr,
-                current_step=first_step,
-                state=State.RUNNING,
-                payload={
-                    'operation': action,
-                    'protocol': 'device',
-                    'device_id': context.device.pk,
-                    'domain_id': domain.pk if domain else None,
-                    'ca_id': ca.pk if ca else None,
-                    **payload,
-                },
-            )
+                inst = WorkflowInstance.objects.create(
+                    definition=wf,
+                    device_request=dr,
+                    current_step=first_step,
+                    state=State.RUNNING,
+                    payload={
+                        'operation': action,
+                        'protocol': 'device',
+                        'device_id': context.device.pk,
+                        'domain_id': domain.pk if domain else None,
+                        'ca_id': ca.pk if ca else None,
+                        **payload,
+                    },
+                )
 
-            advance_instance(inst)
-            inst.refresh_from_db()
-
-        dr.recompute_and_save()
+                advance_instance(inst)
+                inst.refresh_from_db()
+            print('END OF DEF')
+        else:
+            print('Found NO definition')
+            dr.recompute_and_save()
         context.device_request = dr  # type: ignore[attr-defined]
 
 

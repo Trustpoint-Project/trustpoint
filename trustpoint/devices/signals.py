@@ -34,7 +34,7 @@ def _trigger_device_events(sender: ModelBase, instance: DeviceModel, *, created:
         return
 
     # 2) Device onboarded (domain changed from old→new)
-    old = getattr(instance, '_old_domain_id', None)
+    old = getattr(instance, 'old_domain_id', None)
     new = instance.domain_id
 
     if old != new and new is not None:

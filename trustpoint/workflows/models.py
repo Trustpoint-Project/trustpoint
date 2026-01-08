@@ -158,13 +158,13 @@ class DeviceRequest(models.Model):
         related_name='device_requests',
     )
 
-    action = models.CharField(max_length=32)  # "created", "onboarded", "deleted"
+    action = models.CharField(max_length=32)
     payload = models.JSONField(default=dict, blank=True)
 
     aggregated_state = models.CharField(
         max_length=32,
         choices=State.choices,
-        default=State.AWAITING,
+        default=State.RUNNING,
     )
 
     finalized = models.BooleanField(default=False)
@@ -186,28 +186,55 @@ class DeviceRequest(models.Model):
         instances = self.instances.all()
 
         if not instances.exists():
-            self.aggregated_state = State.AWAITING
-            self.finalized = False
+            self.aggregated_state = State.FINALIZED
+            self.finalized = True
         else:
+            print(0)
             states = {inst.state for inst in instances}
             if any(s == State.FAILED for s in states):
+                print(1)
                 self.aggregated_state = State.FAILED
-            elif all(s in {State.FINALIZED, State.ABORTED} for s in states):
+            elif all(s in {State.FINALIZED, State.ABORTED, State.PASSED} for s in states):
+                print(2)
                 self.aggregated_state = State.FINALIZED
+                self.finalized = True
+                for s in instances:
+                    s.finalize()
             elif any(s == State.AWAITING for s in states):
                 self.aggregated_state = State.AWAITING
+                print(3)
             else:
+                print(5)
+                print(states)
                 self.aggregated_state = State.RUNNING
 
-            self.finalized = all(inst.finalized for inst in instances)
-
         self.save(update_fields=['aggregated_state', 'finalized', 'updated_at'])
+        print(f'RECPOMÜUTED TO STATE: {self.aggregated_state}')
 
     @property
     def badge_class(self) -> str:
         """Return the CSS class for the aggregated state badge."""
         return get_status_badge(self.aggregated_state)[1]
-    
+
+    def finalize(self, final_status: str | State | None = None) -> None:
+        """Finalize this request and all non-finalized child workflow instances.
+
+        Args:
+            final_status: Optional final aggregated state to set for the request.
+        """
+        self.finalized = True
+        if final_status is None:
+            self.save(update_fields=['finalized', 'updated_at'])
+        else:
+            print('FINAL STAT')
+            print(final_status)
+            self.aggregated_state = final_status
+            self.save(update_fields=['aggregated_state', 'finalized', 'updated_at'])
+            print(self.aggregated_state)
+
+        for inst in self.instances.filter(finalized=False):
+            inst.finalize()
+
     def abort(self) -> None:
         """Abort this request and all non-finalized child workflow instances."""
         if self.finalized:

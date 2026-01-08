@@ -157,12 +157,20 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
             executor = StepExecutorFactory.create(step_type)
             result: ExecutorResult = executor.execute(inst, signal)
             _persist_step_context(inst, result)
-            if inst.enrollment_request:
-                inst.enrollment_request.recompute_and_save()
 
             if not _merge_global_vars(inst, result):
                 break
 
-            should_continue, signal = _handle_status(inst, result.status, signal)
-            if not should_continue:
+            inst.state = result.status
+            inst.save(update_fields=['state'])
+
+            if _advance_pointer(inst) and result.status in {State.PASSED, State.APPROVED}:
+                signal = None
+            else:
+                print(' I GOT ENDED')
+                if inst.enrollment_request:
+                    inst.enrollment_request.recompute_and_save()
+                elif inst.device_request:
+                    print('I get recomputed')
+                    inst.device_request.recompute_and_save()
                 break

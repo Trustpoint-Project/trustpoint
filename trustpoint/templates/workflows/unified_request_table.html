@@ -1,5 +1,6 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
+{% load static %}
 
 {% block content %}
 <div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
@@ -9,7 +10,7 @@
   </div>
 
   {# --- FILTERS --- #}
-  <form method="get" class="card-body pb-2">
+  <form method="get" class="card-body pb-2" id="unified-filter-form">
     <div class="row g-2 align-items-end">
 
       {# Row 1 #}
@@ -64,7 +65,7 @@
         {{ filter_form.requested_to }}
       </div>
 
-      {# Row 3: apply + include finalized #}
+      {# Row 3 #}
       <div class="col-12 d-flex justify-content-between align-items-center mt-2">
         <div class="form-check">
           {{ filter_form.include_finalized }}
@@ -79,12 +80,13 @@
     </div>
   </form>
 
-  {# --- BULK ACTION FORM (applies to both request types) --- #}
+  {# --- BULK ACTION FORM --- #}
   <form method="post" action="{% url 'workflows:requests_bulk_abort' %}"
-        style="flex-grow: 1; display: flex; flex-direction: column;">
+        style="flex-grow: 1; display: flex; flex-direction: column; min-height: 0;">
     {% csrf_token %}
 
-    <div class="card-body pt-0" style="overflow: auto; flex-grow: 1; max-height: 90%;">
+    {# Scroll area only for the table #}
+    <div class="card-body pt-0" style="overflow: auto; flex-grow: 1; min-height: 0;">
       <table class="table">
         <thead>
           <tr>
@@ -98,7 +100,6 @@
             <th>{% trans 'Domain' %}</th>
             <th>{% trans 'Protocol' %}</th>
             <th>{% trans 'Operation' %}</th>
-            <th>{% trans 'Action' %}</th>
             <th>{% trans 'Template' %}</th>
             <th>{% trans 'Workflows' %}</th>
             <th>{% trans 'Created' %}</th>
@@ -132,29 +133,8 @@
                 {% else %}&mdash;{% endif %}
               </td>
 
-              <td>
-                {% if r.request_type == "Enrollment" %}
-                  {{ r.protocol }}
-                {% else %}
-                  &mdash;
-                {% endif %}
-              </td>
-
-              <td>
-                {% if r.request_type == "Enrollment" %}
-                  {{ r.operation }}
-                {% else %}
-                  &mdash;
-                {% endif %}
-              </td>
-
-              <td>
-                {% if r.request_type == "Device" %}
-                  {{ r.action_text|capfirst }}
-                {% else %}
-                  &mdash;
-                {% endif %}
-              </td>
+              <td>{{ r.protocol|default:"—" }}</td>
+              <td>{{ r.operation|default:"—"|capfirst }}</td>
 
               <td>
                 {% if r.request_type == "Enrollment" %}
@@ -181,7 +161,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="12" class="text-center py-4">
+              <td colspan="11" class="text-center py-4">
                 {% trans 'No requests.' %}
               </td>
             </tr>
@@ -190,7 +170,8 @@
       </table>
     </div>
 
-    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+    {# Footer is outside the scroll area; will not overlap rows #}
+    <div class="card-footer d-flex justify-content-between">
       <div class="tp-card-btn-footer m-1">
         <button type="submit" formaction="{% url 'workflows:requests_bulk_signal' %}"
                 name="action" value="approve"
@@ -213,4 +194,6 @@
   </form>
 
 </div>
+
+<script type="module" src="{% static 'js/workflows/unified-requests.js' %}"></script>
 {% endblock %}

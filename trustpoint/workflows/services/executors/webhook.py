@@ -42,7 +42,7 @@ class WebhookExecutor(AbstractStepExecutor):
 
     - URL, headers, and string body templating with Django templates using a 'ctx' dict
     - Supports method, headers, body, auth (basic|bearer), timeoutSecs
-    - result_to/result_source for whole-response capture
+    - webhook_variable/result_source for whole-response capture
     - fine-grained exports: [{"from_path":"json.foo","to_path":"serial"}]  # note: bare key allowed
     - Stores per-step context and returns a flat vars map for $vars merging.
 
@@ -69,7 +69,7 @@ class WebhookExecutor(AbstractStepExecutor):
             body_raw,
             timeout_secs,
             auth_cfg,
-            result_to_raw,
+            webhook_variable_raw,
             result_source,
             exports,
         ) = _extract_webhook_config(params)
@@ -108,7 +108,7 @@ class WebhookExecutor(AbstractStepExecutor):
             )
 
         step_ctx = _build_step_context(method, url, resp, resp_json)
-        flat_vars = _build_flat_vars(resp, resp_json, result_to_raw, result_source, exports)
+        flat_vars = _build_flat_vars(resp, resp_json, webhook_variable_raw, result_source, exports)
 
         return ExecutorResult(
             status=State.PASSED,
@@ -138,7 +138,7 @@ def _extract_webhook_config(
     body_raw = params.get('body')
     timeout_secs = _safe_int(params.get('timeoutSecs'), default=15)
     auth_cfg = params.get('auth')
-    result_to_raw = str(params.get('result_to') or '').strip()
+    webhook_variable_raw = str(params.get('webhook_variable') or '').strip()
     result_source = str(params.get('result_source') or 'auto').strip().lower()
     exports = list(params.get('exports') or [])
     return (
@@ -148,7 +148,7 @@ def _extract_webhook_config(
         body_raw,
         timeout_secs,
         auth_cfg,
-        result_to_raw,
+        webhook_variable_raw,
         result_source,
         exports,
     )
@@ -268,15 +268,15 @@ def _build_step_context(
 def _build_flat_vars(
     resp: requests.Response,
     resp_json: Any | None,
-    result_to_raw: str,
+    webhook_variable_raw: str,
     result_source: str,
     exports: list[Any],
 ) -> dict[str, Any]:
     flat_vars: dict[str, Any] = {}
 
     # Whole-result capture
-    if result_to_raw:
-        dest = result_to_raw.removeprefix('vars.')
+    if webhook_variable_raw:
+        dest = webhook_variable_raw.removeprefix('vars.')
         if dest:
             val = _select_source_value(resp, resp_json, result_source)
             with contextlib.suppress(Exception):
@@ -305,9 +305,17 @@ def _make_error_context(message: str) -> dict[str, Any]:
         'type': 'Webhook',
         'status': 'failed',
         'error': message,
-        'outputs': {},
+        'outputs': {
+            'webhook': {
+                'method': None,
+                'url': None,
+                'status': None,
+                'headers': {},
+                'json': None,
+                'text': None,
+            }
+        },
     }
-
 
 def _safe_int(v: Any, *, default: int) -> int:
     try:

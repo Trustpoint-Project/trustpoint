@@ -85,7 +85,7 @@ class Events:
     device_onboarded = Event(
         key='device_onboarded',
         protocol='device',
-        operation='onboard',
+        operation='onboarded',
         handler='device_action',
     )
 

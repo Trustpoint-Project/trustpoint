@@ -36,6 +36,7 @@ from trustpoint_core.oid import AlgorithmIdentifier
 
 from devices.models import DeviceModel
 from pki.models import DomainModel, IssuingCaModel
+from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_DEVICES_SUBCATEGORY, PageContextMixin
 from util.email import MailTemplates
 from workflows.context.registry import get_strategy
@@ -58,32 +59,28 @@ from workflows.services.wizard import transform_to_definition_schema
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet
 
-# class ContextCatalogView(View):
-#     """Return a flattened, searchable catalog of {{ ctx.* }} variables for a running instance."""
+class WizardContextCatalogView(View):
+    """Return a handler-driven ctx variable catalog for the wizard (design-time).
 
-#     def get(self, _request: HttpRequest, instance_id: UUID, *_args: Any, **_kwargs: Any) -> JsonResponse:
-#         """Return JSON catalog of available template paths for {{ ctx.* }}.
+    Query params:
+        handler: required
+        protocol: optional
+        operation: optional
+    """
 
-#         Args:
-#             _request: The HTTP request.
-#             instance_id: Workflow instance UUID.
+    def get(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
+        handler = (request.GET.get('handler') or '').strip()
+        protocol = (request.GET.get('protocol') or '').strip()
+        operation = (request.GET.get('operation') or '').strip()
 
-#         Returns:
-#             JsonResponse with 'usage' and 'vars' (each var has key, label, sample).
-#         """
-#         inst = get_object_or_404(WorkflowInstance, pk=instance_id)
-#         ctx = build_context(inst)  # returns a dict
-#         catalog = build_catalog(ctx)
-#         return JsonResponse(catalog, safe=True)
+        if not handler:
+            return JsonResponse({'error': 'Missing required query param: handler'}, status=400)
 
-class ContextCatalogView(View):
-    def get(self, _request, instance_id, *_args, **_kwargs):
-        inst = get_object_or_404(WorkflowInstance, pk=instance_id)
-
-        handler = inst.definition.definition.get('events', [{}])[0].get('handler')
         strategy = get_strategy(handler)
 
-        groups = strategy.get_groups(inst)
+        # Prefer explicit design-time groups; fall back to empty.
+        getter = getattr(strategy, 'get_design_time_groups', None)
+        groups = getter(protocol=protocol or None, operation=operation or None) if callable(getter) else []
 
         return JsonResponse(
             {
@@ -93,6 +90,31 @@ class ContextCatalogView(View):
             safe=True,
         )
 
+class ContextCatalogView(View, LoggerMixin):
+    """Return a handler-specific variable catalog for the wizard variable panel."""
+
+    def get(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
+        handler = str(request.GET.get('handler') or '').strip()
+        protocol = str(request.GET.get('protocol') or '').strip()
+        operation = str(request.GET.get('operation') or '').strip()
+
+        if not handler:
+            return JsonResponse({'handler': '', 'groups': []}, safe=True)
+
+        try:
+            strategy = get_strategy(handler)
+        except ValueError:
+            return JsonResponse({'handler': handler, 'groups': []}, safe=True)
+
+        try:
+            groups = strategy.get_design_time_groups(protocol=protocol, operation=operation)
+        except Exception:
+            self.logger.exception(
+                'wizard context catalog failed (handler=%s protocol=%s operation=%s)', handler, protocol, operation
+            )
+            groups = []
+
+        return JsonResponse({'handler': handler, 'groups': groups}, safe=True)
 
 class MailTemplateListView(View):
     """Return email templates grouped for the wizard."""
@@ -525,10 +547,39 @@ class WorkflowDefinitionPublishView(View):
         return redirect('workflows:definition_table')
 
 
-class WorkflowWizardView(View):
+class WorkflowWizardView(View, LoggerMixin):
     """UI wizard to create or edit a linear workflow."""
 
     template_name = 'workflows/definition_wizard.html'
+
+    def _dbg_step_id_keys(self, payload: dict) -> None:
+        """Temporary debug helper: log which step-id keys exist in the incoming payload."""
+        try:
+            # support both flat and nested shapes
+            d = payload.get("definition")
+            if isinstance(d, dict) and isinstance(d.get("definition"), dict):
+                d = d["definition"]
+            if not isinstance(d, dict):
+                d = payload
+
+            steps = d.get("steps") if isinstance(d.get("steps"), list) else payload.get("steps")
+            if not isinstance(steps, list):
+                self.logger.warning("WIZARD DEBUG: no steps list found. top_keys=%s", list(payload.keys()))
+                return
+
+            sample = []
+            for i, s in enumerate(steps, start=1):
+                if not isinstance(s, dict):
+                    sample.append({"i": i, "type": type(s).__name__})
+                    continue
+                keys = sorted(s.keys())
+                # show the common id-ish keys and their values
+                idish = {k: s.get(k) for k in ("id", "uid", "key", "step_id", "stepId") if k in s}
+                sample.append({"i": i, "keys": keys, "idish": idish, "type": s.get("type")})
+
+            self.logger.warning("WIZARD DEBUG: steps summary:\n%s", json.dumps(sample, indent=2, default=str))
+        except Exception:
+            self.logger.exception("WIZARD DEBUG: failed to inspect payload")
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the workflow definition wizard page."""
@@ -542,6 +593,7 @@ class WorkflowWizardView(View):
         """Validate and save a workflow definition submitted from the wizard."""
         try:
             data = json.loads(request.body)
+            self._dbg_step_id_keys(data)
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON payload.'}, status=400)
 
@@ -871,7 +923,7 @@ class UnifiedRequestListView(View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         form = UnifiedRequestFilterForm(request.GET)
-        form.is_valid()  # must run to populate cleaned_data
+        form.is_valid()
         flt = UnifiedRequestFilters.from_form(form)
 
         badge_case = Case(
@@ -886,13 +938,28 @@ class UnifiedRequestListView(View):
             .annotate(instance_count=Count('instances'))
         )
 
+        if not flt.include_finalized:
+            ers = ers.filter(finalized=False)
+        if flt.state:
+            ers = ers.filter(aggregated_state=flt.state)
+        if flt.device_name:
+            ers = ers.filter(device__common_name__icontains=flt.device_name)
+        if flt.domain_id is not None:
+            ers = ers.filter(domain_id=flt.domain_id)
+        if flt.protocol:
+            ers = ers.filter(protocol__icontains=flt.protocol)
+        if flt.operation:
+            ers = ers.filter(operation__icontains=flt.operation)
         if flt.template:
             ers = ers.filter(template__icontains=flt.template)
+        if flt.requested_from:
+            ers = ers.filter(created_at__gte=flt.requested_from)
+        if flt.requested_to:
+            ers = ers.filter(created_at__lte=flt.requested_to)
 
         ers_rows = (
             ers.annotate(
                 request_type=Value('Enrollment', output_field=CharField()),
-                action_text=Value('', output_field=CharField()),
                 template_text=Cast('template', output_field=CharField()),
                 badge_css=badge_case,
             )
@@ -902,7 +969,6 @@ class UnifiedRequestListView(View):
                 'aggregated_state',
                 'finalized',
                 'request_type',
-                'action_text',
                 'protocol',
                 'operation',
                 'template_text',
@@ -935,16 +1001,15 @@ class UnifiedRequestListView(View):
         if flt.requested_to:
             drs = drs.filter(created_at__lte=flt.requested_to)
 
-        # Action filter (DeviceRequest only)
-        if flt.action:
-            drs = drs.filter(action__icontains=flt.action)
+        # "Action" filter applies to DeviceRequest.action but is shown as operation in the table
+        if flt.operation:
+            drs = drs.filter(action__icontains=flt.operation)
 
         drs_rows = (
             drs.annotate(
                 request_type=Value('Device', output_field=CharField()),
-                action_text=Cast('action', output_field=CharField()),
-                protocol=Value('', output_field=CharField()),
-                operation=Value('', output_field=CharField()),
+                protocol=Value('device', output_field=CharField()),
+                operation=Cast('action', output_field=CharField()),
                 template_text=Value('', output_field=CharField()),
                 badge_css=badge_case,
             )
@@ -954,7 +1019,6 @@ class UnifiedRequestListView(View):
                 'aggregated_state',
                 'finalized',
                 'request_type',
-                'action_text',
                 'protocol',
                 'operation',
                 'template_text',
