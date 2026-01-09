@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, fields
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 if TYPE_CHECKING:
     from cryptography import x509
@@ -17,6 +17,8 @@ if TYPE_CHECKING:
     from workflows.models import EnrollmentRequest
 
 # Request context classes follow the naming convention of <Protocol><Operation>RequestContext
+
+RCT = TypeVar('RCT', bound='BaseRequestContext')
 
 @dataclass(kw_only=True)
 class BaseRequestContext:
@@ -53,6 +55,11 @@ class BaseRequestContext:
     def to_dict(self) -> dict[str, Any]:
         """Serialize the context to a dictionary."""
         return {field.name: getattr(self, field.name) for field in fields(self)}
+
+    def narrow(self, child_cls: type[RCT], **extra: Any) -> RCT:
+        """Create a new request context of a more specific subclass, copying existing attributes."""
+        data = self.to_dict()
+        return child_cls(**data, **extra)
 
     def clear(self) -> None:
         """Reset all attributes to None."""

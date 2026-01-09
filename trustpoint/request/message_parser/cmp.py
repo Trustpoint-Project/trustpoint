@@ -508,7 +508,7 @@ class CmpCertificateBodyValidation(LoggerMixin):
 class CmpBodyValidation(ParsingComponent, LoggerMixin):
     """Component for validating CMP body based on operation context."""
 
-    def parse(self, context: BaseRequestContext) -> None:
+    def parse(self, context: BaseRequestContext) -> CmpBaseRequestContext:
         """Validate the CMP body type and extract the appropriate body."""
         if not isinstance(context, CmpBaseRequestContext):
             exc_msg = 'CmpBodyValidation requires a CmpBaseRequestContext.'
@@ -541,6 +541,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             self._validate_operation_body_match(context.operation, body_type)
 
             if body_type in ('ir', 'cr'):
+                context = context.narrow(CmpCertificateRequestContext)
                 CmpCertificateBodyValidation().parse_ircr_body(context, pki_body, body_type)
             elif body_type == 'rr':
                 self._raise_not_implemented_error('CMP RR is not implemented yet.')
@@ -550,6 +551,9 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         except ValueError as e:
             self.logger.exception('CMP body type validation failed', extra={'error': str(e)})
             raise
+
+        self.logger.debug('Context obj type: %s', type(context).__name__)
+        return context
 
     def _validate_body_type_supported(self, body_type: str) -> None:
         """Validate that the CMP body type is supported by the request pipeline."""

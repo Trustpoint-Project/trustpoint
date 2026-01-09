@@ -10,7 +10,7 @@ class ParsingComponent(ABC):
     """Abstract base class for components in the composite parsing pattern."""
 
     @abstractmethod
-    def parse(self, context: BaseRequestContext) -> None:
+    def parse(self, context: BaseRequestContext) -> None | BaseRequestContext:
         """Execute parsing logic and store results in the context."""
 
 
@@ -93,13 +93,15 @@ class CompositeParsing(ParsingComponent, LoggerMixin):
             raise ValueError(error_message)
 
 
-    def parse(self, context: BaseRequestContext) -> None:
-        """Execute all child parsers."""
+    def parse(self, context: BaseRequestContext) -> BaseRequestContext:
+        """Execute all child parsers, returning the updated type-narrowed context."""
         self.logger.debug('Starting composite parsing with %i components', len(self.components))
 
         for i, component in enumerate(self.components):
             try:
-                component.parse(context)
+                ret_val = component.parse(context)
+                if isinstance(ret_val, BaseRequestContext):
+                    context = ret_val
                 self.logger.debug('Parsing component %s completed successfully',
                                   component.__class__.__name__)
             except ValueError as e:
@@ -121,3 +123,4 @@ class CompositeParsing(ParsingComponent, LoggerMixin):
 
         self.logger.info('Composite parsing successful. All %i components completed',
                          len(self.components))
+        return context
