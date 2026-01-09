@@ -13,7 +13,7 @@ from pyasn1.codec.der import encoder as der_encoder
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
 
 from cmp.util import NameParser
-from request.request_context import BaseRequestContext, CmpBaseRequestContext
+from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingComponent
@@ -165,79 +165,16 @@ class CmpHeaderValidation(ParsingComponent, LoggerMixin):
             raise ValueError(err_msg)
 
 
-class CmpBodyValidation(ParsingComponent, LoggerMixin):
-    """Component for validating CMP body based on operation context."""
+class CmpCertificateBodyValidation(LoggerMixin):
+    """Sub-component for validating CMP certificate body for IR and CR message types."""
 
     def __init__(self, cert_template_version: int = 2) -> None:
-        """Initialize the CMP body validation component.
+        """Initialize the CMP IR/CR body validation component.
 
         Args:
             cert_template_version: Expected certificate template version (default: 2)
         """
         self.cert_template_version = cert_template_version
-
-    def parse(self, context: BaseRequestContext) -> None:
-        """Validate the CMP body type and extract the appropriate body."""
-        if not isinstance(context, CmpBaseRequestContext):
-            exc_msg = 'CmpBodyValidation requires a CmpBaseRequestContext.'
-            raise TypeError(exc_msg)
-
-        if context.parsed_message is None:
-            error_message = 'Parsed message is missing from the context.'
-            self.logger.warning('CMP body type validation failed: Parsed message is missing')
-            self._raise_value_error(error_message)
-
-        try:
-            if not hasattr(context.parsed_message, '__getitem__'):
-                error_message = 'Parsed message is not a CMP message structure.'
-                self.logger.warning('CMP body type validation failed: Invalid message structure')
-                self._raise_value_error(error_message)
-
-            parsed_message = context.parsed_message
-            if not hasattr(parsed_message, '__getitem__'):
-                error_message = 'Parsed message is not indexable.'
-                self.logger.warning('CMP body type validation failed: Message not indexable')
-                self._raise_value_error(error_message)
-
-            pki_body = parsed_message['body']
-
-            body_type = pki_body.getName()
-
-            if body_type not in ('ir', 'cr'):
-                err_msg = f'Unsupported CMP body type: {body_type}'
-                self._raise_value_error(err_msg)
-
-            # Validate body type matches operation
-            self._validate_operation_body_match(context.operation, body_type)
-
-            # Extract and validate certificate request messages
-            cert_req_messages = pki_body[body_type]
-            self._validate_cert_req_messages(cert_req_messages)
-
-            # Validate certificate request details
-            cert_req_msg = cert_req_messages[0]['certReq']
-            request_builder = self._validate_cert_request(cert_req_msg)
-
-            context.cert_requested = request_builder
-
-            self.logger.info('CMP body type validation successful: %s body extracted', body_type.upper())
-
-        except ValueError as e:
-            self.logger.exception('CMP body type validation failed', extra={'error': str(e)})
-            raise
-
-    def _validate_operation_body_match(self, operation: str | None, body_type: str) -> None:
-        """Validate that the operation matches the body type."""
-        if operation == 'initialization' and body_type != 'ir':
-            err_msg = f'Expected CMP IR body for initialization operation, but got CMP {body_type.upper()} body.'
-            raise ValueError(err_msg)
-        if operation == 'certification' and body_type != 'cr':
-            err_msg = f'Expected CMP CR body for certification operation, but got CMP {body_type.upper()} body.'
-            raise ValueError(err_msg)
-
-    def _raise_value_error(self, message: str) -> Never:
-        """Helper function to raise a ValueError with the given message."""
-        raise ValueError(message)
 
     def _validate_cert_req_messages(self, cert_req_messages: list[rfc2511.CertReqMsg]) -> None:
         """Validate the certificate request messages structure."""
@@ -262,10 +199,6 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             self._raise_validation_error('Version must be 2 if supplied in certificate request.')
 
         return self._cert_template_to_builder(cert_req_template)
-
-    def _raise_validation_error(self, message: str) -> Never:
-        """Helper function to raise a ValueError with the given message."""
-        raise ValueError(message)
 
     def _cert_template_to_builder(
             self,
@@ -311,9 +244,9 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
 
         return builder.public_key(public_key)
 
-    def _raise_not_implemented_error(self, message: str) -> None:
-        """Helper function to raise NotImplementedError with a given message."""
-        raise NotImplementedError(message)
+    def _raise_validation_error(self, message: str) -> Never:
+        """Helper function to raise a ValueError with the given message."""
+        raise ValueError(message)
 
     def _parse_cert_template_extensions(self, extensions_asn1: rfc2459.Extensions) -> list[x509.Extension[Any]]:  # noqa: C901 - Core workflow orchestration requires multiple validation and conditional paths
         """Parse ASN.1 extensions from certTemplate into cryptography extension objects using fallback approach."""
@@ -552,6 +485,103 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         except Exception:
             self.logger.exception('Failed to parse Certificate Policies extension')
             raise
+
+    def _raise_value_error(self, message: str) -> Never:
+        """Helper function to raise a ValueError with the given message."""
+        raise ValueError(message)
+
+    def _raise_not_implemented_error(self, message: str) -> None:
+        """Helper function to raise NotImplementedError with a given message."""
+        raise NotImplementedError(message)
+
+    def parse_ircr_body(self, context: CmpCertificateRequestContext, pki_body: rfc4210.PKIBody, body_type: str) -> None:
+        """Extract the certificate request messages from CMP IR/CR body."""
+        cert_req_messages = pki_body[body_type]
+        self._validate_cert_req_messages(cert_req_messages)
+
+        cert_req_msg = cert_req_messages[0]['certReq']
+        request_builder = self._validate_cert_request(cert_req_msg)
+
+        context.cert_requested = request_builder
+
+
+class CmpBodyValidation(ParsingComponent, LoggerMixin):
+    """Component for validating CMP body based on operation context."""
+
+    def parse(self, context: BaseRequestContext) -> None:
+        """Validate the CMP body type and extract the appropriate body."""
+        if not isinstance(context, CmpBaseRequestContext):
+            exc_msg = 'CmpBodyValidation requires a CmpBaseRequestContext.'
+            raise TypeError(exc_msg)
+
+        if context.parsed_message is None:
+            error_message = 'Parsed message is missing from the context.'
+            self.logger.warning('CMP body type validation failed: Parsed message is missing')
+            self._raise_value_error(error_message)
+
+        try:
+            if not hasattr(context.parsed_message, '__getitem__'):
+                error_message = 'Parsed message is not a CMP message structure.'
+                self.logger.warning('CMP body type validation failed: Invalid message structure')
+                self._raise_value_error(error_message)
+
+            parsed_message = context.parsed_message
+            if not hasattr(parsed_message, '__getitem__'):
+                error_message = 'Parsed message is not indexable.'
+                self.logger.warning('CMP body type validation failed: Message not indexable')
+                self._raise_value_error(error_message)
+
+            pki_body = parsed_message['body']
+
+            body_type = pki_body.getName()
+
+            self._validate_body_type_supported(body_type)
+
+            # Validate body type matches operation
+            self._validate_operation_body_match(context.operation, body_type)
+
+            if body_type in ('ir', 'cr'):
+                CmpCertificateBodyValidation().parse_ircr_body(context, pki_body, body_type)
+            elif body_type == 'rr':
+                self._raise_not_implemented_error('CMP RR is not implemented yet.')
+
+            self.logger.info('CMP body type validation successful: %s body extracted', body_type.upper())
+
+        except ValueError as e:
+            self.logger.exception('CMP body type validation failed', extra={'error': str(e)})
+            raise
+
+    def _validate_body_type_supported(self, body_type: str) -> None:
+        """Validate that the CMP body type is supported by the request pipeline."""
+        if body_type not in ('ir', 'cr'):
+            err_msg = f'Unsupported CMP body type: {body_type}'
+            self._raise_value_error(err_msg)
+
+    def _validate_operation_body_match(self, operation: str | None, body_type: str) -> None:
+        """Validate that the operation matches the body type."""
+        if operation == 'initialization':
+            if body_type != 'ir':
+                err_msg = f'Expected CMP IR body for initialization operation, but got CMP {body_type.upper()} body.'
+                raise ValueError(err_msg)
+            return
+        if operation == 'certification':
+            if body_type != 'cr':
+                err_msg = f'Expected CMP CR body for certification operation, but got CMP {body_type.upper()} body.'
+                raise ValueError(err_msg)
+            return
+        if operation == 'revocation':
+            if body_type != 'rr':
+                err_msg = f'Expected CMP RR body for revocation operation, but got CMP {body_type.upper()} body.'
+                raise ValueError(err_msg)
+            return
+
+    def _raise_value_error(self, message: str) -> Never:
+        """Helper function to raise a ValueError with the given message."""
+        raise ValueError(message)
+
+    def _raise_not_implemented_error(self, message: str) -> None:
+        """Helper function to raise NotImplementedError with a given message."""
+        raise NotImplementedError(message)
 
 
 class CmpMessageParser(CompositeParsing):
