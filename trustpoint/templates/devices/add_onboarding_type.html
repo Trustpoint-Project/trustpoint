@@ -17,9 +17,9 @@
             <div class="d-flex gap-3 mt-3">
                 <div class="card flex-fill d-flex flex-column">
                     <div class="card-body d-flex flex-column">
-                        <h5 class="card-title"><strong>Use Onboarding (Recommended)</strong></h5>
+                        <h5 class="card-title"><strong>Zero Touch Onboarding</strong></h5>
                         <hr class="hr-m">
-                        <p class="card-text flex-grow-1">If a domain credential shall be issued that will in turn be used for authentication, please choose Onboarding.</p>
+                        <p class="card-text flex-grow-1">AOKI (Automated Onboarding Key Infrastructure) enables secure zero-touch onboarding of industrial devices using the Certificate Management Protocol (CMP)</p>
                         <a href="{% url use_onboarding_url_name 1 %}" class="btn btn-primary mt-auto w-100" style="max-width: 250px; margin-left: auto; margin-right: auto;">
                             AOKI
                         </a>
@@ -27,11 +27,11 @@
                 </div>
                 <div class="card flex-fill d-flex flex-column">
                     <div class="card-body d-flex flex-column">
-                        <h5 class="card-title"><strong>Do not use onboarding</strong></h5>
+                        <h5 class="card-title"><strong>With new DevID</strong></h5>
                         <hr class="hr-m">
                         <p class="card-text flex-grow-1">If the trustpoint shall directly issue application certificates without using a domain credential, please choose No Onboarding.</p>
                         <a href="{% url use_no_onboarding_url  %}" class="btn btn-primary mt-auto w-100" style="max-width: 250px; margin-left: auto; margin-right: auto;">
-                            NOKI
+                            Add DevOwnerID
                         </a>
                     </div>
                 </div>
