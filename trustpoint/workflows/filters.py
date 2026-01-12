@@ -1,3 +1,11 @@
+"""Filter form and parsed filter values for the unified workflow request list.
+
+This module provides:
+- A Django form (`UnifiedRequestFilterForm`) used to validate GET query parameters.
+- An immutable dataclass (`UnifiedRequestFilters`) that normalizes cleaned form data
+  into a simple, typed container consumed by views/query builders.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,6 +19,7 @@ from workflows.models import State
 
 
 class UnifiedRequestFilterForm(forms.Form):
+    """Django form for filtering unified enrollment/device request listings."""
     device_name = forms.CharField(
         label=_('Device'),
         required=False,
@@ -91,6 +100,20 @@ class UnifiedRequestFilterForm(forms.Form):
 
 @dataclass(frozen=True)
 class UnifiedRequestFilters:
+    """Normalized filter values derived from `UnifiedRequestFilterForm`.
+
+    Attributes:
+        device_name: Substring filter applied to device common name.
+        domain_id: Optional domain primary key.
+        type: Request type discriminator ("Enrollment", "Device", or "").
+        state: Aggregated state filter or "" for all.
+        include_finalized: Whether to include finalized/aborted requests.
+        protocol: Protocol substring (Enrollment only; Device rows use "device").
+        operation: Operation/action substring.
+        template: Template substring (Enrollment only).
+        requested_from: Optional lower bound for created_at.
+        requested_to: Optional upper bound for created_at.
+    """
     device_name: str
     domain_id: int | None
     type: str
@@ -104,6 +127,15 @@ class UnifiedRequestFilters:
 
     @classmethod
     def from_form(cls, form: UnifiedRequestFilterForm) -> UnifiedRequestFilters:
+        """Create normalized filters from a validated form.
+
+        Args:
+            form: A bound `UnifiedRequestFilterForm`. The caller is expected to have
+                called `is_valid()` before invoking this method.
+
+        Returns:
+            A `UnifiedRequestFilters` instance containing normalized filter values.
+        """
         cd = form.cleaned_data
         dom = cd.get('domain')
         return cls(

@@ -1,7 +1,7 @@
 """Utilities to transform wizard input into a workflow definition schema.
 
-This module exposes a single helper to convert simple wizard-provided lists
-of events and steps into the internal workflow-definition JSON structure.
+This module converts wizard-provided lists of events and steps into the internal
+workflow-definition JSON structure persisted in WorkflowDefinition.definition.
 """
 
 from __future__ import annotations
@@ -15,24 +15,32 @@ def transform_to_definition_schema(
 ) -> dict[str, Any]:
     """Convert wizard input into an internal workflow-definition schema.
 
+    Rules:
+    - Preserve step["id"] if provided and non-empty.
+    - Otherwise generate a stable sequential id: "step-<n>".
+    - Produce linear transitions in the given order.
+
     Args:
-        events: List of event descriptors, each containing protocol and operation.
-        steps: Ordered list of step descriptors, each with type and parameters.
+        events: List of event descriptors.
+        steps: Ordered list of step descriptors.
 
     Returns:
-        dict[str, Any]: Workflow definition containing:
-            - "events": the input events.
-            - "steps": steps with generated IDs ("step-1", "step-2", ...).
-            - "transitions": linear transitions linking steps on the "next" signal.
+        Workflow definition dict with keys: "events", "steps", "transitions".
     """
-    steps_list: list[dict[str, Any]] = [
-        {
-            'id': f'step-{idx}',
-            'type': step['type'],
-            'params': step.get('params', {}),
-        }
-        for idx, step in enumerate(steps, start=1)
-    ]
+    steps_list: list[dict[str, Any]] = []
+
+    for idx, step in enumerate(steps, start=1):
+        sid = step.get('id')
+        if not isinstance(sid, str) or not sid.strip():
+            sid = f'step-{idx}'
+
+        steps_list.append(
+            {
+                'id': sid,
+                'type': step['type'],
+                'params': step.get('params', {}) or {},
+            }
+        )
 
     transitions: list[dict[str, str]] = [
         {

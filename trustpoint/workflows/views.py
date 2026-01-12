@@ -17,7 +17,7 @@ from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
 from django.contrib import messages
-from django.core.paginator import Paginator
+from django.core.paginator import Page, Paginator
 from django.db import IntegrityError, models
 from django.db.models import Case, CharField, Count, Value, When
 from django.db.models.functions import Cast
@@ -28,6 +28,7 @@ from django.http import (
     JsonResponse,
 )
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.timezone import now as tz_now
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -52,11 +53,15 @@ from workflows.models import (
     WorkflowScope,
     get_status_badge,
 )
+from workflows.services.context import build_context
+from workflows.services.context_catalog import build_catalog
 from workflows.services.engine import advance_instance
 from workflows.services.validators import validate_wizard_payload
 from workflows.services.wizard import transform_to_definition_schema
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from django.db.models.query import QuerySet
 
 class WizardContextCatalogView(View):
@@ -69,6 +74,16 @@ class WizardContextCatalogView(View):
     """
 
     def get(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
+        """Return a design-time context variable catalog for the wizard.
+
+        Args:
+            request: The HTTP request providing query parameters.
+            *_args: Unused positional arguments.
+            **_kwargs: Unused keyword arguments.
+
+        Returns:
+            JsonResponse containing the handler name and a list of context groups.
+        """
         handler = (request.GET.get('handler') or '').strip()
         protocol = (request.GET.get('protocol') or '').strip()
         operation = (request.GET.get('operation') or '').strip()
@@ -78,43 +93,65 @@ class WizardContextCatalogView(View):
 
         strategy = get_strategy(handler)
 
-        # Prefer explicit design-time groups; fall back to empty.
         getter = getattr(strategy, 'get_design_time_groups', None)
         groups = getter(protocol=protocol or None, operation=operation or None) if callable(getter) else []
 
-        return JsonResponse(
-            {
-                'handler': handler,
-                'groups': groups,
-            },
-            safe=True,
+        return JsonResponse({'handler': handler, 'groups': groups}, safe=True)
+
+
+class RuntimeContextCatalogView(View, LoggerMixin):
+    """Return a flattened runtime ctx catalog for a specific WorkflowInstance (debug)."""
+
+    def get(self, _request: HttpRequest, instance_id: UUID, *_args: Any, **_kwargs: Any) -> JsonResponse:
+        """Return a flattened runtime context catalog for a workflow instance.
+
+        Args:
+            _request: The HTTP request (unused).
+            instance_id: The workflow instance UUID.
+            *_args: Unused positional arguments.
+            **_kwargs: Unused keyword arguments.
+
+        Returns:
+            JsonResponse containing a flattened context catalog or an error payload.
+        """
+        inst = get_object_or_404(
+            WorkflowInstance.objects.select_related(
+                'definition',
+                'enrollment_request',
+                'enrollment_request__device',
+                'enrollment_request__domain',
+                'enrollment_request__ca',
+                'device_request',
+                'device_request__device',
+                'device_request__domain',
+                'device_request__ca',
+            ),
+            pk=instance_id,
         )
 
-class ContextCatalogView(View, LoggerMixin):
-    """Return a handler-specific variable catalog for the wizard variable panel."""
-
-    def get(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
-        handler = str(request.GET.get('handler') or '').strip()
-        protocol = str(request.GET.get('protocol') or '').strip()
-        operation = str(request.GET.get('operation') or '').strip()
-
-        if not handler:
-            return JsonResponse({'handler': '', 'groups': []}, safe=True)
-
         try:
-            strategy = get_strategy(handler)
-        except ValueError:
-            return JsonResponse({'handler': handler, 'groups': []}, safe=True)
-
-        try:
-            groups = strategy.get_design_time_groups(protocol=protocol, operation=operation)
+            ctx = build_context(inst)
+            catalog = build_catalog(ctx)
         except Exception:
-            self.logger.exception(
-                'wizard context catalog failed (handler=%s protocol=%s operation=%s)', handler, protocol, operation
+            self.logger.exception('runtime context catalog failed (instance_id=%s)', instance_id)
+            return JsonResponse(
+                {
+                    'error': 'Failed to build runtime catalog.',
+                    'instance_id': str(instance_id),
+                    'usage': 'Insert variables using {{ ctx.<path> }}',
+                    'vars': [],
+                },
+                status=500,
             )
-            groups = []
 
-        return JsonResponse({'handler': handler, 'groups': groups}, safe=True)
+        catalog['instance'] = {
+            'id': str(inst.id),
+            'workflow': str(inst.definition.name),
+            'state': str(inst.state),
+            'current_step': str(inst.current_step),
+        }
+        return JsonResponse(catalog, safe=True)
+
 
 class MailTemplateListView(View):
     """Return email templates grouped for the wizard."""
@@ -552,34 +589,33 @@ class WorkflowWizardView(View, LoggerMixin):
 
     template_name = 'workflows/definition_wizard.html'
 
-    def _dbg_step_id_keys(self, payload: dict) -> None:
+    def _dbg_step_id_keys(self, payload: dict[str, Any]) -> None:
         """Temporary debug helper: log which step-id keys exist in the incoming payload."""
         try:
             # support both flat and nested shapes
-            d = payload.get("definition")
-            if isinstance(d, dict) and isinstance(d.get("definition"), dict):
-                d = d["definition"]
+            d = payload.get('definition')
+            if isinstance(d, dict) and isinstance(d.get('definition'), dict):
+                d = d['definition']
             if not isinstance(d, dict):
                 d = payload
 
-            steps = d.get("steps") if isinstance(d.get("steps"), list) else payload.get("steps")
+            steps = d.get('steps') if isinstance(d.get('steps'), list) else payload.get('steps')
             if not isinstance(steps, list):
-                self.logger.warning("WIZARD DEBUG: no steps list found. top_keys=%s", list(payload.keys()))
+                self.logger.warning('WIZARD DEBUG: no steps list found. top_keys=%s', list(payload.keys()))
                 return
 
             sample = []
             for i, s in enumerate(steps, start=1):
                 if not isinstance(s, dict):
-                    sample.append({"i": i, "type": type(s).__name__})
+                    sample.append({'i': i, 'type': type(s).__name__})
                     continue
                 keys = sorted(s.keys())
                 # show the common id-ish keys and their values
-                idish = {k: s.get(k) for k in ("id", "uid", "key", "step_id", "stepId") if k in s}
-                sample.append({"i": i, "keys": keys, "idish": idish, "type": s.get("type")})
+                idish = {k: s.get(k) for k in ('id', 'uid', 'key', 'step_id', 'stepId') if k in s}
+                sample.append({'i': i, 'keys': keys, 'idish': idish, 'type': s.get('type')})
 
-            self.logger.warning("WIZARD DEBUG: steps summary:\n%s", json.dumps(sample, indent=2, default=str))
         except Exception:
-            self.logger.exception("WIZARD DEBUG: failed to inspect payload")
+            self.logger.exception('WIZARD DEBUG: failed to inspect payload')
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the workflow definition wizard page."""
@@ -718,38 +754,118 @@ class WorkflowDefinitionDeleteView(View):
 
 
 class WorkflowInstanceDetailView(PageContextMixin, View):
-    """Show detailed info for a pending workflow instance, including step summary."""
+    """Show detailed info for a workflow instance, including steps and request details."""
 
     template_name = 'workflows/instance_detail.html'
 
     def get(self, request: HttpRequest, instance_id: UUID, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Render the detail view for a single workflow instance."""
-        inst = get_object_or_404(
+        """Render the workflow instance detail page."""
+        inst = self._get_instance(instance_id)
+        payload = inst.payload or {}
+
+        enr = inst.enrollment_request
+        dr = inst.device_request
+
+        ca, dm, dv = self._resolve_scope_objects(payload, enr, dr)
+        protocol, operation = self._resolve_protocol_operation(payload, enr, dr)
+
+        steps, current_step_label = self._build_steps(inst)
+
+        csr_pem = payload.get('csr_pem')
+        csr_info = self._parse_csr_info(csr_pem)
+
+        runtime_catalog_url = reverse('workflows:runtime_context_catalog', kwargs={'instance_id': inst.id})
+
+        context = self._build_template_context(
+            inst=inst,
+            payload=payload,
+            enr=enr,
+            dr=dr,
+            ca=ca,
+            dm=dm,
+            dv=dv,
+            protocol=protocol,
+            operation=operation,
+            steps=steps,
+            current_step_label=current_step_label,
+            csr_info=csr_info,
+            csr_pem=csr_pem,
+            runtime_catalog_url=runtime_catalog_url,
+        )
+        return render(request, self.template_name, context)
+
+    # ---------------------- helpers ---------------------- #
+
+    @staticmethod
+    def _get_instance(instance_id: UUID) -> WorkflowInstance:
+        return get_object_or_404(
             WorkflowInstance.objects.select_related(
                 'definition',
                 'enrollment_request',
                 'enrollment_request__device',
                 'enrollment_request__domain',
                 'enrollment_request__ca',
+                'device_request',
+                'device_request__device',
+                'device_request__domain',
+                'device_request__ca',
             ),
             pk=instance_id,
         )
 
-        payload = inst.payload or {}
+    @staticmethod
+    def _resolve_model(model_cls: type[models.Model], payload_id: Any, fallback: Any) -> Any:
+        if payload_id:
+            return get_object_or_404(model_cls, pk=payload_id)
+        return fallback
 
-        # ---- Resolve CA / Domain / Device -------------------------------------
-        def _resolve(model_cls: type[models.Model], payload_id: Any, fallback: Any) -> Any:
-            """Resolve a model instance from payload or fall back to the given value."""
-            if payload_id:
-                return get_object_or_404(model_cls, pk=payload_id)
-            return fallback
+    def _resolve_scope_objects(
+        self,
+        payload: dict[str, Any],
+        enr: EnrollmentRequest | None,
+        dr: DeviceRequest | None,
+    ) -> tuple[IssuingCaModel | None, DomainModel | None, DeviceModel | None]:
+        fallback_ca = (enr.ca if enr and enr.ca_id else None) or (dr.ca if dr and dr.ca_id else None)
+        fallback_dm = (enr.domain if enr and enr.domain_id else None) or (dr.domain if dr and dr.domain_id else None)
+        fallback_dv = (enr.device if enr and enr.device_id else None) or (dr.device if dr and dr.device_id else None)
 
-        enr = inst.enrollment_request
-        ca = _resolve(IssuingCaModel, payload.get('ca_id'), enr.ca if enr and enr.ca_id else None)
-        dm = _resolve(DomainModel, payload.get('domain_id'), enr.domain if enr and enr.domain_id else None)
-        dv = _resolve(DeviceModel, payload.get('device_id'), enr.device if enr and enr.device_id else None)
+        ca = self._resolve_model(IssuingCaModel, payload.get('ca_id'), fallback_ca)
+        dm = self._resolve_model(DomainModel, payload.get('domain_id'), fallback_dm)
+        dv = self._resolve_model(DeviceModel, payload.get('device_id'), fallback_dv)
+        return ca, dm, dv
 
-        # ---- Steps + step contexts -------------------------------------------
+    @staticmethod
+    def _resolve_protocol_operation(
+        payload: dict[str, Any],
+        enr: EnrollmentRequest | None,
+        dr: DeviceRequest | None,
+    ) -> tuple[str | None, str | None]:
+        protocol = payload.get('protocol') or (enr.protocol if enr else None) or ('device' if dr else None)
+        operation = payload.get('operation') or (enr.operation if enr else None) or (dr.action if dr else None)
+        return protocol, operation
+
+    @staticmethod
+    def _extract_error(ctx: dict[str, Any]) -> str | None:
+        if not isinstance(ctx, dict):
+            return None
+
+        err = ctx.get('error')
+        if isinstance(err, str) and err.strip():
+            return err.strip()
+
+        for k in ('message', 'detail', 'reason'):
+            v = ctx.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+
+        if isinstance(err, dict):
+            msg = err.get('message') or err.get('detail') or err.get('reason')
+            if isinstance(msg, str) and msg.strip():
+                return msg.strip()
+
+        return None
+
+    def _build_steps(self, inst: WorkflowInstance) -> tuple[list[dict[str, Any]], str | None]:
         steps_raw = inst.get_steps()
         step_contexts: dict[str, dict[str, Any]] = inst.step_contexts or {}
 
@@ -773,75 +889,104 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
             if current_idx is not None and idx0 == current_idx:
                 current_step_label = step_label
 
-            error_value = ctx.get('error')
-            details = {
-                k: v
-                for k, v in ctx.items()
-                if k not in {'status', 'ok'}
-            }
+            normalized_error = self._extract_error(ctx)
+
+            details = dict(ctx)
+            details.pop('status', None)
+            details.pop('ok', None)
+            details['error'] = normalized_error
 
             steps.append(
                 {
+                    'id': step_id,
                     'label': step_label,
                     'type': step_type,
                     'status': display_status,
                     'badge_class': badge_class,
-                    'error': error_value,
+                    'error': normalized_error,
                     'details': details,
                 }
             )
 
-        # ---- CSR parsing ------------------------------------------------------
-        csr_info: dict[str, Any] | None = None
-        csr_pem = payload.get('csr_pem')
-        if isinstance(csr_pem, str) and csr_pem.strip():
+        return steps, current_step_label
+
+    @staticmethod
+    def _parse_csr_info(csr_pem: Any) -> dict[str, Any] | None:
+        if not (isinstance(csr_pem, str) and csr_pem.strip()):
+            return None
+
+        try:
+            csr_obj = x509.load_pem_x509_csr(csr_pem.encode('utf-8'))
+
+            cn_attrs = csr_obj.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+            cn = cn_attrs[0].value if cn_attrs else None
+
             try:
-                csr_obj = x509.load_pem_x509_csr(csr_pem.encode('utf-8'))
+                san_ext = csr_obj.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+                dns_sans = san_ext.value.get_values_for_type(x509.DNSName)
+                ip_sans = [str(ip) for ip in san_ext.value.get_values_for_type(x509.IPAddress)]
+                sans = [*dns_sans, *ip_sans]
+            except ExtensionNotFound:
+                sans = []
 
-                cn_attrs = csr_obj.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
-                cn = cn_attrs[0].value if cn_attrs else None
+            sig_alg = AlgorithmIdentifier.from_dotted_string(csr_obj.signature_algorithm_oid.dotted_string)
+            return {
+                'subject': csr_obj.subject.rfc4514_string(),
+                'common_name': cn,
+                'sans': sans,
+                'key_algorithm': csr_obj.public_key().__class__.__name__,
+                'signature_algorithm': f'{sig_alg.verbose_name}, {sig_alg.dotted_string}',
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {'error': f'Failed to parse CSR: {exc!s}'}
 
-                try:
-                    san_ext = csr_obj.extensions.get_extension_for_class(x509.SubjectAlternativeName)
-                    dns_sans = san_ext.value.get_values_for_type(x509.DNSName)
-                    ip_sans = [str(ip) for ip in san_ext.value.get_values_for_type(x509.IPAddress)]
-                    sans = [*dns_sans, *ip_sans]
-                except ExtensionNotFound:
-                    sans = []
-
-                sig_alg = AlgorithmIdentifier.from_dotted_string(csr_obj.signature_algorithm_oid.dotted_string)
-                csr_info = {
-                    'subject': csr_obj.subject.rfc4514_string(),
-                    'common_name': cn,
-                    'sans': sans,
-                    'key_algorithm': csr_obj.public_key().__class__.__name__,
-                    'signature_algorithm': f'{sig_alg.verbose_name}, {sig_alg.dotted_string}',
-                }
-            except Exception as e:  # noqa: BLE001
-                csr_info = {'error': f'Failed to parse CSR: {e!s}'}
-
-        context = {
+    @staticmethod
+    def _build_template_context(  # noqa: PLR0913
+        *,
+        inst: WorkflowInstance,
+        payload: dict[str, Any],
+        enr: EnrollmentRequest | None,
+        dr: DeviceRequest | None,
+        ca: IssuingCaModel | None,
+        dm: DomainModel | None,
+        dv: DeviceModel | None,
+        protocol: str | None,
+        operation: str | None,
+        steps: list[dict[str, Any]],
+        current_step_label: str | None,
+        csr_info: dict[str, Any] | None,
+        csr_pem: Any,
+        runtime_catalog_url: str,
+    ) -> dict[str, Any]:
+        return {
             'inst': inst,
             'payload': payload,
+            'enr': enr,
+            'dr': dr,
+            'ca_obj': ca,
+            'domain_obj': dm,
+            'device_obj': dv,
             'ca_name': ca.unique_name if ca else None,
             'domain_name': dm.unique_name if dm else None,
             'device_name': dv.common_name if dv else None,
             'device_serial_number': dv.serial_number if dv else None,
-            'csr_info': csr_info,
-            'csr_pem': csr_pem,
+            'protocol': protocol,
+            'operation': operation,
             'steps': steps,
             'current_step_label': current_step_label,
+            'csr_info': csr_info,
+            'csr_pem': csr_pem,
             'can_signal': (
                 not inst.finalized
                 and inst.state == State.AWAITING
                 and inst.enrollment_request is not None
                 and inst.enrollment_request.aggregated_state == State.AWAITING
             ),
+            'runtime_catalog_url': runtime_catalog_url,
             'page_category': 'workflows',
             'page_name': 'pending',
             'clm_url': f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management',
         }
-        return render(request, self.template_name, context)
 
 
 class SignalInstanceView(View):
@@ -886,12 +1031,14 @@ class SignalInstanceView(View):
         return redirect('workflows:request_detail', pk=inst.enrollment_request.pk)
 
 class DeviceRequestDetailView(ListView[WorkflowInstance]):
+    """Show WorkflowInstances that belong to a single DeviceRequest."""
     model = WorkflowInstance
     template_name = 'workflows/device_request_detail.html'
     context_object_name = 'instances'
     paginate_by = 50
 
     def get_queryset(self) -> QuerySet[WorkflowInstance]:
+        """Return WorkflowInstances for the requested DeviceRequest."""
         dr = get_object_or_404(DeviceRequest, pk=self.kwargs['pk'])
         return (
             WorkflowInstance.objects.filter(device_request=dr)
@@ -906,6 +1053,7 @@ class DeviceRequestDetailView(ListView[WorkflowInstance]):
         )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Expose the parent DeviceRequest and page metadata."""
         context = super().get_context_data(**kwargs)
         dr = get_object_or_404(
             DeviceRequest.objects.select_related('device', 'domain', 'ca'),
@@ -918,25 +1066,55 @@ class DeviceRequestDetailView(ListView[WorkflowInstance]):
 
 
 class UnifiedRequestListView(View):
+    """Render a unified list of enrollment and device requests with filtering and pagination."""
+
     template_name = 'workflows/unified_request_table.html'
     paginate_by = 25
 
     def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the unified request list."""
         form = UnifiedRequestFilterForm(request.GET)
         form.is_valid()
         flt = UnifiedRequestFilters.from_form(form)
 
-        badge_case = Case(
+        badge_case = self._build_badge_case()
+
+        ers_rows = self._build_enrollment_rows(flt, badge_case)
+        drs_rows = self._build_device_rows(flt, badge_case)
+
+        unified = self._choose_unified_queryset(flt, ers_rows, drs_rows)
+        unified = self._apply_sorting(unified, request)
+
+        page_obj = self._paginate(unified, request)
+
+        return render(
+            request,
+            self.template_name,
+            {
+                'page_obj': page_obj,
+                'requests': page_obj.object_list,
+                'filter_form': form,
+                'page_category': 'workflows',
+                'page_name': 'pending_requests',
+                'preserve_qs': request.GET.urlencode(),
+            },
+        )
+
+    # ---------------------- helpers ---------------------- #
+
+    @staticmethod
+    def _build_badge_case() -> Case:
+        return Case(
             *[When(aggregated_state=k, then=Value(v[1])) for k, v in BADGE_MAP.items()],
             default=Value('bg-secondary text-light'),
             output_field=CharField(),
         )
 
-        # ---- Enrollment QS ---------------------------------------------------
-        ers = (
-            EnrollmentRequest.objects.select_related('device', 'domain', 'ca')
-            .annotate(instance_count=Count('instances'))
-        )
+    @staticmethod
+    def _build_enrollment_rows(flt: UnifiedRequestFilters, badge_case: Case) -> QuerySet[Any]:
+        ers = EnrollmentRequest.objects.select_related(
+            'device', 'domain', 'ca').annotate(instance_count=Count('instances')
+            )
 
         if not flt.include_finalized:
             ers = ers.filter(finalized=False)
@@ -957,7 +1135,7 @@ class UnifiedRequestListView(View):
         if flt.requested_to:
             ers = ers.filter(created_at__lte=flt.requested_to)
 
-        ers_rows = (
+        return (
             ers.annotate(
                 request_type=Value('Enrollment', output_field=CharField()),
                 template_text=Cast('template', output_field=CharField()),
@@ -982,11 +1160,9 @@ class UnifiedRequestListView(View):
             )
         )
 
-        # ---- Device QS -------------------------------------------------------
-        drs = (
-            DeviceRequest.objects.select_related('device', 'domain', 'ca')
-            .annotate(instance_count=Count('instances'))
-        )
+    @staticmethod
+    def _build_device_rows(flt: UnifiedRequestFilters, badge_case: Case) -> QuerySet[Any]:
+        drs = DeviceRequest.objects.select_related('device', 'domain', 'ca').annotate(instance_count=Count('instances'))
 
         if not flt.include_finalized:
             drs = drs.filter(finalized=False)
@@ -1000,12 +1176,10 @@ class UnifiedRequestListView(View):
             drs = drs.filter(created_at__gte=flt.requested_from)
         if flt.requested_to:
             drs = drs.filter(created_at__lte=flt.requested_to)
-
-        # "Action" filter applies to DeviceRequest.action but is shown as operation in the table
         if flt.operation:
             drs = drs.filter(action__icontains=flt.operation)
 
-        drs_rows = (
+        return (
             drs.annotate(
                 request_type=Value('Device', output_field=CharField()),
                 protocol=Value('device', output_field=CharField()),
@@ -1032,39 +1206,34 @@ class UnifiedRequestListView(View):
             )
         )
 
-        # ---- Choose source / UNION ------------------------------------------
+    @staticmethod
+    def _choose_unified_queryset(
+        flt: UnifiedRequestFilters,
+        ers_rows: QuerySet[Any],
+        drs_rows: QuerySet[Any],
+    ) -> QuerySet[Any]:
         if flt.type == 'Enrollment':
-            unified = ers_rows
-        elif flt.type == 'Device':
-            unified = drs_rows
-        else:
-            unified = ers_rows.union(drs_rows, all=True)
+            return ers_rows
+        if flt.type == 'Device':
+            return drs_rows
+        return ers_rows.union(drs_rows, all=True)
 
-        # ---- Sorting ---------------------------------------------------------
+    @staticmethod
+    def _apply_sorting(unified: QuerySet[Any], request: HttpRequest) -> QuerySet[Any]:
         sort = (request.GET.get('sort') or '-created_at').strip()
         allowed_sorts = {'created_at', 'aggregated_state', 'request_type'}
+
         reverse = sort.startswith('-')
         key = sort.lstrip('-')
         if key not in allowed_sorts:
             key = 'created_at'
             reverse = True
-        unified = unified.order_by(f'-{key}' if reverse else key)
 
+        return unified.order_by(f'-{key}' if reverse else key)
+
+    def _paginate(self, unified: QuerySet[Any], request: HttpRequest) -> Page[Any]:
         paginator = Paginator(unified, self.paginate_by)
-        page_obj = paginator.get_page(request.GET.get('page'))
-
-        return render(
-            request,
-            self.template_name,
-            {
-                'page_obj': page_obj,
-                'requests': page_obj.object_list,
-                'filter_form': form,
-                'page_category': 'workflows',
-                'page_name': 'pending_requests',
-                'preserve_qs': request.GET.urlencode(),
-            },
-        )
+        return paginator.get_page(request.GET.get('page'))
 
 
 class EnrollmentRequestDetailView(ListView[WorkflowInstance]):
@@ -1114,7 +1283,7 @@ def _parse_selected_rows(values: list[str]) -> tuple[list[UUID], list[UUID]]:
         try:
             typ, sid = raw.split(':', 1)
             uid = UUID(sid)
-        except Exception:  # noqa: BLE001
+        except (ValueError, TypeError):
             continue
 
         if typ == 'Enrollment':
@@ -1125,7 +1294,9 @@ def _parse_selected_rows(values: list[str]) -> tuple[list[UUID], list[UUID]]:
     return enr, dev
 
 class BulkAbortEnrollmentRequestsView(View):
+    """Abort multiple enrollment/device requests selected in the UI."""
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        """Abort all selected requests and redirect back to the request table."""
         selected = request.POST.getlist('row_checkbox')
         if not selected:
             messages.warning(request, 'Please select at least one request.')
@@ -1210,11 +1381,13 @@ class SignalEnrollmentRequestView(View):
 
 
 class BulkSignalEnrollmentRequestsView(View):
+    """Approve or reject multiple requests selected in the UI."""
+
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
-        action = request.POST.get('action')
-        if action not in {'approve', 'reject'}:
-            messages.error(request, f'Invalid bulk action: {action!r}')
-            return redirect('workflows:request_table')
+        """Apply an approve/reject action to all selected requests and redirect back to the request table."""
+        action = self._get_action_or_redirect(request)
+        if isinstance(action, HttpResponseRedirect):
+            return action
 
         selected = request.POST.getlist('row_checkbox')
         if not selected:
@@ -1226,56 +1399,89 @@ class BulkSignalEnrollmentRequestsView(View):
         enr_qs = EnrollmentRequest.objects.filter(id__in=enr_ids).prefetch_related('instances')
         dev_qs = DeviceRequest.objects.filter(id__in=dev_ids).prefetch_related('instances')
 
-        # Validate “possible action”
+        if not self._validate_bulk_action(request, action, enr_qs, dev_qs):
+            return redirect('workflows:request_table')
+
+        updated = self._apply_bulk_action(action, enr_qs, dev_qs)
+        self._report_bulk_result(request, action, updated)
+        return redirect('workflows:request_table')
+
+    # ---------------------- helpers ---------------------- #
+
+    @staticmethod
+    def _get_action_or_redirect(request: HttpRequest) -> str | HttpResponseRedirect:
+        action = request.POST.get('action')
+        if action not in {'approve', 'reject'}:
+            messages.error(request, f'Invalid bulk action: {action!r}')
+            return redirect('workflows:request_table')
+        return action
+
+    @staticmethod
+    def _validate_bulk_action(
+        request: HttpRequest,
+        action: str,
+        enr_qs: QuerySet[EnrollmentRequest],
+        dev_qs: QuerySet[DeviceRequest],
+    ) -> bool:
         for er in enr_qs:
-            if er.finalized:
-                messages.error(request, 'Cannot update finalized requests.')
-                return redirect('workflows:request_table')
-            if er.aggregated_state != State.AWAITING:
-                messages.error(
-                    request,
-                    _(f'You cannot {action} a request already in state "{er.aggregated_state.lower()}"'),
-                )
-                return redirect('workflows:request_table')
-            if action == 'approve' and any(inst.state == State.FAILED for inst in er.instances.all()):
-                messages.error(request, 'Cannot approve requests containing failed instances.')
-                return redirect('workflows:request_table')
+            ok = BulkSignalEnrollmentRequestsView._validate_single_request(request, action, er)
+            if not ok:
+                return False
 
         for dr in dev_qs:
-            if dr.finalized:
-                messages.error(request, 'Cannot update finalized requests.')
-                return redirect('workflows:request_table')
-            if dr.aggregated_state != State.AWAITING:
-                messages.error(
-                    request,
-                    _(f'You cannot {action} a request already in state "{dr.aggregated_state.lower()}"'),
-                )
-                return redirect('workflows:request_table')
-            if action == 'approve' and any(inst.state == State.FAILED for inst in dr.instances.all()):
-                messages.error(request, 'Cannot approve requests containing failed instances.')
-                return redirect('workflows:request_table')
+            ok = BulkSignalEnrollmentRequestsView._validate_single_request(request, action, dr)
+            if not ok:
+                return False
 
+        return True
+
+    @staticmethod
+    def _validate_single_request(request: HttpRequest, action: str, req: Any) -> bool:
+        if req.finalized:
+            messages.error(request, 'Cannot update finalized requests.')
+            return False
+        if req.aggregated_state != State.AWAITING:
+            messages.error(
+                request,
+                _('You cannot %s a request already in state "%s"') % (action, req.aggregated_state.lower()),
+            )
+            return False
+        if action == 'approve' and any(inst.state == State.FAILED for inst in req.instances.all()):
+            messages.error(request, 'Cannot approve requests containing failed instances.')
+            return False
+        return True
+
+    @staticmethod
+    def _apply_bulk_action(
+        action: str,
+        enr_qs: QuerySet[EnrollmentRequest],
+        dev_qs: QuerySet[DeviceRequest],
+    ) -> int:
         updated = 0
 
         for er in enr_qs:
-            for inst in er.instances.all():
-                advance_instance(inst, signal=action)
-                inst.refresh_from_db()
+            BulkSignalEnrollmentRequestsView._signal_instances(action, er.instances.all())
             er.recompute_and_save()
             updated += 1
 
         for dr in dev_qs:
-            for inst in dr.instances.all():
-                advance_instance(inst, signal=action)
-                inst.refresh_from_db()
+            BulkSignalEnrollmentRequestsView._signal_instances(action, dr.instances.all())
             dr.recompute_and_save()
             updated += 1
 
+        return updated
+
+    @staticmethod
+    def _signal_instances(action: str, instances: Iterable[WorkflowInstance]) -> None:
+        for inst in instances:
+            advance_instance(inst, signal=action)
+            inst.refresh_from_db()
+
+    @staticmethod
+    def _report_bulk_result(request: HttpRequest, action: str, updated: int) -> None:
         if updated == 0:
             messages.warning(request, 'No requests were updated.')
         elif action == 'approve':
             messages.success(request, f'{updated} request(s) approved.')
         else:
             messages.warning(request, f'{updated} request(s) rejected.')
-
-        return redirect('workflows:request_table')

@@ -1,0 +1,60 @@
+{% load i18n %}
+
+<h5 class="mb-3">{% trans 'Workflow steps' %}</h5>
+
+<table class="table table-sm">
+  <thead>
+    <tr>
+      <th>{% trans 'Step' %}</th>
+      <th>{% trans 'Status' %}</th>
+      <th>{% trans 'Type' %}</th>
+      <th>{% trans 'Details' %}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for step in steps %}
+      <tr>
+        <td>
+          {{ step.label }}
+          <div class="text-muted small">{{ step.id }}</div>
+        </td>
+
+        <td>
+          <span class="badge {{ step.badge_class }}">{{ step.status }}</span>
+        </td>
+
+        <td>
+          <code>{{ step.type }}</code>
+        </td>
+
+        <td>
+          <ul class="mb-0">
+            {% if step.details %}
+              {% for key, value in step.details.items %}
+                {% if key != 'error' %}
+                  <li><strong>{{ key }}:</strong> {{ value }}</li>
+                {% endif %}
+              {% endfor %}
+            {% else %}
+              <li class="text-muted">&mdash;</li>
+            {% endif %}
+            <li>
+              <strong>{% trans 'Error' %}:</strong>
+              {% if step.error %}
+                <span class="text-danger">{{ step.error }}</span>
+              {% else %}
+                <span class="text-muted">None</span>
+              {% endif %}
+            </li>
+          </ul>
+        </td>
+      </tr>
+    {% empty %}
+      <tr>
+        <td colspan="4" class="text-center text-muted">
+          {% trans 'No step metadata is available for this instance.' %}
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>

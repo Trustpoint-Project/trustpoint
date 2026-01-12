@@ -1,3 +1,9 @@
+"""Base types for workflow context catalog strategies.
+
+These strategies build design-time variable catalogs for the UI wizard.
+They do not assemble runtime execution context.
+"""
+
 from __future__ import annotations
 
 from typing import Any

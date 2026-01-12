@@ -1,4 +1,7 @@
-# workflows/context/strategy/common.py
+"""Shared context catalog groups used by multiple strategies.
+
+The functions in this module return UI-oriented variable groups for the wizard.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +9,14 @@ from typing import Any
 
 
 def common_workflow_group(_instance: Any = None) -> dict[str, Any]:
+    """Return the common workflow variable group.
+
+    Args:
+        _instance: Optional instance parameter (unused; kept for API compatibility).
+
+    Returns:
+        A dict describing a wizard variable group for workflow metadata.
+    """
     return {
         'name': 'Workflow',
         'vars': [
@@ -16,6 +27,14 @@ def common_workflow_group(_instance: Any = None) -> dict[str, Any]:
 
 
 def common_instance_group(_instance: Any = None) -> dict[str, Any]:
+    """Return the common workflow instance variable group.
+
+    Args:
+        _instance: Optional instance parameter (unused; kept for API compatibility).
+
+    Returns:
+        A dict describing a wizard variable group for instance metadata.
+    """
     return {
         'name': 'Instance',
         'vars': [

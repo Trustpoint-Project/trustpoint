@@ -1,4 +1,7 @@
-# workflows/context/strategy/device_action.py
+"""Context catalog strategy for device lifecycle actions.
+
+This module provides the wizard variable catalog for the `device_action` handler.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +15,7 @@ from .common import common_instance_group, common_workflow_group
 
 @register
 class DeviceActionContextStrategy(ContextStrategy):
+    """Context catalog strategy for the `device_action` handler."""
     handler = 'device_action'
 
     def get_design_time_groups(

@@ -1,85 +1,75 @@
 """Approval step executor."""
+
 from __future__ import annotations
 
 from workflows.models import State, WorkflowInstance
 from workflows.services.executors.factory import AbstractStepExecutor
-from workflows.services.types import ExecutorResult
+from workflows.services.types import ExecutorResult, StepContext
 
 
 class ApprovalExecutor(AbstractStepExecutor):
     """Approval step executor.
 
-    First encounter (no signal) → AWAITING (AwaitingApproval).
-
-    - On "reject" → REJECTED (terminal).
+    Semantics:
+    - If no signal is provided -> AWAITING (engine will keep the same current_step).
+    - On "reject" -> REJECTED (terminal).
     - On "approve":
-        • If this is the last Approval step → APPROVED.
-        • Otherwise → PASSED.
+        * If this is the last Approval step -> APPROVED.
+        * Otherwise -> PASSED (engine advances to next step).
     """
 
     def do_execute(self, instance: WorkflowInstance, signal: str | None) -> ExecutorResult:
-        """Execute the approval step and return the resulting state.
-
-        Args:
-            instance: Workflow instance being processed.
-            signal: External decision signal such as ``approve`` or ``reject``.
-
-        Returns:
-            ExecutorResult describing the new workflow state and step context.
-        """
-        # First visit (no signal) → AWAITING
-        if signal is None and instance.state == State.RUNNING:
+        """Execute the approval step and return the resulting state."""
+        if signal is None:
             return ExecutorResult(
                 status=State.AWAITING,
-                context={
-                    'type': 'Approval',
-                    'status': 'AwaitingApproval',
-                    'error': None,
-                    'outputs': {'AwaitingApproval': True},
-                },
+                context=StepContext(
+                    step_type='Approval',
+                    step_status='AwaitingApproval',
+                    error=None,
+                    outputs={'AwaitingApproval': True},
+                ),
             )
 
-        # Rejected → terminal
         if signal == 'reject':
             return ExecutorResult(
                 status=State.REJECTED,
-                context={
-                    'type': 'Approval',
-                    'status': 'rejected',
-                    'error': None,
-                    'outputs': {'decision': 'Rejected'},
-                },
+                context=StepContext(
+                    step_type='Approval',
+                    step_status='rejected',
+                    error=None,
+                    outputs={'decision': 'Rejected'},
+                ),
             )
 
-        # Approved
         if signal == 'approve':
             if instance.is_last_approval_step():
                 return ExecutorResult(
                     status=State.APPROVED,
-                    context={
-                        'type': 'Approval',
-                        'status': 'approved',
-                        'error': None,
-                        'outputs': {'decision': 'Approved', 'last_approval': True},
-                    },
+                    context=StepContext(
+                        step_type='Approval',
+                        step_status='approved',
+                        error=None,
+                        outputs={'decision': 'Approved', 'last_approval': True},
+                    ),
                 )
             return ExecutorResult(
                 status=State.PASSED,
-                context={
-                    'type': 'Approval',
-                    'status': 'passed',
-                    'error': None,
-                    'outputs': {'decision': 'Approved'},
-                },
+                context=StepContext(
+                    step_type='Approval',
+                    step_status='passed',
+                    error=None,
+                    outputs={'decision': 'Approved'},
+                ),
             )
 
-        # Any other case → still waiting
+        # Any other signal -> remain waiting.
         return ExecutorResult(
             status=State.AWAITING,
-            context={
-                'type': 'Approval',
-                'status': 'AwaitingApproval',
-                'error': None,
-                'outputs': {'AwaitingApproval': True},
-            },
+            context=StepContext(
+                step_type='Approval',
+                step_status='AwaitingApproval',
+                error=None,
+                outputs={'AwaitingApproval': True},
+            ),
         )

@@ -64,13 +64,65 @@ class DeviceActionHandler(WorkflowHandler):
         if not payload:
             payload = {}
 
-        action = context.operation  # "created", "onboarded", "deleted"
-
-        # Domain and CA might be null
+        # Strict rule: device actions without a domain must not trigger workflows
         domain = context.domain
-        ca = domain.get_issuing_ca_or_value_error() if domain else None
+        if domain is None:
+            self.logger.info(
+                'Skipping device_action workflow trigger: device=%s has no domain (operation=%s).',
+                context.device.pk,
+                context.operation,
+            )
+            context.device_request = None  # type: ignore[attr-defined]
+            return
 
-        # Create a new DeviceRequest
+        action = context.operation  # "created", "onboarded", "deleted"
+        ca = domain.get_issuing_ca_or_value_error()
+
+        def _norm(v: Any) -> int | None:
+            try:
+                return int(v) if v is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        ca_id = _norm(ca.pk)
+        domain_id = _norm(domain.pk)
+        device_id = _norm(context.device.pk)
+
+        # Determine applicable workflows FIRST:
+        # 1) Restrict by event at DB level (prevents "certificate-only" definitions from being scanned here)
+        # 2) Apply scope semantics (CA/Domain/Device exact or NULL=any)
+        candidates = (
+            WorkflowDefinition.objects.filter(published=True)
+            .filter(
+                definition__events__contains=[
+                    {
+                        'protocol': 'device',
+                        'operation': action,
+                    }
+                ]
+            )
+            .filter(
+                Q(scopes__ca_id=ca_id) | Q(scopes__ca_id__isnull=True),
+                Q(scopes__domain_id=domain_id) | Q(scopes__domain_id__isnull=True),
+                Q(scopes__device_id=device_id) | Q(scopes__device_id__isnull=True),
+            )
+            .distinct()
+        )
+
+        # Keep only workflows that have steps
+        definitions: list[WorkflowDefinition] = []
+        for wf in candidates:
+            meta = wf.definition or {}
+            steps = meta.get('steps', [])
+            if steps:
+                definitions.append(wf)
+
+        # New rule: if no workflow applies -> do NOT create a DeviceRequest at all
+        if not definitions:
+            context.device_request = None  # type: ignore[attr-defined]
+            return
+
+        # Create DeviceRequest only once we know it will have at least one workflow instance
         dr = DeviceRequest.objects.create(
             device=context.device,
             domain=domain,
@@ -81,64 +133,43 @@ class DeviceActionHandler(WorkflowHandler):
             payload=payload,
         )
 
-        # Find matching workflow definitions
-        definitions = [
-            wf
-            for wf in WorkflowDefinition.objects.filter(published=True)
-            if any(
-                e.get('protocol') == 'device' and e.get('operation') == action for e in wf.definition.get('events', [])
+        for wf in definitions:
+            meta = wf.definition or {}
+            steps = meta.get('steps', [])
+            if not steps:
+                continue
+
+            first_step = steps[0]['id']
+
+            inst = WorkflowInstance.objects.create(
+                definition=wf,
+                device_request=dr,
+                current_step=first_step,
+                state=State.RUNNING,
+                payload={
+                    'operation': action,
+                    'protocol': 'device',
+                    'device_id': device_id,
+                    'domain_id': domain_id,
+                    'ca_id': ca_id,
+                    **payload,
+                },
             )
-        ]
 
-        if definitions:
-            print('Found definition')
-            for wf in definitions:
-                meta = wf.definition or {}
-                steps = meta.get('steps', [])
-                if not steps:
-                    continue
+            advance_instance(inst)
+            inst.refresh_from_db()
 
-                first_step = steps[0]['id']
+        # Recompute after children were ensured/advanced
+        dr.recompute_and_save()
+        dr.refresh_from_db()
 
-                inst = WorkflowInstance.objects.create(
-                    definition=wf,
-                    device_request=dr,
-                    current_step=first_step,
-                    state=State.RUNNING,
-                    payload={
-                        'operation': action,
-                        'protocol': 'device',
-                        'device_id': context.device.pk,
-                        'domain_id': domain.pk if domain else None,
-                        'ca_id': ca.pk if ca else None,
-                        **payload,
-                    },
-                )
-
-                advance_instance(inst)
-                inst.refresh_from_db()
-            print('END OF DEF')
-        else:
-            print('Found NO definition')
-            dr.recompute_and_save()
         context.device_request = dr  # type: ignore[attr-defined]
 
 
 class CertificateRequestHandler(WorkflowHandler):
     """Manages workflows triggered by certificate request events."""
 
-    def _validate_context(self, context: RequestContext) -> tuple[bool, str]:
-        """Validate the context for the worfklow request handler."""
-        if not context.domain:
-            return (False, 'No domain found')
-        if not context.device:
-            return (False, 'No device found')
-        if not context.parsed_message:
-            return (False, 'No CSR found')
-
-        return (True, '')
-
-    def handle(  # noqa: C901, PLR0912, PLR0915 - Core workflow orchestration requires multiple validation and conditional paths
+    def handle(  # noqa: C901, PLR0912, PLR0915
         self,
         context: RequestContext,
         payload: dict[str, Any] | None = None,
@@ -158,8 +189,6 @@ class CertificateRequestHandler(WorkflowHandler):
             raise ValueError
         if not context.cert_requested:
             raise ValueError
-        if not context.cert_requested:
-            raise ValueError
         if not context.protocol:
             raise ValueError
         if not context.operation:
@@ -171,19 +200,52 @@ class CertificateRequestHandler(WorkflowHandler):
         if not isinstance(csr, CertificateSigningRequest):
             raise TypeError
 
-        ca_id = _norm(context.domain.get_issuing_ca_or_value_error().pk)
+        ca_obj = context.domain.get_issuing_ca_or_value_error()
+
+        ca_id = _norm(ca_obj.pk)
         domain_id = _norm(context.domain.pk)
         device_id = _norm(context.device.pk)
 
         fingerprint = hashlib.sha256(csr.tbs_certrequest_bytes).hexdigest()
-        template = context.cert_profile_str or ''  # TODO: ren. profile throughout EnrollmentRequest  # noqa: E501, FIX002, TD002
+        template = context.cert_profile_str or ''  # TODO: ren. profile throughout EnrollmentRequest
 
-        # Find or create an open EnrollmentRequest
+        # 1) Determine applicable workflows FIRST (so we can skip creating empty requests)
+        # Restrict by event at DB level to avoid scanning device-action definitions.
+        definitions_qs = (
+            WorkflowDefinition.objects.filter(published=True)
+            .filter(
+                definition__events__contains=[
+                    {
+                        'protocol': context.protocol,
+                        'operation': context.operation,
+                    }
+                ]
+            )
+            .filter(
+                Q(scopes__ca_id=ca_id) | Q(scopes__ca_id__isnull=True),
+                Q(scopes__domain_id=domain_id) | Q(scopes__domain_id__isnull=True),
+                Q(scopes__device_id=device_id) | Q(scopes__device_id__isnull=True),
+            )
+            .distinct()
+        )
+        definitions: list[WorkflowDefinition] = []
+        for wf in definitions_qs:
+            meta = wf.definition or {}
+            steps = meta.get('steps', [])
+            if steps:
+                definitions.append(wf)
+
+
+        if not definitions:
+            context.enrollment_request = None
+            return
+
+        # 2) Find or create an open EnrollmentRequest only if workflows exist
         req = (
             EnrollmentRequest.objects.filter(
                 protocol=context.protocol,
                 operation=context.operation,
-                ca=context.domain.get_issuing_ca_or_value_error(),
+                ca=ca_obj,
                 domain=context.domain,
                 device=context.device,
                 fingerprint=fingerprint,
@@ -198,7 +260,7 @@ class CertificateRequestHandler(WorkflowHandler):
             req = EnrollmentRequest.objects.create(
                 protocol=context.protocol,
                 operation=context.operation,
-                ca=context.domain.get_issuing_ca_or_value_error(),
+                ca=ca_obj,
                 domain=context.domain,
                 device=context.device,
                 fingerprint=fingerprint,
@@ -207,32 +269,13 @@ class CertificateRequestHandler(WorkflowHandler):
                 finalized=False,
             )
 
-        # Scope candidates
-        definitions = (
-            WorkflowDefinition.objects.filter(published=True)
-            .filter(
-                Q(scopes__ca_id=ca_id) | Q(scopes__ca_id__isnull=True),
-                Q(scopes__domain_id=domain_id) | Q(scopes__domain_id__isnull=True),
-                Q(scopes__device_id=device_id) | Q(scopes__device_id__isnull=True),
-            )
-            .distinct()
-        )
-
-        per_instance: list[dict[str, Any]] = []
-
+        # 3) Ensure instances for all applicable definitions
         for wf in definitions:
             meta = wf.definition or {}
             steps = meta.get('steps', [])
             if not steps:
                 continue
 
-            events = meta.get('events', [])
-            if not any(
-                t.get('protocol') == context.protocol and t.get('operation') == context.operation for t in events
-            ):
-                continue
-
-            # Reuse regardless of finalized flag (to avoid duplicates forever)
             inst = (
                 WorkflowInstance.objects.filter(
                     definition=wf,
@@ -242,7 +285,6 @@ class CertificateRequestHandler(WorkflowHandler):
                 .first()
             )
 
-            created = False
             if inst is None:
                 first_step = steps[0]['id']
                 full_payload = {
@@ -263,26 +305,13 @@ class CertificateRequestHandler(WorkflowHandler):
                         state=State.RUNNING,
                         payload=full_payload,
                     )
-                created = True
 
-            # Advance fresh/active instances
             if inst.state is State.RUNNING:
                 advance_instance(inst)
                 inst.refresh_from_db()
 
-            per_instance.append(
-                {
-                    'workflow_id': str(wf.id),
-                    'workflow_name': wf.name,
-                    'instance_id': str(inst.id),
-                    'created': created,
-                    'state': inst.state,
-                }
-            )
-
-        # Recompute aggregate after all children were ensured/advanced
+        # 4) Recompute aggregate after all children were ensured/advanced
         req.recompute_and_save()
         req.refresh_from_db()
 
-        # If truly no matching definitions, reflect NoMatch
         context.enrollment_request = req

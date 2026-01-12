@@ -188,3 +188,6 @@ collected_static
 
 _*.sh
 .github/copilot-instructions.md
+
+docker/trustpoint/nginx/tls/*
+tests/client/*

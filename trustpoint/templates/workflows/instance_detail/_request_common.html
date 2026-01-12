@@ -1,0 +1,54 @@
+{% load i18n %}
+
+<h5 class="mb-3">{% trans 'Request (resolved)' %}</h5>
+
+<ul class="mb-0">
+
+  <li>
+    <strong>{% trans 'Device' %}:</strong>
+    {% if device_obj %}
+      <a href="{% url clm_url pk=device_obj.id %}">
+        {{ device_obj.common_name }} ({{ device_obj.serial_number }})
+      </a>
+    {% else %}
+      <span class="text-muted">&mdash;</span>
+    {% endif %}
+  </li>
+
+  <li>
+    <strong>{% trans 'Domain' %}:</strong>
+    {% if domain_obj %}
+      <a href="{% url 'pki:domains-config' domain_obj.id %}">{{ domain_obj.unique_name }}</a>
+    {% else %}
+      <span class="text-muted">&mdash;</span>
+    {% endif %}
+  </li>
+
+  <li>
+    <strong>{% trans 'CA' %}:</strong>
+    {% if ca_obj %}
+      <a href="{% url 'pki:issuing_cas-config' ca_obj.id %}">{{ ca_obj.unique_name }}</a>
+    {% else %}
+      <span class="text-muted">&mdash;</span>
+    {% endif %}
+  </li>
+
+  <li>
+    <strong>{% trans 'Protocol' %}:</strong>
+    {% if protocol %}
+      {{ protocol }}
+    {% else %}
+      <span class="text-muted">&mdash;</span>
+    {% endif %}
+  </li>
+
+  <li>
+    <strong>{% trans 'Operation' %}:</strong>
+    {% if operation %}
+      {{ operation }}
+    {% else %}
+      <span class="text-muted">&mdash;</span>
+    {% endif %}
+  </li>
+
+</ul>

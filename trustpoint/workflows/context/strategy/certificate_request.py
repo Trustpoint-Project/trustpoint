@@ -1,4 +1,8 @@
-# workflows/context/strategy/certificate_request.py
+"""Context catalog strategy for certificate enrollment requests.
+
+This module provides the wizard variable catalog for the `certificate_request`
+handler, optionally specialized by protocol and operation.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +16,7 @@ from .common import common_instance_group, common_workflow_group
 
 @register
 class CertificateRequestContextStrategy(ContextStrategy):
+    """Context catalog strategy for the `certificate_request` handler."""
     handler = 'certificate_request'
 
     def get_design_time_groups(
@@ -85,7 +90,10 @@ class CertificateRequestContextStrategy(ContextStrategy):
                     {
                         'name': 'EST • simpleenroll',
                         'vars': [
-                            {'path': 'ctx.request.est.simpleenroll.profile', 'label': 'Enrollment profile', 'sample': None},
+                            {
+                                'path': 'ctx.request.est.simpleenroll.profile',
+                                'label': 'Enrollment profile', 'sample': None
+                            },
                         ],
                     }
                 )
@@ -94,7 +102,10 @@ class CertificateRequestContextStrategy(ContextStrategy):
                     {
                         'name': 'EST • simplereenroll',
                         'vars': [
-                            {'path': 'ctx.request.est.simplereenroll.prev_cert_serial', 'label': 'Previous cert serial', 'sample': None},
+                            {
+                                'path': 'ctx.request.est.simplereenroll.prev_cert_serial',
+                                'label': 'Previous cert serial', 'sample': None
+                            },
                         ],
                     }
                 )
@@ -139,8 +150,14 @@ class CertificateRequestContextStrategy(ContextStrategy):
                     {
                         'name': 'CMP • revocationRequest',
                         'vars': [
-                            {'path': 'ctx.request.cmp.revocation.reason', 'label': 'Revocation reason', 'sample': None},
-                            {'path': 'ctx.request.cmp.revocation.serial', 'label': 'Certificate serial', 'sample': None},
+                            {
+                                'path': 'ctx.request.cmp.revocation.reason',
+                                'label': 'Revocation reason', 'sample': None
+                            },
+                            {
+                                'path': 'ctx.request.cmp.revocation.serial',
+                                'label': 'Certificate serial', 'sample': None
+                            },
                         ],
                     }
                 )

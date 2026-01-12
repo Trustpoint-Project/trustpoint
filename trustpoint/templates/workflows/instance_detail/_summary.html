@@ -1,0 +1,36 @@
+{% load i18n %}
+
+<h5 class="mb-3">{% trans 'Summary' %}</h5>
+<dl class="row">
+
+  <dt class="col-sm-3">{% trans 'Instance ID' %}</dt>
+  <dd class="col-sm-9">{{ inst.id }}</dd>
+
+  <dt class="col-sm-3">{% trans 'Workflow' %}</dt>
+  <dd class="col-sm-9">
+    <a href="{% url 'workflows:definition_wizard' %}?edit={{ inst.definition.id }}">
+      {{ inst.definition.name }}
+    </a>
+  </dd>
+
+  <dt class="col-sm-3">{% trans 'State' %}</dt>
+  <dd class="col-sm-9">
+    <span class="badge {{ inst.badge_class }}">{{ inst.state }}</span>
+  </dd>
+
+  <dt class="col-sm-3">{% trans 'Current step' %}</dt>
+  <dd class="col-sm-9">
+    {% if current_step_label %}
+      {{ current_step_label }} <span class="text-muted">({{ inst.current_step }})</span>
+    {% else %}
+      <span class="text-muted">&mdash;</span>
+    {% endif %}
+  </dd>
+
+  <dt class="col-sm-3">{% trans 'Requested at' %}</dt>
+  <dd class="col-sm-9">{{ inst.created_at|date:"Y/m/d, H:i:s" }}</dd>
+
+  <dt class="col-sm-3">{% trans 'Last updated' %}</dt>
+  <dd class="col-sm-9">{{ inst.updated_at|date:"Y/m/d, H:i:s" }}</dd>
+
+</dl>

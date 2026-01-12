@@ -1,64 +1,47 @@
-"""Webhook step executor."""
+"""Webhook step executor.
+
+Executes an outbound HTTP call and optionally exports values to $vars.
+
+Templating:
+- URL, headers, and string body are rendered using Django templates with context:
+    {"ctx": build_context(instance)}
+
+Exports:
+- webhook_variable captures a "whole result" under a destination path in $vars.
+- exports is a list of dicts: {"from_path":"json.foo", "to_path":"serial"}
+- to_path may be "serial" or "vars.serial"; "vars." is stripped and stored under $vars.
+
+Collision policy:
+- Exports and webhook_variable writes are no-overwrite.
+- Collisions raise ValueError and are handled by the engine as a FAILED instance.
+"""
 
 from __future__ import annotations
 
 import contextlib
 import json as _json
 import logging
-import re
 from typing import Any
 
 import requests
+from django.template import TemplateSyntaxError, engines
 
 from workflows.models import State, WorkflowInstance
 from workflows.services.context import build_context, set_in
 from workflows.services.executors.factory import AbstractStepExecutor
-from workflows.services.types import ExecutorResult
-
-_CTX_PLACEHOLDER_RE = re.compile(r'\{\{\s*ctx\.([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)*)\s*\}\}')
-
-def _lookup_ctx_path(ctx: dict[str, Any], path: str) -> Any:
-    cur: Any = ctx
-    for part in path.split('.'):
-        if not isinstance(cur, dict):
-            return None
-        cur = cur.get(part)
-    return cur
-
-def _render_ctx_placeholders(template: str, ctx: dict[str, Any]) -> str:
-    def repl(m: re.Match[str]) -> str:
-        path = m.group(1)
-        val = _lookup_ctx_path(ctx, path)
-        return '' if val is None else str(val)
-
-    return _CTX_PLACEHOLDER_RE.sub(repl, template)
+from workflows.services.types import ExecutorResult, StepContext
 
 logger = logging.getLogger(__name__)
 
 
-
 class WebhookExecutor(AbstractStepExecutor):
-    """Execute an outbound HTTP call and optionally export values to $vars.
-
-    - URL, headers, and string body templating with Django templates using a 'ctx' dict
-    - Supports method, headers, body, auth (basic|bearer), timeoutSecs
-    - webhook_variable/result_source for whole-response capture
-    - fine-grained exports: [{"from_path":"json.foo","to_path":"serial"}]  # note: bare key allowed
-    - Stores per-step context and returns a flat vars map for $vars merging.
-
-    to_path:
-        Accepts either "serial" or "vars.serial" (we strip optional "vars." and store under $vars).
-    """
+    """Execute an outbound HTTP call and optionally export values to $vars."""
 
     def do_execute(self, instance: WorkflowInstance, _signal: str | None) -> ExecutorResult:
-        """Execute the webhook step.
+        """Execute the webhook step for the current workflow instance.
 
-        Args:
-            instance: Workflow instance being executed.
-            _signal: Optional signal (unused for webhook steps).
-
-        Returns:
-            ExecutorResult describing step outcome and exported vars.
+        Performs template rendering, executes the HTTP request, builds a StepContext
+        describing the outcome, and returns exported variables for merging into ctx.vars.
         """
         params = _get_step_params(instance)
 
@@ -75,24 +58,22 @@ class WebhookExecutor(AbstractStepExecutor):
         ) = _extract_webhook_config(params)
 
         ctx: dict[str, Any] = build_context(instance)
+        dj = engines['django']
+        template_ctx = {'ctx': ctx}
 
         auth, bearer_token = _build_auth(auth_cfg)
 
-        ok, url, err_msg = _render_url(url_tpl, ctx)
+        ok, url, err_msg = _render_template_str(dj, template_ctx, url_tpl, label='URL')
         if not ok:
-            return ExecutorResult(
-                status=State.FAILED,
-                context=_make_error_context(err_msg),
-            )
+            return ExecutorResult(status=State.FAILED, context=_make_error_context(err_msg))
 
-        headers = _build_headers(headers_raw, ctx, bearer_token)
-
-        ok, data_kwargs, body_err = _build_body(body_raw, ctx)
+        ok, headers, hdr_err = _render_headers(dj, template_ctx, headers_raw, bearer_token=bearer_token)
         if not ok:
-            return ExecutorResult(
-                status=State.FAILED,
-                context=_make_error_context(body_err),
-            )
+            return ExecutorResult(status=State.FAILED, context=_make_error_context(hdr_err))
+
+        ok, data_kwargs, body_err = _build_body(dj, template_ctx, body_raw)
+        if not ok:
+            return ExecutorResult(status=State.FAILED, context=_make_error_context(body_err))
 
         options = {
             'headers': headers,
@@ -108,6 +89,8 @@ class WebhookExecutor(AbstractStepExecutor):
             )
 
         step_ctx = _build_step_context(method, url, resp, resp_json)
+
+        # no silent suppression; collisions propagate to engine (FAILED + engine context)
         flat_vars = _build_flat_vars(resp, resp_json, webhook_variable_raw, result_source, exports)
 
         return ExecutorResult(
@@ -117,11 +100,7 @@ class WebhookExecutor(AbstractStepExecutor):
         )
 
 
-# ---------------------------- helpers ----------------------------
-
-
 def _get_step_params(instance: WorkflowInstance) -> dict[str, Any]:
-    """Return the params dict for the current step, or raise if not found."""
     step = next((s for s in instance.get_steps() if s.get('id') == instance.current_step), None)
     if step is None:
         msg = f'Unknown current step id {instance.current_step!r}'
@@ -166,45 +145,64 @@ def _build_auth(auth_cfg: Any) -> tuple[Any, str | None]:
     return auth, bearer_token
 
 
-def _render_url(url_tpl: str, ctx: dict[str, Any]) -> tuple[bool, str, str]:
+def _render_template_str(dj: Any, template_ctx: dict[str, Any], src: str, *, label: str) -> tuple[bool, str, str]:
+    if not isinstance(src, str) or not src.strip():
+        return False, '', f'{label} is missing.'
     try:
-        url = _render_ctx_placeholders(url_tpl, ctx)
+
+        rendered = dj.from_string(src).render(template_ctx).strip()
+    except TemplateSyntaxError as exc:
+        logger.exception('Webhook: %s template syntax error', label)
+        return False, '', f'{label} template syntax error: {exc}'
     except Exception as exc:
-        logger.exception('Webhook: URL render failed')
-        return False, '', f'URL render error: {exc!s}'
-    return True, url, ''
+        logger.exception('Webhook: %s render failed', label)
+        return False, '', f'{label} render error: {exc!s}'
+    return True, rendered, ''
 
 
-def _build_headers(
+def _render_headers(
+    dj: Any,
+    template_ctx: dict[str, Any],
     headers_raw: dict[str, Any],
-    ctx: dict[str, Any],
+    *,
     bearer_token: str | None,
-) -> dict[str, str]:
+) -> tuple[bool, dict[str, str], str]:
     headers: dict[str, str] = {}
     for k, v in headers_raw.items():
         sval = str(v)
-        with contextlib.suppress(Exception):
-            sval = _render_ctx_placeholders(sval, ctx)
+        try:
+            # keep autoescape default; headers are plain strings
+            sval = dj.from_string(sval).render(template_ctx).strip()
+        except TemplateSyntaxError as exc:
+            return False, {}, f'Header template syntax error for {k!r}: {exc}'
+        except Exception as exc:  # noqa: BLE001
+            return False, {}, f'Header render error for {k!r}: {exc!s}'
         headers[str(k)] = sval
 
     if bearer_token:
         headers.setdefault('Authorization', f'Bearer {bearer_token}')
 
-    return headers
+    return True, headers, ''
 
-def _build_body(body_raw: Any, ctx: dict[str, Any]) -> tuple[bool, dict[str, Any], str]:
+
+def _build_body(dj: Any, template_ctx: dict[str, Any], body_raw: Any) -> tuple[bool, dict[str, Any], str]:
     data_kwargs: dict[str, Any] = {}
 
     if isinstance(body_raw, str) and body_raw.strip():
         try:
-            rendered = _render_ctx_placeholders(body_raw, ctx)
+            rendered = dj.from_string(body_raw).render(template_ctx)
+        except TemplateSyntaxError as exc:
+            logger.exception('Webhook: body template syntax error')
+            return False, {}, f'Body template syntax error: {exc}'
         except Exception as exc:
             logger.exception('Webhook: body render failed')
             return False, {}, f'Body render error: {exc!s}'
+
         try:
             data_kwargs['json'] = _json.loads(rendered)
         except _json.JSONDecodeError:
             data_kwargs['data'] = rendered.encode('utf-8')
+
     elif isinstance(body_raw, (dict, list)):
         data_kwargs['json'] = body_raw
 
@@ -242,27 +240,23 @@ def _perform_request(
     return resp, resp_json, None
 
 
-def _build_step_context(
-    method: str,
-    url: str,
-    resp: requests.Response,
-    resp_json: Any | None,
-) -> dict[str, Any]:
-    return {
-        'type': 'Webhook',
-        'status': 'passed',
-        'error': None,
-        'outputs': {
-            'webhook': {
-                'method': method,
-                'url': url,
-                'status': resp.status_code,
-                'headers': dict(resp.headers),
-                'json': resp_json,
-                'text': None if resp_json is not None else resp.text,
-            }
-        },
+def _build_step_context(method: str, url: str, resp: requests.Response, resp_json: Any | None) -> StepContext:
+    outputs: dict[str, Any] = {
+        'webhook': {
+            'method': method,
+            'url': url,
+            'status': resp.status_code,
+            'headers': dict(resp.headers),
+            'json': resp_json,
+            'text': None if resp_json is not None else resp.text,
+        }
     }
+    return StepContext(
+        step_type='Webhook',
+        step_status='passed',
+        error=None,
+        outputs=outputs,
+    )
 
 
 def _build_flat_vars(
@@ -274,15 +268,12 @@ def _build_flat_vars(
 ) -> dict[str, Any]:
     flat_vars: dict[str, Any] = {}
 
-    # Whole-result capture
     if webhook_variable_raw:
         dest = webhook_variable_raw.removeprefix('vars.')
         if dest:
             val = _select_source_value(resp, resp_json, result_source)
-            with contextlib.suppress(Exception):
-                set_in(flat_vars, dest, val, forbid_overwrite=True)
+            set_in(flat_vars, dest, val, forbid_overwrite=True)
 
-    # Fine-grained exports
     if isinstance(exports, list):
         norm_headers = _normalize_headers_for_lookup(resp.headers)
         for exp in exports:
@@ -293,29 +284,30 @@ def _build_flat_vars(
             if not from_path or not to_path_raw:
                 continue
             dest = to_path_raw.removeprefix('vars.')
-            with contextlib.suppress(Exception):
-                val = _extract_from_path(resp, resp_json, norm_headers, from_path)
-                set_in(flat_vars, dest, val, forbid_overwrite=True)
+            val = _extract_from_path(resp, resp_json, norm_headers, from_path)
+            set_in(flat_vars, dest, val, forbid_overwrite=True)
 
     return flat_vars
 
 
-def _make_error_context(message: str) -> dict[str, Any]:
-    return {
-        'type': 'Webhook',
-        'status': 'failed',
-        'error': message,
-        'outputs': {
-            'webhook': {
-                'method': None,
-                'url': None,
-                'status': None,
-                'headers': {},
-                'json': None,
-                'text': None,
-            }
-        },
+def _make_error_context(message: str) -> StepContext:
+    outputs: dict[str, Any] = {
+        'webhook': {
+            'method': None,
+            'url': None,
+            'status': None,
+            'headers': {},
+            'json': None,
+            'text': None,
+        }
     }
+    return StepContext(
+        step_type='Webhook',
+        step_status='failed',
+        error=message,
+        outputs=outputs,
+    )
+
 
 def _safe_int(v: Any, *, default: int) -> int:
     try:
