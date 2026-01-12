@@ -16,7 +16,7 @@ urlpatterns = [
         name='truststores',
     ),
     path('truststores/add/', truststores.TruststoreCreateView.as_view(), name='truststores-add'),
-    path('truststores/add/<int:pk>/', truststores.TruststoreCreateView.as_view(), name='truststores-add-with-pk'),
+    re_path(r'^truststores/add/(?P<pk>\d+)?/?$', truststores.TruststoreCreateView.as_view(), name='truststores-add-with-pk'),
     re_path(
         r'^truststores/download/(?P<pk>[0-9]+)/?$',
         truststores.TruststoreDownloadView.as_view(),
@@ -148,13 +148,13 @@ urlpatterns = [
         domains.IssuedCertificatesView.as_view(),
         name='domain-issued_certificates',
     ),
-    path(
-        'devid-registration/method_select/<int:pk>/',
+    re_path(
+        r'^devid-registration/method_select/(?P<pk>\d+)?/?$',
         DevIdMethodSelectView.as_view(),
         name='devid_registration-method_select',
     ),
-    path(
-        'devid-registration/create/<int:pk>/',
+    re_path(
+        'devid-registration/create/(?P<pk>\d+)?/?$',
         DevIdRegistrationCreateView.as_view(),
         name='devid_registration_create',
     ),

@@ -226,7 +226,8 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data."""
         context = super().get_context_data(**kwargs)
-        context['domain'] = self.get_domain()
+        domain = self.get_domain()
+        context['domain'] =domain
         truststore_id = self.kwargs.get('truststore_id')
         if truststore_id:
             context['truststore'] = self.get_truststore(truststore_id)
@@ -239,7 +240,8 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
         """Initialize the form with default values."""
         initial = super().get_initial()
         domain = self.get_domain()
-        initial['domain'] = domain
+        if domain:
+            initial['domain'] = domain
         truststore_id = self.kwargs.get('truststore_id')
         if truststore_id:
             initial['truststore'] = self.get_truststore(truststore_id)
@@ -253,26 +255,39 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
         form_kwargs['initial'] = self.get_initial()
         return form_kwargs
 
-    def get_domain(self) -> DomainModel:
-        """Fetch the domain based on the primary key passed in the URL."""
-        try:
-            pk = self.kwargs.get('pk')
-            return DomainModel.objects.get(pk=pk)
-        except DomainModel.DoesNotExist as e:
-            exc_msg = 'This Domain does not exist.'
-            raise Http404(exc_msg) from e
+    def get_domain(self) -> DomainModel | None:
+        """Get domain from URL pk (GET) or form data (POST)."""
+        pk = self.kwargs.get('pk')
+        if pk:
+            try:
+                return DomainModel.objects.get(pk=pk)
+            except DomainModel.DoesNotExist:
+                raise Http404('Domain does not exist.')
+
+        if self.request.method == 'POST':
+            domain_id = self.request.POST.get('domain')
+            if domain_id:
+                try:
+                    return DomainModel.objects.get(pk=domain_id)
+                except (DomainModel.DoesNotExist, ValueError):
+                    raise Http404('Domain does not exist.')
+
+        return None
+
+
 
     def get_truststore(self, truststore_id: int) -> TruststoreModel:
-        """Fetch the domain based on the primary key passed in the URL."""
+        """Fetch the truststore based on the primary key passed in the URL."""
         try:
             return TruststoreModel.objects.get(pk=truststore_id)
         except TruststoreModel.DoesNotExist as e:
-            exc_msg = 'This Domain does not exist.'
+            exc_msg = 'This Truststore does not exist.'
             raise Http404(exc_msg) from e
 
     def form_valid(self, form: DevIdRegistrationForm) -> HttpResponse:
         """Handle the case where the form is valid."""
         dev_id_registration = form.save()
+        self.object = dev_id_registration
         messages.success(
             self.request,
             _('Successfully created DevID registration pattern {name}.').format(name=dev_id_registration.unique_name),
@@ -281,8 +296,10 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
 
     def get_success_url(self) -> str:
         """Return the URL to redirect to upon successful form submission."""
-        domain = self.get_domain()
-        return cast('str', reverse_lazy('pki:domains-config', kwargs={'pk': domain.id}))
+        if self.kwargs.get('pk'):
+            domain = self.object.domain
+            return reverse_lazy('pki:domains-config', kwargs={'pk': domain.id})
+        return reverse_lazy('devices:devices')
 
 
 class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView[DevIdRegistration, Any]):
@@ -308,7 +325,12 @@ class DevIdMethodSelectView(DomainContextMixin, FormView[DevIdAddMethodSelectFor
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data."""
         context = super().get_context_data(**kwargs)
-        context['domain'] = get_object_or_404(DomainModel, id=self.kwargs.get('pk'))
+        pk = self.kwargs.get('pk')
+
+        if pk:
+            context['domain'] = DomainModel.objects.get(pk=pk)
+        else:
+            context['domain'] = None
         return context
 
     def form_valid(self, form: DevIdAddMethodSelectForm) -> HttpResponseRedirect:
