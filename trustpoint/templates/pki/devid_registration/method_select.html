@@ -15,7 +15,11 @@
                 <div class="tp-card-centered-content">
                     <a href="{% url 'pki:devid_registration_create' pk=domain.id %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Use existing Truststore' %}</a>
                     <br>
-                    <a href="{% url 'pki:truststores-add-with-pk' pk=domain.id %}" class="btn btn-primary min-width-30 mb-5">{% trans 'Upload new Truststore' %}</a>
+                                       {% if domain %}
+                        <a href="{% url 'pki:truststores-add-with-pk' pk=domain.id %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Upload a new  Truststore (d)' %}</a>
+                    {% else %}
+                        <a href="{% url 'pki:truststores-add-from-device' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Upload a new  Truststore (no d)' %}</a>
+                    {% endif %}
                 </div>
             </div>
             <div class="card-footer d-flex tp-sticky-footer">

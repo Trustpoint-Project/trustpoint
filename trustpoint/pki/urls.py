@@ -164,6 +164,12 @@ urlpatterns = [
         name='devid_registration_create-with_truststore_id',
     ),
     path(
+        'truststores/add/from-device/',
+        truststores.TruststoreCreateView.as_view(),
+        name='truststores-add-from-device',
+    ),
+
+    path(
         'devid-registration/delete/<int:pk>/', DevIdRegistrationDeleteView.as_view(), name='devid_registration_delete'
     ),
     # DevOwnerID views

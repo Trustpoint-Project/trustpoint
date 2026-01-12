@@ -229,6 +229,8 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
         domain = self.get_domain()
         context['domain'] =domain
         truststore_id = self.kwargs.get('truststore_id')
+        if not truststore_id:
+            truststore_id = self.request.GET.get('truststore_id')
         if truststore_id:
             context['truststore'] = self.get_truststore(truststore_id)
         else:
@@ -243,6 +245,8 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
         if domain:
             initial['domain'] = domain
         truststore_id = self.kwargs.get('truststore_id')
+        if not truststore_id:
+            truststore_id = self.request.GET.get('truststore_id')
         if truststore_id:
             initial['truststore'] = self.get_truststore(truststore_id)
         else:
