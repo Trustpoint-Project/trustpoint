@@ -6,7 +6,7 @@ from pydantic_core import ValidationError
 from cmp.util import PKIFailureInfo as CMPErrs
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from pki.util.cert_req_converter import JSONCertRequestConverter
-from request.request_context import BaseCertificateRequestContext
+from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from trustpoint.logger import LoggerMixin
 
 
@@ -14,12 +14,18 @@ class ProfileValidator(LoggerMixin):
     """Converts and validates certificate requests against profiles."""
 
     @classmethod
-    def validate(cls, context: BaseCertificateRequestContext) -> None:
+    def validate(cls, context: BaseRequestContext) -> None:
         """Validates the certificate request against the profile.
 
         Args:
-            context (BaseCertificateRequestContext): The request context containing the certificate request.
+            context (BaseRequestContext): The request context containing the certificate request.
         """
+        if not isinstance(context, BaseCertificateRequestContext):
+            exc_msg = 'Profile validation can only be performed on certificate request contexts.'
+            context.error('Invalid request context for profile validation.',
+                          http_status=500, cmp_code=CMPErrs.SYSTEM_FAILURE)
+            raise TypeError(exc_msg)
+
         cert_request_json = JSONCertRequestConverter.to_json(context.cert_requested)
         cls.logger.info('Cert Request JSON: %s', cert_request_json)
 
