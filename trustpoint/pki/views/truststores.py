@@ -22,6 +22,7 @@ from rest_framework import filters, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from trustpoint_core.archiver import ArchiveFormat, Archiver
+from trustpoint_core.oid import NameOid
 from trustpoint_core.serializer import CertificateFormat
 
 from pki.forms import TruststoreAddForm
@@ -114,7 +115,7 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
             context['domain'] = get_object_or_404(DomainModel, id=pk)
         return context
 
-
+OID_MAP = {oid.dotted_string: oid.verbose_name for oid in NameOid}
 class TruststoreDetailView(TruststoresContextMixin, DetailView[TruststoreModel]):
     """The truststore detail view."""
 
@@ -124,6 +125,49 @@ class TruststoreDetailView(TruststoresContextMixin, DetailView[TruststoreModel])
     template_name = 'pki/truststores/details.html'
     context_object_name = 'truststore'
 
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adding map of attribute and its oid with its values.
+
+        Args:
+                   **kwargs: Keyword arguments passed to super().get_context_data().
+
+        Returns:
+               dict: The context data.
+        """
+        context = super().get_context_data(**kwargs)
+        truststore: TruststoreModel = context['truststore']
+
+        # For each certificate in this truststore, build subject/issuer entries
+        cert_context = []
+        for cert in truststore.certificates.all():
+            subject_entries = [
+                {
+                    'oid': entry.oid,
+                    'name': OID_MAP.get(entry.oid),
+                    'value': entry.value
+                }
+                for entry in cert.subject.all()
+            ]
+
+
+            issuer_entries = [
+                {
+                    'oid': entry.oid,
+                    'name': OID_MAP.get(entry.oid),
+                    'value': entry.value,
+                    'id': entry.id
+                }
+                for entry in cert.issuer.all()
+            ]
+
+            cert_context.append({
+                'certificate': cert,
+                'subject_entries': subject_entries,
+                'issuer_entries': issuer_entries
+            })
+
+        context['cert_context'] = cert_context
+        return context
 
 class TruststoreDownloadView(TruststoresContextMixin, DetailView[TruststoreModel]):
     """View for downloading a single truststore."""

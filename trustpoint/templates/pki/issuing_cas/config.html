@@ -288,7 +288,7 @@
                             <div>
                                 <div>{% trans 'Last CRL issued' %}</div>
                                 {% if issuing_ca.last_crl_issued_at %}
-                                    <div>{{ issuing_ca.last_crl_issued_at }}</div>
+                                    <div>{{ issuing_ca.last_crl_issued_at }} (#{{ issuing_ca.crl_number }})</div>
                                 {% else %}
                                     <div>{% trans 'No CRL has been issued yet.' %}</div>
                                 {% endif %}
