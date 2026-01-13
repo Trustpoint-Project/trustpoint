@@ -12,8 +12,8 @@ from request.authorization.base import (
     DomainScopeValidation,
     ProtocolAuthorization,
 )
-
-from request.request_context import BaseRequestContext
+from request.authorization.est import EstAuthorization, EstOperationAuthorization
+from request.request_context import BaseRequestContext, BaseCertificateRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 
 
 class TestProtocolAuthorization:
@@ -103,7 +103,7 @@ class TestEstOperationAuthorization:  # Changed from TestOperationAuthorization
         allowed_operations = ['simpleenroll', 'simplereenroll']
         auth = EstOperationAuthorization(allowed_operations)  # Changed class name
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstBaseRequestContext)
         context.operation = 'simpleenroll'
 
         # Should not raise an exception
@@ -114,7 +114,7 @@ class TestEstOperationAuthorization:  # Changed from TestOperationAuthorization
         allowed_operations = ['simpleenroll', 'simplereenroll']
         auth = EstOperationAuthorization(allowed_operations)  # Changed class name
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstBaseRequestContext)
         context.operation = 'invalid_operation'
 
         with pytest.raises(ValueError) as exc_info:
@@ -127,7 +127,7 @@ class TestEstOperationAuthorization:  # Changed from TestOperationAuthorization
         allowed_operations = ['simpleenroll']
         auth = EstOperationAuthorization(allowed_operations)  # Changed class name
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstBaseRequestContext)
         context.operation = None
 
         with pytest.raises(ValueError) as exc_info:
@@ -140,7 +140,7 @@ class TestEstOperationAuthorization:  # Changed from TestOperationAuthorization
         allowed_operations = ['simpleenroll']
         auth = EstOperationAuthorization(allowed_operations)  # Changed class name
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstBaseRequestContext)
         context.operation = ''
 
         with pytest.raises(ValueError) as exc_info:
@@ -153,7 +153,7 @@ class TestEstOperationAuthorization:  # Changed from TestOperationAuthorization
         allowed_operations = ['simpleenroll']
         auth = EstOperationAuthorization(allowed_operations)  # Changed class name
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstBaseRequestContext)
         context.operation = 'simpleenroll'
 
         # Should not raise an exception
@@ -167,7 +167,7 @@ class TestCertificateProfileAuthorization:
         """Test successful certificate template authorization."""
         auth = CertificateProfileAuthorization()
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=BaseCertificateRequestContext)
         context.cert_profile_str = 'domain_credential'
         context.domain = domain_instance['domain']
 
@@ -178,7 +178,7 @@ class TestCertificateProfileAuthorization:
         """Test certificate profile authorization failure with invalid profile."""
         auth = CertificateProfileAuthorization()
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=BaseCertificateRequestContext)
         context.cert_profile_str = 'invalid_profile'
         context.domain = domain_instance['domain']
 
@@ -192,7 +192,7 @@ class TestCertificateProfileAuthorization:
     def test_cert_profile_str_authorization_failure_missing_profile(self, domain_instance, cert_profile_instance) -> None:
         """Test certificate profile authorization failure with missing profile string."""
         auth = CertificateProfileAuthorization()
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=BaseCertificateRequestContext)
         context.cert_profile_str = None
 
         with pytest.raises(ValueError) as exc_info:
@@ -204,7 +204,7 @@ class TestCertificateProfileAuthorization:
         """Test certificate profile authorization failure with empty profile string."""
         auth = CertificateProfileAuthorization()
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=BaseCertificateRequestContext)
         context.cert_profile_str = ''
 
         with pytest.raises(ValueError) as exc_info:
@@ -215,7 +215,7 @@ class TestCertificateProfileAuthorization:
     def test_cert_profile_str_authorization_alias(self, domain_instance, cert_profile_instance) -> None:
         """Test certificate profile authorization with single allowed profile."""
         auth = CertificateProfileAuthorization()
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=BaseCertificateRequestContext)
         context.cert_profile_str = 'test_profile_alias' # Using alias for profile 'domain_credential'
         context.domain = domain_instance['domain']
 
@@ -442,8 +442,8 @@ class TestEstAuthorization:
         """Test EST authorization initialization with default components."""
         auth = EstAuthorization()
 
-        # Should have 5 components by default
-        assert len(auth.components) == 5
+        # Should have 4 components by default (not 5)
+        assert len(auth.components) == 4
 
         # Check component types
         component_types = [type(comp).__name__ for comp in auth.components]
@@ -501,7 +501,7 @@ class TestEstAuthorization:
         auth = EstAuthorization()
 
         # Create a context that should pass all authorization checks
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
         context.cert_profile_str = 'tls_server'
@@ -517,7 +517,7 @@ class TestEstAuthorization:
         """Test EST authorization failure due to wrong protocol."""
         auth = EstAuthorization()
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.protocol = 'cmp'  # Wrong protocol
         context.operation = 'simpleenroll'
         context.cert_profile_str = 'tls_server'
@@ -534,7 +534,7 @@ class TestEstAuthorization:
         """Test EST authorization failure due to wrong operation."""
         auth = EstAuthorization()
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.protocol = 'est'
         context.operation = 'invalid_operation'  # Wrong operation
         context.cert_profile_str = 'tls_server'
@@ -551,7 +551,7 @@ class TestEstAuthorization:
         """Test EST authorization failure due to wrong certificate template."""
         auth = EstAuthorization()
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
         context.cert_profile_str = 'invalid_template'  # Wrong template
@@ -571,7 +571,7 @@ class TestEstAuthorization:
         different_domain = Mock()
         different_domain.unique_name = 'different_domain'
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
         context.cert_profile_str = 'tls_server'
@@ -588,7 +588,7 @@ class TestEstAuthorization:
         """Test EST authorization failure due to missing device."""
         auth = EstAuthorization()
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
         context.cert_profile_str = 'tls_server'
@@ -604,7 +604,7 @@ class TestEstAuthorization:
         """Test EST authorization failure due to missing domain."""
         auth = EstAuthorization()
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
         context.cert_profile_str = 'tls_server'
