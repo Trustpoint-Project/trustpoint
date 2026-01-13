@@ -202,7 +202,7 @@ class TruststoreAddForm(forms.Form):
 
         try:
             certificate_collection_serializer = CertificateCollectionSerializer.from_bytes(trust_store_file)
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Try parsing as a single certificate (DER or PEM)
             try:
                 certificate_serializer = CertificateSerializer.from_bytes(trust_store_file)
