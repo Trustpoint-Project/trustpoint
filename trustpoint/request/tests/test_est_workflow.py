@@ -6,12 +6,13 @@ from django.test.client import RequestFactory
 from pki.util.cert_profile import JSONProfileVerifier
 from pki.util.cert_req_converter import JSONCertRequestConverter
 
-from request.authentication.base import EstAuthentication
-from request.authorization.base import CertificateProfileAuthorization, EstAuthorization, EstOperationAuthorization
+from request.authentication import EstAuthentication
+from request.authorization import CertificateProfileAuthorization, EstAuthorization
+from request.authorization.est import EstOperationAuthorization
 from request.request_validator.http_req import EstHttpRequestValidator
-from request.operation_processor.base import CertificateIssueProcessor
-from request.message_parser.base import EstMessageParser
-from request.request_context import RequestContext
+from request.operation_processor import CertificateIssueProcessor
+from request.message_parser import EstMessageParser
+from request.request_context import BaseRequestContext
 from trustpoint.logger import LoggerMixin
 
 
@@ -60,7 +61,7 @@ class TestESTHelper(LoggerMixin):
             HTTP_AUTHORIZATION=f'Basic {auth_header}',
         )
 
-        mock_context = RequestContext(raw_message=request,
+        mock_context = BaseRequestContext(raw_message=request,
                                       domain_str=domain_str,
                                       protocol=protocol_str,
                                       operation=operation_str,
@@ -133,7 +134,7 @@ class TestESTHelper(LoggerMixin):
         )
 
         # Build mock context
-        mock_context = RequestContext(
+        mock_context = BaseRequestContext(
             raw_message=request,
             domain_str=domain_str,
             protocol=protocol_str,

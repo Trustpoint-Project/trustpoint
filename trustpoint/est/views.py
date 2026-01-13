@@ -118,7 +118,7 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
             validator.validate(ctx)
 
             parser = EstMessageParser()
-            parser.parse(ctx)
+            ctx = cast('EstCertificateRequestContext', parser.parse(ctx))
 
             est_authenticator = EstAuthentication()
             est_authenticator.authenticate(ctx)
@@ -225,7 +225,7 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
             validator.validate(ctx)
 
             parser = EstMessageParser()
-            parser.parse(ctx)
+            ctx = cast('EstCertificateRequestContext', parser.parse(ctx))
 
             est_authenticator = EstAuthentication()
             est_authenticator.authenticate(ctx)

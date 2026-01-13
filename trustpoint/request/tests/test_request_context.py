@@ -1,4 +1,4 @@
-"""Unit tests for the RequestContext class."""
+"""Unit tests for the BaseRequestContext class."""
 
 from dataclasses import fields
 from unittest.mock import Mock
@@ -10,28 +10,28 @@ from django.http import HttpRequest
 from pki.models import DomainModel
 from pyasn1_modules.rfc4210 import PKIMessage
 
-from request.request_context import RequestContext
+from request.request_context import BaseRequestContext
 
 
 class TestRequestContext:
-    """Test cases for the RequestContext class."""
+    """Test cases for the BaseRequestContext class."""
 
     def test_init_with_defaults(self):
-        """Test that RequestContext initializes with all None values by default."""
-        context = RequestContext()
+        """Test that BaseRequestContext initializes with all None values by default."""
+        context = BaseRequestContext()
 
         # Check that all fields are initialized to None
         for field in fields(context):
             assert getattr(context, field.name) is None
 
     def test_init_with_values(self):
-        """Test that RequestContext can be initialized with specific values."""
+        """Test that BaseRequestContext can be initialized with specific values."""
         raw_message = Mock(spec=HttpRequest)
         domain_str = 'example.com'
         operation = 'certificate_request'
         protocol = 'est'
 
-        context = RequestContext(
+        context = BaseRequestContext(
             raw_message=raw_message,
             domain_str=domain_str,
             operation=operation,
@@ -47,7 +47,7 @@ class TestRequestContext:
 
     def test_to_dict(self):
         """Test that to_dict returns a dictionary representation of the context."""
-        context = RequestContext(
+        context = BaseRequestContext(
             operation='test_operation',
             protocol='test_protocol',
             domain_str='test.domain.com',
@@ -72,7 +72,7 @@ class TestRequestContext:
         mock_device = Mock(spec=DeviceModel)
         mock_domain = Mock(spec=DomainModel)
 
-        context = RequestContext(
+        context = BaseRequestContext(
             raw_message=mock_request,
             device=mock_device,
             domain=mock_domain
@@ -95,7 +95,7 @@ class TestRequestContext:
 
     def test_clear(self):
         """Test that clear() resets all attributes to None."""
-        context = RequestContext(
+        context = BaseRequestContext(
             raw_message=Mock(spec=HttpRequest),
             operation='test_operation',
             protocol='est',
@@ -128,7 +128,7 @@ class TestRequestContext:
         mock_cert = Mock(spec=x509.Certificate)
         mock_cert_list = [Mock(spec=x509.Certificate), Mock(spec=x509.Certificate)]
 
-        context = RequestContext(
+        context = BaseRequestContext(
             raw_message=mock_request,
             parsed_message=mock_csr,
             operation='enroll',
@@ -167,13 +167,13 @@ class TestRequestContext:
         """Test that parsed_message can hold a PKIMessage object."""
         mock_pki_message = Mock(spec=PKIMessage)
 
-        context = RequestContext(parsed_message=mock_pki_message)
+        context = BaseRequestContext(parsed_message=mock_pki_message)
 
         assert context.parsed_message == mock_pki_message
 
     def test_dataclass_immutability_after_creation(self):
         """Test that fields can be modified after creation (dataclass is mutable)."""
-        context = RequestContext()
+        context = BaseRequestContext()
 
         # Modify fields after creation
         context.operation = 'new_operation'
@@ -186,7 +186,7 @@ class TestRequestContext:
 
     def test_field_count(self):
         """Test that the expected number of fields are present."""
-        context = RequestContext()
+        context = BaseRequestContext()
         field_names = [field.name for field in fields(context)]
 
         expected_fields = [
@@ -207,7 +207,7 @@ class TestRequestContext:
 
     def test_to_dict_after_clear(self):
         """Test that to_dict works correctly after clear()."""
-        context = RequestContext(
+        context = BaseRequestContext(
             operation='test',
             protocol='est',
             domain_str='domain'

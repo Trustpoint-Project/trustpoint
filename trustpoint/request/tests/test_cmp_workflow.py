@@ -4,11 +4,11 @@ import socket
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 
-from request.authentication.base import CmpAuthentication
-from request.authorization.base import CmpAuthorization
+from request.authentication import CmpAuthentication
+from request.authorization import CmpAuthorization
 from request.request_validator.http_req import CmpHttpRequestValidator
-from request.message_parser.base import CmpMessageParser
-from request.request_context import RequestContext
+from request.message_parser import CmpMessageParser
+from request.request_context import BaseRequestContext
 from request.tests.cmp_mock_server import CMPMockServer
 from request.tests.openssl_cmp_factory import (
     BasicCMPArgs,
@@ -55,7 +55,7 @@ class TestCMPHelper(LoggerMixin):
 
         mock_server.stop_server()
 
-        mock_context = RequestContext(raw_message=request,
+        mock_context = BaseRequestContext(raw_message=request,
                                       domain_str=domain_str,
                                       protocol=protocol_str,
                                       operation=operation_str_long,
@@ -71,7 +71,7 @@ class TestCMPHelper(LoggerMixin):
         assert mock_context.client_certificate is None
         assert mock_context.client_intermediate_certificate is None
 
-        parser.parse(mock_context)
+        mock_context = parser.parse(mock_context)
 
         assert mock_context.cert_requested is not None
         assert isinstance(mock_context.cert_requested, x509.CertificateBuilder), \
@@ -133,11 +133,11 @@ class TestCMPHelper(LoggerMixin):
 
         mock_server.stop_server()
 
-        mock_context = RequestContext(raw_message=request,
-                                      domain_str=domain_str,
-                                      protocol=protocol_str,
-                                      operation=operation_str_long,
-                                      cert_profile_str=certtemplate_str)
+        mock_context = BaseRequestContext(raw_message=request,
+                                        domain_str=domain_str,
+                                        protocol=protocol_str,
+                                        operation=operation_str_long,
+                                        cert_profile_str=certtemplate_str)
 
         validator = CmpHttpRequestValidator()
         parser = CmpMessageParser()
@@ -151,7 +151,7 @@ class TestCMPHelper(LoggerMixin):
         assert headers['Content-Type'] == 'application/pkixcmp', 'Invalid Content-Type header'
 
         # Parse the CMP message
-        parser.parse(mock_context)
+        mock_context =parser.parse(mock_context)
 
         assert mock_context.client_certificate is not None, 'Client certificate not parsed'
 
@@ -241,7 +241,7 @@ class TestCMPHelper(LoggerMixin):
             assert headers['Content-Type'] == 'application/pkixcmp', 'Invalid Content-Type in request headers'
 
             # Parse RequestContext with invalid credentials
-            mock_context = RequestContext(
+            mock_context = BaseRequestContext(
                 raw_message=request,
                 domain_str=domain_str,
                 protocol='cmp',
@@ -255,7 +255,7 @@ class TestCMPHelper(LoggerMixin):
 
             # Validation should pass for request structure but fail during authentication
             validator.validate(mock_context)
-            parser.parse(mock_context)
+            mock_context = parser.parse(mock_context)
 
             try:
                 authenticator.authenticate(mock_context)
