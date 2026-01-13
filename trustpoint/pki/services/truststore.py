@@ -2,7 +2,7 @@
 
 from django.core.exceptions import ValidationError
 from django.db.models.query import QuerySet
-from trustpoint_core.serializer import CertificateCollectionSerializer
+from trustpoint_core.serializer import CertificateCollectionSerializer, CertificateSerializer
 
 from pki.forms import TruststoreAddForm
 from pki.models.truststore import TruststoreModel
@@ -25,9 +25,16 @@ class TruststoreService:
         try:
             certificate_collection_serializer = CertificateCollectionSerializer.from_bytes(trust_store_file)
             certs = certificate_collection_serializer.as_crypto()
-        except Exception as exception:
-            error_message = 'Unable to process the Truststore. May be malformed / corrupted.'
-            raise ValidationError(error_message) from exception
+        except Exception:
+            # Try parsing as a single certificate (DER or PEM)
+            try:
+                certificate_serializer = CertificateSerializer.from_bytes(trust_store_file)
+                der_bytes = certificate_serializer.as_der()
+                certificate_collection_serializer = CertificateCollectionSerializer.from_list_of_der([der_bytes])
+                certs = certificate_collection_serializer.as_crypto()
+            except Exception as exception:
+                error_message = 'Unable to process the Truststore. May be malformed / corrupted.'
+                raise ValidationError(error_message) from exception
 
         if not unique_name:
             unique_name = get_certificate_name(certs[0])
