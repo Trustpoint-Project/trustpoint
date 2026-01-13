@@ -25,8 +25,7 @@ class TruststoreService:
         try:
             certificate_collection_serializer = CertificateCollectionSerializer.from_bytes(trust_store_file)
             certs = certificate_collection_serializer.as_crypto()
-        except Exception:
-            # Try parsing as a single certificate (DER or PEM)
+        except Exception:  # noqa: BLE001
             try:
                 certificate_serializer = CertificateSerializer.from_bytes(trust_store_file)
                 der_bytes = certificate_serializer.as_der()
