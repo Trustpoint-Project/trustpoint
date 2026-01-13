@@ -243,6 +243,7 @@ class Command(BaseCommand, LoggerMixin):
         onboarding_protocols.remove(OnboardingProtocol.MANUAL)
         onboarding_protocols.remove(OnboardingProtocol.CMP_IDEVID)
         onboarding_protocols.remove(OnboardingProtocol.EST_IDEVID)
+        onboarding_protocols.remove(OnboardingProtocol.OPC_GDS_PUSH)
 
         self.log_and_stdout('Starting the process of adding domains and devices...\n')
 

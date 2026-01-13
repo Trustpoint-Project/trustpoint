@@ -30,15 +30,20 @@ from devices.forms import (
     BrowserLoginForm,
     ClmDeviceModelNoOnboardingForm,
     ClmDeviceModelOnboardingForm,
+    ClmDeviceModelOpcUaGdsPushOnboardingForm,
     CredentialDownloadForm,
     DeleteDevicesForm,
     IssueDomainCredentialForm,
     IssueOpcUaClientCredentialForm,
+    IssueOpcUaGdsPushDomainCredentialForm,
     IssueOpcUaServerCredentialForm,
     IssueTlsClientCredentialForm,
     IssueTlsServerCredentialForm,
     NoOnboardingCreateForm,
     OnboardingCreateForm,
+    OpcUaGdsPushCreateForm,
+    OpcUaGdsPushTruststoreAssociationForm,
+    OpcUaGdsPushTruststoreMethodSelectForm,
     RevokeDevicesForm,
     RevokeIssuedCredentialForm,
 )
@@ -66,6 +71,7 @@ from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
+    DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY,
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
@@ -265,6 +271,24 @@ class OpcUaGdsTableView(DeviceTableView):
         )
         return self.apply_filters(base_qs)
 
+class OpcUaGdsPushTableView(DeviceTableView):
+    """Table View for devices where OPC_UA_GDS_PUSH is True."""
+
+    template_name = 'devices/opc_ua_gds_push.html'
+
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+
+    def get_queryset(self) -> QuerySet[DeviceModel]:
+        """Filter queryset to only include devices which are of OPC-UA GDS type and filtered by UI filters.
+
+        Returns:
+            Returns a queryset of all DeviceModels which are of OPC_UA_GDS_PUSH type, filtered by UI filters.
+        """
+        base_qs = super(ListView, self).get_queryset().filter(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+        )
+        return self.apply_filters(base_qs)
+
 
 # ------------------------------------------------- Device Create View -------------------------------------------------
 
@@ -304,6 +328,39 @@ class OpcUaGdsCreateChooseOnboardingView(AbstractCreateChooseOnboaringView):
     """View for choosing if the new OPC UA GDS shall be onboarded or not."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the cancel url href according to the subcategory.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the devices page.
+        """
+        context = super().get_context_data(**kwargs)
+        # Remove no-onboarding option for OPC UA GDS
+        context.pop('use_no_onboarding_url', None)
+        return context
+
+class OpcUaGdsPushCreateChooseOnboardingView(AbstractCreateChooseOnboaringView):
+    """View for choosing if the new OPC UA GDS Push shall be onboarded or not."""
+
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the cancel url href according to the subcategory.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the devices page.
+        """
+        context = super().get_context_data(**kwargs)
+        # Remove no-onboarding option for OPC UA GDS Push
+        context.pop('use_no_onboarding_url', None)
+        return context
 
 
 class AbstractCreateNoOnboardingView(PageContextMixin, FormView[NoOnboardingCreateForm]):
@@ -405,8 +462,10 @@ class AbstractCreateOnboardingView(PageContextMixin, FormView[OnboardingCreateFo
         """
         if self.page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY:
             self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)
-        else:
+        elif self.page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY:
             self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS)
+        else:  # DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+            self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH)
         return super().form_valid(form)
 
     def get_success_url(self) -> str:
@@ -432,6 +491,13 @@ class OpcUaGdsCreateOnboardingView(AbstractCreateOnboardingView):
     """Create form view for the devices section."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class OpcUaGdsPushCreateOnboardingView(AbstractCreateOnboardingView):
+    """Create form view for the OPC UA GDS Push devices section."""
+
+    form_class = OpcUaGdsPushCreateForm
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
 
 
 # ------------------------------------------ Certificate Lifecycle Management ------------------------------------------
@@ -549,6 +615,10 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                 issue_domain_cred_onboarding_url = (
                     f'{self.page_category}:{self.page_name}'
                     '_certificate_lifecycle_management_issue_domain_credential_est_username_password'
+                )
+            elif self.object.onboarding_config.onboarding_protocol == OnboardingProtocol.OPC_GDS_PUSH:
+                issue_domain_cred_onboarding_url = (
+                    f'{self.page_category}:{self.page_name}_onboarding_clm_issue_domain_credential'
                 )
 
         context['issue_app_cred_onboarding_url'] = ''
@@ -723,6 +793,66 @@ class OpcUaGdsCertificateLifecycleManagementSummaryView(AbstractCertificateLifec
     """Certificate Lifecycle Management Summary View for OPC UA Devcies."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class OpcUaGdsPushCertificateLifecycleManagementSummaryView(AbstractCertificateLifecycleManagementSummaryView):
+    """Certificate Lifecycle Management Summary View for OPC UA GDS Push devices."""
+
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+
+    def get_onboarding_initial(self) -> dict[str, Any]:
+        """Gets the initial values for onboarding for GDS Push.
+
+        Returns:
+            Initial values for onboarding.
+        """
+        if not self.object.onboarding_config:
+            err_msg = gettext_lazy('The device does not have onboarding configured.')
+            raise ValueError(err_msg)
+        return {
+            'common_name': self.object.common_name,
+            'serial_number': self.object.serial_number,
+            'domain': self.object.domain,
+            'ip_address': self.object.ip_address,
+            'port': self.object.port,
+            'onboarding_protocol': OnboardingProtocol.OPC_GDS_PUSH.label,
+            'onboarding_status': OnboardingStatus(self.object.onboarding_config.onboarding_status).label,
+            'pki_protocol_opc_gds_push': self.object.onboarding_config.has_pki_protocol(
+                OnboardingPkiProtocol.OPC_GDS_PUSH
+            ),
+        }
+
+    def get_onboarding_form(self) -> ClmDeviceModelOpcUaGdsPushOnboardingForm:
+        """Gets the form for GDS Push onboarding.
+
+        Returns:
+            The GDS Push onboarding form.
+        """
+        return ClmDeviceModelOpcUaGdsPushOnboardingForm(initial=self.get_onboarding_initial(), instance=self.object)
+
+    def post(self, request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponse:
+        """Handles the POST request used for device form submission.
+
+        Args:
+            request: The django request object.
+            _args: Positional arguments are discarded.
+            kwargs: Keyword arguments are passed to get_context_data.
+
+        Returns:
+            The HttpResponse.
+        """
+        self.object = self.get_object()
+
+        if self.object.onboarding_config:
+            form = ClmDeviceModelOpcUaGdsPushOnboardingForm(request.POST, instance=self.object)
+            if form.is_valid():
+                form.save()
+        else:
+            # This shouldn't happen for GDS Push
+            pass
+
+        context = self.get_context_data(object=self.object, **kwargs)
+        return self.render_to_response(context)
 
 
 #  ------------------------------ Certificate Lifecycle Management - Credential Issuance -------------------------------
@@ -1130,6 +1260,136 @@ class OpcUaGdsIssueDomainCredentialView(AbstractIssueDomainCredentialView):
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
+class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
+    """View for issuing domain credentials for OPC-UA GDS Push devices."""
+
+    form_class = IssueOpcUaGdsPushDomainCredentialForm
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+
+    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
+        """Issues a domain credential for the device.
+
+        Args:
+            device: The device to be associated with the new credential.
+            cleaned_data: The validated form data.
+
+        Returns:
+            The IssuedCredentialModel object that was created and saved.
+        """
+        if not device.domain:
+            raise Http404(DeviceWithoutDomainErrorMsg)
+        issuer = self.issuer_class(device=device, domain=device.domain)
+        application_uri = cast('str', cleaned_data.get('application_uri'))
+        return issuer.issue_domain_credential(application_uri=application_uri)
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle the POST request with custom redirect to truststore association."""
+        self.object = self.get_object()
+        form = self.form_class(**self.get_form_kwargs())
+
+        if form.is_valid():
+            credential = self.issue_credential(device=self.object, cleaned_data=form.cleaned_data)
+            messages.success(
+                request, f'Successfully issued {self.friendly_name} for device {credential.device.common_name}'
+            )
+            # Redirect to truststore method selection instead of direct association
+            return HttpResponseRedirect(
+                reverse_lazy(
+                    f'devices:{self.page_name}_truststore_method_select', kwargs={'pk': self.get_object().id}
+                )
+            )
+
+        return self.render_to_response(self.get_context_data(form=form))
+
+
+class OpcUaGdsPushTruststoreMethodSelectView(PageContextMixin, FormView[OpcUaGdsPushTruststoreMethodSelectForm]):
+    """View for selecting the method to associate a truststore with an OPC UA GDS Push device."""
+
+    form_class = OpcUaGdsPushTruststoreMethodSelectForm
+    template_name = 'devices/truststore_method_select.html'
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+
+    def get_device(self) -> DeviceModel:
+        """Get the device from the URL parameters."""
+        pk = self.kwargs.get('pk')
+        try:
+            return DeviceModel.objects.get(pk=pk)
+        except DeviceModel.DoesNotExist as e:
+            exc_msg = f'Device with pk {pk} does not exist.'
+            raise Http404(exc_msg) from e
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the device to the context."""
+        context = super().get_context_data(**kwargs)
+        context['device'] = self.get_device()
+        return context
+
+    def form_valid(self, form: OpcUaGdsPushTruststoreMethodSelectForm) -> HttpResponseRedirect:
+        """Redirect to the view for the selected method."""
+        method_select = form.cleaned_data.get('method_select')
+        device_pk = self.kwargs.get('pk')
+
+        if method_select == 'upload_truststore':
+            # Redirect to truststore creation with device context
+            return HttpResponseRedirect(
+                reverse('pki:truststores-add-opc-ua-gds-push', kwargs={'device_pk': device_pk})
+            )
+
+        if method_select == 'select_truststore':
+            # Redirect to existing truststore selection
+            return HttpResponseRedirect(
+                reverse('devices:opc_ua_gds_push_truststore_association', kwargs={'pk': device_pk})
+            )
+
+        # Default fallback
+        return HttpResponseRedirect(
+            reverse('devices:opc_ua_gds_push_truststore_association', kwargs={'pk': device_pk})
+        )
+
+
+class OpcUaGdsPushTruststoreAssociationView(PageContextMixin, FormView[OpcUaGdsPushTruststoreAssociationForm]):
+    """View for associating a truststore with an OPC UA GDS Push device's onboarding configuration."""
+
+    form_class = OpcUaGdsPushTruststoreAssociationForm
+    template_name = 'devices/truststore_association.html'
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Add the device instance to the form kwargs."""
+        kwargs = super().get_form_kwargs()
+        kwargs['instance'] = self.get_device()
+        return kwargs
+
+    def get_device(self) -> DeviceModel:
+        """Get the device from the URL parameters."""
+        pk = self.kwargs.get('pk')
+        try:
+            return DeviceModel.objects.get(pk=pk)
+        except DeviceModel.DoesNotExist as e:
+            exc_msg = f'Device with pk {pk} does not exist.'
+            raise Http404(exc_msg) from e
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the device to the context."""
+        context = super().get_context_data(**kwargs)
+        context['device'] = self.get_device()
+        return context
+
+    def form_valid(self, form: OpcUaGdsPushTruststoreAssociationForm) -> HttpResponseRedirect:
+        """Handle successful form submission."""
+        form.save()
+        messages.success(
+            self.request,
+            f'Successfully associated truststore with device {self.get_device().common_name}'
+        )
+        return HttpResponseRedirect(
+            reverse_lazy(
+                f'devices:{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_certificate_lifecycle_management',
+                kwargs={'pk': self.get_device().pk}
+            )
+        )
+
+
 class AbstractIssueTlsClientCredentialView(
     AbstractIssueCredentialView[IssueTlsClientCredentialForm, LocalTlsClientCredentialIssuer]
 ):
@@ -1412,6 +1672,12 @@ class OpcUaGdsDownloadPageDispatcherView(AbstractDownloadPageDispatcherView):
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
+class OpcUaGdsPushDownloadPageDispatcherView(AbstractDownloadPageDispatcherView):
+    """Download dispatcher view for the OPC UA GDS Push pages."""
+
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+
+
 # --------------------------------------------- Certificate Download Help ----------------------------------------------
 
 
@@ -1451,6 +1717,12 @@ class OpcUaGdsCertificateDownloadView(AbstractCertificateDownloadView):
     """Certificate download view for the OPC UA GDS pages."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class OpcUaGdsPushCertificateDownloadView(AbstractCertificateDownloadView):
+    """Certificate download view for the OPC UA GDS Push pages."""
+
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
 
 
 # ---------------------------------------------- Credential Download Help ----------------------------------------------
@@ -1862,6 +2134,11 @@ class OpcUaGdsIssuedCredentialRevocationView(AbstractIssuedCredentialRevocationV
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
+class OpcUaGdsPushIssuedCredentialRevocationView(AbstractIssuedCredentialRevocationView):
+    """abc."""
+
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+
 
 class AbstractBulkRevokeView(LoggerMixin, PageContextMixin, ListView[DeviceModel]):
     """View to confirm the deletion of multiple Devices."""
@@ -2015,6 +2292,11 @@ class OpcUaGdsBulkRevokeView(AbstractBulkRevokeView):
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
+class OpcUaGdsPushBulkRevokeView(AbstractBulkRevokeView):
+    """abc."""
+
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+
 
 class AbstractBulkDeleteView(LoggerMixin, PageContextMixin, ListView[DeviceModel]):
     """View to confirm the deletion of multiple Devices."""
@@ -2154,6 +2436,10 @@ class OpcUaGdsBulkDeleteView(AbstractBulkDeleteView):
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
+class OpcUaGdsPushBulkDeleteView(AbstractBulkDeleteView):
+    """abc."""
+
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
 
 class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
     """ViewSet for managing Device instances.

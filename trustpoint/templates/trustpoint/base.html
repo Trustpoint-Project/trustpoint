@@ -53,6 +53,8 @@
                 <div class="tp-menu-collapse {% if page_category == 'devices' %}show{% endif %}">
                     <a href="{% url 'devices:devices' %}" class="tp-menu-item {% if page_name == 'devices' %}tp-menu-active{% endif %}">{% trans 'Devices' %}</a>
                     <a href="{% url 'devices:opc_ua_gds' %}" class="tp-menu-item {% if page_name == 'opc_ua_gds' %}tp-menu-active{% endif %}">{% trans 'OPC UA GDS' %}</a>
+                    <a href="{% url 'devices:opc_ua_gds_push' %}" class="tp-menu-item {% if page_name == 'opc_ua_gds_push' %}tp-menu-active{% endif %}">{% trans 'OPC UA GDS Push' %}</a>
+
                 </div>
             </div>
 

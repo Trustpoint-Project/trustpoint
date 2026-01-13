@@ -27,6 +27,7 @@ from devices.models import (
 )
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.domain import DomainModel
+from pki.models.truststore import TruststoreModel
 from trustpoint.forms import DisableOptionsSelect
 from util.field import UniqueNameValidator
 
@@ -226,6 +227,16 @@ class IssueOpcUaClientCredentialForm(ApplicationUriFormMixin, BaseCredentialForm
 
 class IssueOpcUaServerCredentialForm(ApplicationUriFormMixin, BaseServerCredentialForm):
     """Form to issue a new OPC UA server credential."""
+
+
+class IssueOpcUaGdsPushDomainCredentialForm(ApplicationUriFormMixin, BaseCredentialForm):
+    """Form to issue a new OPC UA GDS Push domain credential."""
+
+    def __init__(self, *args: Any, device: DeviceModel, **kwargs: Any) -> None:
+        """Initialize the form with disabled common name field."""
+        super().__init__(*args, device=device, **kwargs)
+        self.fields['common_name'].disabled = True
+        self.fields['common_name'].initial = 'Trustpoint Domain Credential'
 
 
 class BrowserLoginForm(forms.Form):
@@ -496,6 +507,91 @@ class OnboardingCreateForm(forms.Form):
         return device_model
 
 
+class OpcUaGdsPushCreateForm(forms.Form):
+    """Form for OPC UA GDS Push device creation with onboarding."""
+
+    common_name = forms.CharField(max_length=100, validators=[UniqueNameValidator()])
+    serial_number = forms.CharField(max_length=100, required=False)
+    domain_queryset: QuerySet[DomainModel] = DomainModel.objects.filter(is_active=True)
+    domain = forms.ModelChoiceField(queryset=domain_queryset, empty_label='----------', required=False)
+    ip_address = forms.GenericIPAddressField(protocol='both', required=True, label=_('IP Address'))
+    port = forms.IntegerField(min_value=1, max_value=65535, required=True, label=_('Port'))
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the CreateDeviceForm."""
+        super().__init__(*args, **kwargs)
+
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.layout = Layout(
+            HTML('<h2>General</h2><hr>'),
+            Field('common_name'),
+            Field('serial_number'),
+            Field('domain'),
+            Field('ip_address'),
+            Field('port'),
+        )
+
+    def clean_common_name(self) -> str:
+        """Validates the device name, i.e. checks if it is unique.
+
+        Args:
+            common_name: The desired name of the new device.
+
+        Returns:
+            The device name if it passed the checks.
+        """
+        common_name = str(self.cleaned_data.get('common_name'))
+        if DeviceModel.objects.filter(common_name=common_name).exists():
+            err_msg = _('Device with this common name already exists.')
+            raise forms.ValidationError(err_msg)
+        return common_name
+
+    def save(self, device_type: DeviceModel.DeviceType) -> DeviceModel:
+        """Stores the form as device model object in the db.
+
+        Args:
+            device_type: The device type to set.
+
+        Returns:
+            The created DeviceModel.
+        """
+        common_name = cast('str', self.cleaned_data.get('common_name'))
+        serial_number = cast('str', self.cleaned_data.get('serial_number'))
+        domain = cast('DomainModel | None', self.cleaned_data.get('domain'))
+        ip_address = cast('str', self.cleaned_data.get('ip_address'))
+        port = cast('int', self.cleaned_data.get('port'))
+
+        # Fixed for GDS Push
+        onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
+        onboarding_pki_protocols = [OnboardingPkiProtocol.OPC_GDS_PUSH]
+
+        onboarding_config_model = OnboardingConfigModel(
+            onboarding_status=OnboardingStatus.PENDING, onboarding_protocol=onboarding_protocol
+        )
+        onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
+
+        # No secrets needed for GDS Push
+        onboarding_config_model.full_clean()
+
+        device_model = DeviceModel(
+            common_name=common_name,
+            serial_number=serial_number,
+            domain=domain,
+            device_type=device_type,
+            onboarding_config=onboarding_config_model,
+            ip_address=ip_address,
+            port=port,
+        )
+
+        device_model.full_clean()
+
+        onboarding_config_model.save()
+        device_model.save()
+
+        return device_model
+
+
 class ClmDeviceModelOnboardingForm(forms.Form):
     """CLM Device Model form for devices that use onboarding."""
 
@@ -581,6 +677,112 @@ class ClmDeviceModelOnboardingForm(forms.Form):
             self.instance.save()
 
 
+class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
+    """CLM Device Model form for OPC UA GDS Push devices that use onboarding."""
+
+    common_name = forms.CharField(max_length=100, validators=[UniqueNameValidator()])
+    serial_number = forms.CharField(max_length=100, required=False)
+    domain_queryset: QuerySet[DomainModel] = DomainModel.objects.filter(is_active=True)
+    domain = forms.ModelChoiceField(queryset=domain_queryset, empty_label='----------', required=False)
+    ip_address = forms.GenericIPAddressField(protocol='both', required=True, label=_('IP Address'))
+    port = forms.IntegerField(min_value=1, max_value=65535, required=True, label=_('Port'))
+    truststore_queryset: QuerySet[TruststoreModel] = TruststoreModel.objects.filter(
+        intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
+    )
+    opc_trust_store = forms.ModelChoiceField(
+        queryset=truststore_queryset, empty_label='----------', required=False, label=_('OPC UA Trust Store')
+    )
+
+    onboarding_protocol = forms.CharField(
+        label='Onboarding Protocol',
+        widget=forms.TextInput(attrs={'readonly': 'readonly', 'class': 'readonly-field form-control'}),
+        required=False,
+    )
+    onboarding_status = forms.CharField(
+        label='Onboarding Status',
+        widget=forms.TextInput(attrs={'readonly': 'readonly', 'class': 'readonly-field form-control'}),
+    )
+
+    pki_protocol_opc_gds_push = forms.BooleanField(label='OPC - GDS Push', required=False)
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the form."""
+        self.instance: DeviceModel = kwargs.pop('instance')
+
+        # Set initial values
+        initial = kwargs.get('initial', {})
+        initial.update({
+            'common_name': self.instance.common_name,
+            'serial_number': self.instance.serial_number,
+            'domain': self.instance.domain,
+            'ip_address': self.instance.ip_address,
+            'port': self.instance.port,
+            'opc_trust_store': (
+                self.instance.onboarding_config.opc_trust_store
+                if self.instance.onboarding_config else None
+            ),
+            'onboarding_protocol': (
+                self.instance.onboarding_config.onboarding_protocol
+                if self.instance.onboarding_config else ''
+            ),
+            'onboarding_status': (
+                self.instance.onboarding_config.onboarding_status
+                if self.instance.onboarding_config else ''
+            ),
+            'pki_protocol_opc_gds_push': (
+                self.instance.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
+                if self.instance.onboarding_config else False
+            ),
+        })
+        kwargs['initial'] = initial
+
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.layout = Layout(
+            Field('common_name'),
+            Field('serial_number'),
+            Field('domain'),
+            Field('ip_address'),
+            Field('port'),
+            Field('opc_trust_store'),
+            HTML('<h2>Device Onboarding Configuration</h2><hr>'),
+            Field('onboarding_protocol'),
+            Field('onboarding_status'),
+            HTML('<h2>Enabled PKI-Protocols</h2><hr>'),
+            Field('pki_protocol_opc_gds_push'),
+            HTML('<hr>'),
+            Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
+            HTML('<hr>'),
+        )
+
+        super().__init__(*args, **kwargs)
+
+    def save(self) -> None:
+        """Saves the changes to DB."""
+        if not self.instance.onboarding_config:
+            err_msg = _('Expected DeviceModel that is configured to use onboarding.')
+            raise forms.ValidationError(err_msg)
+
+        with transaction.atomic():
+            self.instance.common_name = self.cleaned_data['common_name']
+            self.instance.serial_number = self.cleaned_data['serial_number']
+            self.instance.domain = self.cleaned_data['domain']
+            self.instance.ip_address = self.cleaned_data['ip_address']
+            self.instance.port = self.cleaned_data['port']
+            self.instance.onboarding_config.opc_trust_store = self.cleaned_data['opc_trust_store']
+
+            # For GDS Push, protocol is fixed
+            self.instance.onboarding_config.onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
+            self.instance.onboarding_config.clear_pki_protocols()
+            if self.cleaned_data['pki_protocol_opc_gds_push'] is True:
+                self.instance.onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
+
+            self.instance.onboarding_config.full_clean()
+            self.instance.onboarding_config.save()
+            self.instance.full_clean()
+            self.instance.save()
+
+
 class ClmDeviceModelNoOnboardingForm(forms.Form):
     """CLM Device Model form for devices that do not use onboarding."""
 
@@ -647,3 +849,61 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
         self.instance.no_onboarding_config.save()
         self.instance.full_clean()
         self.instance.save()
+
+
+class OpcUaGdsPushTruststoreAssociationForm(forms.Form):
+    """Form for associating a truststore with an OPC UA GDS Push device's onboarding configuration."""
+
+    truststore_queryset: QuerySet[TruststoreModel] = TruststoreModel.objects.filter(
+        intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
+    )
+    opc_trust_store = forms.ModelChoiceField(
+        queryset=truststore_queryset, empty_label='----------', required=True, label=_('OPC UA Trust Store')
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the form."""
+        self.instance: DeviceModel = kwargs.pop('instance')
+
+        self.helper = FormHelper()
+        self.helper.layout = Layout(
+            HTML("<h2>Associate Trust Store</h2>"),
+            HTML("<p>Select a trust store to associate with this device's onboarding configuration.</p>"),
+            Field('opc_trust_store'),
+            HTML('<hr>'),
+            Submit('submit', _('Associate Trust Store'), css_class='btn btn-primary w-100'),
+            HTML('<hr>'),
+        )
+
+        super().__init__(*args, **kwargs)
+
+    def save(self) -> None:
+        """Saves the truststore association to the device's onboarding config."""
+        if not self.instance.onboarding_config:
+            err_msg = _('Expected DeviceModel that is configured to use onboarding.')
+            raise forms.ValidationError(err_msg)
+
+        with transaction.atomic():
+            self.instance.onboarding_config.opc_trust_store = self.cleaned_data['opc_trust_store']
+            self.instance.onboarding_config.full_clean()
+            self.instance.onboarding_config.save()
+
+
+class OpcUaGdsPushTruststoreMethodSelectForm(forms.Form):
+    """Form for selecting the method to associate a truststore with an OPC UA GDS Push device.
+
+    Attributes:
+        method_select (ChoiceField): A dropdown to select the method for truststore association.
+            - `upload_truststore`: Upload a new truststore prior to association.
+            - `select_truststore`: Use an existing truststore for association.
+    """
+
+    method_select = forms.ChoiceField(
+        label=_('Select Method'),
+        choices=[
+            ('upload_truststore', _('Upload a new truststore prior to association')),
+            ('select_truststore', _('Use an existing truststore for association')),
+        ],
+        initial='select_truststore',
+        required=True,
+    )

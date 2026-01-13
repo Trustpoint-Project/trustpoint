@@ -8,6 +8,8 @@
                 <h1>{% trans 'Create new Device' %}</h1>
             {% elif page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY %}
                 <h1>{% trans 'Create new OPC UA GDS' %}</h1>
+            {% elif page_name == DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY %}
+                <h1>{% trans 'Create new OPC UA GDS Push' %}</h1>
             {% endif %}
         </div>
 
@@ -25,6 +27,7 @@
                         </a>
                     </div>
                 </div>
+                {% if use_no_onboarding_url %}
                 <div class="card flex-fill d-flex flex-column">
                     <div class="card-body d-flex flex-column">
                         <h5 class="card-title"><strong>Do not use onboarding</strong></h5>
@@ -35,6 +38,7 @@
                         </a>
                     </div>
                 </div>
+                {% endif %}
             </div>
         </div>
 

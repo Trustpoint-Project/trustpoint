@@ -17,6 +17,11 @@ urlpatterns = [
     ),
     path('truststores/add/', truststores.TruststoreCreateView.as_view(), name='truststores-add'),
     path('truststores/add/<int:pk>/', truststores.TruststoreCreateView.as_view(), name='truststores-add-with-pk'),
+    path(
+        'truststores/add/opc-ua-gds-push/<int:device_pk>/',
+        truststores.OpcUaGdsPushTruststoreCreateView.as_view(),
+        name='truststores-add-opc-ua-gds-push'
+    ),
     re_path(
         r'^truststores/download/(?P<pk>[0-9]+)/?$',
         truststores.TruststoreDownloadView.as_view(),

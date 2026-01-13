@@ -649,19 +649,28 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
 
     _pseudonym = DOMAIN_CREDENTIAL_CN
 
-    def issue_domain_credential(self) -> IssuedCredentialModel:
+    def issue_domain_credential(self, application_uri: str | None = None) -> IssuedCredentialModel:
         """Issues a domain credential for a device.
+
+        Args:
+            application_uri: Optional application URI to include in the certificate.
 
         Returns:
             The issued domain credential model.
         """
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
 
+        extra_extensions = [(x509.BasicConstraints(ca=False, path_length=None), True)]
+        if application_uri:
+            extra_extensions.append(
+                (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(application_uri)]), False)
+            )
+
         certificate = self._build_certificate(
             common_name=self._pseudonym,
             public_key=private_key.public_key_serializer.as_crypto(),
             validity_days=365,
-            extra_extensions=[(x509.BasicConstraints(ca=False, path_length=None), True)],
+            extra_extensions=extra_extensions,
         )
 
         cert_chain = (
