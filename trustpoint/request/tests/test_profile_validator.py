@@ -13,7 +13,7 @@ from pydantic_core import ValidationError
 
 from pki.models import CertificateProfileModel
 from request.profile_validator import ProfileValidator
-from request.request_context import BaseRequestContext
+from request.request_context import BaseRequestContext, BaseCertificateRequestContext, EstCertificateRequestContext
 
 
 @pytest.mark.django_db
@@ -51,7 +51,7 @@ class TestProfileValidator:
         csr = builder.sign(private_key.as_crypto(), hashes.SHA256())
         
         # Create context
-        context = Mock(spec=BaseRequestContext)
+        context = EstCertificateRequestContext()
         context.cert_requested = csr
         context.certificate_profile_model = cert_profile
         
@@ -77,7 +77,7 @@ class TestProfileValidator:
         )
         csr = builder.sign(private_key, hashes.SHA256())
         
-        context = Mock(spec=BaseRequestContext)
+        context = EstCertificateRequestContext()
         context.cert_requested = csr
         context.certificate_profile_model = None
         
@@ -111,7 +111,7 @@ class TestProfileValidator:
         private_key = KeyGenerator.generate_private_key(domain=domain)
         csr = builder.sign(private_key.as_crypto(), hashes.SHA256())
         
-        context = Mock(spec=BaseRequestContext)
+        context = EstCertificateRequestContext()
         context.cert_requested = csr
         context.certificate_profile_model = cert_profile
         
@@ -154,7 +154,7 @@ class TestProfileValidator:
         private_key = KeyGenerator.generate_private_key(domain=domain)
         csr = builder.sign(private_key.as_crypto(), hashes.SHA256())
         
-        context = Mock(spec=BaseRequestContext)
+        context = EstCertificateRequestContext()
         context.cert_requested = csr
         context.certificate_profile_model = cert_profile
         
@@ -195,7 +195,7 @@ class TestProfileValidator:
         private_key = KeyGenerator.generate_private_key(domain=domain)
         csr = builder.sign(private_key.as_crypto(), hashes.SHA256())
         
-        context = Mock(spec=BaseRequestContext)
+        context = EstCertificateRequestContext()
         context.cert_requested = csr
         context.certificate_profile_model = cert_profile
         
@@ -245,7 +245,7 @@ class TestProfileValidator:
         private_key = KeyGenerator.generate_private_key(domain=domain)
         csr = builder.sign(private_key.as_crypto(), hashes.SHA256())
         
-        context = Mock(spec=BaseRequestContext)
+        context = EstCertificateRequestContext()
         context.cert_requested = csr
         context.certificate_profile_model = cert_profile
         
@@ -290,7 +290,7 @@ class TestProfileValidator:
         private_key = KeyGenerator.generate_private_key(domain=domain)
         csr = builder.sign(private_key.as_crypto(), hashes.SHA256())
         
-        context = Mock(spec=BaseRequestContext)
+        context = EstCertificateRequestContext()
         context.cert_requested = csr
         context.certificate_profile_model = cert_profile
         

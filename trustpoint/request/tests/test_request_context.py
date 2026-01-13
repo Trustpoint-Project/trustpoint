@@ -10,7 +10,7 @@ from django.http import HttpRequest
 from pki.models import DomainModel
 from pyasn1_modules.rfc4210 import PKIMessage
 
-from request.request_context import BaseRequestContext
+from request.request_context import BaseRequestContext, EstBaseRequestContext, HttpBaseRequestContext
 
 
 class TestRequestContext:
@@ -26,19 +26,16 @@ class TestRequestContext:
 
     def test_init_with_values(self):
         """Test that BaseRequestContext can be initialized with specific values."""
-        raw_message = Mock(spec=HttpRequest)
         domain_str = 'example.com'
         operation = 'certificate_request'
         protocol = 'est'
 
         context = BaseRequestContext(
-            raw_message=raw_message,
             domain_str=domain_str,
             operation=operation,
             protocol=protocol
         )
 
-        assert context.raw_message == raw_message
         assert context.domain_str == domain_str
         assert context.operation == operation
         assert context.protocol == protocol
@@ -50,8 +47,7 @@ class TestRequestContext:
         context = BaseRequestContext(
             operation='test_operation',
             protocol='test_protocol',
-            domain_str='test.domain.com',
-            est_username='test_user'
+            domain_str='test.domain.com'
         )
 
         result = context.to_dict()
@@ -60,35 +56,28 @@ class TestRequestContext:
         assert result['operation'] == 'test_operation'
         assert result['protocol'] == 'test_protocol'
         assert result['domain_str'] == 'test.domain.com'
-        assert result['est_username'] == 'test_user'
         # Check that None values are also included
-        assert result['raw_message'] is None
         assert result['parsed_message'] is None
         assert result['device'] is None
 
     def test_to_dict_with_complex_objects(self):
         """Test to_dict with complex objects like mocks."""
-        mock_request = Mock(spec=HttpRequest)
         mock_device = Mock(spec=DeviceModel)
         mock_domain = Mock(spec=DomainModel)
 
         context = BaseRequestContext(
-            raw_message=mock_request,
             device=mock_device,
             domain=mock_domain
         )
 
         result = context.to_dict()
 
-        assert 'raw_message' in result
         assert 'device' in result
         assert 'domain' in result
 
-        assert isinstance(result['raw_message'], Mock)
         assert isinstance(result['device'], Mock)
         assert isinstance(result['domain'], Mock)
 
-        assert context.raw_message is mock_request
         assert context.device is mock_device
         assert context.domain is mock_domain
 
@@ -96,13 +85,9 @@ class TestRequestContext:
     def test_clear(self):
         """Test that clear() resets all attributes to None."""
         context = BaseRequestContext(
-            raw_message=Mock(spec=HttpRequest),
             operation='test_operation',
             protocol='est',
-            domain_str='example.com',
-            est_username='user',
-            est_password='password',
-            cmp_shared_secret='secret'
+            domain_str='example.com'
         )
 
         # Verify some fields are set
@@ -120,46 +105,30 @@ class TestRequestContext:
     def test_all_field_types(self):
         """Test that all field types can be set and retrieved correctly."""
         # Create mock objects for complex types
-        mock_request = Mock(spec=HttpRequest)
         mock_csr = Mock(spec=CertificateSigningRequest)
-        mock_pki_message = Mock(spec=PKIMessage)
         mock_domain = Mock(spec=DomainModel)
         mock_device = Mock(spec=DeviceModel)
         mock_cert = Mock(spec=x509.Certificate)
         mock_cert_list = [Mock(spec=x509.Certificate), Mock(spec=x509.Certificate)]
 
         context = BaseRequestContext(
-            raw_message=mock_request,
             parsed_message=mock_csr,
             operation='enroll',
             protocol='est',
-            cert_profile_str='server_cert',
-            est_encoding='base64',
             domain_str='test.example.com',
             domain=mock_domain,
             device=mock_device,
-            cert_requested=mock_csr,
-            est_username='test_user',
-            est_password='test_password',
-            cmp_shared_secret='shared_secret',
             client_certificate=mock_cert,
             client_intermediate_certificate=mock_cert_list
         )
 
         # Verify all fields are set correctly
-        assert context.raw_message == mock_request
         assert context.parsed_message == mock_csr
         assert context.operation == 'enroll'
         assert context.protocol == 'est'
-        assert context.cert_profile_str == 'server_cert'
-        assert context.est_encoding == 'base64'
         assert context.domain_str == 'test.example.com'
         assert context.domain == mock_domain
         assert context.device == mock_device
-        assert context.cert_requested == mock_csr
-        assert context.est_username == 'test_user'
-        assert context.est_password == 'test_password'
-        assert context.cmp_shared_secret == 'shared_secret'
         assert context.client_certificate == mock_cert
         assert context.client_intermediate_certificate == mock_cert_list
 
@@ -185,21 +154,16 @@ class TestRequestContext:
         assert context.domain_str == 'new_operation'
 
     def test_field_count(self):
-        """Test that the expected number of fields are present."""
+        """Test that the expected number of fields are present in BaseRequestContext."""
         context = BaseRequestContext()
         field_names = [field.name for field in fields(context)]
 
         expected_fields = [
-            'raw_message', 'parsed_message', 'operation', 'protocol',
-            'cert_profile_str', 'est_encoding',
-            'domain_str', 'domain', 'device', 'certificate_profile_model', 'cert_requested',
-            'est_username', 'est_password', 'cmp_shared_secret',
-            'client_certificate', 'client_intermediate_certificate',
-            'cert_requested_profile_validated', 'issued_certificate',
+            'operation', 'protocol', 'parsed_message',
+            'domain_str', 'domain', 'device',
             'owner_credential', 'issuer_credential',
-            'http_response_status', 'http_response_content',
-            'http_response_content_type',
-            'enrollment_request', 'event' # These two should be refactored into the overall Req Context
+            'client_certificate', 'client_intermediate_certificate',
+            'event'
         ]
 
         assert len(field_names) == len(expected_fields)
