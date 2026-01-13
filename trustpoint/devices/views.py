@@ -1126,6 +1126,12 @@ class OpcUaGdsOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssu
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
+class OpcUaGdsPushOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssueNewApplicationCredentialView):
+    """abc."""
+
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+
+
 class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: BaseTlsCredentialIssuer](
     PageContextMixin, DetailView[DeviceModel]
 ):
