@@ -1127,9 +1127,45 @@ class OpcUaGdsOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssu
 
 
 class OpcUaGdsPushOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssueNewApplicationCredentialView):
-    """abc."""
+    """View for issuing application credentials for OPC UA GDS Push devices - redirects directly to help page."""
 
     page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+
+    def get(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Redirect directly to the GDS Push application certificate help page."""
+        self.object = self.get_object()
+
+        if not self.object.onboarding_config:
+            err_msg = gettext_lazy('Device is not configured for onboarding')
+            messages.warning(request, err_msg)
+            return redirect(
+                f'{self.page_category}:{self.page_name}_certificate_lifecycle_management',
+                pk=self.object.pk
+            )
+
+        if not self.object.onboarding_config.get_pki_protocols():
+            err_msg = gettext_lazy(
+                'All PKI protocols for this device to request application certificates are disabled.'
+            )
+            messages.warning(request, err_msg)
+            return redirect(
+                f'{self.page_category}:{self.page_name}_certificate_lifecycle_management',
+                pk=self.object.pk
+            )
+
+        if not self.object.domain:
+            err_msg = gettext_lazy('No domain is configured for this device.')
+            messages.warning(request, err_msg)
+            return redirect(
+                f'{self.page_category}:{self.page_name}_certificate_lifecycle_management',
+                pk=self.object.pk
+            )
+
+        # Redirect directly to the GDS Push application certificate help page
+        return redirect(
+            f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_cmp_domain_credential',
+            pk=self.object.pk
+        )
 
 
 class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: BaseTlsCredentialIssuer](
@@ -1729,6 +1765,223 @@ class OpcUaGdsPushCertificateDownloadView(AbstractCertificateDownloadView):
     """Certificate download view for the OPC UA GDS Push pages."""
 
     page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+
+
+# -------------------------------------------- OPC UA GDS Push Actions -------------------------------------------------
+
+
+class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel]):
+    """View to update the trustlist on an OPC UA GDS Push device."""
+
+    http_method_names = ('post',)
+    model = DeviceModel
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+    page_category = DEVICES_PAGE_CATEGORY
+
+    def post(self, request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle the POST request to update the trustlist.
+
+        Args:
+            request: The Django request object.
+            _args: Positional arguments are discarded.
+            kwargs: Keyword arguments are passed to get_object().
+
+        Returns:
+            HttpResponse redirecting back to the help page.
+        """
+        self.object = self.get_object()
+
+        try:
+            # Get the domain credential for authentication
+            domain_credentials = IssuedCredentialModel.objects.filter(
+                device=self.object,
+                issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
+            ).order_by('-created_at')
+
+            if not domain_credentials.exists():
+                messages.error(
+                    request,
+                    'No domain credential found for device. Please issue a domain credential first.'
+                )
+                return self._redirect_to_help_page()
+
+            domain_credential = domain_credentials.first()
+
+            # Import here to avoid circular import
+            from request.gds_push import GdsPushError, GdsPushService
+
+            # Create GDS Push service
+            service = GdsPushService(
+                device=self.object,
+                domain_credential=domain_credential,
+            )
+
+            # Update trustlist
+            success, message = service.update_trustlist()
+
+            if success:
+                messages.success(request, f'Trustlist updated successfully: {message}')
+            else:
+                messages.error(request, f'Failed to update trustlist: {message}')
+
+        except GdsPushError as e:
+            messages.error(request, f'GDS Push error: {e}')
+        except Exception as e:
+            messages.error(request, f'Unexpected error: {e}')
+            import traceback
+            traceback.print_exc()
+
+        return self._redirect_to_help_page()
+
+    def _redirect_to_help_page(self) -> HttpResponseRedirect:
+        """Redirect back to the help page.
+
+        Returns:
+            HttpResponseRedirect to the help page.
+        """
+        return HttpResponseRedirect(
+            reverse_lazy(
+                f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_cmp_domain_credential',
+                kwargs={'pk': self.object.pk}
+            )
+        )
+
+
+class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[DeviceModel]):
+    """View to update the server certificate on an OPC UA GDS Push device."""
+
+    http_method_names = ('post',)
+    model = DeviceModel
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+    page_category = DEVICES_PAGE_CATEGORY
+
+    def post(self, request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle the POST request to update the server certificate.
+
+        Args:
+            request: The Django request object.
+            _args: Positional arguments are discarded.
+            kwargs: Keyword arguments are passed to get_object().
+
+        Returns:
+            HttpResponse redirecting back to the help page.
+        """
+        self.object = self.get_object()
+
+        try:
+            # Get the domain credential for authentication
+            domain_credentials = IssuedCredentialModel.objects.filter(
+                device=self.object,
+                issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
+            ).order_by('-created_at')
+
+            if not domain_credentials.exists():
+                messages.error(
+                    request,
+                    'No domain credential found for device. Please issue a domain credential first.'
+                )
+                return self._redirect_to_help_page()
+
+            domain_credential = domain_credentials.first()
+
+            # Import here to avoid circular import
+            from request.gds_push import GdsPushError, GdsPushService
+
+            # Create GDS Push service
+            service = GdsPushService(
+                device=self.object,
+                domain_credential=domain_credential,
+            )
+
+            # Update server certificate
+            success, message, certificate_bytes = service.update_server_certificate()
+
+            if success and certificate_bytes:
+                messages.success(request, f'Server certificate updated successfully: {message}')
+
+                # Update truststore with new server certificate
+                self._update_truststore_with_certificate(certificate_bytes)
+
+            else:
+                messages.error(request, f'Failed to update server certificate: {message}')
+
+        except GdsPushError as e:
+            messages.error(request, f'GDS Push error: {e}')
+        except Exception as e:
+            messages.error(request, f'Unexpected error: {e}')
+            import traceback
+            traceback.print_exc()
+
+        return self._redirect_to_help_page()
+
+    def _update_truststore_with_certificate(self, certificate_bytes: bytes) -> None:
+        """Update or create truststore with the new server certificate.
+
+        Args:
+            certificate_bytes: DER-encoded certificate bytes
+        """
+        try:
+            from cryptography import x509
+            from cryptography.hazmat.backends import default_backend
+            from pki.models.certificate import CertificateModel
+            from pki.models.truststore import TruststoreModel
+
+            # Load certificate
+            cert = x509.load_der_x509_certificate(certificate_bytes, default_backend())
+
+            # Get or create truststore for this device
+            truststore = self.object.onboarding_config.opc_trust_store
+            if not truststore:
+                # Create new truststore
+                truststore = TruststoreModel.objects.create(
+                    unique_name=f'opc_server_{self.object.common_name}',
+                    friendly_name=f'OPC Server Certificate for {self.object.common_name}',
+                    intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
+                )
+                self.object.onboarding_config.opc_trust_store = truststore
+                self.object.onboarding_config.save()
+
+            # Remove old server certificates from truststore
+            truststore.certificates.clear()
+
+            # Create new certificate model
+            cert_model = CertificateModel.from_cryptography(cert)
+            cert_model.save()
+
+            # Add to truststore
+            truststore.certificates.add(cert_model)
+
+            messages.info(
+                self._get_request(),
+                f'Updated truststore "{truststore.unique_name}" with new server certificate'
+            )
+
+        except Exception as e:
+            messages.warning(
+                self._get_request(),
+                f'Server certificate updated but failed to update truststore: {e}'
+            )
+
+    def _get_request(self) -> HttpRequest:
+        """Get the current request from view context.
+
+        Returns:
+            The current HttpRequest
+        """
+        return self.request  # type: ignore[return-value]
+
+    def _redirect_to_help_page(self) -> HttpResponseRedirect:
+        """Redirect back to the help page.
+
+        Returns:
+            HttpResponseRedirect to the help page.
+        """
+        return HttpResponseRedirect(
+            reverse_lazy(
+                f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_cmp_domain_credential',
+                kwargs={'pk': self.object.pk}
+            )
+        )
 
 
 # ---------------------------------------------- Credential Download Help ----------------------------------------------

@@ -33,6 +33,7 @@ from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
+    DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY,
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
@@ -104,6 +105,7 @@ class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
         context['help_page'] = HelpPage(heading=heading, sections=sections)
         context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
         context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
+        context['ValueRenderType_HTML'] = ValueRenderType.HTML.value
         context['clm_url'] = f'{self.page_category}:{self.page_name}_certificate_lifecycle_management'
         return context
 
@@ -742,3 +744,123 @@ class OpcUaGdsApplicationCertificateWithEstDomainCredentialHelpView(BaseHelpView
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = ApplicationCertificateWithEstDomainCredentialStrategy()
+
+
+class OpcUaGdsPushApplicationCertificateStrategy(HelpPageStrategy):
+    """Strategy for building the OPC UA GDS Push application certificate help page."""
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        device = help_context.get_device_or_http_404()
+        onboarding_config = getattr(device, 'onboarding_config', None)
+        if not onboarding_config:
+            raise Http404(_('Onboarding is not configured for this device.'))
+
+        summary = HelpSection(
+            _non_lazy('Summary'),
+            [
+                HelpRow(
+                    _non_lazy('Protocol'),
+                    'OPC UA GDS Push',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Device Type'),
+                    'OPC UA GDS Push Device',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Domain'),
+                    help_context.domain_unique_name,
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Required Public Key Type'),
+                    str(help_context.domain.public_key_info),
+                    ValueRenderType.CODE,
+                ),
+            ],
+        )
+
+        # Check if domain credential exists for this device
+        from devices.models import IssuedCredentialModel
+        from django.urls import reverse
+        
+        has_domain_credential = IssuedCredentialModel.objects.filter(
+            device=device,
+            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
+        ).exists()
+
+        if has_domain_credential:
+            # Build action buttons
+            update_trustlist_url = reverse(
+                'devices:opc_ua_gds_push_update_trustlist',
+                kwargs={'pk': device.pk}
+            )
+            update_cert_url = reverse(
+                'devices:opc_ua_gds_push_update_server_certificate',
+                kwargs={'pk': device.pk}
+            )
+
+            # Use CSRF_TOKEN_PLACEHOLDER that will be replaced in template
+            trustlist_html = (
+                '<form method="post" action="' + update_trustlist_url + '" style="display: inline;">'
+                'CSRF_TOKEN_PLACEHOLDER'
+                '<button type="submit" class="btn btn-primary">Update Trustlist</button>'
+                '</form>'
+                '<p class="text-muted mt-2">Updates the device\'s trust list with CA certificates '
+                'and CRLs from the associated truststore.</p>'
+            )
+
+            cert_html = (
+                '<form method="post" action="' + update_cert_url + '" style="display: inline;">'
+                'CSRF_TOKEN_PLACEHOLDER'
+                '<button type="submit" class="btn btn-success">Update Server Certificate</button>'
+                '</form>'
+                '<p class="text-muted mt-2">Generates a new CSR on the server, signs it with the '
+                'domain CA, and updates the server certificate.</p>'
+            )
+
+            actions = HelpSection(
+                _non_lazy('Available Actions'),
+                [
+                    HelpRow(
+                        _non_lazy('Update Trustlist'),
+                        trustlist_html,
+                        ValueRenderType.HTML,
+                    ),
+                    HelpRow(
+                        _non_lazy('Update Server Certificate'),
+                        cert_html,
+                        ValueRenderType.HTML,
+                    ),
+                ],
+            )
+        else:
+            # Show instructions to issue domain credential first
+            actions = HelpSection(
+                _non_lazy('Required Setup'),
+                [
+                    HelpRow(
+                        _non_lazy('Domain Credential Required'),
+                        'Before you can update the trustlist or server certificate, you must first issue '
+                        'a domain credential for this device. This credential is used to authenticate '
+                        'securely with the OPC UA server.',
+                        ValueRenderType.PLAIN,
+                    ),
+                ],
+            )
+
+        sections = [
+            summary,
+            actions,
+        ]
+
+        return sections, _non_lazy('Help - Issue Application Certificates using OPC UA GDS Push')
+
+
+class OpcUaGdsPushApplicationCertificateHelpView(BaseHelpView):
+    """Help view for OPC UA GDS Push application certificates."""
+
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+    strategy = OpcUaGdsPushApplicationCertificateStrategy()

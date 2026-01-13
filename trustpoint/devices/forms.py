@@ -45,6 +45,7 @@ ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS = [
     (OnboardingProtocol.MANUAL.value, OnboardingProtocol.MANUAL.label),
     (OnboardingProtocol.AOKI.value, OnboardingProtocol.AOKI.label),
     (OnboardingProtocol.BRSKI.value, OnboardingProtocol.BRSKI.label),
+    (OnboardingProtocol.OPC_GDS_PUSH.value, OnboardingProtocol.OPC_GDS_PUSH.label),
 ]
 
 
@@ -516,6 +517,18 @@ class OpcUaGdsPushCreateForm(forms.Form):
     domain = forms.ModelChoiceField(queryset=domain_queryset, empty_label='----------', required=False)
     ip_address = forms.GenericIPAddressField(protocol='both', required=True, label=_('IP Address'))
     port = forms.IntegerField(min_value=1, max_value=65535, required=True, label=_('Port'))
+    opc_user = forms.CharField(
+        max_length=128,
+        required=False,
+        label=_('OPC User'),
+        help_text=_('OPC UA Server security administration user (role: SecurityAdmin)')
+    )
+    opc_password = forms.CharField(
+        max_length=128,
+        required=False,
+        label=_('OPC Password'),
+        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'})
+    )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the CreateDeviceForm."""
@@ -530,6 +543,9 @@ class OpcUaGdsPushCreateForm(forms.Form):
             Field('domain'),
             Field('ip_address'),
             Field('port'),
+            HTML('<h2>OPC UA Credentials</h2><hr>'),
+            Field('opc_user'),
+            Field('opc_password'),
         )
 
     def clean_common_name(self) -> str:
@@ -561,13 +577,18 @@ class OpcUaGdsPushCreateForm(forms.Form):
         domain = cast('DomainModel | None', self.cleaned_data.get('domain'))
         ip_address = cast('str', self.cleaned_data.get('ip_address'))
         port = cast('int', self.cleaned_data.get('port'))
+        opc_user = cast('str', self.cleaned_data.get('opc_user'))
+        opc_password = cast('str', self.cleaned_data.get('opc_password'))
 
         # Fixed for GDS Push
         onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
         onboarding_pki_protocols = [OnboardingPkiProtocol.OPC_GDS_PUSH]
 
         onboarding_config_model = OnboardingConfigModel(
-            onboarding_status=OnboardingStatus.PENDING, onboarding_protocol=onboarding_protocol
+            onboarding_status=OnboardingStatus.PENDING,
+            onboarding_protocol=onboarding_protocol,
+            opc_user=opc_user,
+            opc_password=opc_password
         )
         onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
 
@@ -722,11 +743,11 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
                 if self.instance.onboarding_config else None
             ),
             'onboarding_protocol': (
-                self.instance.onboarding_config.onboarding_protocol
+                OnboardingProtocol(self.instance.onboarding_config.onboarding_protocol).label
                 if self.instance.onboarding_config else ''
             ),
             'onboarding_status': (
-                self.instance.onboarding_config.onboarding_status
+                OnboardingStatus(self.instance.onboarding_config.onboarding_status).label
                 if self.instance.onboarding_config else ''
             ),
             'pki_protocol_opc_gds_push': (
@@ -867,7 +888,7 @@ class OpcUaGdsPushTruststoreAssociationForm(forms.Form):
 
         self.helper = FormHelper()
         self.helper.layout = Layout(
-            HTML("<h2>Associate Trust Store</h2>"),
+            HTML('<h2>Associate Trust Store</h2>'),
             HTML("<p>Select a trust store to associate with this device's onboarding configuration.</p>"),
             Field('opc_trust_store'),
             HTML('<hr>'),

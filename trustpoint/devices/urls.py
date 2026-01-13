@@ -268,7 +268,7 @@ urlpatterns = [
             'opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/'
             'onboarding/issue-application-credential/cmp-domain-credential/'
         ),
-        devices_help_views.OpcUaGdsApplicationCertificateWithCmpDomainCredentialHelpView.as_view(),
+        devices_help_views.OpcUaGdsPushApplicationCertificateHelpView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_onboarding_clm_issue_application_credential_cmp_domain_credential',
     ),
     path(
@@ -347,6 +347,17 @@ urlpatterns = [
         'opc-ua-gds-push/certificate/download/<int:pk>/',
         views.OpcUaGdsPushCertificateDownloadView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_certificate-download',
+    ),
+    # OPC UA GDS Push Actions
+    path(
+        'opc-ua-gds-push/<int:pk>/update-trustlist/',
+        views.OpcUaGdsPushUpdateTrustlistView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_update_trustlist',
+    ),
+    path(
+        'opc-ua-gds-push/<int:pk>/update-server-certificate/',
+        views.OpcUaGdsPushUpdateServerCertificateView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_update_server_certificate',
     ),
     path(
         'credential-download/browser/<int:pk>/cancel',
