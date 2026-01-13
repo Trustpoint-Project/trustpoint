@@ -11,7 +11,7 @@ from cryptography.x509.oid import NameOID
 from django.http import HttpRequest
 from django.test import RequestFactory
 from pki.models.domain import DomainModel
-from request.request_context import RequestContext
+from request.request_context import BaseRequestContext
 
 from est.views import (
     EstCACertsView,
@@ -163,7 +163,7 @@ def test_est_simple_enrollment_mixin_event():
 @patch('est.views.EstAuthentication')
 @patch('est.views.EstMessageParser')
 @patch('est.views.EstHttpRequestValidator')
-@patch('est.views.RequestContext')
+@patch('est.views.BaseRequestContext')
 def test_process_enrollment_success(
     mock_request_context,
     mock_validator,
@@ -179,7 +179,7 @@ def test_process_enrollment_success(
 ):
     """Test successful enrollment processing."""
     # Setup mocks
-    mock_ctx = Mock(spec=RequestContext)
+    mock_ctx = Mock(spec=BaseRequestContext)
     mock_ctx.http_response_content = b'Certificate issued'
     mock_ctx.http_response_status = 200
     mock_ctx.http_response_content_type = 'application/pkcs7-mime'
@@ -210,9 +210,9 @@ def test_process_enrollment_success(
     mock_error_responder.build_response.assert_not_called()
 
 
-@patch('est.views.RequestContext')
+@patch('est.views.BaseRequestContext')
 def test_process_enrollment_request_context_failure(mock_request_context, request_factory):
-    """Test enrollment processing when RequestContext initialization fails."""
+    """Test enrollment processing when BaseRequestContext initialization fails."""
     mock_request_context.side_effect = Exception('Context creation failed')
     
     mixin = EstSimpleEnrollmentMixin()
@@ -230,12 +230,12 @@ def test_process_enrollment_request_context_failure(mock_request_context, reques
 
 @patch('est.views.EstErrorMessageResponder')
 @patch('est.views.EstHttpRequestValidator')
-@patch('est.views.RequestContext')
+@patch('est.views.BaseRequestContext')
 def test_process_enrollment_validation_failure(
     mock_request_context, mock_validator, mock_error_responder, request_factory
 ):
     """Test enrollment processing when validation fails."""
-    mock_ctx = Mock(spec=RequestContext)
+    mock_ctx = Mock(spec=BaseRequestContext)
     mock_ctx.http_response_content = b'Validation error'
     mock_ctx.http_response_status = 400
     mock_ctx.http_response_content_type = 'text/plain'
@@ -373,7 +373,7 @@ def test_est_simple_reenrollment_view_csrf_exempt():
 @patch('est.views.EstAuthentication')
 @patch('est.views.EstMessageParser')
 @patch('est.views.EstHttpRequestValidator')
-@patch('est.views.RequestContext')
+@patch('est.views.BaseRequestContext')
 def test_est_simple_reenrollment_view_post_success(
     mock_request_context,
     mock_validator,
@@ -389,7 +389,7 @@ def test_est_simple_reenrollment_view_post_success(
 ):
     """Test successful reenrollment via POST."""
     # Setup mocks
-    mock_ctx = Mock(spec=RequestContext)
+    mock_ctx = Mock(spec=BaseRequestContext)
     mock_ctx.http_response_content = b'Certificate renewed'
     mock_ctx.http_response_status = 200
     mock_ctx.http_response_content_type = 'application/pkcs7-mime'
@@ -421,9 +421,9 @@ def test_est_simple_reenrollment_view_post_success(
     mock_error_responder.build_response.assert_not_called()
 
 
-@patch('est.views.RequestContext')
+@patch('est.views.BaseRequestContext')
 def test_est_simple_reenrollment_view_post_context_failure(mock_request_context, request_factory):
-    """Test reenrollment when RequestContext initialization fails."""
+    """Test reenrollment when BaseRequestContext initialization fails."""
     mock_request_context.side_effect = Exception('Context creation failed')
     
     view = EstSimpleReEnrollmentView.as_view()
@@ -442,12 +442,12 @@ def test_est_simple_reenrollment_view_post_context_failure(mock_request_context,
 @patch('est.views.EstErrorMessageResponder')
 @patch('est.views.EstAuthentication')
 @patch('est.views.EstHttpRequestValidator')
-@patch('est.views.RequestContext')
+@patch('est.views.BaseRequestContext')
 def test_est_simple_reenrollment_view_post_authentication_failure(
     mock_request_context, mock_validator, mock_auth, mock_error_responder, request_factory
 ):
     """Test reenrollment when authentication fails."""
-    mock_ctx = Mock(spec=RequestContext)
+    mock_ctx = Mock(spec=BaseRequestContext)
     mock_ctx.http_response_content = b'Authentication error'
     mock_ctx.http_response_status = 401
     mock_ctx.http_response_content_type = 'text/plain'
