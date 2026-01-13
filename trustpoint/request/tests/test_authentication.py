@@ -8,7 +8,7 @@ from devices.models import IssuedCredentialModel
 
 from request.authentication.base import ClientCertificateAuthentication
 from request.authentication.est import UsernamePasswordAuthentication
-from request.request_context import BaseRequestContext
+from request.request_context import BaseRequestContext, EstBaseRequestContext
 
 
 class TestUsernamePasswordAuthentication:
@@ -17,7 +17,7 @@ class TestUsernamePasswordAuthentication:
     def setup_method(self):
         """Set up test fixtures."""
         self.auth = UsernamePasswordAuthentication()
-        self.context = Mock(spec=BaseRequestContext)
+        self.context = Mock(spec=EstBaseRequestContext)
 
     def test_authenticate_success(self, est_device_without_onboarding):
         """Test successful username/password authentication."""
