@@ -147,7 +147,7 @@ class TruststoreAddForm(forms.Form):
         required=True,
     )
 
-    trust_store_file = forms.FileField(label=_('PEM or PKCS#7 File'), required=True)
+    trust_store_file = forms.FileField(label=_('PEM, DER, or PKCS#7 File'), required=True)
 
     def clean_unique_name(self) -> str:
         """Validates the uniqueness of the truststore name.
@@ -202,9 +202,15 @@ class TruststoreAddForm(forms.Form):
 
         try:
             certificate_collection_serializer = CertificateCollectionSerializer.from_bytes(trust_store_file)
-        except Exception as exception:
-            error_message = _('Unable to process the Truststore. May be malformed / corrupted.')
-            raise ValidationError(error_message) from exception
+        except Exception:
+            # Try parsing as a single certificate (DER or PEM)
+            try:
+                certificate_serializer = CertificateSerializer.from_bytes(trust_store_file)
+                der_bytes = certificate_serializer.as_der()
+                certificate_collection_serializer = CertificateCollectionSerializer.from_list_of_der([der_bytes])
+            except Exception as exception:
+                error_message = _('Unable to process the Truststore. May be malformed / corrupted.')
+                raise ValidationError(error_message) from exception
 
         try:
             certs = certificate_collection_serializer.as_crypto()
