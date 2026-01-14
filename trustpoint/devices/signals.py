@@ -27,8 +27,8 @@ def _trigger_device_events(sender: ModelBase, instance: DeviceModel, *, created:
             event=Events.device_created,
             device=instance,
             domain=instance.domain,
-            protocol='device',
-            operation='created',
+            protocol=Events.device_created.protocol,
+            operation=Events.device_created.operation,
         )
         handler.handle(ctx)
         return
@@ -39,11 +39,11 @@ def _trigger_device_events(sender: ModelBase, instance: DeviceModel, *, created:
 
     if old != new and new is not None:
         ctx = RequestContext(
-            event=Events.device_onboarded,
+            event=Events.device_domain_changed,
             device=instance,
             domain=instance.domain,
-            protocol='device',
-            operation='onboarded',
+            protocol=Events.device_domain_changed.protocol,
+            operation=Events.device_domain_changed.operation,
         )
         handler.handle(ctx)
 
@@ -55,7 +55,7 @@ def _trigger_device_deleted(sender: ModelBase, instance: DeviceModel, **_: Any) 
         event=Events.device_deleted,
         device=instance,
         domain=instance.domain,
-        protocol='device',
-        operation='deleted',
+        protocol=Events.device_deleted.protocol,
+        operation=Events.device_deleted.operation,
     )
     WorkflowHandler().handle(ctx)

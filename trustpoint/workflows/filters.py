@@ -73,7 +73,7 @@ class UnifiedRequestFilterForm(forms.Form):
         label=_('Operation'),
         required=False,
         widget=forms.TextInput(
-            attrs={'class': 'form-control form-control-sm', 'placeholder': _('simpleenroll, created, onboarded, …')}
+            attrs={'class': 'form-control form-control-sm', 'placeholder': _('simpleenroll, created, domain changed, …')}
         ),
     )
 
