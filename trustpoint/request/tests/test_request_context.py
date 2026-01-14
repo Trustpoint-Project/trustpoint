@@ -10,7 +10,7 @@ from django.http import HttpRequest
 from pki.models import DomainModel
 from pyasn1_modules.rfc4210 import PKIMessage
 
-from request.request_context import BaseRequestContext, EstBaseRequestContext, HttpBaseRequestContext
+from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext, HttpBaseRequestContext
 
 
 class TestRequestContext:
@@ -183,3 +183,24 @@ class TestRequestContext:
         # All values should be None
         for value in result.values():
             assert value is None
+
+    def test_field_count(self):
+        """Test that the expected number of fields are present."""
+        context = EstCertificateRequestContext()
+        field_names = [field.name for field in fields(context)]
+
+        expected_fields = [
+            'raw_message', 'parsed_message', 'operation', 'protocol',
+            'cert_profile_str', 'est_encoding',
+            'domain_str', 'domain', 'device', 'certificate_profile_model', 'cert_requested',
+            'est_username', 'est_password',
+            'client_certificate', 'client_intermediate_certificate',
+            'cert_requested_profile_validated', 'issued_certificate',
+            'owner_credential', 'issuer_credential',
+            'http_response_status', 'http_response_content',
+            'http_response_content_type',
+            'enrollment_request', 'event' # These two should be refactored into the overall Req Context
+        ]
+
+        assert len(field_names) == len(expected_fields)
+        assert set(field_names) == set(expected_fields)

@@ -1,6 +1,7 @@
 """Unit tests for PKI message parser components."""
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
+import base64
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
@@ -11,7 +12,7 @@ from request.message_parser import CmpMessageParser, EstMessageParser
 from request.message_parser.base import CertProfileParsing, CompositeParsing, DomainParsing
 from request.message_parser.cmp import CmpPkiMessageParsing
 from request.message_parser.est import EstAuthorizationHeaderParsing, EstCsrSignatureVerification, EstPkiMessageParsing
-from request.request_context import BaseRequestContext
+from request.request_context import BaseCertificateRequestContext, BaseRequestContext, BaseRevocationRequestContext, CmpBaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 
 
 class TestEstPkiMessageParsing:
@@ -19,7 +20,7 @@ class TestEstPkiMessageParsing:
 
     def test_parse_pem_csr_success(self, test_csr_fixture):
         """Test parsing a valid PEM-encoded CSR."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=EstCertificateRequestContext)
         mock_raw_message = Mock()
         mock_raw_message.body = test_csr_fixture.get_pem()
         mock_context.raw_message = mock_raw_message
@@ -33,7 +34,7 @@ class TestEstPkiMessageParsing:
 
     def test_parse_base64_der_with_newlines_success(self, test_csr_fixture):
         """Test parsing a valid Base64-encoded DER CSR with newlines."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=EstCertificateRequestContext)
         mock_raw_message = Mock()
         mock_raw_message.body = test_csr_fixture.get_base64_der_with_newlines()
         mock_context.raw_message = mock_raw_message
@@ -47,7 +48,7 @@ class TestEstPkiMessageParsing:
 
     def test_parse_base64_der_csr_success(self, test_csr_fixture):
         """Test parsing a valid Base64-encoded DER CSR."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=EstCertificateRequestContext)
         mock_raw_message = Mock()
         mock_raw_message.body = test_csr_fixture.get_base64_der()
         mock_context.raw_message = mock_raw_message
@@ -61,7 +62,7 @@ class TestEstPkiMessageParsing:
 
     def test_parse_der_csr_success(self, test_csr_fixture):
         """Test parsing a valid raw DER CSR."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=EstCertificateRequestContext)
         mock_raw_message = Mock()
         mock_raw_message.body = test_csr_fixture.get_der()
         mock_context.raw_message = mock_raw_message
@@ -75,7 +76,7 @@ class TestEstPkiMessageParsing:
 
     def test_parse_missing_raw_message(self):
         """Test parsing with missing raw message."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=EstCertificateRequestContext)
         mock_context.raw_message = None
 
         parser = EstPkiMessageParsing()
@@ -88,7 +89,7 @@ class TestEstPkiMessageParsing:
 
     def test_parse_missing_message_body(self):
         """Test parsing with missing message body."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=EstCertificateRequestContext)
         mock_raw_message = Mock()
         mock_raw_message.body = None
         mock_context.raw_message = mock_raw_message
@@ -103,7 +104,7 @@ class TestEstPkiMessageParsing:
 
     def test_parse_unsupported_format(self):
         """Test parsing with unsupported CSR format."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=EstCertificateRequestContext)
         mock_raw_message = Mock()
         mock_raw_message.body = b'This is not valid base64 data!'
         mock_context.raw_message = mock_raw_message
@@ -118,7 +119,7 @@ class TestEstPkiMessageParsing:
 
     def test_parse_exception_handling(self):
         """Test handling of parsing exceptions."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=EstBaseRequestContext)
         mock_raw_message = Mock()
         mock_raw_message.body = b'-----BEGIN CERTIFICATE REQUEST-----\ntest\n-----END CERTIFICATE REQUEST-----'
         mock_context.raw_message = mock_raw_message
@@ -139,7 +140,7 @@ class TestEstCsrSignatureVerification:
 
     def test_verify_rsa_signature_success(self, test_csr_fixture):
         """Test successful RSA signature verification."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=EstBaseRequestContext)
         mock_context.cert_requested = test_csr_fixture.get_cryptography_object()
 
         verifier = EstCsrSignatureVerification()
@@ -148,7 +149,7 @@ class TestEstCsrSignatureVerification:
 
     def test_verify_missing_csr(self):
         """Test verification with missing CSR."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=EstCertificateRequestContext)
         mock_context.cert_requested = None
 
         verifier = EstCsrSignatureVerification()
@@ -161,7 +162,7 @@ class TestEstCsrSignatureVerification:
 
     def test_verify_missing_hash_algorithm(self):
         """Test verification with missing hash algorithm."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=EstCertificateRequestContext)
         mock_csr = Mock(spec=x509.CertificateSigningRequest)
         mock_csr.signature_hash_algorithm = None
         mock_context.cert_requested = mock_csr
@@ -176,7 +177,7 @@ class TestEstCsrSignatureVerification:
 
     def test_verify_unsupported_key_type(self):
         """Test verification with unsupported key type."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=EstCertificateRequestContext)
         mock_csr = Mock(spec=x509.CertificateSigningRequest)
         mock_unsupported_key = Mock()
         mock_hash_algorithm = Mock(spec=hashes.SHA256)
@@ -195,7 +196,7 @@ class TestEstCsrSignatureVerification:
 
     def test_verify_signature_failure(self):
         """Test handling of signature verification failure."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=EstBaseRequestContext)
         mock_csr = Mock(spec=x509.CertificateSigningRequest)
         mock_rsa_key = Mock(spec=rsa.RSAPublicKey)
         mock_hash_algorithm = Mock(spec=hashes.SHA256)
@@ -224,7 +225,7 @@ class TestEstAuthorizationHeaderParsing:
     def test_validate_success(self):
         """Test successful validation and credential extraction."""
         validator = EstAuthorizationHeaderParsing()
-        context = BaseRequestContext()
+        context = EstBaseRequestContext()
         context.raw_message = MagicMock()
 
         # Create valid Basic auth header
@@ -232,29 +233,29 @@ class TestEstAuthorizationHeaderParsing:
         encoded_credentials = base64.b64encode(credentials.encode()).decode()
         context.raw_message.headers = {'Authorization': f'Basic {encoded_credentials}'}
 
-        validator.validate(context)
+        validator.parse(context)
         assert context.est_username == 'username'
         assert context.est_password == 'password'
 
     def test_validate_missing_authorization(self):
         """Test that missing Authorization header passes."""
         validator = EstAuthorizationHeaderParsing()
-        context = BaseRequestContext()
+        context = EstBaseRequestContext()
         context.raw_message = MagicMock()
         context.raw_message.headers = {'Other-Header': 'value'}
 
         # Should not raise any exception
-        validator.validate(context)
+        validator.parse(context)
 
     def test_validate_non_basic_auth(self):
         """Test that non-Basic auth does not pass."""
         validator = EstAuthorizationHeaderParsing()
-        context = BaseRequestContext()
+        context = EstBaseRequestContext()
         context.raw_message = MagicMock()
         context.raw_message.headers = {'Authorization': 'Bearer token123'}
 
         try:
-            validator.validate(context)
+            validator.parse(context)
             assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert "Authorization header must start with 'Basic'." in str(e)
@@ -262,12 +263,12 @@ class TestEstAuthorizationHeaderParsing:
     def test_validate_malformed_basic_auth(self):
         """Test ValueError for malformed Basic auth credentials."""
         validator = EstAuthorizationHeaderParsing()
-        context = BaseRequestContext()
+        context = EstBaseRequestContext()
         context.raw_message = MagicMock()
         context.raw_message.headers = {'Authorization': 'Basic invalid_base64!!!'}
 
         try:
-            validator.validate(context)
+            validator.parse(context)
             assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert "Malformed 'Authorization' header credentials" in str(e)
@@ -275,7 +276,7 @@ class TestEstAuthorizationHeaderParsing:
     def test_validate_basic_auth_no_colon(self):
         """Test ValueError for Basic auth without colon separator."""
         validator = EstAuthorizationHeaderParsing()
-        context = BaseRequestContext()
+        context = EstBaseRequestContext()
         context.raw_message = MagicMock()
 
         # Valid base64 but no colon separator
@@ -284,7 +285,7 @@ class TestEstAuthorizationHeaderParsing:
         context.raw_message.headers = {'Authorization': f'Basic {encoded_credentials}'}
 
         try:
-            validator.validate(context)
+            validator.parse(context)
             assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert "Malformed 'Authorization' header credentials" in str(e)
@@ -292,11 +293,11 @@ class TestEstAuthorizationHeaderParsing:
     def test_validate_missing_raw_message(self):
         """Test ValueError when raw_message is None."""
         validator = EstAuthorizationHeaderParsing()
-        context = BaseRequestContext()
+        context = EstBaseRequestContext()
         context.raw_message = None
 
         try:
-            validator.validate(context)
+            validator.parse(context)
             assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert 'Raw message is missing from the context' in str(e)
@@ -304,12 +305,12 @@ class TestEstAuthorizationHeaderParsing:
     def test_validate_missing_headers(self):
         """Test ValueError when headers are missing."""
         validator = EstAuthorizationHeaderParsing()
-        context = BaseRequestContext()
+        context = EstBaseRequestContext()
         context.raw_message = MagicMock()
         context.raw_message.headers = None
 
         try:
-            validator.validate(context)
+            validator.parse(context)
             assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert 'Raw message is missing headers' in str(e)
@@ -400,9 +401,20 @@ class TestDomainParsing:
 class TestCertProfileParsing:
     """Test cases for CertProfileParsing component."""
 
+    def test_parse_cert_profile_not_cert_request_context(self):
+        """Test missing cert profile string is ignored if not a certificate request context."""
+        mock_context = Mock(spec=BaseRevocationRequestContext)
+        mock_context.cert_profile_str = None
+
+        parser = CertProfileParsing()
+        ret_value = parser.parse(mock_context)
+
+        assert not ret_value
+
+
     def test_parse_cert_profile_str_success(self):
         """Test successful certificate profile string parsing."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=BaseCertificateRequestContext)
         mock_context.cert_profile_str = 'test_template'
 
         parser = CertProfileParsing()
@@ -412,7 +424,7 @@ class TestCertProfileParsing:
 
     def test_parse_missing_cert_profile_str(self):
         """Test parsing with missing certificate template."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=BaseCertificateRequestContext)
         mock_context.cert_profile_str = None
 
         parser = CertProfileParsing()
@@ -429,7 +441,7 @@ class TestCmpPkiMessageParsing:
 
     def test_parse_cmp_message_success(self):
         """Test successful CMP message parsing."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=CmpBaseRequestContext)
         mock_raw_message = Mock()
         mock_raw_message.body = b'cmp_message_data'
         mock_context.raw_message = mock_raw_message
@@ -445,7 +457,7 @@ class TestCmpPkiMessageParsing:
 
     def test_parse_missing_raw_message(self):
         """Test parsing with missing raw message."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=CmpBaseRequestContext)
         mock_context.raw_message = None
 
         parser = CmpPkiMessageParsing()
@@ -458,7 +470,7 @@ class TestCmpPkiMessageParsing:
 
     def test_parse_missing_message_body(self):
         """Test parsing with missing message body."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=CmpBaseRequestContext)
         mock_raw_message = Mock()
         mock_raw_message.body = None
         mock_context.raw_message = mock_raw_message
@@ -473,7 +485,7 @@ class TestCmpPkiMessageParsing:
 
     def test_parse_decode_error(self):
         """Test handling of decode errors."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=CmpBaseRequestContext)
         mock_raw_message = Mock()
         mock_raw_message.body = b'invalid_cmp_data'
         mock_context.raw_message = mock_raw_message
@@ -489,7 +501,7 @@ class TestCmpPkiMessageParsing:
 
     def test_parse_type_error(self):
         """Test handling of type errors during decode."""
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=CmpBaseRequestContext)
         mock_raw_message = Mock()
         mock_raw_message.body = b'invalid_cmp_data'
         mock_context.raw_message = mock_raw_message
@@ -563,7 +575,7 @@ class TestCmpMessageParser:
     def test_parse_delegation(self):
         """Test that parse method delegates to components."""
         parser = CmpMessageParser()
-        mock_context = Mock(spec=BaseRequestContext)
+        mock_context = Mock(spec=CmpBaseRequestContext)
 
         # Set up the mock context with required attributes for CMP parsing
         mock_context.raw_message = Mock()
@@ -590,11 +602,12 @@ class TestEstMessageParser:
         """Test EstMessageParser initialization."""
         parser = EstMessageParser()
 
-        assert len(parser.components) == 4
-        assert isinstance(parser.components[0], EstPkiMessageParsing)
-        assert isinstance(parser.components[1], DomainParsing)
-        assert isinstance(parser.components[2], CertProfileParsing)
-        assert isinstance(parser.components[3], EstCsrSignatureVerification)
+        assert len(parser.components) == 5
+        assert isinstance(parser.components[0], EstAuthorizationHeaderParsing)
+        assert isinstance(parser.components[1], EstPkiMessageParsing)
+        assert isinstance(parser.components[2], DomainParsing)
+        assert isinstance(parser.components[3], CertProfileParsing)
+        assert isinstance(parser.components[4], EstCsrSignatureVerification)
 
     def test_parse_delegation(self):
         """Test that parse method delegates to all components."""

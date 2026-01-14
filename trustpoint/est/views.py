@@ -109,7 +109,7 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
             )
 
         except Exception:
-            err_msg = 'Failed to set up request context.'
+            err_msg = 'Failed to set up EST request context.'
             self.logger.exception(err_msg)
             return LoggedHttpResponse(err_msg, status=500)
 
@@ -140,11 +140,7 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
             self.logger.exception('Error processing EST simpleenroll request')
             EstErrorMessageResponder.build_response(ctx)
 
-        return LoggedHttpResponse(
-            content=ctx.http_response_content or b'',
-            status=ctx.http_response_status,
-            content_type=ctx.http_response_content_type
-        )
+        return ctx.to_http_response()
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -247,11 +243,7 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
             self.logger.exception('Error processing EST simplereenroll request')
             EstErrorMessageResponder.build_response(ctx)
 
-        return LoggedHttpResponse(
-            content=ctx.http_response_content or b'',
-            status=ctx.http_response_status,
-            content_type=ctx.http_response_content_type
-        )
+        return ctx.to_http_response()
 
 
 

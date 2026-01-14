@@ -11,7 +11,7 @@ from request.message_responder.est import (
     EstErrorMessageResponder,
     EstMessageResponder,
 )
-from request.request_context import BaseRequestContext
+from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 from workflows.models import State
 
 
@@ -19,17 +19,23 @@ from workflows.models import State
 class TestEstMessageResponder:
     """Tests for EstMessageResponder class."""
 
+    def test_incorrect_context_type(self) -> None:
+        context = Mock(spec=BaseRequestContext)
+
+        with pytest.raises(TypeError, match='EstMessageResponder requires a subclass of EstBaseRequestContext.'):
+            EstMessageResponder.build_response(context)
+
     def test_build_response_no_enrollment_request(self) -> None:
         """Test build_response when enrollment_request is None."""
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.enrollment_request = None
 
         with pytest.raises(ValueError, match='No enrollment request is set in the context'):
-            EstMessageResponder.build_response(context)
+            EstCertificateMessageResponder.build_response(context)
 
     def test_build_response_awaiting_state(self) -> None:
         """Test build_response with AWAITING state."""
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstBaseRequestContext)
         enrollment_request = Mock()
         enrollment_request.aggregated_state = State.AWAITING
         context.enrollment_request = enrollment_request
@@ -42,7 +48,7 @@ class TestEstMessageResponder:
 
     def test_build_response_rejected_state(self) -> None:
         """Test build_response with REJECTED state."""
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         enrollment_request = Mock()
         enrollment_request.aggregated_state = State.REJECTED
         context.enrollment_request = enrollment_request
@@ -56,7 +62,7 @@ class TestEstMessageResponder:
 
     def test_build_response_failed_state(self) -> None:
         """Test build_response with FAILED state."""
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         enrollment_request = Mock()
         enrollment_request.aggregated_state = State.FAILED
         enrollment_request.id = 123
@@ -77,7 +83,7 @@ class TestEstMessageResponder:
         device = device_instance_onboarding['device']
         cert = device_instance_onboarding['cert']
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         enrollment_request = Mock()
         enrollment_request.aggregated_state = State.APPROVED
         enrollment_request.is_valid.return_value = True
@@ -102,7 +108,7 @@ class TestEstMessageResponder:
         device = device_instance['device']
         cert = device_instance['cert']
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         enrollment_request = Mock()
         enrollment_request.aggregated_state = State.APPROVED
         enrollment_request.is_valid.return_value = True
@@ -120,7 +126,7 @@ class TestEstMessageResponder:
 
     def test_build_response_invalid_request(self) -> None:
         """Test build_response with invalid enrollment request."""
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.http_response_status = None
         context.http_response_content = None
         context.http_response_content_type = None
@@ -137,7 +143,7 @@ class TestEstMessageResponder:
 
     def test_build_response_unsupported_operation(self) -> None:
         """Test build_response with unsupported operation."""
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.http_response_status = None
         context.http_response_content = None
         context.http_response_content_type = None
@@ -160,7 +166,7 @@ class TestEstCertificateMessageResponder:
 
     def test_build_response_no_issued_certificate(self) -> None:
         """Test build_response when issued_certificate is None."""
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.issued_certificate = None
 
         with pytest.raises(ValueError, match='Issued certificate is not set in the context'):
@@ -174,7 +180,7 @@ class TestEstCertificateMessageResponder:
         cert = device_instance_onboarding['cert']
         device = device_instance_onboarding['device']
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.issued_certificate = cert
         context.est_encoding = 'pem'
         context.device = device
@@ -195,7 +201,7 @@ class TestEstCertificateMessageResponder:
         cert = device_instance_onboarding['cert']
         device = device_instance_onboarding['device']
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.issued_certificate = cert
         context.est_encoding = 'der'
         context.device = device
@@ -215,7 +221,7 @@ class TestEstCertificateMessageResponder:
         cert = device_instance_onboarding['cert']
         device = device_instance_onboarding['device']
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.issued_certificate = cert
         context.est_encoding = 'base64_der'
         context.device = device
@@ -235,7 +241,7 @@ class TestEstCertificateMessageResponder:
         cert = device_instance_onboarding['cert']
         device = device_instance_onboarding['device']
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.issued_certificate = cert
         context.est_encoding = 'pkcs7'
         context.device = device
@@ -255,7 +261,7 @@ class TestEstCertificateMessageResponder:
         cert = device_instance['cert']
         device = device_instance['device']
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.issued_certificate = cert
         context.est_encoding = 'pem'
         context.device = device
@@ -273,7 +279,7 @@ class TestEstCertificateMessageResponder:
         """Test build_response when device is None."""
         cert = device_instance['cert']
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.issued_certificate = cert
         context.est_encoding = 'pem'
         context.device = None
@@ -290,7 +296,7 @@ class TestEstCertificateMessageResponder:
         """Test build_response when UnicodeDecodeError occurs."""
         cert = device_instance['cert']
 
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         context.issued_certificate = cert
         context.est_encoding = 'invalid_encoding'
         context.device = None
@@ -307,7 +313,7 @@ class TestEstErrorMessageResponder:
 
     def test_build_response_default_values(self) -> None:
         """Test build_response with default status and message."""
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstBaseRequestContext)
         context.http_response_status = None
         context.http_response_content = None
         context.http_response_content_type = None
@@ -320,7 +326,7 @@ class TestEstErrorMessageResponder:
 
     def test_build_response_custom_values(self) -> None:
         """Test build_response with custom status and message."""
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstBaseRequestContext)
         context.http_response_status = 404
         context.http_response_content = 'Not found'
         context.http_response_content_type = 'text/html'
@@ -333,7 +339,7 @@ class TestEstErrorMessageResponder:
 
     def test_build_response_partial_defaults(self) -> None:
         """Test build_response with only custom status."""
-        context = Mock(spec=BaseRequestContext)
+        context = Mock(spec=EstBaseRequestContext)
         context.http_response_status = 400
         context.http_response_content = None
         context.http_response_content_type = None

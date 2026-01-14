@@ -12,7 +12,7 @@ from request.authorization.est import EstOperationAuthorization
 from request.request_validator.http_req import EstHttpRequestValidator
 from request.operation_processor import CertificateIssueProcessor
 from request.message_parser import EstMessageParser
-from request.request_context import BaseRequestContext
+from request.request_context import BaseRequestContext, EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 
@@ -61,7 +61,7 @@ class TestESTHelper(LoggerMixin):
             HTTP_AUTHORIZATION=f'Basic {auth_header}',
         )
 
-        mock_context = BaseRequestContext(raw_message=request,
+        mock_context = EstCertificateRequestContext(raw_message=request,
                                       domain_str=domain_str,
                                       protocol=protocol_str,
                                       operation=operation_str,
@@ -82,7 +82,7 @@ class TestESTHelper(LoggerMixin):
         assert mock_context.est_username == device.est_username
         assert mock_context.est_password == device.no_onboarding_config.est_password
 
-        parser.parse(mock_context)
+        mock_context = parser.parse(mock_context)
 
         assert mock_context.cert_requested is not None
         assert isinstance(mock_context.cert_requested, x509.CertificateSigningRequest), \
@@ -134,7 +134,7 @@ class TestESTHelper(LoggerMixin):
         )
 
         # Build mock context
-        mock_context = BaseRequestContext(
+        mock_context = EstCertificateRequestContext(
             raw_message=request,
             domain_str=domain_str,
             protocol=protocol_str,

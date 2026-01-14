@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from django.http import HttpResponse
+
 if TYPE_CHECKING:
     from cryptography import x509
     from cryptography.x509 import CertificateSigningRequest
@@ -55,6 +57,15 @@ class BaseRequestContext:
     def to_dict(self) -> dict[str, Any]:
         """Serialize the context to a dictionary."""
         return {field.name: getattr(self, field.name) for field in fields(self)}
+
+    def to_http_response(self) -> HttpResponse:
+        """Convert the context's HTTP response attributes to a Django HttpResponse."""
+        if not isinstance(self, HttpBaseRequestContext):
+            exc_msg = 'to_http_response can only be called on HttpBaseRequestContext instances.'
+            raise TypeError(exc_msg)
+        return HttpResponse(content=self.http_response_content or b'',
+                            status=self.http_response_status or 500,
+                            content_type=self.http_response_content_type or 'text/plain')
 
     def narrow(self, child_cls: type[RCT], **extra: Any) -> RCT:
         """Create a new request context of a more specific subclass, copying existing attributes."""

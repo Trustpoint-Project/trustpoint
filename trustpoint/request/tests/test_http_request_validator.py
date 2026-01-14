@@ -14,7 +14,7 @@ from request.request_validator.http_req import (
     IntermediateCertificatesValidation,
     PayloadSizeValidation,
 )
-from request.request_context import BaseRequestContext
+from request.request_context import BaseRequestContext, EstCertificateRequestContext
 
 # Sample PEM certificate for testing
 SAMPLE_PEM_CERT = """-----BEGIN CERTIFICATE-----
@@ -544,19 +544,18 @@ class TestEstHttpRequestValidator:
     def test_init(self):
         """Test initialization with correct components."""
         validator = EstHttpRequestValidator()
-        assert len(validator.components) == 7
+        assert len(validator.components) == 6
         assert isinstance(validator.components[0], PayloadSizeValidation)
         assert isinstance(validator.components[1], ContentTypeValidation)
         assert isinstance(validator.components[2], AcceptHeaderValidation)
-        assert isinstance(validator.components[3], EstAuthorizationHeaderParsing)
-        assert isinstance(validator.components[4], ClientCertificateValidation)
-        assert isinstance(validator.components[5], IntermediateCertificatesValidation)
-        assert isinstance(validator.components[6], ContentTransferEncodingValidation)
+        assert isinstance(validator.components[3], ClientCertificateValidation)
+        assert isinstance(validator.components[4], IntermediateCertificatesValidation)
+        assert isinstance(validator.components[5], ContentTransferEncodingValidation)
 
     def test_validate_integration(self):
         """Test integration with valid EST request."""
         validator = EstHttpRequestValidator()
-        context = BaseRequestContext()
+        context = EstCertificateRequestContext()
         context.raw_message = MagicMock()
         context.raw_message.body = b'test est payload'
         context.raw_message.headers = {

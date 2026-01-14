@@ -8,7 +8,7 @@ from request.authentication import CmpAuthentication
 from request.authorization import CmpAuthorization
 from request.request_validator.http_req import CmpHttpRequestValidator
 from request.message_parser import CmpMessageParser
-from request.request_context import BaseRequestContext
+from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpCertificateRequestContext
 from request.tests.cmp_mock_server import CMPMockServer
 from request.tests.openssl_cmp_factory import (
     BasicCMPArgs,
@@ -55,7 +55,7 @@ class TestCMPHelper(LoggerMixin):
 
         mock_server.stop_server()
 
-        mock_context = BaseRequestContext(raw_message=request,
+        mock_context = CmpCertificateRequestContext(raw_message=request,
                                       domain_str=domain_str,
                                       protocol=protocol_str,
                                       operation=operation_str_long,
@@ -133,7 +133,7 @@ class TestCMPHelper(LoggerMixin):
 
         mock_server.stop_server()
 
-        mock_context = BaseRequestContext(raw_message=request,
+        mock_context = CmpCertificateRequestContext(raw_message=request,
                                         domain_str=domain_str,
                                         protocol=protocol_str,
                                         operation=operation_str_long,
@@ -241,7 +241,7 @@ class TestCMPHelper(LoggerMixin):
             assert headers['Content-Type'] == 'application/pkixcmp', 'Invalid Content-Type in request headers'
 
             # Parse RequestContext with invalid credentials
-            mock_context = BaseRequestContext(
+            mock_context = CmpCertificateRequestContext(
                 raw_message=request,
                 domain_str=domain_str,
                 protocol='cmp',
