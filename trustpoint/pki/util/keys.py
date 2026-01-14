@@ -25,11 +25,13 @@ class AutoGenPkiKeyAlgorithm(models.TextChoices):
     RSA2048 = 'RSA2048SHA256', 'RSA2048'
     RSA4096 = 'RSA4096SHA256', 'RSA4096'
     SECP256R1 = 'SECP256R1SHA256', 'SECP256R1'
+    NONE = '', ''
     # omitting the rest of the choices as an example that Auto Gen PKI doesn't have to support all key algorithms
 
     def to_public_key_info(self) -> PublicKeyInfo:
         """Gets the corresponding public key info for the key algorithm."""
-        if self.value == AutoGenPkiKeyAlgorithm.RSA2048:
+        if self.value in {AutoGenPkiKeyAlgorithm.RSA2048, AutoGenPkiKeyAlgorithm.NONE}:
+            # If no key is selected default back to RSA2048
             return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=2048)
         if self.value == AutoGenPkiKeyAlgorithm.RSA4096:
             return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA, key_size=4096)
