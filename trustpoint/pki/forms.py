@@ -45,6 +45,70 @@ def get_private_key_location_from_config() -> PrivateKeyLocation:
     return PrivateKeyLocation.SOFTWARE
 
 
+class IssuingCaImportMixin:
+    """Mixin for Issuing CA import forms providing common validation and creation logic."""
+
+    def _raise_validation_error(self, message: str) -> NoReturn:
+        """Helper method to raise a ValidationError with a given message.
+
+        Args:
+            message (str): The error message to be included in the ValidationError.
+
+        Raises:
+            ValidationError: Always raised with the provided message.
+        """
+        raise ValidationError(message)
+
+    def _validate_ca_certificate(self, cert_crypto: x509.Certificate) -> None:
+        """Validates that the certificate is a CA certificate with required extensions."""
+        if cert_crypto.extensions.get_extension_for_class(x509.BasicConstraints).value.ca is False:
+            self._raise_validation_error('The provided certificate is not a CA certificate.')
+        try:
+            key_usage_ext = cert_crypto.extensions.get_extension_for_class(x509.KeyUsage)
+            if not key_usage_ext.value.key_cert_sign:
+                self._raise_validation_error('The provided certificate must have keyCertSign usage enabled.')
+            if not key_usage_ext.value.crl_sign:
+                self._raise_validation_error('The provided certificate must have cRLSign usage enabled.')
+        except x509.ExtensionNotFound:
+            self._raise_validation_error('KeyUsage extension is required for CA certificates.')
+
+    def _check_duplicate_issuing_ca(self, cert_crypto: x509.Certificate) -> None:
+        """Checks if the certificate is already used by an existing Issuing CA."""
+        certificate_in_db = CertificateModel.get_cert_by_sha256_fingerprint(
+            cert_crypto.fingerprint(algorithm=hashes.SHA256()).hex()
+        )
+        if certificate_in_db:
+            issuing_ca_qs = IssuingCaModel.objects.filter(credential__certificate=certificate_in_db)
+            if issuing_ca_qs.exists():
+                issuing_ca_in_db = issuing_ca_qs[0]
+                err_msg = (
+                    f'Issuing CA {issuing_ca_in_db.unique_name} is already configured '
+                    'with the same Issuing CA certificate.'
+                )
+                self._raise_validation_error(err_msg)
+
+    def _finalize_issuing_ca_creation(
+        self, unique_name: str | None, cert: x509.Certificate, credential_serializer: CredentialSerializer
+    ) -> None:
+        """Finalizes the creation of the Issuing CA after validation."""
+        if not unique_name:
+            unique_name = get_certificate_name(cert)
+
+        if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
+            self._raise_validation_error('Unique name is already taken. Choose another one.')
+
+        try:
+            IssuingCaModel.create_new_issuing_ca(
+                unique_name=unique_name,
+                credential_serializer=credential_serializer,
+                issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.LOCAL_PKCS11,
+            )
+        except ValidationError:
+            raise
+        except Exception:  # noqa: BLE001
+            self._raise_validation_error('Failed to process the Issuing CA. Please see logs for further details.')
+
+
 class DevIdAddMethodSelectForm(forms.Form):
     """Form for selecting the method to add an DevID Onboarding Pattern.
 
@@ -414,7 +478,7 @@ class IssuingCaFileTypeSelectForm(forms.Form):
     )
 
 
-class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
+class IssuingCaAddFileImportPkcs12Form(IssuingCaImportMixin, LoggerMixin, forms.Form):
     """Form for importing an Issuing CA using a PKCS#12 file.
 
     This form allows the user to upload a PKCS#12 file containing the private key
@@ -443,29 +507,6 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         label=_('[Optional] PKCS#12 password'),
         required=False,
     )
-
-    def clean_unique_name(self) -> str:
-        """Validates the unique name to ensure it is not already in use.
-
-        Raises:
-            ValidationError: If the unique name is already associated with an existing Issuing CA.
-        """
-        unique_name = self.cleaned_data['unique_name']
-        if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
-            error_message = 'Unique name is already taken. Choose another one.'
-            raise ValidationError(error_message)
-        return cast('str', unique_name)
-
-    def _raise_validation_error(self, message: str) -> NoReturn:
-        """Helper method to raise a ValidationError with a given message.
-
-        Args:
-            message (str): The error message to be included in the ValidationError.
-
-        Raises:
-            ValidationError: Always raised with the provided message.
-        """
-        raise ValidationError(message)
 
     def _read_and_encode_pkcs12_file(self, cleaned_data: dict[str, Any]) -> tuple[bytes, bytes | None]:
         """Reads the PKCS#12 file and encodes the password if provided."""
@@ -520,8 +561,8 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         cert_crypto = credential_serializer.certificate
         if cert_crypto is None:
             self._raise_validation_error('Certificate is missing from credential serializer.')
-        if cert_crypto.extensions.get_extension_for_class(x509.BasicConstraints).value.ca is False:
-            self._raise_validation_error('The provided certificate is not a CA certificate.')
+        self._validate_ca_certificate(cert_crypto)
+        self._check_duplicate_issuing_ca(cert_crypto)
         return cert_crypto
 
     def clean(self) -> None:
@@ -547,29 +588,10 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         credential_serializer = self._parse_and_prepare_credential(pkcs12_raw, pkcs12_password, unique_name)
         cert_crypto = self._validate_ca_certificate(credential_serializer)
 
-        try:
-            if not unique_name:
-                unique_name = get_certificate_name(cert_crypto)
-
-            if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
-                self._raise_validation_error('Unique name is already taken. Choose another one.')
-
-            IssuingCaModel.create_new_issuing_ca(
-                unique_name=unique_name,
-                credential_serializer=credential_serializer,
-                issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.LOCAL_PKCS11,
-            )
-        # TODO(AlexHx8472): Filter credentials and check if any issuing ca corresponds to it.  # noqa: FIX002
-        # TODO(AlexHx8472): If it does get and display the name of the issuing ca in the message.  # noqa: FIX002
-        # TODO(AlexHx8472): If not, give information about the credential usage  # noqa: FIX002
-        # TODO(AlexHx8472): that is already in the db.  # noqa: FIX002
-        except ValidationError:
-            raise
-        except Exception:  # noqa: BLE001
-            self._raise_validation_error('Failed to process the Issuing CA. Please see logs for further details.')
+        self._finalize_issuing_ca_creation(unique_name, cert_crypto, credential_serializer)
 
 
-class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
+class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin, forms.Form):
     """Form for importing an Issuing CA using separate files.
 
     This form allows the user to upload a private key file, its password (optional),
@@ -685,18 +707,8 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             err_msg = 'The provided certificate is not a CA certificate.'
             self._raise_validation_error(err_msg)
 
-        certificate_in_db = CertificateModel.get_cert_by_sha256_fingerprint(
-            certificate_serializer.as_crypto().fingerprint(algorithm=hashes.SHA256()).hex()
-        )
-        if certificate_in_db:
-            issuing_ca_qs = IssuingCaModel.objects.filter(credential__certificate=certificate_in_db)
-            if issuing_ca_qs.exists():
-                issuing_ca_in_db = issuing_ca_qs[0]
-                err_msg = (
-                    f'Issuing CA {issuing_ca_in_db.unique_name} is already configured '
-                    'with the same Issuing CA certificate.'
-                )
-                raise ValidationError(err_msg)
+        self._validate_ca_certificate(cert_crypto)
+        self._check_duplicate_issuing_ca(cert_crypto)
 
         return certificate_serializer
 
@@ -725,17 +737,6 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
                 raise ValidationError(err_msg) from exception
 
         return None
-
-    def _raise_validation_error(self, message: str) -> None:
-        """Helper method to raise a ValidationError with a given message.
-
-        Args:
-            message (str): The error message to be included in the ValidationError.
-
-        Raises:
-            ValidationError: Always raised with the provided message.
-        """
-        raise ValidationError(message)
 
     def _validate_credential_components(
         self, credential_serializer: CredentialSerializer
@@ -795,51 +796,30 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         Raises:
             ValidationError: If the form data is invalid or there is an error during processing.
         """
-        try:
-            cleaned_data = super().clean()
-            if not cleaned_data:
-                return
+        cleaned_data = super().clean()
+        if not cleaned_data:
+            return
 
-            unique_name = cleaned_data.get('unique_name')
-            private_key_serializer = cleaned_data.get('private_key_file')
-            ca_certificate_serializer = cleaned_data.get('ca_certificate')
-            ca_certificate_chain_serializer = (
-                cleaned_data.get('ca_certificate_chain') if cleaned_data.get('ca_certificate_chain') else None
-            )
+        unique_name = cleaned_data.get('unique_name')
+        private_key_serializer = cleaned_data.get('private_key_file')
+        ca_certificate_serializer = cleaned_data.get('ca_certificate')
+        ca_certificate_chain_serializer = (
+            cleaned_data.get('ca_certificate_chain') if cleaned_data.get('ca_certificate_chain') else None
+        )
 
-            if not private_key_serializer or not ca_certificate_serializer:
-                return
+        if not private_key_serializer or not ca_certificate_serializer:
+            return
 
-            credential_serializer = CredentialSerializer.from_serializers(
-                private_key_serializer=private_key_serializer,
-                certificate_serializer=ca_certificate_serializer,
-                certificate_collection_serializer=ca_certificate_chain_serializer,
-            )
+        credential_serializer = CredentialSerializer.from_serializers(
+            private_key_serializer=private_key_serializer,
+            certificate_serializer=ca_certificate_serializer,
+            certificate_collection_serializer=ca_certificate_chain_serializer,
+        )
 
-            cert, pk = self._validate_credential_components(credential_serializer)
-            self._prepare_credential_serializer(credential_serializer, unique_name, pk)
+        cert, pk = self._validate_credential_components(credential_serializer)
+        self._prepare_credential_serializer(credential_serializer, unique_name, pk)
 
-            if not unique_name:
-                unique_name = get_certificate_name(cert)
-
-            if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
-                error_message = 'Unique name is already taken. Choose another one.'
-                self._raise_validation_error(error_message)
-
-            IssuingCaModel.create_new_issuing_ca(
-                unique_name=unique_name,
-                credential_serializer=credential_serializer,
-                issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.LOCAL_PKCS11,
-            )
-        # TODO(AlexHx8472): Filter credentials and check if any issuing ca corresponds to it.  # noqa: FIX002
-        # TODO(AlexHx8472): If it does get and display the name of the issuing ca in the message.  # noqa: FIX002
-        # TODO(AlexHx8472): If not, give information about the credential usage # noqa: FIX002
-        # TODO(AlexHx8472): that is already in the db.  # noqa: FIX002
-        except ValidationError:
-            raise
-        except Exception as exception:
-            err_msg = str(exception)
-            raise ValidationError(err_msg) from exception
+        self._finalize_issuing_ca_creation(unique_name, cert, credential_serializer)
 
 
 class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
