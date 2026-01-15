@@ -154,7 +154,7 @@ urlpatterns = [
         name='devid_registration-method_select',
     ),
     re_path(
-        'devid-registration/create/(?P<pk>\d+)?/?$',
+        r'devid-registration/create/(?P<pk>\d+)/$',
         DevIdRegistrationCreateView.as_view(),
         name='devid_registration_create',
     ),

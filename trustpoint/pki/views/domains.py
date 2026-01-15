@@ -301,7 +301,7 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
     def get_success_url(self) -> str:
         """Return the URL to redirect to upon successful form submission."""
         if self.kwargs.get('pk'):
-            domain = self.object.domain
+            domain = get_object_or_404(DomainModel, pk=self.kwargs["pk"])
             return reverse_lazy('pki:domains-config', kwargs={'pk': domain.id})
         return reverse_lazy('devices:devices')
 
