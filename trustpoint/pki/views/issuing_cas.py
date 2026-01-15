@@ -33,7 +33,7 @@ from pki.forms import (
     IssuingCaAddMethodSelectForm,
 )
 from pki.models import CertificateModel, IssuingCaModel
-from pki.serializer import IssuingCaSerializer
+from pki.serializer.issuing_ca import IssuingCaSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -43,6 +43,8 @@ from trustpoint.views.base import (
 )
 
 if TYPE_CHECKING:
+    from typing import ClassVar
+
     from django.db.models import QuerySet
     from django.forms import Form
     from django.http import HttpRequest
