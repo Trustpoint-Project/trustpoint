@@ -426,7 +426,27 @@ class TestTruststoreAddForm:
         assert form.fields['unique_name'].required is False
 
 
-@pytest.mark.django_db  
+@pytest.mark.django_db
+class TestTruststoreAddFormValidation:
+    """Test TruststoreAddForm validation with actual files."""
+
+    def test_form_valid_der_certificate(self):
+        """Test that form accepts DER encoded certificate."""
+        der_file_path = 'tests/data/issuing_cas/ee0_valid.der'
+        with open(der_file_path, 'rb') as f:
+            der_data = f.read()
+        
+        uploaded_file = SimpleUploadedFile('certificate.der', der_data, content_type='application/x-x509-ca-cert')
+        
+        form_data = {
+            'intended_usage': TruststoreModel.IntendedUsage.GENERIC.value,
+        }
+        form = TruststoreAddForm(data=form_data, files={'trust_store_file': uploaded_file})
+        
+        assert form.is_valid(), f"Form should be valid but got errors: {form.errors}"
+        assert 'truststore' in form.cleaned_data
+        truststore = form.cleaned_data['truststore']
+        assert truststore.number_of_certificates == 1  
 class TestIssuingCaAddFileImportPkcs12Form:
     """Test IssuingCaAddFileImportPkcs12Form."""
 

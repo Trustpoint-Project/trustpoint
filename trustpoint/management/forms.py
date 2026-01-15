@@ -105,7 +105,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
     def clean_auto_gen_pki_key_algorithm(self) -> AutoGenPkiKeyAlgorithm:
         """Keep the current value of `auto_gen_pki_key_algorithm` from the instance if the field was disabled."""
         form_value = self.cleaned_data.get('auto_gen_pki_key_algorithm')
-        if form_value is None:
+        if form_value is None or form_value == '':
             if self.instance:
                 return AutoGenPkiKeyAlgorithm(self.instance.auto_gen_pki_key_algorithm)
             return AutoGenPkiKeyAlgorithm.RSA2048
