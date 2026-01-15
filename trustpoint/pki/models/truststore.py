@@ -67,6 +67,7 @@ class TruststoreModel(models.Model):
         TLS = 1, _('TLS')
         GENERIC = 2, _('Generic')
         DEVICE_OWNER_ID = 3, _('Device Owner ID')
+        OPC_UA_GDS_PUSH = 4, _('OPC UA GDS Push')
 
 
     unique_name = models.CharField(

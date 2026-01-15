@@ -74,6 +74,9 @@ class CertificateGenerator:
             x509.Name(
                 [
                     x509.NameAttribute(NameOID.COMMON_NAME, subject_cn),
+                    x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Trustpoint'),
+                    x509.NameAttribute(NameOID.COUNTRY_NAME, 'DE'),
+                    x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, 'Baden-Wuerttemberg'),
                 ]
             )
         )
@@ -81,6 +84,9 @@ class CertificateGenerator:
             x509.Name(
                 [
                     x509.NameAttribute(NameOID.COMMON_NAME, issuer_cn),
+                    x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Trustpoint'),
+                    x509.NameAttribute(NameOID.COUNTRY_NAME, 'DE'),
+                    x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, 'Baden-Wuerttemberg'),
                 ]
             )
         )
@@ -88,7 +94,24 @@ class CertificateGenerator:
         builder = builder.not_valid_after(datetime.datetime.now(tz=datetime.UTC) + (one_day * validity_days))
         builder = builder.serial_number(x509.random_serial_number())
         builder = builder.public_key(public_key)
-        builder = builder.add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+
+        is_root_ca = issuer_private_key == private_key
+        path_length = 1 if is_root_ca else 0
+        builder = builder.add_extension(x509.BasicConstraints(ca=True, path_length=path_length), critical=True)
+        builder = builder.add_extension(
+            x509.KeyUsage(
+                digital_signature=False,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=True,
+                crl_sign=True,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
         builder = builder.add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False)
         builder = builder.add_extension(
             x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_private_key.public_key()), critical=False
