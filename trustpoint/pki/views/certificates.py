@@ -95,7 +95,6 @@ class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateMode
                 'oid': entry.oid,
                 'name': name,
                 'value': entry.value,
-                'id': entry.id,
             })
         context['issuer_entries'] = issuer_entries
         ip_addresses = []
