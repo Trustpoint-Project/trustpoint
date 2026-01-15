@@ -75,6 +75,10 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         rsa2_root, _ = self.create_root_ca(
             'Root-CA RSA-2048-SHA256', private_key=rsa2_root_ca_key, hash_algorithm=hashes.SHA256()
         )
+        rsa2_root_ca = self.save_root_ca(
+            root_ca_cert=rsa2_root,
+            unique_name='root-ca-rsa-2048-sha256',
+        )
         rsa2_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=rsa2_root_ca_key,
             private_key=rsa2_issuing_ca_key,
@@ -88,6 +92,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             chain=[rsa2_root],
             unique_name='issuing-ca-a',
             ca_type=ca_type,
+            parent_ca=rsa2_root_ca,
         )
 
         self.log_and_stdout('Creating RSA-3072 Root CA and Issuing CA B...')
@@ -95,6 +100,10 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         rsa3_issuing_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
         rsa3_root, _ = self.create_root_ca(
             'Root-CA RSA-3072-SHA256', private_key=rsa3_root_ca_key, hash_algorithm=hashes.SHA256()
+        )
+        rsa3_root_ca = self.save_root_ca(
+            root_ca_cert=rsa3_root,
+            unique_name='root-ca-rsa-3072-sha256',
         )
         rsa3_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=rsa3_root_ca_key,
@@ -109,6 +118,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             chain=[rsa3_root],
             unique_name='issuing-ca-b',
             ca_type=ca_type,
+            parent_ca=rsa3_root_ca,
         )
 
         self.log_and_stdout('Creating RSA-4096 Root CA and Issuing CA C...')
@@ -116,6 +126,10 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         rsa4_issuing_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
         rsa4_root, _ = self.create_root_ca(
             'Root-CA RSA-4096-SHA256', private_key=rsa4_root_ca_key, hash_algorithm=hashes.SHA512()
+        )
+        rsa4_root_ca = self.save_root_ca(
+            root_ca_cert=rsa4_root,
+            unique_name='root-ca-rsa-4096-sha256',
         )
         rsa4_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=rsa4_root_ca_key,
@@ -130,6 +144,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             chain=[rsa4_root],
             unique_name='issuing-ca-c',
             ca_type=ca_type,
+            parent_ca=rsa4_root_ca,
         )
 
         self.log_and_stdout('Creating SECP256R1 Root CA and Issuing CA D...')
@@ -137,6 +152,10 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         ecc1_issuing_ca_key = ec.generate_private_key(curve=ec.SECP256R1())
         ecc1_root, _ = self.create_root_ca(
             'Root-CA SECP256R1-SHA256', private_key=ecc1_root_ca_key, hash_algorithm=hashes.SHA256()
+        )
+        ecc1_root_ca = self.save_root_ca(
+            root_ca_cert=ecc1_root,
+            unique_name='root-ca-secp256r1-sha256',
         )
         ecc1_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=ecc1_root_ca_key,
@@ -151,6 +170,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             chain=[ecc1_root],
             unique_name='issuing-ca-d',
             ca_type=ca_type,
+            parent_ca=ecc1_root_ca,
         )
 
         self.log_and_stdout('Creating SECP384R1 Root CA and Issuing CA E...')
@@ -158,6 +178,10 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         ecc2_issuing_ca_key = ec.generate_private_key(curve=ec.SECP384R1())
         ecc2_root, _ = self.create_root_ca(
             'Root-CA SECP384R1-SHA256', private_key=ecc2_root_ca_key, hash_algorithm=hashes.SHA256()
+        )
+        ecc2_root_ca = self.save_root_ca(
+            root_ca_cert=ecc2_root,
+            unique_name='root-ca-secp384r1-sha256',
         )
         ecc2_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=ecc2_root_ca_key,
@@ -172,6 +196,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             chain=[ecc2_root],
             unique_name='issuing-ca-e',
             ca_type=ca_type,
+            parent_ca=ecc2_root_ca,
         )
 
         self.log_and_stdout('Creating SECP521R1 Root CA and Issuing CA F...')
@@ -179,6 +204,10 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         ecc3_issuing_ca_key = ec.generate_private_key(curve=ec.SECP521R1())
         ecc3_root, _ = self.create_root_ca(
             'Root-CA SECP521R1-SHA256', private_key=ecc3_root_ca_key, hash_algorithm=hashes.SHA3_512()
+        )
+        ecc3_root_ca = self.save_root_ca(
+            root_ca_cert=ecc3_root,
+            unique_name='root-ca-secp521r1-sha256',
         )
         ecc3_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=ecc3_root_ca_key,
@@ -193,6 +222,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             chain=[ecc3_root],
             unique_name='issuing-ca-f',
             ca_type=ca_type,
+            parent_ca=ecc3_root_ca,
         )
 
         self.log_and_stdout('All issuing CAs have been created successfully!')

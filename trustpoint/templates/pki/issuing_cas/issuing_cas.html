@@ -13,27 +13,20 @@
                 <tr>
                     <th id="checkbox-column"><input type="checkbox"/></th>
                     <th>
-                        <a href="?sort={% if current_sort == 'unique_name' %}-{% endif %}unique_name">
-                            {% trans 'Issuing CA Name' %}
-                        </a>
+                        {% trans 'Domain' %}
                     </th>
                     <th>
-                        <a href="?sort={% if current_sort == 'credential__certificates__common_name' %}-{% endif %}credential__certificates__common_name">
+                        <a href="?sort={% if current_sort == 'certificate__common_name' %}-{% endif %}certificate__common_name">
                             {% trans 'Common Name' %}
                         </a>
                     </th>
                     <th>
-                        <a href="?sort={% if current_sort == 'credential__certificates__not_valid_after' %}-{% endif %}credential__certificates__not_valid_after">
+                        <a href="?sort={% if current_sort == 'certificate__not_valid_after' %}-{% endif %}certificate__not_valid_after">
                             {% trans 'Not valid after' %}
                         </a>
                     </th>
                     <th>
                             {% trans 'Signature Suite' %}
-                    </th>
-                    <th>
-                        <a href="?sort={% if current_sort == 'updated_at' %}-{% endif %}updated_at">
-                            {% trans 'Updated' %}
-                        </a>
                     </th>
                     <th>
                         <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
@@ -51,18 +44,17 @@
                         <td class="row_checkbox">
                             <input type="checkbox" name="row_checkbox" value="{{ ca.id }}"/>
                         </td>
-                        <td>{{ ca.unique_name }}</td>
-                        <td>{{ ca.credential.certificate.common_name }}</td>
-                        <td>{{ ca.credential.certificate.not_valid_after }}</td>
+                        <td>{{ ca.certificate.common_name }}</td>
+                        <td>{% for domain in ca.issuing_ca_ref.domains.all %}<a href="{% url 'pki:domains-config' pk=domain.id %}">{{ domain.unique_name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+                        <td>{{ ca.certificate.not_valid_after }}</td>
                         <td>{{ ca.signature_suite }}</td>
-                        <td>{{ ca.updated_at }}</td>
                         <td>{{ ca.created_at }}</td>
                         <td><a href="config/{{ ca.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Configure' %}</a></td>
                         <td><a href="delete/{{ ca.id }}/" class="btn btn-danger tp-table-btn w-100">{% trans 'Delete' %}</a></td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="9" class="middle">{% trans 'No Issuing CA has been added yet.' %}</td>
+                        <td colspan="8" class="middle">{% trans 'No Issuing CA has been added yet.' %}</td>
                     </tr>
                 {% endfor %}
             </tbody>

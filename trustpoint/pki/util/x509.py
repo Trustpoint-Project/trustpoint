@@ -18,7 +18,7 @@ from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
 from management.models import KeyStorageConfig
-from pki.models import IssuingCaModel
+from pki.models import CaModel, IssuingCaModel
 from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
@@ -232,14 +232,27 @@ class CertificateGenerator:
         return (certs, keys)
 
     @staticmethod
-    def save_issuing_ca(
+    def save_issuing_ca(  # noqa: PLR0913
         issuing_ca_cert: x509.Certificate,
         chain: list[x509.Certificate],
         private_key: PrivateKey,
         unique_name: str = 'issuing_ca',
         ca_type: IssuingCaModel.IssuingCaTypeChoice = IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED,
-    ) -> IssuingCaModel:
-        """Saves an Issuing CA certificate to the database."""
+        parent_ca: CaModel | None = None,
+    ) -> CaModel:
+        """Saves an Issuing CA certificate to the database and returns the CaModel.
+
+        Args:
+            issuing_ca_cert: The issuing CA certificate.
+            chain: List of intermediate certificates in the chain.
+            private_key: The private key for the issuing CA.
+            unique_name: Unique name for this CA.
+            ca_type: The type of issuing CA.
+            parent_ca: Optional parent CA in the hierarchy (the CA that issued this certificate).
+
+        Returns:
+            CaModel: The created CA model.
+        """
         issuing_ca_credential_serializer = CredentialSerializer(
             private_key=private_key,
             certificate=issuing_ca_cert,
@@ -311,14 +324,36 @@ class CertificateGenerator:
         )
 
         issuing_ca = IssuingCaModel.create_new_issuing_ca(
-            unique_name=unique_name,
             credential_serializer=issuing_ca_credential_serializer,
             issuing_ca_type=ca_type
         )
 
+        ca = CaModel.create_from_issuing(unique_name=unique_name, issuing_ca=issuing_ca)
+
+        if parent_ca is not None:
+            ca.parent_ca = parent_ca
+            ca.save()
+
         logger.info("Issuing CA '%s' saved successfully.", unique_name)
 
-        return issuing_ca
+        return ca
+
+    @staticmethod
+    def save_root_ca(
+        root_ca_cert: x509.Certificate,
+        unique_name: str = 'root_ca',
+        crl_pem: str | None = None,
+    ) -> CaModel:
+        """Saves a keyless root CA certificate as a keyless CA to the database and returns the CaModel."""
+        ca = CaModel.create_from_keyless(
+            unique_name=unique_name,
+            certificate=root_ca_cert,
+            crl_pem=crl_pem,
+        )
+
+        logger.info("Keyless root CA '%s' saved successfully.", unique_name)
+
+        return ca
 
 
 class ClientCertificateAuthenticationError(Exception):

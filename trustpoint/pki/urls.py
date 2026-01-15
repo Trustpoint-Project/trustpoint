@@ -3,7 +3,7 @@
 from django.urls import path, re_path
 
 from help_pages import pki_help_views
-from pki.views import cert_profiles, certificates, domains, issuing_cas, owner_credentials, truststores
+from pki.views import ca, cert_profiles, certificates, domains, issuing_cas, owner_credentials, truststores
 from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
 from pki.views.issuing_cas import IssuedCertificatesListView
 
@@ -85,6 +85,7 @@ urlpatterns = [
         name='certificate-issuing-ca-download',
     ),
     path('certificates/details/<int:pk>/', certificates.CertificateDetailView.as_view(), name='certificate-detail'),
+    path('cas/', ca.CaTableView.as_view(), name='cas'),
     path('issuing-cas/', issuing_cas.IssuingCaTableView.as_view(), name='issuing_cas'),
     path(
         'issuing-cas/add/method-select/',
@@ -103,6 +104,7 @@ urlpatterns = [
     ),
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
+    path('keyless-cas/config/<int:pk>/', issuing_cas.KeylessCaConfigView.as_view(), name='keyless_cas-config'),
     path('issuing-cas/crl-gen/<int:pk>/', issuing_cas.IssuingCaCrlGenerationView.as_view(), name='issuing_cas-crl-gen'),
     path(
         'issuing-cas/config/<int:pk>/help/crl-download/',

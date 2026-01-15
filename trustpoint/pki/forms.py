@@ -21,7 +21,7 @@ from trustpoint_core.serializer import (
 )
 
 from management.models import KeyStorageConfig
-from pki.models import DevIdRegistration, IssuingCaModel, OwnerCredentialModel
+from pki.models import CaModel, DevIdRegistration, IssuingCaModel, OwnerCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
@@ -80,12 +80,14 @@ class IssuingCaImportMixin:
         if certificate_in_db:
             issuing_ca_qs = IssuingCaModel.objects.filter(credential__certificate=certificate_in_db)
             if issuing_ca_qs.exists():
-                issuing_ca_in_db = issuing_ca_qs[0]
-                err_msg = (
-                    f'Issuing CA {issuing_ca_in_db.unique_name} is already configured '
-                    'with the same Issuing CA certificate.'
-                )
-                self._raise_validation_error(err_msg)
+                ca_qs = CaModel.objects.filter(issuing_ca_ref=issuing_ca_qs[0])
+                if ca_qs.exists():
+                    ca_in_db = ca_qs[0]
+                    err_msg = (
+                        f'Issuing CA {ca_in_db.unique_name} is already configured '
+                        'with the same Issuing CA certificate.'
+                    )
+                    self._raise_validation_error(err_msg)
 
     def _finalize_issuing_ca_creation(
         self, unique_name: str | None, cert: x509.Certificate, credential_serializer: CredentialSerializer
@@ -94,15 +96,15 @@ class IssuingCaImportMixin:
         if not unique_name:
             unique_name = get_certificate_name(cert)
 
-        if IssuingCaModel.objects.filter(unique_name=unique_name).exists():
+        if CaModel.objects.filter(unique_name=unique_name).exists():
             self._raise_validation_error('Unique name is already taken. Choose another one.')
 
         try:
-            IssuingCaModel.create_new_issuing_ca(
-                unique_name=unique_name,
+            issuing_ca = IssuingCaModel.create_new_issuing_ca(
                 credential_serializer=credential_serializer,
                 issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.LOCAL_PKCS11,
             )
+            CaModel.create_from_issuing(unique_name=unique_name, issuing_ca=issuing_ca)
         except ValidationError:
             raise
         except Exception:  # noqa: BLE001

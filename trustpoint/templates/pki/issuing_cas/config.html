@@ -13,9 +13,9 @@
                 <div class="card-body">
                     <h3>{% trans 'Domains' %}</h3>
                     <hr class="hr-m">
-                    {% if issuing_ca.domains.all %}
+                    {% if issuing_ca.issuing_ca_ref.domains.all %}
                         <div class="tp-kvp-list">
-                        {% for domain in issuing_ca.domains.all %}
+                        {% for domain in issuing_ca.issuing_ca_ref.domains.all %}
                             <div>
                                 <div>
                                     <a href="{% url 'pki:domains-config' pk=domain.id %}">{{ domain.unique_name }}</a>
@@ -37,7 +37,7 @@
                     <div class="tp-kvp-list">
                         <div>
                             <div>{% trans 'Type' %}</div>
-                            <div>{{ issuing_ca.get_issuing_ca_type_display }}</div>
+                            <div>{{ issuing_ca.issuing_ca_ref.get_issuing_ca_type_display }}</div>
                         </div>
                         <div>
                             <div>{% trans 'Updated' %}</div>
@@ -55,15 +55,15 @@
                         <div>
                             <div>{% trans 'Issuing CA Certificate' %}</div>
                             <div>
-                                <a href="{% url 'pki:certificate-detail' pk=issuing_ca.credential.certificate.id %}">
-                                    {% if issuing_ca.credential.certificate.common_name %}
-                                        CN: {{ issuing_ca.credential.certificate.common_name }}
+                                <a href="{% url 'pki:certificate-detail' pk=issuing_ca.issuing_ca_ref.credential.certificate.id %}">
+                                    {% if issuing_ca.issuing_ca_ref.credential.certificate.common_name %}
+                                        CN: {{ issuing_ca.issuing_ca_ref.credential.certificate.common_name }}
                                     {% else %}
                                         <h3>{% trans 'Issuing CA Certificate' %}</h3>
                                     {% endif %}
                                 </a>
                             </div>
-                            {% for certificate_chain_order in issuing_ca.credential.ordered_certificate_chain_queryset %}
+                            {% for certificate_chain_order in issuing_ca.issuing_ca_ref.credential.ordered_certificate_chain_queryset %}
                                 {% if forloop.last %}
                                     <div>{% trans 'Root CA Certificate' %}</div>
                                     <div>
@@ -105,7 +105,7 @@
                     </div>
 
                     <h3>
-                        {% if issuing_ca.credential.certificate.subject_public_bytes == issuing_ca.credential.certificate.issuer_public_bytes %}
+                        {% if issuing_ca.issuing_ca_ref.credential.certificate.subject_public_bytes == issuing_ca.issuing_ca_ref.credential.certificate.issuer_public_bytes %}
                             {% trans 'Issuing CA Certificate (This is a self-signed Root CA Certificate)' %}
                         {% else %}
                             {% trans 'Issuing CA Certificate' %}
@@ -116,16 +116,16 @@
                         <div>
                             <div>{% trans 'Issuing CA Certificate' %}</div>
                             <div>
-                                <a href="{% url 'pki:certificate-detail' pk=issuing_ca.credential.certificate.id %}">
-                                    {% if issuing_ca.credential.certificate.common_name %}
-                                        CN: {{ issuing_ca.credential.certificate.common_name }}
+                                <a href="{% url 'pki:certificate-detail' pk=issuing_ca.issuing_ca_ref.credential.certificate.id %}">
+                                    {% if issuing_ca.issuing_ca_ref.credential.certificate.common_name %}
+                                        CN: {{ issuing_ca.issuing_ca_ref.credential.certificate.common_name }}
                                     {% else %}
                                         {% trans 'Issuing CA Certificate' %}
                                     {% endif %}
                                 </a>
                             </div>
                         </div>
-                        {% with issuing_ca_certificate=issuing_ca.credential.certificate %}
+                        {% with issuing_ca_certificate=issuing_ca.issuing_ca_ref.credential.certificate %}
                             <div>
                                 <div>{% trans 'Serial Number' %}</div>
                                 <div>{{ issuing_ca_certificate.serial_number }}</div>

@@ -5,7 +5,7 @@ from __future__ import annotations
 import secrets
 import threading
 
-from pki.models import DomainModel, IssuingCaModel, RevokedCertificateModel
+from pki.models import CaModel, DomainModel, IssuingCaModel, RevokedCertificateModel
 from pki.util.keys import AutoGenPkiKeyAlgorithm, KeyGenerator
 from pki.util.x509 import CertificateGenerator
 from trustpoint.logger import LoggerMixin
@@ -26,18 +26,22 @@ class AutoGenPki(LoggerMixin):
         if key_alg is not None:
             unique_name = f'{UNIQUE_NAME_PREFIX}_{key_alg.name}'
             try:
-                return IssuingCaModel.objects.get(unique_name=unique_name)
-            except IssuingCaModel.DoesNotExist:
+                ca = CaModel.objects.get(unique_name=unique_name)
+            except CaModel.DoesNotExist:
                 return None
+            else:
+                return ca.issuing_ca_ref
         else:
             try:
-                return IssuingCaModel.objects.filter(
+                ca = CaModel.objects.filter(
                     unique_name__startswith=UNIQUE_NAME_PREFIX,
-                    issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN,
+                    issuing_ca_ref__issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN,
                     is_active=True
                 ).first()
-            except IssuingCaModel.DoesNotExist:
+            except CaModel.DoesNotExist:
                 return None
+            else:
+                return ca.issuing_ca_ref if ca else None
 
     @classmethod
     def enable_auto_gen_pki(cls, key_alg: AutoGenPkiKeyAlgorithm) -> None:
@@ -65,7 +69,7 @@ class AutoGenPki(LoggerMixin):
             # Re-use any existing root CA for the auto-generated PKI and current key type
             try:
                 root_ca = IssuingCaModel.objects.get(
-                    unique_name=root_ca_name, issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
+                    ca__unique_name=root_ca_name, issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
                 )
                 root_cert = root_ca.credential.get_certificate()
                 root_1_key = root_ca.credential.get_private_key()
@@ -76,7 +80,7 @@ class AutoGenPki(LoggerMixin):
                     root_ca_name,
                     private_key=key_gen.generate_private_key_for_public_key_info(public_key_info)
                 )
-                CertificateGenerator.save_issuing_ca(
+                root_ca = CertificateGenerator.save_issuing_ca(
                     issuing_ca_cert=root_cert,
                     private_key=root_1_key,
                     chain=[],
@@ -99,16 +103,17 @@ class AutoGenPki(LoggerMixin):
                 chain=[root_cert],
                 unique_name=issuing_ca_unique_name,
                 ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN,
+                parent_ca=root_ca
             )
             cls.logger.info('Saved new Issuing CA: %s', issuing_ca_unique_name)
 
             cls.logger.info('Linking to domain: %s', domain_unique_name)
             domain, created = DomainModel.objects.get_or_create(
                 unique_name=domain_unique_name,
-                defaults={'issuing_ca': issuing_ca},
+                defaults={'issuing_ca': issuing_ca.issuing_ca_ref},
             )
             cls.logger.info('Domain %s (created=%s, was_active=%s)', domain_unique_name, created, domain.is_active)
-            domain.issuing_ca = issuing_ca
+            domain.issuing_ca = issuing_ca.issuing_ca_ref
             domain.is_active = True
             domain.save()
             cls.logger.info('Domain %s updated and activated', domain_unique_name)

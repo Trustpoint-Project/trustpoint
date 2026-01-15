@@ -12,7 +12,7 @@ from devices.models import DeviceModel, OnboardingConfigModel, NoOnboardingConfi
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from management.models import KeyStorageConfig
-from pki.models import DevIdRegistration, DomainModel, IssuingCaModel, TruststoreModel
+from pki.models import CaModel, DevIdRegistration, DomainModel, IssuingCaModel, TruststoreModel
 from pki.util.x509 import CertificateGenerator
 from devices.models import OnboardingPkiProtocol, NoOnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
 from signer.models import SignerModel
@@ -249,7 +249,8 @@ class Command(BaseCommand, LoggerMixin):
         for domain_name, devices in data.items():
             issuing_ca_name, truststore_name = domain_ca_truststore_map[domain_name]
 
-            issuing_ca = IssuingCaModel.objects.get(unique_name=issuing_ca_name)
+            ca = CaModel.objects.get(unique_name=issuing_ca_name, issuing_ca_ref__isnull=False)
+            issuing_ca = ca.issuing_ca_ref
             truststore = TruststoreModel.objects.get(unique_name=truststore_name)
 
             domain, created = DomainModel.objects.get_or_create(unique_name=domain_name)

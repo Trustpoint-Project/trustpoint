@@ -227,7 +227,13 @@ class EnrollmentRequest(models.Model):
     operation = models.CharField(max_length=50)
     device = models.ForeignKey(DeviceModel, on_delete=models.CASCADE, related_name='device', null=True, blank=True)
     domain = models.ForeignKey(DomainModel, on_delete=models.CASCADE, related_name='domain', null=True, blank=True)
-    ca = models.ForeignKey(IssuingCaModel, on_delete=models.CASCADE, related_name='ca', null=True, blank=True)
+    ca = models.ForeignKey(
+        IssuingCaModel,
+        on_delete=models.CASCADE,
+        related_name='enrollment_requests',
+        null=True,
+        blank=True
+    )
     fingerprint = models.CharField(max_length=128)  # CSR fingerprint (sha256 hex)
     template = models.CharField(max_length=100, blank=True, default='')
 

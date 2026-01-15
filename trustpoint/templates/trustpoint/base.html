@@ -69,6 +69,7 @@
                 </a>
                 <div class="tp-menu-collapse {% if page_category == 'pki' %}show{% endif %}">
                     <a href="{% url 'pki:domains' %}" class="tp-menu-item {% if page_name == 'domains' %}tp-menu-active{% endif %}">{% trans 'Domains' %}</a>
+                    <a href="{% url 'pki:cas' %}" class="tp-menu-item {% if page_name == 'cas' %}tp-menu-active{% endif %}">{% trans 'CAs' %}</a>
                     <a href="{% url 'pki:issuing_cas' %}" class="tp-menu-item {% if page_name == 'issuing_cas' %}tp-menu-active{% endif %}">{% trans 'Issuing CAs' %}</a>
                     <a href="{% url 'pki:certificates' %}" class="tp-menu-item {% if page_name == 'certificates' %}tp-menu-active{% endif %}">{% trans 'Certificates' %}</a>
                     <a href="{% url 'pki:cert_profiles' %}" class="tp-menu-item {% if page_name == 'cert_profiles' %}tp-menu-active{% endif %}">{% trans 'Certificate Profiles' %}</a>

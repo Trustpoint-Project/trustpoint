@@ -18,7 +18,6 @@ from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
 from trustpoint.logger import LoggerMixin
 from util.db import CustomDeleteActionModel
-from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet
@@ -45,9 +44,6 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
         REMOTE_EST = 4, _('Remote-EST')
         REMOTE_CMP = 5, _('Remote-CMP')
 
-    unique_name = models.CharField(
-        verbose_name=_('Issuing CA Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
-    )
     credential: models.OneToOneField[CredentialModel] = models.OneToOneField(
         CredentialModel,
         related_name='issuing_cas',
@@ -58,48 +54,138 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
         verbose_name=_('Issuing CA Type'), choices=IssuingCaTypeChoice, null=False, blank=False
     )
 
-    is_active = models.BooleanField(
-        _('Active'),
-        default=True,
-    )
-
-    created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
-    updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
-    last_crl_issued_at = models.DateTimeField(verbose_name=_('Last CRL Issued'), null=True, blank=True)
-    crl_number = models.PositiveIntegerField(
-        verbose_name=_('CRL Number'), default=0,
-    )
-
-    crl_pem = models.TextField(editable=False, default='', verbose_name=_('CRL in PEM format'))
-
     def __str__(self) -> str:
         """Returns a human-readable string that represents this IssuingCaModel entry.
 
         Returns:
             str: Human-readable string that represents this IssuingCaModel entry.
         """
-        return self.unique_name
+        if hasattr(self, 'ca') and self.ca:
+            return self.ca.unique_name
+        return f'IssuingCaModel(id={self.pk})'
 
     def __repr__(self) -> str:
         """Returns a string representation of the IssuingCaModel instance."""
-        return f'IssuingCaModel(unique_name={self.unique_name})'
+        unique_name = self.ca.unique_name if hasattr(self, 'ca') and self.ca else f'id={self.pk}'
+        return f'IssuingCaModel({unique_name})'
+
+    @property
+    def unique_name(self) -> str:
+        """Returns the unique name from the CaModel.
+
+        Returns:
+            str: The unique name of this CA.
+
+        Raises:
+            AttributeError: If this IssuingCaModel is not wrapped in a CaModel.
+        """
+        if hasattr(self, 'ca') and self.ca:
+            return self.ca.unique_name
+        msg = 'This IssuingCaModel does not have a CaModel. Create a CaModel wrapper to access unique_name.'
+        raise AttributeError(msg)
+
+    @unique_name.setter
+    def unique_name(self, value: str) -> None:
+        """Sets the unique name in the CaModel.
+
+        Args:
+            value: The new unique name.
+
+        Raises:
+            AttributeError: If this IssuingCaModel is not wrapped in a CaModel.
+        """
+        if hasattr(self, 'ca') and self.ca:
+            self.ca.unique_name = value
+            self.ca.save()
+        else:
+            msg = 'This IssuingCaModel does not have a CaModel. Create a CaModel wrapper to set unique_name.'
+            raise AttributeError(msg)
+
+    @property
+    def is_active(self) -> bool:
+        """Returns whether this CA is active from the CaModel.
+
+        Returns:
+            bool: True if the CA is active.
+
+        Raises:
+            AttributeError: If this IssuingCaModel is not wrapped in a CaModel.
+        """
+        if hasattr(self, 'ca') and self.ca:
+            return self.ca.is_active
+        msg = 'This IssuingCaModel does not have a CaModel. Create a CaModel wrapper to access is_active.'
+        raise AttributeError(msg)
+
+    @is_active.setter
+    def is_active(self, value: bool) -> None:
+        """Sets the is_active in the CaModel.
+
+        Args:
+            value: The new is_active value.
+
+        Raises:
+            AttributeError: If this IssuingCaModel is not wrapped in a CaModel.
+        """
+        if hasattr(self, 'ca') and self.ca:
+            self.ca.is_active = value
+            self.ca.save()
+        else:
+            msg = 'This IssuingCaModel does not have a CaModel. Create a CaModel wrapper to set is_active.'
+            raise AttributeError(msg)
 
     @property
     def common_name(self) -> str:
         """Returns common name."""
         return self.credential.certificate.common_name
 
+    @property
+    def last_crl_issued_at(self) -> datetime.datetime | None:
+        """Returns when the last CRL was issued (from active CRL).
+
+        Returns:
+            datetime | None: The this_update time of the active CRL, or None if no CRL exists.
+        """
+        if not hasattr(self, 'ca') or not self.ca:
+            return None
+        active_crl = self.ca.get_active_crl()
+        return active_crl.this_update if active_crl else None
+
+    @property
+    def crl_number(self) -> int:
+        """Returns the current CRL number (from active CRL).
+
+        Returns:
+            int: The CRL number of the active CRL, or 0 if no CRL exists.
+        """
+        if not hasattr(self, 'ca') or not self.ca:
+            return 0
+        active_crl = self.ca.get_active_crl()
+        return active_crl.crl_number if active_crl and active_crl.crl_number else 0
+
+    @property
+    def crl_pem(self) -> str:
+        """Returns the active CRL in PEM format.
+
+        Returns:
+            str: The CRL in PEM format, or empty string if no CRL exists.
+        """
+        if not hasattr(self, 'ca') or not self.ca:
+            return ''
+        active_crl = self.ca.get_active_crl()
+        return active_crl.crl_pem if active_crl else ''
+
     @classmethod
     def create_new_issuing_ca(
         cls,
-        unique_name: str,
         credential_serializer: CredentialSerializer,
         issuing_ca_type: IssuingCaModel.IssuingCaTypeChoice,
     ) -> IssuingCaModel:
         """Creates a new Issuing CA model and returns it.
 
+        Note: This creates only the IssuingCaModel. You should wrap it in a CaModel
+        to manage unique_name, is_active, and timestamps.
+
         Args:
-            unique_name: The unique name that will be used to identify the Issuing CA.
             credential_serializer:
                 The credential as CredentialSerializer instance.
                 It will be normalized and validated, if it is a valid credential to be used as an Issuing CA.
@@ -145,27 +231,40 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
         )
 
         issuing_ca = cls(
-            unique_name=unique_name,
             credential=credential_model,
             issuing_ca_type=issuing_ca_type,
         )
         issuing_ca.save()
         return issuing_ca
 
-    def _issue_crl(self) -> None:
-        """Issues a CRL with revoked certificates issued by this CA."""
-        crl_issued_at = timezone.now()
-        self.last_crl_issued_at = crl_issued_at
+    def _issue_crl(self, crl_validity_hours: int = 24) -> None:
+        """Issues a CRL with revoked certificates issued by this CA.
 
+        CRLs are now managed through CrlModel via the CaModel relationship.
+        This method maintains backward compatibility.
+
+        Args:
+            crl_validity_hours: Hours until the next CRL update (nextUpdate field). Defaults to 24.
+        """
+        # Check if this IssuingCaModel has a CaModel wrapper
+        if not hasattr(self, 'ca') or not self.ca:
+            msg = 'This IssuingCaModel must be wrapped in a CaModel to issue CRLs.'
+            raise AttributeError(msg)
+
+        from pki.models.crl import CrlModel  # noqa: PLC0415
+
+        crl_issued_at = timezone.now()
         ca_subject = self.credential.certificate.get_certificate_serializer().as_crypto().subject
+
+        latest_crl = self.ca.get_latest_crl()
+        next_crl_number = (latest_crl.crl_number + 1) if latest_crl and latest_crl.crl_number else 1
 
         crl_builder = x509.CertificateRevocationListBuilder(
             issuer_name=ca_subject,
             last_update=crl_issued_at,
-            next_update=crl_issued_at + datetime.timedelta(hours=24),  # (minutes=self.next_crl_generation_time)
+            next_update=crl_issued_at + datetime.timedelta(hours=crl_validity_hours),
         )
-        self.crl_number += 1
-        crl_builder = crl_builder.add_extension(x509.CRLNumber(self.crl_number), critical=False)
+        crl_builder = crl_builder.add_extension(x509.CRLNumber(next_crl_number), critical=False)
 
         crl_certificates = self.revoked_certificates.all()
 
@@ -189,20 +288,24 @@ class IssuingCaModel(LoggerMixin, CustomDeleteActionModel):
 
         crl = crl_builder.sign(private_key=priv_k, algorithm=hash_algorithm)
 
-        self.crl_pem = crl.public_bytes(encoding=serialization.Encoding.PEM).decode()
-        self.save()
+        crl_pem = crl.public_bytes(encoding=serialization.Encoding.PEM).decode()
+
+        CrlModel.create_from_pem(ca=self.ca, crl_pem=crl_pem, set_active=True)
 
         self.logger.info('CRL generation for CA %s finished.', self.unique_name)
 
-    def issue_crl(self) -> bool:
+    def issue_crl(self, crl_validity_hours: int = 24) -> bool:
         """Issues a CRL with revoked certificates issued by this CA.
+
+        Args:
+            crl_validity_hours: Hours until the next CRL update (nextUpdate field). Defaults to 24.
 
         Returns:
             bool: True if the CRL was successfully issued, False otherwise.
         """
         self.logger.debug('Generating CRL for CA %s', self.unique_name)
         try:
-            self._issue_crl()
+            self._issue_crl(crl_validity_hours=crl_validity_hours)
             self.logger.info('CRL generation for CA %s finished.', self.unique_name)
         except Exception:
             self.logger.exception('CRL generation for CA %s failed', self.unique_name)
