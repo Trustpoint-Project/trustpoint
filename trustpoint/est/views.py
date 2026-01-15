@@ -85,7 +85,7 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
         request: HttpRequest,
         domain_name: str | None,
         cert_profile: str | None,
-    ) -> LoggedHttpResponse:
+    ) -> HttpResponse:
         """Process an EST simple enrollment request.
 
         Args:
@@ -111,7 +111,7 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
         except Exception:
             err_msg = 'Failed to set up EST request context.'
             self.logger.exception(err_msg)
-            return LoggedHttpResponse(err_msg, status=500)
+            return HttpResponse(err_msg, status=500)
 
         try:
             validator = EstHttpRequestValidator()
@@ -147,7 +147,7 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
 class EstSimpleEnrollmentView(EstSimpleEnrollmentMixin, View):
     """Handles simple EST (Enrollment over Secure Transport) enrollment requests."""
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle POST requests for simple enrollment with domain and cert profile in URL."""
         del args
 
@@ -161,7 +161,7 @@ class EstSimpleEnrollmentView(EstSimpleEnrollmentMixin, View):
 class EstSimpleEnrollmentDefaultView(EstSimpleEnrollmentMixin, View):
     """Handles simple EST enrollment requests without requiring domain or cert profile in URL."""
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle POST requests for simple enrollment with optional domain/cert profile."""
         del args
         del kwargs
@@ -191,7 +191,7 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
 
     EVENT = Events.est_simplereenroll
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse:
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle POST requests for simple reenrollment."""
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
         del args

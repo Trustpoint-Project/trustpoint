@@ -119,14 +119,14 @@ class TestEstPkiMessageParsing:
 
     def test_parse_exception_handling(self):
         """Test handling of parsing exceptions."""
-        mock_context = Mock(spec=EstBaseRequestContext)
+        mock_context = Mock(spec=EstCertificateRequestContext)
         mock_raw_message = Mock()
         mock_raw_message.body = b'-----BEGIN CERTIFICATE REQUEST-----\ntest\n-----END CERTIFICATE REQUEST-----'
         mock_context.raw_message = mock_raw_message
 
         parser = EstPkiMessageParsing()
 
-        with patch('request.pki_message_parser.x509.load_pem_x509_csr', side_effect=Exception('Parse error')):
+        with patch('request.message_parser.est.x509.load_pem_x509_csr', side_effect=Exception('Parse error')):
             try:
                 parser.parse(mock_context)
                 assert False, 'Expected ValueError to be raised'
@@ -140,7 +140,7 @@ class TestEstCsrSignatureVerification:
 
     def test_verify_rsa_signature_success(self, test_csr_fixture):
         """Test successful RSA signature verification."""
-        mock_context = Mock(spec=EstBaseRequestContext)
+        mock_context = Mock(spec=EstCertificateRequestContext)
         mock_context.cert_requested = test_csr_fixture.get_cryptography_object()
 
         verifier = EstCsrSignatureVerification()
@@ -196,7 +196,7 @@ class TestEstCsrSignatureVerification:
 
     def test_verify_signature_failure(self):
         """Test handling of signature verification failure."""
-        mock_context = Mock(spec=EstBaseRequestContext)
+        mock_context = Mock(spec=EstCertificateRequestContext)
         mock_csr = Mock(spec=x509.CertificateSigningRequest)
         mock_rsa_key = Mock(spec=rsa.RSAPublicKey)
         mock_hash_algorithm = Mock(spec=hashes.SHA256)
@@ -211,7 +211,7 @@ class TestEstCsrSignatureVerification:
 
         verifier = EstCsrSignatureVerification()
 
-        with patch('request.pki_message_parser.padding.PKCS1v15'):
+        with patch('request.message_parser.est.padding.PKCS1v15'):
             try:
                 verifier.parse(mock_context)
                 assert False, 'Expected ValueError to be raised'
@@ -449,7 +449,7 @@ class TestCmpPkiMessageParsing:
 
         parser = CmpPkiMessageParsing()
 
-        with patch('request.pki_message_parser.ber_decoder.decode', return_value=(mock_pki_message, None)), \
+        with patch('request.message_parser.cmp.ber_decoder.decode', return_value=(mock_pki_message, None)), \
              patch.object(parser, '_extract_signer_certificate'):
             parser.parse(mock_context)
 
@@ -492,7 +492,7 @@ class TestCmpPkiMessageParsing:
 
         parser = CmpPkiMessageParsing()
 
-        with patch('request.pki_message_parser.ber_decoder.decode', side_effect=ValueError('Decode error')):
+        with patch('request.message_parser.cmp.ber_decoder.decode', side_effect=ValueError('Decode error')):
             try:
                 parser.parse(mock_context)
                 assert False, 'Expected ValueError to be raised'
@@ -508,7 +508,7 @@ class TestCmpPkiMessageParsing:
 
         parser = CmpPkiMessageParsing()
 
-        with patch('request.pki_message_parser.ber_decoder.decode', side_effect=TypeError('Type error')):
+        with patch('request.message_parser.cmp.ber_decoder.decode', side_effect=TypeError('Type error')):
             try:
                 parser.parse(mock_context)
                 assert False, 'Expected ValueError to be raised'
@@ -612,18 +612,20 @@ class TestEstMessageParser:
     def test_parse_delegation(self):
         """Test that parse method delegates to all components."""
         parser = EstMessageParser()
-        mock_context = Mock()
+        mock_context = Mock(spec=EstCertificateRequestContext)
 
         with patch.object(parser.components[0], 'parse') as mock_parse1, \
-                patch.object(parser.components[1], 'parse') as mock_parse2, \
-                patch.object(parser.components[2], 'parse') as mock_parse3, \
-                patch.object(parser.components[3], 'parse') as mock_parse4:
+             patch.object(parser.components[1], 'parse') as mock_parse2, \
+             patch.object(parser.components[2], 'parse') as mock_parse3, \
+             patch.object(parser.components[3], 'parse') as mock_parse4, \
+             patch.object(parser.components[4], 'parse') as mock_parse5:
             parser.parse(mock_context)
 
             mock_parse1.assert_called_once_with(mock_context)
             mock_parse2.assert_called_once_with(mock_context)
             mock_parse3.assert_called_once_with(mock_context)
             mock_parse4.assert_called_once_with(mock_context)
+            mock_parse5.assert_called_once_with(mock_context)
 
     def test_parse_component_failure_stops_execution(self):
         """Test that component failure stops execution of subsequent components."""

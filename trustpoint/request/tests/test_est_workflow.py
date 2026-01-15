@@ -79,10 +79,11 @@ class TestESTHelper(LoggerMixin):
 
         assert mock_context.client_certificate is None
         assert mock_context.client_intermediate_certificate is None
-        assert mock_context.est_username == device.est_username
-        assert mock_context.est_password == device.no_onboarding_config.est_password
 
         mock_context = parser.parse(mock_context)
+
+        assert mock_context.est_username == device.est_username
+        assert mock_context.est_password == device.no_onboarding_config.est_password
 
         assert mock_context.cert_requested is not None
         assert isinstance(mock_context.cert_requested, x509.CertificateSigningRequest), \

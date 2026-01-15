@@ -35,12 +35,12 @@ class TestEstMessageResponder:
 
     def test_build_response_awaiting_state(self) -> None:
         """Test build_response with AWAITING state."""
-        context = Mock(spec=EstBaseRequestContext)
+        context = Mock(spec=EstCertificateRequestContext)
         enrollment_request = Mock()
         enrollment_request.aggregated_state = State.AWAITING
         context.enrollment_request = enrollment_request
 
-        EstMessageResponder.build_response(context)
+        EstCertificateMessageResponder.build_response(context)
 
         assert context.http_response_status == 202
         assert context.http_response_content_type == 'text/plain'
@@ -53,7 +53,7 @@ class TestEstMessageResponder:
         enrollment_request.aggregated_state = State.REJECTED
         context.enrollment_request = enrollment_request
 
-        EstMessageResponder.build_response(context)
+        EstCertificateMessageResponder.build_response(context)
 
         enrollment_request.finalize.assert_called_once_with(State.REJECTED)
         assert context.http_response_status == 403
@@ -68,7 +68,7 @@ class TestEstMessageResponder:
         enrollment_request.id = 123
         context.enrollment_request = enrollment_request
 
-        EstMessageResponder.build_response(context)
+        EstCertificateMessageResponder.build_response(context)
 
         assert context.http_response_status == 500
         assert context.http_response_content_type == 'text/plain'
